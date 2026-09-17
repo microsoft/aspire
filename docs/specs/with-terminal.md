@@ -66,6 +66,13 @@ created it: closing its tab or shutting down the AppHost disposes it. For a
 dialog-scoped terminal, use `await using` around creation and the interaction;
 closing the interaction alone does not dispose the terminal.
 
+`DistributedApplication.StopAsync()` stops and awaits all AppHost-owned terminals,
+including terminals already closing in the background. Closing a terminal removes
+it from discovery immediately, but the service retains teardown ownership until
+cleanup finishes. Dashboard close waits at most 10 seconds; a timeout or disconnect
+ends only that wait, not cleanup. Host-stop cancellation likewise bounds the wait,
+and subsequent AppHost disposal joins the same cleanup operation.
+
 ### Terminal interactions
 
 `IInteractionService.PromptTerminalAsync` displays one caller-owned terminal in

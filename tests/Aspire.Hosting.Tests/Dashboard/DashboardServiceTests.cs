@@ -1635,8 +1635,11 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             Assert.False(cleanup.IsCompleted);
             Assert.False(attachment.IsCompleted);
             Assert.False(terminalService.TryGetTerminal(terminal.Id, out _));
+            var shutdown = terminalService.DisposeAsync().AsTask();
+            Assert.False(shutdown.IsCompleted);
             gated.ReleaseWrite();
             await cleanup.DefaultTimeout();
+            await shutdown.DefaultTimeout();
             await attachment.DefaultTimeout();
         }
         finally
@@ -1725,8 +1728,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
                 var log = await logs.Reader.ReadAsync().AsTask().DefaultTimeout();
                 Assert.Equal(LogLevel.Error, log.LogLevel);
                 Assert.Equal($"Failed to dispose terminal {terminal.Id}.", log.Message);
-                var aggregate = Assert.IsType<AggregateException>(log.Exception);
-                Assert.Same(failure, Assert.Single(aggregate.Flatten().InnerExceptions));
+                Assert.Same(failure, log.Exception);
             }
         }
         finally
@@ -1762,7 +1764,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var log = await logs.Reader.ReadAsync().AsTask().DefaultTimeout();
         Assert.Equal(LogLevel.Error, log.LogLevel);
         Assert.Equal($"Failed to dispose terminal {terminal.Id}.", log.Message);
-        Assert.Same(failure, Assert.Single(Assert.IsType<AggregateException>(log.Exception).InnerExceptions));
+        Assert.Same(failure, log.Exception);
     }
 
     private static DashboardServiceImpl CreateDashboardService(

@@ -367,9 +367,5 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
         }
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        _owner.Remove(this);
-        await StopAsync().ConfigureAwait(false);
-    }
+    public ValueTask DisposeAsync() => _owner.DisposeTerminalAsync(this);
 }

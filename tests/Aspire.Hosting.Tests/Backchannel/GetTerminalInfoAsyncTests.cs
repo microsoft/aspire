@@ -4,12 +4,16 @@
 using System.Net.Sockets;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Diagnostics;
+using Aspire.Hosting.Terminals;
+using Aspire.Hosting.Utils;
 using Aspire.Shared.TerminalHost;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using StreamJsonRpc;
+
+#pragma warning disable ASPIRETERMINAL001 // Test consumer of the experimental AppHost terminal API.
 
 namespace Aspire.Hosting.Tests.Backchannel;
 
@@ -271,6 +275,46 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
         Assert.Contains(AuxiliaryBackchannelCapabilities.Terminals_V1, result.Capabilities);
     }
 
+    [Fact]
+    public async Task ListTerminalsAsync_MissingTerminalService_Throws()
+    {
+        using var services = new ServiceCollection()
+            .AddSingleton(new DistributedApplicationModel(new ResourceCollection()))
+            .BuildServiceProvider();
+        var target = CreateTarget(services);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => target.ListTerminalsAsync(new ListTerminalsRequest())).DefaultTimeout();
+
+        Assert.Contains(nameof(TerminalService), exception.Message);
+    }
+
+    [Theory]
+    [InlineData(TerminalPlacement.Dock)]
+    [InlineData(TerminalPlacement.Dialog)]
+    [InlineData(TerminalPlacement.None)]
+    public async Task ListTerminalsAsync_RegisteredService_ReturnsAppHostTerminals(TerminalPlacement placement)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        await using var app = builder.Build();
+        var terminalService = app.Services.GetRequiredService<TerminalService>();
+        var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
+        {
+            Title = "AppHost terminal",
+            Executable = "unused",
+            Placement = placement
+        });
+        var target = CreateTarget(app.Services);
+
+        var result = await target.ListTerminalsAsync(new ListTerminalsRequest()).DefaultTimeout();
+
+        Assert.Empty(result.ResourceTerminals);
+        var summary = Assert.Single(result.AppHostTerminals);
+        Assert.Equal(terminal.Id, summary.TerminalId);
+        Assert.Equal(terminal.Title, summary.Title);
+        Assert.Equal(placement.ToString(), summary.Placement);
+    }
+
     /// <summary>
     /// Builds a target resource with a <see cref="TerminalAnnotation"/> wired to one
     /// per-replica <see cref="TerminalHostResource"/> per replica. <paramref name="controlListeners"/>
@@ -327,14 +371,21 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
         return (new DistributedApplicationModel(resources), hosts);
     }
 
-    private static AuxiliaryBackchannelRpcTarget CreateTarget(DistributedApplicationModel model)
+    private AuxiliaryBackchannelRpcTarget CreateTarget(DistributedApplicationModel model)
     {
         var services = new ServiceCollection();
         services.AddSingleton(model);
+        services.AddSingleton(_ => TestTerminalService.Create());
         var sp = services.BuildServiceProvider();
+        _toDispose.Add(sp);
+        return CreateTarget(sp);
+    }
+
+    private static AuxiliaryBackchannelRpcTarget CreateTarget(IServiceProvider services)
+    {
         var configuration = new ConfigurationBuilder().Build();
         var profilingTelemetry = new ProfilingTelemetry(configuration);
-        return new AuxiliaryBackchannelRpcTarget(NullLogger<AuxiliaryBackchannelRpcTarget>.Instance, configuration, profilingTelemetry, sp);
+        return new AuxiliaryBackchannelRpcTarget(NullLogger<AuxiliaryBackchannelRpcTarget>.Instance, configuration, profilingTelemetry, services);
     }
 
     private async Task<FakeControlHost> StartFakeControlHostAsync(TerminalHostSessionInfo session)

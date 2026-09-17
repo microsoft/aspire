@@ -13,6 +13,7 @@ using Hex1b;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 #pragma warning disable ASPIRETERMINAL001 // Test consumer of the experimental AppHost terminal API.
 
@@ -625,6 +626,123 @@ public class TerminalServiceTests
         Assert.Same(expected, await Assert.ThrowsAsync<IOException>(() => disposal).DefaultTimeout());
         Assert.Same(disposal, service.DisposeAsync().AsTask());
         Assert.Same(expected, await Assert.ThrowsAsync<IOException>(() => terminal.DisposeAsync().AsTask()).DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DisposeAsync_JoinsRetiringTerminalAndObservesItsFailure(bool fail)
+    {
+        var service = TestTerminalService.Create();
+        var expected = fail ? new IOException("Retiring workload disposal failed.") : null;
+        var workload = new GatedTerminalWorkloadAdapter { DisposalException = expected };
+        var terminal = service.CreateTerminal("Retiring", TerminalPlacement.Dock,
+            Hex1bTerminal.CreateBuilder().WithWorkload(workload), 80, 24);
+        using var subscription = service.SubscribeDockTerminals();
+        await using var changes = subscription.Subscription.GetAsyncEnumerator();
+        Task close = Task.CompletedTask;
+        Exception? closeFailure;
+        Exception? shutdownFailure;
+        try
+        {
+            terminal.Start();
+            await workload.ReadStarted.DefaultTimeout();
+            close = terminal.DisposeAsync().AsTask();
+            await workload.DisposeStarted.DefaultTimeout();
+
+            Assert.False(close.IsCompleted);
+            Assert.False(service.TryGetTerminal(terminal.Id, out _));
+            Assert.Empty(service.ListAll());
+            Assert.True(await changes.MoveNextAsync().AsTask().DefaultTimeout());
+            Assert.Equal(new TerminalChange(TerminalChangeType.Removed, new(terminal.Id, terminal.Title)), changes.Current);
+
+            var shutdown = service.DisposeAsync().AsTask();
+            Assert.False(shutdown.IsCompleted);
+            Assert.Same(shutdown, service.DisposeAsync().AsTask());
+            // Shutdown completes the stream without publishing a second removal for the retiring terminal.
+            Assert.False(await changes.MoveNextAsync().AsTask().DefaultTimeout());
+        }
+        finally
+        {
+            workload.ReleaseDispose();
+            closeFailure = await Record.ExceptionAsync(() => close).DefaultTimeout();
+            shutdownFailure = await Record.ExceptionAsync(() => service.DisposeAsync().AsTask()).DefaultTimeout();
+        }
+
+        Assert.Same(expected, closeFailure);
+        Assert.Same(expected, shutdownFailure);
+        Assert.Equal(!fail, workload.IsDisposed);
+        Assert.Same(expected, await Record.ExceptionAsync(() => terminal.DisposeAsync().AsTask()).DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AppHostStop_StopsTerminalsBeforeDisposalAndCancellationOnlyBoundsWait(bool cancelWait)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(options =>
+        {
+            options.DisableDashboard = true;
+            options.TrustDeveloperCertificate = false;
+        });
+        // Keep the production terminal lifecycle registration, without starting DCP or unrelated hosted services.
+        foreach (var registration in builder.Services.Where(descriptor =>
+            descriptor.ServiceType == typeof(IHostedService) &&
+            descriptor.ImplementationType != typeof(TerminalServiceHost)).ToArray())
+        {
+            builder.Services.Remove(registration);
+        }
+        Assert.Single(builder.Services, descriptor => descriptor.ServiceType == typeof(IHostedService));
+        await using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+        var service = app.Services.GetRequiredService<TerminalService>();
+        var workload = new GatedTerminalWorkloadAdapter();
+        var terminal = service.CreateTerminal("Host shutdown", TerminalPlacement.None,
+            Hex1bTerminal.CreateBuilder().WithWorkload(workload), 80, 24);
+        using var stopCts = new CancellationTokenSource();
+        Task stop = Task.CompletedTask;
+        Task disposal = Task.CompletedTask;
+        try
+        {
+            terminal.Start();
+            await workload.ReadStarted.DefaultTimeout();
+            stop = app.StopAsync(stopCts.Token);
+            await workload.DisposeStarted.DefaultTimeout();
+
+            Assert.False(stop.IsCompleted);
+            Assert.False(workload.IsDisposed);
+            Assert.Empty(service.ListAll());
+            Assert.Throws<ObjectDisposedException>(() => CreateDockTerminal(service, "Too late"));
+
+            if (cancelWait)
+            {
+                await stopCts.CancelAsync();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => stop).DefaultTimeout();
+                disposal = app.DisposeAsync().AsTask();
+                Assert.False(disposal.IsCompleted);
+            }
+
+            workload.ReleaseDispose();
+            if (!cancelWait)
+            {
+                await stop.DefaultTimeout();
+            }
+            await disposal.DefaultTimeout();
+            Assert.True(workload.IsDisposed);
+        }
+        finally
+        {
+            workload.ReleaseDispose();
+            try
+            {
+                await stop.DefaultTimeout();
+            }
+            catch (OperationCanceledException) when (stopCts.IsCancellationRequested)
+            {
+            }
+            await disposal.DefaultTimeout();
+            await terminal.DisposeAsync().DefaultTimeout();
+        }
     }
 
     [Fact]

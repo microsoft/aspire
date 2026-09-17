@@ -482,6 +482,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                 ResourceTerminals = new Terminals.ResourceTerminalCatalog(sp.GetRequiredService<DistributedApplicationModel>(), logger)
             };
         });
+        _innerBuilder.Services.AddHostedService<Terminals.TerminalServiceHost>();
 
         ConfigureHealthChecks();
 

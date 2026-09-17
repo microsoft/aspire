@@ -46,6 +46,8 @@ public sealed class TerminalService : IAsyncDisposable
     internal const int DefaultDockUpdateBufferCapacity = 64;
 
     private readonly ConcurrentDictionary<string, Hex1bAspireTerminal> _terminals = new(StringComparer.Ordinal);
+    // Closed terminals leave discovery immediately, but shutdown must still await their teardown.
+    private readonly HashSet<Hex1bAspireTerminal> _retiringTerminals = [];
     private readonly ILogger<TerminalService> _logger;
     private readonly int _dockUpdateBufferCapacity;
     private readonly object _syncLock = new();
@@ -363,22 +365,39 @@ public sealed class TerminalService : IAsyncDisposable
         }
     }
 
-    internal void Remove(Hex1bAspireTerminal terminal)
+    internal async ValueTask DisposeTerminalAsync(Hex1bAspireTerminal terminal)
     {
+        bool removed;
         lock (_syncLock)
         {
-            if (!_terminals.TryRemove(terminal.Id, out _))
+            removed = _terminals.TryRemove(terminal.Id, out _);
+            if (removed)
             {
-                return;
-            }
+                _retiringTerminals.Add(terminal);
 
-            if (terminal.Placement == TerminalPlacement.Dock)
-            {
-                Publish(new TerminalChange(TerminalChangeType.Removed, terminal.Descriptor));
+                if (terminal.Placement == TerminalPlacement.Dock)
+                {
+                    Publish(new TerminalChange(TerminalChangeType.Removed, terminal.Descriptor));
+                }
             }
         }
 
-        _logger.LogDebug("Removed terminal {TerminalId} ({Title}).", terminal.Id, terminal.Title);
+        if (removed)
+        {
+            _logger.LogDebug("Removed terminal {TerminalId} ({Title}).", terminal.Id, terminal.Title);
+        }
+
+        try
+        {
+            await terminal.StopAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (_syncLock)
+            {
+                _retiringTerminals.Remove(terminal);
+            }
+        }
     }
 
     private void Publish(TerminalChange change)
@@ -438,7 +457,9 @@ public sealed class TerminalService : IAsyncDisposable
 
             _disposed = 1;
             var terminals = _terminals.Values.ToArray();
+            var retiringTerminals = _retiringTerminals.ToArray();
             _terminals.Clear();
+            _retiringTerminals.Clear();
 
             foreach (var terminal in terminals)
             {
@@ -453,7 +474,7 @@ public sealed class TerminalService : IAsyncDisposable
                 channel.Writer.TryComplete();
             }
 
-            _disposeTask = DisposeTerminalsAsync(terminals, ResourceTerminals);
+            _disposeTask = DisposeTerminalsAsync([.. terminals, .. retiringTerminals], ResourceTerminals);
             return new ValueTask(_disposeTask);
         }
     }

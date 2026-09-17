@@ -3,6 +3,7 @@
 
 using System.Text.RegularExpressions;
 using System.Globalization;
+using System.Runtime.ExceptionServices;
 using Aspire.DashboardService.Proto.V1;
 using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
@@ -759,12 +760,21 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
         // DisposeAsync can block synchronously in cancellation callbacks. Run it independently so even
         // that work is bounded by the RPC's wait, without letting a disconnect cancel the disposal.
-        var disposal = Task.Run(async () => await terminal.DisposeAsync().ConfigureAwait(false), CancellationToken.None);
-        _ = disposal.ContinueWith(
-            task => logger.LogError(task.Exception, "Failed to dispose terminal {TerminalId}.", terminal.Id),
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
+        var disposal = Task.Run<ExceptionDispatchInfo?>(async () =>
+        {
+            try
+            {
+                await terminal.DisposeAsync().ConfigureAwait(false);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to dispose terminal {TerminalId}.", terminal.Id);
+                // Carry the failure back to a waiting RPC without leaving an unobserved faulted task
+                // if the RPC has already timed out or disconnected.
+                return ExceptionDispatchInfo.Capture(ex);
+            }
+        }, CancellationToken.None);
 
         try
         {
@@ -773,13 +783,14 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // Only stop waiting. Cleanup still owns the attached transports until terminal teardown
-                // finishes, and the continuation observes any failure after this RPC has returned.
+                // finishes, and the background operation logs any failure after this RPC has returned.
                 throw new RpcException(new Status(StatusCode.DeadlineExceeded,
                     $"Terminal '{terminal.Id}' did not finish disposing within {CloseTerminalTimeoutSeconds} seconds."));
             }
 
             // Preserve genuine disposal failures, including TimeoutException from the workload itself.
-            await disposal.ConfigureAwait(false);
+            var failure = await disposal.ConfigureAwait(false);
+            failure?.Throw();
         }
         finally
         {
