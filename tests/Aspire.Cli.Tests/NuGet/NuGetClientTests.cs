@@ -245,40 +245,32 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             new TestFeatures(),
             new TestEnvironment(),
             NullLogger<NuGetClient>.Instance);
-        string? packageRoot = null;
-        try
-        {
-            var restoredPackages = await client.RestoreAsync(
-                [(packageId, "1.0.0")],
-                "net10.0",
-                "linux-x64",
-                restoreDirectory.FullName,
-                [feedDirectory.FullName],
-                nugetConfigPath: null,
-                workspace.WorkspaceRoot.FullName,
-                TestContext.Current.CancellationToken);
-            packageRoot = Path.GetDirectoryName(restoredPackages[0].InstallPath);
-            var manifestPath = Path.Combine(restoreDirectory.FullName, IntegrationPackageProbeManifest.FileName);
-            await client.WriteManifestAsync(
-                restoredPackages,
-                manifestPath,
-                "net10.0",
-                "linux-x64",
-                TestContext.Current.CancellationToken);
+        using var restoredPackageScope = new RestoredPackageScope(
+            GetEffectiveGlobalPackagesFolder(nugetConfigPath: null, workspace.WorkspaceRoot.FullName),
+            packageId);
 
-            var manifest = IntegrationPackageProbeManifest.Load(manifestPath);
-            Assert.EndsWith(
-                Path.Combine("runtimes", "unix-x64", "lib", "net10.0", "UnixFallback.dll"),
-                manifest.TryGetManagedAssemblyPath(new("UnixFallback")),
-                StringComparison.OrdinalIgnoreCase);
-        }
-        finally
-        {
-            if (packageRoot is not null)
-            {
-                Directory.Delete(packageRoot, recursive: true);
-            }
-        }
+        var restoredPackages = await client.RestoreAsync(
+            [(packageId, "1.0.0")],
+            "net10.0",
+            "linux-x64",
+            restoreDirectory.FullName,
+            [feedDirectory.FullName],
+            nugetConfigPath: null,
+            workspace.WorkspaceRoot.FullName,
+            TestContext.Current.CancellationToken);
+        var manifestPath = Path.Combine(restoreDirectory.FullName, IntegrationPackageProbeManifest.FileName);
+        await client.WriteManifestAsync(
+            restoredPackages,
+            manifestPath,
+            "net10.0",
+            "linux-x64",
+            TestContext.Current.CancellationToken);
+
+        var manifest = IntegrationPackageProbeManifest.Load(manifestPath);
+        Assert.EndsWith(
+            Path.Combine("runtimes", "unix-x64", "lib", "net10.0", "UnixFallback.dll"),
+            manifest.TryGetManagedAssemblyPath(new("UnixFallback")),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -316,6 +308,10 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
               </packageSourceMapping>
             </configuration>
             """);
+        using var restoredPackageScope = new RestoredPackageScope(
+            GetEffectiveGlobalPackagesFolder(nugetConfigPath, workspace.WorkspaceRoot.FullName),
+            packageId);
+
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
@@ -344,6 +340,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var feedDirectory = workspace.CreateDirectory("feed");
+        var packagesDirectory = workspace.CreateDirectory("packages");
         var restoreDirectory = workspace.CreateDirectory("restore");
         var packageA = $"Aspire.Test.Package.A.{Guid.NewGuid():N}";
         var packageB = $"Aspire.Test.Package.B.{Guid.NewGuid():N}";
@@ -358,6 +355,11 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             feedDirectory.FullName,
             packageB,
             dependencies: [(packageA, "[2.0.0]")]);
+        var nugetConfigPath = CreateWorkspaceGlobalPackagesConfig(workspace, packagesDirectory);
+        using var restoredPackageScope = new RestoredPackageScope(
+            GetEffectiveGlobalPackagesFolder(nugetConfigPath, workspace.WorkspaceRoot.FullName),
+            packageA,
+            packageB);
 
         var client = new NuGetClient(
             new TestFeatures(),
@@ -370,7 +372,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             runtimeIdentifier: null,
             restoreDirectory.FullName,
             [feedDirectory.FullName],
-            nugetConfigPath: null,
+            nugetConfigPath,
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken);
 
@@ -408,6 +410,10 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
               </packageSourceMapping>
             </configuration>
             """);
+        using var restoredPackageScope = new RestoredPackageScope(
+            GetEffectiveGlobalPackagesFolder(nugetConfigPath, workspace.WorkspaceRoot.FullName),
+            packageId);
+
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
@@ -465,6 +471,10 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
               </packageSourceMapping>
             </configuration>
             """);
+        using var restoredPackageScope = new RestoredPackageScope(
+            GetEffectiveGlobalPackagesFolder(nugetConfigPath, workspace.WorkspaceRoot.FullName),
+            packageId);
+
         var client = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
@@ -589,6 +599,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var feedDirectory = workspace.CreateDirectory("feed");
+        var packagesDirectory = workspace.CreateDirectory("packages");
         var restoreDirectory = workspace.CreateDirectory("restore");
         var rootPackage = $"Aspire.Test.Package.Root.{Guid.NewGuid():N}";
         var dependencyPackage = $"Aspire.Test.Package.Dep.{Guid.NewGuid():N}";
@@ -614,6 +625,11 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             dependencyPackage,
             version: "3.0.0",
             dependencies: [(missingPackage, "1.0.0")]);
+        var nugetConfigPath = CreateWorkspaceGlobalPackagesConfig(workspace, packagesDirectory);
+        using var restoredPackageScope = new RestoredPackageScope(
+            GetEffectiveGlobalPackagesFolder(nugetConfigPath, workspace.WorkspaceRoot.FullName),
+            rootPackage,
+            dependencyPackage);
 
         var client = new NuGetClient(
             new TestFeatures(),
@@ -626,7 +642,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             runtimeIdentifier: null,
             restoreDirectory.FullName,
             [feedDirectory.FullName],
-            nugetConfigPath: null,
+            nugetConfigPath,
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken);
 
@@ -703,6 +719,42 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         }
     }
 
+    /// <summary>
+    /// Writes a NuGet config that redirects the global packages folder into the temporary workspace
+    /// so restored packages are removed with the workspace instead of accumulating in the machine's
+    /// real global packages folder.
+    /// </summary>
+    private static string CreateWorkspaceGlobalPackagesConfig(TemporaryWorkspace workspace, DirectoryInfo packagesDirectory)
+    {
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        File.WriteAllText(
+            nugetConfigPath,
+            $"""
+            <configuration>
+              <config>
+                <add key="globalPackagesFolder" value="{packagesDirectory.FullName}" />
+              </config>
+            </configuration>
+            """);
+
+        return nugetConfigPath;
+    }
+
+    /// <summary>
+    /// Resolves the global packages folder the client will actually restore into, using the same
+    /// settings lookup. NUGET_PACKAGES takes precedence over the <c>globalPackagesFolder</c> config
+    /// value, so a workspace-scoped config alone does not keep restores out of the machine-wide
+    /// folder on developer machines or CI agents that set the variable.
+    /// </summary>
+    private static string GetEffectiveGlobalPackagesFolder(string? nugetConfigPath, string workingDirectory)
+    {
+        var settings = nugetConfigPath is not null
+            ? Settings.LoadSpecificSettings(Path.GetDirectoryName(nugetConfigPath)!, Path.GetFileName(nugetConfigPath))
+            : Settings.LoadDefaultSettings(workingDirectory);
+
+        return SettingsUtility.GetGlobalPackagesFolder(settings);
+    }
+
     private static void CreatePackage(
         string feedDirectory,
         string packageId,
@@ -760,5 +812,35 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
     {
         using var writer = new StreamWriter(archive.CreateEntry(path).Open());
         writer.Write(contents);
+    }
+
+    /// <summary>
+    /// Removes the packages a restore test installed from the global packages folder. Disposal runs
+    /// even when an assertion fails, so a failing test cannot leave packages behind in a folder that
+    /// outlives the temporary workspace.
+    /// </summary>
+    private sealed class RestoredPackageScope(string globalPackagesFolder, params string[] packageIds) : IDisposable
+    {
+        public void Dispose()
+        {
+            foreach (var packageId in packageIds)
+            {
+                var packageDirectory = Path.Combine(globalPackagesFolder, packageId.ToLowerInvariant());
+                if (!Directory.Exists(packageDirectory))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    Directory.Delete(packageDirectory, recursive: true);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Another test process may hold the extracted files open. Leaving a stray
+                    // package behind must not fail an otherwise passing test.
+                }
+            }
+        }
     }
 }

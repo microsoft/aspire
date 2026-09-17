@@ -291,10 +291,16 @@ internal sealed class NuGetClient(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             var displaySource = PackageSourceRedactor.RedactForDisplay(source.Source);
+
+            // Only the exception type is logged. NuGet protocol failures format the feed URL into
+            // their own message -- often a derived resource URL rather than the configured source
+            // string -- so logging the exception would leak UserInfo/SAS credentials into
+            // ~/.aspire/logs, which users routinely attach to bug reports. A total search failure
+            // still surfaces through the error thrown by SearchAsync, so nothing fails silently.
             logger.LogWarning(
-                ex,
-                "Failed to search NuGet package source '{PackageSource}'.",
-                displaySource);
+                "Failed to search NuGet package source '{PackageSource}': {ExceptionType}",
+                displaySource,
+                ex.GetType().Name);
             return new([], displaySource, ex);
         }
     }
