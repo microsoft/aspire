@@ -40,8 +40,9 @@ resource my_long_env_name_law 'Microsoft.OperationalInsights/workspaces@2025-02-
   tags: tags
 }
 
-resource my_long_env_name 'Microsoft.App/managedEnvironments@2025-07-01' = {
+resource my_long_env_name 'Microsoft.App/managedEnvironments@2026-07-01' = {
   name: take('mylongenvname${uniqueString(resourceGroup().id)}', 24)
+  tags: tags
   location: location
   properties: {
     appLogsConfiguration: {
@@ -58,7 +59,6 @@ resource my_long_env_name 'Microsoft.App/managedEnvironments@2025-07-01' = {
       }
     ]
   }
-  tags: tags
 }
 
 resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2025-10-02-preview' = {
@@ -97,7 +97,7 @@ resource shares_volumes_cache_0 'Microsoft.Storage/storageAccounts/fileServices/
   parent: storageVolumeFileService
 }
 
-resource managedStorage_volumes_cache_0 'Microsoft.App/managedEnvironments/storages@2025-07-01' = {
+resource managedStorage_volumes_cache_0 'Microsoft.App/managedEnvironments/storages@2026-07-01' = {
   name: take('${toLower('cache')}-${toLower('Appdata')}-${resourceToken}', 32)
   properties: {
     azureFile: {

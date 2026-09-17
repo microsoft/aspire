@@ -15,6 +15,7 @@ resource project1 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'project1'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
@@ -34,25 +35,9 @@ resource project1 'Microsoft.App/containerApps@2025-10-02-preview' = {
         }
       }
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {
-          probes: [
-            {
-              failureThreshold: 3
-              httpGet: {
-                path: '/health'
-                port: int('1111')
-                scheme: 'HTTP'
-              }
-              initialDelaySeconds: 5
-              periodSeconds: 5
-              successThreshold: 1
-              timeoutSeconds: 1
-              type: 'Liveness'
-            }
-          ]
           image: project1_containerimage
           name: 'project1'
           env: [
@@ -67,6 +52,21 @@ resource project1 'Microsoft.App/containerApps@2025-10-02-preview' = {
             {
               name: 'HTTPS_PORTS'
               value: '1111'
+            }
+          ]
+          probes: [
+            {
+              failureThreshold: 3
+              httpGet: {
+                path: '/health'
+                port: int('1111')
+                scheme: 'HTTP'
+              }
+              initialDelaySeconds: 5
+              periodSeconds: 5
+              successThreshold: 1
+              timeoutSeconds: 1
+              type: 'Liveness'
             }
           ]
         }
