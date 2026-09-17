@@ -1028,7 +1028,7 @@ public static class AzureContainerAppExtensions
     /// <remarks>
     /// Express defaults to zero minimum replicas and does not provision the managed Aspire dashboard.
     /// Explicit replica settings and infrastructure customization are preserved. Azure validates service compatibility.
-    /// App-to-app references require explicitly public HTTP endpoints and use their HTTPS URLs.
+    /// App-to-app references require explicitly public HTTP endpoints. References to apps in Express environments use HTTPS; cross-environment references preserve the producer's configured scheme.
     /// Local execution is unchanged.
     /// When combined with existing-resource configuration, the existing environment must already use Express.
     /// </remarks>
