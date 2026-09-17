@@ -157,7 +157,11 @@ public static class QdrantBuilderExtensions
     /// </summary>
     /// <param name="builder">The resource builder for the destination resource.</param>
     /// <param name="qdrantResource">The Qdrant server resource.</param>
-    /// <param name="connectionName">An override of the source resource's logical connection name. Physical environment-variable names are derived from this value when it is not <see langword="null"/>.</param>
+    /// <param name="connectionName">
+    /// An override of the source resource's logical connection name. Physical environment-variable names are derived from this value when it is not <see langword="null"/>,
+    /// unless the source resource specifies <see cref="IResourceWithConnectionString.ConnectionStringEnvironmentVariable"/>, in which case that explicit physical name is preserved
+    /// for the gRPC connection and used with an <c>_http</c> suffix for the HTTP connection.
+    /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the generic withReference export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<QdrantServerResource> qdrantResource, string? connectionName = null)

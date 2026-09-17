@@ -102,10 +102,6 @@ internal sealed class RadiusInfrastructureBuilder
     private readonly HashSet<ParameterResource> _emptyCredentialSubstitutions = [];
     private readonly Dictionary<ParameterResource, (IResource Owner, bool IsProjectionSubstitution)> _recipeCredentialOwners = [];
 
-    // The prefix WithReference gives the connection string it injects: "ConnectionStrings__<connectionName>".
-    // Read (not written) here, to recover the connection name a reference was aliased to.
-    private const string ConnectionStringEnvironmentPrefix = "ConnectionStrings__";
-
     // Tracks (resource, parameter) pairs that have already produced an unrelated-use warning, so a
     // parameter referenced by the same resource in multiple env vars only warns once.
     private readonly HashSet<(IResource Resource, ParameterResource Parameter)> _warnedUnrelatedSubstitutions = [];
@@ -3101,24 +3097,15 @@ internal sealed class RadiusInfrastructureBuilder
     /// prefixes that <c>WithReference</c>'s connection-property splat used for it.
     /// </summary>
     /// <remarks>
-    /// The prefix is <c>&lt;ENCODED_CONNECTION_NAME&gt;_</c>, and <c>connectionName</c> defaults to the
-    /// referenced resource's name but can be overridden per reference — an override
-    /// <c>WithReference</c> records nowhere in the model. It is recoverable anyway, because the same
-    /// call emits the connection string under <c>ConnectionStrings__&lt;connectionName&gt;</c> as a
-    /// <see cref="ConnectionStringReference"/> that names the resource, so the consumer's own
-    /// environment carries the alias. Reading it from there keeps an aliased reference
-    /// (<c>WithReference(cache, "admin")</c> → <c>ADMIN_PASSWORD</c>) attributable without having to
-    /// accept an arbitrary prefix, which is what would let an unrelated variable pass.
+    /// Use the logical name recorded by <see cref="ConnectionStringReferenceAnnotation"/>, not the
+    /// projected physical alias: <c>db__primary</c> splats to <c>DB__PRIMARY_*</c> even though its
+    /// portable connection-string alias is <c>ConnectionStrings__db_primary</c>.
     /// <para>
-    /// The resource name is always included as well: a consumer that suppresses the connection
-    /// string via <see cref="ReferenceEnvironmentInjectionFlags"/>, or a resource that overrides
-    /// <see cref="IResourceWithConnectionString.ConnectionStringEnvironmentVariable"/>, leaves no
-    /// alias to read, and in both cases the splat used the default.
+    /// Reference relationships retain the resource-name fallback when connection-string injection
+    /// is suppressed via <see cref="ReferenceEnvironmentInjectionFlags"/>.
     /// </para>
     /// </remarks>
-    private static Dictionary<IResource, HashSet<string>> BuildReferencePrefixes(
-        IResource resource,
-        Dictionary<string, object> environmentVariables)
+    private static Dictionary<IResource, HashSet<string>> BuildReferencePrefixes(IResource resource)
     {
         var prefixes = new Dictionary<IResource, HashSet<string>>();
 
@@ -3135,15 +3122,9 @@ internal sealed class RadiusInfrastructureBuilder
             }
         }
 
-        foreach (var (key, value) in environmentVariables)
+        foreach (var reference in resource.Annotations.OfType<ConnectionStringReferenceAnnotation>())
         {
-            // ConnectionStrings__<connectionName>, written by the same WithReference call that
-            // splatted the properties. Anything else cannot tell us about an alias.
-            if (value is ConnectionStringReference connectionStringReference &&
-                key.StartsWith(ConnectionStringEnvironmentPrefix, StringComparison.Ordinal))
-            {
-                Add(connectionStringReference.Resource, key[ConnectionStringEnvironmentPrefix.Length..]);
-            }
+            Add(reference.Source, reference.EnvironmentVariableNames.LogicalName);
         }
 
         return prefixes;
@@ -3695,7 +3676,7 @@ internal sealed class RadiusInfrastructureBuilder
             context.EnvironmentVariables.Remove(key);
         }
 
-        var referencePrefixes = BuildReferencePrefixes(resource, context.EnvironmentVariables);
+        var referencePrefixes = BuildReferencePrefixes(resource);
 
         // Created on demand: a container with no credential-bearing variable emits no secret.
         RadiusSecuritySecretConstruct? containerSecret = null;

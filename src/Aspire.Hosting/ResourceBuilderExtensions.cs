@@ -1086,7 +1086,8 @@ public static class ResourceBuilderExtensions
 
     /// <summary>
     /// Injects a connection string as an environment variable from the source resource into the destination resource, using the source resource's name as the connection string name (if not overridden).
-    /// The logical connection name is preserved for application configuration. When that name is not portable as an environment-variable suffix,
+    /// The logical connection name is preserved for application configuration. When the source resource does not specify
+    /// <see cref="IResourceWithConnectionString.ConnectionStringEnvironmentVariable"/> and the logical name is not portable as an environment-variable suffix,
     /// Aspire emits both the legacy name and a portable alias that replaces characters unsupported in environment-variable names.
     /// For example, <c>my-db</c> produces <c>ConnectionStrings__my-db</c> and <c>ConnectionStrings__my_db</c> on targets that support both names.
     /// <para>
@@ -1101,7 +1102,10 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="TDestination">The destination resource.</typeparam>
     /// <param name="builder">The resource where connection string will be injected.</param>
     /// <param name="source">The resource from which to extract the connection string.</param>
-    /// <param name="connectionName">An override of the source resource's logical connection name. The physical environment-variable names are derived from this value when it is not <see langword="null"/>.</param>
+    /// <param name="connectionName">
+    /// An override of the source resource's logical connection name. The physical environment-variable names are derived from this value when it is not <see langword="null"/>,
+    /// unless the source resource specifies <see cref="IResourceWithConnectionString.ConnectionStringEnvironmentVariable"/>, in which case that explicit physical name is preserved.
+    /// </param>
     /// <param name="optional"><see langword="true"/> to allow a missing connection string; <see langword="false"/> to throw an exception if the connection string is not found.</param>
     /// <exception cref="DistributedApplicationException">Throws an exception if the connection string resolves to null. It can be null if the resource has no connection string, and if the configuration has no connection string for the source resource.</exception>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
