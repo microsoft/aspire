@@ -1,5 +1,27 @@
 # Aspire VS Code Extension Changelog
 
+## v1.23.0
+
+<!-- aspire-ext-changelog-done from=039a7c58f11a01521e49882e26d0d6593b87d9cf to=a7d8508b8e2f240580e17b6f97ffc663aeadc026 base=1.22.0 -->
+
+### Features
+
+- Add VS Code debugging support for Deno services running under Aspire with `deno run` or `deno serve` ([#18628](https://github.com/microsoft/aspire/pull/18628), [#20020](https://github.com/microsoft/aspire/pull/20020)).
+- Add VS Code debugging support for TypeScript AppHosts that use Deno ([#16218](https://github.com/microsoft/aspire/issues/16218), [#18627](https://github.com/microsoft/aspire/pull/18627)).
+- Add managed breakpoint support for Blazor WebAssembly projects launched with **Debug in Browser** in VS Code ([#17797](https://github.com/microsoft/aspire/issues/17797), [#17795](https://github.com/microsoft/aspire/issues/17795), [#20001](https://github.com/microsoft/aspire/pull/20001)).
+- Reuse Aspire's coordinated build output when debugging .NET resources in VS Code, avoiding redundant builds ([#19037](https://github.com/microsoft/aspire/issues/19037), [#19678](https://github.com/microsoft/aspire/pull/19678)).
+- Preselect default agent setup options in the VS Code picker when creating a new Aspire app or adding Aspire to an existing project ([#19629](https://github.com/microsoft/aspire/issues/19629), [#19996](https://github.com/microsoft/aspire/pull/19996)).
+
+### Fixes
+
+- Fix **Debug in Browser** getting stuck at `about:blank` on Windows when Microsoft Edge compatibility settings are enabled ([#20151](https://github.com/microsoft/aspire/issues/20151), [#20152](https://github.com/microsoft/aspire/pull/20152)).
+- Fix unpackaged WinUI 3 applications crashing when starting a debug session in VS Code ([#19091](https://github.com/microsoft/aspire/issues/19091), [#19877](https://github.com/microsoft/aspire/pull/19877)).
+- Fix delays when saving **Don't Show Again** for Aspire CLI update notifications in VS Code ([#19854](https://github.com/microsoft/aspire/pull/19854)).
+
+### Documentation
+
+- Update the **Enable Aspire Cli Debug Logging** setting description to explain where to find CLI log files ([#19739](https://github.com/microsoft/aspire/issues/19739), [#19868](https://github.com/microsoft/aspire/pull/19868)).
+
 ## v1.22.0
 
 <!-- aspire-ext-changelog-done from=93b731db94a086cb90e6b126d6a2ebab555ee300 to=8e47a3dbf220a74a79fd734ea7b4b941c842595e base=1.21.0 -->

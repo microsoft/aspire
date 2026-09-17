@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.AppContainers;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.Expressions;
@@ -70,7 +71,9 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
 
         template.Scale = new ContainerAppScale()
         {
-            MinReplicas = Resource.GetReplicaCount()
+            MinReplicas = _containerAppEnvironmentContext.Environment.IsExpress && !Resource.HasAnnotationOfType<ReplicaAnnotation>()
+                ? 0
+                : Resource.GetReplicaCount()
         };
 
         var containerAppContainer = new ContainerAppContainer();
@@ -112,8 +115,13 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
         };
         containerApp.Configuration = configuration;
 
-        // default autoConfigureDataProtection to true for .NET projects
-        if (Resource is IDotnetProgramResource && Resource.AsContainer() is null)
+        if (_containerAppEnvironmentContext.Environment.IsExpress)
+        {
+            containerApp.ResourceVersion = AzureContainerAppExpressSupport.ResourceVersion;
+        }
+        // Express does not support platform language-stack configuration.
+        // Otherwise default autoConfigureDataProtection to true for .NET projects.
+        else if (Resource is IDotnetProgramResource && Resource.AsContainer() is null)
         {
             const string latestPreview = "2025-10-02-preview"; // this property is currently only available in preview
             containerApp.ResourceVersion = latestPreview;
@@ -231,7 +239,8 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
                 var scheme = preserveHttp ? endpoint.UriScheme : "https";
                 var port = scheme is "http" ? 80 : 443;
 
-                _endpointMapping[endpoint.Name] = new(scheme, NormalizedContainerAppName, port, targetPort, true, httpIngress.External, endpoint.TlsEnabled);
+                _endpointMapping[endpoint.Name] = new(scheme, NormalizedContainerAppName, port, targetPort, true, httpIngress.External,
+                    _containerAppEnvironmentContext.Environment.IsExpress || endpoint.TlsEnabled);
             }
 
             // Record HTTP endpoints being upgraded (logged once at environment level)

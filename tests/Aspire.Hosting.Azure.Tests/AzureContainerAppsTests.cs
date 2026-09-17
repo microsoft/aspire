@@ -141,12 +141,20 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         Assert.Contains("autoConfigureDataProtection", bicep);
     }
 
-    [Fact]
-    public async Task EndpointReferenceToFoundryHostedAgentIsResolvedAcrossComputeEnvironments()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task EndpointReferenceToFoundryHostedAgentIsResolvedAcrossComputeEnvironments(bool useExpress)
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var acaEnv = builder.AddAzureContainerAppEnvironment("env");
+        if (useExpress)
+        {
+#pragma warning disable ASPIREACAEXPRESS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+            acaEnv = acaEnv.AsExpress();
+#pragma warning restore ASPIREACAEXPRESS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        }
 
         var project = builder.AddFoundry("foundry")
             .AddProject("project");
