@@ -802,10 +802,41 @@ internal sealed class NullBundleService : IBundleService
 }
 
 /// <summary>
+/// A bundle service that reports an already-extracted layout and records extraction requests.
+/// </summary>
+internal sealed class RecordingBundleService(string dcpDirectory) : IBundleService
+{
+    public int EnsureExtractedAndAcquireLayoutCallCount { get; private set; }
+
+    public bool IsBundle => true;
+
+    public Task EnsureExtractedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
+        => Task.FromResult(BundleExtractResult.NoPayload);
+
+    public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
+    {
+        EnsureExtractedAndAcquireLayoutCallCount++;
+
+        // GetComponentPath combines LayoutPath with the component's relative path, so root the
+        // layout at the DCP directory's parent and reference the directory by name.
+        var layout = new LayoutConfiguration
+        {
+            LayoutPath = Path.GetDirectoryName(dcpDirectory),
+            Components = new LayoutComponents { Dcp = Path.GetFileName(dcpDirectory) }
+        };
+
+        return Task.FromResult<BundleLayoutLease?>(new BundleLayoutLease(layout, lease: null));
+    }
+
+    public string? GetDefaultExtractDir(string processPath) => null;
+}
+
+/// <summary>
 /// A no-op payload provider that reports no payload available.
 /// </summary>
-internal sealed class NullBundlePayloadProvider : IBundlePayloadProvider
-{
+internal sealed class NullBundlePayloadProvider : IBundlePayloadProvider{
     public bool HasPayload => false;
 
     public Stream? OpenPayload() => null;

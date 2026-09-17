@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
 using Aspire.Shared;
@@ -14,6 +15,7 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// </summary>
 internal sealed class DcpConnectionHealthCheck(
     ILayoutDiscovery layoutDiscovery,
+    IBundleService bundleService,
     IDcpConnectionChecker connectionTester,
     CliExecutionContext executionContext,
     ILogger<DcpConnectionHealthCheck> logger) : IEnvironmentCheck
@@ -27,9 +29,16 @@ internal sealed class DcpConnectionHealthCheck(
 
     public async Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
     {
+        BundleLayoutLease? layoutLease = null;
         try
         {
-            var dcpDirectory = layoutDiscovery.GetComponentPath(LayoutComponent.Dcp, executionContext.WorkingDirectory.FullName);
+            // Layout discovery only finds a bundle that is already on disk, so extract first.
+            // Otherwise the first `aspire doctor` on a fresh install reports the DCP bundle as
+            // missing purely because nothing had extracted it yet. The lease is held for the whole
+            // check because the connection probes below launch DCP out of that layout.
+            layoutLease = await bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "doctor", cancellationToken).ConfigureAwait(false);
+            var dcpDirectory = layoutLease?.Layout.GetDcpPath() ??
+                layoutDiscovery.GetComponentPath(LayoutComponent.Dcp, executionContext.WorkingDirectory.FullName);
             if (string.IsNullOrWhiteSpace(dcpDirectory))
             {
                 logger.LogDebug("Skipping DCP connection health checks because no Aspire bundle layout was discovered.");
@@ -95,6 +104,10 @@ internal sealed class DcpConnectionHealthCheck(
                 Message = DoctorCommandStrings.DcpConnectionCheckFailedMessage,
                 Details = ex.Message
             }];
+        }
+        finally
+        {
+            layoutLease?.Dispose();
         }
     }
 
