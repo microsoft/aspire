@@ -142,7 +142,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool..
+        ///   Looks up a localized string similar to App host code can open terminals here. Resource terminals are shown separately on their resource pages..
         /// </summary>
         public static string TerminalDockPanelBody {
             get {
@@ -151,7 +151,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to No terminals.
+        ///   Looks up a localized string similar to No docked terminals.
         /// </summary>
         public static string TerminalDockPanelHeading {
             get {
@@ -160,11 +160,20 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Press ` to hide this panel..
+        ///   Looks up a localized string similar to Press the backtick key (`) to hide this panel..
         /// </summary>
         public static string TerminalDockPanelHint {
             get {
                 return ResourceManager.GetString("TerminalDockPanelHint", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resource terminals:.
+        /// </summary>
+        public static string TerminalDockResourceTerminals {
+            get {
+                return ResourceManager.GetString("TerminalDockResourceTerminals", resourceCulture);
             }
         }
 

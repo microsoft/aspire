@@ -130,9 +130,24 @@
             {
                 <div class="terminal-dock-panel">
                     <div class="terminal-dock-panel-card">
-                        <FluentIcon Value="@(new Icons.Regular.Size24.Window())" Color="Color.Default" />
+                        <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="24px" Color="Color.Default" />
                         <h3 class="terminal-dock-panel-heading">@Loc[nameof(Resources.Layout.TerminalDockPanelHeading)]</h3>
                         <p class="terminal-dock-panel-body">@Loc[nameof(Resources.Layout.TerminalDockPanelBody)]</p>
+                        @if (_resourceTerminalLinks.Length > 0)
+                        {
+                            <p class="terminal-dock-panel-body terminal-dock-resource-links">
+                                @Loc[nameof(Resources.Layout.TerminalDockResourceTerminals)]@(" ")
+                                @for (var i = 0; i < _resourceTerminalLinks.Length; i++)
+                                {
+                                    if (i > 0)
+                                    {
+                                        <text>, </text>
+                                    }
+                                    var link = _resourceTerminalLinks[i];
+                                    <a class="aspire-link-button" href="@link.Url">@link.Name</a>
+                                }
+                            </p>
+                        }
                         <a class="aspire-link-button" href="https://aka.ms/aspire/dashboard-terminals" target="_blank" rel="noopener noreferrer">@Loc[nameof(Resources.Layout.TerminalDockMoreInformation)]</a>
                         <p class="terminal-dock-panel-hint">@Loc[nameof(Resources.Layout.TerminalDockPanelHint)]</p>
                     </div>

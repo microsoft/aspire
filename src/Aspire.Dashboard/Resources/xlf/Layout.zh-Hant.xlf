@@ -203,24 +203,29 @@
         <note>Link to documentation about dashboard terminals, shown when the terminal dock is empty.</note>
       </trans-unit>
       <trans-unit id="TerminalDockPanelBody">
-        <source>Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool.</source>
-        <target state="new">Terminals are started by the app host. One appears here when app host code opens a terminal, or when a resource command runs an interactive tool.</target>
+        <source>App host code can open terminals here. Resource terminals are shown separately on their resource pages.</source>
+        <target state="new">App host code can open terminals here. Resource terminals are shown separately on their resource pages.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockPanelHeading">
-        <source>No terminals</source>
-        <target state="new">No terminals</target>
+        <source>No docked terminals</source>
+        <target state="new">No docked terminals</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockPanelHint">
-        <source>Press ` to hide this panel.</source>
-        <target state="new">Press ` to hide this panel.</target>
+        <source>Press the backtick key (`) to hide this panel.</source>
+        <target state="new">Press the backtick key (`) to hide this panel.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockResizeHelp">
         <source>Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</source>
         <target state="new">Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockResourceTerminals">
+        <source>Resource terminals:</source>
+        <target state="new">Resource terminals:</target>
+        <note>Label before a comma-separated list of links to resource terminal pages in the empty terminal dock.</note>
       </trans-unit>
       <trans-unit id="TerminalDockReturnToDock">
         <source>Return to panel</source>

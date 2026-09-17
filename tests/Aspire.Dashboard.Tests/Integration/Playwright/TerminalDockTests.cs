@@ -284,7 +284,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
                 else
                 {
                     await Assertions.Expect(page.Locator(".terminal-dock-collapse")).ToBeFocusedAsync();
-                    await Assertions.Expect(page.Locator(".terminal-dock-panel-heading")).ToHaveTextAsync("No terminals");
+                    await Assertions.Expect(page.Locator(".terminal-dock-panel-heading")).ToHaveTextAsync("No docked terminals");
                 }
             }
 

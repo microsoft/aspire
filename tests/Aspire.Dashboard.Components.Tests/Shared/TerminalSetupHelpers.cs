@@ -1,12 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.JSInterop;
@@ -16,6 +19,26 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class TerminalSetupHelpers
 {
+    public static ResourceViewModel CreateTerminalResource(
+        string resourceName,
+        int replicaIndex = 0,
+        int replicaCount = 1,
+        string? displayName = null,
+        KnownResourceState state = KnownResourceState.Running,
+        bool hidden = false)
+    {
+        var properties = new Dictionary<string, string>
+        {
+            [KnownProperties.Terminal.Enabled] = "true",
+            [KnownProperties.Terminal.ReplicaIndex] = replicaIndex.ToString(CultureInfo.InvariantCulture),
+            [KnownProperties.Terminal.ReplicaCount] = replicaCount.ToString(CultureInfo.InvariantCulture)
+        }.ToDictionary(pair => pair.Key, pair => new ResourcePropertyViewModel(
+            pair.Key, Value.ForString(pair.Value), isValueSensitive: false, knownProperty: null,
+            sortOrder: 0, displayName: null, isHighlighted: false));
+
+        return ModelTestHelpers.CreateResource(resourceName, state, displayName, properties: properties, hidden: hidden);
+    }
+
     public static void SetupTerminalComponents(TestContext context, TestDashboardClient client, string pathBase = "")
     {
         FluentUISetupHelpers.AddCommonDashboardServices(context);

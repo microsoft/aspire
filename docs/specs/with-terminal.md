@@ -369,6 +369,9 @@ dock. The shortcut is suppressed while a terminal or text input has focus so it
 does not consume typed input. Press <kbd>F6</kbd> first to move from terminal input
 to its footer controls before toggling the dock.
 
+When the dock is empty, it lists links to terminal-enabled resources on their
+resource pages. Resource terminals remain separate from AppHost-owned dock tabs.
+
 Dock panes, interaction dialogs and detached windows automatically fit when
 opened. A detached window takes primary once, carrying the originating view's
 selected font size rather than its grid dimensions. Its font preference can

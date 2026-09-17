@@ -25,7 +25,10 @@ public partial class MainLayoutTests
     public async Task TerminalDock_RequiresResourceService(bool isEnabled)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var client = new TestDashboardClient(isEnabled: isEnabled, terminalChannelProvider: () => updates);
+        var client = new TestDashboardClient(
+            isEnabled: isEnabled,
+            terminalChannelProvider: () => updates,
+            resourceChannelProvider: () => Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>());
         TerminalSetupHelpers.SetupTerminalView(this);
         TerminalSetupHelpers.SetupTerminalDock(this);
         SetupMainLayoutServices(dashboardClient: client);
@@ -64,7 +67,10 @@ public partial class MainLayoutTests
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var subscriptionDisposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var client = new TestDashboardClient(isEnabled: true, terminalChannelProvider: () => updates)
+        var client = new TestDashboardClient(
+            isEnabled: true,
+            terminalChannelProvider: () => updates,
+            resourceChannelProvider: () => Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>())
         {
             OnTerminalSubscriptionDisposed = () => subscriptionDisposed.TrySetResult()
         };

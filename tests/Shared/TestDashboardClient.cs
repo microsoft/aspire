@@ -37,6 +37,7 @@ public class TestDashboardClient : IDashboardClient
     public ConcurrentQueue<(IReadOnlyList<string> ResourceNames, DateTime ClearDate)> ClearedConsoleLogs { get; } = new();
     public ConcurrentQueue<string> ClosedTerminals { get; } = new();
     public Action? OnTerminalSubscriptionDisposed { get; set; }
+    public Action? OnResourceSubscriptionDisposed { get; set; }
     public Func<WatchTerminalsUpdate, Task>? BeforeTerminalUpdateAsync { get; set; }
     public int TerminalSubscriptionCount => Volatile.Read(ref _terminalSubscriptionCount);
     public int ActiveTerminalSubscriptionCount => Volatile.Read(ref _activeTerminalSubscriptionCount);
@@ -191,11 +192,18 @@ public class TestDashboardClient : IDashboardClient
 
         return Task.FromResult(new ResourceViewModelSubscription(_initialResources?.ToImmutableArray() ?? [], BuildSubscription(channel, cancellationToken)));
 
-        async static IAsyncEnumerable<IReadOnlyList<ResourceViewModelChange>> BuildSubscription(Channel<IReadOnlyList<ResourceViewModelChange>> channel, [EnumeratorCancellation] CancellationToken cancellationToken)
+        async IAsyncEnumerable<IReadOnlyList<ResourceViewModelChange>> BuildSubscription(Channel<IReadOnlyList<ResourceViewModelChange>> channel, [EnumeratorCancellation] CancellationToken cancellationToken)
         {
-            await foreach (var item in channel.Reader.ReadAllAsync(cancellationToken))
+            try
             {
-                yield return item;
+                await foreach (var item in channel.Reader.ReadAllAsync(cancellationToken))
+                {
+                    yield return item;
+                }
+            }
+            finally
+            {
+                OnResourceSubscriptionDisposed?.Invoke();
             }
         }
     }
