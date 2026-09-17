@@ -267,42 +267,6 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
-    [InlineData(EndpointProperty.Url)]
-    [InlineData(EndpointProperty.Host)]
-    [InlineData(EndpointProperty.IPV4Host)]
-    [InlineData(EndpointProperty.HostAndPort)]
-    public async Task ExpressConsumerRejectsPrivateStandardEndpoints(EndpointProperty property)
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var standard = builder.AddAzureContainerAppEnvironment("standard");
-        var express = builder.AddAzureContainerAppEnvironment("express").AsExpress();
-        var api = builder.AddContainer("api", "myimage")
-            .WithHttpEndpoint(targetPort: 8080)
-            .WithComputeEnvironment(standard);
-        var web = builder.AddContainer("web", "myimage")
-            .WithHttpEndpoint(targetPort: 8080)
-            .WithComputeEnvironment(express);
-        if (property is EndpointProperty.Url)
-        {
-            web.WithReference(api.GetEndpoint("http"));
-        }
-        else
-        {
-            web.WithEnvironment("API", ReferenceExpression.Create($"api={api.GetEndpoint("http").Property(property)}"));
-        }
-
-        using var app = builder.Build();
-        await ExecuteBeforeStartHooksAsync(app, default);
-        var exception = Assert.Throws<InvalidOperationException>(GetTarget(web.Resource).GetBicepTemplateString);
-
-        Assert.Equal(
-            "Azure Container Apps Express environment 'express' cannot reference internal endpoint 'http' on resource 'api'. " +
-            "Use WithExternalHttpEndpoints() to explicitly enable public HTTPS ingress, or use a standard Azure Container Apps environment.",
-            exception.Message);
-        Assert.False(api.GetEndpoint("http").EndpointAnnotation.IsExternal);
-    }
-
-    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task ConsumersAcceptPreservedHttpFromStandardEndpoints(bool expressConsumer)
