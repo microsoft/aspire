@@ -115,6 +115,8 @@
     <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Managed\**\publish\aspire-managed.exe" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsLinux())" Include="$(ArtifactsBinDir)Aspire.Managed/**/publish/aspire-managed" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsMacOS())" Include="$(ArtifactsBinDir)Aspire.Managed/**/publish/aspire-managed" />
+    <!-- Select only Hex1b's unsigned helper, preserving the upstream signatures on ConPTY and OpenConsole. -->
+    <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Managed\**\publish\hex1bpty.exe" />
     <!--
       Note: VS Code extension (.vsix) is NOT included here.
       Signing the VSIX changes its hash, breaking manifest integrity verification.

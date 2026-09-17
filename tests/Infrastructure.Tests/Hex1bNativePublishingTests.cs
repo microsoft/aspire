@@ -142,6 +142,28 @@ public sealed class Hex1bNativePublishingTests : IDisposable
             (string?)item.Attribute("PackagePath") == @"buildTransitive\$(DefaultTargetFramework)");
     }
 
+    [Fact]
+    public void WindowsManagedSigningIncludesPtyHelperAndPreservesMicrosoftSidecars()
+    {
+        var signingProps = XDocument.Load(Path.Combine(RepoRoot.Path, "eng", "Signing.props"));
+        var helperCertificate = Assert.Single(signingProps.Descendants("FileSignInfo"),
+            item => (string?)item.Attribute("Include") == "hex1bpty.exe");
+        Assert.Equal("3PartySHA2", (string?)helperCertificate.Attribute("CertificateName"));
+
+        var windowsManagedFiles = signingProps.Descendants("ItemsToSign")
+            .Where(item => (string?)item.Attribute("Condition") == "$([System.OperatingSystem]::IsWindows())")
+            .Select(item => (string?)item.Attribute("Include"))
+            .Where(path => path?.StartsWith("$(ArtifactsBinDir)Aspire.Managed", StringComparison.Ordinal) is true)
+            .Order(StringComparer.Ordinal);
+
+        Assert.Equal(
+            [
+                @"$(ArtifactsBinDir)Aspire.Managed\**\publish\aspire-managed.exe",
+                @"$(ArtifactsBinDir)Aspire.Managed\**\publish\hex1bpty.exe"
+            ],
+            windowsManagedFiles);
+    }
+
     private string CreatePublishProject(string rid, bool singleFile, bool duplicateUnrelatedAsset)
     {
         var nativeItems = new XElement("ItemGroup");
