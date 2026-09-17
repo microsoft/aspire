@@ -121,7 +121,7 @@ public class FilterDialogTests : DashboardTestContext
             })
         };
 
-        var cut = RenderComponent<FilterDialog>(builder => builder.Add(p => p.Content, content));
+        var cut = Render<FilterDialog>(builder => builder.Add(p => p.Content, content));
 
         var option = Assert.Single(cut.Find("fluent-dropdown[type='combobox']").QuerySelectorAll("fluent-option:not([freeform])"));
         Assert.Equal("trace-id", option.GetAttribute("text"));

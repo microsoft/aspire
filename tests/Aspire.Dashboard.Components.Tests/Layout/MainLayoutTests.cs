@@ -349,7 +349,7 @@ public partial class MainLayoutTests : DashboardTestContext
         var expectedRunText = FormatHelpers.FormatTimeWithOptionalDate(
             Services.GetRequiredService<BrowserTimeProvider>(),
             incompatibleRun.StartedAtUtc.UtcDateTime);
-        var cut = RenderComponent<DashboardRunSelect>(builder =>
+        var cut = Render<DashboardRunSelect>(builder =>
         {
             builder.Add(component => component.SelectedRunId, currentRun.RunId);
             builder.Add(component => component.SelectedRunIsCurrent, true);

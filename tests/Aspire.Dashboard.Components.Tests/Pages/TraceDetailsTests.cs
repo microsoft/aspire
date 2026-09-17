@@ -80,7 +80,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         Assert.Single(cut.FindComponents<FluentDataGrid<SpanWaterfallViewModel>>());
         cut.WaitForAssertion(() => Assert.Equal(1, telemetryRepository.TraceSubscriptionCount));
 
-        await cut.InvokeAsync(DisposeComponents);
+        await cut.InvokeAsync(DisposeComponentsAsync);
 
         Assert.Equal(0, telemetryRepository.TraceSubscriptionCount);
     }
