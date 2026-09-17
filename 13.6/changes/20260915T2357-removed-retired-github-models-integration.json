@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "GitHub Models was fully retired, so the `Aspire.Hosting.GitHub.Models` integration no longer worked and has been removed from the repository. Existing users must migrate to another model provider, such as Microsoft Foundry. Previously published package versions remain hidden from `aspire add`.",
-  "docsPrs": [],
+  "docsPrs": [
+    1672
+  ],
   "docsRequired": true,
   "emoji": "🗑️",
   "firstMergedAt": "2026-09-15T23:57:19Z",

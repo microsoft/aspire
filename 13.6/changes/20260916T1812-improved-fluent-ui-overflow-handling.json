@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Updated the dashboard's Fluent UI library to a preview build that fixes a global overlay spinner flash. Overflow menus for resource URLs, metric filter tags, and trace span summaries now keep their intrinsic width and stay bounded for large collections, and single resource URLs truncate with an ellipsis when a grid column is too narrow.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧵",
+  "firstMergedAt": "2026-09-16T18:12:30Z",
+  "lastMergedAt": "2026-09-16T18:12:30Z",
+  "name": "Improved Fluent UI overflow handling",
+  "owner": "JamesNK",
+  "prs": [
+    20176
+  ]
+}

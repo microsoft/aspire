@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed dashboard styling regressions: dialogs now expand to fit their content instead of scrolling prematurely, an empty message bar no longer reserves visible space, and disabled text inputs, dropdowns, number inputs, and checkboxes use consistent dark-theme surfaces and cursors.",
+  "docsPrs": [
+    1682
+  ],
+  "docsRequired": true,
+  "emoji": "🎨",
+  "firstMergedAt": "2026-09-16T16:54:07Z",
+  "lastMergedAt": "2026-09-16T16:54:07Z",
+  "name": "Fixed dashboard layout and disabled control styling",
+  "owner": "JamesNK",
+  "prs": [
+    20170
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Links from historical dashboard runs (resource URLs, console log links, and property-grid/text-visualizer links) now render at reduced opacity to visually distinguish them from the current run. Switching back to the current run restores normal opacity.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🕰️",
+  "firstMergedAt": "2026-09-16T16:58:14Z",
+  "lastMergedAt": "2026-09-16T16:58:14Z",
+  "name": "Dimmed links in historical dashboard runs",
+  "owner": "JamesNK",
+  "prs": [
+    20171
+  ]
+}

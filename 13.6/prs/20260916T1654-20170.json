@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixed dashboard layout and disabled control styling regressions",
+  "mergedAt": "2026-09-16T16:54:07Z",
+  "number": 20170,
+  "runDate": "2026-09-17T00:07:37Z",
+  "status": "included",
+  "title": "Fix dashboard layout and disabled control styling"
+}

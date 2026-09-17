@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "`AddDotnetProject()` resources can now be published and deployed, matching the capabilities already available to `AddProject()` resources. Docker Compose, Kubernetes, Azure Container Apps, Azure App Service, Azure Sandboxes, Foundry, and Radius publishers all recognize publishable .NET program resources, and EF Core migration and hosted Blazor scenarios work with the newer Project V2 model.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🚀",
+  "firstMergedAt": "2026-09-16T22:08:10Z",
+  "lastMergedAt": "2026-09-16T22:08:10Z",
+  "name": "DotnetProjectResource publishing support",
+  "owner": "karolz-ms",
+  "prs": [
+    19997
+  ]
+}

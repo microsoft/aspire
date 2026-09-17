@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed the selection checkmark in the Console Logs settings menu overlapping the label, and removed a stray fallback checkmark that appeared alongside the accent styling in selected Fluent dropdown options.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "✅",
+  "firstMergedAt": "2026-09-16T16:53:09Z",
+  "lastMergedAt": "2026-09-16T16:53:09Z",
+  "name": "Fixed dashboard selection indicators",
+  "owner": "JamesNK",
+  "prs": [
+    20141
+  ]
+}
