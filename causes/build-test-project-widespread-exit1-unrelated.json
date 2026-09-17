@@ -4,8 +4,8 @@
   "title": "Multiple unrelated 'Build test project' jobs (Hosting.RemoteHost, Hosting.Azure, Hosting.Azure.Kubernetes, Playground, Dashboard) fail with generic exit code 1",
   "job_name": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
   "error_pattern": "Process completed with exit code 1. (Build test project step failed across multiple unrelated jobs simultaneously; job logs unavailable: 'Failed to fetch logs for job').",
-  "analysis": "Job failed at the 'Build test project' step with a generic exit code 1 and no fetchable job logs, matching a recurring pattern of widespread unrelated 'Build test project' failures. PR #20140 only modifies Aspire.Dashboard source and tests, unrelated to the Hosting.RemoteHost build.",
-  "failure_details": "### Annotations: Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest) (104628488998)\n- warning: No files were found with the provided path: **/*.binlog\ntestresults/**\nartifacts/bin/Aspire.Templates.Tests/Debug/net8.0/logs/**\nartifacts/log/test-logs/**. No artifacts will be uploaded.\n- failure: Process completed with exit code 1.\n\nJob logs were unavailable: 'Failed to fetch logs for job'.",
+  "analysis": "The 'Build test project' step failed with a bare exit code 1 and no retrievable job logs. The PR only modifies Aspire.Hosting.Dotnet source/tests and does not touch Hosting.RemoteHost, so this is unrelated to the PR's changes. This exact generic failure signature has recurred across multiple unrelated test-build jobs in past runs.",
+  "failure_details": "### Job: Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)\n- Conclusion: failure\n- Failed Steps: Build test project\n- Annotation: failure - Process completed with exit code 1.\n- Job logs: (Failed to fetch logs for job 105381679335)\nPR changed files are limited to src/Aspire.Hosting.Dotnet/* and its tests/PolyglotAppHosts samples, none of which relate to Hosting.RemoteHost.",
   "occurrences": [
     {
       "run_id": 33494022725,
@@ -83,6 +83,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
       "pr_number": 20140,
       "observed_at": "2026-09-16T02:17:11Z"
+    },
+    {
+      "run_id": 35274272340,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35274272340",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
+      "pr_number": 20157,
+      "observed_at": "2026-09-17T21:41:00Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19838"
