@@ -12,8 +12,9 @@
     box-sizing: border-box;
     max-height: 100vh;
     background-color: #0d1117;
-    border-top: 1px solid var(--colorNeutralStroke1);
     transition: transform 120ms ease-out;
+    --fluent-multi-splitter-bar-size: 5px;
+    --fluent-multi-splitter-background-color: var(--colorNeutralStroke2);
     /* The dock stays dark in both dashboard themes. Pin the Fluent tokens its buttons and icons
        consume so a light dashboard theme cannot paint dark icons or light controls on the tabstrip. */
     --colorNeutralForeground1: #c9d1d9;
@@ -52,6 +53,7 @@
     gap: 2px;
     padding: 2px 4px;
     background-color: #161b22;
+    border-top: 1px solid var(--colorNeutralStroke1);
     border-bottom: 1px solid var(--colorNeutralStroke1);
     flex: 0 0 auto;
 }
@@ -164,21 +166,44 @@
 }
 
 .terminal-dock-resize-handle {
-    flex: 0 0 auto;
-    height: 6px;
-    cursor: ns-resize;
+    position: absolute;
+    inset-inline: 0;
+    top: calc((1px - var(--fluent-multi-splitter-bar-size)) / 2);
+    z-index: 1;
+    height: var(--fluent-multi-splitter-bar-size);
+    cursor: row-resize;
     background-color: transparent;
     touch-action: none;
 }
 
 .terminal-dock-resize-handle:hover {
-    background-color: var(--colorBrandStroke1);
+    background-color: var(--fluent-multi-splitter-background-color);
+}
+/*
+.terminal-dock-resize-handle::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 50%;
+    height: 1px;
+    background-color: var(--fluent-multi-splitter-background-color);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-50%);
+}
+*/
+.terminal-dock-resize-handle:hover::before {
+    opacity: 0.8;
 }
 
 .terminal-dock-resize-handle:focus-visible {
-    background-color: var(--colorStrokeFocus2);
     outline: 2px solid var(--colorStrokeFocus2);
     outline-offset: -2px;
+}
+
+.terminal-dock-resize-handle:focus-visible::before {
+    background-color: var(--colorBrandStroke1);
+    opacity: 1;
 }
 
 /* Shown in place of the terminal while it is running in a detached window. */
