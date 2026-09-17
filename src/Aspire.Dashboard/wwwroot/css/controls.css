@@ -661,6 +661,19 @@ body {
     min-width: 180px;
 }
 
+/* A submenu can be taller than the space both above and below its anchor. Keep Fluent's
+   preferred placements, then constrain the popup to the viewport if neither fits.
+   https://developer.mozilla.org/docs/Web/CSS/@position-try */
+@position-try --aspire-submenu-viewport {
+    top: 4px;
+    bottom: auto;
+    max-height: calc(100dvh - 8px);
+}
+
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item > fluent-menu-list {
+    position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline, --aspire-submenu-viewport, --aspire-submenu-viewport flip-inline;
+}
+
 :is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item {
     gap: 0;
     grid-template-columns: minmax(32px, auto) 0 minmax(0, 1fr) minmax(32px, auto);
