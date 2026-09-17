@@ -8,18 +8,18 @@
     "start": "next start"
   },
   "dependencies": {
-    "next": "16.2.11",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "next": "16.3.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@types/node": "25.5.0",
-    "@types/react": "19.2.14",
-    "typescript": "6.0.2"
+    "@types/node": "25.9.5",
+    "@types/react": "19.2.18",
+    "typescript": "6.0.3"
   },
   "overrides": {
-    "postcss": "8.5.23",
-    "nanoid": "3.3.17",
-    "sharp": "0.35.0"
+    "postcss": "8.5.28",
+    "nanoid": "3.3.18",
+    "sharp": "0.35.4"
   }
 }

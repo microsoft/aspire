@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREDOTNETPROJECT001
+#pragma warning disable ASPIREPROJECTS001
 
 using System.Net;
 using System.Runtime.CompilerServices;
@@ -434,6 +436,26 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
+    public void AsHostedAgent_InPublishMode_DotnetProjectKeepsSdkPublishingTarget()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var agent = builder.AddDotnetProject("agent", "agent.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint(targetPort: 9000, env: "DEFAULT_AD_PORT")
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        Assert.Same(agent.Resource, hostedAgent.Target);
+        Assert.True(agent.Resource.SupportsDotnetProgramPublishing());
+        Assert.DoesNotContain(builder.Resources.OfType<ContainerResource>(), resource => resource.Name == agent.Resource.Name);
+        Assert.DoesNotContain(agent.Resource.Annotations, annotation => annotation is DockerfileBuildAnnotation);
+        Assert.Contains(agent.Resource.Annotations, annotation => annotation is EndpointEnvironmentInjectionFilterAnnotation);
+    }
+
+    [Fact]
     public void AsHostedAgent_WithOptions_AppliesAllPropertiesToConfiguration()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -787,7 +809,7 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void AsHostedAgent_StampsReferenceRoleAssignmentAnnotationOnTarget_WithAzureAIUserRole()
+    public void AsHostedAgent_StampsReferenceRoleAssignmentAnnotationOnTarget_WithFoundryUserRole()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
@@ -803,12 +825,12 @@ public class HostedAgentExtensionTests
         var annotation = Assert.Single(hostedAgent.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
         Assert.Same(account, annotation.Target);
         Assert.Contains(annotation.Roles, role =>
-            string.Equals(role.Id, AzureHostedAgentResource.AzureAIUserRoleDefinitionId, StringComparison.OrdinalIgnoreCase));
+            string.Equals(role.Id, FoundryResource.FoundryUserRoleDefinitionId, StringComparison.OrdinalIgnoreCase));
 #pragma warning restore ASPIREAZURE003
     }
 
     [Fact]
-    public void AsHostedAgent_ReferenceRoleAssignmentAnnotation_GrantsOnlyAzureAIUserRole()
+    public void AsHostedAgent_ReferenceRoleAssignmentAnnotation_GrantsOnlyFoundryUserRole()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
@@ -824,9 +846,9 @@ public class HostedAgentExtensionTests
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
         var annotation = Assert.Single(hostedAgent.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
 
-        // The implied grant is least-privilege: only "Azure AI User" is required to invoke the agent.
+        // The implied grant is least-privilege: only "Foundry User" is required to invoke the agent.
         var role = Assert.Single(annotation.Roles);
-        Assert.Equal(AzureHostedAgentResource.AzureAIUserRoleDefinitionId, role.Id, ignoreCase: true);
+        Assert.Equal(FoundryResource.FoundryUserRoleDefinitionId, role.Id, ignoreCase: true);
 
         // The account's default data-plane roles must NOT be folded in here. A consumer that references
         // the account directly still receives them via the preparer's normal walk, and a consumer that

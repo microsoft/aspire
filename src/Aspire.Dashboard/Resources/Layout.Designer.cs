@@ -106,6 +106,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to This run can't be viewed because it was created by an incompatible version of the dashboard..
+        /// </summary>
+        public static string DashboardRunSelectIncompatibleTooltip {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectIncompatibleTooltip", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Aspire.
         /// </summary>
         public static string MainLayoutAspire {

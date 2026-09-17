@@ -22,11 +22,17 @@ public partial class GridColumnManager : ComponentBase, IDisposable
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
 
+    /// <summary>
+    /// Gets the column identifiers in their declared order.
+    /// </summary>
+    public IReadOnlyList<string> ColumnOrder { get; private set; } = null!;
+
     public ViewportInformation ViewportInformation => _gridViewportInformation ?? DimensionManager.ViewportInformation;
 
     protected override void OnInitialized()
     {
         _columnById = Columns.ToDictionary(c => c.Name, StringComparers.GridColumn);
+        ColumnOrder = [.. Columns.Select(c => c.Name)];
 
         DimensionManager.OnViewportSizeChanged += OnViewportSizeChanged;
 

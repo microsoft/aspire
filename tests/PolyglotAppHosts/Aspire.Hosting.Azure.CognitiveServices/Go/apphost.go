@@ -13,6 +13,10 @@ func main() {
 	}
 
 	openai := builder.AddAzureOpenAI("openai")
+	_ = openai.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		account := infrastructure.GetCognitiveServicesAccount()
+		account.Tags().Set("provisioning-proxy", "go")
+	})
 	if openai.Err() != nil {
 		log.Fatalf(aspire.FormatError(openai.Err()))
 	}

@@ -234,12 +234,14 @@ public static class AtsCapabilityScanner
         // Pass 5: Filter method name collisions (overloaded methods) after expansion
         FilterMethodNameCollisions(allCapabilities, allDiagnostics);
 
+        var resolvedEnumTypes = ResolveEnumTypeNames(allEnumTypes);
+
         return new ScanResult
         {
             Capabilities = allCapabilities,
             HandleTypes = allTypeInfos,
             DtoTypes = allDtoTypes,
-            EnumTypes = allEnumTypes,
+            EnumTypes = resolvedEnumTypes,
             ExportedValues = allExportedValues,
             Diagnostics = allDiagnostics,
             Methods = allMethods,
@@ -273,18 +275,90 @@ public static class AtsCapabilityScanner
         FilterMethodNameCollisions(result.Capabilities, result.Diagnostics);
 
         var exportedValues = DeduplicateExportedValues(result.ExportedValues, result.Diagnostics);
+        var resolvedEnumTypes = ResolveEnumTypeNames(result.EnumTypes);
 
         return new ScanResult
         {
             Capabilities = result.Capabilities,
             HandleTypes = result.HandleTypes,
             DtoTypes = result.DtoTypes,
-            EnumTypes = result.EnumTypes,
+            EnumTypes = resolvedEnumTypes,
             ExportedValues = exportedValues,
             Diagnostics = result.Diagnostics,
             Methods = result.Methods,
             Properties = result.Properties
         };
+    }
+
+    private static List<AtsEnumTypeInfo> ResolveEnumTypeNames(IReadOnlyList<AtsEnumTypeInfo> enumTypes)
+    {
+        var collidingNames = enumTypes
+            .GroupBy(enumType => enumType.Name, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (collidingNames.Count == 0)
+        {
+            return [.. enumTypes];
+        }
+
+        var usedNames = enumTypes
+            .Where(enumType => !collidingNames.Contains(enumType.Name))
+            .Select(enumType => enumType.Name)
+            .ToHashSet(StringComparer.Ordinal);
+        var resolvedNames = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var group in enumTypes
+            .Where(enumType => collidingNames.Contains(enumType.Name))
+            .GroupBy(enumType => enumType.Name, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal))
+        {
+            foreach (var enumType in group.OrderBy(enumType => enumType.TypeId, StringComparer.Ordinal))
+            {
+                // Different integration packages can expose unrelated enums with the same CLR simple name.
+                // Prefix only those collisions so existing generated names remain stable for every unique enum.
+                var baseName = GetEnumNamePrefix(enumType) + enumType.Name;
+                var resolvedName = baseName;
+                var suffix = 2;
+
+                while (!usedNames.Add(resolvedName))
+                {
+                    resolvedName = baseName + suffix++;
+                }
+
+                resolvedNames[enumType.TypeId] = resolvedName;
+            }
+        }
+
+        return
+        [
+            .. enumTypes.Select(enumType => resolvedNames.TryGetValue(enumType.TypeId, out var resolvedName)
+                ? new AtsEnumTypeInfo
+                {
+                    TypeId = enumType.TypeId,
+                    Name = resolvedName,
+                    Values = enumType.Values,
+                    ValueInfos = enumType.ValueInfos,
+                    ClrType = enumType.ClrType,
+                    Documentation = enumType.Documentation
+                }
+                : enumType)
+        ];
+    }
+
+    private static string GetEnumNamePrefix(AtsEnumTypeInfo enumType)
+    {
+        var assemblyName = enumType.ClrType?.Assembly.GetName().Name;
+        var prefix = assemblyName?[(assemblyName.LastIndexOf('.') + 1)..] ?? "Enum";
+        var sanitizedPrefix = new string([.. prefix.Where(character => char.IsAsciiLetterOrDigit(character) || character == '_')]);
+
+        if (sanitizedPrefix.Length == 0 || char.IsDigit(sanitizedPrefix[0]))
+        {
+            return "Enum" + sanitizedPrefix;
+        }
+
+        return sanitizedPrefix;
     }
 
     /// <summary>
@@ -1668,6 +1742,7 @@ public static class AtsCapabilityScanner
                 var methodNameOverride = memberExportAttr?.MethodName;
                 var propertyDocumentation = GetXmlDocumentation(property, memberExportAttr?.Description);
                 var propertyDescription = memberExportAttr?.Description ?? propertyDocumentation?.Summary ?? $"Gets the {property.Name} property";
+                var isExperimental = AttributeDataReader.HasExperimentalData(property);
 
                 // Generate getter capability if property is readable
                 // Naming: {TypeName}.{propertyName} (camelCase, no "get" prefix)
@@ -1685,6 +1760,7 @@ public static class AtsCapabilityScanner
                         OwningTypeName = typeName,
                         Description = propertyDescription,
                         Documentation = propertyDocumentation,
+                        IsExperimental = isExperimental,
                         Parameters = [
                             new AtsParameterInfo
                             {
@@ -1727,6 +1803,7 @@ public static class AtsCapabilityScanner
                         OwningTypeName = typeName,
                         Description = $"Sets the {property.Name} property",
                         Documentation = propertyDocumentation,
+                        IsExperimental = isExperimental,
                         Parameters = [
                             new AtsParameterInfo
                             {
@@ -1895,6 +1972,7 @@ public static class AtsCapabilityScanner
                 var returnTypeRef = CreateTypeRef(method.ReturnType, enumCollector: null, assemblyExportedTypeCache);
 
                 var obsoleteData = AttributeDataReader.GetObsoleteData(method);
+                var isExperimental = AttributeDataReader.HasExperimentalData(method);
 
                 // Get simple method name (without type prefix)
                 var simpleMethodName = methodNameOverride ?? customMethodName ?? ToCamelCase(method.Name);
@@ -1906,6 +1984,7 @@ public static class AtsCapabilityScanner
                     OwningTypeName = typeName,
                     Description = description,
                     Documentation = methodDocumentation,
+                    IsExperimental = isExperimental,
                     IsObsolete = obsoleteData is not null,
                     ObsoleteMessage = obsoleteData?.Message,
                     Parameters = paramInfos,
@@ -2002,6 +2081,7 @@ public static class AtsCapabilityScanner
         // Get named arguments
         var methodNameOverride = exportAttr.MethodName;
         var obsoleteData = AttributeDataReader.GetObsoleteData(method);
+        var isExperimental = AttributeDataReader.HasExperimentalData(method);
 
         var methodName = methodNameOverride ?? methodNameFromAttr;
         // New format: {AssemblyName}/{methodName}
@@ -2078,6 +2158,7 @@ public static class AtsCapabilityScanner
             MethodName = methodName,
             Description = description,
             Documentation = methodDocumentation,
+            IsExperimental = isExperimental,
             IsObsolete = obsoleteData is not null,
             ObsoleteMessage = obsoleteData?.Message,
             Parameters = paramInfos,
@@ -2672,7 +2753,8 @@ public static class AtsCapabilityScanner
         var underlyingType = Nullable.GetUnderlyingType(type);
         if (underlyingType != null)
         {
-            return CreateTypeRef(underlyingType, enumCollector, assemblyExportedTypeCache);
+            var typeRef = CreateTypeRef(underlyingType, enumCollector, assemblyExportedTypeCache);
+            return typeRef is null ? null : WithNullability(typeRef, type, NullabilityState.Nullable);
         }
 
         // Handle primitives

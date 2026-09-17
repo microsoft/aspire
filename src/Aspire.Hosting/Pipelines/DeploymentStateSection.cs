@@ -37,6 +37,8 @@ public sealed class DeploymentStateSection(string sectionName, JsonObject? data,
     /// </remarks>
     public JsonObject Data { get; } = data ?? [];
 
+    internal JsonObject OriginalData { get; set; } = data?.DeepClone().AsObject() ?? [];
+
     /// <summary>
     /// Gets or sets the current version of this section.
     /// </summary>

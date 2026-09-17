@@ -9,7 +9,6 @@ using System.Threading.Channels;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Git;
 using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.FileProviders;
@@ -28,23 +27,26 @@ internal sealed class AuxiliaryBackchannelMonitor(
     TimeProvider timeProvider,
     ProfilingTelemetry profilingTelemetry) : BackgroundService, IAuxiliaryBackchannelMonitor
 {
+    /// <summary>
+    /// Identifies the log written on each connect attempt, so tests can observe attempts without
+    /// depending on the wording of the message.
+    /// </summary>
+    internal static EventId ConnectingToSocketEvent { get; } = new(1, nameof(ConnectingToSocketEvent));
+
     private static readonly TimeSpan s_maxRetryElapsed = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan s_maxRetryDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan s_initialUnreachableRetryDelay = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan s_maxUnreachableRetryDelay = TimeSpan.FromMinutes(5);
 
-    // Compact socket file names have no prefix to reduce the path length as much as possible and avoid socket path length limits,
-    // which are much shorter than typical file path limits (e.g. 108 BYTES on Windows/Linux).
-    // But this means we need to watch for all files while keeping backchannel sockets in a directory separate 
-    // from other CLI-managed files.
-    private const string CompactSocketWatchPattern = "*";
-    private const string LegacySocketWatchPattern = "aux*.sock.*";
-
-    // Outer key: hash (prefix), Inner key: socketPath, Value: connection
-    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, AppHostAuxiliaryBackchannel>> _connectionsByHash = new();
-    private readonly string _backchannelsDirectory = BackchannelConstants.GetBackchannelsDirectory(GetHomeDirectory());
-    private readonly string _legacyBackchannelsDirectory = BackchannelConstants.GetLegacyBackchannelsDirectory(GetHomeDirectory());
+    private readonly ConcurrentDictionary<string, AppHostAuxiliaryBackchannel> _connectionsBySocketPath = new(StringComparers.FileSystemPath);
+    private readonly IReadOnlyList<AppHostSocketDirectory> _socketDirectories = AppHostSocketManager.GetSocketDirectories(executionContext.HomeDirectory.FullName);
 
     // Track known socket files to detect additions and removals
-    private readonly HashSet<string> _knownSocketFiles = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _knownSocketPaths = new(StringComparers.FileSystemPath);
+
+    // Sockets that exhausted the connect retry budget but that we are not allowed to delete.
+    // See MarkUnreachable for why these need a backoff instead of an immediate retry.
+    private readonly ConcurrentDictionary<string, UnreachableSocket> _unreachableSockets = new(StringComparers.FileSystemPath);
     private readonly SemaphoreSlim _scanLock = new(1, 1);
     private readonly TimeProvider _timeProvider = timeProvider;
     private event Action? ConnectionsChanged;
@@ -53,15 +55,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
     /// Gets all active AppHost connections, flattened from all hashes.
     /// </summary>
     public IEnumerable<IAppHostAuxiliaryBackchannel> Connections =>
-        _connectionsByHash.Values.SelectMany(d => d.Values);
-
-    /// <summary>
-    /// Gets connections for a specific AppHost hash (prefix).
-    /// </summary>
-    /// <param name="hash">The AppHost hash.</param>
-    /// <returns>All connections for the given hash, or empty if none.</returns>
-    public IEnumerable<IAppHostAuxiliaryBackchannel> GetConnectionsByHash(string hash) =>
-        _connectionsByHash.TryGetValue(hash, out var connections) ? connections.Values : [];
+        _connectionsBySocketPath.Values;
 
     public async IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
@@ -72,29 +66,22 @@ internal sealed class AuxiliaryBackchannelMonitor(
         void QueueConnectionChange() => connectionChanges.Writer.TryWrite(true);
 
         ConnectionsChanged += QueueConnectionChange;
+        List<PhysicalFileProvider>? fileProviders = null;
 
         try
         {
-            Directory.CreateDirectory(_backchannelsDirectory);
-            Directory.CreateDirectory(_legacyBackchannelsDirectory);
-
             await ProcessDirectoryChangesAsync(cancellationToken).ConfigureAwait(false);
             yield return Connections.ToList();
 
-            using var fileProvider = new PhysicalFileProvider(_backchannelsDirectory);
-            fileProvider.UsePollingFileWatcher = true;
-            fileProvider.UseActivePolling = true;
-            using var legacyFileProvider = new PhysicalFileProvider(_legacyBackchannelsDirectory);
-            legacyFileProvider.UsePollingFileWatcher = true;
-            legacyFileProvider.UseActivePolling = true;
+            fileProviders = CreateFileProviders();
 
             _ = Task.Run(async () =>
             {
                 try
                 {
                     await Task.WhenAll(
-                        WatchConnectionChangesAsync(fileProvider, CompactSocketWatchPattern, cancellationToken),
-                        WatchConnectionChangesAsync(legacyFileProvider, LegacySocketWatchPattern, cancellationToken)).ConfigureAwait(false);
+                        fileProviders.Select((fileProvider, index) =>
+                            WatchConnectionChangesAsync(fileProvider, _socketDirectories[index].SearchPattern, cancellationToken))).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -115,6 +102,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
         {
             ConnectionsChanged -= QueueConnectionChange;
             connectionChanges.Writer.TryComplete();
+            DisposeFileProviders(fileProviders);
         }
 
         async Task WatchConnectionChangesAsync(IFileProvider fileProvider, string watchPattern, CancellationToken cancellationToken)
@@ -144,40 +132,72 @@ internal sealed class AuxiliaryBackchannelMonitor(
     {
         get
         {
-            var connections = Connections.ToList();
+            var selectedAppHostPath = SelectedAppHostPath;
+            var connection = SelectConnection(Connections, ref selectedAppHostPath);
 
-            if (connections.Count == 0)
-            {
-                return null;
-            }
-
-            // Check if a specific AppHost was selected
-            if (!string.IsNullOrEmpty(SelectedAppHostPath))
-            {
-                var selectedConnection = connections.FirstOrDefault(c =>
-                    c.AppHostInfo?.AppHostPath != null &&
-                    string.Equals(Path.GetFullPath(c.AppHostInfo.AppHostPath), Path.GetFullPath(SelectedAppHostPath), StringComparison.OrdinalIgnoreCase));
-
-                if (selectedConnection != null)
-                {
-                    return selectedConnection;
-                }
-
-                // Clear the selection since the AppHost is no longer available
-                SelectedAppHostPath = null;
-            }
-
-            // Look for in-scope connections
-            var inScopeConnections = connections.Where(c => c.IsInScope).ToList();
-
-            if (inScopeConnections.Count == 1)
-            {
-                return inScopeConnections[0];
-            }
-
-            // Fall back to the first available connection
-            return connections.FirstOrDefault();
+            // SelectConnection clears the selection when the chosen AppHost is gone.
+            SelectedAppHostPath = selectedAppHostPath;
+            return connection;
         }
+    }
+
+    /// <summary>
+    /// Applies the AppHost selection policy: an explicit selection wins, then a single in-scope
+    /// connection, then whatever is available.
+    /// </summary>
+    /// <remarks>
+    /// Kept separate from the property so test doubles can reuse the real policy instead of carrying
+    /// their own copy of it, which would let the two drift and make selection tests vacuous.
+    /// </remarks>
+    /// <param name="connections">The currently established connections.</param>
+    /// <param name="selectedAppHostPath">
+    /// The explicitly selected AppHost path. Set to <see langword="null"/> when it no longer matches
+    /// any connection, so the caller stops trying to honor a selection that has gone away.
+    /// </param>
+    internal static IAppHostAuxiliaryBackchannel? SelectConnection(
+        IEnumerable<IAppHostAuxiliaryBackchannel> connections,
+        ref string? selectedAppHostPath)
+    {
+        var candidates = connections.ToList();
+
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        // Check if a specific AppHost was selected
+        if (!string.IsNullOrEmpty(selectedAppHostPath))
+        {
+            // Hoisted out of the predicate because canonicalization walks the filesystem per
+            // path segment, and every writer of SelectedAppHostPath already stores a canonical
+            // path, so this normally resolves to itself.
+            var selectedCanonicalPath = PathNormalizer.ResolveToFilesystemPath(selectedAppHostPath);
+            var selectedConnection = candidates.FirstOrDefault(c =>
+                c.AppHostInfo?.AppHostPath != null &&
+                string.Equals(
+                    PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath),
+                    selectedCanonicalPath,
+                    StringComparisons.FileSystemPath));
+
+            if (selectedConnection != null)
+            {
+                return selectedConnection;
+            }
+
+            // Clear the selection since the AppHost is no longer available
+            selectedAppHostPath = null;
+        }
+
+        // Look for in-scope connections
+        var inScopeConnections = candidates.Where(c => c.IsInScope).ToList();
+
+        if (inScopeConnections.Count == 1)
+        {
+            return inScopeConnections[0];
+        }
+
+        // Fall back to the first available connection
+        return candidates[0];
     }
 
     /// <summary>
@@ -202,12 +222,12 @@ internal sealed class AuxiliaryBackchannelMonitor(
             return false;
         }
 
-        // Resolve symlinks (not just Path.GetFullPath) on both operands. The OS reports a process's current
-        // directory in physical form (for example macOS temp dirs under /var -> /private/var), while a
-        // file-based AppHost reports its path unresolved, so comparing without resolving symlinks would treat
-        // an in-scope AppHost as out of scope. 
-        var normalizedWorkingDirectory = PathNormalizer.ResolveSymlinks(workingDirectory);
-        var normalizedAppHostPath = PathNormalizer.ResolveSymlinks(appHostPath);
+        // Resolve symlinks and filesystem aliases on both operands. The OS reports a process's
+        // current directory in physical form (for example macOS temp dirs under /var -> /private/var),
+        // while a file-based AppHost can report its path unresolved, so comparing without filesystem
+        // normalization would treat an in-scope AppHost as out of scope.
+        var normalizedWorkingDirectory = PathNormalizer.ResolveToFilesystemPath(workingDirectory);
+        var normalizedAppHostPath = PathNormalizer.ResolveToFilesystemPath(appHostPath);
 
         // Check if the AppHost path is within the working directory
         var relativePath = Path.GetRelativePath(normalizedWorkingDirectory, normalizedAppHostPath);
@@ -250,28 +270,21 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
             logger.LogInformation("Starting auxiliary backchannel monitor for {CommandType}", command.GetType().Name);
 
-            // Ensure both directories exist so the monitor can see compact sockets and
-            // sockets created by older AppHosts that still use the legacy location.
-            Directory.CreateDirectory(_backchannelsDirectory);
-            Directory.CreateDirectory(_legacyBackchannelsDirectory);
-
             // Scan for existing sockets on startup.
             await ProcessDirectoryChangesAsync(stoppingToken).ConfigureAwait(false);
 
-            // Use file watcher with polling enabled for reliability.
-            using var fileProvider = new PhysicalFileProvider(_backchannelsDirectory);
-            fileProvider.UsePollingFileWatcher = true;
-            fileProvider.UseActivePolling = true;
-            using var legacyFileProvider = new PhysicalFileProvider(_legacyBackchannelsDirectory);
-            legacyFileProvider.UsePollingFileWatcher = true;
-            legacyFileProvider.UseActivePolling = true;
-
-            // Run the watcher loop until cancellation
-            var fileWatcherTask = Task.WhenAll(
-                RunFileWatcherLoopAsync(fileProvider, CompactSocketWatchPattern, stoppingToken),
-                RunFileWatcherLoopAsync(legacyFileProvider, LegacySocketWatchPattern, stoppingToken));
-
-            await fileWatcherTask.ConfigureAwait(false);
+            var fileProviders = CreateFileProviders();
+            try
+            {
+                // Run the watcher loops until cancellation.
+                await Task.WhenAll(
+                    fileProviders.Select((fileProvider, index) =>
+                        RunFileWatcherLoopAsync(fileProvider, _socketDirectories[index].SearchPattern, stoppingToken))).ConfigureAwait(false);
+            }
+            finally
+            {
+                DisposeFileProviders(fileProviders);
+            }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -291,13 +304,62 @@ internal sealed class AuxiliaryBackchannelMonitor(
             // Clean up all connections in parallel
             var disconnectTasks = Connections.Select(DisconnectAsync);
             await Task.WhenAll(disconnectTasks).ConfigureAwait(false);
-            _connectionsByHash.Clear();
+            _connectionsBySocketPath.Clear();
         }
     }
 
     private async Task UpdateConnectionsAsync(CancellationToken cancellationToken)
     {
         await ProcessDirectoryChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Creates a polling file provider for every directory that can contain backchannel sockets.
+    /// </summary>
+    /// <remarks>
+    /// The directories are created first because <see cref="PhysicalFileProvider"/> requires an
+    /// existing root, and because sockets from older AppHosts still land in the legacy location.
+    /// Polling is enabled because the sockets are created by other processes and native change
+    /// notifications for socket files are not reliable across platforms.
+    /// </remarks>
+    private List<PhysicalFileProvider> CreateFileProviders()
+    {
+        var fileProviders = new List<PhysicalFileProvider>(_socketDirectories.Count);
+        try
+        {
+            foreach (var socketDirectory in _socketDirectories)
+            {
+                Directory.CreateDirectory(socketDirectory.DirectoryPath);
+                fileProviders.Add(new PhysicalFileProvider(socketDirectory.DirectoryPath)
+                {
+                    UsePollingFileWatcher = true,
+                    UseActivePolling = true
+                });
+            }
+        }
+        catch
+        {
+            // Each provider already constructed owns an active polling timer, and the caller's
+            // finally only runs once this method returns a list to assign, so a failure partway
+            // through the loop would leak every provider created before it.
+            DisposeFileProviders(fileProviders);
+            throw;
+        }
+
+        return fileProviders;
+    }
+
+    private static void DisposeFileProviders(List<PhysicalFileProvider>? fileProviders)
+    {
+        if (fileProviders is null)
+        {
+            return;
+        }
+
+        foreach (var fileProvider in fileProviders)
+        {
+            fileProvider.Dispose();
+        }
     }
 
     private async Task<IReadOnlyList<Task>> ProcessDirectoryChangesAsync(CancellationToken cancellationToken)
@@ -308,42 +370,38 @@ internal sealed class AuxiliaryBackchannelMonitor(
         await _scanLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var currentFiles = new HashSet<string>(GetSocketFiles(), StringComparer.OrdinalIgnoreCase);
+            var currentSockets = AppHostSocketManager.FindSockets(executionContext.HomeDirectory.FullName, Environment.ProcessId, logger);
+            var currentSocketPaths = currentSockets.Select(socket => socket.SocketPath).ToHashSet(StringComparers.FileSystemPath);
 
-            // Find new files (files that exist now but weren't known before)
-            var newFiles = currentFiles.Except(_knownSocketFiles, StringComparer.OrdinalIgnoreCase).ToList();
-            connectTasks.EnsureCapacity(newFiles.Count);
-            foreach (var newFile in newFiles)
+            // Find new sockets (files that exist now but weren't known before), plus previously
+            // unreachable sockets whose backoff has expired.
+            var newSockets = currentSockets
+                .Where(socket => !_knownSocketPaths.Contains(socket.SocketPath) || TryClaimRetry(socket.SocketPath))
+                .ToList();
+            connectTasks.EnsureCapacity(newSockets.Count);
+            foreach (var newSocket in newSockets)
             {
-                logger.LogDebug("Socket created: {SocketPath}", newFile);
-                connectTasks.Add(TryConnectToSocketAsync(newFile, failedSockets, cancellationToken));
+                logger.LogDebug("Socket created: {SocketPath}", newSocket.SocketPath);
+                connectTasks.Add(TryConnectToSocketAsync(newSocket, failedSockets, cancellationToken));
             }
 
             // Find removed files (files that were known but no longer exist)
-            var removedFiles = _knownSocketFiles.Except(currentFiles, StringComparer.OrdinalIgnoreCase).ToList();
+            var removedFiles = _knownSocketPaths.Except(currentSocketPaths, StringComparers.FileSystemPath).ToList();
             foreach (var removedFile in removedFiles)
             {
                 logger.LogDebug("Socket deleted: {SocketPath}", removedFile);
-                var hash = AppHostHelper.ExtractHashFromSocketPath(removedFile);
-                if (!string.IsNullOrEmpty(hash) &&
-                    _connectionsByHash.TryGetValue(hash, out var connectionsForHash) &&
-                    connectionsForHash.TryRemove(removedFile, out var connection))
+                ClearUnreachable(removedFile);
+                if (_connectionsBySocketPath.TryRemove(removedFile, out var connection))
                 {
                     _ = Task.Run(async () => await DisconnectAsync(connection).ConfigureAwait(false), CancellationToken.None);
-
-                    // Clean up empty hash entries
-                    if (connectionsForHash.IsEmpty)
-                    {
-                        _connectionsByHash.TryRemove(hash, out _);
-                    }
                 }
             }
 
             // Update the known files set
-            _knownSocketFiles.Clear();
-            foreach (var file in currentFiles)
+            _knownSocketPaths.Clear();
+            foreach (var socketPath in currentSocketPaths)
             {
-                _knownSocketFiles.Add(file);
+                _knownSocketPaths.Add(socketPath);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -361,59 +419,43 @@ internal sealed class AuxiliaryBackchannelMonitor(
             await Task.WhenAll(connectTasks).ConfigureAwait(false);
         }
 
-        // Remove failed sockets from known files so they can be retried on next scan
-        foreach (var failedSocket in failedSockets)
+        // Remove failed sockets from known files so they can be retried on next scan.
+        // This reacquires the lock because _knownSocketPaths is a plain HashSet and a concurrent scan
+        // (the public ScanAsync or either directory watcher) clears and repopulates it inside the lock.
+        if (!failedSockets.IsEmpty)
         {
-            if (_knownSocketFiles.Remove(failedSocket))
+            await _scanLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
             {
-                logger.LogDebug("Marked failed socket for retry on next scan: {SocketPath}", failedSocket);
+                foreach (var failedSocket in failedSockets)
+                {
+                    if (_knownSocketPaths.Remove(failedSocket))
+                    {
+                        logger.LogDebug("Marked failed socket for retry on next scan: {SocketPath}", failedSocket);
+                    }
+                }
+            }
+            finally
+            {
+                _scanLock.Release();
             }
         }
 
         return connectTasks;
     }
 
-    private async Task TryConnectToSocketAsync(string socketPath, ConcurrentBag<string> failedSockets, CancellationToken cancellationToken)
+    private async Task TryConnectToSocketAsync(IAppHostSocket appHostSocket, ConcurrentBag<string> failedSockets, CancellationToken cancellationToken)
     {
-        var hash = AppHostHelper.ExtractHashFromSocketPath(socketPath);
-        if (string.IsNullOrEmpty(hash))
-        {
-            logger.LogWarning("Could not extract hash from socket path: {SocketPath}", socketPath);
-            failedSockets.Add(socketPath);
-            return;
-        }
+        var socketPath = appHostSocket.SocketPath;
 
         // Check if we're already connected to this specific socket
-        if (_connectionsByHash.TryGetValue(hash, out var existingConnections) &&
-            existingConnections.ContainsKey(socketPath))
+        if (_connectionsBySocketPath.ContainsKey(socketPath))
         {
             logger.LogDebug("Already connected to socket: {SocketPath}", socketPath);
             return;
         }
 
-        // PID-based orphan detection (for new format sockets with PID in filename)
-        var pid = AppHostHelper.ExtractPidFromSocketPath(socketPath);
-        if (pid is { } pidValue && !AppHostHelper.ProcessExists(pidValue))
-        {
-            logger.LogDebug("Socket is orphaned (PID {Pid} not running), skipping: {SocketPath}", pidValue, socketPath);
-            // Clean up the orphaned socket with double-check to minimize TOCTOU race window
-            // (A new process could theoretically start with the same PID between our checks)
-            try
-            {
-                if (!AppHostHelper.ProcessExists(pidValue))
-                {
-                    File.Delete(socketPath);
-                    logger.LogDebug("Deleted orphaned socket: {SocketPath}", socketPath);
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogDebug(ex, "Failed to delete orphaned socket: {SocketPath}", socketPath);
-            }
-            failedSockets.Add(socketPath);
-            return;
-        }
-
+        var pid = appHostSocket.ProcessId;
         var maxElapsed = s_maxRetryElapsed;
         var delay = TimeSpan.FromMilliseconds(100);
         var maxDelay = s_maxRetryDelay;
@@ -434,7 +476,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
                 if (isFirstAttempt)
                 {
-                    logger.LogInformation("Connecting to auxiliary socket: {SocketPath}", socketPath);
+                    logger.LogInformation(ConnectingToSocketEvent, "Connecting to auxiliary socket: {SocketPath}", socketPath);
                 }
                 else
                 {
@@ -442,10 +484,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
                 }
 
                 // Connect to the Unix socket
-                socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-                var endpoint = new UnixDomainSocketEndPoint(socketPath);
-
-                await socket.ConnectAsync(endpoint, cancellationToken).ConfigureAwait(false);
+                socket = await appHostSocket.ConnectAsync(cancellationToken).ConfigureAwait(false);
                 break; // Success - exit retry loop
             }
             catch (SocketException ex) when (ex.SocketErrorCode == SocketError.ConnectionRefused)
@@ -453,8 +492,17 @@ internal sealed class AuxiliaryBackchannelMonitor(
                 socket?.Dispose();
                 socket = null;
 
-                // For sockets without PID (old format from versions before 9.3), if connection is refused and file is old, it's stale.
-                // For sockets with PID, we already checked process existence above, so this is transient.
+                // A refusal on a pidless socket (the pre-9.3 format) carries no ownership information,
+                // so age is the only available signal: anything past the bind grace window is treated
+                // as stale and reclaimed.
+                //
+                // A refusal on a PID-qualified socket is retried instead. FindSockets already deleted
+                // sockets whose owning process is gone, so reaching here usually means the AppHost is
+                // mid-startup. It can also mean the AppHost died and an unrelated process inherited its
+                // PID, but a refusal cannot distinguish the two: macOS also reports ECONNREFUSED for a
+                // live listener with a full backlog. Deleting a live AppHost's socket would make it
+                // undiscoverable for the rest of its lifetime, so the retry budget is spent and the
+                // socket is then parked by MarkUnreachable rather than reclaimed.
                 // TODO: Remove old format support after 9.3 is widely adopted (target: 10.0 release)
                 if (isFirstAttempt && !pid.HasValue)
                 {
@@ -472,6 +520,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
                     }
 
                     logger.LogDebug("Socket connection refused (stale socket): {SocketPath}", socketPath);
+                    appHostSocket.TryDelete();
                     failedSockets.Add(socketPath);
                     return;
                 }
@@ -490,7 +539,14 @@ internal sealed class AuxiliaryBackchannelMonitor(
         if (socket is null || !socket.Connected)
         {
             logger.LogDebug("Socket connection timed out after {ElapsedSeconds} seconds: {SocketPath}", maxElapsed.TotalSeconds, socketPath);
-            failedSockets.Add(socketPath);
+            if (pid is { } pidValue && !BackchannelConstants.ProcessExists(pidValue))
+            {
+                appHostSocket.TryDelete();
+                failedSockets.Add(socketPath);
+                return;
+            }
+
+            MarkUnreachable(socketPath);
             return;
         }
 
@@ -502,7 +558,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
             // Use the centralized factory to create the connection
             // This ensures capabilities are always fetched
-            var connection = await AppHostAuxiliaryBackchannel.CreateFromSocketAsync(hash, socketPath, isInScope, logger, profilingTelemetry, socket, cancellationToken).ConfigureAwait(false);
+            var connection = await AppHostAuxiliaryBackchannel.CreateFromSocketAsync(appHostSocket, isInScope, logger, profilingTelemetry, socket, cancellationToken).ConfigureAwait(false);
 
             // Update isInScope based on actual appHostInfo now that we have it
             connection.IsInScope = IsAppHostInScope(connection.AppHostInfo?.AppHostPath);
@@ -511,36 +567,24 @@ internal sealed class AuxiliaryBackchannelMonitor(
             connection.Rpc!.Disconnected += (sender, args) =>
             {
                 logger.LogInformation("Disconnected from AppHost at {SocketPath}: {Reason}", socketPath, args.Reason);
-                if (_connectionsByHash.TryGetValue(hash, out var connectionsForHash) &&
-                    connectionsForHash.TryRemove(socketPath, out var conn))
+                if (_connectionsBySocketPath.TryRemove(socketPath, out var conn))
                 {
                     _ = Task.Run(async () => await DisconnectAsync(conn).ConfigureAwait(false));
-
-                    // Clean up empty hash entries
-                    if (connectionsForHash.IsEmpty)
-                    {
-                        _connectionsByHash.TryRemove(hash, out _);
-                    }
-
                     NotifyConnectionsChanged();
                 }
             };
 
-            // Get or create the inner dictionary for this hash
-            var connectionsDict = _connectionsByHash.GetOrAdd(hash, _ => new ConcurrentDictionary<string, AppHostAuxiliaryBackchannel>());
-
-            if (connectionsDict.TryAdd(socketPath, connection))
+            if (_connectionsBySocketPath.TryAdd(socketPath, connection))
             {
+                ClearUnreachable(socketPath);
                 logger.LogInformation(
                     "Successfully connected to AppHost at {SocketPath}. " +
-                    "Hash: {Hash}, " +
                     "AppHost Path: {AppHostPath}, " +
                     "AppHost PID: {AppHostPid}, " +
                     "CLI PID: {CliPid}, " +
                     "In Scope: {InScope}, " +
                     "Supports V2: {SupportsV2}",
                     socketPath,
-                    hash,
                     connection.AppHostInfo?.AppHostPath ?? "N/A",
                     connection.AppHostInfo?.ProcessId.ToString(CultureInfo.InvariantCulture) ?? "N/A",
                     connection.AppHostInfo?.CliProcessId?.ToString(CultureInfo.InvariantCulture) ?? "N/A",
@@ -555,15 +599,101 @@ internal sealed class AuxiliaryBackchannelMonitor(
                 await DisconnectAsync(connection).ConfigureAwait(false);
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Shutdown, not a property of this socket. Leave it known and unpenalized so the next
+            // run starts clean.
+            logger.LogDebug("Cancelled while establishing the backchannel for socket: {SocketPath}", socketPath);
+        }
         catch (Exception ex)
         {
+            // The connect succeeded, so the AppHost is listening; only the RPC handshake failed.
+            // Back off rather than adding to failedSockets: that would drop the socket from
+            // _knownSocketPaths and make it look new again, so every later scan would pay a full
+            // connect plus handshake, which is the unbounded-cost shape MarkUnreachable exists to
+            // prevent. An AppHost that was merely mid-startup still recovers once the delay expires.
             logger.LogError(ex, "Failed to connect to socket: {SocketPath}", socketPath);
-            failedSockets.Add(socketPath);
+            MarkUnreachable(socketPath);
         }
     }
 
     private bool IsAppHostInScope(string? appHostPath)
         => IsAppHostInScopeOfDirectory(appHostPath, executionContext.WorkingDirectory.FullName);
+
+    /// <summary>
+    /// Claims a due retry for <paramref name="socketPath"/>, deferring it again so that only one scan
+    /// retries a given socket at a time.
+    /// </summary>
+    /// <remarks>
+    /// Sockets are selected under <see cref="_scanLock"/>, but the connect attempts are awaited after it
+    /// is released and the backoff is only escalated once the retry budget is exhausted. A scan that
+    /// overlaps that window would otherwise re-select the same socket and start a second connect loop,
+    /// so a single stale socket could still fan out concurrent retries and defeat the backoff. New
+    /// sockets need no equivalent claim because <see cref="_knownSocketPaths"/> is repopulated before
+    /// the lock is released.
+    /// <para>
+    /// The delay is carried forward unchanged so that <see cref="MarkUnreachable"/> keeps doubling from
+    /// the same point, and the compare-and-swap makes the claim safe even for callers outside the lock.
+    /// </para>
+    /// </remarks>
+    private bool TryClaimRetry(string socketPath)
+    {
+        if (!_unreachableSockets.TryGetValue(socketPath, out var state))
+        {
+            return false;
+        }
+
+        var now = _timeProvider.GetUtcNow();
+        if (now < state.RetryAfter)
+        {
+            return false;
+        }
+
+        return _unreachableSockets.TryUpdate(socketPath, new UnreachableSocket(now + state.Delay, state.Delay), state);
+    }
+
+    /// <summary>
+    /// Schedules a backed-off retry for a socket we cannot establish a backchannel over but that we
+    /// are not permitted to delete.
+    /// </summary>
+    /// <remarks>
+    /// A connect that fails with <see cref="SocketError.ConnectionRefused"/> cannot distinguish an
+    /// orphaned socket whose owner's PID has been recycled (so the liveness check wrongly reports the
+    /// owner is alive) from a healthy AppHost whose listen backlog is momentarily full. On macOS both
+    /// produce ECONNREFUSED. Deleting is therefore unsafe: an AppHost never recreates its socket file,
+    /// so removing a live one makes it undiscoverable for the rest of its lifetime, whereas keeping an
+    /// orphan only wastes a connect attempt.
+    /// <para>
+    /// Simply retrying is not viable either. Retry candidates are chosen by diffing against
+    /// <see cref="_knownSocketPaths"/>, so re-arming an unreachable socket makes every later scan pay
+    /// the full <see cref="s_maxRetryElapsed"/> budget again, indefinitely. Backing off keeps the
+    /// recovery path for a transiently saturated AppHost while bounding the cost of an orphan.
+    /// </para>
+    /// <para>
+    /// The delay is measured with <see cref="_timeProvider"/> rather than a monotonic source because a
+    /// wall-clock adjustment can only make a retry happen early or late. Unlike comparing timestamps
+    /// across processes, it cannot produce a wrong liveness verdict.
+    /// </para>
+    /// </remarks>
+    private void MarkUnreachable(string socketPath)
+    {
+        var now = _timeProvider.GetUtcNow();
+        var state = _unreachableSockets.AddOrUpdate(
+            socketPath,
+            _ => new UnreachableSocket(now + s_initialUnreachableRetryDelay, s_initialUnreachableRetryDelay),
+            (_, existing) =>
+            {
+                var delay = TimeSpan.FromTicks(Math.Min(existing.Delay.Ticks * 2, s_maxUnreachableRetryDelay.Ticks));
+                return new UnreachableSocket(now + delay, delay);
+            });
+
+        logger.LogDebug(
+            "Socket unreachable, deferring retry for {DelaySeconds}s: {SocketPath}",
+            state.Delay.TotalSeconds,
+            socketPath);
+    }
+
+    private void ClearUnreachable(string socketPath) => _unreachableSockets.TryRemove(socketPath, out _);
 
     private static async Task DisconnectAsync(IAppHostAuxiliaryBackchannel connection)
     {
@@ -578,34 +708,6 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
         await Task.CompletedTask.ConfigureAwait(false);
     }
-
-    private IEnumerable<string> GetSocketFiles()
-    {
-        if (Directory.Exists(_backchannelsDirectory))
-        {
-            foreach (var socketPath in Directory.GetFiles(_backchannelsDirectory))
-            {
-                if (AppHostHelper.ExtractHashFromSocketPath(socketPath) is not null)
-                {
-                    yield return socketPath;
-                }
-            }
-        }
-
-        if (Directory.Exists(_legacyBackchannelsDirectory))
-        {
-            // Support both "auxi.sock.*" and "aux.sock.*" for backward compatibility.
-            // Note: "aux" is a reserved device name on Windows < 11, but we still scan for it
-            // to support sockets created by older AppHost versions.
-            foreach (var socketPath in Directory.GetFiles(_legacyBackchannelsDirectory, "aux*.sock.*"))
-            {
-                yield return socketPath;
-            }
-        }
-    }
-
-    private static string GetHomeDirectory()
-        => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     /// <summary>
     /// Runs the file watcher loop that triggers scans when file changes are detected.
@@ -652,4 +754,10 @@ internal sealed class AuxiliaryBackchannelMonitor(
         }
     }
 
+    /// <summary>
+    /// Backoff state for a socket that could not be reached and cannot safely be deleted.
+    /// </summary>
+    /// <param name="RetryAfter">The earliest time another connect attempt should be made.</param>
+    /// <param name="Delay">The delay that produced <paramref name="RetryAfter"/>, doubled on each successive failure.</param>
+    private sealed record UnreachableSocket(DateTimeOffset RetryAfter, TimeSpan Delay);
 }

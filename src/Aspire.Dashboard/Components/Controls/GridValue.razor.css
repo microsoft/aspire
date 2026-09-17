@@ -10,13 +10,18 @@
     white-space: nowrap;
 }
 
+::deep .masked-content {
+    font-size: 0.8em;
+    letter-spacing: 0.1em;
+}
+
 ::deep .button-container {
     margin-left: 0; /* by default there shouldn't be a margin on the button container because it has no contents */
 }
 
 ::deep .masking-enabled .button-container, td:hover .button-container, td:focus-within .button-container {
     /* the button container always has contents if masking is enabled or it is hovered over, so display margin */
-    margin-left: calc((6 + (var(--design-unit) * var(--density))) * 1px);
+    margin-left: var(--spacingHorizontalXXS);
 }
 
 ::deep .defaultHidden {

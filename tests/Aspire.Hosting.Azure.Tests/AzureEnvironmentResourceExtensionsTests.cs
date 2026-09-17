@@ -4888,6 +4888,18 @@ public class AzureEnvironmentResourceExtensionsTests
     }
 
     [Fact]
+    public void AddAzureEnvironment_UsesCloudCubeIcon()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+
+        var resourceBuilder = builder.AddAzureEnvironment();
+
+        var icon = Assert.Single(resourceBuilder.Resource.Annotations.OfType<ResourceIconAnnotation>());
+        Assert.Equal("CloudCube", icon.IconName);
+        Assert.Equal(IconVariant.Filled, icon.IconVariant);
+    }
+
+    [Fact]
     public void AzureEnvironmentResource_PreservesDefaultResourceNameValidation()
     {
         var builder = CreateBuilder(isRunMode: true);
@@ -5382,6 +5394,9 @@ public class AzureEnvironmentResourceExtensionsTests
 
             return Task.FromResult(new DeploymentStateSection(sectionName, data, version: 0));
         }
+
+        public Task<DeploymentStateSection> AcquireCurrentSectionAsync(string sectionName, CancellationToken cancellationToken = default)
+            => AcquireSectionAsync(sectionName, cancellationToken);
 
         public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {

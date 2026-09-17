@@ -6,9 +6,14 @@ import { openAspireView } from './vscode';
 
 export const JAVA_APP_HOST_DIRECTORY = 'JavaSpringBoot.AppHost.Java';
 export const JAVA_APP_HOST_SOURCE = path.join(JAVA_APP_HOST_DIRECTORY, 'AppHost.java');
+export const JAVA_STARTER_APP_HOST_SOURCE = 'AppHost.java';
 
 export function getJavaAppHostSourcePath(): string {
     return path.join(getWorkspaceRoot(), JAVA_APP_HOST_SOURCE);
+}
+
+export function getJavaStarterAppHostSourcePath(): string {
+    return path.join(getWorkspaceRoot(), JAVA_STARTER_APP_HOST_SOURCE);
 }
 
 /**
@@ -24,6 +29,13 @@ export async function prepareJavaWorkspace(): Promise<void> {
     await openAspireView();
     await assertJavaCapabilityAdvertised();
     await waitForJavaAppHostCandidate();
+    await waitForRepositoryIdle();
+}
+
+export async function prepareJavaStarterWorkspace(): Promise<void> {
+    await openAspireView();
+    await assertJavaCapabilityAdvertised();
+    await waitForWorkspaceAppHostCandidate(getJavaStarterAppHostSourcePath());
     await waitForRepositoryIdle();
 }
 

@@ -14,6 +14,15 @@ func main() {
 
 	// 1) AddAzureCosmosDB
 	cosmos := builder.AddAzureCosmosDB("cosmos")
+	_ = cosmos.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		account := infrastructure.GetCosmosDBAccount()
+		account.Tags().Set("provisioning-proxy", "go")
+		bypassResourceID := infrastructure.CreateCosmosDBResourceIdentifier(
+			"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/shared/providers/Microsoft.DocumentDB/databaseAccounts/bypass")
+		if err := account.NetworkAclBypassResourceIds().Add(bypassResourceID); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
 
 	// 2) WithDefaultAzureSku
 	cosmos.WithDefaultAzureSku()
@@ -58,7 +67,7 @@ func main() {
 			emulator.WithDataVolume(&aspire.WithDataVolumeOptions{
 				Name: aspire.StringPtr("cosmos-emulator-data"),
 			}) // 9) WithDataVolume
-			emulator.WithGatewayPort(18081) // 10) WithGatewayPort
+			emulator.WithGatewayPort(aspire.Float64Ptr(18081)) // 10) WithGatewayPort
 			emulator.WithDataExplorer(&aspire.WithDataExplorerOptions{
 				Port: aspire.Float64Ptr(11234),
 			}) // 11) WithDataExplorer

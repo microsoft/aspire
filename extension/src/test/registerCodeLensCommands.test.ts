@@ -57,6 +57,24 @@ suite('registerCodeLensCommands', () => {
 
             assert.deepStrictEqual(sendCommandStub.firstCall.args[3], { target });
             assert.deepStrictEqual(sendCommandStub.secondCall.args[3], { target });
+
+            const terminalError = new Error('terminal startup failed');
+            const rejectedCommand = Promise.reject(terminalError);
+            void rejectedCommand.catch(() => { });
+            sendCommandStub.returns(rejectedCommand);
+
+            await assert.rejects(
+                callbacks.get('aspire-vscode.codeLensViewLogs')!('api', appHostPath),
+                error => error === terminalError);
+
+            const appHostTerminalError = new Error('AppHost terminal startup failed');
+            const rejectedAppHostCommand = Promise.reject(appHostTerminalError);
+            void rejectedAppHostCommand.catch(() => { });
+            sendCommandStub.returns(rejectedAppHostCommand);
+
+            await assert.rejects(
+                callbacks.get('aspire-vscode.codeLensViewAppHostLogs')!(appHostPath),
+                error => error === appHostTerminalError);
         }
         finally {
             registrations.forEach(registration => registration.dispose());

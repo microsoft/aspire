@@ -430,20 +430,90 @@ public sealed class NpmCliPackageTests : IDisposable
     }
 
     [Fact]
+    public async Task AspireCliUsesMicrosoftCertificate()
+    {
+        var signingProps = XDocument.Parse(await ReadRepoFileAsync("eng/Signing.props"));
+
+        AssertSigningRule(
+            signingProps,
+            "FileExtensionSignInfo",
+            ".msi",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "!@(FileExtensionSignInfo->AnyHaveMetadataValue('Identity', '.msi'))");
+        AssertSigningRule(
+            signingProps,
+            "FileExtensionSignInfo",
+            ".cat",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: null);
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "aspire.exe",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsWindows())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "aspire-managed.exe",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsWindows())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "aspire",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsLinux())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "aspire-managed",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsLinux())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "get-aspire-cli.ps1",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsWindows())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "manifest.cat",
+            "Microsoft400",
+            collisionPriorityId: null,
+            condition: "$([System.OperatingSystem]::IsWindows())");
+        AssertSigningRule(
+            signingProps,
+            "FileSignInfo",
+            "aspire.js",
+            "Microsoft400",
+            collisionPriorityId: "AspireCliNpmPackage",
+            condition: null);
+    }
+
+    [Fact]
     public async Task NpmSigningScopeCoversNestedTarballPayloads()
     {
         var signingProps = XDocument.Parse(await ReadRepoFileAsync("eng/Signing.props"));
 
-        AssertScopedSigningRule(signingProps, "FileExtensionSignInfo", ".tgz", "LinuxSign500180PGP");
-        AssertScopedSigningRule(signingProps, "FileSignInfo", "aspire.js", "MicrosoftDotNet500");
+        AssertSigningRule(signingProps, "FileExtensionSignInfo", ".tgz", "LinuxSign500180PGP", "AspireCliNpmPackage", condition: null);
+        AssertSigningRule(signingProps, "FileSignInfo", "aspire.js", "Microsoft400", "AspireCliNpmPackage", condition: null);
 
         // The native npm packages are built from already-signed native archives.
         // The main Windows build should only produce the detached npm tarball
         // signature; it must still provide scoped rules for nested native
         // executables because Arcade resolves nested file certificates inside
         // the ItemsToSign collision scope.
-        AssertScopedSigningRule(signingProps, "FileSignInfo", "aspire.exe", "None");
-        AssertScopedSigningRule(signingProps, "FileSignInfo", "aspire", "None");
+        AssertSigningRule(signingProps, "FileSignInfo", "aspire.exe", "None", "AspireCliNpmPackage", condition: null);
+        AssertSigningRule(signingProps, "FileSignInfo", "aspire", "None", "AspireCliNpmPackage", condition: null);
     }
 
     [Fact]
@@ -738,19 +808,26 @@ public sealed class NpmCliPackageTests : IDisposable
         return count;
     }
 
-    private static void AssertScopedSigningRule(XDocument document, string elementName, string include, string certificateName)
+    private static void AssertSigningRule(
+        XDocument document,
+        string elementName,
+        string include,
+        string certificateName,
+        string? collisionPriorityId,
+        string? condition)
     {
         var matchingRules = document
             .Descendants(elementName)
             .Where(element =>
-                (string?)element.Attribute("CollisionPriorityId") == "AspireCliNpmPackage" &&
+                (string?)element.Attribute("CollisionPriorityId") == collisionPriorityId &&
                 ((string?)element.Attribute("Include") == include || (string?)element.Attribute("Update") == include) &&
-                (string?)element.Attribute("CertificateName") == certificateName)
+                (string?)element.Attribute("CertificateName") == certificateName &&
+                (string?)element.Attribute("Condition") == condition)
             .ToArray();
 
         Assert.True(
             matchingRules.Length == 1,
-            $"Expected exactly one {elementName} for '{include}' using '{certificateName}' in the AspireCliNpmPackage signing scope, but found {matchingRules.Length}.");
+            $"Expected exactly one {elementName} for '{include}' using '{certificateName}', collision scope '{collisionPriorityId}', and condition '{condition}', but found {matchingRules.Length}.");
     }
 
     public sealed record RidPackageExpectation(string Rid, string BinaryName, string[] Os, string[] Cpu, string[]? Libc);

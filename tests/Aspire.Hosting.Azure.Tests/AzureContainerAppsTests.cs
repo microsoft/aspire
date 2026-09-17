@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREACANAMING001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREACANAMING002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREDOTNETPROJECT001
 
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -120,6 +121,25 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddContainerAppEnvironmentAddsDeploymentTargetToDotnetProjectResource()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+        var project = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint();
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        Assert.Same(environment.Resource, target.ComputeEnvironment);
+        var provisioningResource = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+        var (_, bicep) = await GetManifestWithBicep(provisioningResource);
+        Assert.Contains("autoConfigureDataProtection", bicep);
     }
 
     [Fact]
@@ -728,7 +748,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         builder.AddAzureContainerAppEnvironment("env");
 
         builder.AddContainer("api", "myimage")
-            .WithVolume("vol1", "/path1")
+            .WithVolume("vol1", "/path1", env: "DATA_PATH")
             .WithVolume("vol2", "/path2")
             .WithBindMount("bind1", "/path3");
 
@@ -750,6 +770,42 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task ProjectAndExecutableVolumesIncludeEnvironmentPaths()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        builder.AddProject<Project>("project", launchProfileName: null)
+            .WithVolume("project-data", "/srv/project", env: "DATA_PATH");
+        builder.AddExecutable("executable", "node", ".")
+            .PublishAsDockerFile()
+            .WithVolume("executable-data", "/srv/executable", env: "DATA_PATH");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        SettingsTask settingsTask = default!;
+
+        foreach (var resource in model.Resources
+            .Where(resource => resource.Name is "project" or "executable")
+            .OrderBy(resource => resource.Name))
+        {
+            var target = resource.GetDeploymentTargetAnnotation();
+            var deploymentResource = target?.DeploymentTarget as AzureProvisioningResource;
+            Assert.NotNull(deploymentResource);
+
+            var (manifest, bicep) = await GetManifestWithBicep(deploymentResource);
+            settingsTask = settingsTask is null
+                ? Verify(manifest.ToString(), "json").AppendContentAsFile(bicep, "bicep")
+                : settingsTask.AppendContentAsFile(manifest.ToString(), "json").AppendContentAsFile(bicep, "bicep");
+        }
+
+        await settingsTask;
     }
 
     [Fact]

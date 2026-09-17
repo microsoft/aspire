@@ -493,6 +493,11 @@ public sealed partial class SqliteTelemetryRepository
     {
         var parameters = new DynamicParameters();
         var predicates = new List<string>();
+        if (context.LogIds is { Count: > 0 })
+        {
+            parameters.Add("LogIds", context.LogIds);
+            predicates.Add("l.log_id IN @LogIds");
+        }
         if (context.ResourceKeys.Count > 0)
         {
             var resourcePredicates = new List<string>();
@@ -557,6 +562,13 @@ public sealed partial class SqliteTelemetryRepository
             JOIN telemetry_scopes s ON s.scope_id = l.scope_id
             {where}
             """, parameters);
+    }
+
+    private HashSet<long> GetMatchingLogIdsFromDatabase(GetLogsContext context)
+    {
+        using var connection = _database.OpenConnection();
+        var query = BuildLogQuery(context);
+        return connection.Query<long>($"SELECT l.log_id {query.FromAndWhere};", query.Parameters).ToHashSet();
     }
 
     private static string BuildLogFilterPredicate(FieldTelemetryFilter filter, DynamicParameters parameters, int index)

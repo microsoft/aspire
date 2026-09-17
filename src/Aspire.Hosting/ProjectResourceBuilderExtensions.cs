@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPROJECTS001 // WithProjectDefaults is experimental.
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Utils;
@@ -466,6 +467,19 @@ public static class ProjectResourceBuilderExtensions
     /// resource behind the Rebuild command.
     /// </para>
     /// <para>
+    /// For TLS-enabled endpoints, an available HTTPS certificate is mapped to Kestrel's default certificate
+    /// unless the resource environment already contains <c>Kestrel__Certificates__Default__Path</c>,
+    /// <c>Kestrel__Certificates__Default__KeyPath</c>, or <c>Kestrel__Certificates__Default__Subject</c>.
+    /// These names are matched case-insensitively. The presence of any of them preserves the existing
+    /// certificate configuration, including its password. Settings supplied by earlier HTTPS certificate
+    /// callbacks participate in this check.
+    /// </para>
+    /// <para>
+    /// A password alone does not suppress the default PFX configuration. It is replaced by the selected
+    /// certificate's password, or removed when that certificate has no password. Certificate settings
+    /// loaded separately by the resource application, such as from <c>appsettings.json</c>, are not checked.
+    /// </para>
+    /// <para>
     /// The resource must carry <see cref="IProjectMetadata"/>. It is intended for language integration
     /// packages that add their own .NET resource type, such as <c>Aspire.Hosting.Dotnet</c>; use
     /// <see cref="AddProject{TProject}(IDistributedApplicationBuilder, string)"/> for ordinary projects.
@@ -504,9 +518,15 @@ public static class ProjectResourceBuilderExtensions
                 $"Pass {nameof(ProjectResourceOptions)} to the method that adds the resource instead.");
         }
 
+        launchDefaults.BuildConfiguration =
+            builder.ApplicationBuilder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+
+        var launchConfigurationType = ProjectLaunchConfigurationFactory.GetLaunchConfigurationType(
+            builder.Resource,
+            projectMetadata);
         builder.WithDebugSupport(
             mode => ProjectLaunchConfigurationFactory.Create(builder.Resource, mode),
-            KnownLaunchConfigurationTypes.Project);
+            launchConfigurationType);
 
         // File-based apps (a bare .cs file) are a .NET 10 SDK feature. The check lives here rather than in
         // each Add* method so every .NET-launched resource gets it, and it is deferred to start time because
@@ -575,6 +595,17 @@ public static class ProjectResourceBuilderExtensions
                 return Task.CompletedTask;
             }
 
+            // Preserve an explicit certificate selection as a group. Replacing a PEM Path with a PFX
+            // path while retaining KeyPath makes Kestrel load incompatible files.
+            // https://github.com/microsoft/aspire/issues/20019
+            if (ctx.EnvironmentVariables.Keys.Any(name =>
+                string.Equals(name, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath, StringComparisons.EnvironmentVariableName) ||
+                string.Equals(name, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultKeyPath, StringComparisons.EnvironmentVariableName) ||
+                string.Equals(name, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultSubject, StringComparisons.EnvironmentVariableName)))
+            {
+                return Task.CompletedTask;
+            }
+
             // Kestrel's default certificate configuration accepts PFX paths directly. This avoids
             // PEM key-pair path handling differences in local development environments.
             ctx.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath] = ctx.PfxPath;
@@ -595,7 +626,7 @@ public static class ProjectResourceBuilderExtensions
         // In run mode, create a hidden rebuilder resource for this project.
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
-            AddRebuilderResource(builder, projectResource);
+            AddRebuilderResource(builder, projectResource, launchDefaults);
         }
 
         if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
@@ -1052,22 +1083,30 @@ public static class ProjectResourceBuilderExtensions
     /// <summary>
     /// Creates a hidden rebuilder resource that runs 'dotnet build' on demand via the rebuild command.
     /// </summary>
-    private static void AddRebuilderResource<TProjectResource>(IResourceBuilder<TProjectResource> builder, TProjectResource projectResource)
+    private static void AddRebuilderResource<TProjectResource>(
+        IResourceBuilder<TProjectResource> builder,
+        TProjectResource projectResource,
+        ProjectLaunchDefaultsAnnotation launchDefaults)
         where TProjectResource : class, IResource
     {
         var projectMetadata = projectResource.GetProjectMetadata();
-        if (projectMetadata.IsFileBasedApp)
-        {
-            return;
-        }
-
         var rebuilderName = $"{projectResource.Name}-rebuilder";
         var rebuilder = new ProjectRebuilderResource(rebuilderName, projectResource, projectMetadata.ProjectPath);
         rebuilder.Annotations.Add(NameValidationPolicyAnnotation.None);
         var rebuilderBuilder = builder.ApplicationBuilder.AddResource(rebuilder);
 
         rebuilderBuilder
-            .WithArgs("build", projectMetadata.ProjectPath)
+            .WithArgs(context =>
+            {
+                context.Args.Add("build");
+                context.Args.Add(projectMetadata.ProjectPath);
+
+                if (!string.IsNullOrEmpty(launchDefaults.BuildConfiguration))
+                {
+                    context.Args.Add("--configuration");
+                    context.Args.Add(launchDefaults.BuildConfiguration);
+                }
+            })
             .WithAnnotation(new ExplicitStartupAnnotation())
             .WithAnnotation(new ExcludeLifecycleCommandsAnnotation())
             .ExcludeFromManifest()

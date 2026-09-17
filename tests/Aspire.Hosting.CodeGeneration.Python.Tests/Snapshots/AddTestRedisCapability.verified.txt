@@ -17,6 +17,7 @@
       }
     ]
   },
+  IsExperimental: false,
   IsObsolete: false,
   Parameters: [
     {
@@ -43,6 +44,7 @@
         TypeId: number,
         ClrType: int,
         IsInterface: false,
+        IsNullable: true,
         IsReadOnly: false,
         IsResourceBuilder: false,
         IsDistributedApplicationBuilder: false,

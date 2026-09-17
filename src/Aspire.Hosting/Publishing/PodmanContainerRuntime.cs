@@ -311,6 +311,155 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             return false;
         }
     }
+
+    public override async Task<ContainerImageManifestInspectionResult> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
+        var remoteImageName = imageName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
+            ? imageName
+            : $"docker://{imageName}";
+
+        string manifest;
+        try
+        {
+            manifest = await ExecuteContainerCommandForOutputAsync(
+                ["manifest", "inspect", remoteImageName],
+                "inspect image manifest",
+                imageName,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (DistributedApplicationException ex)
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                rawJson: null,
+                ex.Message,
+                manifestAccessor: null);
+        }
+
+        if (!IsJsonObjectOrArray(manifest))
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                manifest,
+                $"Podman returned an invalid image manifest for '{imageName}'.",
+                manifestAccessor: null);
+        }
+
+        if (!IsPlainSingleImageManifest(manifest))
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Succeeded,
+                manifest,
+                errorMessage: null,
+                (operatingSystem, architecture) => FindManifest(manifest, operatingSystem, architecture));
+        }
+
+        // Podman returns a plain OCI/Docker manifest for a single-architecture tag:
+        //   { "schemaVersion": 2, "config": { ... }, "layers": [ ... ] }
+        // Unlike its manifest-list output, that shape has no digest. Query the local image
+        // metadata so the sandbox deployer can still pin the tag to an immutable reference.
+        var localImageName = imageName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
+            ? imageName["docker://".Length..]
+            : imageName;
+        string imageMetadata;
+        try
+        {
+            await ExecuteContainerCommandForOutputAsync(
+                ["pull", remoteImageName],
+                "pull image for metadata inspection",
+                imageName,
+                cancellationToken).ConfigureAwait(false);
+            imageMetadata = await ExecuteContainerCommandForOutputAsync(
+                ["image", "inspect", "--format", """{"Digest":{{json .Digest}},"Os":{{json .Os}},"Architecture":{{json .Architecture}}}""", localImageName],
+                "inspect image metadata",
+                imageName,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (DistributedApplicationException ex)
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                manifest,
+                ex.Message,
+                manifestAccessor: null);
+        }
+
+        string? digest;
+        string? os;
+        string? architecture;
+        try
+        {
+            using var metadataDocument = JsonDocument.Parse(imageMetadata);
+            var metadata = metadataDocument.RootElement;
+            digest = metadata.TryGetProperty("Digest", out var digestProperty) ? digestProperty.GetString() : null;
+            os = metadata.TryGetProperty("Os", out var osProperty) ? osProperty.GetString() : null;
+            architecture = metadata.TryGetProperty("Architecture", out var architectureProperty) ? architectureProperty.GetString() : null;
+        }
+        catch (JsonException ex)
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                imageMetadata,
+                $"Podman returned invalid image metadata for '{imageName}': {ex.Message}",
+                manifestAccessor: null);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                imageMetadata,
+                $"Podman returned invalid image metadata for '{imageName}': {ex.Message}",
+                manifestAccessor: null);
+        }
+
+        if (digest is null || !ContainerImageManifest.IsValidDigest(digest))
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                imageMetadata,
+                $"Podman did not return an immutable digest for image '{imageName}'.",
+                manifestAccessor: null);
+        }
+
+        if (string.IsNullOrWhiteSpace(os) || string.IsNullOrWhiteSpace(architecture))
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                imageMetadata,
+                $"Podman did not return platform metadata for image '{imageName}'.",
+                manifestAccessor: null);
+        }
+
+        var inspectedManifest = new ContainerImageManifest(digest, os, architecture);
+        return new ContainerImageManifestInspectionResult(
+            ContainerImageInspectionStatus.Succeeded,
+            imageMetadata,
+            errorMessage: null,
+            (requestedOperatingSystem, requestedArchitecture) =>
+                string.Equals(requestedOperatingSystem, inspectedManifest.OperatingSystem, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(requestedArchitecture, inspectedManifest.Architecture, StringComparison.OrdinalIgnoreCase)
+                    ? inspectedManifest
+                    : null);
+    }
+
+    private static bool IsPlainSingleImageManifest(string manifest)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(manifest);
+            var root = document.RootElement;
+            return root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty("schemaVersion", out _) &&
+                root.TryGetProperty("config", out _) &&
+                root.TryGetProperty("layers", out _) &&
+                !root.TryGetProperty("manifests", out _);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 }
 
 /// <summary>

@@ -260,6 +260,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.ApiDocsIndexServiceFactory);
 
         services.AddSingleton<CommonCommandServices>();
+        services.AddSingleton<ResourceWaitService>();
         services.AddTransient<AppHostConnectionResolver>();
         services.AddTransient<RootCommand>();
         services.AddTransient<NewCommand>();
@@ -597,7 +598,8 @@ internal sealed class CliServiceCollectionTestOptions
     {
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        return new ExtensionRpcTarget(configuration, executionContext);
+        var cancellationManager = serviceProvider.GetRequiredService<ConsoleCancellationManager>();
+        return new ExtensionRpcTarget(configuration, executionContext, cancellationManager);
     };
 
     public Func<IServiceProvider, IExtensionBackchannel> ExtensionBackchannelFactory { get; set; } = serviceProvider =>

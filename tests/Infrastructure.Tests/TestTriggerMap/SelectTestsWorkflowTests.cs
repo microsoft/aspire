@@ -2,14 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Xunit;
+using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests.TestTriggerMap;
 
 /// <summary>
 /// Guards on the CI wiring that surrounds the SelectTests engine but lives in YAML rather than C#:
 /// the <c>run-full-ci</c> label kill switch (computed in <c>.github/workflows/tests.yml</c>, consumed by
-/// <c>.github/actions/select-tests/action.yml</c>) and the selection-comment posting in
-/// <c>tests.yml</c>. Neither is exercised by the CLI tests, yet both are easy to silently regress
+/// <c>.github/actions/select-tests/action.yml</c>), the top-level changed-file skip gate, and the
+/// selection-comment posting in <c>tests.yml</c>. These are not exercised by the CLI tests, yet are easy to silently regress
 /// (loosen the kill switch, or revert the comment to update-in-place), so they are pinned here.
 /// </summary>
 public sealed class SelectTestsWorkflowTests
@@ -43,6 +44,26 @@ public sealed class SelectTestsWorkflowTests
         Assert.Contains(
             "forceAll: ${{ contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}",
             testsYml);
+    }
+
+    [Fact]
+    public void TestsWorkflowEnforcesSelectedTestSubset()
+    {
+        var yaml = new YamlStream();
+        using var reader = new StringReader(File.ReadAllText(TestsWorkflowPath));
+        yaml.Load(reader);
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
+        var setupForTests = (YamlMappingNode)jobs.Children[new YamlScalarNode("setup_for_tests")];
+        var steps = (YamlSequenceNode)setupForTests.Children[new YamlScalarNode("steps")];
+        var selectTests = Assert.Single(
+            steps.Cast<YamlMappingNode>(),
+            step => step.Children.TryGetValue(new YamlScalarNode("uses"), out var uses) &&
+                    uses.ToString() == "./.github/actions/select-tests");
+        var inputs = (YamlMappingNode)selectTests.Children[new YamlScalarNode("with")];
+
+        Assert.Equal("true", inputs.Children[new YamlScalarNode("enforce")].ToString());
     }
 
     // The comment_selection job posts one comment per pushed commit (createComment for a new commit,
@@ -132,8 +153,25 @@ public sealed class SelectTestsWorkflowTests
         Assert.DoesNotContain("exit", mergeBaseRegion);
     }
 
+    // The top-level skip gate runs before SelectTests. Git's default rename detection can report only
+    // the destination, so moving compiled source into a skippable baseline-shaped path could otherwise
+    // hide the deleted source and skip the entire CI workflow. Keep both rename sides visible, matching
+    // the selector's own changed-file resolution.
+    [Fact]
+    public void CheckChangedFilesActionDisablesRenameDetection()
+    {
+        var action = File.ReadAllText(CheckChangedFilesActionPath);
+
+        Assert.Contains(
+            "git diff --name-only --no-renames \"$BASE_REF\"...\"$HEAD_REF\"",
+            action);
+    }
+
     private static string SelectTestsActionPath
         => Path.Combine(RepoRoot.Path, ".github", "actions", "select-tests", "action.yml");
+
+    private static string CheckChangedFilesActionPath
+        => Path.Combine(RepoRoot.Path, ".github", "actions", "check-changed-files", "action.yml");
 
     private static string TestsWorkflowPath
         => Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml");

@@ -44,6 +44,125 @@ namespace Aspire.Hosting.Tests.Dcp;
 public class DcpExecutorTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task ExecutablePrecomputedReplicasCreateDistinctProducersAndRestartIndividually()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = AddExecutableWithPrecomputedReplicas(builder)
+            .WithHttpEndpoint(name: "http", env: "PORT");
+        var kubernetesService = new TestKubernetesService();
+        var startingEvents = new ConcurrentQueue<OnResourceStartingContext>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceStartingContext>(context =>
+        {
+            startingEvents.Enqueue(context);
+            return Task.CompletedTask;
+        });
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService,
+            events: events);
+
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var executables = GetCreatedExecutablesForResource(kubernetesService, "program");
+        Assert.Equal(2, executables.Count);
+        Assert.Same(resource.Resource, Assert.Single(startingEvents).Resource);
+        var service = Assert.Single(kubernetesService.CreatedResources.OfType<Service>());
+        var targetPorts = new HashSet<int>();
+        foreach (var executable in executables)
+        {
+            Assert.True(executable.TryGetAnnotationAsObjectList<ServiceProducerAnnotation>(CustomResource.ServiceProducerAnnotation, out var producers));
+            var producer = Assert.Single(producers);
+            Assert.Equal(service.Metadata.Name, producer.ServiceName);
+            var targetPort = Assert.IsType<int>(producer.Port);
+            AssertPortAllocatedFromProxylessEndpointAllocatorRange(targetPort);
+            Assert.True(targetPorts.Add(targetPort));
+            Assert.Equal(
+                $"{{{{- portForServing \"{service.Metadata.Name}\" -}}}}",
+                Assert.Single(executable.Spec.Env!, variable => variable.Name == "PORT").Value);
+        }
+
+        var firstName = executables[0].Metadata.Name;
+        var secondName = executables[1].Metadata.Name;
+        var reference = executor.GetResource(firstName);
+        await executor.StopResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+        await executor.StartResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        var afterRestart = GetCreatedExecutablesForResource(kubernetesService, "program");
+        Assert.Equal(3, afterRestart.Count);
+        Assert.Equal(2, afterRestart.Count(executable => executable.Metadata.Name == firstName));
+        Assert.Single(afterRestart, executable => executable.Metadata.Name == secondName);
+    }
+
+    [Fact]
+    public async Task ExecutablePrecomputedReplicasCanEachBeExplicitlyStarted()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = AddExecutableWithPrecomputedReplicas(builder).WithExplicitStart();
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "program"));
+        Assert.True(resource.Resource.TryGetInstances(out var instances));
+        for (var index = 0; index < instances.Length; index++)
+        {
+            var reference = executor.GetResource(instances[index].Name);
+            await executor.StartResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+
+            var created = GetCreatedExecutablesForResource(kubernetesService, "program");
+            Assert.Equal(index + 1, created.Count);
+            Assert.All(created, executable => Assert.True(executable.Spec.Start));
+        }
+    }
+
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, 8080)]
+    public async Task ExecutablePrecomputedReplicasRejectIncompatibleEndpoints(bool proxied, int? targetPort)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        AddExecutableWithPrecomputedReplicas(builder)
+            .WithHttpEndpoint(name: "http", isProxied: proxied, targetPort: targetPort);
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.RunApplicationAsync()).DefaultTimeout();
+
+        Assert.Equal(
+            proxied
+                ? "Resource 'program' can have multiple replicas, and it uses endpoint 'http' that has TargetPort property set. Each replica must have a unique port; setting TargetPort is not allowed."
+                : "Resource 'program' uses multiple replicas and a proxy-less endpoint 'http'. These features do not work together.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task PlainExecutableReplicaEligibilityIsUnchanged()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = builder.AddExecutable("program", "program", builder.AppHostDirectory)
+            .WithAnnotation(new ReplicaAnnotation(3));
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        Assert.True(resource.Resource.TryGetInstances(out var instances));
+        Assert.Single(instances);
+        var executable = GetCreatedExecutableForResource(kubernetesService, "program");
+        Assert.Equal("1", executable.Metadata.Annotations[CustomResource.ResourceReplicaCount]);
+        Assert.Equal("0", executable.Metadata.Annotations[CustomResource.ResourceReplicaIndex]);
+    }
+
+    [Fact]
     public async Task ContainersArePassedOtelServiceName()
     {
         // Arrange
@@ -615,15 +734,22 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EndpointPortsExecutableNotReplicatedProxiedNoPortNoTargetPort()
     {
+        var (allocatedTargetPort, _) = GetAvailableConsecutivePortPair();
         var builder = DistributedApplication.CreateBuilder();
 
         var exe = builder.AddExecutable("CoolProgram", "cool", Environment.CurrentDirectory, "--alpha", "--bravo")
             .WithEndpoint(name: "NoPortNoTargetPort", env: "NO_PORT_NO_TARGET_PORT", isProxied: true);
 
         var kubernetesService = new TestKubernetesService();
+        var dcpOptions = new DcpOptions
+        {
+            DashboardPath = "./dashboard",
+            ProxylessEndpointPortRangeStart = allocatedTargetPort,
+            ProxylessEndpointPortRangeEnd = allocatedTargetPort
+        };
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
         await appExecutor.RunApplicationAsync();
 
         var dcpExe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>());
@@ -632,12 +758,11 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         // Neither Port, nor TargetPort are set
         // Clients use proxy, MAY have the proxy port injected.
         // Proxy gets autogenerated port.
-        // Program gets (different) autogenerated port that MUST be injected via env var / startup param.
+        // Aspire assigns the program a different non-ephemeral port that DCP injects via env var / startup param.
         var svc = kubernetesService.CreatedResources.OfType<Service>().Single(s => s.Name() == "CoolProgram");
         Assert.Equal(AddressAllocationModes.Localhost, svc.Spec.AddressAllocationMode);
         Assert.True(svc.Status?.EffectivePort >= TestKubernetesService.StartOfAutoPortRange);
-        Assert.True(spAnnList.Single(ann => ann.ServiceName == "CoolProgram").Port is null,
-            "Expected service producer (target) port to not be set (leave allocation to DCP)");
+        Assert.Equal(allocatedTargetPort, spAnnList.Single(ann => ann.ServiceName == "CoolProgram").Port);
         var envVarVal = dcpExe.Spec.Env?.Single(v => v.Name == "NO_PORT_NO_TARGET_PORT").Value;
         Assert.False(string.IsNullOrWhiteSpace(envVarVal));
         Assert.Contains("""portForServing "CoolProgram" """, envVarVal);
@@ -646,6 +771,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EndpointPortsExecutableNotReplicatedProxiedPortSetNoTargetPort()
     {
+        var (allocatedTargetPort, _) = GetAvailableConsecutivePortPair();
         var builder = DistributedApplication.CreateBuilder();
 
         const int desiredPort = TestKubernetesService.StartOfAutoPortRange - 1000;
@@ -653,9 +779,15 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             .WithEndpoint(name: "PortSetNoTargetPort", port: desiredPort, env: "PORT_SET_NO_TARGET_PORT");
 
         var kubernetesService = new TestKubernetesService();
+        var dcpOptions = new DcpOptions
+        {
+            DashboardPath = "./dashboard",
+            ProxylessEndpointPortRangeStart = allocatedTargetPort,
+            ProxylessEndpointPortRangeEnd = allocatedTargetPort
+        };
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
         await appExecutor.RunApplicationAsync();
 
         var dcpExe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>());
@@ -664,12 +796,11 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         // Port is set, but TargetPort is empty
         // Clients use proxy, MAY have the proxy port injected.
         // Proxy uses Port.
-        // Program gets autogenerated port that MUST be injected via env var / startup param.
+        // Aspire assigns the program a non-ephemeral port that DCP injects via env var / startup param.
         var svc = kubernetesService.CreatedResources.OfType<Service>().Single(s => s.Name() == "CoolProgram");
         Assert.Equal(AddressAllocationModes.Localhost, svc.Spec.AddressAllocationMode);
         Assert.Equal(desiredPort, svc.Status?.EffectivePort);
-        Assert.True(spAnnList.Single(ann => ann.ServiceName == "CoolProgram").Port is null,
-            "Expected service producer (target) port to not be set (leave allocation to DCP)");
+        Assert.Equal(allocatedTargetPort, spAnnList.Single(ann => ann.ServiceName == "CoolProgram").Port);
         var envVarVal = dcpExe.Spec.Env?.Single(v => v.Name == "PORT_SET_NO_TARGET_PORT").Value;
         Assert.False(string.IsNullOrWhiteSpace(envVarVal));
         Assert.Contains("""portForServing "CoolProgram" """, envVarVal);
@@ -705,6 +836,38 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var envVarVal = dcpExe.Spec.Env?.Single(v => v.Name == "NO_PORT_TARGET_PORT_SET").Value;
         Assert.False(string.IsNullOrWhiteSpace(envVarVal));
         Assert.Equal(desiredPort, int.Parse(envVarVal, CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public async Task DynamicProxiedExecutableTargetPortExcludesFixedTargetPorts()
+    {
+        var (fixedTargetPort, allocatedTargetPort) = GetAvailableConsecutivePortPair();
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddExecutable("FixedProgram", "fixed", Environment.CurrentDirectory)
+            .WithEndpoint(name: "fixed", targetPort: fixedTargetPort, isProxied: true);
+        builder.AddExecutable("DynamicProgram", "dynamic", Environment.CurrentDirectory)
+            .WithEndpoint(name: "dynamic", isProxied: true);
+
+        var dcpOptions = new DcpOptions
+        {
+            DashboardPath = "./dashboard",
+            ProxylessEndpointPortRangeStart = fixedTargetPort,
+            ProxylessEndpointPortRangeEnd = allocatedTargetPort
+        };
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+
+        await appExecutor.RunApplicationAsync();
+
+        var fixedExecutable = kubernetesService.CreatedResources.OfType<Executable>().Single(e => e.AppModelResourceName == "FixedProgram");
+        var dynamicExecutable = kubernetesService.CreatedResources.OfType<Executable>().Single(e => e.AppModelResourceName == "DynamicProgram");
+        Assert.True(fixedExecutable.TryGetAnnotationAsObjectList<ServiceProducerAnnotation>(CustomResource.ServiceProducerAnnotation, out var fixedAnnotations));
+        Assert.True(dynamicExecutable.TryGetAnnotationAsObjectList<ServiceProducerAnnotation>(CustomResource.ServiceProducerAnnotation, out var dynamicAnnotations));
+        Assert.Equal(fixedTargetPort, Assert.Single(fixedAnnotations).Port);
+        Assert.Equal(allocatedTargetPort, Assert.Single(dynamicAnnotations).Port);
     }
 
     [Fact]
@@ -858,6 +1021,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EndpointPortsPersistentExecutableDefaultsToProxiedEndpointWhenPortsAreRandomized()
     {
+        var (allocatedTargetPort, _) = GetAvailableConsecutivePortPair();
         var builder = DistributedApplication.CreateBuilder();
 
         const int desiredPort = TestKubernetesService.StartOfAutoPortRange - 1002;
@@ -871,7 +1035,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         };
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
 
-        var dcpOptions = new DcpOptions { DashboardPath = "./dashboard", RandomizePorts = true };
+        var dcpOptions = new DcpOptions
+        {
+            DashboardPath = "./dashboard",
+            RandomizePorts = true,
+            ProxylessEndpointPortRangeStart = allocatedTargetPort,
+            ProxylessEndpointPortRangeEnd = allocatedTargetPort
+        };
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -886,7 +1056,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Null(svc.Spec.Port);
         Assert.True(svc.Status?.EffectivePort >= TestKubernetesService.StartOfAutoPortRange);
         Assert.NotEqual(desiredPort, svc.Status?.EffectivePort);
-        Assert.Null(spAnnList.Single(ann => ann.ServiceName == "CoolProgram").Port);
+        Assert.Equal(allocatedTargetPort, spAnnList.Single(ann => ann.ServiceName == "CoolProgram").Port);
 
         var envVarVal = dcpExe.Spec.Env?.Single(v => v.Name == "PORT_SET_NO_TARGET_PORT").Value;
         Assert.False(string.IsNullOrWhiteSpace(envVarVal));
@@ -1406,6 +1576,51 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(persistedPort, persistentService.Spec.Port);
         Assert.Equal(allocatedPort, dynamicService.Status?.EffectivePort);
         Assert.Equal(allocatedPort, dynamicService.Spec.Port);
+        Assert.Empty(userSecretsManager.Secrets);
+    }
+
+    [Fact]
+    public async Task IsolatedPersistentProxylessEndpointIgnoresAndDoesNotPersistPort()
+    {
+        var (persistedPort, allocatedPort) = GetAvailableConsecutivePortPair();
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddExecutable("PersistentProgram", "persistent", Environment.CurrentDirectory)
+            .WithPersistentLifetime()
+            .WithEndpoint(name: "http", env: "HTTP_PORT", isProxied: false);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+                ["Resources:PersistentProgram:http:port"] = persistedPort.ToString(CultureInfo.InvariantCulture)
+            })
+            .Build();
+        var userSecretsManager = new MockUserSecretsManager();
+        var dcpOptions = new DcpOptions
+        {
+            DashboardPath = "./dashboard",
+            RandomizePorts = true,
+            ProxylessEndpointPortRangeStart = allocatedPort,
+            ProxylessEndpointPortRangeEnd = allocatedPort
+        };
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            configuration: configuration,
+            kubernetesService: kubernetesService,
+            dcpOptions: dcpOptions,
+            userSecretsManager: userSecretsManager);
+
+        await appExecutor.RunApplicationAsync();
+
+        var service = kubernetesService.CreatedResources.OfType<Service>().Single(s => s.Name() == "PersistentProgram");
+        Assert.Equal(AddressAllocationModes.Proxyless, service.Spec.AddressAllocationMode);
+        Assert.Equal(allocatedPort, service.Status?.EffectivePort);
+        Assert.NotEqual(persistedPort, service.Status?.EffectivePort);
         Assert.Empty(userSecretsManager.Secrets);
     }
 
@@ -3381,6 +3596,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exes = GetCreatedExecutablesForResource(kubernetesService, "ServiceA");
         Assert.Equal(3, exes.Count);
+        var targetPorts = new HashSet<int>();
 
         foreach (var dcpExe in exes)
         {
@@ -3389,12 +3605,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             // Neither Port, nor TargetPort are set
             // Clients use proxy, MAY have the proxy port injected.
             // Proxy gets autogenerated port.
-            // Each replica gets a different autogenerated port that MUST be injected via env var/startup param.
+            // Aspire assigns each replica a different non-ephemeral port that DCP injects via env var/startup param.
             var svc = kubernetesService.CreatedResources.OfType<Service>().Single(s => s.Name() == "ServiceA-NoPortNoTargetPort");
             Assert.Equal(AddressAllocationModes.Localhost, svc.Spec.AddressAllocationMode);
             Assert.True(svc.Status?.EffectivePort >= TestKubernetesService.StartOfAutoPortRange);
-            Assert.True(spAnnList.Single(ann => ann.ServiceName == "ServiceA-NoPortNoTargetPort").Port is null,
-                "Expected service producer (target) port to not be set (leave allocation to DCP)");
+            var targetPort = Assert.IsType<int>(spAnnList.Single(ann => ann.ServiceName == "ServiceA-NoPortNoTargetPort").Port);
+            AssertPortAllocatedFromProxylessEndpointAllocatorRange(targetPort);
+            Assert.True(targetPorts.Add(targetPort));
             var envVarVal = dcpExe.Spec.Env?.Single(v => v.Name == "NO_PORT_NO_TARGET_PORT").Value;
             Assert.False(string.IsNullOrWhiteSpace(envVarVal));
             Assert.Contains("""portForServing "ServiceA-NoPortNoTargetPort" """, envVarVal);
@@ -3426,6 +3643,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exes = GetCreatedExecutablesForResource(kubernetesService, "ServiceA");
         Assert.Equal(3, exes.Count);
+        var targetPorts = new HashSet<int>();
 
         foreach (var dcpExe in exes)
         {
@@ -3434,12 +3652,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             // Port is set, but TargetPort is empty.
             // Clients use proxy, MAY have the proxy port injected.
             // Proxy uses Port.
-            // Each replica gets a different autogenerated port that MUST be injected via env var/startup param.
+            // Aspire assigns each replica a different non-ephemeral port that DCP injects via env var/startup param.
             var svc = kubernetesService.CreatedResources.OfType<Service>().Single(s => s.Name() == "ServiceA-PortSetNoTargetPort");
             Assert.Equal(AddressAllocationModes.Localhost, svc.Spec.AddressAllocationMode);
             Assert.Equal(desiredPortOne, svc.Status?.EffectivePort);
-            Assert.True(spAnnList.Single(ann => ann.ServiceName == "ServiceA-PortSetNoTargetPort").Port is null,
-                "Expected service producer (target) port to not be set (leave allocation to DCP)");
+            var targetPort = Assert.IsType<int>(spAnnList.Single(ann => ann.ServiceName == "ServiceA-PortSetNoTargetPort").Port);
+            AssertPortAllocatedFromProxylessEndpointAllocatorRange(targetPort);
+            Assert.True(targetPorts.Add(targetPort));
             var envVarVal = dcpExe.Spec.Env?.Single(v => v.Name == "PORT_SET_NO_TARGET_PORT").Value;
             Assert.False(string.IsNullOrWhiteSpace(envVarVal));
             Assert.Contains("""portForServing "ServiceA-PortSetNoTargetPort" """, envVarVal);
@@ -3517,6 +3736,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EndpointPortsPersistentProjectDefaultsToProxiedEndpointWhenPortsAreRandomized()
     {
+        var (allocatedTargetPort, _) = GetAvailableConsecutivePortPair();
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
         {
             AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
@@ -3533,7 +3753,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         };
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
 
-        var dcpOptions = new DcpOptions { DashboardPath = "./dashboard", RandomizePorts = true };
+        var dcpOptions = new DcpOptions
+        {
+            DashboardPath = "./dashboard",
+            RandomizePorts = true,
+            ProxylessEndpointPortRangeStart = allocatedTargetPort,
+            ProxylessEndpointPortRangeEnd = allocatedTargetPort
+        };
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -3548,7 +3774,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Null(svc.Spec.Port);
         Assert.True(svc.Status?.EffectivePort >= TestKubernetesService.StartOfAutoPortRange);
         Assert.NotEqual(desiredPort, svc.Status?.EffectivePort);
-        Assert.Null(spAnnList.Single(ann => ann.ServiceName == "ServiceA").Port);
+        Assert.Equal(allocatedTargetPort, spAnnList.Single(ann => ann.ServiceName == "ServiceA").Port);
 
         var aspnetCoreUrls = dcpExe.Spec.Env?.Single(v => v.Name == KnownAspNetCoreConfigNames.Urls).Value;
         Assert.Contains("""portForServing "ServiceA" """, aspnetCoreUrls);
@@ -9810,6 +10036,17 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         // Assert
         var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
+    private static IResourceBuilder<ExecutableResource> AddExecutableWithPrecomputedReplicas(IDistributedApplicationBuilder builder)
+    {
+        return builder.AddExecutable("program", "program", builder.AppHostDirectory)
+            .WithAnnotation(new ReplicaAnnotation(2))
+            .WithAnnotation(new DcpInstancesAnnotation(
+            [
+                new DcpInstance("program-first", "first", 0),
+                new DcpInstance("program-second", "second", 1)
+            ]));
     }
 
     private static Executable GetCreatedExecutableForResource(TestKubernetesService kubernetesService, string appModelResourceName)

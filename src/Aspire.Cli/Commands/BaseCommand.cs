@@ -196,8 +196,18 @@ internal abstract class BaseCommand : Command
         }
 
         var isErrorExitCode = result.ExitCode != CliExitCodes.Success;
+        var shouldDisplayDiagnosticLogs = isErrorExitCode
+            && !result.ShouldDisplayHelp
+            && !s_suppressErrorLogsMessageExitCodes.Contains(result.ExitCode);
+        var displayedActionableFailure = shouldDisplayDiagnosticLogs
+            && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
+            && await extensionInteractionService.TryDisplayCommandFailureAsync(
+                result.ErrorMessage,
+                _executionContext.LogFilePath,
+                ExecutionContext.AppHostCliLogFilePath,
+                CancellationToken.None).ConfigureAwait(false);
 
-        if (result.ErrorMessage is not null)
+        if (!displayedActionableFailure && result.ErrorMessage is not null)
         {
             InteractionService.DisplayError(result.ErrorMessage);
         }
@@ -216,7 +226,7 @@ internal abstract class BaseCommand : Command
         // Display the CLI log file path on non-zero exit codes so the user knows
         // where to find diagnostic details. Suppress for user-input errors where
         // the log wouldn't contain useful context (e.g., missing required arguments).
-        if (isErrorExitCode && !s_suppressErrorLogsMessageExitCodes.Contains(result.ExitCode))
+        if (!displayedActionableFailure && shouldDisplayDiagnosticLogs)
         {
             InteractionService.DisplayMessage(
                 KnownEmojis.PageFacingUp,

@@ -194,6 +194,7 @@ public class DevTunnelResourceBuilderExtensionsTests
     {
         var client = new TestDevTunnelClient
         {
+            CreatedTunnelId = "mytunnel.eun1",
             PortList = new()
             {
                 Ports = [
@@ -228,6 +229,102 @@ public class DevTunnelResourceBuilderExtensionsTests
         Assert.Contains(calls, call => call.Method == nameof(IDevTunnelClient.GetPortListAsync) && call.TunnelId == "mytunnel.eun1");
         Assert.Contains(calls, call => call.Method == nameof(IDevTunnelClient.CreatePortAsync) && call.TunnelId == "mytunnel.eun1" && call.PortNumber == 5001);
         Assert.Contains(calls, call => call.Method == nameof(IDevTunnelClient.DeletePortAsync) && call.TunnelId == "mytunnel.eun1" && call.PortNumber == 6000);
+    }
+
+    [Fact]
+    public async Task OnBeforeResourceStarted_WithAutoSelectedRegion_UsesCreatedTunnelIdForPortOperations()
+    {
+        var client = new TestDevTunnelClient
+        {
+            CreatedTunnelId = "mytunnel.eun1",
+            PortList = new()
+            {
+                Ports = [
+                    new(5001, "https"),
+                    new(6000, "https")
+                ]
+            }
+        };
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDevTunnelClient>(client);
+        builder.Services.AddSingleton<IRequiredCommandValidator, TestRequiredCommandValidator>();
+
+        var target = builder.AddProject<ProjectA>("target")
+            .WithHttpEndpoint(port: 5000, targetPort: 5001, name: "http");
+        var tunnel = builder.AddDevTunnel("tunnel", "mytunnel")
+            .WithReference(target);
+        var tunnelPort = Assert.Single(tunnel.Resource.Ports);
+        tunnelPort.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint = new(
+            tunnelPort.TargetEndpoint.EndpointAnnotation,
+            "localhost",
+            5000);
+
+        using var app = builder.Build();
+
+        await builder.Eventing.PublishAsync(new BeforeResourceStartedEvent(tunnel.Resource, app.Services)).DefaultTimeout();
+
+        var calls = client.Calls.ToArray();
+        Assert.Contains(calls, call => call.Method == nameof(IDevTunnelClient.CreateTunnelAsync) && call.TunnelId == "mytunnel");
+        Assert.Contains(calls, call => call.Method == nameof(IDevTunnelClient.GetPortListAsync) && call.TunnelId == "mytunnel.eun1");
+        Assert.Contains(calls, call => call.Method == nameof(IDevTunnelClient.CreatePortAsync) && call.TunnelId == "mytunnel.eun1" && call.PortNumber == 5001);
+        Assert.Contains(calls, call => call.Method == nameof(IDevTunnelClient.DeletePortAsync) && call.TunnelId == "mytunnel.eun1" && call.PortNumber == 6000);
+    }
+
+    [Fact]
+    public async Task DevTunnelHealthCheck_WithAutoSelectedRegion_UsesReturnedTunnelIdForAccessOperations()
+    {
+        var client = new TestDevTunnelClient
+        {
+            TunnelStatus = new("mytunnel.eun1", HostConnections: 1, ClientConnections: 0, Description: "", Labels: [])
+            {
+                Ports = [
+                    new(5001, "https")
+                    {
+                        PortUri = new("https://mytunnel-5001.eun1.devtunnels.ms")
+                    }
+                ]
+            }
+        };
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDevTunnelClient>(client);
+
+        var target = builder.AddProject<ProjectA>("target")
+            .WithHttpEndpoint(port: 5000, targetPort: 5001, name: "http");
+        var tunnel = builder.AddDevTunnel("tunnel", "mytunnel")
+            .WithReference(target);
+
+        using var app = builder.Build();
+        var healthCheck = new DevTunnelHealthCheck(
+            client,
+            app.Services.GetRequiredService<LoggedOutNotificationManager>(),
+            tunnel.Resource,
+            app.Services.GetRequiredService<ILogger<DevTunnelHealthCheck>>());
+
+        var result = await healthCheck.CheckHealthAsync(new HealthCheckContext()).DefaultTimeout();
+
+        Assert.Equal(HealthStatus.Healthy, result.Status);
+        Assert.Collection(
+            client.Calls,
+            call =>
+            {
+                Assert.Equal(nameof(IDevTunnelClient.GetTunnelAsync), call.Method);
+                Assert.Equal("mytunnel", call.TunnelId);
+                Assert.Null(call.PortNumber);
+            },
+            call =>
+            {
+                Assert.Equal(nameof(IDevTunnelClient.GetAccessAsync), call.Method);
+                Assert.Equal("mytunnel.eun1", call.TunnelId);
+                Assert.Null(call.PortNumber);
+            },
+            call =>
+            {
+                Assert.Equal(nameof(IDevTunnelClient.GetAccessAsync), call.Method);
+                Assert.Equal("mytunnel.eun1", call.TunnelId);
+                Assert.Equal(5001, call.PortNumber);
+            });
     }
 
     [Fact]
