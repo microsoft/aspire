@@ -3,7 +3,10 @@
   "type": "infra-failure",
   "title": "SqlServerContainerFixture InitializeAsync fails with Docker port 1433 already in use on shared CI runner",
   "test_name": "Aspire.Hosting.Azure.Tests.AzureSqlPrincipalReconciliationTests",
-  "error_pattern": "Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint frosty_lehmann ...: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"} at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync()",
+  "job_name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+  "error_pattern": "Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint busy_bardeen ...: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}",
+  "analysis": "All 7 test failures share the identical root cause: the shared SqlServerContainerFixture attempts to start a Docker container bound to host port 1433, which is already in use on the CI runner (likely from a concurrent test run or leftover container). This is an environmental/infrastructure port-allocation conflict, not caused by the PR's Azure Container Apps Express code changes, which do not touch SQL Server test fixtures.",
+  "failure_details": "Class fixture type 'Aspire.Hosting.Azure.Tests.SqlServerContainerFixture' threw in InitializeAsync\n---- Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError, response={\"message\":\"failed to set up container networking: driver failed programming external connectivity on endpoint busy_bardeen (2130bdbc9d145a28196981c93a1310c134659304dd4b2e32d5f83b5facdf3ca6): failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use\"}\n----- Inner Stack Trace -----\n   at Docker.DotNet.DockerClient.HandleIfErrorResponseAsync(HttpStatusCode statusCode, HttpResponseMessage response, IEnumerable`1 handlers) in /_/src/Docker.DotNet/DockerClient.cs:line 494\n   at Docker.DotNet.DockerClient.MakeRequestAsync[T](IEnumerable`1 errorHandlers, HttpMethod method, String path, IQueryString queryString, IRequestContent body, IDictionary`2 headers, TimeSpan timeout, CancellationToken token) in /_/src/Docker.DotNet/DockerClient.cs:line 246\n   at Docker.DotNet.ContainerOperations.StartContainerAsync(String id, ContainerStartParameters parameters, CancellationToken cancellationToken) in /_/src/Docker.DotNet/Endpoints/ContainerOperations.cs:line 201\n   at DotNet.Testcontainers.Clients.TestcontainersClient.StartAsync(String id, CancellationToken ct) in /_/src/Testcontainers/Clients/TestcontainersClient.cs:line 129\n   at DotNet.Testcontainers.Containers.DockerContainer.UnsafeStartAsync(CancellationToken ct) in /_/src/Testcontainers/Containers/DockerContainer.cs:line 544\n   at DotNet.Testcontainers.Containers.DockerContainer.StartAsync(CancellationToken ct) in /_/src/Testcontainers/Containers/DockerContainer.cs:line 340\n   at Aspire.Hosting.Azure.Tests.SqlServerContainerFixture.InitializeAsync() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Azure.Tests/SqlServerContainerFixture.cs:line 28\n\nThis pattern repeated across 7 test methods in AzureSqlPrincipalReconciliationTests, all sharing the same class fixture.",
   "occurrences": [
     {
       "run_id": 33086828076,
@@ -11,6 +14,13 @@
       "job": "Tests / Run VS Code extension unit tests (Windows)",
       "pr_number": 19730,
       "observed_at": "2026-08-27T15:49:53Z"
+    },
+    {
+      "run_id": 35262261892,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35262261892",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "pr_number": 20115,
+      "observed_at": "2026-09-17T19:56:01Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19743"
