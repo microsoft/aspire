@@ -44,7 +44,7 @@ public class TerminalViewTests : DashboardTestContext
         Assert.IsType<DotNetObjectReference<TerminalView>>(invocation.Arguments[2]);
         var options = Assert.IsType<TerminalViewOptions>(invocation.Arguments[3]);
         Assert.Equal("dock:shell", options.SizeMemoryKey);
-        Assert.Equal(Resources.ConsoleLogs.TerminalInputLabel, options.Label);
+        Assert.Equal(Resources.TerminalStrings.TerminalInputLabel, options.Label);
         Assert.IsType<ElementReference>(invocation.Arguments[4]);
         Assert.IsType<ElementReference>(invocation.Arguments[5]);
         var registry = Services.GetRequiredService<TerminalViewSessionRegistry>();
@@ -69,9 +69,9 @@ public class TerminalViewTests : DashboardTestContext
         Assert.Equal(showDimensions ? 1 : 0, cut.FindAll(".terminal-fit").Count);
         Assert.Single(cut.FindAll(".terminal-font-minus"));
         Assert.Single(cut.FindAll(".terminal-font-plus"));
-        Assert.Equal(Resources.ConsoleLogs.TerminalFocusControlsHint, cut.Find(".terminal-focus-hint").TextContent);
-        Assert.Equal(Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize, cut.Find(".terminal-font-minus").GetAttribute("aria-label"));
-        Assert.Equal(Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize, cut.Find(".terminal-font-plus").GetAttribute("aria-label"));
+        Assert.Equal(Resources.TerminalStrings.TerminalFocusControlsHint, cut.Find(".terminal-focus-hint").TextContent);
+        Assert.Equal(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize, cut.Find(".terminal-font-minus").GetAttribute("aria-label"));
+        Assert.Equal(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize, cut.Find(".terminal-font-plus").GetAttribute("aria-label"));
     }
 
     [Theory]
@@ -94,6 +94,10 @@ public class TerminalViewTests : DashboardTestContext
         }
         cut.SetParametersAndRender(builder => builder.Add(p => p.ResourceName, null));
         Assert.Empty(cut.FindAll(".terminal-open-window"));
+        if (!chromeless)
+        {
+            Assert.Equal(Resources.TerminalStrings.TerminalTitle, cut.Find(".terminal-title").TextContent);
+        }
     }
 
     [Fact]
@@ -132,7 +136,7 @@ public class TerminalViewTests : DashboardTestContext
             Cols = 97, Rows = 38, SizeKey = "97x38", SizeSelectEnabled = true
         }));
         Assert.False(cut.Find(".terminal-fit").HasAttribute("disabled"));
-        Assert.Equal(Resources.ConsoleLogs.TerminalToolbarGridSizeAuto, cut.Find(".terminal-fit").TextContent.Trim());
+        Assert.Equal(Resources.TerminalStrings.TerminalToolbarGridSizeAuto, cut.Find(".terminal-fit").TextContent.Trim());
         var items = cut.FindComponent<FluentSelect<TerminalSizePreset, string>>().Instance.Items;
         Assert.NotNull(items);
         Assert.Equal([new("97x38", "97\u00d738", 97, 38), new TerminalSizePreset("80x24", "80\u00d724", 80, 24)], items);
@@ -199,10 +203,10 @@ public class TerminalViewTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData("mount-failed", nameof(Resources.ConsoleLogs.TerminalMountFailed))]
-    [InlineData("disconnected", nameof(Resources.ConsoleLogs.TerminalDisconnected))]
-    [InlineData("input-failed", nameof(Resources.ConsoleLogs.TerminalInputFailed))]
-    [InlineData("sizing-failed", nameof(Resources.ConsoleLogs.TerminalSizingFailed))]
+    [InlineData("mount-failed", nameof(Resources.TerminalStrings.TerminalMountFailed))]
+    [InlineData("disconnected", nameof(Resources.TerminalStrings.TerminalDisconnected))]
+    [InlineData("input-failed", nameof(Resources.TerminalStrings.TerminalInputFailed))]
+    [InlineData("sizing-failed", nameof(Resources.TerminalStrings.TerminalSizingFailed))]
     public async Task TerminalError_DisplaysLocalizedAlert(string error, string resourceKey)
     {
         TerminalSetupHelpers.SetupTerminalView(this);
@@ -211,12 +215,12 @@ public class TerminalViewTests : DashboardTestContext
         {
             TerminalId = 1, Generation = 1, Error = error
         }));
-        var loc = Services.GetRequiredService<IStringLocalizer<Resources.ConsoleLogs>>();
+        var loc = Services.GetRequiredService<IStringLocalizer<Resources.TerminalStrings>>();
         Assert.Equal(loc[resourceKey].Value, cut.Find("[role=alert]").TextContent);
         var button = Assert.Single(cut.FindAll(".terminal-error fluent-button"));
         Assert.Equal(error is "input-failed" or "sizing-failed"
-            ? Resources.ConsoleLogs.TerminalDismissError
-            : Resources.ConsoleLogs.TerminalRetry, button.TextContent.Trim());
+            ? Resources.TerminalStrings.TerminalDismissError
+            : Resources.TerminalStrings.TerminalRetry, button.TextContent.Trim());
     }
 
     [Theory]
@@ -308,7 +312,7 @@ public class TerminalViewTests : DashboardTestContext
         module.SetupVoid("setReadOnly", _ => true).SetException(new JSException("Unsupported live input policy"));
         var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "app"));
         cut.SetParametersAndRender(builder => builder.Add(p => p.ReadOnly, true));
-        cut.WaitForAssertion(() => Assert.Equal(Resources.ConsoleLogs.TerminalMountFailed, cut.Find("[role=alert]").TextContent));
+        cut.WaitForAssertion(() => Assert.Equal(Resources.TerminalStrings.TerminalMountFailed, cut.Find("[role=alert]").TextContent));
         Assert.Equal(["initTerminal", "getSizePresets", "setReadOnly"], module.Invocations.Select(i => i.Identifier));
     }
 
@@ -321,7 +325,7 @@ public class TerminalViewTests : DashboardTestContext
         initialization.SetException(new JSException("Worker unavailable"));
         var retry = module.Setup<int>("initTerminal", _ => !failed);
         var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "app"));
-        cut.WaitForAssertion(() => Assert.Equal(Resources.ConsoleLogs.TerminalMountFailed, cut.Find("[role=alert]").TextContent));
+        cut.WaitForAssertion(() => Assert.Equal(Resources.TerminalStrings.TerminalMountFailed, cut.Find("[role=alert]").TextContent));
         cut.SetParametersAndRender(builder => builder.Add(p => p.ResourceName, "app"));
         Assert.Single(initialization.Invocations);
 

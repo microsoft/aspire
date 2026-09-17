@@ -60,7 +60,7 @@ public partial class TerminalWindowButton : ComponentBase, IAsyncDisposable
     public required ILogger<TerminalWindowButton> Logger { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Resources.ConsoleLogs> Loc { get; init; }
+    public required IStringLocalizer<Resources.TerminalStrings> Loc { get; init; }
 
     [Inject]
     public required Microsoft.FluentUI.AspNetCore.Components.INotificationService ToastService { get; init; }
@@ -99,7 +99,7 @@ public partial class TerminalWindowButton : ComponentBase, IAsyncDisposable
             Logger.LogWarning(ex, "Failed to register the terminal window button.");
             if (!_disposed)
             {
-                await ToastService.ShowErrorToastAsync(Loc[nameof(Resources.ConsoleLogs.TerminalToolbarOpenInWindowFailed)]);
+                await ToastService.ShowErrorToastAsync(Loc[nameof(Resources.TerminalStrings.TerminalToolbarOpenInWindowFailed)]);
             }
         }
     }
@@ -114,11 +114,11 @@ public partial class TerminalWindowButton : ComponentBase, IAsyncDisposable
         if (result == TerminalWindowOpenResult.Failed)
         {
             Logger.LogWarning("The browser failed to open or focus a terminal window.");
-            await ToastService.ShowErrorToastAsync(Loc[nameof(Resources.ConsoleLogs.TerminalToolbarOpenInWindowFailed)]);
+            await ToastService.ShowErrorToastAsync(Loc[nameof(Resources.TerminalStrings.TerminalToolbarOpenInWindowFailed)]);
         }
         else if (result == TerminalWindowOpenResult.Blocked && !OnWindowOpened.HasDelegate)
         {
-            await ToastService.ShowErrorToastAsync(Loc[nameof(Resources.ConsoleLogs.TerminalToolbarOpenInWindowBlocked)]);
+            await ToastService.ShowErrorToastAsync(Loc[nameof(Resources.TerminalStrings.TerminalToolbarOpenInWindowBlocked)]);
         }
 
         if (!_disposed)

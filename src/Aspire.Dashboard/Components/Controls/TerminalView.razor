@@ -16,11 +16,11 @@
         @if (!Chromeless)
         {
             <div class="terminal-titlebar">
-                <span class="terminal-title">@(ResourceName ?? Loc[nameof(Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)].Value)</span>
+                <span class="terminal-title">@(ResourceName ?? Loc[nameof(Resources.TerminalStrings.TerminalTitle)].Value)</span>
                 @if (ShowOpenInWindow && !string.IsNullOrEmpty(ResourceName))
                 {
                     <TerminalWindowButton Class="terminal-open-window"
-                                          Label="@Loc[nameof(Resources.ConsoleLogs.TerminalToolbarOpenInWindow)]"
+                                          Label="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarOpenInWindow)]"
                                           TerminalKey="@($"resource:{ResourceName}:{ReplicaIndex}")"
                                           Url="@($"terminal-window/resource/{Uri.EscapeDataString(ResourceName)}/{ReplicaIndex}")"
                                           FontSize="@FontSize" />
@@ -35,39 +35,39 @@
                     <span role="alert">@GetErrorMessage()</span>
                     @if (_terminalError is "input-failed" or "sizing-failed")
                     {
-                        <FluentButton OnClick="DismissErrorAsync">@Loc[nameof(Resources.ConsoleLogs.TerminalDismissError)]</FluentButton>
+                        <FluentButton OnClick="DismissErrorAsync">@Loc[nameof(Resources.TerminalStrings.TerminalDismissError)]</FluentButton>
                     }
                     else
                     {
-                        <FluentButton OnClick="RetryAsync">@Loc[nameof(Resources.ConsoleLogs.TerminalRetry)]</FluentButton>
+                        <FluentButton OnClick="RetryAsync">@Loc[nameof(Resources.TerminalStrings.TerminalRetry)]</FluentButton>
                     }
                 </div>
             }
         </div>
         <div class="terminal-footer" tabindex="-1" @ref="_footerElement">
-            <span class="terminal-focus-hint">@(FocusControlsHintLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalFocusControlsHint)])</span>
+            <span class="terminal-focus-hint">@(FocusControlsHintLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalFocusControlsHint)])</span>
             <div class="terminal-controls">
                 <FluentButton Class="terminal-font-minus aspire-icon-button" Disabled="@(!_state.CanDecreaseFontSize || ReadOnly)"
-                              Title="@(DecreaseFontSizeLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)])"
-                              aria-label="@(DecreaseFontSizeLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)])"
+                              Title="@(DecreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)])"
+                              aria-label="@(DecreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)])"
                               OnClick="@(() => SetFontSizeAsync(_state.FontPx - 1))">−</FluentButton>
                 <span class="terminal-font-size">@(_state.FontPx > 0 ? $"{_state.FontPx}px" : null)</span>
                 <FluentButton Class="terminal-font-plus aspire-icon-button" Disabled="@(!_state.CanIncreaseFontSize || ReadOnly)"
-                              Title="@(IncreaseFontSizeLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)])"
-                              aria-label="@(IncreaseFontSizeLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)])"
+                              Title="@(IncreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)])"
+                              aria-label="@(IncreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)])"
                               OnClick="@(() => SetFontSizeAsync(_state.FontPx + 1))">+</FluentButton>
                 @if (ShowDimensionsPicker)
                 {
                     <FluentButton Class="terminal-fit aspire-icon-button" Disabled="@(!_state.FitEnabled || ReadOnly)"
-                                  Title="@(FitLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)])"
-                                  aria-label="@(FitLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)])"
-                                  OnClick="FitToContainerAsync">@(FitLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)])</FluentButton>
+                                  Title="@(FitLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)])"
+                                  aria-label="@(FitLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)])"
+                                  OnClick="FitToContainerAsync">@(FitLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)])</FluentButton>
                     <FluentSelect TOption="TerminalSizePreset" TValue="string" Class="terminal-size-select aspire-input" Items="@DisplayedSizePresets"
                                   OptionValue="@(p => p.Value)"
                                   OptionText="@(p => p.Label)"
                                   Value="@_state.SizeKey" ValueChanged="@(value => SetSizeModeAsync(value ?? string.Empty))"
                                   Disabled="@(!_state.SizeSelectEnabled || ReadOnly)"
-                                  aria-label="@(TerminalDimensionsLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSize)])" />
+                                  aria-label="@(TerminalDimensionsLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSize)])" />
                 }
             </div>
         </div>

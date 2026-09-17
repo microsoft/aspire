@@ -99,6 +99,11 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>ConsoleLogs.resx</DependentUpon>
     </Compile>
+    <Compile Update="Resources\TerminalStrings.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>TerminalStrings.resx</DependentUpon>
+    </Compile>
     <Compile Update="Resources\ControlsStrings.Designer.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
@@ -180,6 +185,13 @@
       <SubType>Designer</SubType>
       <Generator>PublicResXFileCodeGenerator</Generator>
       <LastGenOutput>ConsoleLogs.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Resources\TerminalStrings.resx">
+      <XlfSourceFormat>Resx</XlfSourceFormat>
+      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
+      <SubType>Designer</SubType>
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>TerminalStrings.Designer.cs</LastGenOutput>
     </EmbeddedResource>
     <EmbeddedResource Update="Resources\Dialogs.resx">
       <XlfSourceFormat>Resx</XlfSourceFormat>

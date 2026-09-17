@@ -53,7 +53,7 @@
                     <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Color="Color.Default"/>
                 </FluentButton>
             }
-            @if (!_isSwitchingRuns && DashboardClient.IsEnabled && !DashboardClient.IsReadOnly)
+            @if (IsTerminalDockEnabled)
             {
                 <FluentButton Class="header-button"
                               Appearance="ButtonAppearance.Default" OnClick="@ToggleTerminalDockAsync"
@@ -135,6 +135,8 @@
             LaunchHelpAsync="@LaunchHelpAsync"
             LaunchAIAgentsAsync="@LaunchAIAgentsAsync"
             IsAgentHelpEnabled="@(Options.CurrentValue.UI.DisableAgentHelp != true)"
+            IsTerminalDockEnabled="@IsTerminalDockEnabled"
+            ToggleTerminalDockAsync="@ToggleTerminalDockAsync"
             LaunchNotificationsAsync="@LaunchNotificationsAsync"
             LaunchSettingsAsync="@LaunchSettingsAsync" />
     }
@@ -158,7 +160,7 @@
     <DashboardDialogProvider/>
     <FluentTooltipProvider />
     <InteractionsProvider />
-    @if (!_isSwitchingRuns && DashboardClient.IsEnabled && !DashboardClient.IsReadOnly)
+    @if (IsTerminalDockEnabled)
     {
         @* Removing the dock cancels its selected-run subscription and shortcut. Returning to the live run starts a
            new subscription rather than reusing the stream chosen for a previous selection. *@

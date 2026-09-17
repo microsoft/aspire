@@ -128,7 +128,7 @@ public partial class ConsoleLogsTests
         Assert.Equal($"resource:{resourceName}:{replicaIndex}", open.GetAttribute("data-terminal-window-key"));
         Assert.Equal($"http://localhost{pathBase}/terminal-window/resource/{escapedResourceName}/{replicaIndex}?fontSize=17",
             open.GetAttribute("data-terminal-window-url"));
-        Assert.Equal(Resources.ConsoleLogs.TerminalToolbarOpenInWindow, open.GetAttribute("aria-label"));
+        Assert.Equal(Resources.TerminalStrings.TerminalToolbarOpenInWindow, open.GetAttribute("aria-label"));
         Assert.False(open.HasAttribute("disabled"));
         var launcher = TerminalSetupHelpers.GetWindowLauncher(this, cut);
         await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync($"resource:{resourceName}:{replicaIndex}", "opened"));

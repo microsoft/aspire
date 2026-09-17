@@ -116,8 +116,8 @@ public class TerminalWindowButtonTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData("blocked", nameof(Resources.ConsoleLogs.TerminalToolbarOpenInWindowBlocked))]
-    [InlineData("failed", nameof(Resources.ConsoleLogs.TerminalToolbarOpenInWindowFailed))]
+    [InlineData("blocked", nameof(Resources.TerminalStrings.TerminalToolbarOpenInWindowBlocked))]
+    [InlineData("failed", nameof(Resources.TerminalStrings.TerminalToolbarOpenInWindowFailed))]
     public async Task BrowserFailure_ShowsActionableToast(string result, string resourceKey)
     {
         TerminalSetupHelpers.SetupTerminalWindows(this);
@@ -127,9 +127,9 @@ public class TerminalWindowButtonTests : DashboardTestContext
         await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync("terminal", result));
         var toast = Assert.Single(toasts.FindComponents<FluentToast>()).Instance;
         Assert.Equal(ToastIntent.Error, toast.Intent);
-        Assert.Equal(resourceKey == nameof(Resources.ConsoleLogs.TerminalToolbarOpenInWindowBlocked)
-            ? Resources.ConsoleLogs.TerminalToolbarOpenInWindowBlocked
-            : Resources.ConsoleLogs.TerminalToolbarOpenInWindowFailed, toast.Title);
+        Assert.Equal(resourceKey == nameof(Resources.TerminalStrings.TerminalToolbarOpenInWindowBlocked)
+            ? Resources.TerminalStrings.TerminalToolbarOpenInWindowBlocked
+            : Resources.TerminalStrings.TerminalToolbarOpenInWindowFailed, toast.Title);
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public class TerminalWindowButtonTests : DashboardTestContext
             .Add(p => p.Url, "terminal-window/apphost/terminal")
             .Add(p => p.FontSize, 19));
         Assert.True(cut.FindComponent<FluentButton>().Instance.Disabled);
-        toasts.WaitForAssertion(() => Assert.Equal(Resources.ConsoleLogs.TerminalToolbarOpenInWindowFailed,
+        toasts.WaitForAssertion(() => Assert.Equal(Resources.TerminalStrings.TerminalToolbarOpenInWindowFailed,
             Assert.Single(toasts.FindComponents<FluentToast>()).Instance.Title));
     }
 }

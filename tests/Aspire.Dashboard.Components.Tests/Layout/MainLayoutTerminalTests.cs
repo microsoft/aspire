@@ -13,6 +13,7 @@ using Bunit;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;
@@ -20,9 +21,11 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 public partial class MainLayoutTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task TerminalDock_RequiresResourceService(bool isEnabled)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task TerminalDock_RequiresResourceService(bool isEnabled, bool isDesktop)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = new TestDashboardClient(
@@ -34,12 +37,17 @@ public partial class MainLayoutTests
         SetupMainLayoutServices(dashboardClient: client);
 
         var cut = RenderComponent<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
-            new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+            new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
         var label = Services.GetRequiredService<IStringLocalizer<Resources.Layout>>()[nameof(Resources.Layout.MainLayoutToggleTerminalDock)].Value;
         var shortcuts = Services.GetRequiredService<ShortcutManager>();
+        var toggleSelector = isDesktop ? $"fluent-button[aria-label='{label}']" : $"fluent-menu-item[title='{label}']";
+        if (!isDesktop)
+        {
+            await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
+        }
 
         Assert.Equal(isEnabled ? 1 : 0, cut.FindComponents<TerminalDock>().Count);
-        Assert.Equal(isEnabled ? 1 : 0, cut.FindAll($"fluent-button[aria-label='{label}']").Count);
+        Assert.Equal(isEnabled ? 1 : 0, cut.FindAll(toggleSelector).Count);
         await cut.InvokeAsync(() => shortcuts.OnGlobalKeyDown(AspireKeyboardShortcut.ToggleTerminalDock));
 
         if (isEnabled)
@@ -50,7 +58,7 @@ public partial class MainLayoutTests
             await cut.InvokeAsync(() => client.SetConnectionState(DashboardConnectionState.Disconnected));
             cut.Render();
             Assert.Same(dock, cut.FindComponent<TerminalDock>().Instance);
-            Assert.Single(cut.FindAll($"fluent-button[aria-label='{label}']"));
+            Assert.Single(cut.FindAll(toggleSelector));
             await cut.InvokeAsync(() => dock.DisposeAsync().AsTask()).DefaultTimeout();
         }
         else
@@ -61,9 +69,11 @@ public partial class MainLayoutTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task TerminalDock_RunSelection_OnlySubscribesWhileLive(bool startHistorical)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task TerminalDock_RunSelection_OnlySubscribesWhileLive(bool startHistorical, bool isDesktop)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var subscriptionDisposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -91,20 +101,26 @@ public partial class MainLayoutTests
         }
 
         var cut = RenderComponent<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
-            new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+            new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
         var shortcuts = Services.GetRequiredService<ShortcutManager>();
         var label = Services.GetRequiredService<IStringLocalizer<Resources.Layout>>()[nameof(Resources.Layout.MainLayoutToggleTerminalDock)].Value;
+        var toggleSelector = isDesktop ? $"fluent-button[aria-label='{label}']" : $"fluent-menu-item[title='{label}']";
+        if (!isDesktop)
+        {
+            await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
+        }
 
         if (startHistorical)
         {
             Assert.Empty(cut.FindComponents<TerminalDock>());
-            Assert.Empty(cut.FindAll($"fluent-button[aria-label='{label}']"));
+            Assert.Empty(cut.FindAll(toggleSelector));
             Assert.Equal(0, client.TerminalSubscriptionCount);
             await cut.InvokeAsync(() => shortcuts.OnGlobalKeyDown(AspireKeyboardShortcut.ToggleTerminalDock));
             await cut.InvokeAsync(() => cut.FindComponent<DashboardRunSelect>().Instance.SelectedRunIdChanged.InvokeAsync(null));
         }
 
         var originalDock = cut.FindComponent<TerminalDock>().Instance;
+        Assert.Single(cut.FindAll(toggleSelector));
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Activated, "old"));
         cut.WaitForAssertion(() =>
         {
@@ -117,7 +133,7 @@ public partial class MainLayoutTests
         cut.WaitForAssertion(() =>
         {
             Assert.Empty(cut.FindComponents<TerminalDock>());
-            Assert.Empty(cut.FindAll($"fluent-button[aria-label='{label}']"));
+            Assert.Empty(cut.FindAll(toggleSelector));
             Assert.Equal(0, client.ActiveTerminalSubscriptionCount);
         });
         await cut.InvokeAsync(() => shortcuts.OnGlobalKeyDown(AspireKeyboardShortcut.ToggleTerminalDock));
@@ -128,6 +144,7 @@ public partial class MainLayoutTests
         await cut.InvokeAsync(() => cut.FindComponent<DashboardRunSelect>().Instance.SelectedRunIdChanged.InvokeAsync(null));
         var newDock = cut.FindComponent<TerminalDock>().Instance;
         Assert.NotSame(originalDock, newDock);
+        Assert.Single(cut.FindAll(toggleSelector));
         await cut.InvokeAsync(() => shortcuts.OnGlobalKeyDown(AspireKeyboardShortcut.ToggleTerminalDock));
         cut.WaitForAssertion(() =>
         {
@@ -137,5 +154,47 @@ public partial class MainLayoutTests
         });
 
         await cut.InvokeAsync(() => newDock.DisposeAsync().AsTask()).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task TerminalDock_MobileMenu_CanOpenCollapseAndReopenWithoutKeyboard()
+    {
+        var client = new TestDashboardClient(
+            isEnabled: true,
+            terminalChannelProvider: () => Channel.CreateUnbounded<WatchTerminalsUpdate>(),
+            resourceChannelProvider: () => Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>());
+        TerminalSetupHelpers.SetupTerminalView(this);
+        TerminalSetupHelpers.SetupTerminalDock(this);
+        SetupMainLayoutServices(dashboardClient: client);
+
+        var cut = RenderComponent<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
+            new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+        var label = Services.GetRequiredService<IStringLocalizer<Resources.Layout>>()[nameof(Resources.Layout.MainLayoutToggleTerminalDock)].Value;
+        var dock = cut.FindComponent<TerminalDock>().Instance;
+        Assert.Empty(cut.FindAll(".terminal-dock"));
+
+        foreach (var visible in new[] { true, false, true })
+        {
+            await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
+            var item = cut.Find($"fluent-menu-item[title='{label}']");
+            Assert.Null(item.GetAttribute("aria-current"));
+            await cut.InvokeAsync(() => item.TriggerEvent("onmenuitemchange", new MenuItemEventArgs
+            {
+                Id = item.Id,
+                Text = item.TextContent
+            }));
+
+            cut.WaitForAssertion(() =>
+            {
+                Assert.Empty(cut.FindAll(".mobile-nav-menu"));
+                var panel = Assert.Single(cut.FindAll(".terminal-dock"));
+                Assert.Equal(visible ? "false" : "true", panel.GetAttribute("aria-hidden"));
+                Assert.Equal(!visible, panel.HasAttribute("inert"));
+                Assert.Contains(visible ? "visible" : "collapsed", panel.ClassList);
+                Assert.Same(dock, cut.FindComponent<TerminalDock>().Instance);
+            });
+        }
+
+        await cut.InvokeAsync(() => dock.DisposeAsync().AsTask()).DefaultTimeout();
     }
 }

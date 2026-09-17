@@ -119,7 +119,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Resources.ConsoleLogs> Loc { get; init; }
+    public required IStringLocalizer<Resources.TerminalStrings> Loc { get; init; }
 
     [Inject]
     public required IStringLocalizer<Resources.ControlsStrings> ControlsLoc { get; init; }
@@ -242,12 +242,12 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                 AutoFit = autoFit,
                 SizeMemoryKey = SizeMemoryKey,
                 InitialFontSize = InitialFontSize,
-                Label = Loc[nameof(Resources.ConsoleLogs.TerminalInputLabel)],
-                DecreaseFontSize = DecreaseFontSizeLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)],
-                IncreaseFontSize = IncreaseFontSizeLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)],
-                TerminalDimensions = TerminalDimensionsLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSize)],
-                Fit = FitLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)],
-                FocusControlsHint = FocusControlsHintLabel ?? Loc[nameof(Resources.ConsoleLogs.TerminalFocusControlsHint)],
+                Label = Loc[nameof(Resources.TerminalStrings.TerminalInputLabel)],
+                DecreaseFontSize = DecreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)],
+                IncreaseFontSize = IncreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)],
+                TerminalDimensions = TerminalDimensionsLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSize)],
+                Fit = FitLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)],
+                FocusControlsHint = FocusControlsHintLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalFocusControlsHint)],
             }, _selectionTemplateElement, _footerElement);
         _appliedReadOnly = readOnly;
         _appliedAutoFit = autoFit;
@@ -417,10 +417,10 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
     private string GetErrorMessage() => Loc[_terminalError switch
     {
-        "disconnected" => nameof(Resources.ConsoleLogs.TerminalDisconnected),
-        "input-failed" => nameof(Resources.ConsoleLogs.TerminalInputFailed),
-        "sizing-failed" => nameof(Resources.ConsoleLogs.TerminalSizingFailed),
-        _ => nameof(Resources.ConsoleLogs.TerminalMountFailed)
+        "disconnected" => nameof(Resources.TerminalStrings.TerminalDisconnected),
+        "input-failed" => nameof(Resources.TerminalStrings.TerminalInputFailed),
+        "sizing-failed" => nameof(Resources.TerminalStrings.TerminalSizingFailed),
+        _ => nameof(Resources.TerminalStrings.TerminalMountFailed)
     }];
 
     private Task DismissErrorAsync() => InvokeTerminalAsync("dismissError");

@@ -105,6 +105,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
+    private bool IsTerminalDockEnabled => !_isSwitchingRuns && DashboardClient.IsEnabled && !DashboardClient.IsReadOnly;
+
     protected override async Task OnInitializedAsync()
     {
         if (RunStore.SupportsRunSelection)
@@ -542,5 +544,5 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     }
 
     private Task ToggleTerminalDockAsync()
-        => _terminalDock?.ToggleAsync() ?? Task.CompletedTask;
+        => IsTerminalDockEnabled && _terminalDock is { } dock ? dock.ToggleAsync() : Task.CompletedTask;
 }
