@@ -188,10 +188,7 @@ public class BuildEnvironment
         // Template tests build generated apps from repo-built packages, not from an installed
         // Aspire CLI bundle layout, so keep bundle resolution disabled for these test builds.
         EnvVars["AspireUseCliBundle"] = "false";
-        // Generated apps do not import the repository's Directory.Build.props. Temporarily match its
-        // audit suppression while using nuget.org for Hex1b; remove NU1902/NU1903 with the
-        // nuget-hex1b source in nuget8.config once the package is available from the internal feeds.
-        EnvVars["NoWarn"] = "ASPIRE010;NU1902;NU1903";
+        EnvVars["NoWarn"] = "ASPIRE010";
 
         if (OperatingSystem.IsMacOS())
         {

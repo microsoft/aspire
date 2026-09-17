@@ -10,33 +10,24 @@ namespace Infrastructure.Tests;
 public sealed class NuGetConfigTests
 {
     [Fact]
-    public void TemplateRestoresLimitNuGetOrgToHex1bAndPreserveExistingFeeds()
+    public void TemplateRestoresUseOnlyLocalAndApprovedFeeds()
     {
         var document = XDocument.Load(Path.Combine(RepoRoot.Path, "tests", "Shared", "TemplatesTesting", "data", "nuget8.config"));
         var root = document.Root;
         Assert.NotNull(root);
         var sources = root.Element("packageSources")!.Elements("add")
             .ToDictionary(element => element.Attribute("key")!.Value, element => element.Attribute("value")!.Value, StringComparer.Ordinal);
-        string[] expectedSources = ["built-local", "dotnet-eng", "dotnet-public", "dotnet10", "dotnet9", "nuget-hex1b"];
+        string[] expectedSources = ["built-local", "dotnet-eng", "dotnet-public", "dotnet10", "dotnet9"];
         Assert.Equal(expectedSources, sources.Keys.Order(StringComparer.Ordinal));
-        Assert.Equal("https://api.nuget.org/v3/index.json", sources["nuget-hex1b"]);
+        Assert.Equal("%BUILT_NUGETS_PATH%", sources["built-local"]);
+        Assert.All(sources.Where(source => source.Key != "built-local"), source => AssertApprovedSource(source.Value));
 
         var mappings = root.Element("packageSourceMapping")!.Elements("packageSource")
             .ToDictionary(element => element.Attribute("key")!.Value,
                 element => element.Elements("package").Select(package => package.Attribute("pattern")!.Value).ToArray(),
                 StringComparer.Ordinal);
         Assert.Equal(expectedSources, mappings.Keys.Order(StringComparer.Ordinal));
-        foreach (var (source, patterns) in mappings)
-        {
-            if (source == "nuget-hex1b")
-            {
-                Assert.Equal(["Hex1b"], patterns);
-            }
-            else
-            {
-                Assert.Equal(["*"], patterns);
-            }
-        }
+        Assert.All(mappings.Values, patterns => Assert.Equal(["*"], patterns));
     }
 
     [Fact]
@@ -61,22 +52,12 @@ public sealed class NuGetConfigTests
                 Assert.Empty(source.Nodes());
             });
 
-        Assert.All(root.Element("packageSources")!.Elements("add"), source =>
-        {
-            if ((string?)source.Attribute("key") == "nuget-hex1b")
-            {
-                // Until Hex1b is mirrored, its temporary external source must remain limited to that package.
-                Assert.Equal("https://api.nuget.org/v3/index.json", (string?)source.Attribute("value"));
-                var mapping = Assert.Single(root.Element("packageSourceMapping")!.Elements("packageSource"),
-                    element => (string?)element.Attribute("key") == "nuget-hex1b");
-                Assert.Equal(["Hex1b"], mapping.Elements("package").Select(package => (string?)package.Attribute("pattern")));
-            }
-            else
-            {
-                var uri = new Uri(source.Attribute("value")!.Value);
-                Assert.Contains(uri.Host, new[] { "pkgs.dev.azure.com", "dnceng.pkgs.visualstudio.com" });
-            }
-        });
+        var sources = root.Element("packageSources")!.Elements("add").ToArray();
+        Assert.All(sources, source => AssertApprovedSource(source.Attribute("value")!.Value));
+        Assert.Equal(
+            sources.Select(source => source.Attribute("key")!.Value).Order(StringComparer.Ordinal),
+            root.Element("packageSourceMapping")!.Elements("packageSource")
+                .Select(source => source.Attribute("key")!.Value).Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -117,5 +98,13 @@ public sealed class NuGetConfigTests
         {
             Assert.Contains(package, publicPatterns);
         }
+    }
+
+    private static void AssertApprovedSource(string source)
+    {
+        Assert.True(
+            source.StartsWith("https://pkgs.dev.azure.com/dnceng/", StringComparison.Ordinal) ||
+            source.StartsWith("https://dnceng.pkgs.visualstudio.com/public/", StringComparison.Ordinal),
+            $"Unexpected package source: {source}");
     }
 }

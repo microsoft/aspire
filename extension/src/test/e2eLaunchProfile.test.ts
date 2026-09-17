@@ -1149,7 +1149,7 @@ builder.Build().Run();
         assert.ok(writeConfig.includes('fs.writeFileSync(workspaceNuGetConfigPath, nugetConfig);'));
     });
 
-    test('limits temporary nuget.org access to Hex1b in both fixture restore scopes', () => {
+    test('uses only local and approved package feeds in both fixture restore scopes', () => {
         const configurations = getFixtureNuGetConfigurations(['/packages/local', '/packages/<preview> & "daily"']);
         const expectedConfig = `<?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -1162,8 +1162,6 @@ builder.Build().Run();
     <add key="dotnet9" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
     <add key="dotnet10" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet10/nuget/v3/index.json" />
     <add key="dotnet-libraries" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-libraries/nuget/v3/index.json" />
-    <!-- Remove this source and its package mappings once Hex1b is mirrored into the approved internal feeds. -->
-    <add key="nuget-hex1b" value="https://api.nuget.org/v3/index.json" />
   </packageSources>
   <packageSourceMapping>
     <clear />
@@ -1187,9 +1185,6 @@ builder.Build().Run();
     </packageSource>
     <packageSource key="dotnet-libraries">
       <package pattern="*" />
-    </packageSource>
-    <packageSource key="nuget-hex1b">
-      <package pattern="Hex1b" />
     </packageSource>
   </packageSourceMapping>
 </configuration>
