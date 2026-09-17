@@ -2,8 +2,26 @@
 
 ## v1.23.0
 
-<!-- aspire-ext-changelog from=039a7c58f11a01521e49882e26d0d6593b87d9cf to=a7d8508b8e2f240580e17b6f97ffc663aeadc026 base=1.22.0 -->
-_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
+<!-- aspire-ext-changelog-done from=039a7c58f11a01521e49882e26d0d6593b87d9cf to=a7d8508b8e2f240580e17b6f97ffc663aeadc026 base=1.22.0 -->
+
+### Features
+
+- Add Deno application hosting (`AddDenoApp`, `DenoAppResource`) with automatic VS Code debugging for direct `run` and `serve` launches ([#18628](https://github.com/microsoft/aspire/pull/18628)).
+- Add Deno support to the TypeScript AppHost toolchain resolver, including dependency checks, scaffolding, `aspire doctor` diagnostics, and VS Code debugger handoff ([#16218](https://github.com/microsoft/aspire/issues/16218), [#18627](https://github.com/microsoft/aspire/pull/18627)).
+- Complete managed Blazor WebAssembly debugging in VS Code, so **Debug in Browser** hands WebAssembly client projects to the C# debugger and supports managed breakpoints ([#17797](https://github.com/microsoft/aspire/issues/17797), [#17795](https://github.com/microsoft/aspire/issues/17795), [#20001](https://github.com/microsoft/aspire/pull/20001)).
+- Coordinate builds for `AddDotnetProject` resources that share output directories so IDE and F5 launches start from consistent build output ([#19037](https://github.com/microsoft/aspire/issues/19037), [#19678](https://github.com/microsoft/aspire/pull/19678)).
+- Preselect the Aspire CLI's default agent asset selections when creating or initializing a project from VS Code ([#19629](https://github.com/microsoft/aspire/issues/19629), [#19996](https://github.com/microsoft/aspire/pull/19996)).
+
+### Fixes
+
+- Fix **Debug in Browser** getting stuck at `about:blank` on Windows when VS Code inherits an Edge compatibility environment variable ([#20151](https://github.com/microsoft/aspire/issues/20151), [#20152](https://github.com/microsoft/aspire/pull/20152)).
+- Fix Deno debugging so breakpoints in startup code are reliably hit instead of intermittently being skipped ([#20020](https://github.com/microsoft/aspire/pull/20020)).
+- Fix unpackaged WinUI 3 projects crashing on debug start by launching the generated app host executable instead of the managed DLL ([#19091](https://github.com/microsoft/aspire/issues/19091), [#19877](https://github.com/microsoft/aspire/pull/19877)).
+- Fix a timestamp mismatch that could delay suppressing an outdated CLI notification for an unrelated CLI/version after choosing **Don't Show Again** ([#19854](https://github.com/microsoft/aspire/pull/19854)).
+
+### Documentation
+
+- Clarify that CLI debug log files are stored in the Aspire home directory's `logs` folder in the **Enable Aspire Cli Debug Logging** setting description ([#19739](https://github.com/microsoft/aspire/issues/19739), [#19868](https://github.com/microsoft/aspire/pull/19868)).
 
 ## v1.22.0
 
