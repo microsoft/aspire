@@ -50,6 +50,11 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private int _maximumHeightPx = MaximumHeightPx;
     private Task? _watchTask;
     private Task? _resourceWatchTask;
+    private bool _jsInitializationStarted;
+    private Task? _jsInitializationTask;
+    private bool _resizeHandleRegistrationStarted;
+    private bool _tabNavigationRegistrationStarted;
+    private Task? _disposeTask;
     private IJSObjectReference? _jsModule;
     private DotNetObjectReference<TerminalDock>? _selfRef;
     private ElementReference _dockElement;
@@ -104,16 +109,13 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
     protected override void OnInitialized()
     {
-        ShortcutManager.AddGlobalKeydownListener(this);
-
-        // Watched eagerly rather than on first open: an `activated` notification is how AppHost code reveals a
-        // terminal it created (AspireTerminal.Show()), and that has to work in a browser that has never opened the
-        // dock. One idle server stream per circuit is the price of that.
-        _watchTask = Task.Run(() => WatchTerminalsAsync(_cts.Token), _cts.Token);
-        // MainLayout only creates the dock for the live run, so use the live resource repository.
         if (DashboardClient.IsEnabled && !DashboardClient.IsReadOnly)
         {
-            _resourceWatchTask = Task.Run(() => WatchResourceTerminalsAsync(_cts.Token), _cts.Token);
+            ShortcutManager.AddGlobalKeydownListener(this);
+
+            // Keep only metadata watching eager: AspireTerminal.Show() must reveal the dock even before
+            // its first manual opening. Resource links, browser controls, and viewers can wait.
+            _watchTask = Task.Run(() => WatchTerminalsAsync(_cts.Token), _cts.Token);
         }
     }
 
@@ -130,7 +132,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     /// </remarks>
     public Task ToggleAsync() => InvokeAsync(() =>
     {
-        if (_disposed)
+        if (_disposed || !DashboardClient.IsEnabled || DashboardClient.IsReadOnly)
         {
             return;
         }
@@ -162,26 +164,54 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             [new(TelemetryPropertyKeys.TerminalDockTrigger, new AspireTelemetryProperty(trigger.ToString()))], Logger);
         _hasBeenOpened = true;
         _isVisible = true;
+        if (_resourceWatchTask is null && DashboardClient.IsEnabled && !DashboardClient.IsReadOnly)
+        {
+            // The initial snapshot supplies resources accumulated before opening. Keep watching after collapse
+            // so reopening preserves the existing dock state without restarting its subscriptions.
+            _resourceWatchTask = Task.Run(() => WatchResourceTerminalsAsync(_cts.Token), _cts.Token);
+        }
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override Task OnAfterRenderAsync(bool firstRender)
     {
-        // Wiring happens on the render that first materialises the dock element, which is not the component's first
-        // render — the markup is suppressed until the dock has been opened at least once.
-        if (!_disposed && _hasBeenOpened && _jsModule is null)
+        if (_disposed || !_hasBeenOpened || _jsInitializationStarted)
         {
-            _selfRef = DotNetObjectReference.Create(this);
+            return Task.CompletedTask;
+        }
+
+        // Import and registration can yield while another render runs. Mark the entire operation started
+        // synchronously, not just when the module arrives, and retain its task for disposal to join.
+        _jsInitializationStarted = true;
+        return _jsInitializationTask = InitializeJsAsync();
+    }
+
+    private async Task InitializeJsAsync()
+    {
+        try
+        {
             _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Layout/TerminalDock.razor.js").ConfigureAwait(true);
             if (_disposed)
             {
-                await _jsModule.DisposeAsync().ConfigureAwait(true);
                 return;
             }
+            _selfRef = DotNetObjectReference.Create(this);
+            // Mark attempts before invoking JS so disposal also cleans up partially registered listeners.
+            _resizeHandleRegistrationStarted = true;
             await _jsModule.InvokeVoidAsync("registerResizeHandle", _dockElement, _selfRef, MinimumHeightPx, MaximumHeightPx).ConfigureAwait(true);
             if (!_disposed)
             {
+                _tabNavigationRegistrationStarted = true;
                 await _jsModule.InvokeVoidAsync("registerTabNavigation", _dockElement).ConfigureAwait(true);
             }
+        }
+        catch (JSDisconnectedException)
+        {
+            // The circuit is gone; disposal will release any managed references.
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to initialize terminal dock controls.");
+            throw;
         }
     }
 
@@ -406,7 +436,10 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                         endedTerminalIds.Add(endedTerminalId);
                     }
 
-                    StateHasChanged();
+                    if (_hasBeenOpened)
+                    {
+                        StateHasChanged();
+                    }
                     foreach (var terminalId in endedTerminalIds)
                     {
                         if (_disposed)
@@ -576,13 +609,10 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private static string BuildEndpoint(string terminalId)
         => $"api/apphost-terminal?terminalId={Uri.EscapeDataString(terminalId)}";
 
-    public async ValueTask DisposeAsync()
-    {
-        if (_disposed)
-        {
-            return;
-        }
+    public ValueTask DisposeAsync() => new(_disposeTask ??= DisposeCoreAsync());
 
+    private async Task DisposeCoreAsync()
+    {
         _disposed = true;
         TelemetryContext?.Dispose();
         TelemetryContext = null;
@@ -600,30 +630,78 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             // Expected when stopping the watches.
         }
 
-        if (_jsModule is { } module)
+        if (_jsInitializationTask is { } initialization)
         {
             try
             {
-                await module.InvokeVoidAsync("unregisterResizeHandle", _dockElement).ConfigureAwait(true);
-                await module.InvokeVoidAsync("unregisterTabNavigation", _dockElement).ConfigureAwait(true);
-                await module.DisposeAsync().ConfigureAwait(true);
+                await initialization.ConfigureAwait(true);
             }
-            catch (JSDisconnectedException)
+            catch (Exception)
             {
-                // The circuit is already gone; there is nothing left to clean up on the browser side.
+                // InitializeJsAsync already logged and propagated the failure. Release partial registration too.
             }
         }
 
-        _selfRef?.Dispose();
-
-        if (_windowButton is { } button)
+        try
         {
-            // Leaves any detached windows open: they are viewers of AppHost-owned terminals and have no reason to
-            // die because this circuit went away.
-            await button.DisposeAsync().ConfigureAwait(true);
+            await DisposeJsAsync().ConfigureAwait(true);
         }
+        finally
+        {
+            try
+            {
+                if (_windowButton is { } button)
+                {
+                    // Leaves independent windows and their AppHost-owned producers running.
+                    await button.DisposeAsync().ConfigureAwait(true);
+                }
+            }
+            finally
+            {
+                _cts.Dispose();
+            }
+        }
+    }
 
-        _cts.Dispose();
+    private async Task DisposeJsAsync()
+    {
+        try
+        {
+            if (_jsModule is { } module)
+            {
+                try
+                {
+                    try
+                    {
+                        if (_resizeHandleRegistrationStarted)
+                        {
+                            await module.InvokeVoidAsync("unregisterResizeHandle", _dockElement).ConfigureAwait(true);
+                        }
+                    }
+                    finally
+                    {
+                        if (_tabNavigationRegistrationStarted)
+                        {
+                            await module.InvokeVoidAsync("unregisterTabNavigation", _dockElement).ConfigureAwait(true);
+                        }
+                    }
+                }
+                catch (JSDisconnectedException)
+                {
+                    // There is no browser-side state left to unregister after the circuit disconnects.
+                }
+                finally
+                {
+                    await JSInteropHelpers.SafeDisposeAsync(module).ConfigureAwait(true);
+                    _jsModule = null;
+                }
+            }
+        }
+        finally
+        {
+            _selfRef?.Dispose();
+            _selfRef = null;
+        }
     }
 
     private enum TerminalDockTrigger

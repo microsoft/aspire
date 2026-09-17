@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Terminal;
@@ -19,6 +20,14 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class TerminalSetupHelpers
 {
+    public static TestDashboardClient CreateTerminalDashboardClient(
+        Func<Channel<WatchTerminalsUpdate>>? terminalChannelProvider = null,
+        Func<string, CancellationToken, Task>? closeTerminal = null)
+        => new(isEnabled: true,
+            resourceChannelProvider: () => Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>(),
+            terminalChannelProvider: terminalChannelProvider,
+            closeTerminal: closeTerminal);
+
     public static ResourceViewModel CreateTerminalResource(
         string resourceName,
         int replicaIndex = 0,

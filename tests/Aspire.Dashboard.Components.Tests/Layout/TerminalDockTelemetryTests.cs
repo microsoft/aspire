@@ -8,7 +8,6 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Tests;
-using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
 using Bunit;
 using Microsoft.AspNetCore.InternalTesting;
@@ -29,7 +28,9 @@ public partial class TerminalDockTests
     public async Task Telemetry_TracksVisibleIntervalsAndOpeningTrigger(string action, string trigger, bool telemetryEnabled)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
+        var processed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.OnTerminalUpdateProcessed = _ => processed.TrySetResult();
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var sender = new TestDashboardTelemetrySender { IsTelemetryEnabled = telemetryEnabled };
         Services.AddSingleton<IDashboardTelemetrySender>(sender);
@@ -42,7 +43,8 @@ public partial class TerminalDockTests
 
         var renderCount = cut.RenderCount;
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
-        cut.WaitForAssertion(() => Assert.True(cut.RenderCount > renderCount));
+        await processed.Task.DefaultTimeout();
+        Assert.Equal(renderCount, cut.RenderCount);
         Assert.Null(cut.Instance.TelemetryContext);
         Assert.Empty(DrainTelemetryEvents(sender));
 

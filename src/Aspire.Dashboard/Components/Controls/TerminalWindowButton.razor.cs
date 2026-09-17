@@ -74,11 +74,12 @@ public partial class TerminalWindowButton : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender || _disposed)
+        if (_disposed || _launcher is not null || Disabled || string.IsNullOrEmpty(TerminalKey) || LaunchUrl is null)
         {
             return;
         }
 
+        // Assign before awaiting registration so later renders cannot register a second listener.
         _launcher = new TerminalWindowLauncher(JS, NavigationManager, OnOpenedAsync,
             key => InvokeAsync(() => _disposed ? Task.CompletedTask : OnWindowClosed.InvokeAsync(key)));
         try

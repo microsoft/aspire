@@ -134,7 +134,7 @@ public partial class TerminalDockTests : DashboardTestContext
     public async Task AppHostTerminalEndpoint_UsesDashboardBaseUri(string pathBase, string terminalId, string escapedTerminalId)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         Services.AddSingleton<NavigationManager>(new TestNavigationManager($"https://dashboard.example{pathBase}/"));
         TerminalSetupHelpers.SetupTerminalComponents(this, client, pathBase);
         Services.GetRequiredService<NavigationManager>().NavigateTo("consolelogs/resource/other");
@@ -157,7 +157,7 @@ public partial class TerminalDockTests : DashboardTestContext
         int requestedHeight, int viewportHeight, int minimum, int maximum, int expectedHeight)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var cut = RenderComponent<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
@@ -196,7 +196,7 @@ public partial class TerminalDockTests : DashboardTestContext
     [Fact]
     public async Task ResizeDock_AfterDisposal_DoesNotUpdateState()
     {
-        var client = new TestDashboardClient();
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient();
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var cut = RenderComponent<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
@@ -215,7 +215,7 @@ public partial class TerminalDockTests : DashboardTestContext
     public async Task WatchUpdates_ReplaceSnapshotAndSelectAppHostTerminals()
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var cut = RenderComponent<TerminalDock>();
 
@@ -270,7 +270,7 @@ public partial class TerminalDockTests : DashboardTestContext
         bool previouslyOpened, string activatedId, string[] ids, string? selectedId)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var cut = RenderComponent<TerminalDock>();
         if (previouslyOpened)
@@ -311,7 +311,9 @@ public partial class TerminalDockTests : DashboardTestContext
     public async Task RecoverySnapshot_WithoutActivationDoesNotRevealDock(bool previouslyOpened)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
+        var processed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.OnTerminalUpdateProcessed = _ => processed.TrySetResult();
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var cut = RenderComponent<TerminalDock>();
         if (previouslyOpened)
@@ -322,16 +324,18 @@ public partial class TerminalDockTests : DashboardTestContext
 
         var renderCount = cut.RenderCount;
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("replacement"));
+        await processed.Task.DefaultTimeout();
         cut.WaitForAssertion(() =>
         {
-            Assert.True(cut.RenderCount > renderCount);
             if (previouslyOpened)
             {
+                Assert.True(cut.RenderCount > renderCount);
                 Assert.True(cut.Find(".terminal-dock.collapsed").HasAttribute("inert"));
                 Assert.Equal("replacement", cut.Find("[role=tab][aria-selected=true]").TextContent.Trim());
             }
             else
             {
+                Assert.Equal(renderCount, cut.RenderCount);
                 Assert.Empty(cut.FindAll(".terminal-dock"));
             }
         });
@@ -341,7 +345,7 @@ public partial class TerminalDockTests : DashboardTestContext
     public async Task SelectTab_UpdatesAccessibleSelectionWithoutRemountingPanes()
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var cut = RenderComponent<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
@@ -389,7 +393,7 @@ public partial class TerminalDockTests : DashboardTestContext
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var client = new TestDashboardClient(
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(
             terminalChannelProvider: () => updates,
             closeTerminal: (_, _) => completion.Task);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
@@ -422,7 +426,7 @@ public partial class TerminalDockTests : DashboardTestContext
     public async Task LastTabRemoved_EmptyDockCanReceiveAnotherAppHostTerminal()
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var cut = RenderComponent<TerminalDock>();
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Activated, "first"));
@@ -451,7 +455,7 @@ public partial class TerminalDockTests : DashboardTestContext
     public async Task CloseInactiveTab_DoesNotChangeSelection()
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var cut = RenderComponent<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
@@ -478,7 +482,7 @@ public partial class TerminalDockTests : DashboardTestContext
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var client = new TestDashboardClient(
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(
             terminalChannelProvider: () => updates,
             closeTerminal: (_, _) => completion.Task);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
@@ -522,7 +526,7 @@ public partial class TerminalDockTests : DashboardTestContext
     public async Task HideDock_IsInertWithoutClosingOrRemountingTerminals(bool hideWithShortcut, bool reopenFromAppHost)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var cut = RenderComponent<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
@@ -581,7 +585,7 @@ public partial class TerminalDockTests : DashboardTestContext
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var started = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var client = new TestDashboardClient(
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(
             terminalChannelProvider: () => updates,
             closeTerminal: (_, cancellationToken) =>
             {
@@ -610,7 +614,7 @@ public partial class TerminalDockTests : DashboardTestContext
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var client = new TestDashboardClient(
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(
             terminalChannelProvider: () => updates,
             closeTerminal: (_, _) => completion.Task);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
@@ -638,7 +642,7 @@ public partial class TerminalDockTests : DashboardTestContext
     public async Task DetachActiveTerminal_CarriesItsFontAndReturnResumesAutoFit(string pathBase, string terminalId, string escapedTerminalId)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         Services.AddSingleton<NavigationManager>(new TestNavigationManager($"http://localhost{pathBase}/"));
         TerminalSetupHelpers.SetupTerminalComponents(this, client, pathBase);
         Services.GetRequiredService<NavigationManager>().NavigateTo("consolelogs/resource/first");
@@ -687,11 +691,15 @@ public partial class TerminalDockTests : DashboardTestContext
     public async Task RecoverySnapshot_ClosesWindowForMissingTerminal()
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var cut = RenderComponent<TerminalDock>();
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Activated, "detached"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
+        await cut.InvokeAsync(() => cut.FindComponent<TerminalView>().Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Connected = true, FontPx = 19
+        }));
 
         var launcher = TerminalSetupHelpers.GetWindowLauncher(this, cut);
         await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync("detached", "opened"));
@@ -723,12 +731,16 @@ public partial class TerminalDockTests : DashboardTestContext
     public async Task DelayedDetachNotification_ReconcilesCapturedTerminalRatherThanActiveTab(bool removeClickedTerminal)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var cut = RenderComponent<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
+        await cut.InvokeAsync(() => cut.FindComponents<TerminalView>()[0].Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Connected = true, FontPx = 19
+        }));
         var launcher = TerminalSetupHelpers.GetWindowLauncher(this, cut);
 
         await cut.FindAll(".terminal-dock-tab-select")[1].ClickAsync(new());
@@ -762,7 +774,7 @@ public partial class TerminalDockTests : DashboardTestContext
     public async Task BlockedDetach_KeepsInlineViewAndDisplaysFeedback()
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
-        var client = new TestDashboardClient(terminalChannelProvider: () => updates);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var cut = RenderComponent<TerminalDock>();
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Activated, "terminal"));

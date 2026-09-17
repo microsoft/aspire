@@ -27,6 +27,7 @@ public class TestDashboardClient : IDashboardClient
     private readonly IList<ResourceViewModel>? _initialResources;
     private int _terminalSubscriptionCount;
     private int _activeTerminalSubscriptionCount;
+    private int _resourceSubscriptionCount;
 
     public bool IsEnabled { get; }
     public bool IsReadOnly { get; set; }
@@ -39,8 +40,10 @@ public class TestDashboardClient : IDashboardClient
     public Action? OnTerminalSubscriptionDisposed { get; set; }
     public Action? OnResourceSubscriptionDisposed { get; set; }
     public Func<WatchTerminalsUpdate, Task>? BeforeTerminalUpdateAsync { get; set; }
+    public Action<WatchTerminalsUpdate>? OnTerminalUpdateProcessed { get; set; }
     public int TerminalSubscriptionCount => Volatile.Read(ref _terminalSubscriptionCount);
     public int ActiveTerminalSubscriptionCount => Volatile.Read(ref _activeTerminalSubscriptionCount);
+    public int ResourceSubscriptionCount => Volatile.Read(ref _resourceSubscriptionCount);
     public event Action<DashboardConnectionState>? ConnectionStateChanged;
     public Task ReconnectAsync() => Task.CompletedTask;
 
@@ -129,6 +132,9 @@ public class TestDashboardClient : IDashboardClient
                     }
 
                     yield return update;
+                    // Resuming after yield confirms the subscriber finished handling this update, even if it
+                    // intentionally did not render. Tests can synchronize without depending on UI side effects.
+                    OnTerminalUpdateProcessed?.Invoke(update);
                 }
             }
         }
@@ -189,6 +195,7 @@ public class TestDashboardClient : IDashboardClient
         }
 
         var channel = _resourceChannelProvider();
+        Interlocked.Increment(ref _resourceSubscriptionCount);
 
         return Task.FromResult(new ResourceViewModelSubscription(_initialResources?.ToImmutableArray() ?? [], BuildSubscription(channel, cancellationToken)));
 

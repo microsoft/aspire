@@ -23,6 +23,63 @@ public class TerminalWindowButtonTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentButton(this);
     }
 
+    [Theory]
+    [InlineData(true, "terminal", "terminal-window/apphost/terminal", 19)]
+    [InlineData(false, null, "terminal-window/apphost/terminal", 19)]
+    [InlineData(false, "", "terminal-window/apphost/terminal", 19)]
+    [InlineData(false, "terminal", null, 19)]
+    [InlineData(false, "terminal", "", 19)]
+    [InlineData(false, "terminal", "terminal-window/apphost/terminal", null)]
+    [InlineData(false, "terminal", "terminal-window/apphost/terminal", 0)]
+    public async Task Registration_WaitsUntilLaunchingIsAvailable(bool disabled, string? key, string? url, int? fontSize)
+    {
+        var module = TerminalSetupHelpers.SetupTerminalWindows(this);
+        var registration = module.SetupVoid("registerTerminalWindowButton", _ => true);
+        var cut = RenderComponent<TerminalWindowButton>(builder => builder
+            .Add(p => p.Label, "Open")
+            .Add(p => p.Disabled, disabled)
+            .Add(p => p.TerminalKey, key)
+            .Add(p => p.Url, url)
+            .Add(p => p.FontSize, fontSize));
+        cut.Render();
+
+        Assert.True(cut.FindComponent<FluentButton>().Instance.Disabled);
+        Assert.Equal([], JSInterop.Invocations.Where(invocation => invocation.Identifier == "import" &&
+            Equals(invocation.Arguments[0], "/js/app-terminalwindow.js")));
+        Assert.Empty(module.Invocations);
+
+        cut.SetParametersAndRender(builder => builder
+            .Add(p => p.Disabled, false)
+            .Add(p => p.TerminalKey, "terminal")
+            .Add(p => p.Url, "terminal-window/apphost/terminal")
+            .Add(p => p.FontSize, 19));
+        Assert.Single(registration.Invocations);
+        Assert.True(cut.FindComponent<FluentButton>().Instance.Disabled);
+        cut.Render();
+        Assert.Single(registration.Invocations);
+        registration.SetVoidResult();
+        cut.WaitForAssertion(() => Assert.False(cut.FindComponent<FluentButton>().Instance.Disabled));
+
+        cut.SetParametersAndRender(builder => builder.Add(p => p.Disabled, true));
+        cut.SetParametersAndRender(builder => builder.Add(p => p.Disabled, false));
+        Assert.Single(registration.Invocations);
+        await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask());
+        Assert.Single(module.Invocations, invocation => invocation.Identifier == "unregisterTerminalWindowButton");
+    }
+
+    [Fact]
+    public async Task Disposal_BeforeLaunchingIsAvailable_DoesNotLoadJavaScript()
+    {
+        var module = TerminalSetupHelpers.SetupTerminalWindows(this);
+        var cut = RenderComponent<TerminalWindowButton>(builder => builder.Add(p => p.Label, "Open"));
+
+        await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask());
+
+        Assert.Empty(module.Invocations);
+        Assert.Equal([], JSInterop.Invocations.Where(invocation => invocation.Identifier == "import" &&
+            Equals(invocation.Arguments[0], "/js/app-terminalwindow.js")));
+    }
+
     [Fact]
     public void RegistrationAndMetadata_AreRequiredBeforeEnablingNativeButton()
     {
@@ -122,7 +179,11 @@ public class TerminalWindowButtonTests : DashboardTestContext
     {
         TerminalSetupHelpers.SetupTerminalWindows(this);
         var toasts = RenderComponent<FluentToastProvider>();
-        var cut = RenderComponent<TerminalWindowButton>(builder => builder.Add(p => p.Label, "Open"));
+        var cut = RenderComponent<TerminalWindowButton>(builder => builder
+            .Add(p => p.Label, "Open")
+            .Add(p => p.TerminalKey, "terminal")
+            .Add(p => p.Url, "terminal-window/apphost/terminal")
+            .Add(p => p.FontSize, 19));
         var launcher = TerminalSetupHelpers.GetWindowLauncher(this, cut);
         await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync("terminal", result));
         var toast = Assert.Single(toasts.FindComponents<FluentToast>()).Instance;
@@ -146,5 +207,8 @@ public class TerminalWindowButtonTests : DashboardTestContext
         Assert.True(cut.FindComponent<FluentButton>().Instance.Disabled);
         toasts.WaitForAssertion(() => Assert.Equal(Resources.TerminalStrings.TerminalToolbarOpenInWindowFailed,
             Assert.Single(toasts.FindComponents<FluentToast>()).Instance.Title));
+        cut.Render();
+        Assert.Single(module.Invocations, invocation => invocation.Identifier == "registerTerminalWindowButton");
+        Assert.Single(toasts.FindComponents<FluentToast>());
     }
 }

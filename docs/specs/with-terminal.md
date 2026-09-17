@@ -384,6 +384,12 @@ with the resource service enabled, and are hidden while switching runs.
 When the dock is empty, it lists links to terminal-enabled resources on their
 resource pages. Resource terminals remain separate from AppHost-owned dock tabs.
 
+Before the first opening, the dock watches only AppHost terminal metadata so
+`Show()` can reveal it remotely. Resource-link tracking and browser controls start
+on first opening; ordinary metadata updates do not render the unopened dock.
+Window-launch listeners are registered only once the launch button has a usable
+terminal target and font size, before the button is enabled.
+
 Dock panes, interaction dialogs and detached windows automatically fit when
 opened. A detached window takes primary once, carrying the originating view's
 selected font size rather than its grid dimensions. Its font preference can
