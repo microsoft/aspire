@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Routine dependency refresh (NuGet/npm/tool version bumps) after .NET servicing; no user-facing product behavior change.",
+  "mergedAt": "2026-09-17T00:25:17Z",
+  "number": 20046,
+  "runDate": "2026-09-17T06:07:53Z",
+  "status": "excluded",
+  "title": "Refresh third-party dependencies"
+}
