@@ -59,6 +59,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     private readonly DcpAppResourceStore _appResources;
     private readonly SemaphoreSlim _tunnelSemaphore = new(1, 1);
     private readonly List<TunnelConfiguration> _tunnelConfigurations = [];
+    private readonly Dictionary<EndpointAnnotation, TaskCompletionSource> _hostEndpointConnectivity = new(ReferenceEqualityComparer.Instance);
     private Task<AppResource<ContainerNetworkTunnelProxy>>? _tunnelCreationTask;
 
     public ContainerCreator(
@@ -415,7 +416,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
     internal IEnumerable<ContainerNetworkService> CreateContainerNetworkServicesForHostResource(HostResourceWithEndpoints re)
     {
-        var resourceLogger = _loggerService.GetLogger(re.Resource);
         var services = new List<ContainerNetworkService>();
         var useTunnel = _options.Value.EnableAspireContainerTunnel;
         string tunnelProxyName = useTunnel ? GetTunnelProxyResourceName() : "";
@@ -425,12 +425,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             var (serviceName, isNew) = _nameGenerator.GetServiceName(re.Resource, endpoint, KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
             if (!isNew)
             {
-                continue;
-            }
-
-            if (useTunnel && endpoint.Protocol != ProtocolType.Tcp)
-            {
-                resourceLogger.LogWarning("Host endpoint '{EndpointName}' on resource '{HostResource}' is referenced by a container resource, but the endpoint is using a network protocol '{Protocol}' other than TCP. Only TCP is supported for container-to-host references.", endpoint.Name, re.Resource.Name, endpoint.Protocol);
                 continue;
             }
 
@@ -495,7 +489,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     }
 
     /// <summary>
-    /// Ensures that host resources referenced by a container are reachable.
+    /// Ensures that host resource endpoints are reachable from the default container network.
     /// </summary>
     internal async Task EnsureHostConnectivityAsync(ImmutableArray<HostResourceWithEndpoints> hostDependencies, ContainerCreationContext cctx, IDcpObjectFactory factory, CancellationToken cancellationToken)
     {
@@ -506,7 +500,9 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             return;
         }
 
-        ContainerNetworkService[] containerNetworkServices;
+        var connectivityTasks = new List<Task>();
+        var newEndpointsByResource = new Dictionary<IResourceWithEndpoints, List<EndpointAnnotation>>(ReferenceEqualityComparer.Instance);
+        var newEndpointCompletions = new List<TaskCompletionSource>();
 
         // While not strictly necessary from correctness perspective, it is better for performance if tunnel creation
         // is as "chunky" as possible. That is why we serialize the discovery of host dependencies,
@@ -515,17 +511,107 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         await _tunnelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            containerNetworkServices = hostDependencies.SelectMany(CreateContainerNetworkServicesForHostResource).ToArray();
+            foreach (var hostDependency in hostDependencies)
+            {
+                foreach (var endpoint in hostDependency.Endpoints)
+                {
+                    if (endpoint.Protocol != ProtocolType.Tcp)
+                    {
+                        _loggerService.GetLogger(hostDependency.Resource).LogWarning(
+                            "Host endpoint '{EndpointName}' on resource '{HostResource}' is referenced from the default Aspire container network, but the endpoint uses the unsupported network protocol '{Protocol}'. The Aspire container tunnel supports only TCP.",
+                            endpoint.Name,
+                            hostDependency.Resource.Name,
+                            endpoint.Protocol);
+                        continue;
+                    }
+
+                    if (!_hostEndpointConnectivity.TryGetValue(endpoint, out var completion))
+                    {
+                        completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                        _hostEndpointConnectivity.Add(endpoint, completion);
+                        newEndpointCompletions.Add(completion);
+
+                        if (!newEndpointsByResource.TryGetValue(hostDependency.Resource, out var endpoints))
+                        {
+                            endpoints = [];
+                            newEndpointsByResource.Add(hostDependency.Resource, endpoints);
+                        }
+
+                        endpoints.Add(endpoint);
+                    }
+
+                    connectivityTasks.Add(completion.Task);
+                }
+            }
         }
         finally
         {
             _tunnelSemaphore.Release();
         }
 
-        if (containerNetworkServices.Length == 0)
+        if (newEndpointsByResource.Count > 0)
         {
-            // We have already set up tunnels for all currently-needed host dependencies.
-            return;
+            var newHostDependencies = newEndpointsByResource
+                .Select(pair => new HostResourceWithEndpoints(pair.Key, pair.Value))
+                .ToImmutableArray();
+
+            // Endpoint allocation belongs to the application run, not to whichever resource first requested it.
+            // Callers can cancel their own waits without cancelling or poisoning the shared allocation.
+            _ = CompleteHostConnectivityAsync(
+                newHostDependencies,
+                newEndpointCompletions,
+                cctx,
+                factory);
+        }
+
+        await Task.WhenAll(connectivityTasks).WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task CompleteHostConnectivityAsync(
+        ImmutableArray<HostResourceWithEndpoints> hostDependencies,
+        IReadOnlyList<TaskCompletionSource> endpointCompletions,
+        ContainerCreationContext cctx,
+        IDcpObjectFactory factory)
+    {
+        try
+        {
+            await CreateHostConnectivityAsync(
+                hostDependencies,
+                cctx,
+                factory,
+                cctx.ApplicationRunCancellationToken).ConfigureAwait(false);
+
+            foreach (var completion in endpointCompletions)
+            {
+                completion.TrySetResult();
+            }
+        }
+        catch (OperationCanceledException) when (cctx.ApplicationRunCancellationToken.IsCancellationRequested)
+        {
+            foreach (var completion in endpointCompletions)
+            {
+                completion.TrySetCanceled(cctx.ApplicationRunCancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            foreach (var completion in endpointCompletions)
+            {
+                completion.TrySetException(ex);
+            }
+        }
+    }
+
+    private async Task CreateHostConnectivityAsync(
+        ImmutableArray<HostResourceWithEndpoints> hostDependencies,
+        ContainerCreationContext cctx,
+        IDcpObjectFactory factory,
+        CancellationToken cancellationToken)
+    {
+        var containerNetworkServices = hostDependencies.SelectMany(CreateContainerNetworkServicesForHostResource).ToArray();
+        if (containerNetworkServices.Length != hostDependencies.Sum(dependency => dependency.Endpoints.Count()))
+        {
+            throw new InvalidOperationException("Failed to create a container-network service for every requested host endpoint.");
         }
 
         await Task.WhenAll([cctx.ContainerPrerequisitesReady, cctx.ContainerTunnelPrerequisitesReady]).WaitAsync(cancellationToken).ConfigureAwait(false);

@@ -56,7 +56,7 @@ internal sealed class ExecutableCreator(
         cancellationToken.ThrowIfCancellationRequested();
 
         var configuration = await _configurationResolver
-            .ResolveAsync(renderedResource, resourceLogger, cancellationToken)
+            .ResolveAsync(renderedResource, resourceLogger, factory, cancellationToken)
             .ConfigureAwait(false);
         if (configuration.Configuration.Exception is not null)
         {

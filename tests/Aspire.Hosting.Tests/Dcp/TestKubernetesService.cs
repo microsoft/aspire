@@ -28,6 +28,7 @@ internal sealed class TestKubernetesService : IKubernetesService
     private readonly List<Channel<(WatchEventType, CustomResource)>> _watchChannels = [];
     private readonly Func<CustomResource, string, bool?, Stream> _startStream;
     private readonly bool _ignoreDeletes;
+    private readonly Action<CustomResource>? _beforeCreate;
     private int _nextPort = StartOfAutoPortRange;
     private int _nextResourceUid;
     private int _nextResourceVersion;
@@ -35,13 +36,15 @@ internal sealed class TestKubernetesService : IKubernetesService
     public TestKubernetesService(
         Func<CustomResource, string, Stream>? startStream = null,
         bool ignoreDeletes = false,
-        Func<CustomResource, string, bool?, Stream>? startStreamWithFollow = null)
+        Func<CustomResource, string, bool?, Stream>? startStreamWithFollow = null,
+        Action<CustomResource>? beforeCreate = null)
     {
         _startStream = startStreamWithFollow ??
             (startStream is not null
                 ? (obj, logStreamType, follow) => startStream(obj, logStreamType)
                 : (obj, logStreamType, follow) => new MemoryStream(Encoding.UTF8.GetBytes($"Logs for {obj.Metadata.Name} ({logStreamType})")));
         _ignoreDeletes = ignoreDeletes;
+        _beforeCreate = beforeCreate;
     }
 
     public Task<T> GetAsync<T>(string name, string? namespaceParameter = null, CancellationToken _ = default) where T : CustomResource, IKubernetesStaticMetadata
@@ -67,6 +70,8 @@ internal sealed class TestKubernetesService : IKubernetesService
 
     public Task<T> CreateAsync<T>(T obj, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
+        _beforeCreate?.Invoke(obj);
+
         var res = Copy(obj);
 
         // "Allocate" port for a service.

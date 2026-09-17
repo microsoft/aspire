@@ -1789,41 +1789,85 @@ public static class ResourceExtensions
         HashSet<object> visitedValues,
         DistributedApplicationExecutionContext executionContext)
     {
+        VisitReferences(value, visitedValues, reference =>
+        {
+            if (reference is HostUrl hostUrl)
+            {
+                CollectHostUrlDependencies(hostUrl, dependencies, newDependencies, executionContext);
+            }
+            else if (reference is IResource resource && dependencies.Add(resource))
+            {
+                newDependencies.Add(resource);
+            }
+        });
+    }
+
+    /// <summary>
+    /// Gets references of the specified type from unresolved execution configuration values.
+    /// </summary>
+    internal static IReadOnlyList<T> GetReferences<T>(this IExecutionConfigurationGathererContext context)
+        where T : class
+    {
+        var references = new HashSet<T>(ReferenceEqualityComparer.Instance);
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+
+        foreach (var value in GetUnresolvedValues(context))
+        {
+            VisitReferences(value, visited, reference =>
+            {
+                if (reference is T typedReference)
+                {
+                    references.Add(typedReference);
+                }
+            });
+        }
+
+        return [.. references];
+    }
+
+    private static IEnumerable<object> GetUnresolvedValues(IExecutionConfigurationGathererContext context)
+    {
+        foreach (var argument in context.Arguments)
+        {
+            yield return argument;
+        }
+
+        foreach (var environmentVariable in context.EnvironmentVariables.Values)
+        {
+            yield return environmentVariable;
+        }
+
+        if (context is ExecutionConfigurationGathererContext gathererContext)
+        {
+            foreach (var launchToolArguments in gathererContext.AdditionalConfigurationData.OfType<UnresolvedLaunchToolArgumentsData>())
+            {
+                foreach (var argument in launchToolArguments.Arguments)
+                {
+                    yield return argument;
+                }
+            }
+        }
+    }
+
+    private static void VisitReferences(object? value, HashSet<object> visitedValues, Action<object> visitor)
+    {
         if (value is null || !visitedValues.Add(value))
         {
             return;
         }
 
-        if (value is HostUrl hostUrl)
-        {
-            CollectHostUrlDependencies(hostUrl, dependencies, newDependencies, executionContext);
-        }
+        visitor(value);
 
-        // Direct resource references
-        if (value is IResource resource)
-        {
-            if (dependencies.Add(resource))
-            {
-                newDependencies.Add(resource);
-            }
-        }
-
-        // Resource builder wrapping a resource
         if (value is IResourceBuilder<IResource> resourceBuilder)
         {
-            if (dependencies.Add(resourceBuilder.Resource))
-            {
-                newDependencies.Add(resourceBuilder.Resource);
-            }
-            value = resourceBuilder.Resource;
+            VisitReferences(resourceBuilder.Resource, visitedValues, visitor);
         }
 
-        // Recurse through IValueWithReferences
         if (value is IValueWithReferences valueWithReferences)
         {
             foreach (var reference in valueWithReferences.References)
             {
-                CollectDependenciesFromValue(reference, dependencies, newDependencies, visitedValues, executionContext);
+                VisitReferences(reference, visitedValues, visitor);
             }
         }
     }
