@@ -173,6 +173,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        RequireCurrentAspireSkillsBundle(strategy);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -190,10 +191,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         // Create .vscode folder so the scanner detects VS Code environment
         Directory.CreateDirectory(vscodePath);
-        await SeedAspireSkillsBundleCacheAsync(auto, workspace, counter);
 
-        // Run aspire agent init and accept the default location and skills. The cache
-        // fixture above keeps this independent from the unpublished npm package.
+        // Run aspire agent init and accept the default location and skills.
         await auto.TypeAsync("aspire agent init");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("workspace:", timeout: TimeSpan.FromSeconds(30));
@@ -207,7 +206,13 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
         // Playwright and dotnet-inspect are not pre-selected, so just accept
-        // the default Aspire skills from the seeded bundle.
+        // the default Aspire skills from the installed CLI's embedded bundle.
+        await auto.EnterAsync();
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("Configure the Aspire MCP server for detected agent environments?"),
+            timeout: TimeSpan.FromSeconds(30), description: "MCP server confirmation prompt");
+        // MCP configuration is strictly opt-in and defaults to No, so accepting the default
+        // here leaves MCP unconfigured.
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
@@ -215,10 +220,14 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // Verify skill files were created (skills are now installed at .agents/skills/ by StandardLocationAgentEnvironmentScanner)
         var skillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
         var fileContent = File.ReadAllText(skillFilePath);
-        Assert.Contains("aspire start", fileContent);
+        Assert.Contains("name: aspire", fileContent);
         var deploymentSkillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md");
         var deploymentFileContent = File.ReadAllText(deploymentSkillFilePath);
-        Assert.Contains("Aspire Deployment", deploymentFileContent);
+        Assert.Contains("name: aspire-deployment", deploymentFileContent);
+
+        // Verify MCP was not configured, since it was never selected in the prompt above.
+        var vscodeMcpConfigPath = Path.Combine(vscodePath, "mcp.json");
+        Assert.False(File.Exists(vscodeMcpConfigPath), $"Expected no MCP config to be written but found {vscodeMcpConfigPath}");
     }
 
     /// <summary>
@@ -234,23 +243,18 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        RequireCurrentAspireSkillsBundle(strategy);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
         await auto.InstallAspireCliAsync(strategy, counter);
-
-        // Seed the user-level cache with the six bundle skills so the CLI exercises the cached
-        // path without needing the unpublished npm package. The fixture mirrors the published
-        // bundle's manifest shape.
-        await SeedAspireSkillsBundleCacheAsync(auto, workspace, counter);
 
         // The names below are the ones the original bug hid from the CLI. Naming them explicitly
         // (rather than `--skills all`) avoids pulling in playwright/dotnet-inspect, which would
@@ -270,166 +274,153 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         {
             var skillFile = Path.Combine(skillsRoot, skillName, "SKILL.md");
             Assert.True(File.Exists(skillFile), $"Expected {skillName} SKILL.md at {skillFile}");
+            Assert.Contains($"name: {skillName}", File.ReadAllText(skillFile));
         }
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
-    private static async Task SeedAspireSkillsBundleCacheAsync(Hex1bTerminalAutomator auto, TemporaryWorkspace workspace, SequenceCounter counter)
+    /// <summary>
+    /// Regression test for the chained agent init flow reached via <c>aspire init</c>: verifies that
+    /// accepting agent init never surfaces the retired "Install Aspire MCP server" entry, either mixed
+    /// into the skill selection list or as its own prompt. MCP configuration is only reachable through
+    /// standalone <c>aspire agent init</c>, which chained flows never chain into.
+    /// </summary>
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task AspireInit_ChainedAgentInit_NeverOffersMcpConfiguration()
     {
-        const string aspireSkillsVersion = "0.0.1";
-        var scriptPath = Path.Combine(workspace.WorkspaceRoot.FullName, "seed-aspire-skills-cache.sh");
-        var script =
-            $$"""
-            #!/usr/bin/env bash
-            set -euo pipefail
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        RequireCurrentAspireSkillsBundle(strategy);
+        var workspace = TemporaryWorkspace.Create(output);
 
-            cache="$HOME/.aspire/cache/aspire-skills/{{aspireSkillsVersion}}"
-            rm -rf "$cache"
-            mkdir -p \
-              "$cache/skills/aspire/references" \
-              "$cache/skills/aspire/evals" \
-              "$cache/skills/aspireify" \
-              "$cache/skills/aspire-deployment/references" \
-              "$cache/skills/aspire-init" \
-              "$cache/skills/aspire-monitoring" \
-              "$cache/skills/aspire-orchestration"
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
-            cat > "$cache/skills/aspire/SKILL.md" <<'SKILL'
-            ---
-            name: aspire
-            description: "Aspire CLI commands and workflows for distributed apps"
-            ---
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-            # Aspire Skill
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-            Use `aspire start` to start an Aspire app.
-            SKILL
-            printf '%s\n' '# App commands' > "$cache/skills/aspire/references/app-commands.md"
-            printf '%s\n' '{}' > "$cache/skills/aspire/evals/evals.json"
+        // Create a detectable MCP configuration target so the negative MCP assertions below are
+        // meaningful: without a `.vscode` directory present, no agent environment is detected and
+        // the "no MCP prompt/config" assertions would trivially pass even if MCP were still wired
+        // into the chained flow.
+        var vscodePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".vscode");
 
-            cat > "$cache/skills/aspireify/SKILL.md" <<'SKILL'
-            ---
-            name: aspireify
-            description: "One-time setup: wire up AppHost with discovered projects"
-            ---
+        // Pass --language so the interactive language prompt is skipped, then accept the chained
+        // agent init prompt (instead of declining it) to reach skill selection.
+        await auto.TypeAsync("aspire init --language csharp");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Created aspire.config.json", timeout: TimeSpan.FromMinutes(2));
 
-            # Aspireify
-            SKILL
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("configure AI agent environments"),
+            timeout: TimeSpan.FromSeconds(30),
+            description: "agent init prompt after aspire init");
+        Directory.CreateDirectory(vscodePath);
+        await auto.WaitAsync(500);
+        await auto.TypeAsync("y");
 
-            cat > "$cache/skills/aspire-deployment/SKILL.md" <<'SKILL'
-            ---
-            name: aspire-deployment
-            description: "Aspire deployment target selection, preflight, publish, and deploy workflows"
-            ---
+        // Skill location prompt: accept the default (Standard).
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("skill files be installed"),
+            timeout: TimeSpan.FromSeconds(60), description: "skill location prompt");
+        await auto.EnterAsync();
 
-            # Aspire Deployment
-            SKILL
-            printf '%s\n' '# Preflight' > "$cache/skills/aspire-deployment/references/preflight.md"
+        // Skill selection prompt: the retired "Install Aspire MCP server" entry must never be mixed
+        // into this list — MCP configuration is unreachable from the chained flow by construction.
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("skills should be installed"),
+            timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
+        var skillSelectionScreen = auto.CreateSnapshot().GetScreenText();
+        Assert.DoesNotContain("Install Aspire MCP server", skillSelectionScreen);
+        await auto.EnterAsync();
 
-            cat > "$cache/skills/aspire-init/SKILL.md" <<'SKILL'
-            ---
-            name: aspire-init
-            description: "First-run flow for adding Aspire to a repo"
-            ---
+        // The chained flow never registers --mcp, so it goes straight from skill selection to
+        // "configuration complete" — no MCP prompt is ever shown, and the detected `.vscode`
+        // target (created above) is left untouched.
+        await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
+        var completionScreen = auto.CreateSnapshot().GetScreenText();
+        Assert.DoesNotContain("Configure the Aspire MCP server", completionScreen);
+        await auto.WaitForSuccessPromptAsync(counter);
 
-            # Aspire Init
-            SKILL
+        var mcpConfigPath = Path.Combine(vscodePath, "mcp.json");
+        Assert.False(File.Exists(mcpConfigPath), $"Expected {mcpConfigPath} to not be written since MCP is unreachable from the chained flow.");
+    }
 
-            cat > "$cache/skills/aspire-monitoring/SKILL.md" <<'SKILL'
-            ---
-            name: aspire-monitoring
-            description: "Observe Aspire apps with logs, traces, metrics, and resource state"
-            ---
+    /// <summary>
+    /// Regression test for the chained agent init flow reached via <c>aspire new</c>: verifies that
+    /// <c>aspireify</c> is pre-checked in the skill selection prompt (new projects get the complete
+    /// default skill set) while the retired "Install Aspire MCP server" entry never appears, either
+    /// mixed into that list or as its own prompt.
+    /// </summary>
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task AspireNew_ChainedAgentInit_PreSelectsAspireifyAndNeverOffersMcp()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        RequireCurrentAspireSkillsBundle(strategy);
+        var workspace = TemporaryWorkspace.Create(output);
 
-            # Aspire Monitoring
-            SKILL
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
-            cat > "$cache/skills/aspire-orchestration/SKILL.md" <<'SKILL'
-            ---
-            name: aspire-orchestration
-            description: "Manage Aspire AppHost lifecycle and resource commands"
-            ---
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-            # Aspire Orchestration
-            SKILL
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-            aspire_skill_hash="$(sha256sum "$cache/skills/aspire/SKILL.md" | awk '{print $1}')"
-            aspire_commands_hash="$(sha256sum "$cache/skills/aspire/references/app-commands.md" | awk '{print $1}')"
-            aspire_evals_hash="$(sha256sum "$cache/skills/aspire/evals/evals.json" | awk '{print $1}')"
-            aspireify_skill_hash="$(sha256sum "$cache/skills/aspireify/SKILL.md" | awk '{print $1}')"
-            deployment_skill_hash="$(sha256sum "$cache/skills/aspire-deployment/SKILL.md" | awk '{print $1}')"
-            deployment_preflight_hash="$(sha256sum "$cache/skills/aspire-deployment/references/preflight.md" | awk '{print $1}')"
-            init_skill_hash="$(sha256sum "$cache/skills/aspire-init/SKILL.md" | awk '{print $1}')"
-            monitoring_skill_hash="$(sha256sum "$cache/skills/aspire-monitoring/SKILL.md" | awk '{print $1}')"
-            orchestration_skill_hash="$(sha256sum "$cache/skills/aspire-orchestration/SKILL.md" | awk '{print $1}')"
+        // The chained agent-init scan starts from the CLI process's working directory (the
+        // workspace root the Docker terminal is launched in) and only walks upward looking for a
+        // `.vscode` folder — it never walks down into the newly scaffolded project directory. So
+        // the detectable `.vscode` folder must be seeded at the workspace root, not inside the new
+        // project, for the scan to find it. Without it, no agent environment would be detected and
+        // the "no MCP prompt/config" assertions below would trivially pass even if MCP were still
+        // wired into the chained flow.
+        var vscodePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".vscode");
 
-            cat > "$cache/skill-manifest.json" <<JSON
+        // --skill-locations skips the interactive skill-location prompt so the flow lands directly
+        // on the skill selection prompt whose pre-selected state we want to inspect.
+        await auto.AspireNewAcceptingAgentInitAsync(
+            "StarterApp",
+            extraArguments: "--skill-locations claudecode",
+            beforeAcceptingAgentInit: () =>
             {
-              "version": "{{aspireSkillsVersion}}",
-              "supports": {
-                "aspireCli": ">=0.0.0 <999.0.0",
-                "aspireSdk": ">=0.0.0 <999.0.0"
-              },
-              "skills": [
-                {
-                  "name": "aspire",
-                  "description": "Aspire CLI commands and workflows for distributed apps",
-                  "installExcludedRelativePaths": ["evals"],
-                  "files": [
-                    { "relativePath": "SKILL.md", "sha256": "$aspire_skill_hash" },
-                    { "relativePath": "references/app-commands.md", "sha256": "$aspire_commands_hash" },
-                    { "relativePath": "evals/evals.json", "sha256": "$aspire_evals_hash" }
-                  ]
-                },
-                {
-                  "name": "aspireify",
-                  "description": "One-time setup: wire up AppHost with discovered projects",
-                  "files": [
-                    { "relativePath": "SKILL.md", "sha256": "$aspireify_skill_hash" }
-                  ]
-                },
-                {
-                  "name": "aspire-deployment",
-                  "description": "Aspire deployment target selection, preflight, publish, and deploy workflows",
-                  "files": [
-                    { "relativePath": "SKILL.md", "sha256": "$deployment_skill_hash" },
-                    { "relativePath": "references/preflight.md", "sha256": "$deployment_preflight_hash" }
-                  ]
-                },
-                {
-                  "name": "aspire-init",
-                  "description": "First-run flow for adding Aspire to a repo",
-                  "files": [
-                    { "relativePath": "SKILL.md", "sha256": "$init_skill_hash" }
-                  ]
-                },
-                {
-                  "name": "aspire-monitoring",
-                  "description": "Observe Aspire apps with logs, traces, metrics, and resource state",
-                  "files": [
-                    { "relativePath": "SKILL.md", "sha256": "$monitoring_skill_hash" }
-                  ]
-                },
-                {
-                  "name": "aspire-orchestration",
-                  "description": "Manage Aspire AppHost lifecycle and resource commands",
-                  "files": [
-                    { "relativePath": "SKILL.md", "sha256": "$orchestration_skill_hash" }
-                  ]
-                }
-              ]
-            }
-            JSON
-            """;
+                Directory.CreateDirectory(vscodePath);
+                return Task.CompletedTask;
+            });
 
-        await File.WriteAllTextAsync(scriptPath, script.ReplaceLineEndings("\n"));
+        // The flow lands directly on skill selection. aspireify must be pre-checked (aspire new
+        // pre-selects the complete default skill set), and the retired "Install Aspire MCP server"
+        // entry must never appear in this list.
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("skills should be installed"),
+            timeout: TimeSpan.FromSeconds(60), description: "skill selection prompt");
+        var skillSelectionScreen = auto.CreateSnapshot().GetScreenText();
+        Assert.Contains("[X] aspireify", skillSelectionScreen);
+        Assert.DoesNotContain("Install Aspire MCP server", skillSelectionScreen);
+        await auto.EnterAsync();
 
-        var containerScriptPath = CliE2ETestHelpers.ToContainerPath(scriptPath, workspace);
-        await auto.RunCommandAsync($"bash {AspireCliShellCommandHelpers.QuoteBashArg(containerScriptPath)}", counter, TimeSpan.FromSeconds(30));
-        await auto.RunCommandAsync($"export aspireSkillsVersion={AspireCliShellCommandHelpers.QuoteBashArg(aspireSkillsVersion)}", counter, TimeSpan.FromSeconds(30));
+        // aspire new never registers --mcp, so it goes straight from skill selection to
+        // "configuration complete" — no MCP prompt is ever shown, and the detected `.vscode`
+        // target (created above) is left untouched.
+        await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
+        var completionScreen = auto.CreateSnapshot().GetScreenText();
+        Assert.DoesNotContain("Configure the Aspire MCP server", completionScreen);
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        var mcpConfigPath = Path.Combine(vscodePath, "mcp.json");
+        Assert.False(File.Exists(mcpConfigPath), $"Expected {mcpConfigPath} to not be written since MCP is unreachable from the chained flow.");
+    }
+
+    private static void RequireCurrentAspireSkillsBundle(CliInstallStrategy strategy)
+    {
+        Assert.SkipWhen(
+            strategy.Mode == CliInstallMode.InstallScript ||
+            (strategy.Mode == CliInstallMode.DotnetTool && strategy.NupkgSourcePath is null),
+            "This test validates the current Aspire CLI's embedded skills bundle. Use a local or PR CLI build instead of a released CLI.");
     }
 }

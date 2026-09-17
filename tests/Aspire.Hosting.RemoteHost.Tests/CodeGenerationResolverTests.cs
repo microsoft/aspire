@@ -4,6 +4,7 @@
 using Aspire.Hosting.RemoteHost.CodeGeneration;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.Hosting.RemoteHost.Language;
+using Aspire.TypeSystem;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -25,6 +26,51 @@ public class CodeGenerationResolverTests
         Assert.NotNull(resolver.GetCodeGenerator("Python"));
         Assert.NotNull(resolver.GetCodeGenerator("Rust"));
         Assert.NotNull(resolver.GetCodeGenerator("TypeScript"));
+    }
+
+    /// <summary>
+    /// API export is discovered as its own type, and the code generator itself must not implement
+    /// the exporter contract.
+    /// </summary>
+    /// <remarks>
+    /// <c>Aspire.TypeSystem</c> is force-shared from the apphost server's default
+    /// <see cref="System.Runtime.Loader.AssemblyLoadContext"/> and freezes its strong-name
+    /// <c>AssemblyVersion</c> at a constant, so a CLI that predates
+    /// <see cref="IApiReferenceExporter"/> still binds a newer SDK's codegen assembly — it just has
+    /// no such interface in its bundled copy. A type's interface list is resolved eagerly when the
+    /// type loads, so a generator implementing the interface would itself fail to load there and
+    /// TypeScript generation, not just export, would disappear. Keeping export on a separate type
+    /// confines the loss to the feature that CLI could not use anyway.
+    /// </remarks>
+    [Fact]
+    public void CodeGeneratorResolver_ResolvesApiReferenceExporterWithoutItLivingOnTheCodeGenerator()
+    {
+        using var serviceProvider = CreateServiceProvider();
+        var assemblyLoader = CreateAssemblyLoader();
+        var resolver = new CodeGeneratorResolver(serviceProvider, assemblyLoader, NullLogger<CodeGeneratorResolver>.Instance);
+
+        var generator = resolver.GetCodeGenerator("TypeScript");
+        Assert.NotNull(generator);
+        Assert.IsNotAssignableFrom<IApiReferenceExporter>(generator);
+
+        var exporter = resolver.GetApiReferenceExporter("TypeScript");
+        Assert.NotNull(exporter);
+        Assert.Equal("TypeScript", exporter.Language);
+    }
+
+    /// <summary>
+    /// A documented API that no generator produces would be worse than no documentation at all, so
+    /// discovering exporters independently must not make one reachable for an unsupported language.
+    /// </summary>
+    [Fact]
+    public void CodeGeneratorResolver_DoesNotResolveAnExporterForALanguageWithNoGenerator()
+    {
+        using var serviceProvider = CreateServiceProvider();
+        var assemblyLoader = CreateAssemblyLoader();
+        var resolver = new CodeGeneratorResolver(serviceProvider, assemblyLoader, NullLogger<CodeGeneratorResolver>.Instance);
+
+        Assert.Null(resolver.GetCodeGenerator("Klingon"));
+        Assert.Null(resolver.GetApiReferenceExporter("Klingon"));
     }
 
     [Fact]

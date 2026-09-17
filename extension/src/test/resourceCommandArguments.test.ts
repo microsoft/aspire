@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
-import * as cliModule from '../debugger/languages/cli';
+import * as cliModule from '../utils/process/cliProcess';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import {
     buildResourceCommandCliArgs,
@@ -13,8 +13,9 @@ import {
     ResourceCommandArgumentValue,
 } from '../views/ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from '../views/ResourceCommandArgumentsLoader';
-import { ResourceCommandArgumentInputJson } from '../views/AppHostDataRepository';
+import { ResourceCommandArgumentInputJson } from '../data/AppHostDataRepository';
 import { extensionLogOutputChannel } from '../utils/logging';
+import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 
 function makeInput(overrides: Partial<ResourceCommandArgumentInputJson> = {}): ResourceCommandArgumentInputJson {
     return {
@@ -437,6 +438,42 @@ suite('ResourceCommandArguments', () => {
             spawnStub.restore();
             warningStub.restore();
             withProgressStub.restore();
+        }
+    });
+
+    test('shared dynamic argument loader resolves the CLI using the target derived from the appHost path', async () => {
+        const withProgressStub = sinon.stub(vscode.window, 'withProgress').callsFake((_options: any, task: any) => task(undefined, undefined));
+        const folder = { name: 'a', index: 0, uri: vscode.Uri.file('/repo') } as vscode.WorkspaceFolder;
+        const getWorkspaceFolderStub = sinon.stub(vscode.workspace, 'getWorkspaceFolder').returns(folder);
+        const getAspireCliExecutablePathStub = sinon.stub().resolves('/repo/bin/aspire');
+        const terminalProvider = {
+            getAspireCliExecutablePath: getAspireCliExecutablePathStub,
+        } as unknown as AspireTerminalProvider;
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            queueMicrotask(() => {
+                options?.stdoutCallback?.('[]');
+                options?.exitCallback?.(0);
+            });
+
+            return { stdin: { end: () => { } } } as any;
+        });
+
+        try {
+            const loader = createResourceCommandArgumentLoader({
+                cliExecutionProvider: terminalProvider,
+                resourceName: 'argument-commands',
+                commandName: 'dependent-arguments',
+                appHostPath: '/repo/AppHost.csproj',
+            });
+
+            await loader([]);
+
+            assert.ok(getAspireCliExecutablePathStub.calledOnceWith(workspaceFolderCliPathTarget(folder)));
+        }
+        finally {
+            spawnStub.restore();
+            withProgressStub.restore();
+            getWorkspaceFolderStub.restore();
         }
     });
 

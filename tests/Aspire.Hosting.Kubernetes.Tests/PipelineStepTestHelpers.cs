@@ -22,12 +22,7 @@ internal static class PipelineStepTestHelpers
     /// </summary>
     public static async Task<List<PipelineStep>> CreateStepsAsync(IServiceProvider services, IResource resource)
     {
-        var pipelineContext = new PipelineContext(
-            services.GetRequiredService<DistributedApplicationModel>(),
-            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
-            services,
-            NullLogger.Instance,
-            CancellationToken.None);
+        var pipelineContext = CreateContext(services);
 
         var results = new List<PipelineStep>();
         foreach (var annotation in resource.Annotations.OfType<PipelineStepAnnotation>())
@@ -41,6 +36,29 @@ internal static class PipelineStepTestHelpers
 
         return results;
     }
+
+    /// <summary>
+    /// Runs a step's action directly. Several steps are reachable from more than one pipeline execution,
+    /// so tests use this to run a step twice and assert it stayed idempotent.
+    /// </summary>
+    public static async Task RunStepAsync(IServiceProvider services, PipelineStep step)
+    {
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync(step.Name);
+
+        await step.Action!(new PipelineStepContext
+        {
+            PipelineContext = CreateContext(services),
+            ReportingStep = reportingStep
+        });
+    }
+
+    private static PipelineContext CreateContext(IServiceProvider services)
+        => new(
+            services.GetRequiredService<DistributedApplicationModel>(),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            services,
+            NullLogger.Instance,
+            CancellationToken.None);
 
     /// <summary>
     /// Returns the sorted names of gateway- and TLS-related steps. Tests assert on this whole set

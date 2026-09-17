@@ -14,12 +14,15 @@ using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Shared.UserSecrets;
@@ -31,6 +34,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 using StreamJsonRpc;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -49,6 +53,230 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
+    }
+
+    [Theory]
+    [InlineData("--launch-profile")]
+    [InlineData("-lp")]
+    public void RunCommand_ParsesLaunchProfileOption(string optionName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", optionName, "E2E"]);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal("E2E", result.GetValue(AppHostLauncher.s_launchProfileOption));
+        Assert.Empty(result.UnmatchedTokens);
+    }
+
+    [Fact]
+    public async Task RunCommand_RejectsLaunchProfileForUnsupportedAppHostType()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var interactionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            DisplayName = "TypeScript (Node.js)",
+            SupportsLaunchProfiles = false
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--launch-profile", "E2E"]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Contains(
+            string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.LaunchProfileNotSupported, projectFactory.DisplayName),
+            interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task RunCommand_DetachedRejectsLaunchProfileForUnsupportedAppHostBeforeStoppingOrLaunching()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var interactionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            DisplayName = "TypeScript (Node.js)",
+            SupportsLaunchProfiles = false
+        };
+        var processFactory = new TestProcessExecutionFactory
+        {
+            DefaultExitCode = CliExitCodes.FailedToDotnetRunAppHost
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+        services.Replace(ServiceDescriptor.Singleton<IProcessExecutionFactory>(processFactory));
+        using var provider = services.BuildServiceProvider();
+        var executionContext = provider.GetRequiredService<CliExecutionContext>();
+        var socketPath = CreateMatchingSocketFile(appHostFile, executionContext.HomeDirectory);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--detach", "--apphost", appHostFile.FullName, "--launch-profile", "E2E"]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.True(File.Exists(socketPath), "Validation should happen before existing AppHost instances are stopped.");
+        Assert.Equal(0, processFactory.AttemptCount);
+        Assert.Contains(
+            string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.LaunchProfileNotSupported, projectFactory.DisplayName),
+            interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task RunCommand_MissingExplicitLaunchProfileFallsBackToDotNet()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var propertiesDirectory = Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(propertiesDirectory.FullName, "launchSettings.json"), """
+            {
+              "profiles": {
+                "playwright": {
+                  "commandName": "Project"
+                }
+              }
+            }
+            """);
+        var interactionService = new TestInteractionService();
+        var buildCalled = false;
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) =>
+            {
+                buildCalled = true;
+                return 1;
+            }
+        };
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.DotNetCliRunnerFactory = _ => runner;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--launch-profile", "missing"]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.True(buildCalled);
+    }
+
+    [Theory]
+    [InlineData("""{ "commandName": "Executable", "executablePath": "custom-tool" }""")]
+    [InlineData("true")]
+    public async Task RunCommand_ExistingUnsupportedOrMalformedLaunchProfileFallsBackToDotNet(string profile)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var propertiesDirectory = Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(propertiesDirectory.FullName, "launchSettings.json"), $$"""
+            {
+              "profiles": {
+                "container": {{profile}}
+              }
+            }
+            """);
+        var buildCalled = false;
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) =>
+            {
+                buildCalled = true;
+                return 1;
+            }
+        };
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.DotNetCliRunnerFactory = _ => runner;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--launch-profile", "container"]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.True(buildCalled);
+    }
+
+    [Fact]
+    public async Task RunCommand_PassesSelectedLaunchProfileToProjectContext()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        string? launchProfile = null;
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = (context, _) =>
+            {
+                launchProfile = context.LaunchProfile;
+                context.BuildCompletionSource?.TrySetResult(false);
+                return Task.FromResult(42);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--launch-profile", "E2E"]);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(42, exitCode);
+        Assert.Equal("E2E", launchProfile);
     }
 
     [Fact]
@@ -75,6 +303,181 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             string.Format(CultureInfo.CurrentCulture, RunCommandStrings.InvalidAppHostStartupTimeoutEnvironmentVariable, CliConfigNames.AppHostStartupTimeout),
             Assert.Single(interactionService.DisplayedErrors));
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenProjectExitsSuccessfullyBeforeBuildCompletion_ReturnsFailure()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (_, _) =>
+            {
+                await Task.Yield();
+                return CliExitCodes.Success;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Equal(InteractionServiceStrings.ProjectCouldNotBeBuilt, Assert.Single(interactionService.DisplayedErrors));
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenProjectThrowsBeforeBuildCompletion_FailsPromptly()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (_, _) =>
+            {
+                await Task.Yield();
+                throw new InvalidOperationException("Project failed before build completion.");
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Equal(
+            string.Format(
+                CultureInfo.CurrentCulture,
+                InteractionServiceStrings.UnexpectedErrorOccurred,
+                "Project failed before build completion."),
+            Assert.Single(interactionService.DisplayedErrors));
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenCancelledDuringBuild_ExitsSuccessfully()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = (_, runCancellationToken) =>
+            {
+                Assert.NotEqual(cts.Token, runCancellationToken);
+                cts.Cancel();
+                return Task.FromCanceled<int>(runCancellationToken);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenProjectReturnsCancelledDuringBuild_ExitsSuccessfully()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = (context, _) =>
+            {
+                // GuestAppHostProject signals failed preparation before translating cancellation to
+                // an exit code. Complete both synchronously to exercise that returned-result path.
+                context.BuildCompletionSource?.TrySetResult(false);
+                cts.Cancel();
+                return Task.FromResult(CliExitCodes.Cancelled);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interactionService.DisplayedErrors);
     }
 
     [Fact]
@@ -484,22 +887,34 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_StartupTimeoutBudgetIncludesBuildAndBackchannelWaits()
+    public async Task RunCommand_StartupTimeoutStartsAfterBuildCompletes()
     {
         var interactionService = new TestInteractionService();
         var timeProvider = new FakeTimeProvider();
+        var appHostReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowBackchannel = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var backchannelFactory = (IServiceProvider sp) => new TestAppHostBackchannel
+        {
+            NotifyAppHostReadyAsyncCalled = appHostReady,
+            GetAppHostLogEntriesAsyncCallback = EmptyLogEntriesAsync
+        };
 
         var runnerFactory = (IServiceProvider sp) =>
         {
             var runner = new TestDotNetCliRunner();
             runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) =>
             {
-                timeProvider.Advance(TimeSpan.FromSeconds(2));
+                timeProvider.Advance(TimeSpan.FromSeconds(3));
                 return 0;
             };
             runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
             runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
             {
+                runStarted.TrySetResult();
+                await allowBackchannel.Task.WaitAsync(ct);
+                backchannelCompletionSource!.SetResult(sp.GetRequiredService<IAppHostCliBackchannel>());
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
                 return 0;
             };
@@ -512,6 +927,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.AppHostBackchannelFactory = backchannelFactory;
             options.DotNetCliRunnerFactory = runnerFactory;
             options.ConfigurationCallback += config =>
             {
@@ -526,12 +942,18 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
 
-        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
-        Assert.Contains(
-            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 2, CliConfigNames.AppHostStartupTimeout),
-            interactionService.DisplayedErrors);
+        Assert.Same(runStarted.Task, await Task.WhenAny(runStarted.Task, pendingRun).DefaultTimeout());
+        allowBackchannel.SetResult();
+        Assert.Same(appHostReady.Task, await Task.WhenAny(appHostReady.Task, pendingRun).DefaultTimeout());
+
+        await cts.CancelAsync().DefaultTimeout();
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(interactionService.DisplayedErrors);
     }
 
     [Fact]
@@ -924,6 +1346,59 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.False(cliPrefetchStarted);
     }
 
+    [Theory]
+    [InlineData("--launch-profile")]
+    [InlineData("-lp")]
+    public async Task RunCommand_DetachedChild_PreservesOptionShapedLaunchProfileAndAppHostArguments(string launchProfileOption)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var propertiesDirectory = Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(propertiesDirectory.FullName, "launchSettings.json"), """
+            {
+              "profiles": {
+                "--no-build": {
+                  "commandName": "Project"
+                }
+              }
+            }
+            """);
+        var expectedAppHostArguments = new[] { "true", "false", string.Empty, "--detach", "--option-shaped" };
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var processFactory = new TestProcessExecutionFactory
+        {
+            DefaultExitCode = CliExitCodes.FailedToDotnetRunAppHost
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        services.Replace(ServiceDescriptor.Singleton<IProcessExecutionFactory>(processFactory));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+        [
+            "run",
+            "--detach",
+            "--apphost", appHostFile.FullName,
+            "--no-build",
+            $"{launchProfileOption}=--no-build",
+            "--",
+            .. expectedAppHostArguments
+        ]);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, await result.InvokeAsync().DefaultTimeout());
+
+        AssertDetachedChildArguments(command, processFactory.LastArguments, "--no-build", expectedAppHostArguments);
+    }
+
     [Fact]
     public async Task RunCommand_WithoutDetachFlag_ShowsUpdateNotification()
     {
@@ -961,22 +1436,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("123", message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void GenerateChildLogFilePath_UsesDetachChildNamingWithoutProcessId()
-    {
-        var logsDirectory = Path.Combine(Path.GetTempPath(), "aspire-cli-tests");
-        var now = new DateTimeOffset(2026, 02, 12, 18, 00, 00, TimeSpan.Zero);
-        var timeProvider = new FixedTimeProvider(now);
-
-        var path = AppHostLauncher.GenerateChildLogFilePath(logsDirectory, timeProvider);
-        var fileName = Path.GetFileName(path);
-
-        Assert.StartsWith(logsDirectory, path, StringComparison.OrdinalIgnoreCase);
-        Assert.StartsWith("cli_20260212T180000000_detach-child_", fileName, StringComparison.Ordinal);
-        Assert.EndsWith(".log", fileName, StringComparison.Ordinal);
-        Assert.DoesNotContain($"_{Environment.ProcessId}", fileName, StringComparison.Ordinal);
-    }
-
     private sealed class ProjectFileDoesNotExistLocator : Aspire.Cli.Projects.IProjectLocator
     {
         public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
@@ -1000,38 +1459,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         }
 
         public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
-    }
-
-    [Fact]
-    public async Task RunCommand_WhenCertificateServiceThrows_ReturnsNonZeroExitCode()
-    {
-        var runnerFactory = (IServiceProvider sp) =>
-        {
-            var runner = new TestDotNetCliRunner();
-
-            // Fake apphost information to return a compatable app host.
-            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
-
-            return runner;
-        };
-
-        var projectLocatorFactory = (IServiceProvider sp) => new TestProjectLocator();
-
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.CertificateServiceFactory = _ => new ThrowingCertificateService();
-            options.DotNetCliRunnerFactory = runnerFactory;
-            options.ProjectLocatorFactory = projectLocatorFactory;
-        });
-
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("run");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(CliExitCodes.FailedToTrustCertificates, exitCode);
     }
 
     [Fact]
@@ -1689,14 +2116,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         }
     }
 
-    private sealed class ThrowingCertificateService : Aspire.Cli.Certificates.ICertificateService
-    {
-        public Task<Aspire.Cli.Certificates.EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
-        {
-            throw new Aspire.Cli.Certificates.CertificateServiceException("Failed to trust certificates");
-        }
-    }
-
     private sealed class NoProjectFileProjectLocator : IProjectLocator
     {
         public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
@@ -1837,6 +2256,132 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_InRemoteNonInteractiveHost_DisplaysEachEndpointOnce()
+    {
+        var resourceStatesProcessed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var interactionService = new TestInteractionService();
+
+        var backchannelFactory = (IServiceProvider sp) =>
+        {
+            return new TestAppHostBackchannel
+            {
+                GetAppHostLogEntriesAsyncCallback = EmptyLogEntriesAsync,
+                GetDashboardUrlsAsyncCallback = _ => Task.FromResult(new DashboardUrlsState
+                {
+                    DashboardHealthy = true,
+                    BaseUrlWithLoginToken = "http://localhost:5000/login?t=abcd",
+                    CodespacesUrlWithLoginToken = null
+                }),
+                GetResourceStatesAsyncCallback = cancellationToken => GetResourceStatesAsync(resourceStatesProcessed, cancellationToken)
+            };
+        };
+
+        var runnerFactory = (IServiceProvider sp) =>
+        {
+            var runner = new TestDotNetCliRunner();
+            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) => 0;
+            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
+            runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
+            {
+                var backchannel = sp.GetRequiredService<IAppHostCliBackchannel>();
+                backchannelCompletionSource!.SetResult(backchannel);
+
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+
+                return 0;
+            };
+
+            return runner;
+        };
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AppHostBackchannelFactory = backchannelFactory;
+            options.DotNetCliRunnerFactory = runnerFactory;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ConfigurationCallback += config =>
+            {
+                config["VSCODE_IPC_HOOK_CLI"] = "test-ipc-hook";
+                config["SSH_CONNECTION"] = "127.0.0.1 1 127.0.0.1 2";
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run");
+
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+
+        try
+        {
+            await resourceStatesProcessed.Task.DefaultTimeout();
+        }
+        finally
+        {
+            cts.Cancel();
+
+            var exitCode = await pendingRun.DefaultTimeout();
+            Assert.Equal(CliExitCodes.Success, exitCode);
+        }
+
+        var renderedOutput = interactionService.DisplayedRenderables.Select(RenderToPlainConsole).ToList();
+
+        Assert.Empty(interactionService.DisplayedLiveRenderables);
+        Assert.Single(renderedOutput, output => output.Contains("frontend has endpoint http://localhost:5000", StringComparison.Ordinal));
+        Assert.Single(renderedOutput, output => output.Contains("backend has endpoint http://localhost:5001", StringComparison.Ordinal));
+        Assert.Single(renderedOutput, output => output.Contains("Endpoints:", StringComparison.Ordinal));
+        Assert.Single(renderedOutput, output => output.Contains("Press CTRL+C to stop the AppHost and exit.", StringComparison.Ordinal));
+
+        static async IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync(
+            TaskCompletionSource resourceStatesProcessed,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return new RpcResourceState
+            {
+                Resource = "frontend",
+                Type = "Project",
+                State = "Running",
+                Endpoints = ["http://localhost:5000"],
+                Health = "Healthy"
+            };
+            yield return new RpcResourceState
+            {
+                Resource = "backend",
+                Type = "Project",
+                State = "Running",
+                Endpoints = ["http://localhost:5001"],
+                Health = "Healthy"
+            };
+
+            resourceStatesProcessed.SetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        static string RenderToPlainConsole(IRenderable renderable)
+        {
+            var writer = new StringWriter();
+            var console = AnsiConsole.Create(new AnsiConsoleSettings
+            {
+                Ansi = AnsiSupport.No,
+                Interactive = InteractionSupport.No,
+                ColorSystem = ColorSystemSupport.NoColors,
+                Out = new AnsiConsoleOutput(writer),
+                Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+            });
+
+            console.Profile.Width = int.MaxValue;
+            console.Profile.Capabilities.Links = false;
+            console.Write(renderable);
+
+            return writer.ToString().Replace("\r\n", "\n");
+        }
+    }
+
+    [Fact]
     public async Task RunCommand_InRemoteExtensionHost_DisplaysDashboardUrlsBeforeLiveEndpointDisplayCompletes()
     {
         var displayLiveStarted = new TaskCompletionSource();
@@ -1876,6 +2421,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.AppHostBackchannelFactory = backchannelFactory;
             options.DotNetCliRunnerFactory = runnerFactory;
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
             options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
             options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp)
             {
@@ -2302,7 +2848,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         File.WriteAllText(appHostProjectFile.FullName, "<Project></Project>");
 
         var options = new ProcessInvocationOptions();
-        await AppHostHelper.BuildAppHostAsync(testRunner, testInteractionService, appHostProjectFile, noRestore: false, options, workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+        await AppHostHelper.BuildAppHostAsync(testRunner, testInteractionService, appHostProjectFile, noRestore: false, env: null, options, workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
     }
 
     [Fact]
@@ -2311,7 +2857,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var buildCalled = false;
 
         var extensionBackchannel = new TestExtensionBackchannel();
-        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(new[] { "devkit" });
+        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(new[] { "devkit", "project" });
 
         var appHostBackchannel = new TestAppHostBackchannel();
         appHostBackchannel.GetDashboardUrlsAsyncCallback = (ct) => Task.FromResult(new DashboardUrlsState
@@ -2381,7 +2927,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var buildCalled = false;
 
         var extensionBackchannel = new TestExtensionBackchannel();
-        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(Array.Empty<string>());
+        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(new[] { "project" });
 
         var appHostBackchannel = new TestAppHostBackchannel();
         appHostBackchannel.GetDashboardUrlsAsyncCallback = (ct) => Task.FromResult(new DashboardUrlsState
@@ -3489,11 +4035,14 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("run -- --custom-arg value");
+        var result = command.Parse("run -- --custom-arg value --launch-profile E2E");
 
         Assert.Empty(result.Errors);
+        Assert.Null(result.GetValue(AppHostLauncher.s_launchProfileOption));
         Assert.Contains("--custom-arg", result.UnmatchedTokens);
         Assert.Contains("value", result.UnmatchedTokens);
+        Assert.Contains("--launch-profile", result.UnmatchedTokens);
+        Assert.Contains("E2E", result.UnmatchedTokens);
     }
 
     [Fact]
@@ -3559,6 +4108,475 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task CaptureAppHostLogsAsync_ForwardsStructuredEntries()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test.log");
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (capability, _) => Task.FromResult(capability == KnownCapabilities.AppHostLogOutput)
+        };
+        using var services = new ServiceCollection()
+            .AddSingleton<IExtensionBackchannel>(extensionBackchannel)
+            .BuildServiceProvider();
+        var forwarded = new List<ExtensionAppHostLogEntry>();
+        var interactionService = new TestExtensionInteractionService(services)
+        {
+            WriteAppHostLogEntryCallback = forwarded.Add
+        };
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetAppHostLogEntriesAsyncCallback = YieldEntries
+        };
+
+        using (var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()))
+        {
+            await RunCommand.CaptureAppHostLogsAsync(fileLoggerProvider, backchannel, interactionService, CancellationToken.None);
+        }
+
+        Assert.Collection(forwarded,
+            entry => Assert.Equal((1L, "Warning", "Warning message", (string?)null), (entry.SequenceNumber, entry.LogLevel, entry.Message, entry.Exception)),
+            entry => Assert.Equal((2L, "Error", "Error message", "System.InvalidOperationException: boom"), (entry.SequenceNumber, entry.LogLevel, entry.Message, entry.Exception)));
+        var logFileContents = await File.ReadAllTextAsync(logFilePath);
+        Assert.Contains($"Error message{Environment.NewLine}System.InvalidOperationException: boom", logFileContents);
+
+        static async IAsyncEnumerable<BackchannelLogEntry> YieldEntries([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return CreateEntry(1, LogLevel.Warning, "Warning message");
+            yield return CreateEntry(2, LogLevel.Error, "Error message", "System.InvalidOperationException: boom");
+            yield return CreateEntry(3, LogLevel.Debug, "Debug message");
+            await Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task CaptureAppHostLogsAsync_SuppressesRepeatedPositiveSequencesWithinEachGenerationOnly()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test.log");
+        var firstGeneration = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var secondGeneration = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (_, _) => Task.FromResult(true)
+        };
+        using var services = new ServiceCollection()
+            .AddSingleton<IExtensionBackchannel>(extensionBackchannel)
+            .BuildServiceProvider();
+        var forwarded = new List<ExtensionAppHostLogEntry>();
+        var legacyMessages = new List<string>();
+        var interactionService = new TestExtensionInteractionService(services)
+        {
+            WriteAppHostLogEntryCallback = forwarded.Add,
+            WriteDebugSessionMessageCallback = (message, _, _) => legacyMessages.Add(message)
+        };
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetAppHostLogEntriesAsyncCallback = cancellationToken => YieldEntries(firstGeneration, secondGeneration, cancellationToken)
+        };
+
+        using (var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()))
+        {
+            await RunCommand.CaptureAppHostLogsAsync(fileLoggerProvider, backchannel, interactionService, CancellationToken.None);
+        }
+
+        Assert.Collection(forwarded,
+            entry => Assert.Equal((firstGeneration, 42L, "Numbered entry"), (entry.GenerationId, entry.SequenceNumber, entry.Message)),
+            entry => Assert.Equal((secondGeneration, 42L, "Next generation entry"), (entry.GenerationId, entry.SequenceNumber, entry.Message)));
+        Assert.Equal(["Legacy entry", "Legacy entry"], legacyMessages);
+        var lines = (await File.ReadAllLinesAsync(logFilePath))
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToArray();
+        Assert.Collection(lines,
+            line => Assert.Equal("[2026-03-16 12:00:00.000] [WARN] [AppHost/Category] Numbered entry", line),
+            line => Assert.Equal("[2026-03-16 12:00:00.000] [WARN] [AppHost/Category] Next generation entry", line),
+            line => Assert.Equal("[2026-03-16 12:00:00.000] [INFO] [AppHost/Category] Legacy entry", line),
+            line => Assert.Equal("[2026-03-16 12:00:00.000] [INFO] [AppHost/Category] Legacy entry", line));
+
+        static async IAsyncEnumerable<BackchannelLogEntry> YieldEntries(
+            Guid firstGeneration,
+            Guid secondGeneration,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return CreateEntry(42, LogLevel.Warning, "Numbered entry", generationId: firstGeneration);
+            yield return CreateEntry(42, LogLevel.Warning, "Numbered replay", generationId: firstGeneration);
+            yield return CreateEntry(42, LogLevel.Warning, "Next generation entry", generationId: secondGeneration);
+            yield return CreateEntry(0, LogLevel.Information, "Legacy entry");
+            yield return CreateEntry(0, LogLevel.Information, "Legacy entry");
+            await Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task CaptureAppHostLogsAsync_SuppressesAFullReplayBuffer()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test.log");
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (_, _) => Task.FromResult(true)
+        };
+        using var services = new ServiceCollection()
+            .AddSingleton<IExtensionBackchannel>(extensionBackchannel)
+            .BuildServiceProvider();
+        var forwardedSequences = new List<long>();
+        var interactionService = new TestExtensionInteractionService(services)
+        {
+            WriteAppHostLogEntryCallback = entry => forwardedSequences.Add(entry.SequenceNumber)
+        };
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetAppHostLogEntriesAsyncCallback = YieldEntries
+        };
+
+        using (var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()))
+        {
+            await RunCommand.CaptureAppHostLogsAsync(fileLoggerProvider, backchannel, interactionService, CancellationToken.None);
+        }
+
+        Assert.Equal(Enumerable.Range(1, 1000).Select(value => (long)value), forwardedSequences);
+        Assert.Equal(1000, (await File.ReadAllLinesAsync(logFilePath)).Count(line => !string.IsNullOrWhiteSpace(line)));
+
+        static async IAsyncEnumerable<BackchannelLogEntry> YieldEntries([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            for (var replay = 0; replay < 2; replay++)
+            {
+                for (var sequenceNumber = 1L; sequenceNumber <= 1000; sequenceNumber++)
+                {
+                    yield return CreateEntry(sequenceNumber, LogLevel.Information, $"Entry {sequenceNumber}");
+                }
+            }
+
+            await Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task CaptureAppHostLogsAsync_EvictsTheOldestRememberedSequence()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test.log");
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (_, _) => Task.FromResult(true)
+        };
+        using var services = new ServiceCollection()
+            .AddSingleton<IExtensionBackchannel>(extensionBackchannel)
+            .BuildServiceProvider();
+        var forwardedSequences = new List<long>();
+        var interactionService = new TestExtensionInteractionService(services)
+        {
+            WriteAppHostLogEntryCallback = entry => forwardedSequences.Add(entry.SequenceNumber)
+        };
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetAppHostLogEntriesAsyncCallback = YieldEntries
+        };
+
+        using (var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()))
+        {
+            await RunCommand.CaptureAppHostLogsAsync(fileLoggerProvider, backchannel, interactionService, CancellationToken.None);
+        }
+
+        Assert.Equal(1002, forwardedSequences.Count);
+        Assert.Equal(1, forwardedSequences[0]);
+        Assert.Equal(1, forwardedSequences[^1]);
+        Assert.Equal(1002, (await File.ReadAllLinesAsync(logFilePath)).Count(line => !string.IsNullOrWhiteSpace(line)));
+
+        static async IAsyncEnumerable<BackchannelLogEntry> YieldEntries([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            for (var sequenceNumber = 1L; sequenceNumber <= 1001; sequenceNumber++)
+            {
+                yield return CreateEntry(sequenceNumber, LogLevel.Information, $"Entry {sequenceNumber}");
+            }
+
+            yield return CreateEntry(1, LogLevel.Information, "Evicted entry");
+            await Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task CaptureAppHostLogsAsync_UsesLegacyOutputForUnnumberedEntries()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (_, _) => Task.FromResult(true)
+        };
+        using var services = new ServiceCollection()
+            .AddSingleton<IExtensionBackchannel>(extensionBackchannel)
+            .BuildServiceProvider();
+        var legacyMessages = new List<string>();
+        var interactionService = new TestExtensionInteractionService(services)
+        {
+            WriteDebugSessionMessageCallback = (message, _, _) => legacyMessages.Add(message)
+        };
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetAppHostLogEntriesAsyncCallback = YieldEntries
+        };
+        using var fileLoggerProvider = new FileLoggerProvider(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "test.log"),
+            new TestStartupErrorWriter());
+
+        await RunCommand.CaptureAppHostLogsAsync(fileLoggerProvider, backchannel, interactionService, CancellationToken.None);
+
+        Assert.Equal(["Legacy message"], legacyMessages);
+
+        static async IAsyncEnumerable<BackchannelLogEntry> YieldEntries([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return CreateEntry(0, LogLevel.Information, "Legacy message");
+            await Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task CaptureAppHostLogsAsync_ForwardsBufferedEntryWhenCapabilityProbeCompletes()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var capabilityProbe = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var nextEntryRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (_, _) => capabilityProbe.Task
+        };
+        using var services = new ServiceCollection()
+            .AddSingleton<IExtensionBackchannel>(extensionBackchannel)
+            .BuildServiceProvider();
+        var forwarded = new TaskCompletionSource<ExtensionAppHostLogEntry>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var interactionService = new TestExtensionInteractionService(services)
+        {
+            WriteAppHostLogEntryCallback = entry => forwarded.TrySetResult(entry)
+        };
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetAppHostLogEntriesAsyncCallback = YieldOneEntryThenWait
+        };
+        using var captureCancellationSource = new CancellationTokenSource();
+        using var fileLoggerProvider = new FileLoggerProvider(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "test.log"),
+            new TestStartupErrorWriter());
+        var captureTask = RunCommand.CaptureAppHostLogsAsync(
+            fileLoggerProvider,
+            backchannel,
+            interactionService,
+            captureCancellationSource.Token);
+
+        try
+        {
+            await nextEntryRequested.Task.DefaultTimeout();
+            capabilityProbe.SetResult(true);
+
+            var entry = await forwarded.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal("Buffered entry", entry.Message);
+        }
+        finally
+        {
+            await captureCancellationSource.CancelAsync();
+            await captureTask;
+        }
+
+        async IAsyncEnumerable<BackchannelLogEntry> YieldOneEntryThenWait([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return CreateEntry(1, LogLevel.Information, "Buffered entry");
+            nextEntryRequested.SetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+    }
+
+    [Fact]
+    public async Task CaptureAppHostLogsAsync_DoesNotLetTheCapabilityProbeGateLogFileWrites()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test.log");
+        var secondEntryRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            // The probe cannot answer until capture requests the second entry. Awaiting the probe
+            // inside the loop deadlocks that request until the probe's fallback timeout fires.
+            HasCapabilityAsyncCallback = async (capability, _) =>
+            {
+                await secondEntryRequested.Task;
+                return capability == KnownCapabilities.AppHostLogOutput;
+            }
+        };
+        using var services = new ServiceCollection()
+            .AddSingleton<IExtensionBackchannel>(extensionBackchannel)
+            .BuildServiceProvider();
+        var forwarded = new List<ExtensionAppHostLogEntry>();
+        var interactionService = new TestExtensionInteractionService(services)
+        {
+            WriteAppHostLogEntryCallback = forwarded.Add
+        };
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetAppHostLogEntriesAsyncCallback = YieldEntries
+        };
+
+        using (var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()))
+        {
+            await RunCommand.CaptureAppHostLogsAsync(fileLoggerProvider, backchannel, interactionService, CancellationToken.None)
+                .WaitAsync(TimeSpan.FromSeconds(30));
+        }
+
+        Assert.Equal(["First entry", "Second entry"], forwarded.Select(entry => entry.Message));
+        var logFileContents = await File.ReadAllTextAsync(logFilePath);
+        Assert.Contains("First entry", logFileContents);
+        Assert.Contains("Second entry", logFileContents);
+
+        async IAsyncEnumerable<BackchannelLogEntry> YieldEntries([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return CreateEntry(1, LogLevel.Information, "First entry");
+            secondEntryRequested.SetResult();
+            yield return CreateEntry(2, LogLevel.Information, "Second entry");
+            await Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task CaptureAppHostLogsAsync_KeepsWritingTheLogFileWhenTheCapabilityProbeNeverAnswers()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test.log");
+        var wedgedProbe = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (_, _) => wedgedProbe.Task
+        };
+        using var services = new ServiceCollection()
+            .AddSingleton<IExtensionBackchannel>(extensionBackchannel)
+            .BuildServiceProvider();
+        var legacyMessages = new List<string>();
+        var interactionService = new TestExtensionInteractionService(services)
+        {
+            WriteDebugSessionMessageCallback = (message, _, _) => legacyMessages.Add(message)
+        };
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetAppHostLogEntriesAsyncCallback = YieldEntries
+        };
+
+        using (var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()))
+        {
+            await RunCommand.CaptureAppHostLogsAsync(fileLoggerProvider, backchannel, interactionService, CancellationToken.None)
+                .WaitAsync(TimeSpan.FromSeconds(30));
+        }
+
+        Assert.Equal(["First entry", "Second entry", "Third entry"], legacyMessages);
+        var logFileContents = await File.ReadAllTextAsync(logFilePath);
+        Assert.Contains("First entry", logFileContents);
+        Assert.Contains("Second entry", logFileContents);
+        Assert.Contains("Third entry", logFileContents);
+
+        static async IAsyncEnumerable<BackchannelLogEntry> YieldEntries([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return CreateEntry(1, LogLevel.Information, "First entry");
+            yield return CreateEntry(2, LogLevel.Information, "Second entry");
+            yield return CreateEntry(3, LogLevel.Information, "Third entry");
+            await Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task CaptureAppHostLogsAsync_LogsCapabilityProbeFailures()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test.log");
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (_, _) => Task.FromException<bool>(new InvalidOperationException("Probe failed"))
+        };
+        using var services = new ServiceCollection()
+            .AddSingleton<IExtensionBackchannel>(extensionBackchannel)
+            .BuildServiceProvider();
+        var interactionService = new TestExtensionInteractionService(services);
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetAppHostLogEntriesAsyncCallback = YieldEntries
+        };
+
+        using (var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()))
+        {
+            await RunCommand.CaptureAppHostLogsAsync(fileLoggerProvider, backchannel, interactionService, CancellationToken.None);
+        }
+
+        var logFileContents = await File.ReadAllTextAsync(logFilePath);
+        Assert.Contains("Structured AppHost log capability probe failed", logFileContents);
+        Assert.Contains("Probe failed", logFileContents);
+
+        static async IAsyncEnumerable<BackchannelLogEntry> YieldEntries([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return CreateEntry(1, LogLevel.Information, "Fallback entry");
+            await Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task CaptureAppHostLogsAsync_ExpectedDisconnectDrainsBufferedEntries()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var capabilityProbe = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var waitingToDisconnect = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Synchronous continuations ensure SetException does not return until the in-flight
+        // MoveNextAsync has observed the disconnect. The capability probe completes afterward.
+        var disconnect = new TaskCompletionSource();
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (_, _) => capabilityProbe.Task
+        };
+        using var services = new ServiceCollection()
+            .AddSingleton<IExtensionBackchannel>(extensionBackchannel)
+            .BuildServiceProvider();
+        var forwarded = new List<ExtensionAppHostLogEntry>();
+        var interactionService = new TestExtensionInteractionService(services)
+        {
+            WriteAppHostLogEntryCallback = forwarded.Add
+        };
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetAppHostLogEntriesAsyncCallback = YieldOneEntryThenDisconnect
+        };
+        using var fileLoggerProvider = new FileLoggerProvider(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "test.log"),
+            new TestStartupErrorWriter());
+        var captureTask = RunCommand.CaptureAppHostLogsAsync(
+            fileLoggerProvider,
+            backchannel,
+            interactionService,
+            CancellationToken.None);
+
+        await waitingToDisconnect.Task.DefaultTimeout();
+        disconnect.SetException(new ConnectionLostException());
+        capabilityProbe.SetResult(true);
+        await captureTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal("Buffered entry", Assert.Single(forwarded).Message);
+
+        async IAsyncEnumerable<BackchannelLogEntry> YieldOneEntryThenDisconnect([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return CreateEntry(1, LogLevel.Warning, "Buffered entry");
+            waitingToDisconnect.SetResult();
+            await disconnect.Task;
+        }
+    }
+
+    private static BackchannelLogEntry CreateEntry(long sequenceNumber, LogLevel level, string message, string? exception = null, Guid? generationId = null)
+    {
+        return new BackchannelLogEntry
+        {
+            GenerationId = generationId ?? Guid.Empty,
+            SequenceNumber = sequenceNumber,
+            Timestamp = new DateTimeOffset(2026, 3, 16, 12, 0, 0, TimeSpan.Zero),
+            LogLevel = level,
+            Message = message,
+            Exception = exception,
+            EventId = new EventId(42, "ExampleEvent"),
+            CategoryName = "Example.Category",
+        };
+    }
+
+    [Fact]
     public async Task CaptureAppHostLogsAsync_ConnectionLostException_TreatedAsNormalCompletion()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -3596,6 +4614,210 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             await Task.CompletedTask;
             throw new ConnectionLostException();
         }
+    }
+
+    [Fact]
+    public void DebugSessionOptions_SerializesAppHostSelectionOriginUsingWireContract()
+    {
+        var options = new DebugSessionOptions
+        {
+            AppHostSelectionOrigin = DebugSessionOptions.ExplicitCliAppHostSelectionOrigin
+        };
+
+        var json = JsonSerializer.Serialize(options, BackchannelJsonSerializerContext.Default.DebugSessionOptions);
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal("explicit-cli", document.RootElement.GetProperty("appHostSelectionOrigin").GetString());
+    }
+
+    [Theory]
+    [InlineData(false, "default-discovery")]
+    [InlineData(true, "explicit-cli")]
+    public async Task RunCommand_WhenDelegatingToExtension_CarriesAppHostSelectionOrigin(bool explicitAppHost, string expectedOrigin)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        string? workingDirectory = null;
+        string? projectFile = null;
+        bool? debug = null;
+        DebugSessionOptions? options = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
+        {
+            testOptions.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            testOptions.InteractionServiceFactory = sp =>
+            {
+                var service = new TestExtensionInteractionService(sp);
+                service.StartDebugSessionCallback = (wd, pf, dbg, debugSessionOptions) =>
+                {
+                    workingDirectory = wd;
+                    projectFile = pf;
+                    debug = dbg;
+                    options = debugSessionOptions;
+                };
+                return service;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(explicitAppHost ? $"run --apphost \"{appHostFile.FullName}\"" : "run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(workspace.WorkspaceRoot.FullName, workingDirectory);
+        Assert.Equal(explicitAppHost ? appHostFile.FullName : null, projectFile);
+        Assert.False(debug);
+        Assert.NotNull(options);
+        Assert.Equal("run", options.Command);
+        Assert.Empty(options.Args!);
+        Assert.Equal(expectedOrigin, options.AppHostSelectionOrigin);
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenRunningInExtension_ForwardsExplicitArgumentsInSemanticOrder()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        TestGitWorktree.WriteLinkedWorktreeMetadata(
+            workspace.WorkspaceRoot.FullName,
+            Path.Combine(workspace.WorkspaceRoot.FullName, "common", ".git"));
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("App Host");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+        var relativeCapturePath = Path.Combine("Profile Output", "profile.zip");
+
+        bool? debug = null;
+        DebugSessionOptions? options = null;
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(workspace, outputHelper, (_, _, dbg, debugSessionOptions) =>
+        {
+            debug = dbg;
+            options = debugSessionOptions;
+        });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+        [
+            "run",
+            "--apphost", appHostFile.FullName,
+            "--debug",
+            "--capture-profile",
+            "--detach=false",
+            "--no-build",
+            "--launch-profile", "E2E",
+            "--isolated=false",
+            "--format=table",
+            "--wait-for-debugger",
+            "--capture-profile-output", relativeCapturePath,
+            "--non-interactive=false",
+            "--log-level", "Debug",
+            "--start-debug-session",
+            "--capture-profile-delay=1",
+            "--",
+            "--custom-arg", "value"
+        ]);
+
+        Assert.Empty(result.Errors);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(debug);
+        Assert.NotNull(options);
+        Assert.Equal("run", options.Command);
+        Assert.NotNull(options.Args);
+        Assert.Equal(
+            [
+                "--debug",
+                "--capture-profile",
+                "--no-build",
+                "--launch-profile", "E2E",
+                "--isolated", "false",
+                "--wait-for-debugger",
+                "--capture-profile-output", new FileInfo(relativeCapturePath).FullName,
+                "--log-level", "Debug",
+                "--capture-profile-delay", "1",
+                "--",
+                "--custom-arg", "value"
+            ],
+            options.Args);
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenRunningInExtensionInLinkedWorktree_DoesNotInferIsolation()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        TestGitWorktree.WriteLinkedWorktreeMetadata(
+            workspace.WorkspaceRoot.FullName,
+            Path.Combine(workspace.WorkspaceRoot.FullName, "common", ".git"));
+
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+
+        DebugSessionOptions? options = null;
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(
+            workspace,
+            outputHelper,
+            (_, _, _, debugSessionOptions) => options = debugSessionOptions);
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--debug", "--", "--custom-arg", "value"]);
+
+        Assert.Empty(result.Errors);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(options);
+        Assert.NotNull(options.Args);
+        Assert.Equal(["--debug", "--", "--custom-arg", "value"], options.Args);
+    }
+
+    [Fact]
+    public async Task RunCommand_WhenRunningInExtension_SynthesizesSeparatorBeforeDelimiterFreeAppHostArguments()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        TestGitWorktree.WriteLinkedWorktreeMetadata(
+            workspace.WorkspaceRoot.FullName,
+            Path.Combine(workspace.WorkspaceRoot.FullName, "common", ".git"));
+
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+
+        DebugSessionOptions? options = null;
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(
+            workspace,
+            outputHelper,
+            (_, _, _, debugSessionOptions) => options = debugSessionOptions);
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(["run", "--apphost", appHostFile.FullName, "--debug", "--secret", "value"]);
+
+        Assert.Empty(result.Errors);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(options);
+        Assert.NotNull(options.Args);
+        Assert.Equal(["--debug", "--", "--secret", "value"], options.Args);
+
+        var childParseResult = command.Parse(["run", .. options.Args]);
+
+        Assert.Empty(childParseResult.Errors);
+        Assert.True(childParseResult.GetValue(RootCommand.DebugOption));
+        Assert.False(childParseResult.GetValue(AppHostLauncher.s_isolatedOption));
+        Assert.Equal(["--secret", "value"], childParseResult.UnmatchedTokens);
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task DelegatedCommands_RecordTransferStateOnlyAfterSuccessfulHandoff(
+        bool captureProfile,
+        bool handoffSucceeds)
+    {
+        await AssertProfileTransferAsync("run", captureProfile, handoffSucceeds);
+        await AssertProfileTransferAsync("start", captureProfile, handoffSucceeds);
     }
 
     [Fact]
@@ -3758,21 +4980,25 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     {
         using var fixture = new TelemetryFixture();
 
-        var runnerFactory = (IServiceProvider sp) =>
-        {
-            var runner = new TestDotNetCliRunner();
-            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
-            return runner;
-        };
-
-        var projectLocatorFactory = (IServiceProvider sp) => new TestProjectLocator();
-
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = (context, _) =>
+            {
+                context.BuildCompletionSource?.TrySetResult(false);
+                return Task.FromResult(CliExitCodes.FailedToBuildArtifacts);
+            }
+        };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.CertificateServiceFactory = _ => new ThrowingCertificateService();
-            options.DotNetCliRunnerFactory = runnerFactory;
-            options.ProjectLocatorFactory = projectLocatorFactory;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
             options.TelemetryFactory = _ => fixture.Telemetry;
 
             if (detached)
@@ -3798,7 +5024,44 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(KnownLanguageId.CSharp, tags[TelemetryConstants.Tags.AppHostLanguage]);
         Assert.Equal(detached, tags[TelemetryConstants.Tags.AppHostDetached]);
         Assert.Equal(isolated, tags[TelemetryConstants.Tags.AppHostIsolated]);
-        Assert.Equal("certificate_trust_failed", tags[TelemetryConstants.Tags.ErrorType]);
+        Assert.Equal("build_failed", tags[TelemetryConstants.Tags.ErrorType]);
+    }
+
+    private async Task AssertProfileTransferAsync(
+        string commandName,
+        bool captureProfile,
+        bool handoffSucceeds)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+
+        ProfileCaptureState? captureState = null;
+        using var provider = CliTestHelper.CreateExtensionServiceProvider(workspace, outputHelper, (_, _, _, _) =>
+        {
+            Assert.NotNull(captureState);
+            Assert.False(captureState.IsTransferred);
+            if (!handoffSucceeds)
+            {
+                throw new InvalidOperationException("Extension handoff failed.");
+            }
+        });
+
+        captureState = provider.GetRequiredService<ProfileCaptureState>();
+        var command = provider.GetRequiredService<RootCommand>();
+        var args = new List<string> { commandName, "--apphost", appHostFile.FullName };
+        if (captureProfile)
+        {
+            args.Add("--capture-profile");
+        }
+
+        var result = command.Parse(args);
+
+        Assert.Empty(result.Errors);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(handoffSucceeds ? CliExitCodes.Success : CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal(handoffSucceeds, captureState.IsTransferred);
     }
 
     private static long GetProcessStartTimeUnixMilliseconds(Process process)
@@ -3806,6 +5069,57 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var startTime = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(process.Id);
         Assert.NotNull(startTime);
         return startTime.Value;
+    }
+
+    private static FileInfo CreateAppHostFile(TemporaryWorkspace workspace)
+    {
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+
+        return appHostFile;
+    }
+
+    private static string CreateMatchingSocketFile(FileInfo appHostFile, DirectoryInfo homeDirectory)
+    {
+        var backchannelsDirectory = Path.Combine(homeDirectory.FullName, ".aspire", "cli", "bch");
+        Directory.CreateDirectory(backchannelsDirectory);
+
+        var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(appHostFile.FullName);
+        var prefix = BackchannelConstants.ComputeSocketPrefix(resolvedAppHostPath, homeDirectory.FullName);
+        var appHostId = Path.GetFileName(prefix);
+        var socketPath = Path.Combine(
+            backchannelsDirectory,
+            $"{appHostId}a1b2C3d4.{(int.MaxValue - 1).ToString(CultureInfo.InvariantCulture)}");
+        File.WriteAllText(socketPath, "");
+        return socketPath;
+    }
+
+    private static void AssertDetachedChildArguments(RootCommand command, string[]? childArguments, string expectedLaunchProfile, string[] expectedAppHostArguments)
+    {
+        var forwardedArguments = ExtractForwardedRunArguments(Assert.IsType<string[]>(childArguments));
+        var separatorIndex = Array.IndexOf(forwardedArguments, "--");
+        var noBuildIndex = Array.IndexOf(forwardedArguments, "--no-build");
+
+        Assert.Equal(1, forwardedArguments.Count(argument => argument == "--"));
+        Assert.True(separatorIndex > 0, "Expected a single child/AppHost separator.");
+        Assert.True(noBuildIndex > 0, "Expected detached child arguments to include --no-build.");
+        Assert.Equal(1, forwardedArguments.Count(argument => argument == "--no-build"));
+        Assert.Equal(["--no-build", $"--launch-profile={expectedLaunchProfile}", "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
+        Assert.DoesNotContain("--detach", forwardedArguments.Take(separatorIndex));
+        var childParseResult = command.Parse(forwardedArguments);
+
+        Assert.Empty(childParseResult.Errors);
+        Assert.Equal(expectedLaunchProfile, childParseResult.GetValue(AppHostLauncher.s_launchProfileOption));
+        Assert.Equal(expectedAppHostArguments, childParseResult.UnmatchedTokens);
+    }
+
+    private static string[] ExtractForwardedRunArguments(string[] childArguments)
+    {
+        var runIndex = Array.IndexOf(childArguments, "run");
+        Assert.True(runIndex >= 0, "Expected detached child arguments to include the run command.");
+
+        return childArguments[runIndex..];
     }
 
 }

@@ -122,7 +122,7 @@ internal sealed class PlaywrightCliInstaller(
             return (PlaywrightInstallStatus.Skipped, null);
         }
 
-        // Step 1: Resolve the target version from the internal npm registry.
+        // Step 1: Resolve the target version from the public npm registry.
         var versionOverride = configuration[VersionOverrideKey];
         string effectiveRange;
 
@@ -147,7 +147,7 @@ internal sealed class PlaywrightCliInstaller(
             effectiveRange = VersionRange;
         }
 
-        logger.LogDebug("Resolving {Package}@{Range} from the internal npm registry.", PackageName, effectiveRange);
+        logger.LogDebug("Resolving {Package}@{Range} from the public npm registry.", PackageName, effectiveRange);
         var packageInfo = await npmRunner.ResolvePackageAsync(PackageName, effectiveRange, cancellationToken);
 
         if (packageInfo is null)

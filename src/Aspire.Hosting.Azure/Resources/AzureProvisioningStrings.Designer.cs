@@ -423,11 +423,38 @@ namespace Aspire.Hosting.Azure.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Overrides the Azure location for this resource and reprovisions it using that location..
+        ///   Looks up a localized string similar to Changes the Azure location for this resource. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost..
         /// </summary>
         internal static string ChangeResourceLocationCommandDescription {
             get {
                 return ResourceManager.GetString("ChangeResourceLocationCommandDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Allow Aspire to delete and recreate the existing Azure resource when changing its location. Any data in the deleted resource may be permanently lost..
+        /// </summary>
+        internal static string ChangeResourceLocationConfirmDeleteDescription {
+            get {
+                return ResourceManager.GetString("ChangeResourceLocationConfirmDeleteDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Allow deletion and possible permanent data loss.
+        /// </summary>
+        internal static string ChangeResourceLocationConfirmDeleteLabel {
+            get {
+                return ResourceManager.GetString("ChangeResourceLocationConfirmDeleteLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Changing the location of Azure resource '{0}' requires deleting and recreating it. Any data in the deleted resource may be permanently lost. Set the '{1}' command argument to true to continue..
+        /// </summary>
+        internal static string ChangeResourceLocationDeleteConfirmationRequiredFormat {
+            get {
+                return ResourceManager.GetString("ChangeResourceLocationDeleteConfirmationRequiredFormat", resourceCulture);
             }
         }
 
@@ -558,7 +585,7 @@ namespace Aspire.Hosting.Azure.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Select or enter a new Azure location for '{0}'. The resource will then be reprovisioned using that location..
+        ///   Looks up a localized string similar to Select or enter a new Azure location for '{0}'. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost..
         /// </summary>
         internal static string ChangeResourceLocationPromptMessage {
             get {

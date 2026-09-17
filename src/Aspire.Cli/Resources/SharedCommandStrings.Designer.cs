@@ -69,6 +69,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string AppHostNotRunningInCurrentWorktree {
+            get {
+                return ResourceManager.GetString("AppHostNotRunningInCurrentWorktree", resourceCulture);
+            }
+        }
+
         internal static string AppHostNotRunningAtPath {
             get {
                 return ResourceManager.GetString("AppHostNotRunningAtPath", resourceCulture);
@@ -159,6 +165,18 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string LaunchProfileOptionDescription {
+            get {
+                return ResourceManager.GetString("LaunchProfileOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string LaunchProfileNotSupported {
+            get {
+                return ResourceManager.GetString("LaunchProfileNotSupported", resourceCulture);
+            }
+        }
+
         internal static string UsingAppHost {
             get {
                 return ResourceManager.GetString("UsingAppHost", resourceCulture);
@@ -210,6 +228,18 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string PipelineListStepsOptionDescription {
+            get {
+                return ResourceManager.GetString("PipelineListStepsOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string PipelineFormatOptionDescription {
+            get {
+                return ResourceManager.GetString("PipelineFormatOptionDescription", resourceCulture);
+            }
+        }
+
         internal static string PipelineStepTimelineLabel {
             get {
                 return ResourceManager.GetString("PipelineStepTimelineLabel", resourceCulture);
@@ -219,6 +249,12 @@ namespace Aspire.Cli.Resources {
         internal static string PipelineStepsSummaryTitle {
             get {
                 return ResourceManager.GetString("PipelineStepsSummaryTitle", resourceCulture);
+            }
+        }
+
+        internal static string PipelineFormatRequiresListSteps {
+            get {
+                return ResourceManager.GetString("PipelineFormatRequiresListSteps", resourceCulture);
             }
         }
 

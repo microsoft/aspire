@@ -14,8 +14,8 @@ namespace Infrastructure.Tests.Pipelines;
 /// </summary>
 public sealed class ExtensionE2eWorkflowTests
 {
-    private const string WorkflowRelativePath = ".github/workflows/extension-e2e-tests.yml";
     private const string CallerWorkflowRelativePath = ".github/workflows/tests.yml";
+    private const string ExtensionUnitWorkflowRelativePath = ".github/workflows/extension-unit-tests.yml";
 
     [Fact]
     public void AdvisoryShardRowsRemainIssueTrackedWithoutWeakeningRunnerStep()
@@ -40,6 +40,49 @@ public sealed class ExtensionE2eWorkflowTests
         var environment = (YamlMappingNode)runSuiteStep.Children[new YamlScalarNode("env")];
         Assert.False(environment.Children.ContainsKey(new YamlScalarNode("ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE")));
         Assert.Equal("${{ matrix.advisoryIssue }}", Scalar(environment, "ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE"));
+
+        var prepareCliStep = Assert.Single(steps, step => Scalar(step, "name") == "Prepare Aspire CLI and package hive");
+        var prepareCliScript = Scalar(prepareCliStep, "run") ?? string.Empty;
+        Assert.Contains(
+            "\"ASPIRE_DCP_PATH=$($dcp.Directory.FullName)\" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append",
+            prepareCliScript,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "\"ASPIRE_CLI_PACKAGES=$hiveDir\" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append",
+            prepareCliScript,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DenoIsInstalledOnlyForDenoE2eShards()
+    {
+        var job = LoadExtensionE2eJob();
+        var rows = MatrixIncludeRows(job).ToList();
+        var denoRows = rows
+            .Where(row => Scalar(row, "installDeno") == "true")
+            .ToList();
+
+        Assert.Contains(denoRows, row => Scalar(row, "name") == "Linux" && Scalar(row, "shardName") == "launch-profiles");
+        Assert.Contains(denoRows, row => Scalar(row, "name") == "Windows" && Scalar(row, "shardName") == "launch-profiles");
+        Assert.All(denoRows, row =>
+        {
+            var name = Scalar(row, "name");
+            var shardName = Scalar(row, "shardName");
+            Assert.True(
+                (shardName == "launch-profiles" && name is "Linux" or "Windows") ||
+                (shardName == "deno-debugger" && name == "Linux"),
+                $"Deno should not be installed for the {name}/{shardName} shard.");
+        });
+
+        var installDenoStep = Assert.Single(
+            ExtensionE2eWorkflow.Steps(job),
+            step => Scalar(step, "name") == "Install Deno");
+        Assert.Equal("${{ matrix.installDeno }}", Scalar(installDenoStep, "if"));
+        Assert.Equal("pwsh", Scalar(installDenoStep, "shell"));
+        var installScript = Scalar(installDenoStep, "run") ?? string.Empty;
+        Assert.Contains("https://github.com/denoland/deno/releases/download/v2.9.0/deno-$target.zip", installScript, StringComparison.Ordinal);
+        Assert.Contains("$installDirectory | Out-File -FilePath $env:GITHUB_PATH", installScript, StringComparison.Ordinal);
+        Assert.Contains("--version", installScript, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -52,7 +95,38 @@ public sealed class ExtensionE2eWorkflowTests
         var root = (YamlMappingNode)yaml.Documents[0].RootNode;
         var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
         var extensionE2eJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("extension_e2e_tests")];
-        Assert.Equal("${{ needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}", Scalar(extensionE2eJob, "if"));
+
+        // The condition is a folded block, so compare on collapsed whitespace rather than the layout.
+        var e2eCondition = string.Join(' ', (Scalar(extensionE2eJob, "if") ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+        // Selection still decides whether the shards run at all.
+        Assert.Contains("needs.setup_for_tests.outputs.run_extension_e2e == 'true'", e2eCondition, StringComparison.Ordinal);
+
+        // !cancelled() rather than success(): extension_tests_win is in `needs` only because it
+        // uploads the VSIX the shards install, and its packaging steps carry the same condition, so a
+        // unit-test failure must not take the E2E signal with it. Assert the job's result is not
+        // consulted at all -- reintroducing it is the regression this pins.
+        Assert.StartsWith("${{ !cancelled() &&", e2eCondition, StringComparison.Ordinal);
+        Assert.DoesNotContain("needs.extension_tests_win.result", e2eCondition, StringComparison.Ordinal);
+
+        // The artifact producers stay required by result: without them every shard fails on a
+        // download, which reports nothing useful about the extension.
+        foreach (var producer in new[] { "build_packages", "build_cli_archive_linux", "build_cli_archive_windows", "extension_bootstrap_linux" })
+        {
+            Assert.Contains($"needs.{producer}.result == 'success'", e2eCondition, StringComparison.Ordinal);
+        }
+
+        // The VSIX the shards install is published even when the unit tests fail; without this the
+        // decoupling above buys nothing because the artifact would never exist.
+        var extensionUnitJobs = LoadWorkflowJobs(ExtensionUnitWorkflowRelativePath);
+        var extensionUnitJob = (YamlMappingNode)extensionUnitJobs.Children[new YamlScalarNode("extension_tests_win")];
+        var unitSteps = ((YamlSequenceNode)extensionUnitJob.Children[new YamlScalarNode("steps")]).Cast<YamlMappingNode>().ToList();
+        var uploadStep = Assert.Single(unitSteps, step => Scalar(step, "name") == "Upload VSIX");
+        Assert.Contains("!cancelled()", Scalar(uploadStep, "if") ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("inputs.packageVsix", Scalar(uploadStep, "if") ?? string.Empty, StringComparison.Ordinal);
+        var packageStep = Assert.Single(unitSteps, step => Scalar(step, "name") == "Package VSIX");
+        Assert.Contains("!cancelled()", Scalar(packageStep, "if") ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains("inputs.packageVsix", Scalar(packageStep, "if") ?? string.Empty, StringComparison.Ordinal);
 
         var resultsJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("results")];
         var steps = (YamlSequenceNode)resultsJob.Children[new YamlScalarNode("steps")];
@@ -62,16 +136,16 @@ public sealed class ExtensionE2eWorkflowTests
         Assert.Equal(2, condition?.Split(unexpectedSkipCheck, StringSplitOptions.None).Length - 1);
     }
 
-    private static YamlMappingNode LoadExtensionE2eJob()
+    private static YamlMappingNode LoadExtensionE2eJob() => ExtensionE2eWorkflow.Job();
+
+    private static YamlMappingNode LoadWorkflowJobs(string relativePath)
     {
         var yaml = new YamlStream();
-        using var reader = new StringReader(File.ReadAllText(Path.Combine(RepoRoot.Path, WorkflowRelativePath)));
+        using var reader = new StringReader(File.ReadAllText(Path.Combine(RepoRoot.Path, relativePath)));
         yaml.Load(reader);
 
-        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
-        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
-
-        return (YamlMappingNode)jobs.Children[new YamlScalarNode("extension_e2e")];
+        var root = Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
+        return Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("jobs")]);
     }
 
     private static IEnumerable<YamlMappingNode> MatrixIncludeRows(YamlMappingNode job)

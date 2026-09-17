@@ -1,10 +1,12 @@
-import * as path from 'path';
-
 import { AspireExtensionContext } from './AspireExtensionContext';
 import { AppHostLaunchService } from './services/AppHostLaunchService';
 import type { AspireAppHostState, AspireExtensionStateSnapshot, AspireResourceCommandState, AspireResourceState, AspireResourceUrlState } from './types/extensionApi';
 import { AspireAppHostTreeProvider } from './views/AspireAppHostTreeProvider';
-import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson, isMatchingAppHostPath } from './views/AppHostDataRepository';
+import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson, isMatchingAppHostPath } from './data/AppHostDataRepository';
+import { isSamePath } from './utils/paths/comparison';
+import { stripResourceSuffix } from './utils/urlSchemes';
+
+export { isSamePath };
 
 export function createStateSnapshot(
   dataRepository: AppHostDataRepository,
@@ -104,11 +106,6 @@ function cloneResourceCommands(commands: ResourceJson['commands']): Record<strin
   }]));
 }
 
-export function stripResourceSuffix(url: string): string {
-  const idx = url.indexOf('/?resource=');
-  return idx !== -1 ? url.substring(0, idx) : url;
-}
-
 export function sanitizeDashboardUrl(url: string | null | undefined): string | undefined {
   if (!url) {
     return undefined;
@@ -120,12 +117,4 @@ export function sanitizeDashboardUrl(url: string | null | undefined): string | u
   catch {
     return undefined;
   }
-}
-
-export function isSamePath(left: string, right: string): boolean {
-  const normalizedLeft = path.resolve(left);
-  const normalizedRight = path.resolve(right);
-  return process.platform === 'win32'
-    ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
-    : normalizedLeft === normalizedRight;
 }

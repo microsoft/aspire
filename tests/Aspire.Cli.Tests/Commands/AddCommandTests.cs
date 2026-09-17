@@ -2389,6 +2389,194 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddCommandPrompter_StagingChannelPreservesAllChannelChoices()
+    {
+        List<string>? displayedLabels = null;
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, choices, formatter, _) =>
+            {
+                var choicesList = choices.Cast<object>().ToList();
+                displayedLabels = choicesList.Select(formatter).ToList();
+                return choicesList.First();
+            }
+        };
+        var prompter = new AddCommandPrompter(interactionService);
+        var cache = new FakeNuGetPackageCache();
+        var implicitChannel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
+        var stagingChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, PackageChannelQuality.Both, [new PackageMapping("Aspire*", "staging")], cache, new TestFeatures(), NullLogger.Instance);
+        var dailyChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Daily, PackageChannelQuality.Prerelease, [new PackageMapping("Aspire*", "daily")], cache, new TestFeatures(), NullLogger.Instance);
+        var prChannel = PackageChannel.CreateExplicitChannel("pr-19404", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "pr-19404")], cache, new TestFeatures(), NullLogger.Instance);
+        var packages = new[]
+        {
+            ("azure-kubernetes", CreatePackage("Aspire.Hosting.Azure.Kubernetes", "13.5.0-preview.1.26415.2"), stagingChannel),
+            ("azure-kubernetes", CreatePackage("Aspire.Hosting.Azure.Kubernetes", "13.4.3"), implicitChannel),
+            ("azure-kubernetes", CreatePackage("Aspire.Hosting.Azure.Kubernetes", "13.6.0-preview.1.26415.1"), dailyChannel),
+            ("azure-kubernetes", CreatePackage("Aspire.Hosting.Azure.Kubernetes", "13.6.0-pr.19404.gf51e8e1d"), prChannel)
+        };
+
+        var result = await prompter.PromptForIntegrationVersionAsync(packages, PackageChannelNames.Staging, CancellationToken.None).DefaultTimeout();
+
+        Assert.Collection(
+            Assert.IsType<List<string>>(displayedLabels),
+            label => Assert.Equal(PackageChannelNames.Staging, label),
+            label => Assert.Contains("13.4.3", label, StringComparison.Ordinal),
+            label => Assert.Equal(PackageChannelNames.Daily, label),
+            label => Assert.Equal("pr-19404", label));
+        Assert.Equal("13.5.0-preview.1.26415.2", result.Package.Version);
+        Assert.Same(stagingChannel, result.Channel);
+    }
+
+    [Theory]
+    // The staging channel can see the current SHA package alongside an older NuGet.org fallback.
+    // A same-line stable package outranks its preview, while a current-line preview-only integration
+    // outranks a stable package from the previous release.
+    [InlineData("13.5.0", "13.5.0-preview.1.26415.2", "13.5.0")]
+    [InlineData("13.4.6", "13.5.0-preview.1.26415.2", "13.5.0-preview.1.26415.2")]
+    public async Task AddCommandPrompter_StagingChannelSelectsHighestVersionAcrossPackageQualities(
+        string stableVersion,
+        string prereleaseVersion,
+        string expectedVersion)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, prerelease, _, _) =>
+                Task.FromResult<IEnumerable<NuGetPackage>>(
+                [CreatePackage("Aspire.Hosting.Redis", prerelease ? prereleaseVersion : stableVersion)])
+        };
+        var stagingChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Staging,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", "staging")],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+        var packages = (await stagingChannel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout())
+            .Select(package => ("redis", package, stagingChannel))
+            .ToArray();
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, choices, _, _) => choices.Cast<object>().First()
+        };
+        var prompter = new AddCommandPrompter(interactionService);
+
+        var result = await prompter.PromptForIntegrationVersionAsync(packages, PackageChannelNames.Staging, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(expectedVersion, result.Package.Version);
+        Assert.Same(stagingChannel, result.Channel);
+    }
+
+    [Theory]
+    [InlineData(KnownLanguageId.CSharp, PackageChannelNames.Staging, "13.5.0", "13.5.0-preview.1.26415.2")]
+    [InlineData(KnownLanguageId.TypeScript, PackageChannelNames.Staging, "13.5.0", "13.5.0-preview.1.26415.2")]
+    [InlineData(KnownLanguageId.CSharp, PackageChannelNames.Daily, "13.6.0-preview.1.26415.1", "13.6.0-preview.1.26415.1")]
+    [InlineData(KnownLanguageId.TypeScript, PackageChannelNames.Daily, "13.6.0-preview.1.26415.1", "13.6.0-preview.1.26415.1")]
+    [InlineData(KnownLanguageId.CSharp, "pr-19404", "13.6.0-pr.19404.gf51e8e1d", "13.6.0-pr.19404.gf51e8e1d")]
+    [InlineData(KnownLanguageId.TypeScript, "pr-19404", "13.6.0-pr.19404.gf51e8e1d", "13.6.0-pr.19404.gf51e8e1d")]
+    public async Task AddCommandNonInteractiveSelectsExpectedVersionAcrossLanguageAndChannelMatrix(
+        string languageId,
+        string targetChannel,
+        string cliVersion,
+        string expectedPackageVersion)
+    {
+        const string packageId = "Aspire.Hosting.Azure.Kubernetes";
+        const string stagingVersion = "13.5.0-preview.1.26415.2";
+        const string dailyVersion = "13.6.0-preview.1.26415.1";
+        const string prVersion = "13.6.0-pr.19404.gf51e8e1d";
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var isTypeScript = string.Equals(languageId, KnownLanguageId.TypeScript, StringComparison.Ordinal);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, isTypeScript ? "apphost.ts" : "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, isTypeScript ? string.Empty : "<Project />");
+
+        if (isTypeScript)
+        {
+            File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), $$"""
+                {
+                  "channel": "{{targetChannel}}"
+                }
+                """);
+        }
+
+        // Force every channel into discovery so each matrix cell proves precedence against
+        // competing implicit, staging, daily, and PR candidates.
+        var hivesDirectory = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
+        hivesDirectory.Create();
+        hivesDirectory.CreateSubdirectory("pr-19404");
+
+        var addedPackageId = string.Empty;
+        var addedPackageVersion = string.Empty;
+        var promptedForVersion = false;
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            LanguageId = languageId,
+            DisplayName = isTypeScript ? "TypeScript (Node.js)" : "C# (.NET)",
+            CanHandleCallback = file => string.Equals(file.FullName, appHostFile.FullName, StringComparison.Ordinal),
+            AddPackageAsyncCallback = (context, _) =>
+            {
+                addedPackageId = context.PackageId;
+                addedPackageVersion = context.PackageVersion;
+                return Task.FromResult(true);
+            }
+        };
+
+        // C# resolves its configured feed through the implicit NuGet.config channel. TypeScript
+        // keeps nuget.org implicit and persists the selected explicit channel in aspire.config.json.
+        var implicitVersion = !isTypeScript && !string.Equals(targetChannel, "pr-19404", StringComparison.Ordinal)
+            ? expectedPackageVersion
+            : "13.4.3";
+        var implicitCache = CreateIntegrationPackageCache(packageId, implicitVersion);
+        var stagingCache = CreateIntegrationPackageCache(packageId, stagingVersion);
+        var dailyCache = CreateIntegrationPackageCache(packageId, dailyVersion);
+        var prCache = CreateIntegrationPackageCache(packageId, prVersion);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                identityChannel: targetChannel,
+                identityVersion: cliVersion);
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.AppHostProjectFactory = _ => projectFactory;
+            options.AddCommandPrompterFactory = sp =>
+            {
+                var prompter = new TestAddCommandPrompter(sp.GetRequiredService<IInteractionService>());
+                prompter.PromptForIntegrationVersionCallback = _ =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("The channel matrix must resolve deterministically without prompting.");
+                };
+                return prompter;
+            };
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                [
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance, currentCliVersion: cliVersion),
+                    // Official staging feeds contain stable packages alongside integrations that
+                    // deliberately remain prerelease, so staging discovery always uses Both.
+                    PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, PackageChannelQuality.Both, [new PackageMapping("Aspire*", "staging")], stagingCache, new TestFeatures(), NullLogger.Instance, currentCliVersion: cliVersion),
+                    PackageChannel.CreateExplicitChannel(PackageChannelNames.Daily, PackageChannelQuality.Prerelease, [new PackageMapping("Aspire*", "daily")], dailyCache, new TestFeatures(), NullLogger.Instance, currentCliVersion: cliVersion),
+                    PackageChannel.CreateExplicitChannel("pr-19404", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "pr-19404")], prCache, new TestFeatures(), NullLogger.Instance, currentCliVersion: cliVersion)
+                ])
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add {packageId} --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(promptedForVersion);
+        Assert.Equal(packageId, addedPackageId);
+        Assert.Equal(expectedPackageVersion, addedPackageVersion);
+    }
+
+    [Fact]
     public async Task AddCommandNonInteractiveTypeScriptAppHostPinnedToDailyPrefersDailyChannelOverImplicitStable()
     {
         // Regression for https://github.com/microsoft/aspire/issues/18114.
@@ -3321,6 +3509,18 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             Id = id,
             Source = "nuget",
             Version = version
+        };
+    }
+
+    private static FakeNuGetPackageCache CreateIntegrationPackageCache(string packageId, string version)
+    {
+        var package = CreatePackage(packageId, version);
+        var isPrerelease = version.Contains('-', StringComparison.Ordinal);
+
+        return new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, prerelease, _, _) =>
+                Task.FromResult<IEnumerable<NuGetPackage>>(prerelease || !isPrerelease ? [package] : [])
         };
     }
 

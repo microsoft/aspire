@@ -1,9 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
-using System.IO.Hashing;
-using System.Text;
+using System.Security.Cryptography;
 
 namespace Aspire.Shared.TerminalHost;
 
@@ -13,8 +11,7 @@ namespace Aspire.Shared.TerminalHost;
 /// <remarks>
 /// <para>
 /// All per-replica terminal-host files live flat under <c>~/.aspire/trmnl/</c>. Each
-/// replica is identified by an 11-character base64url <em>replica id</em> derived from
-/// the tuple <c>(normalized AppHost path, resource name, replica index)</c>. The four
+/// replica is identified by a random 11-character base64url <em>replica id</em>. The four
 /// files for a single replica share the same <c>{replicaId}.</c> prefix:
 /// </para>
 /// <list type="bullet">
@@ -30,12 +27,9 @@ namespace Aspire.Shared.TerminalHost;
 /// <c>/Users/&lt;you&gt;/.aspire/trmnl/AbCdEfGhIjK.ctrl.sock</c> ≈ 52 bytes.
 /// </para>
 /// <para>
-/// The hash inputs intentionally <em>exclude</em> PID and any random suffix so the
-/// path is stable across AppHost restarts: this lets external tools (the <c>aspire
-/// terminal</c> CLI, the dashboard, future log scrapers) discover terminals by
-/// listing <c>~/.aspire/trmnl/*.metadata.json</c> without an active backchannel. The
-/// trade-off is that the host MUST pre-delete any stale <c>.sock</c> at the same path
-/// before binding (see <c>TerminalHostControlListener</c> and <c>TerminalReplica</c>).
+/// Per-run identifiers prevent an older AppHost or terminal-host process from deleting or
+/// rebinding a newer run's sockets. External tools discover terminals by listing metadata
+/// sidecars, so stable filenames are unnecessary.
 /// </para>
 /// </remarks>
 internal static class TerminalHostPaths
@@ -64,13 +58,17 @@ internal static class TerminalHostPaths
     /// <summary>Suffix for the per-replica metadata sidecar (JSON).</summary>
     public const string MetadataSuffix = "metadata.json";
 
+    /// <summary>Suffix for a metadata sidecar while it is being written atomically.</summary>
+    public const string MetadataTemporarySuffix = MetadataSuffix + ".tmp";
+
+    /// <summary>Internal configuration key that overrides the terminal artifact directory.</summary>
+    public const string DirectoryOverrideConfigName = "AppHost:TerminalHostDirectory";
+
     /// <summary>
     /// Length in characters of the base64url replica identifier.
     /// </summary>
     /// <remarks>
-    /// 8 bytes of xxHash3 → ceil(8 / 3) * 4 = 12 base64 chars, minus one '=' = 11.
-    /// Same encoding as <c>Aspire.Hosting.Backchannel.BackchannelConstants.ComputeAppHostId</c>
-    /// so the two hashing schemes look visually consistent in logs.
+    /// 8 bytes → ceil(8 / 3) * 4 = 12 base64 chars, minus one '=' = 11.
     /// </remarks>
     public const int ReplicaIdLength = 11;
 
@@ -90,70 +88,90 @@ internal static class TerminalHostPaths
     }
 
     /// <summary>
-    /// Computes the 11-character base64url replica identifier from the
-    /// <c>(appHostPath, resourceName, replicaIndex)</c> tuple.
+    /// Creates an 11-character random base64url replica identifier for one AppHost run.
     /// </summary>
-    /// <param name="appHostPath">Full path to the AppHost project file (typically from <c>configuration["AppHost:FilePath"]</c>).</param>
-    /// <param name="resourceName">Aspire model resource name the terminal host serves.</param>
-    /// <param name="replicaIndex">Zero-based replica index of the parent resource.</param>
-    public static string ComputeReplicaId(string appHostPath, string resourceName, int replicaIndex)
+    public static string CreateReplicaId()
     {
-        ArgumentException.ThrowIfNullOrEmpty(appHostPath);
-        ArgumentException.ThrowIfNullOrEmpty(resourceName);
-        ArgumentOutOfRangeException.ThrowIfNegative(replicaIndex);
-
-        // NUL separators between tuple components so ("foo", "bar") cannot collide with
-        // ("foob", "ar"). NormalizePath uppercases on Windows so casing differences
-        // between FileInfo.FullName (CLI side) and MSBuild metadata (AppHost side)
-        // don't produce different ids on case-insensitive NTFS/ReFS. Mirrors the rule
-        // in src/Shared/BackchannelConstants.cs::NormalizePath.
-        var composed =
-            NormalizePath(appHostPath)
-            + "\0"
-            + resourceName
-            + "\0"
-            + replicaIndex.ToString(CultureInfo.InvariantCulture);
-
-        var xxHash = new XxHash3();
-        xxHash.Append(Encoding.UTF8.GetBytes(composed));
-        var hash = xxHash.GetCurrentHash();
-
-        return ToBase64UrlIdentifier(hash.AsSpan(0, ReplicaIdByteCount));
+        Span<byte> bytes = stackalloc byte[ReplicaIdByteCount];
+        RandomNumberGenerator.Fill(bytes);
+        return ToBase64UrlIdentifier(bytes);
     }
 
     /// <summary>
     /// Gets the absolute socket path for a given replica id and sockpurpose.
-    /// Format: <c>{home}/.aspire/trmnl/{replicaId}.{sockPurpose}.sock</c>.
+    /// Format: <c>{trmnlDirectory}/{replicaId}.{sockPurpose}.sock</c>.
     /// </summary>
-    /// <param name="homeDirectory">User's profile directory.</param>
-    /// <param name="replicaId">Output of <see cref="ComputeReplicaId(string, string, int)"/>.</param>
+    /// <param name="trmnlDirectory">Terminal artifact directory.</param>
+    /// <param name="replicaId">Output of <see cref="CreateReplicaId"/>.</param>
     /// <param name="sockPurpose">One of <see cref="ProducerSockPurpose"/>, <see cref="ConsumerSockPurpose"/>, <see cref="ControlSockPurpose"/>.</param>
-    public static string GetSocketPath(string homeDirectory, string replicaId, string sockPurpose)
+    public static string GetSocketPath(string trmnlDirectory, string replicaId, string sockPurpose)
     {
+        ArgumentException.ThrowIfNullOrEmpty(trmnlDirectory);
         ArgumentException.ThrowIfNullOrEmpty(replicaId);
         ArgumentException.ThrowIfNullOrEmpty(sockPurpose);
-        return Path.Combine(GetTrmnlDirectory(homeDirectory), $"{replicaId}.{sockPurpose}.sock");
+        return Path.Combine(trmnlDirectory, $"{replicaId}.{sockPurpose}.sock");
     }
 
     /// <summary>
     /// Gets the absolute metadata-sidecar path for a given replica id.
-    /// Format: <c>{home}/.aspire/trmnl/{replicaId}.metadata.json</c>.
+    /// Format: <c>{trmnlDirectory}/{replicaId}.metadata.json</c>.
     /// </summary>
-    public static string GetMetadataPath(string homeDirectory, string replicaId)
+    public static string GetMetadataPath(string trmnlDirectory, string replicaId)
     {
+        ArgumentException.ThrowIfNullOrEmpty(trmnlDirectory);
         ArgumentException.ThrowIfNullOrEmpty(replicaId);
-        return Path.Combine(GetTrmnlDirectory(homeDirectory), $"{replicaId}.{MetadataSuffix}");
+        return Path.Combine(trmnlDirectory, $"{replicaId}.{MetadataSuffix}");
     }
 
-    private static string NormalizePath(string path)
+    /// <summary>
+    /// Gets the temporary path used while atomically writing a metadata sidecar.
+    /// </summary>
+    public static string GetMetadataTemporaryPath(string metadataPath)
     {
-        // On Windows: NTFS/ReFS treat paths as case-insensitive but neither FileInfo.FullName
-        // (CLI side) nor MSBuild metadata (AppHost side) canonicalizes casing against disk,
-        // so segments can differ between the two sides. ToUpperInvariant is deterministic
-        // across machines and cultures, so both sides always agree on the hash input.
-        // On macOS/Linux paths are returned as-is — APFS can be case-sensitive and Linux
-        // filesystems are case-sensitive by default.
-        return OperatingSystem.IsWindows() ? path.ToUpperInvariant() : path;
+        ArgumentException.ThrowIfNullOrEmpty(metadataPath);
+        return metadataPath + ".tmp";
+    }
+
+    /// <summary>
+    /// Extracts and validates the replica identifier encoded in a metadata sidecar filename.
+    /// </summary>
+    public static bool TryGetReplicaIdFromMetadataPath(string metadataPath, out string replicaId)
+        => TryGetReplicaId(metadataPath, MetadataSuffix, out replicaId);
+
+    /// <summary>
+    /// Extracts and validates the replica identifier encoded in a temporary metadata filename.
+    /// </summary>
+    public static bool TryGetReplicaIdFromMetadataTemporaryPath(string metadataTemporaryPath, out string replicaId)
+        => TryGetReplicaId(metadataTemporaryPath, MetadataTemporarySuffix, out replicaId);
+
+    private static bool TryGetReplicaId(string path, string suffix, out string replicaId)
+    {
+        var fileName = Path.GetFileName(path);
+        var extension = "." + suffix;
+        if (!fileName.EndsWith(extension, StringComparison.Ordinal))
+        {
+            replicaId = string.Empty;
+            return false;
+        }
+
+        var candidate = fileName.AsSpan(0, fileName.Length - extension.Length);
+        if (candidate.Length != ReplicaIdLength)
+        {
+            replicaId = string.Empty;
+            return false;
+        }
+
+        foreach (var character in candidate)
+        {
+            if (!char.IsAsciiLetterOrDigit(character) && character is not ('-' or '_'))
+            {
+                replicaId = string.Empty;
+                return false;
+            }
+        }
+
+        replicaId = candidate.ToString();
+        return true;
     }
 
     private static string ToBase64UrlIdentifier(ReadOnlySpan<byte> bytes)

@@ -1,0 +1,12 @@
+{
+  "appHost": {
+    "path": "apphost.rs",
+    "language": "rust"
+  },
+  "packages": {
+    "Aspire.Hosting.Rust": "../../src/Aspire.Hosting.Rust/Aspire.Hosting.Rust.csproj"
+  },
+  "features": {
+    "experimentalPolyglot:rust": true
+  }
+}

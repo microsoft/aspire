@@ -118,6 +118,10 @@ safe-outputs:
     repositories: ["aspire"]
 
 tools:
+  # Shell access is explicit because the unfiltered GitHub integrity setting
+  # requires an intentional allowlist. The agent reads the candidate set
+  # materialized by the trusted pre-agent step and inspects the changelog.
+  bash: ["cat", "grep", "head", "tail", "wc"]
   github:
     # `repos` exposes the commit-comparison and file-content APIs used to gather
     # the extension change set. `pull_requests` and `search` enrich commits with
@@ -171,20 +175,34 @@ pre-agent-steps:
 
       FROM_SHA="${BASH_REMATCH[1]}"
       TO_SHA="${BASH_REMATCH[2]}"
+      CANDIDATES_FILE="${RUNNER_TEMP}/gh-aw/extension-changelog-candidates.tsv"
+      mkdir -p "${RUNNER_TEMP}/gh-aw"
+      rm -f "${CANDIDATES_FILE}"
       CURRENT_BRANCH="$(git branch --show-current)"
       if [ -z "${CURRENT_BRANCH}" ]; then
         echo "::error::Could not determine the checked-out PR branch for authoritative range preload."
         exit 1
       fi
 
-      range_is_available() {
-        git cat-file -e "${FROM_SHA}^{commit}" 2>/dev/null \
-          && git cat-file -e "${TO_SHA}^{commit}" 2>/dev/null \
-          && git merge-base --is-ancestor "${FROM_SHA}" "${TO_SHA}" 2>/dev/null \
-          && git log --format='%H%x09%s' --no-merges "${FROM_SHA}..${TO_SHA}" -- extension/ >/dev/null 2>&1
+      materialize_candidate_set() {
+        if ! git cat-file -e "${FROM_SHA}^{commit}" 2>/dev/null \
+          || ! git cat-file -e "${TO_SHA}^{commit}" 2>/dev/null \
+          || ! git merge-base --is-ancestor "${FROM_SHA}" "${TO_SHA}" 2>/dev/null; then
+          return 1
+        fi
+
+        if ! git log --format='%H%x09%s' --no-merges \
+          "${FROM_SHA}..${TO_SHA}" -- extension/ > "${CANDIDATES_FILE}"; then
+          rm -f "${CANDIDATES_FILE}"
+          return 1
+        fi
+
+        local candidate_count
+        candidate_count="$(wc -l < "${CANDIDATES_FILE}")"
+        echo "Materialized ${candidate_count} authoritative extension changelog candidates in ${CANDIDATES_FILE}."
       }
 
-      if range_is_available; then
+      if materialize_candidate_set; then
         echo "Authoritative marker range ${FROM_SHA}..${TO_SHA} is already locally enumerable."
         exit 0
       fi
@@ -202,13 +220,13 @@ pre-agent-steps:
           git fetch --no-tags --unshallow origin "${CURRENT_BRANCH}"
         fi
 
-        if range_is_available; then
+        if materialize_candidate_set; then
           echo "Preloaded authoritative marker range ${FROM_SHA}..${TO_SHA} for local changelog enumeration."
           exit 0
         fi
       done
 
-      if range_is_available; then
+      if materialize_candidate_set; then
         echo "Preloaded authoritative marker range ${FROM_SHA}..${TO_SHA} for local changelog enumeration."
         exit 0
       fi
@@ -314,18 +332,19 @@ The PR body, description, and deterministic fallback notes are presentation-only
 and MUST NOT be used to discover the change set. The validated marker range is
 the only authoritative source.
 
-A deterministic pre-agent step already preloaded the authoritative marker range
-and history into this checkout. Do not perform any network fetch in the agent
-step. If the local range is missing or cannot be enumerated, treat that as a
-workflow error and fail with a diagnostic instead of trying to repair it here.
+A deterministic pre-agent step already validated and materialized the
+authoritative marker range as
+`${RUNNER_TEMP}/gh-aw/extension-changelog-candidates.tsv`. Do not run `git` or
+perform any network fetch in the agent step. If the candidate file cannot be
+read, treat that as a workflow error and fail with a diagnostic instead of
+trying to repair it here.
 
-Use local git as the authoritative source for the exact candidate set:
+Treat that file as the authoritative source for the exact candidate set:
 
-1. Run `git log --format='%H%x09%s' --no-merges <from>..<to> -- extension/`
-   locally and treat the full output of that command as the exact candidate set.
-2. Count the candidates produced by that command and keep that count in mind
-   while you work.
-3. Consider and classify **every** candidate from that full local set before you
+1. Read every line in the file. Each line contains the 40-character commit SHA,
+   a tab, and its first-line subject.
+2. Count every line and keep that exact candidate count in mind while you work.
+3. Consider and classify **every** candidate from that full set before you
    write notes. You may group related user-facing commits into one final note
    and exclude internal-only commits, but you MUST NOT stop after a fixed number
    of commits and MUST NOT use only the newest page, partial list, PR body, or
@@ -404,7 +423,7 @@ editing `extension/CHANGELOG.md`, emit a single push request as your final
 output so gh-aw commits the change to the triggering PR's head branch with a
 clear commit message (for example
 `Generate extension changelog for v<version>`). Do not include any other file in
-the change. Then write a short success line to the run summary. The summary must be auditable: report the exact candidate count from Step 4, how many candidates were included in the final notes and how many were excluded, and ensure the included/excluded totals (or equivalent auditable classification totals) account for every candidate from the local git range:
+the change. Then write a short success line to the run summary. The summary must be auditable: report the exact candidate count from Step 4, how many candidates were included in the final notes and how many were excluded, and ensure the included/excluded totals (or equivalent auditable classification totals) account for every candidate from the pre-agent candidate file:
 
 > Replaced the placeholder `extension/CHANGELOG.md` entry for **v`<version>`**
 > on PR #`${{ github.event.pull_request.number }}`. Range: `<from>`..`<to>`.
@@ -431,9 +450,9 @@ no-op when no request is emitted.
 - More than one marker present (Step 2).
 - Malformed `from`/`to` SHAs, or SHAs that don't resolve in `microsoft/aspire`
   (Step 3).
-- The local git range still cannot be enumerated after the pre-agent history
-  preload, or required enrichment searches fail outright so you cannot produce
-  notes.
+- The authoritative candidate file is missing or unreadable after pre-agent
+  materialization, or required enrichment searches fail outright so you cannot
+  produce notes.
 
 For these, exit non-zero so the run shows a red X, and write the failing API,
 the marker contents, and the error to the run summary so a maintainer can

@@ -16,6 +16,7 @@
     <Compile Include="$(SharedDir)LaunchProfiles\LaunchSettingsSerializerContext.cs" Link="LaunchSettingsSerializerContext.cs" />
     <Compile Include="$(SharedDir)\KnownAspNetCoreConfigNames.cs" Link="KnownAspNetCoreConfigNames.cs" />
     <Compile Include="$(SharedDir)\KnownConfigNames.cs" Link="KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)\TokenGenerator.cs" Link="TokenGenerator.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -44,10 +45,6 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
-  </ItemGroup>
-
-  <ItemGroup>
-    <InternalsVisibleTo Include="Aspire.Cli.Tests"/>
   </ItemGroup>
 
 </Project>

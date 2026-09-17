@@ -43,8 +43,8 @@ if ($metadata.assetName -ne [System.IO.Path]::GetFileName($metadata.assetName)) 
     throw "Embedded Aspire skills asset name '$($metadata.assetName)' must not contain path separators."
 }
 
-if ([string]::IsNullOrWhiteSpace($metadata.sha256)) {
-    throw "Embedded Aspire skills metadata must specify the release asset SHA-256 hash."
+if ([string]::IsNullOrWhiteSpace($metadata.sha512)) {
+    throw "Embedded Aspire skills metadata must specify the release asset SHA-512 hash."
 }
 
 $archivePath = Join-Path $embeddedDir $metadata.assetName
@@ -52,9 +52,9 @@ if (-not (Test-Path $archivePath)) {
     throw "Embedded Aspire skills archive was not found at '$archivePath'."
 }
 
-$actualHash = (Get-FileHash -Algorithm SHA256 $archivePath).Hash.ToLowerInvariant()
-if ($actualHash -ne $metadata.sha256) {
-    throw "Embedded bundle SHA-256 mismatch. Expected '$($metadata.sha256)', got '$actualHash'."
+$actualHash = (Get-FileHash -Algorithm SHA512 $archivePath).Hash.ToLowerInvariant()
+if ($actualHash -ne $metadata.sha512) {
+    throw "Embedded bundle SHA-512 mismatch. Expected '$($metadata.sha512)', got '$actualHash'."
 }
 
 $certIdentity = "https://github.com/$($metadata.repository)/.github/workflows/publish.yml@refs/tags/$($metadata.tag)"
@@ -100,12 +100,12 @@ if ($metadata.PSObject.Properties.Name -contains 'hooks') {
         }
 
         # Hash over LF-normalized bytes so .ps1 (text=auto) checked out with CRLF on Windows matches.
-        $embeddedHash = Get-AspireSkillsSha256Hex -Bytes (ConvertTo-LfUtf8Bytes -Bytes ([System.IO.File]::ReadAllBytes($embeddedHookPath)))
+        $embeddedHash = Get-AspireSkillsSha512Hex -Bytes (ConvertTo-LfUtf8Bytes -Bytes ([System.IO.File]::ReadAllBytes($embeddedHookPath)))
         if ($embeddedHash -ne $recordedHash) {
-            throw "Embedded telemetry hook '$hookFileName' SHA-256 mismatch. Expected '$recordedHash', got '$embeddedHash'. Re-run update-aspire-skills-bundle.ps1."
+            throw "Embedded telemetry hook '$hookFileName' SHA-512 mismatch. Expected '$recordedHash', got '$embeddedHash'. Re-run update-aspire-skills-bundle.ps1."
         }
 
-        $sourceHash = Get-AspireSkillsSha256Hex -Bytes (Get-AspireSkillsHookContent -Repository $metadata.repository -CommitSha $hooks.commitSha -FileName $hookFileName)
+        $sourceHash = Get-AspireSkillsSha512Hex -Bytes (Get-AspireSkillsHookContent -Repository $metadata.repository -CommitSha $hooks.commitSha -FileName $hookFileName)
         if ($sourceHash -ne $recordedHash) {
             throw "Telemetry hook '$hookFileName' does not match '$($metadata.repository)' at commit '$($hooks.commitSha)'. Expected '$recordedHash', got '$sourceHash'."
         }

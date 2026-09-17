@@ -52,6 +52,57 @@ public static class TestExtensions
         return builder.AddResource(resource);
     }
 
+#if ASPIRE_TYPESCRIPT_CODEGEN_TESTS
+    /// <summary>
+    /// Adds a resource exposed only through a bare marker interface.
+    /// </summary>
+    // Deliberately returns IResourceBuilder<ITestMarkerResource>: the marker interface contributes
+    // no capabilities of its own, so this export is the reference site that forces
+    // TestMarkerResourcePromise to be emitted in the generated SDK. Kept as a plain comment rather
+    // than <remarks> so this rationale does not land in the generated SDK doc comments. See
+    // GenerateDistributedApplication_EmitsPromiseWrapperForBareMarkerResourceBuilder and
+    // https://github.com/microsoft/aspire/issues/19507.
+    [AspireExport]
+    public static IResourceBuilder<ITestMarkerResource> AddTestMarker(
+        this IDistributedApplicationBuilder builder,
+        string name)
+    {
+        return builder.AddResource(new TestMarkerResource(name));
+    }
+#endif
+
+    /// <summary>
+    /// Configures a Redis resource with parameter-only resources whose generated names collide.
+    /// </summary>
+    /// <param name="builder">The Redis resource builder.</param>
+    /// <param name="resource">The resource whose unused Promise wrapper would collide.</param>
+    /// <param name="resourcePromise">The resource whose generated name matches that Promise wrapper.</param>
+    /// <returns>The Redis resource builder.</returns>
+    [AspireExport]
+    public static IResourceBuilder<TestRedisResource> WithPromiseCollisionResources(
+        this IResourceBuilder<TestRedisResource> builder,
+        IResourceBuilder<ITestPromiseCollisionResource> resource,
+        IResourceBuilder<ITestPromiseCollisionResourcePromise> resourcePromise)
+    {
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures a Redis resource with mutable-property and parameter-only resources whose generated names collide.
+    /// </summary>
+    /// <param name="builder">The Redis resource builder.</param>
+    /// <param name="resource">The mutable-property-only resource whose unused Promise wrapper would collide.</param>
+    /// <param name="resourcePromise">The parameter-only resource whose generated name matches that Promise wrapper.</param>
+    /// <returns>The Redis resource builder.</returns>
+    [AspireExport]
+    public static IResourceBuilder<TestRedisResource> WithMutablePromiseCollisionResources(
+        this IResourceBuilder<TestRedisResource> builder,
+        IResourceBuilder<ITestMutablePromiseCollisionResource> resource,
+        IResourceBuilder<ITestMutablePromiseCollisionResourcePromise> resourcePromise)
+    {
+        return builder;
+    }
+
     /// <summary>
     /// Adds a child database to a Redis server resource (factory method pattern).
     /// </summary>
@@ -733,15 +784,32 @@ public static class TestExtensions
     // ===== Duplicate Class Name Tests =====
 
     /// <summary>
-    /// Targets the concrete TestVaultResource so it gets a builder class named "TestVaultResource".
+    /// Adds a vault through its interface while the concrete type is referenced separately.
     /// </summary>
+    /// <param name="builder">The distributed application builder.</param>
+    /// <param name="name">The resource name.</param>
+    /// <returns>The interface vault resource builder.</returns>
     /// <ats-summary>Adds a test vault resource</ats-summary>
     [AspireExport]
-    public static IResourceBuilder<TestVaultResource> AddTestVault(
+    public static IResourceBuilder<ITestVaultResource> AddTestVault(
         this IDistributedApplicationBuilder builder,
         string name)
     {
         return builder.AddResource(new TestVaultResource(name));
+    }
+
+    /// <summary>
+    /// Configures a Redis resource with the concrete vault resource as a parameter.
+    /// </summary>
+    /// <param name="builder">The Redis resource builder.</param>
+    /// <param name="resource">The parameter-only concrete vault resource.</param>
+    /// <returns>The Redis resource builder.</returns>
+    [AspireExport]
+    public static IResourceBuilder<TestRedisResource> WithConcreteVaultResource(
+        this IResourceBuilder<TestRedisResource> builder,
+        IResourceBuilder<TestVaultResource> resource)
+    {
+        return builder;
     }
 
     /// <summary>

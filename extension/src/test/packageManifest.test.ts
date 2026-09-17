@@ -10,6 +10,8 @@ type ManifestMenuItem = {
 
 type ManifestCommand = {
     command?: string;
+    title?: string;
+    category?: string;
     icon?: string;
 };
 
@@ -39,11 +41,13 @@ type ExtensionManifest = {
         viewsWelcome?: Array<{ view?: string; contents?: string; when?: string }>;
         menus?: {
             commandPalette?: ManifestMenuItem[];
+            'editor/title/run'?: ManifestMenuItem[];
             'explorer/context'?: ManifestMenuItem[];
             'view/title'?: ManifestMenuItem[];
             'view/item/context'?: ManifestMenuItem[];
         };
         debuggers?: DebuggerContribution[];
+        walkthroughs?: Array<{ steps?: Array<{ id?: string; completionEvents?: string[] }> }>;
     };
 };
 
@@ -94,10 +98,12 @@ suite('extension/package.json', () => {
         const runAppHost = contextMenus.find(item => item.command === 'aspire-vscode.runAppHost');
         const debugAppHost = contextMenus.find(item => item.command === 'aspire-vscode.debugAppHost');
 
+        // The idle workspace AppHost context value carries the actions its CLI supports as
+        // `:can*` suffixes, so run and debug match the shape rather than the bare string.
         assertContains(runAppHost?.when, "view == aspire-vscode.appHosts");
-        assertContains(runAppHost?.when, 'viewItem == workspaceAppHost');
+        assertContains(runAppHost?.when, 'viewItem =~ /^workspaceAppHost(:[A-Za-z]+)*$/');
         assertContains(debugAppHost?.when, "view == aspire-vscode.appHosts");
-        assertContains(debugAppHost?.when, 'viewItem == workspaceAppHost');
+        assertContains(debugAppHost?.when, 'viewItem =~ /^workspaceAppHost(:[A-Za-z]+)*$/');
     });
 
     test('resource command context action targets apphosts view', () => {
@@ -154,6 +160,107 @@ suite('extension/package.json', () => {
         assert.strictEqual(openDashboardToSide?.when, '!aspire.noRunningAppHosts');
     });
 
+    test('Create with Aspire is pane-only while new and init remain in the command palette', () => {
+        const manifest = readManifest();
+        const hiddenFromPalette = new Set((manifest.contributes.menus?.commandPalette ?? [])
+            .filter(item => item.when === 'false')
+            .map(item => item.command));
+
+        assert.ok(hiddenFromPalette.has('aspire-vscode.createWithAspire'));
+        assert.ok(!hiddenFromPalette.has('aspire-vscode.new'));
+        assert.ok(!hiddenFromPalette.has('aspire-vscode.init'));
+    });
+
+    test('Explorer and editor-title AppHost actions use distinct contributed commands', () => {
+        const manifest = readManifest();
+        const appHostCommands = (manifest.contributes.commands ?? []).filter(command =>
+            command.command === 'aspire-vscode.runAppHostCommand' ||
+            command.command === 'aspire-vscode.debugAppHostCommand' ||
+            command.command === 'aspire-vscode.runAppHostFromExplorer' ||
+            command.command === 'aspire-vscode.debugAppHostFromExplorer' ||
+            command.command === 'aspire-vscode.runAppHostFromEditorCommand' ||
+            command.command === 'aspire-vscode.debugAppHostFromEditorCommand');
+        const explorerMenus = manifest.contributes.menus?.['explorer/context'] ?? [];
+        const editorRunMenus = manifest.contributes.menus?.['editor/title/run'] ?? [];
+        const hiddenFromPalette = (manifest.contributes.menus?.commandPalette ?? [])
+            .filter(item => item.when === 'false')
+            .map(item => item.command);
+
+        assert.deepStrictEqual(appHostCommands, [
+            {
+                command: 'aspire-vscode.runAppHostCommand',
+                title: '%command.runAppHost%',
+                category: 'Aspire',
+                icon: '$(run-all)',
+            },
+            {
+                command: 'aspire-vscode.debugAppHostCommand',
+                title: '%command.debugAppHost%',
+                category: 'Aspire',
+                icon: '$(debug-all)',
+            },
+            {
+                command: 'aspire-vscode.runAppHostFromExplorer',
+                title: '%command.runAppHost%',
+                category: 'Aspire',
+                icon: '$(run-all)',
+            },
+            {
+                command: 'aspire-vscode.debugAppHostFromExplorer',
+                title: '%command.debugAppHost%',
+                category: 'Aspire',
+                icon: '$(debug-all)',
+            },
+            {
+                command: 'aspire-vscode.runAppHostFromEditorCommand',
+                title: '%command.runAppHost%',
+                category: 'Aspire',
+                icon: '$(run-all)',
+            },
+            {
+                command: 'aspire-vscode.debugAppHostFromEditorCommand',
+                title: '%command.debugAppHost%',
+                category: 'Aspire',
+                icon: '$(debug-all)',
+            },
+        ]);
+        assert.deepStrictEqual(
+            explorerMenus.map(item => item.command),
+            ['aspire-vscode.runAppHostFromExplorer', 'aspire-vscode.debugAppHostFromExplorer']);
+        assert.deepStrictEqual(editorRunMenus, [
+            {
+                command: 'aspire-vscode.runAppHostFromEditorCommand',
+                when: 'aspire.fileIsAppHost || (aspire.workspaceHasAppHost && aspire.editorSupportsRunDebug)',
+                group: 'navigation@-4',
+            },
+            {
+                command: 'aspire-vscode.debugAppHostFromEditorCommand',
+                when: '(aspire.fileIsAppHost || aspire.workspaceHasAppHost) && aspire.editorSupportsRunDebug',
+                group: 'navigation@-3',
+            },
+        ]);
+        assert.ok(hiddenFromPalette.includes('aspire-vscode.runAppHostFromExplorer'));
+        assert.ok(hiddenFromPalette.includes('aspire-vscode.debugAppHostFromExplorer'));
+        assert.ok(hiddenFromPalette.includes('aspire-vscode.runAppHostFromEditorCommand'));
+        assert.ok(hiddenFromPalette.includes('aspire-vscode.debugAppHostFromEditorCommand'));
+    });
+
+    test('run AppHost walkthrough completes from Explorer and editor-title commands', () => {
+        const manifest = readManifest();
+        const runAppStep = (manifest.contributes.walkthroughs ?? [])
+            .flatMap(walkthrough => walkthrough.steps ?? [])
+            .find(step => step.id === 'aspire-vscode.getStarted.runApp');
+
+        assert.deepStrictEqual(runAppStep?.completionEvents, [
+            'onCommand:aspire-vscode.runAppHostCommand',
+            'onCommand:aspire-vscode.debugAppHostCommand',
+            'onCommand:aspire-vscode.runAppHostFromExplorer',
+            'onCommand:aspire-vscode.debugAppHostFromExplorer',
+            'onCommand:aspire-vscode.runAppHostFromEditorCommand',
+            'onCommand:aspire-vscode.debugAppHostFromEditorCommand',
+        ]);
+    });
+
     test('Node module AppHost files activate the extension', () => {
         const manifest = readManifest();
         const activationEvents = manifest.activationEvents ?? [];
@@ -166,6 +273,29 @@ suite('extension/package.json', () => {
         assert.ok(activationEvents.includes('workspaceContains:**/apphost.cjs'));
     });
 
+    test('Rust AppHost files activate the extension', () => {
+        const manifest = readManifest();
+        const activationEvents = manifest.activationEvents ?? [];
+
+        assert.ok(activationEvents.includes('workspaceContains:**/apphost.rs'));
+    });
+
+    // A Java-only workspace contains no project file the other activation events match: no .csproj,
+    // and `.aspire/` only exists once a restore has already run. Without an explicit Java event the
+    // extension never activates on a fresh clone, so the AppHost never appears in the Aspire view
+    // and none of the editor features register. Both casings are listed because `workspaceContains`
+    // globs are case-sensitive on Linux and macOS, and Java ties the file name to the class name:
+    // `aspire init` writes `AppHost.java` while the lowercase spelling matches the other languages.
+    test('Java AppHost files activate the extension', () => {
+        const manifest = readManifest();
+        const activationEvents = manifest.activationEvents ?? [];
+
+        assert.ok(activationEvents.includes('workspaceContains:**/AppHost.java'), 'aspire init writes AppHost.java');
+        assert.ok(activationEvents.includes('workspaceContains:**/apphost.java'), 'lowercase matches the other languages');
+        // Maven and Gradle AppHosts nest the source under the standard layout rather than the root.
+        assert.ok(activationEvents.includes('workspaceContains:**/src/main/java/AppHost.java'));
+    });
+
     test('FSharp and Visual Basic AppHost projects activate the extension', () => {
         const manifest = readManifest();
         const activationEvents = manifest.activationEvents ?? [];
@@ -174,12 +304,28 @@ suite('extension/package.json', () => {
         assert.ok(activationEvents.includes('workspaceContains:**/*.vbproj'));
     });
 
-    test('Explorer AppHost commands include Node module filenames', () => {
+    test('Explorer AppHost commands include guest AppHost filenames', () => {
         const manifest = readManifest();
         const explorerMenus = manifest.contributes.menus?.['explorer/context'] ?? [];
-        const expectedAppHostFiles = ['apphost.ts', 'apphost.mts', 'apphost.cts', 'apphost.js', 'apphost.mjs', 'apphost.cjs'];
+        const expectedExplorerCommands = [
+            'aspire-vscode.runAppHostFromExplorer',
+            'aspire-vscode.debugAppHostFromExplorer',
+        ];
+        const expectedAppHostFiles = ['apphost.ts', 'apphost.mts', 'apphost.cts', 'apphost.js', 'apphost.mjs', 'apphost.cjs', 'apphost.rs', 'apphost.java'];
 
-        for (const commandName of ['aspire-vscode.runAppHostCommand', 'aspire-vscode.debugAppHostCommand']) {
+        assert.deepStrictEqual(explorerMenus.map(item => item.command), expectedExplorerCommands);
+        assert.deepStrictEqual(
+            (manifest.contributes.commands ?? [])
+                .map(item => item.command)
+                .filter(command => command?.endsWith('FromExplorer')),
+            expectedExplorerCommands);
+        assert.deepStrictEqual(
+            (manifest.contributes.menus?.commandPalette ?? [])
+                .filter(item => item.when === 'false' && item.command?.endsWith('FromExplorer'))
+                .map(item => item.command),
+            expectedExplorerCommands);
+
+        for (const commandName of expectedExplorerCommands) {
             const menuItem = explorerMenus.find(item => item.command === commandName);
             assert.ok(menuItem?.when, `Expected ${commandName} to have a when clause`);
 
@@ -217,6 +363,28 @@ suite('extension/package.json', () => {
         assert.strictEqual(argsProperty.type, 'array');
         assert.strictEqual(argsProperty.items?.type, 'string');
         assert.strictEqual(argsProperty.description, '%extension.debug.args%');
+    });
+
+    test('CodeLens command handlers are contributed and hidden from the command palette', () => {
+        // Commands registered by the CodeLens module are invoked from lenses, never typed by the user,
+        // so each registration needs a contributes.commands entry (otherwise the title is
+        // unlocalized/undeclared) plus a commandPalette "when": "false" entry.
+        const manifest = readManifest();
+        const registrationSource = fs.readFileSync(path.resolve(__dirname, '../../src/activation/registerCodeLensCommands.ts'), 'utf8');
+        const registeredCodeLensCommands = [...registrationSource.matchAll(
+            /registerInstrumentedCommand\(\s*(['"])(aspire-vscode\.[A-Za-z0-9]+)\1/g)]
+            .map(match => match[2]);
+
+        assert.ok(registeredCodeLensCommands.includes('aspire-vscode.codeLensRevealAppHost'), 'Expected codeLensRevealAppHost to be registered.');
+        assert.ok(registeredCodeLensCommands.includes('aspire-vscode.installDebuggerExtension'), 'Expected installDebuggerExtension to be registered.');
+
+        const contributedCommands = new Set((manifest.contributes.commands ?? []).map(item => item.command));
+        const hiddenFromPalette = new Set((manifest.contributes.menus?.commandPalette ?? [])
+            .filter(item => item.when === 'false')
+            .map(item => item.command));
+
+        assert.deepStrictEqual(registeredCodeLensCommands.filter(command => !contributedCommands.has(command)), []);
+        assert.deepStrictEqual(registeredCodeLensCommands.filter(command => !hiddenFromPalette.has(command)), []);
     });
 
     test('aspire launch configuration declares dashboard browser choices', () => {

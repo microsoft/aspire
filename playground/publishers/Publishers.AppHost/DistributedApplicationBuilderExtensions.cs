@@ -129,7 +129,7 @@ internal static class IDistributedApplicationBuilderExtensions
             var appName = multiInputResult.Canceled ? "default-app" : (multiInputResult.Data?["ApplicationName"]?.Value ?? "default-app");
             var appVersion = multiInputResult.Canceled ? "1.0.0" : (multiInputResult.Data?["ApplicationVersion"]?.Value ?? "1.0.0");
             var sslType = multiInputResult.Canceled ? "self-signed" : (multiInputResult.Data?["SSLCertificateType"]?.Value ?? "self-signed");
-            var certFiles = multiInputResult.Canceled ? null : multiInputResult.Data?["CertificateFile"]?.Files;
+            using var certFiles = multiInputResult.Canceled ? null : multiInputResult.Data?["CertificateFile"]?.GetFiles();
 
             if (certFiles is { Count: > 0 })
             {

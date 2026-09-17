@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -99,7 +100,9 @@ public class CertificatesCommandTests(ITestOutputHelper outputHelper)
             {
                 var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
-                return new CertificateService(toolRunner, interactionService, telemetry, hostEnvironment, TestEnvironment.CreateLinux());
+                var executionContext = sp.GetRequiredService<CliExecutionContext>();
+                var logger = sp.GetRequiredService<ILogger<CertificateService>>();
+                return new CertificateService(toolRunner, interactionService, telemetry, hostEnvironment, TestEnvironment.CreateLinux(), executionContext, logger);
             };
         });
         using var provider = services.BuildServiceProvider();

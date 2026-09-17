@@ -15,6 +15,10 @@ namespace Aspire.Dashboard.Components.Dialogs;
 
 public partial class FilterDialog : IAsyncDisposable
 {
+    // Cancels in-flight telemetry reads when the dialog closes. Reads now run against SQLite on the thread
+    // pool, so without this a closed dialog leaves a full-table scan running with nobody waiting on it.
+    private readonly CancellationTokenSource _disposeCts = new();
+    private long _fieldValuesUpdateVersion;
     private List<SelectViewModel<FilterCondition>> _filterConditions = null!;
     private List<SelectViewModel<FilterCondition>> _stringFilterConditions = null!;
     private List<SelectViewModel<FilterCondition>> _numericFilterConditions = null!;
@@ -24,13 +28,18 @@ public partial class FilterDialog : IAsyncDisposable
         new SelectViewModel<FilterCondition> { Id = condition, Name = FieldTelemetryFilter.ConditionToString(condition, FilterLoc) };
 
     [CascadingParameter]
-    public FluentDialog? Dialog { get; set; }
+    public IDialogInstance? Dialog { get; set; }
 
     [Parameter]
     public FilterDialogViewModel Content { get; set; } = default!;
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    [Inject]
+    public required ILogger<FilterDialog> Logger { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required IJSRuntime JS { get; init; }
@@ -41,10 +50,13 @@ public partial class FilterDialog : IAsyncDisposable
     private List<SelectViewModel<string>> _parameters = default!;
     private List<SelectViewModel<FieldValue>> _filteredValues = default!;
     private List<SelectViewModel<FieldValue>>? _allValues;
+    private bool _loadingPropertyKeys = true;
+    private bool _loadingFieldValues = true;
+    private SelectViewModel<FieldValue>? _selectedValue;
 
     public EditContext EditContext { get; private set; } = default!;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         _stringFilterConditions =
         [
@@ -80,26 +92,7 @@ public partial class FilterDialog : IAsyncDisposable
         EditContext = new EditContext(_formModel);
 
         _filteredValues = [];
-    }
-
-    protected override void OnParametersSet()
-    {
-        var knownFields = Content.KnownKeys.Select(p => new SelectViewModel<string> { Id = p, Name = FieldTelemetryFilter.ResolveFieldName(p) }).ToList();
-        var customFields = Content.PropertyKeys.Select(p => new SelectViewModel<string> { Id = p, Name = FieldTelemetryFilter.ResolveFieldName(p) }).ToList();
-
-        if (customFields.Count > 0)
-        {
-            _parameters =
-            [
-                .. knownFields,
-                new SelectViewModel<string> { Id = null, Name = "-" },
-                .. customFields
-            ];
-        }
-        else
-        {
-            _parameters = knownFields;
-        }
+        _parameters = CreateParameters([]);
 
         if (Content.Filter is { } filter)
         {
@@ -116,8 +109,58 @@ public partial class FilterDialog : IAsyncDisposable
             SetFormValue("");
         }
 
-        UpdateParameterFieldValues();
+        if (!await UpdateParameterFieldValuesAsync())
+        {
+            return;
+        }
         ValueChanged();
+
+        try
+        {
+            var propertyKeys = await Content.GetPropertyKeysAsync(_disposeCts.Token);
+
+            var selectedParameter = _formModel.Parameter?.Id;
+            _parameters = CreateParameters(propertyKeys);
+            _formModel.Parameter = _parameters.SingleOrDefault(parameter => parameter.Id == selectedParameter) ?? _parameters.FirstOrDefault();
+        }
+        catch (OperationCanceledException) when (_disposeCts.IsCancellationRequested)
+        {
+            // The dialog closed while the read was in flight.
+        }
+        catch (Exception ex)
+        {
+            // Custom property keys are additive to KnownKeys, so the dialog is still usable without them.
+            // Letting the exception escape OnInitializedAsync would tear down the circuit and take the whole
+            // dashboard tab with it for what is a recoverable read failure.
+            Logger.LogWarning(ex, "Error loading filter property keys.");
+        }
+        finally
+        {
+            // Property keys are read from the database on a background thread, so this can fault.
+            // Clear the flag in a finally, otherwise the parameter combobox stays disabled with a
+            // spinner for the lifetime of the dialog and the only recovery is reloading the page.
+            _loadingPropertyKeys = false;
+        }
+    }
+
+    private List<SelectViewModel<string>> CreateParameters(List<string> propertyKeys)
+    {
+        var knownFields = Content.KnownKeys.Select(p => new SelectViewModel<string> { Id = p, Name = FieldTelemetryFilter.ResolveFieldName(p) }).ToList();
+        var customFields = propertyKeys
+            .Append(Content.Filter is { Field: { } field } && !Content.KnownKeys.Contains(field, StringComparers.OtlpAttribute) ? field : null)
+            .OfType<string>()
+            .Distinct(StringComparers.OtlpAttribute)
+            .Select(propertyKey => new SelectViewModel<string> { Id = propertyKey, Name = FieldTelemetryFilter.ResolveFieldName(propertyKey) })
+            .ToList();
+
+        return customFields.Count > 0
+            ?
+            [
+                .. knownFields,
+                new SelectViewModel<string> { Id = null, Name = "-" },
+                .. customFields
+            ]
+            : knownFields;
     }
 
     private void UpdateSelectedParameter()
@@ -144,7 +187,7 @@ public partial class FilterDialog : IAsyncDisposable
         if (_formModel.ValueIsNumeric)
         {
             _formModel.Value = null;
-            _formModel.NumericValue = double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var numericValue) && double.IsFinite(numericValue)
+            _formModel.NumericValue = int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numericValue)
                 ? numericValue
                 : null;
         }
@@ -155,29 +198,77 @@ public partial class FilterDialog : IAsyncDisposable
         }
     }
 
-    private void UpdateParameterFieldValues()
+    private async Task<bool> UpdateParameterFieldValuesAsync()
     {
+        var updateVersion = Interlocked.Increment(ref _fieldValuesUpdateVersion);
+
         if (_formModel.ValueIsNumeric || _formModel.ValueIsDate)
         {
             _allValues = null;
             _filteredValues = [];
-            return;
+            _loadingFieldValues = false;
+            return true;
         }
 
         if (_formModel.Parameter?.Id is { } parameterName)
         {
-            var fieldValues = Content.GetFieldValues(parameterName);
-            _allValues = fieldValues
-                .Select(kvp => new FieldValue { Value = kvp.Key, Count = kvp.Value })
-                .OrderByDescending(v => v.Count)
-                .ThenBy(v => v.Value, StringComparers.OtlpFieldValue)
-                .Select(v => new SelectViewModel<FieldValue> { Id = v, Name = v.Value })
-                .ToList();
+            _loadingFieldValues = true;
+            _allValues = null;
+            _filteredValues = [];
+
+            try
+            {
+                var fieldValues = await Content.GetFieldValuesAsync(parameterName, _disposeCts.Token);
+                if (updateVersion != Volatile.Read(ref _fieldValuesUpdateVersion))
+                {
+                    return false;
+                }
+
+                _allValues = fieldValues
+                    .Select(kvp => new FieldValue { Value = kvp.Key, Count = kvp.Value })
+                    .OrderByDescending(v => v.Count)
+                    .ThenBy(v => v.Value, StringComparers.OtlpFieldValue)
+                    .Select(v => new SelectViewModel<FieldValue> { Id = v, Name = v.Value })
+                    .ToList();
+
+                _selectedValue = _formModel.Value is { Length: > 0 } value
+                    ? _allValues.FirstOrDefault(vm => vm.Name == value) ?? new SelectViewModel<FieldValue>
+                    {
+                        Id = new FieldValue { Value = value, Count = 0 },
+                        Name = value
+                    }
+                    : null;
+                _loadingFieldValues = false;
+            }
+            catch (OperationCanceledException) when (_disposeCts.IsCancellationRequested)
+            {
+                // The dialog closed while the read was in flight.
+                return false;
+            }
+            catch (Exception ex)
+            {
+                // Field values only drive the value autocomplete, so the user can still type a value. Failing
+                // the whole dialog for a recoverable read error would be a worse outcome.
+                Logger.LogWarning(ex, "Error loading filter values for field '{FieldName}'.", parameterName);
+
+                // Only the newest in-flight load owns the loading flag. A stale load clearing it here
+                // would hide the spinner while a newer load is still running.
+                if (updateVersion != Volatile.Read(ref _fieldValuesUpdateVersion))
+                {
+                    return false;
+                }
+
+                _loadingFieldValues = false;
+            }
         }
         else
         {
             _allValues = null;
+            _loadingFieldValues = false;
+            _selectedValue = null;
         }
+
+        return true;
     }
 
     private async Task ParameterChangedAsync()
@@ -185,7 +276,10 @@ public partial class FilterDialog : IAsyncDisposable
         UpdateSelectedParameter();
         _formModel.Condition = GetDefaultCondition();
         SetFormValue("");
-        UpdateParameterFieldValues();
+        if (!await UpdateParameterFieldValuesAsync())
+        {
+            return;
+        }
 
         StateHasChanged();
 
@@ -230,6 +324,35 @@ public partial class FilterDialog : IAsyncDisposable
         }
     }
 
+    private void UpdateValueState()
+    {
+        // Fluent copies the selected option's text back into the input on blur. Keep the selection
+        // synchronized with typed text so losing focus doesn't restore a stale value.
+        // Reuse an exact match to retain its metadata, or represent custom text (including an empty
+        // value) with a standalone option that isn't added to the suggestions.
+        if (_selectedValue?.Name != _formModel.Value)
+        {
+            var value = _formModel.Value ?? string.Empty;
+            _selectedValue = _allValues?.FirstOrDefault(vm => vm.Name == value) ?? new SelectViewModel<FieldValue>
+            {
+                Id = new FieldValue { Value = value, Count = 0 },
+                Name = value
+            };
+        }
+
+        EditContext.NotifyFieldChanged(new FieldIdentifier(_formModel, nameof(_formModel.Value)));
+        ValueChanged();
+    }
+
+    private void SelectedValueChanged()
+    {
+        if (_selectedValue is not null)
+        {
+            _formModel.Value = _selectedValue.Name;
+        }
+        UpdateValueState();
+    }
+
     private void Cancel()
     {
         Dialog!.CancelAsync();
@@ -255,7 +378,7 @@ public partial class FilterDialog : IAsyncDisposable
         string value;
         if (_formModel.ValueIsNumeric)
         {
-            value = _formModel.NumericValue!.Value.ToString("R", CultureInfo.InvariantCulture);
+            value = _formModel.NumericValue!.Value.ToString(CultureInfo.InvariantCulture);
         }
         else
         {
@@ -310,6 +433,8 @@ public partial class FilterDialog : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        await _disposeCts.CancelAsync();
+        _disposeCts.Dispose();
         await JSInteropHelpers.SafeDisposeAsync(_jsModule);
     }
 

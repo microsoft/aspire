@@ -382,7 +382,7 @@ public class DotNetTemplateFactoryTests
         public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
-        public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+        public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
         public Task<bool> PromptConfirmAsync(string prompt, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
@@ -432,6 +432,9 @@ public class DotNetTemplateFactoryTests
         public Task<int> BuildAsync(FileInfo projectFile, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
+        public Task<int> BuildAsync(FileInfo projectFile, bool noRestore, IDictionary<string, string>? env, ProcessInvocationOptions options, CancellationToken cancellationToken)
+            => throw new NotImplementedException();
+
         public Task<int> AddPackageAsync(FileInfo projectFile, string packageName, string version, string? packageSourceUrl, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
@@ -474,6 +477,8 @@ public class DotNetTemplateFactoryTests
                 EnvironmentVariables = new Dictionary<string, string>(),
                 Success = true
             });
+
+        public string? ExportDevCertificatePem(CancellationToken cancellationToken) => null;
     }
 
     private sealed class TestNewCommandPrompter : INewCommandPrompter, ITemplateVersionPrompter

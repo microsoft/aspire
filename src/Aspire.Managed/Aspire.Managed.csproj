@@ -19,8 +19,9 @@
     <!-- Don't generate web.config or include IIS hosting -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
 
-    <!-- Self-contained single-file publish settings (applied only during publish via Bundle.proj) -->
+    <!-- CreateLayout copies only the managed executable, so native dependencies must be embedded in the single file. -->
     <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 
     <!-- Locate the SDK's trustedroots directory for NuGet signature verification certificates -->
     <_SdkTrustedRootsDir>$([System.IO.Path]::Combine($([System.IO.Path]::GetDirectoryName($(BundledRuntimeIdentifierGraphFile))), 'trustedroots'))</_SdkTrustedRootsDir>
@@ -44,6 +45,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Preview package warning suppressions do not flow through the Aspire.Dashboard project reference.
+      Exclude compile/runtime assets so this direct reference doesn't displace the Dashboard's runtime asset
+      from the single-file publish. -->
+    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" PrivateAssets="all" ExcludeAssets="compile;runtime" NoWarn="NU3018;NU3027;NU3042" Condition="'$(MicrosoftFluentUIAspNetCoreComponentsIsPreview)' == 'true'" />
     <PackageReference Include="NuGet.Commands" />
     <PackageReference Include="NuGet.Protocol" />
     <PackageReference Include="NuGet.Resolver" />
@@ -53,8 +58,10 @@
   <ItemGroup>
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Shared\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Shared\BundleVersionLease.cs" />
+    <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Shared\HeldFileLease.cs" />
     <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="NuGet\IntegrationPackageProbeManifest.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Shared\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)ParentProcessWatchdog.cs" Link="Shared\ParentProcessWatchdog.cs" />
     <Compile Include="$(SharedDir)ProcessStartTimeHelper.cs" Link="Shared\ProcessStartTimeHelper.cs" />
     <Compile Include="$(SharedDir)ParentProcessLivenessMonitor.cs" Link="Shared\ParentProcessLivenessMonitor.cs" />
   </ItemGroup>
@@ -74,6 +81,11 @@
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(RelativePath)').EndsWith('.runtimeconfig.json'))" />
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(RelativePath)').EndsWith('.staticwebassets.endpoints.json'))" />
     </ItemGroup>
+  </Target>
+
+  <Target Name="ValidateSingleFilePublishConfiguration" BeforeTargets="PrepareForPublish">
+    <Error Condition="'$(PublishSingleFile)' == 'true' and '$(IncludeNativeLibrariesForSelfExtract)' != 'true'"
+           Text="Aspire.Managed single-file publishing must embed native libraries because CreateLayout copies only the managed executable." />
   </Target>
 
 </Project>

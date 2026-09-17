@@ -9,9 +9,9 @@
     {
         <div class="metrics-filters-section">
             <h5>@Loc[nameof(ControlsStrings.ChartContainerFiltersHeader)]</h5>
-            <FluentDataGrid Items="@Queryable.AsQueryable(DimensionFilters)"
+            <FluentDataGrid Class="aspire-spaced-grid" Items="@Queryable.AsQueryable(DimensionFilters)"
                             GridTemplateColumns="200px 1fr auto"
-                            GenerateHeader="GenerateHeaderOption.None"
+                            GenerateHeader="DataGridGeneratedHeaderType.None"
                             RowSize="DataGridRowSize.Medium">
                 <ChildContent>
                     <AspirePropertyColumn Tooltip="true" TooltipText="@(c => c.Name)" Property="@(c => c.Name)"/>
@@ -25,15 +25,15 @@
             </FluentDataGrid>
         </div>
     }
-    @if (Instrument.Summary.Type == OtlpInstrumentType.Histogram)
+    @if (InstrumentType == OtlpInstrumentType.Histogram)
     {
         <div class="metrics-filters-section">
             <h5>@Loc[nameof(ControlsStrings.ChartContainerOptionsHeader)]</h5>
             <div>
                 <FluentSwitch Class="table-switch"
                               Label="@Loc[nameof(ControlsStrings.ChartContainerShowCountLabel)]"
-                              @bind-Value="@ShowCounts"
-                              @bind-Value:after="ShowCountChanged"/>
+                              Value="@ShowCount"
+                              ValueChanged="@OnShowCountChangedAsync"/>
             </div>
         </div>
     }

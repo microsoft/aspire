@@ -288,6 +288,7 @@ public static class ResourceExtensions
             executionContext,
             logger,
             cacheAnnotationCallbackResult: false,
+            peekCachedResultOnly: false,
             cancellationToken).ConfigureAwait(false);
         args.InsertRange(0, launchToolArgs);
 
@@ -299,6 +300,7 @@ public static class ResourceExtensions
         DistributedApplicationExecutionContext executionContext,
         ILogger logger,
         bool cacheAnnotationCallbackResult,
+        bool peekCachedResultOnly,
         CancellationToken cancellationToken)
     {
         // Launch tool arguments run against an isolated list and do not apply to containers, matching
@@ -307,6 +309,15 @@ public static class ResourceExtensions
             !resource.TryGetLastAnnotation<LaunchToolArgsCallbackAnnotation>(out var annotation))
         {
             return [];
+        }
+
+        if (peekCachedResultOnly)
+        {
+            // Read-only discovery: never invoke the callback. Only surface a result DCP has already resolved
+            // and cached; skip anything still in flight, faulted, or canceled.
+            return annotation.AsCallbackAnnotation().TryGetCachedResult(out var cachedTask) && cachedTask!.IsCompletedSuccessfully
+                ? cachedTask.Result
+                : [];
         }
 
         var context = new CommandLineArgsCallbackContext([], resource, cancellationToken)
@@ -1630,52 +1641,83 @@ public static class ResourceExtensions
         // Gather environment variable values
         if (resource.TryGetEnvironmentVariables(out var envAnnotations))
         {
-            var envVars = new Dictionary<string, object>();
-            var context = new EnvironmentCallbackContext(executionContext, resource, envVars, cancellationToken: cancellationToken);
-            
-            if (options.CacheAnnotationCallbackResults)
+            if (options.PeekCachedCallbackResultsOnly)
             {
+                // Read-only discovery: never invoke a callback. Only harvest values DCP has already resolved
+                // and cached via EvaluateOnceAsync. Skip in-flight/faulted/canceled tasks so we never block
+                // describe on an unresolved value nor observe a poisoned task.
                 foreach (var ann in envAnnotations)
                 {
-                    var resultingVars = await ann.AsCallbackAnnotation().EvaluateOnceAsync(context).ConfigureAwait(false);
-                    rawValues.AddRange(resultingVars.Values);
+                    if (ann.AsCallbackAnnotation().TryGetCachedResult(out var cachedTask) &&
+                        cachedTask!.IsCompletedSuccessfully)
+                    {
+                        rawValues.AddRange(cachedTask.Result.Values);
+                    }
                 }
-                
             }
             else
             {
-                foreach (var ann in envAnnotations)
+                var envVars = new Dictionary<string, object>();
+                var context = new EnvironmentCallbackContext(executionContext, resource, envVars, cancellationToken: cancellationToken);
+
+                if (options.CacheAnnotationCallbackResults)
                 {
-                    await ann.Callback(context).ConfigureAwait(false);
+                    foreach (var ann in envAnnotations)
+                    {
+                        var resultingVars = await ann.AsCallbackAnnotation().EvaluateOnceAsync(context).ConfigureAwait(false);
+                        rawValues.AddRange(resultingVars.Values);
+                    }
+
                 }
-                rawValues.AddRange(envVars.Values);
+                else
+                {
+                    foreach (var ann in envAnnotations)
+                    {
+                        await ann.Callback(context).ConfigureAwait(false);
+                    }
+                    rawValues.AddRange(envVars.Values);
+                }
             }
         }
 
         // Gather command-line argument values
         if (resource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var argAnnotations))
         {
-            var args = new List<object>();
-            var context = new CommandLineArgsCallbackContext(args, resource, cancellationToken)
-            {
-                ExecutionContext = executionContext
-            };
-
-            if (options.CacheAnnotationCallbackResults)
+            if (options.PeekCachedCallbackResultsOnly)
             {
                 foreach (var ann in argAnnotations)
                 {
-                    var resultingArgs = await ann.AsCallbackAnnotation().EvaluateOnceAsync(context).ConfigureAwait(false);
-                    rawValues.AddRange(resultingArgs);
+                    if (ann.AsCallbackAnnotation().TryGetCachedResult(out var cachedTask) &&
+                        cachedTask!.IsCompletedSuccessfully)
+                    {
+                        rawValues.AddRange(cachedTask.Result);
+                    }
                 }
             }
             else
             {
-                foreach (var ann in argAnnotations)
+                var args = new List<object>();
+                var context = new CommandLineArgsCallbackContext(args, resource, cancellationToken)
                 {
-                    await ann.Callback(context).ConfigureAwait(false);
+                    ExecutionContext = executionContext
+                };
+
+                if (options.CacheAnnotationCallbackResults)
+                {
+                    foreach (var ann in argAnnotations)
+                    {
+                        var resultingArgs = await ann.AsCallbackAnnotation().EvaluateOnceAsync(context).ConfigureAwait(false);
+                        rawValues.AddRange(resultingArgs);
+                    }
                 }
-                rawValues.AddRange(args);
+                else
+                {
+                    foreach (var ann in argAnnotations)
+                    {
+                        await ann.Callback(context).ConfigureAwait(false);
+                    }
+                    rawValues.AddRange(args);
+                }
             }
         }
 
@@ -1684,6 +1726,7 @@ public static class ResourceExtensions
             executionContext,
             NullLogger.Instance,
             options.CacheAnnotationCallbackResults,
+            options.PeekCachedCallbackResultsOnly,
             cancellationToken).ConfigureAwait(false);
         rawValues.AddRange(launchToolArgs);
 

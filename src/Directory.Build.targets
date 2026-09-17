@@ -14,6 +14,29 @@
     <MakeDir Directories="$(MSBuildProjectDirectory)/api" Condition="!Exists('$(MSBuildProjectDirectory)/api')" />
   </Target>
 
+  <!--
+    Hex1b's win-x64/win-arm64 native assets carry hex1bpty.exe, a ~5 MB PTY host that Hex1b launches
+    only when *it* owns the pseudo-terminal for a child process. Nothing we ship takes that path: DCP
+    creates and owns every PTY we surface, and Aspire.TerminalHost just proxies the byte stream DCP is
+    already producing (see src/Aspire.TerminalHost/TerminalReplica.cs). So the helper is dead weight in
+    every Windows CLI archive, and it is also a second executable that downstream stores have to
+    account for — winget runs executable and malware checks against every binary in the archive, which
+    turned it into submission friction on https://github.com/microsoft/winget-pkgs/pull/421219.
+
+    Unix is unaffected: there the package's native asset is libhex1binterop.{so,dylib}, the
+    termios/ioctl shim the TUI does need, and it keeps flowing through.
+
+    Deliberately scoped to src/. Test projects drive real terminals through Hex1b.Automation, which
+    genuinely needs the PTY host, and this file does not apply to them.
+  -->
+  <Target Name="RemoveUnusedHex1bPtyHostFromPublish"
+          AfterTargets="ComputeResolvedFilesToPublishList"
+          Condition="'$(PublishHex1bPtyHost)' != 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish->WithMetadataValue('Filename', 'hex1bpty'))" />
+    </ItemGroup>
+  </Target>
+
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)../'))" />
 
   <ItemGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').StartsWith('Aspire.Hosting'))

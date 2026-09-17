@@ -43,9 +43,12 @@ internal static class CliE2EAutomatorHelpers
     /// Builds the shell command that launches <c>aspire run</c> with an explicit AppHost startup budget so cold
     /// daily-feed restores don't trip the CLI's default 120s startup timeout. See <see cref="AspireRunStartupBudgetSeconds"/>.
     /// </summary>
-    internal static string GetAspireRunCommand()
+    /// <param name="additionalArguments">Extra arguments appended after <c>aspire run</c>, for example <c>--apphost &lt;path&gt;</c>.</param>
+    internal static string GetAspireRunCommand(string? additionalArguments = null)
     {
-        return $"ASPIRE_CLI_START_TIMEOUT={AspireRunStartupBudgetSeconds.ToString(CultureInfo.InvariantCulture)} aspire run";
+        var command = $"ASPIRE_CLI_START_TIMEOUT={AspireRunStartupBudgetSeconds.ToString(CultureInfo.InvariantCulture)} aspire run";
+
+        return string.IsNullOrEmpty(additionalArguments) ? command : $"{command} {additionalArguments}";
     }
 
     /// <summary>

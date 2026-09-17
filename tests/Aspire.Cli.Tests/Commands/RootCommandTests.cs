@@ -136,6 +136,47 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedOutput, output.ToString().Trim());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task IdentityOverrideNotice_UsesDedicatedNoticePolicyInsteadOfGenericOverrideState(bool noticeRequired)
+    {
+        // Both rows deliberately keep IdentityOverridden=true. Installed sidecar identity needs
+        // the same non-source-tree behavior as explicit emulation, but only the latter should warn.
+        // This display-path test catches a tempting regression where startup UI is changed back to
+        // checking the broader IdentityOverridden property.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var errorWriter = new StringWriter();
+        var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = true };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DisableAnsi = true;
+            options.ErrorTextWriter = errorWriter;
+            options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(
+                identityChannel: "staging",
+                identityVersion: "13.5.0",
+                identityOverridden: true,
+                identityOverrideNoticeRequired: noticeRequired);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, []);
+
+        var errorOutput = errorWriter.ToString();
+        if (noticeRequired)
+        {
+            Assert.Contains(
+                "Aspire CLI is emulating identity 'staging' version '13.5.0'",
+                errorOutput,
+                StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.Equal(string.Empty, errorOutput);
+        }
+    }
+
     [Fact]
     public async Task RootCommandWithHelpArgumentReturnsZero()
     {
@@ -186,6 +227,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("--capture-profile", help, StringComparison.Ordinal);
         Assert.DoesNotContain("--capture-profile-output", help, StringComparison.Ordinal);
         Assert.DoesNotContain("--capture-profile-delay", help, StringComparison.Ordinal);
+        Assert.DoesNotContain("--log-file", help, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -203,6 +245,28 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("profile.zip", result.GetValue(RootCommand.CaptureProfileOutputOption)?.Name);
         Assert.Equal(1, result.GetValue(RootCommand.CaptureProfileDelayOption));
         Assert.DoesNotContain("--capture-profile", result.UnmatchedTokens);
+    }
+
+    [Fact]
+    public void InternalLogFileOption_IsConsumedOnSubcommands()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+        [
+            "run",
+            "--log-file", "child.log",
+            "--launch-profile=E2E",
+            "--",
+            "--from-profile", "value"
+        ]);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal("E2E", result.GetValue(AppHostLauncher.s_launchProfileOption));
+        Assert.Equal(["--from-profile", "value"], result.UnmatchedTokens);
     }
 
     [Fact]

@@ -542,7 +542,13 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             () => GetEndpointUrlAsync(dashboardResource, KnownEndpointNames.OtlpHttpEndpointName, cancellationToken),
             options.OtlpHttpEndpointUrl).ConfigureAwait(false);
 
-        LoggingHelpers.WriteDashboardSummary(distributedApplicationLogger, dashboardUrl, otlpGrpcUrl, otlpHttpUrl, browserToken, isContainer: false);
+        // Withholding the token drops the login URL from the summary and the separate "Login to the dashboard at"
+        // line, leaving the dashboard and OTLP endpoints. Testing sets this because its token is a live
+        // credential for a dashboard the test already has a supported accessor for, and the AppHost logger in
+        // that mode is test and CI output.
+        var summaryToken = options.SuppressLoginUrlInStartupSummary ? null : browserToken;
+
+        LoggingHelpers.WriteDashboardSummary(distributedApplicationLogger, dashboardUrl, otlpGrpcUrl, otlpHttpUrl, summaryToken, isContainer: false);
     }
 
     private async ValueTask<string?> ResolveUrlAsync(Func<ValueTask<string?>> resolveCallback, string? configuredUrl)
@@ -601,6 +607,20 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         context.EnvironmentVariables[KnownAspNetCoreConfigNames.Environment] = environment;
         context.EnvironmentVariables[DashboardConfigNames.ResourceServiceUrlName.EnvVarName] = resourceServiceUrl;
+        SetEnvironmentVariableWithFallback(
+            context,
+            DashboardConfigNames.DashboardApplicationName,
+            "AppHost:DashboardApplicationName",
+            transform: DashboardService.GetDashboardApplicationName);
+        SetEnvironmentVariableWithFallback(
+            context,
+            DashboardConfigNames.DashboardDataDirectoryName,
+            DashboardConfigNames.DashboardDataDirectoryName.ConfigKey);
+        SetEnvironmentVariableWithFallback(
+            context,
+            DashboardConfigNames.DashboardPersistenceModeName,
+            "Aspire:Dashboard:PersistenceMode",
+            defaultValue: "Run");
 
         PopulateDashboardUrls(context);
 
@@ -711,7 +731,34 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         {
             context.EnvironmentVariables[DashboardConfigNames.DebugSessionTelemetryOptOutName.EnvVarName] = optOutValue;
         }
+    }
 
+    private void SetEnvironmentVariableWithFallback(
+        EnvironmentCallbackContext context,
+        ConfigName configName,
+        string fallbackConfigurationKey,
+        string? defaultValue = null,
+        Func<string, string>? transform = null)
+    {
+        if (!string.IsNullOrWhiteSpace(configuration[configName.EnvVarName]))
+        {
+            return;
+        }
+
+        var value = configuration[fallbackConfigurationKey];
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            value = defaultValue;
+        }
+        else if (transform is not null)
+        {
+            value = transform(value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            context.EnvironmentVariables[configName.EnvVarName] = value;
+        }
     }
 
     private class EndpointGenerationContext

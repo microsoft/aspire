@@ -185,18 +185,71 @@ internal sealed class KubernetesPublishingContext(
 
     private async Task AppendResourceContextToHelmValuesAsync(IResource resource, KubernetesResource resourceContext)
     {
-        await AddValuesToHelmSectionAsync(resource, resourceContext.Parameters, HelmExtensions.ParametersKey).ConfigureAwait(false);
+        var parameterItems = MergeHelmValueMappings(
+            resource,
+            HelmExtensions.ParametersKey,
+            (resourceContext.Parameters, "condition parameter"));
 
-        // Merge AdditionalConfigValues (e.g., branch parameters from if/else conditionals)
-        // into a combined dictionary for the config section of values.yaml.
-        var configItems = new Dictionary<string, KubernetesResource.HelmValue>(resourceContext.EnvironmentVariables);
-        foreach (var kvp in resourceContext.AdditionalConfigValues)
+        // Embedded parameters need values.yaml entries for their Helm references, but they must
+        // not become additional environment variables in the generated ConfigMap or Secret.
+        var configItems = MergeHelmValueMappings(
+            resource,
+            HelmExtensions.ConfigKey,
+            (resourceContext.EnvironmentVariables, "environment value"),
+            (resourceContext.AdditionalConfigValues, "embedded parameter"));
+        var secretItems = MergeHelmValueMappings(
+            resource,
+            HelmExtensions.SecretsKey,
+            (resourceContext.Secrets, "environment value"),
+            (resourceContext.AdditionalSecretValues, "embedded parameter"));
+
+        await AddValuesToHelmSectionAsync(resource, parameterItems, HelmExtensions.ParametersKey).ConfigureAwait(false);
+        await AddValuesToHelmSectionAsync(resource, configItems, HelmExtensions.ConfigKey).ConfigureAwait(false);
+        await AddValuesToHelmSectionAsync(resource, secretItems, HelmExtensions.SecretsKey).ConfigureAwait(false);
+    }
+
+    private static Dictionary<string, KubernetesResource.HelmValue> MergeHelmValueMappings(
+        IResource resource,
+        string helmKey,
+        params (IReadOnlyDictionary<string, KubernetesResource.HelmValue> Values, string OriginKind)[] mappingGroups)
+    {
+        var resourceKey = resource.Name.ToHelmValuesSectionName();
+        var result = new Dictionary<string, KubernetesResource.HelmValue>(StringComparer.Ordinal);
+        var origins = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (values, originKind) in mappingGroups)
         {
-            configItems.TryAdd(kvp.Key, kvp.Value);
+            foreach (var (key, value) in values)
+            {
+                var valuesKey = value.ValuesKey ?? key.ToHelmValuesSectionName();
+                var origin = $"{originKind} '{key}'";
+
+                if (!result.TryGetValue(valuesKey, out var existing))
+                {
+                    result.Add(valuesKey, value);
+                    origins.Add(valuesKey, origin);
+                    continue;
+                }
+
+                if (value.ParameterSource is not null &&
+                    ReferenceEquals(existing.ParameterSource, value.ParameterSource))
+                {
+                    if (value.IsEmbeddedParameter && !existing.IsEmbeddedParameter)
+                    {
+                        result[valuesKey] = value;
+                    }
+
+                    continue;
+                }
+
+                throw new InvalidOperationException(
+                    $"Resource '{resource.Name}' maps both {origins[valuesKey]} and {origin} " +
+                    $"to Helm values path '{helmKey}.{resourceKey}.{valuesKey}'. Rename one of them " +
+                    "so each value has a unique Helm path.");
+            }
         }
 
-        await AddValuesToHelmSectionAsync(resource, configItems, HelmExtensions.ConfigKey).ConfigureAwait(false);
-        await AddValuesToHelmSectionAsync(resource, resourceContext.Secrets, HelmExtensions.SecretsKey).ConfigureAwait(false);
+        return result;
     }
 
     private async Task AddValuesToHelmSectionAsync(
@@ -242,18 +295,29 @@ internal sealed class KubernetesPublishingContext(
                 if (parameter.Secret || parameter.Default is null)
                 {
                     // Don't resolve secrets or parameters without defaults during publish.
-                    // Write an empty placeholder and capture the mapping for deploy-time resolution.
                     value = string.Empty;
-                    environment?.CapturedHelmValues.Add(
+                }
+                else
+                {
+                    value = await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                // Embedded parameters must participate in deploy-time lookup even when their
+                // published default is already present in values.yaml. Parent composite values
+                // are resolved from this lookup when writing the deploy override file.
+                if ((parameter.Secret || parameter.Default is null || helmExpressionWithValue.IsEmbeddedParameter) &&
+                    environment is not null &&
+                    !environment.CapturedHelmValues.Any(captured =>
+                        captured.Section == helmKey &&
+                        captured.ResourceKey == resource.Name.ToHelmValuesSectionName() &&
+                        captured.ValueKey == valuesKey))
+                {
+                    environment.CapturedHelmValues.Add(
                         new KubernetesEnvironmentResource.CapturedHelmValue(
                             helmKey,
                             resource.Name.ToHelmValuesSectionName(),
                             valuesKey,
                             parameter));
-                }
-                else
-                {
-                    value = await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
             else

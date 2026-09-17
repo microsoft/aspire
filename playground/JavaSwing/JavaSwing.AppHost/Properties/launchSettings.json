@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "JavaSwing.AppHost": {
+      "commandName": "Project"
+    }
+  }
+}

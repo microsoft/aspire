@@ -67,6 +67,43 @@ public class UnixCertificateManagerTests
     }
 
     [Fact]
+    public async Task GetTrustLevel_WhenCertUtilFillsOutputPipes_Completes()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "NSS certificate trust is only exercised on Linux.");
+
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        var nssDbDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.FullName, "nssdb"));
+
+        try
+        {
+            var certUtilFile = await CreateNoisyCertUtilAsync(tempDirectory);
+            var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+            {
+                ["PATH"] = tempDirectory.FullName,
+                ["SSL_CERT_DIR"] = tempDirectory.FullName,
+                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = nssDbDirectory.FullName
+            });
+            var manager = new UnixCertificateManager(NullLogger.Instance, environment, _ => new ProcessStartInfo(certUtilFile.FullName)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            });
+            using var certificate = manager.CreateAspNetCoreHttpsDevelopmentCertificate(
+                DateTimeOffset.UtcNow.AddDays(-1),
+                DateTimeOffset.UtcNow.AddDays(365));
+
+            var trustLevel = await Task.Run(() => manager.GetTrustLevel(certificate))
+                .DefaultTimeout();
+
+            Assert.Equal(CertificateManager.TrustLevel.None, trustLevel);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void GetTrustLevel_WithCorruptOpenSslCertificate_DoesNotThrow()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "OpenSSL certificate directory trust is only exercised on Linux.");
@@ -216,6 +253,31 @@ public class UnixCertificateManagerTests
             "sleep 60 &" + Environment.NewLine +
             $"echo $! > '{EscapeShellPath(childPidFile)}'" + Environment.NewLine +
             "wait $!" + Environment.NewLine;
+        await File.WriteAllTextAsync(certUtilFile.FullName, script);
+        File.SetUnixFileMode(
+            certUtilFile.FullName,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+
+        return certUtilFile;
+    }
+
+    private static async Task<FileInfo> CreateNoisyCertUtilAsync(DirectoryInfo directory)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            throw new PlatformNotSupportedException();
+        }
+
+        var certUtilFile = new FileInfo(Path.Combine(directory.FullName, "certutil"));
+        var script =
+            "#!/usr/bin/env bash" + Environment.NewLine +
+            "for _ in {1..16}; do" + Environment.NewLine +
+            "  printf '%65536s' x" + Environment.NewLine +
+            "  printf '%65536s' x >&2" + Environment.NewLine +
+            "done" + Environment.NewLine +
+            "exit 1" + Environment.NewLine;
         await File.WriteAllTextAsync(certUtilFile.FullName, script);
         File.SetUnixFileMode(
             certUtilFile.FullName,

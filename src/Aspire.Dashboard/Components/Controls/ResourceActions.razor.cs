@@ -32,6 +32,9 @@ public partial class ResourceActions : ComponentBase
     [Inject]
     public required IconResolver IconResolver { get; init; }
 
+    [Inject]
+    public required IDashboardClient DashboardClient { get; init; }
+
     [Parameter]
     public required EventCallback<CommandViewModel> CommandSelected { get; set; }
 

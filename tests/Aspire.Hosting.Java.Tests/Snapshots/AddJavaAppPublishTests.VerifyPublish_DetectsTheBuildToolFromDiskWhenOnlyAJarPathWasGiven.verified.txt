@@ -1,0 +1,14 @@
+﻿FROM --platform=$BUILDPLATFORM docker.io/library/eclipse-temurin:21-jdk AS build
+WORKDIR /app
+COPY mvnw ./mvnw
+COPY .mvn ./.mvn
+RUN sed -i 's/\r$//' ./mvnw && sh ./mvnw -B -ntp --version
+COPY . .
+RUN --mount=type=cache,id=aspire-java-maven-api,target=/root/.m2/repository,sharing=locked \
+    mkdir -p /build && sed -i 's/\r$//' ./mvnw && sh ./mvnw -B -ntp -DskipTests package && if [ ! -f 'target/worker.jar' ]; then echo "Aspire: the build of 'api' did not produce" 'target/worker.jar' >&2; echo "Check the jarPath passed to AddJavaApp, or use WithJarArtifact to name the published artifact separately." >&2; exit 1; fi && cp 'target/worker.jar' /build/app.jar
+
+FROM docker.io/library/eclipse-temurin:21-jre
+WORKDIR /app
+COPY --from=build --chown=999:999 /build/app.jar /app/app.jar
+USER 999:999
+ENTRYPOINT ["java","-jar","/app/app.jar"]

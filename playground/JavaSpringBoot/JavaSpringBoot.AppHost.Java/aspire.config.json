@@ -1,0 +1,26 @@
+{
+  "appHost": {
+    "path": "AppHost.java",
+    "language": "java"
+  },
+  "features": {
+    "experimentalPolyglot:java": true
+  },
+  "packages": {
+    "Aspire.Hosting.Java": "../../../src/Aspire.Hosting.Java/Aspire.Hosting.Java.csproj",
+    "Aspire.Hosting.CodeGeneration.Java": "../../../src/Aspire.Hosting.CodeGeneration.Java/Aspire.Hosting.CodeGeneration.Java.csproj",
+    "Aspire.Hosting.Docker": "../../../src/Aspire.Hosting.Docker/Aspire.Hosting.Docker.csproj"
+  },
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://javaspringboot-java.dev.localhost:17014;http://javaspringboot-java.dev.localhost:15014",
+      "environmentVariables": {}
+    },
+    "http": {
+      "applicationUrl": "http://javaspringboot-java.dev.localhost:15014",
+      "environmentVariables": {
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+      }
+    }
+  }
+}

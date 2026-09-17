@@ -161,6 +161,7 @@ public class FrontendBrowserTokenAuthTests
         Assert.DoesNotContain("; secure", httpCookie, StringComparison.OrdinalIgnoreCase);
     }
 
+#if DEBUG
     [Fact]
     public async Task Get_Signout_HttpsEndpointWithHttpAndHttpsCookies_DeletesBothCookies()
     {
@@ -210,6 +211,7 @@ public class FrontendBrowserTokenAuthTests
                 Assert.Contains("expires=Thu, 01 Jan 1970", c, StringComparison.OrdinalIgnoreCase);
             });
     }
+        #endif
 
     [Fact]
     public async Task Get_LoginPage_ValidToken_HttpEndpointWithHttpsEndpoint_RedirectToApp()

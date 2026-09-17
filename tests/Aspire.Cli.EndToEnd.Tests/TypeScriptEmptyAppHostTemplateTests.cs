@@ -18,7 +18,7 @@ public sealed class TypeScriptEmptyAppHostTemplateTests(ITestOutputHelper output
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task CreateAndRunTypeScriptEmptyAppHostProject()
+    public async Task CreateAndRunTypeScriptEmptyAppHostProjectWithDevelopmentCertificate()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -34,9 +34,28 @@ public sealed class TypeScriptEmptyAppHostTemplateTests(ITestOutputHelper output
 
         await auto.AspireNewAsync("TsEmptyApp", counter, template: AspireTemplate.TypeScriptEmptyAppHost);
 
-        GitIgnoreAssertions.AssertContainsEntry(
-            Path.Combine(workspace.WorkspaceRoot.FullName, "TsEmptyApp"),
-            ".aspire/");
+        var appDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "TsEmptyApp");
+        GitIgnoreAssertions.AssertContainsEntry(appDirectory, ".aspire/");
+
+        var appHostPath = Path.Combine(appDirectory, "apphost.mts");
+        var appHostContents = await File.ReadAllTextAsync(appHostPath, TestContext.Current.CancellationToken);
+        appHostContents = appHostContents
+            .Replace(
+                "import { createBuilder } from './.aspire/modules/aspire.mjs';",
+                """
+                import { writeFileSync } from 'node:fs';
+                import { createBuilder } from './.aspire/modules/aspire.mjs';
+                """,
+                StringComparison.Ordinal)
+            .Replace(
+                "const builder = await createBuilder();",
+                """
+                writeFileSync('node-extra-ca-certs.txt', process.env.NODE_EXTRA_CA_CERTS ?? '');
+
+                const builder = await createBuilder();
+                """,
+                StringComparison.Ordinal);
+        await File.WriteAllTextAsync(appHostPath, appHostContents, TestContext.Current.CancellationToken);
 
         // Start the empty TypeScript AppHost to verify the scaffolded project works
         await auto.TypeAsync("cd TsEmptyApp");
@@ -46,6 +65,9 @@ public sealed class TypeScriptEmptyAppHostTemplateTests(ITestOutputHelper output
         await auto.RunCommandAsync("npm run build", counter, TimeSpan.FromMinutes(2));
 
         await auto.AspireStartAsync(counter);
+        await auto.RunCommandAsync(
+            "CERT_PATH=$(cat node-extra-ca-certs.txt) && test -s \"$CERT_PATH\" && grep -q -- '-----BEGIN CERTIFICATE-----' \"$CERT_PATH\"",
+            counter);
         await auto.AspireStopAsync(counter);
     }
 

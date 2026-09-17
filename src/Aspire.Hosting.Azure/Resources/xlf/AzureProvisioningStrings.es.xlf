@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationCommandDescription">
-        <source>Overrides the Azure location for this resource and reprovisions it using that location.</source>
-        <target state="new">Overrides the Azure location for this resource and reprovisions it using that location.</target>
+        <source>Changes the Azure location for this resource. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</source>
+        <target state="new">Changes the Azure location for this resource. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationCommandName">
@@ -57,14 +57,29 @@
         <target state="new">Azure resource location updated and reprovisioning completed.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChangeResourceLocationConfirmDeleteDescription">
+        <source>Allow Aspire to delete and recreate the existing Azure resource when changing its location. Any data in the deleted resource may be permanently lost.</source>
+        <target state="new">Allow Aspire to delete and recreate the existing Azure resource when changing its location. Any data in the deleted resource may be permanently lost.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ChangeResourceLocationConfirmDeleteLabel">
+        <source>Allow deletion and possible permanent data loss</source>
+        <target state="new">Allow deletion and possible permanent data loss</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ChangeResourceLocationDeleteConfirmationRequiredFormat">
+        <source>Changing the location of Azure resource '{0}' requires deleting and recreating it. Any data in the deleted resource may be permanently lost. Set the '{1}' command argument to true to continue.</source>
+        <target state="new">Changing the location of Azure resource '{0}' requires deleting and recreating it. Any data in the deleted resource may be permanently lost. Set the '{1}' command argument to true to continue.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChangeResourceLocationKeyVaultUnsupported">
         <source>Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource.</source>
         <target state="new">Azure Key Vault resources cannot change location because soft-deleted vault names remain reserved globally. Use delete, reprovision, or forget state to recover this resource.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationPromptMessage">
-        <source>Select or enter a new Azure location for '{0}'. The resource will then be reprovisioned using that location.</source>
-        <target state="new">Select or enter a new Azure location for '{0}'. The resource will then be reprovisioned using that location.</target>
+        <source>Select or enter a new Azure location for '{0}'. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</source>
+        <target state="new">Select or enter a new Azure location for '{0}'. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChangeResourceLocationPromptTitle">

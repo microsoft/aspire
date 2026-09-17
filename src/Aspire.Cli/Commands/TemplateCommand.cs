@@ -26,6 +26,16 @@ internal sealed class TemplateCommand : BaseCommand
     // and should show update notifications, just like the parent NewCommand.
     protected override bool UpdateNotificationsEnabled => true;
 
+    internal override void PrepareForExecution(ParseResult parseResult)
+    {
+        if (!string.IsNullOrWhiteSpace(parseResult.GetValue(NewCommand.s_sourceOption)))
+        {
+            // The foreground template lookup applies --source. Background prefetch does not know
+            // about invocation options, so letting it run would still contact fallback feeds.
+            DisableTemplatePackageMetadataPrefetchingForInvocation();
+        }
+    }
+
     protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         return _executeCallback(parseResult, cancellationToken);

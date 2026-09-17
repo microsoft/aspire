@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Aspire.Hosting.Radius.CloudProviders;
 
@@ -10,6 +11,7 @@ namespace Aspire.Hosting.Radius.CloudProviders;
 /// selecting an AWS credential mode. Exactly one <c>With*</c> method must
 /// be called; a repeat call replaces the previous selection.
 /// </summary>
+[Experimental("ASPIRERADIUS003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public interface IAwsRadiusProviderBuilder
 {
     /// <summary>

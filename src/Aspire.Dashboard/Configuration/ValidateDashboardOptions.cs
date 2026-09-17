@@ -26,6 +26,15 @@ public sealed class ValidateDashboardOptions : IValidateOptions<DashboardOptions
 
         var errorMessages = new List<string>();
 
+        if (options.Data.PersistenceModeParseError is { } persistenceModeParseError)
+        {
+            errorMessages.Add(persistenceModeParseError);
+        }
+        else if (!Enum.IsDefined(options.Data.PersistenceMode))
+        {
+            errorMessages.Add($"Unexpected dashboard persistence mode: {options.Data.PersistenceMode}");
+        }
+
         if (!options.Frontend.TryParseOptions(out var frontendParseErrorMessage))
         {
             errorMessages.Add(frontendParseErrorMessage);

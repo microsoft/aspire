@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { execFileSync, spawn } from 'child_process';
 import * as path from 'path';
 
+import { removeDirectorySafely } from './testHelpers';
 const extensionRoot = path.resolve(__dirname, '..', '..');
 const repoRoot = path.resolve(extensionRoot, '..');
 const testArtifactsRoot = path.join(extensionRoot, '.test-artifacts', 'e2e-download-cache-tests');
@@ -271,7 +272,7 @@ function getVsCodeExecutableRelativePath(platform: NodeJS.Platform, architecture
 
     switch (platform) {
         case 'darwin':
-            return path.join(vscodeDirectory, 'Contents', 'MacOS', 'Electron');
+            return path.join(vscodeDirectory, 'Contents', 'MacOS', 'Code');
         case 'linux':
             return path.join(vscodeDirectory, 'code');
         case 'win32':
@@ -362,6 +363,19 @@ function readManifest(cacheDirectory: string): CacheManifest {
     return JSON.parse(fs.readFileSync(path.join(cacheDirectory, cache.CACHE_MANIFEST_NAME), 'utf8')) as CacheManifest;
 }
 
+function getPathIdentityAndMetadata(candidatePath: string) {
+    const stats = fs.lstatSync(candidatePath);
+    return {
+        dev: stats.dev,
+        ino: stats.ino,
+        mode: stats.mode,
+        nlink: stats.nlink,
+        size: stats.size,
+        mtimeMs: stats.mtimeMs,
+        ctimeMs: stats.ctimeMs,
+        birthtimeMs: stats.birthtimeMs,
+    };
+}
 
 function getGroupChildNames(groupDirectory: string): string[] {
     if (!fs.existsSync(groupDirectory)) {
@@ -420,6 +434,36 @@ function withLockedDirectoryRemoval(directoryPath: string, failureCount: number,
     }
 
     return attempts;
+}
+
+/**
+ * Drops a new file into `directoryPath` right after it is listed, reproducing the cleanup race
+ * where a Java language server or build daemon is still writing while the run root is torn down.
+ *
+ * Hooking the listing rather than racing a real writer keeps this deterministic - a timing-based
+ * version of this test would only reproduce the bug intermittently.
+ */
+function withLateWriterDuringRemoval(directoryPath: string, writeCount: number, body: () => void): number {
+    const nodeFs = require('fs') as typeof fs;
+    const realReaddirSync = nodeFs.readdirSync;
+    let writes = 0;
+
+    try {
+        nodeFs.readdirSync = ((target: fs.PathLike, ...rest: unknown[]) => {
+            const entries = (realReaddirSync as (...args: unknown[]) => unknown)(target, ...rest);
+            if (target === directoryPath && writes < writeCount) {
+                nodeFs.writeFileSync(path.join(directoryPath, `late-writer-${writes++}.log`), 'written after listing');
+            }
+
+            return entries;
+        }) as typeof fs.readdirSync;
+
+        body();
+    } finally {
+        nodeFs.readdirSync = realReaddirSync;
+    }
+
+    return writes;
 }
 
 async function waitForPaths(pathsToCheck: string[], timeoutMs: number): Promise<void> {
@@ -582,7 +626,7 @@ suite('E2E download cache', () => {
         while (createdTestRoots.length > 0) {
             const root = createdTestRoots.pop();
             if (root) {
-                fs.rmSync(root, { recursive: true, force: true });
+                removeDirectorySafely(root);
             }
         }
     });
@@ -1097,6 +1141,166 @@ suite('E2E download cache', () => {
         assert.deepStrictEqual(readManifest(result.cacheDirectory), result.manifest);
         assert.strictEqual(fs.readFileSync(path.join(unusableDirectory, 'unusable-marker.txt'), 'utf8'), 'unusable');
         assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1), getCacheEntryName(2)]);
+    });
+
+    test('fails before publishing when a concurrent unusable generation fills the recovery bound', () => {
+        const root = createTestRoot('publish-time-generation-limit');
+        const cacheRoot = path.join(root, 'cache');
+        const groupDirectory = getDefaultGroupDirectory(cacheRoot);
+        const originalEntryDirectory = getCacheEntryDirectory(groupDirectory, 1);
+        const originalSentinelPath = path.join(originalEntryDirectory, 'original-generation-sentinel.txt');
+        const concurrentEntryDirectory = getCacheEntryDirectory(groupDirectory, 2);
+        const concurrentSentinelPath = path.join(concurrentEntryDirectory, 'concurrent-generation-sentinel.txt');
+        let candidateDirectory: string | undefined;
+        let concurrentEntryMetadata: ReturnType<typeof getPathIdentityAndMetadata> | undefined;
+        let concurrentSentinelMetadata: ReturnType<typeof getPathIdentityAndMetadata> | undefined;
+
+        populateFakeDownload(originalEntryDirectory, {
+            platform: 'linux',
+            architecture: 'x64',
+        });
+        writeFile(originalSentinelPath, 'original generation');
+        const originalEntryMetadata = getPathIdentityAndMetadata(originalEntryDirectory);
+        const originalSentinelMetadata = getPathIdentityAndMetadata(originalSentinelPath);
+
+        assert.throws(() => cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
+            populate(stagingDirectory) {
+                candidateDirectory = stagingDirectory;
+                populateFakeDownload(stagingDirectory, {
+                    platform: 'linux',
+                    architecture: 'x64',
+                });
+
+                // Simulate another publisher reserving the immutable replacement while this run is
+                // populating. The publish-time read must enforce the cap before renaming candidate.
+                populateFakeDownload(concurrentEntryDirectory, {
+                    platform: 'linux',
+                    architecture: 'x64',
+                });
+                writeFile(concurrentSentinelPath, 'concurrent generation');
+                concurrentEntryMetadata = getPathIdentityAndMetadata(concurrentEntryDirectory);
+                concurrentSentinelMetadata = getPathIdentityAndMetadata(concurrentSentinelPath);
+            },
+        })), (error: unknown) => {
+            if (!(error instanceof Error)) {
+                return false;
+            }
+
+            assert.ok(error.message.includes(groupDirectory));
+            assert.match(error.message, /already contains 2 reserved generations.*will not publish another/);
+            return true;
+        });
+
+        assert.ok(candidateDirectory);
+        assert.ok(concurrentEntryMetadata);
+        assert.ok(concurrentSentinelMetadata);
+        assert.strictEqual(fs.existsSync(candidateDirectory), false);
+        assertNoCandidates(groupDirectory);
+        assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1), getCacheEntryName(2)]);
+        assert.strictEqual(fs.existsSync(getCacheEntryDirectory(groupDirectory, 3)), false);
+        assert.deepStrictEqual(getPathIdentityAndMetadata(originalEntryDirectory), originalEntryMetadata);
+        assert.deepStrictEqual(getPathIdentityAndMetadata(originalSentinelPath), originalSentinelMetadata);
+        assert.strictEqual(fs.readFileSync(originalSentinelPath, 'utf8'), 'original generation');
+        assert.deepStrictEqual(getPathIdentityAndMetadata(concurrentEntryDirectory), concurrentEntryMetadata);
+        assert.deepStrictEqual(getPathIdentityAndMetadata(concurrentSentinelPath), concurrentSentinelMetadata);
+        assert.strictEqual(fs.readFileSync(concurrentSentinelPath, 'utf8'), 'concurrent generation');
+        assert.notDeepStrictEqual(
+            { dev: originalSentinelMetadata.dev, ino: originalSentinelMetadata.ino },
+            { dev: concurrentSentinelMetadata.dev, ino: concurrentSentinelMetadata.ino });
+    });
+
+    test('fails before population when two directory generations are unusable', () => {
+        const root = createTestRoot('generation-limit');
+        const cacheRoot = path.join(root, 'cache');
+        const groupDirectory = getDefaultGroupDirectory(cacheRoot);
+        let populateCalls = 0;
+
+        const originalEntries = [1, 2].map((generation) => {
+            const entryDirectory = getCacheEntryDirectory(groupDirectory, generation);
+            const sentinelPath = path.join(entryDirectory, `generation-${generation}-sentinel.txt`);
+            const sentinelContent = `original generation ${generation} content`;
+
+            populateFakeDownload(entryDirectory, {
+                platform: 'linux',
+                architecture: 'x64',
+            });
+            writeFile(sentinelPath, sentinelContent);
+
+            return {
+                entryDirectory,
+                sentinelPath,
+                sentinelContent,
+                entryMetadata: getPathIdentityAndMetadata(entryDirectory),
+                sentinelMetadata: getPathIdentityAndMetadata(sentinelPath),
+            };
+        });
+
+        assert.throws(() => cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
+            populate() {
+                populateCalls++;
+            },
+        })), (error: unknown) => {
+            if (!(error instanceof Error)) {
+                return false;
+            }
+
+            assert.ok(error.message.includes(groupDirectory));
+            assert.match(error.message, /already contains 2 reserved generations.*will not publish another/);
+            return true;
+        });
+
+        assert.strictEqual(populateCalls, 0);
+        assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1), getCacheEntryName(2)]);
+        for (const originalEntry of originalEntries) {
+            assert.deepStrictEqual(getPathIdentityAndMetadata(originalEntry.entryDirectory), originalEntry.entryMetadata);
+            assert.deepStrictEqual(getPathIdentityAndMetadata(originalEntry.sentinelPath), originalEntry.sentinelMetadata);
+            assert.strictEqual(fs.readFileSync(originalEntry.sentinelPath, 'utf8'), originalEntry.sentinelContent);
+        }
+    });
+
+    test('fails before population when two non-directory names reserve generations', () => {
+        const root = createTestRoot('non-directory-generation-limit');
+        const cacheRoot = path.join(root, 'cache');
+        const groupDirectory = getDefaultGroupDirectory(cacheRoot);
+        const fileReservation = getCacheEntryDirectory(groupDirectory, 1);
+        const linkedReservation = getCacheEntryDirectory(groupDirectory, 2);
+        const externalTarget = path.join(root, 'external-generation-target');
+        const externalSentinel = path.join(externalTarget, 'external-sentinel.txt');
+        let populateCalls = 0;
+
+        writeFile(fileReservation, 'reserved generation one');
+        writeFile(externalSentinel, 'leave external target alone');
+        createDirectoryLink(linkedReservation, externalTarget);
+
+        const fileMetadata = getPathIdentityAndMetadata(fileReservation);
+        const linkMetadata = getPathIdentityAndMetadata(linkedReservation);
+        const externalSentinelMetadata = getPathIdentityAndMetadata(externalSentinel);
+
+        assert.throws(() => cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
+            populate(stagingDirectory) {
+                populateCalls++;
+                populateFakeDownload(stagingDirectory, {
+                    platform: 'linux',
+                    architecture: 'x64',
+                });
+            },
+        })), (error: unknown) => {
+            if (!(error instanceof Error)) {
+                return false;
+            }
+
+            assert.ok(error.message.includes(groupDirectory));
+            assert.match(error.message, /already contains 2 reserved generations.*will not publish another/);
+            return true;
+        });
+
+        assert.strictEqual(populateCalls, 0);
+        assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1), getCacheEntryName(2)]);
+        assert.deepStrictEqual(getPathIdentityAndMetadata(fileReservation), fileMetadata);
+        assert.deepStrictEqual(getPathIdentityAndMetadata(linkedReservation), linkMetadata);
+        assert.strictEqual(fs.readFileSync(fileReservation, 'utf8'), 'reserved generation one');
+        assert.deepStrictEqual(getPathIdentityAndMetadata(externalSentinel), externalSentinelMetadata);
+        assert.strictEqual(fs.readFileSync(externalSentinel, 'utf8'), 'leave external target alone');
     });
 
     test('recovers from repeated population crashes without wedging the cache entry', () => {
@@ -1727,50 +1931,140 @@ suite('E2E download cache', () => {
         assert.deepStrictEqual(readManifest(result.cacheDirectory), result.manifest);
     });
 
-    test('rejects a symlinked cache entry group and replaces only the local link', () => {
+    test('observes a symlinked cache entry group without mutating it before miss-path repair', () => {
         const root = createTestRoot('linked-cache-entry');
         const cacheRoot = path.join(root, 'cache');
         const groupDirectory = getDefaultGroupDirectory(cacheRoot);
         const externalGroup = path.join(root, 'external-cache-entry');
-        const externalArtifacts = populateFakeDownload(path.join(externalGroup, 'entry-000001'), {
-            platform: 'linux',
-            architecture: 'x64',
-        });
         const externalSentinelPath = path.join(externalGroup, 'external-sentinel.txt');
         let populateCalls = 0;
 
         // Candidates are created inside the group with mkdtemp, so a symlinked group would send
-        // hundreds of megabytes of downloads outside the cache root.
-        writeFile(path.join(externalGroup, 'entry-000001', cache.CACHE_MANIFEST_NAME), JSON.stringify({
-            schemaVersion: cache.CACHE_SCHEMA_VERSION,
-            platform: 'linux',
-            architecture: 'x64',
-            vscodeVersion: '1.122.1',
-            extesterVersion: '8.23.0',
-            vscodeDirectory: externalArtifacts.vscodeDirectory,
-            chromeDriverEntry: externalArtifacts.chromeDriverEntry,
-            chromeDriverBinary: externalArtifacts.chromeDriverBinary,
-        }, null, 2));
+        // hundreds of megabytes of downloads outside the cache root. Its apparent generations are
+        // untrusted too, so the initial observation must not make the early cap authoritative.
+        const externalEntries = [1, 2].map((generation) => {
+            const entryDirectory = getCacheEntryDirectory(externalGroup, generation);
+            const markerFileName = `external-generation-${generation}.txt`;
+            publishValidCacheEntry(entryDirectory, {
+                ...defaultCacheKey,
+                markerFileName,
+            });
+
+            const markerPath = path.join(entryDirectory, markerFileName);
+            return {
+                entryDirectory,
+                markerPath,
+                markerFileName,
+                entryMetadata: getPathIdentityAndMetadata(entryDirectory),
+                markerMetadata: getPathIdentityAndMetadata(markerPath),
+            };
+        });
         writeFile(externalSentinelPath, 'leave external entry alone');
+        const externalGroupMetadata = getPathIdentityAndMetadata(externalGroup);
+        const externalSentinelMetadata = getPathIdentityAndMetadata(externalSentinelPath);
         createDirectoryLink(groupDirectory, externalGroup);
 
-        const result = cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
-            populate(stagingDirectory) {
-                populateCalls++;
-                populateFakeDownload(stagingDirectory, {
-                    platform: 'linux',
-                    architecture: 'x64',
-                });
-            },
-        }));
+        const nodeFs = require('fs') as typeof fs;
+        const realReaddirSync = nodeFs.readdirSync;
+        let groupWasLinkedAtInitialRead: boolean | undefined;
+        let result;
+        try {
+            nodeFs.readdirSync = ((target: fs.PathLike, ...rest: unknown[]) => {
+                if (target === groupDirectory && groupWasLinkedAtInitialRead === undefined) {
+                    groupWasLinkedAtInitialRead = nodeFs.lstatSync(groupDirectory).isSymbolicLink();
+                }
 
+                return (realReaddirSync as (...args: unknown[]) => unknown)(target, ...rest);
+            }) as typeof fs.readdirSync;
+
+            result = cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
+                populate(stagingDirectory) {
+                    populateCalls++;
+                    populateFakeDownload(stagingDirectory, {
+                        platform: 'linux',
+                        architecture: 'x64',
+                    });
+                },
+            }));
+        } finally {
+            nodeFs.readdirSync = realReaddirSync;
+        }
+
+        assert.strictEqual(groupWasLinkedAtInitialRead, true);
         assert.strictEqual(populateCalls, 1);
         assert.strictEqual(result.cacheHit, false);
         assert.strictEqual(fs.lstatSync(groupDirectory).isSymbolicLink(), false);
         assert.strictEqual(result.cacheDirectory, getCacheEntryDirectory(groupDirectory, 1));
         assert.strictEqual(fs.readFileSync(externalSentinelPath, 'utf8'), 'leave external entry alone');
-        assert.ok(fs.existsSync(path.join(externalGroup, 'entry-000001', cache.CACHE_MANIFEST_NAME)));
+        assert.deepStrictEqual(getPathIdentityAndMetadata(externalGroup), externalGroupMetadata);
+        assert.deepStrictEqual(getPathIdentityAndMetadata(externalSentinelPath), externalSentinelMetadata);
+        assert.deepStrictEqual(getGroupChildNames(externalGroup), [
+            getCacheEntryName(1),
+            getCacheEntryName(2),
+            path.basename(externalSentinelPath),
+        ]);
+        for (const externalEntry of externalEntries) {
+            assert.deepStrictEqual(getPathIdentityAndMetadata(externalEntry.entryDirectory), externalEntry.entryMetadata);
+            assert.deepStrictEqual(getPathIdentityAndMetadata(externalEntry.markerPath), externalEntry.markerMetadata);
+            assert.strictEqual(fs.readFileSync(externalEntry.markerPath, 'utf8'), externalEntry.markerFileName);
+            assert.ok(fs.existsSync(path.join(externalEntry.entryDirectory, cache.CACHE_MANIFEST_NAME)));
+        }
         assert.deepStrictEqual(readManifest(result.cacheDirectory), result.manifest);
+        assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1)]);
+    });
+
+    test('does not cap a stale symlink listing after cooperative miss repair', () => {
+        const root = createTestRoot('concurrent-linked-cache-entry-repair');
+        const cacheRoot = path.join(root, 'cache');
+        const groupDirectory = getDefaultGroupDirectory(cacheRoot);
+        const externalGroup = path.join(root, 'external-cache-entry');
+        const externalSentinelPath = path.join(externalGroup, 'external-sentinel.txt');
+        let populateCalls = 0;
+
+        fs.mkdirSync(getCacheEntryDirectory(externalGroup, 1), { recursive: true });
+        fs.mkdirSync(getCacheEntryDirectory(externalGroup, 2), { recursive: true });
+        writeFile(externalSentinelPath, 'leave external entry alone');
+        createDirectoryLink(groupDirectory, externalGroup);
+
+        const nodeFs = require('fs') as typeof fs;
+        const realReaddirSync = nodeFs.readdirSync;
+        let repairedGroup = false;
+        let result;
+        try {
+            nodeFs.readdirSync = ((target: fs.PathLike, ...rest: unknown[]) => {
+                const entries = (realReaddirSync as (...args: unknown[]) => unknown)(target, ...rest);
+                if (target === groupDirectory && !repairedGroup) {
+                    repairedGroup = true;
+                    cache.removePathWithoutFollowingLinks(groupDirectory);
+                    nodeFs.mkdirSync(groupDirectory);
+                }
+
+                return entries;
+            }) as typeof fs.readdirSync;
+
+            result = cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
+                populate(stagingDirectory) {
+                    populateCalls++;
+                    populateFakeDownload(stagingDirectory, {
+                        platform: 'linux',
+                        architecture: 'x64',
+                    });
+                },
+            }));
+        } finally {
+            nodeFs.readdirSync = realReaddirSync;
+        }
+
+        assert.strictEqual(repairedGroup, true);
+        assert.strictEqual(populateCalls, 1);
+        assert.strictEqual(result.cacheHit, false);
+        assert.strictEqual(result.cacheDirectory, getCacheEntryDirectory(groupDirectory, 1));
+        assert.strictEqual(fs.readFileSync(externalSentinelPath, 'utf8'), 'leave external entry alone');
+        assert.deepStrictEqual(getGroupChildNames(externalGroup), [
+            getCacheEntryName(1),
+            getCacheEntryName(2),
+            path.basename(externalSentinelPath),
+        ]);
         assert.deepStrictEqual(getGroupChildNames(groupDirectory), [getCacheEntryName(1)]);
     });
 
@@ -2093,6 +2387,39 @@ suite('E2E download cache', () => {
         assert.strictEqual(attempts, 3);
     });
 
+    test('re-sweeps a directory that gains an entry between listing and removal', () => {
+        const root = createTestRoot('link-safe-removal-late-writer');
+        const refilled = path.join(root, 'refilled');
+        writeFile(path.join(refilled, 'existing.txt'), 'existing');
+
+        // A retry of the same rmdir can never clear this: the entry that appeared is still on disk,
+        // so only a fresh listing removes it. maxRetries is 0 here, matching Linux CI, to show the
+        // recovery comes from re-sweeping rather than from the lock retry budget.
+        const writes = withLateWriterDuringRemoval(refilled, 1, () => {
+            cache.removePathWithoutFollowingLinks(refilled, { maxRetries: 0, retryDelay: 1 });
+        });
+
+        assert.strictEqual(writes, 1);
+        assert.strictEqual(fs.existsSync(refilled), false);
+    });
+
+    test('gives up on a directory that keeps being refilled during removal', () => {
+        const root = createTestRoot('link-safe-removal-sweep-budget');
+        const refilled = path.join(root, 'refilled');
+        writeFile(path.join(refilled, 'existing.txt'), 'existing');
+
+        // A process that never stops writing has to surface as a cleanup failure rather than hang
+        // the shard, so the sweeps are bounded.
+        const writes = withLateWriterDuringRemoval(refilled, Number.POSITIVE_INFINITY, () => {
+            assert.throws(
+                () => cache.removePathWithoutFollowingLinks(refilled, { maxRetries: 0, retryDelay: 1 }),
+                /ENOTEMPTY/);
+        });
+
+        assert.strictEqual(writes, 6);
+        assert.ok(fs.existsSync(refilled));
+    });
+
     test('replaces stale projected entries so a reused storage directory tracks the cache', () => {        const root = createTestRoot('replaces-stale-projection');
         const result = cache.ensureDownloadCache(getDefaultCacheOptions(path.join(root, 'cache'), {
             populate(stagingDirectory) {
@@ -2164,18 +2491,75 @@ suite('E2E download cache', () => {
         assert.strictEqual(reused.cacheHit, true);
     });
 
-    test('rejects Code-only macOS bundles when ExTester still requires Electron', () => {
-        const root = createTestRoot('darwin-code-with-legacy-extester');
+    test('rejects Electron-only macOS bundles', () => {
+        const root = createTestRoot('darwin-electron-only-executable');
         const bundle = 'Visual Studio Code.app';
 
         assert.throws(() => cache.ensureDownloadCache(getDefaultCacheOptions(path.join(root, 'cache'), {
             platform: 'darwin',
             architecture: 'arm64',
             populate(stagingDirectory) {
-                writeFile(path.join(stagingDirectory, bundle, 'Contents', 'MacOS', 'Code'), 'vscode binary');
+                writeFile(path.join(stagingDirectory, bundle, 'Contents', 'MacOS', 'Electron'), 'legacy executable');
                 writeFile(path.join(stagingDirectory, 'chromedriver-darwin-arm64', 'chromedriver'), 'driver');
             },
-        })), /vscodeExecutable points to missing paths: 'Visual Studio Code\.app[\\/]Contents[\\/]MacOS[\\/]Electron'/);
+        })), /vscodeExecutable points to missing paths: 'Visual Studio Code\.app[\\/]Contents[\\/]MacOS[\\/]Code'\./);
+    });
+
+    test('projects a Code-only macOS bundle for legacy ExTester without mutating the shared cache', () => {
+        const root = createTestRoot('darwin-code-projection-with-legacy-extester');
+        const cacheRoot = path.join(root, 'cache');
+        const runRoot = path.join(root, 'run');
+        const storageDirectory = path.join(runRoot, 'storage');
+        const bundle = 'Visual Studio Code.app';
+        const codeRelativePath = path.join(bundle, 'Contents', 'MacOS', 'Code');
+        const electronRelativePath = path.join(bundle, 'Contents', 'MacOS', 'Electron');
+        const appRootSentinelRelativePath = path.join(bundle, 'app-root-sentinel.txt');
+        const contentsSentinelRelativePath = path.join(bundle, 'Contents', 'contents-sentinel.txt');
+        const macOsSentinelRelativePath = path.join(bundle, 'Contents', 'MacOS', 'macos-sentinel.txt');
+
+        const result = cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
+            platform: 'darwin',
+            architecture: 'arm64',
+            populate(stagingDirectory) {
+                writeFile(path.join(stagingDirectory, codeRelativePath), 'fake Code binary');
+                writeFile(path.join(stagingDirectory, appRootSentinelRelativePath), 'app root sibling');
+                writeFile(path.join(stagingDirectory, contentsSentinelRelativePath), 'Contents sibling');
+                writeFile(path.join(stagingDirectory, macOsSentinelRelativePath), 'MacOS sibling');
+                writeFile(path.join(stagingDirectory, 'chromedriver-darwin-arm64', 'chromedriver'), 'driver');
+            },
+        }));
+
+        cache.projectDownloadCache(result, storageDirectory);
+
+        const projectedBundleDirectory = path.join(storageDirectory, bundle);
+        const projectedContentsDirectory = path.join(projectedBundleDirectory, 'Contents');
+        const projectedMacOsDirectory = path.join(projectedContentsDirectory, 'MacOS');
+        const sharedElectron = path.join(result.cacheDirectory, electronRelativePath);
+        const projectedElectron = path.join(storageDirectory, electronRelativePath);
+        assert.strictEqual(fs.lstatSync(projectedBundleDirectory).isDirectory(), true);
+        assert.strictEqual(fs.lstatSync(projectedContentsDirectory).isDirectory(), true);
+        assert.strictEqual(fs.lstatSync(projectedMacOsDirectory).isDirectory(), true);
+        assert.strictEqual(fs.readFileSync(path.join(storageDirectory, appRootSentinelRelativePath), 'utf8'), 'app root sibling');
+        assert.strictEqual(fs.readFileSync(path.join(storageDirectory, contentsSentinelRelativePath), 'utf8'), 'Contents sibling');
+        assert.strictEqual(fs.readFileSync(path.join(storageDirectory, macOsSentinelRelativePath), 'utf8'), 'MacOS sibling');
+        assert.strictEqual(fs.existsSync(sharedElectron), false);
+        assert.strictEqual(fs.lstatSync(projectedElectron).isSymbolicLink(), true);
+        assert.strictEqual(fs.readFileSync(projectedElectron, 'utf8'), 'fake Code binary');
+
+        fs.unlinkSync(projectedElectron);
+        cache.removePathWithoutFollowingLinks(runRoot);
+        assert.strictEqual(fs.existsSync(runRoot), false);
+
+        const reused = cache.ensureDownloadCache(getDefaultCacheOptions(cacheRoot, {
+            platform: 'darwin',
+            architecture: 'arm64',
+            populate() {
+                throw new Error('populate must not run when the cached bundle is valid.');
+            },
+        }));
+
+        assert.strictEqual(reused.cacheHit, true);
+        assert.strictEqual(reused.cacheDirectory, result.cacheDirectory);
     });
 
     test('accepts a legacy internal Electron symlink in older macOS bundles', () => {
@@ -2212,7 +2596,7 @@ suite('E2E download cache', () => {
     });
 
     test('rejects a VS Code executable symlink that escapes the cache entry', () => {
-        const root = createTestRoot('darwin-escaping-electron-symlink');
+        const root = createTestRoot('darwin-escaping-code-symlink');
         const outsideBinary = path.join(root, 'outside-binary');
         writeFile(outsideBinary, 'attacker binary');
 
@@ -2222,7 +2606,7 @@ suite('E2E download cache', () => {
             populate(stagingDirectory) {
                 const macOsDirectory = path.join(stagingDirectory, 'Visual Studio Code.app', 'Contents', 'MacOS');
                 fs.mkdirSync(macOsDirectory, { recursive: true });
-                fs.symlinkSync(outsideBinary, path.join(macOsDirectory, 'Electron'));
+                fs.symlinkSync(outsideBinary, path.join(macOsDirectory, 'Code'));
                 writeFile(path.join(stagingDirectory, 'chromedriver-darwin-arm64', 'chromedriver'), 'driver');
             },
         })), /vscodeExecutable points to a symbolic link or junction that escapes the cache entry/i);

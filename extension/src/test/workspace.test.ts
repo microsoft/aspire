@@ -5,10 +5,13 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { yesLabel } from '../loc/strings';
-import { checkForExistingAppHostPathInWorkspace, getCommonExcludeGlob, findAspireSettingsFiles } from '../utils/workspace';
+import { checkCliAvailableOrRedirect, checkForExistingAppHostPathInWorkspace, getCommonExcludeGlob, findAspireSettingsFiles } from '../utils/workspace';
+import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
 import { AppHostDiscoveryService, getWorkspaceAppHostProjectSearchResult } from '../utils/appHostDiscovery';
 import { getAppHostDiscoveryExcludeGlob } from '../utils/workspaceFileSearch';
-
+import * as cliPathModule from '../utils/cliPath';
+import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 suite('utils/workspace tests', () => {
     let sandbox: sinon.SinonSandbox;
 
@@ -18,6 +21,61 @@ suite('utils/workspace tests', () => {
 
     teardown(() => {
         sandbox.restore();
+    });
+
+    suite('checkCliAvailableOrRedirect', () => {
+        test('forwards the supplied window target to resolveCliPath', async () => {
+            const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: true, source: 'path' });
+
+            const result = await checkCliAvailableOrRedirect('command_gate', windowCliPathTarget);
+
+            assert.strictEqual(result.available, true);
+            assert.ok(resolveCliPathStub.calledOnceWith(windowCliPathTarget));
+        });
+
+        test('forwards the supplied workspace folder target to resolveCliPath', async () => {
+            const folder = createWorkspaceFolder('a', '/repo/a');
+            const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: '/repo/a/bin/aspire', available: true, source: 'configured' });
+
+            const result = await checkCliAvailableOrRedirect('debug_gate', workspaceFolderCliPathTarget(folder));
+
+            assert.strictEqual(result.cliPath, '/repo/a/bin/aspire');
+            assert.ok(resolveCliPathStub.calledOnceWith(workspaceFolderCliPathTarget(folder)));
+        });
+
+        test('uses pinnedCliPath without re-resolving the CLI', async () => {
+            const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath');
+            const tryExecuteCliStub = sandbox.stub(cliPathModule, 'tryExecuteCli').resolves(true);
+
+            const result = await checkCliAvailableOrRedirect('debug_gate', windowCliPathTarget, { pinnedCliPath: '/repo/a/bin/aspire' });
+
+            assert.strictEqual(result.cliPath, '/repo/a/bin/aspire');
+            assert.ok(tryExecuteCliStub.calledOnceWithExactly('/repo/a/bin/aspire'));
+            assert.strictEqual(resolveCliPathStub.called, false);
+        });
+
+        test('reports the exact CLI selected for an active command or debug operation', async () => {
+            const target = workspaceFolderCliPathTarget(createWorkspaceFolder('a', '/repo/a'));
+            sandbox.stub(cliPathModule, 'resolveCliPath').resolves({
+                cliPath: '/repo/a/bin/aspire',
+                available: true,
+                source: 'configured',
+            });
+            const resolutions: Array<{ target: typeof target; cliPath: string }> = [];
+            const disposable = onDidResolveCliForOperation(resolution => resolutions.push(resolution));
+
+            try {
+                await checkCliAvailableOrRedirect('debug_gate', target);
+
+                assert.deepStrictEqual(resolutions, [{
+                    target,
+                    cliPath: '/repo/a/bin/aspire',
+                }]);
+            }
+            finally {
+                disposable.dispose();
+            }
+        });
     });
 
     test('getCommonExcludeGlob returns valid glob pattern', () => {
@@ -208,7 +266,7 @@ suite('utils/workspace tests', () => {
                 status: 'buildable',
             });
         } finally {
-            fs.rmSync(workspaceRoot, { recursive: true, force: true });
+            removeDirectorySafely(workspaceRoot);
         }
     });
 });

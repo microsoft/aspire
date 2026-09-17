@@ -93,6 +93,12 @@ internal sealed class RootCommand : BaseRootCommand
         DefaultValueFactory = _ => DefaultCaptureProfileDelaySeconds
     };
 
+    internal static readonly Option<string?> s_logFileOption = new("--log-file")
+    {
+        Recursive = true,
+        Hidden = true
+    };
+
     /// <summary>
     /// Global options that should be passed through to child CLI processes when spawning.
     /// Add new global options here to ensure they are forwarded during detached mode execution.
@@ -191,6 +197,7 @@ internal sealed class RootCommand : BaseRootCommand
         Options.Add(CaptureProfileOption);
         Options.Add(CaptureProfileOutputOption);
         Options.Add(CaptureProfileDelayOption);
+        Options.Add(s_logFileOption);
 
         // Handle standalone 'aspire' or 'aspire --banner' (no subcommand)
         this.SetAction((Func<ParseResult, CancellationToken, Task<int>>)((context, cancellationToken) =>

@@ -35,7 +35,7 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
         await Assertions.Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName)).ToBeVisibleAsync();
 
         await page.Locator(".navigation-button").ClickAsync();
-        var menu = page.Locator("fluent-menu.mobile-nav-menu");
+        var menu = page.Locator("fluent-menu-list.mobile-nav-menu");
         await Assertions.Expect(menu).ToBeVisibleAsync();
 
         await page.Keyboard.PressAsync("Tab");
@@ -72,7 +72,7 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
         await Assertions.Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName)).ToBeVisibleAsync();
 
         await page.Locator(".navigation-button").ClickAsync();
-        var menu = page.Locator("fluent-menu.mobile-nav-menu");
+        var menu = page.Locator("fluent-menu-list.mobile-nav-menu");
         await Assertions.Expect(menu).ToBeVisibleAsync();
 
         await page.Keyboard.PressAsync("Escape");
@@ -105,7 +105,7 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
 
         var metrics = await page.EvaluateAsync<MobileNavFocusMetrics>("""
             () => {
-                const menu = document.querySelector('fluent-menu.mobile-nav-menu');
+                const menu = document.querySelector('fluent-menu-list.mobile-nav-menu');
                 const focusedMenuItem = getActiveMenuItem();
                 const menuRect = menu.getBoundingClientRect();
                 const focusedRect = focusedMenuItem?.getBoundingClientRect() ?? new DOMRect();
@@ -188,7 +188,7 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
 
     private const string IsFocusInsideMobileNavMenuScript = """
         () => {
-            const menu = document.querySelector('fluent-menu.mobile-nav-menu');
+            const menu = document.querySelector('fluent-menu-list.mobile-nav-menu');
             if (!menu) return false;
             let element = document.activeElement;
             while (element) {

@@ -99,8 +99,9 @@ public static class KubernetesIngressExtensions
     }
 
     /// <summary>
-    /// Adds a path-based rule to the ingress. The rule matches all hosts and forwards
-    /// traffic matching the specified path to the given endpoint's backing Kubernetes service.
+    /// Adds a path-based rule to the ingress. The rule matches each hostname configured with
+    /// <see cref="WithHostname(IResourceBuilder{KubernetesIngressResource}, string)"/>, or all hosts
+    /// when no hostname is configured, and forwards matching traffic to the endpoint's backing Kubernetes service.
     /// </summary>
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="path">The URL path to match (e.g., <c>"/"</c> or <c>"/api"</c>). Must start with <c>/</c>.</param>
@@ -185,7 +186,8 @@ public static class KubernetesIngressExtensions
 
     /// <summary>
     /// Adds a hostname that this ingress matches. Multiple hostnames can be added by calling
-    /// this method repeatedly. If no hostnames are configured, the ingress matches all hosts.
+    /// this method repeatedly. Path rules without an explicit host apply to each configured
+    /// hostname. If no hostnames are configured, those rules match all hosts.
     /// </summary>
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="hostname">The hostname to match (e.g., <c>"api.example.com"</c>).</param>
@@ -300,6 +302,10 @@ public static class KubernetesIngressExtensions
     /// <param name="endpoint">The endpoint reference identifying the default backend service and port.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// Kubernetes default backends remain catch-all even when hostnames are configured. Use host-specific
+    /// path rules when traffic must be restricted by hostname.
+    /// </remarks>
     [AspireExport]
     public static IResourceBuilder<KubernetesIngressResource> WithDefaultBackend(
         this IResourceBuilder<KubernetesIngressResource> builder,

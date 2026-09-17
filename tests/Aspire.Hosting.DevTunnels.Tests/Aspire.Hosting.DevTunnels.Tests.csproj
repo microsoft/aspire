@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
+    <Compile Include="$(TestsSharedDir)TestInteractionService.cs" Link="shared/TestInteractionService.cs" />
   </ItemGroup>
 
 </Project>

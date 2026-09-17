@@ -25,6 +25,9 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [InlineData("ps --format table", false)]
     [InlineData("ps --format invalid", false)]
     [InlineData("docs --format json", false)]
+    [InlineData("do --list-steps --format json", true)]
+    [InlineData("do --list-steps --format=json", true)]
+    [InlineData("do --list-steps", false)]
     public async Task BaseCommand_FormatOption_SetsConsoleOutputCorrectly(string args, bool expectErrorConsole)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -191,6 +194,9 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [InlineData("run --format json", false)]
     [InlineData("run", true)]
     [InlineData("docs", false)]
+    [InlineData("do --list-steps --format json", false)]
+    [InlineData("do --list-steps --format=json", false)]
+    [InlineData("do --list-steps --format table", true)]
     public async Task BaseCommand_UpdateNotification_RespectJsonFormat(string args, bool expectNotifyCalled)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -286,6 +292,84 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
 
         var appHostLogMessage = Assert.Single(testInteractionService.DisplayedMessages, m => m.Message == expectedAppHostLogMessage);
         Assert.Equal(ConsoleOutput.Error, appHostLogMessage.ConsoleOverride);
+    }
+
+    [Fact]
+    public async Task BaseCommand_OnFailure_WithMessageActions_CombinesErrorAndDiagnosticLogs()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cliLogPath = Path.Combine(workspace.WorkspaceRoot.FullName, "current-cli.log");
+        var appHostLogPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost-cli.log");
+        var backchannelMonitor = new TestAuxiliaryBackchannelMonitor
+        {
+            ScanAsyncCallback = _ => throw new InvalidOperationException("Something went wrong")
+        };
+        (string? ErrorMessage, string CliLogPath, string? AppHostLogPath)? capturedFailure = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = serviceProvider => new TestExtensionInteractionService(serviceProvider)
+            {
+                TryDisplayCommandFailureAsyncCallback = (errorMessage, capturedCliLogPath, capturedAppHostLogPath, _) =>
+                {
+                    capturedFailure = (errorMessage, capturedCliLogPath, capturedAppHostLogPath);
+                    return Task.FromResult(true);
+                }
+            };
+            options.AuxiliaryBackchannelMonitorFactory = _ => backchannelMonitor;
+            options.CliExecutionContextFactory = _ =>
+            {
+                var context = workspace.CreateExecutionContext(logFilePath: cliLogPath);
+                context.AppHostCliLogFilePath = appHostLogPath;
+                return context;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var interactionService = Assert.IsType<TestExtensionInteractionService>(provider.GetRequiredService<IInteractionService>());
+        var result = provider.GetRequiredService<RootCommand>().Parse("ps");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.NotNull(capturedFailure);
+        Assert.Contains("Something went wrong", capturedFailure.Value.ErrorMessage);
+        Assert.Equal(cliLogPath, capturedFailure.Value.CliLogPath);
+        Assert.Equal(appHostLogPath, capturedFailure.Value.AppHostLogPath);
+        Assert.Empty(interactionService.DisplayedErrors);
+        Assert.Empty(interactionService.DisplayedMessages);
+    }
+
+    [Fact]
+    public async Task BaseCommand_OnFailure_WithoutMessageActions_PreservesLegacyNotifications()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cliLogPath = Path.Combine(workspace.WorkspaceRoot.FullName, "current-cli.log");
+        var backchannelMonitor = new TestAuxiliaryBackchannelMonitor
+        {
+            ScanAsyncCallback = _ => throw new InvalidOperationException("Something went wrong")
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = serviceProvider => new TestExtensionInteractionService(serviceProvider);
+            options.AuxiliaryBackchannelMonitorFactory = _ => backchannelMonitor;
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(logFilePath: cliLogPath);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var interactionService = Assert.IsType<TestExtensionInteractionService>(provider.GetRequiredService<IInteractionService>());
+        var result = provider.GetRequiredService<RootCommand>().Parse("ps");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Single(interactionService.DisplayedErrors);
+        Assert.Empty(interactionService.DisplayedErrorsWithActions);
+        var logMessage = Assert.Single(interactionService.DisplayedMessages);
+        Assert.Contains(cliLogPath, logMessage.Message);
     }
 
     [Fact]

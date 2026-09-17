@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
 using Aspire.TypeSystem;
@@ -39,6 +40,68 @@ public class AtsGoCodeGeneratorTests
 
         await Verify(files["aspire.go"], extension: "go")
             .UseFileName("AtsGeneratedAspire");
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_NullablePrimitiveArrayElementsUsePointers()
+    {
+        var nullableNumbers = Assert.IsType<AtsTypeRef>(AtsCapabilityScanner.CreateTypeRef(typeof(double?[])));
+        var atsContext = new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            EnumTypes = [],
+            DtoTypes =
+            [
+                new AtsDtoTypeInfo
+                {
+                    TypeId = "Tests/NullableArrayDto",
+                    Name = "NullableArrayDto",
+                    Properties =
+                    [
+                        new AtsDtoPropertyInfo
+                        {
+                            Name = "Values",
+                            Type = nullableNumbers
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var generated = _generator.GenerateDistributedApplication(atsContext)["aspire.go"];
+
+        Assert.Contains("Values []*float64", generated, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ExportedNullablePrimitiveArraysUsePointerInitializers()
+    {
+        var nullableNumbers = Assert.IsType<AtsTypeRef>(AtsCapabilityScanner.CreateTypeRef(typeof(double?[])));
+        var atsContext = new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            EnumTypes = [],
+            DtoTypes = [],
+            ExportedValues =
+            [
+                new AtsExportedValueInfo
+                {
+                    OwningAssemblyName = TestTypesAssemblyName,
+                    PathSegments = ["NullableArrays", "Numbers"],
+                    Value = JsonNode.Parse("[1,null,2.5]"),
+                    Type = nullableNumbers
+                }
+            ]
+        };
+
+        var generated = _generator.GenerateDistributedApplication(atsContext)["aspire.go"];
+
+        Assert.Contains(
+            "[]*float64{func(value float64) *float64 { return &value }(1), nil, func(value float64) *float64 { return &value }(2.5)}",
+            generated,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -305,6 +368,80 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    public void GeneratedCode_RequiredNullablePrimitiveAndEnumSettersSendNullValues()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+        var aspireGo = _generator.GenerateDistributedApplication(atsContext)["aspire.go"].ReplaceLineEndings("\n");
+        var primitiveSetter = ExtractGeneratedMethod(
+            aspireGo,
+            "func (s *endpointUpdateContext) SetPort(value *float64)");
+        var enumSetter = ExtractGeneratedMethod(
+            aspireGo,
+            "func (s *containerBuildOptionsCallbackContext) SetDestination(value *ContainerImageDestination)");
+
+        Assert.Contains("reqArgs[\"value\"] = serializeValue(value)", primitiveSetter, StringComparison.Ordinal);
+        Assert.DoesNotContain("if value != nil", primitiveSetter, StringComparison.Ordinal);
+        Assert.Contains("reqArgs[\"value\"] = serializeValue(value)", enumSetter, StringComparison.Ordinal);
+        Assert.DoesNotContain("if value != nil", enumSetter, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(
+        "func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithConfig(config *TestConfigDto)",
+        "config",
+        "config != nil")]
+    [InlineData(
+        "func (s *testRedisResource) WithConnectionString(connectionString *ReferenceExpression)",
+        "connectionString",
+        "connectionString != nil")]
+    [InlineData(
+        "func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrl(url any",
+        "url",
+        "!isNil(url)")]
+    public void GeneratedCode_RequiredNonNullableNilableArgumentsOmitNilValues(
+        string signature,
+        string parameterName,
+        string nilGuard)
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"].ReplaceLineEndings("\n");
+        var method = ExtractGeneratedMethod(aspireGo, signature);
+
+        Assert.Contains(
+            $"if {nilGuard} {{ reqArgs[\"{parameterName}\"] = serializeValue({parameterName}) }}",
+            method,
+            StringComparison.Ordinal);
+        Assert.Contains("func isNil(value any) bool", files["base.go"], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GeneratedCode_InteractionInputValueHelpersHandleNullableValues()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+        var aspireGo = _generator.GenerateDistributedApplication(atsContext)["aspire.go"].ReplaceLineEndings("\n");
+
+        Assert.Contains(
+            "func (s *interactionInputCollection) Value(name string) (string, error) {\n" +
+            "\tinput, err := s.Get(name)\n" +
+            "\tif err != nil { return \"\", err }\n" +
+            "\tif input == nil || input.Value == nil { return \"\", nil }\n" +
+            "\treturn *input.Value, nil\n" +
+            "}",
+            aspireGo,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "func (s *interactionInputCollection) RequiredValue(name string) (string, error) {\n" +
+            "\tinput, err := s.Required(name)\n" +
+            "\tif err != nil { return \"\", err }\n" +
+            "\tif input.Value == nil { return \"\", nil }\n" +
+            "\treturn *input.Value, nil\n" +
+            "}",
+            aspireGo,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void GeneratedCode_CallbackArgsSkipUndecodableStructFields()
     {
         var atsContext = CreateContextFromBothAssemblies();
@@ -429,6 +566,16 @@ public class AtsGoCodeGeneratorTests
         var testAssembly = typeof(TestRedisResource).Assembly;
         var hostingAssembly = typeof(DistributedApplication).Assembly;
         return (testAssembly, hostingAssembly);
+    }
+
+    private static string ExtractGeneratedMethod(string generatedCode, string signature)
+    {
+        var methodStart = generatedCode.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(methodStart >= 0, $"Generated method not found: {signature}");
+        var methodEnd = generatedCode.IndexOf("\n}\n", methodStart, StringComparison.Ordinal);
+        Assert.True(methodEnd >= 0, $"Generated method is incomplete: {signature}");
+
+        return generatedCode[methodStart..methodEnd];
     }
 
 }

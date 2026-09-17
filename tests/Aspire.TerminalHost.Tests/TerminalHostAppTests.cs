@@ -373,6 +373,56 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GracefulCancellationDeletesProducerAndConsumerSockets()
+    {
+        // Regression for https://github.com/microsoft/aspire/issues/19302: on a graceful
+        // `aspire stop`, DCP signals the terminal host (SIGTERM) which Program.cs turns into a
+        // cancellation of the token passed to RunAsync. That cancellation MUST flow through
+        // TearDownAsync -> TerminalReplica.DisposeAsync and unlink both listen sockets
+        // ({id}.dcp.sock producer + {id}.host.sock consumer). If it doesn't (the old SIGINT-only
+        // behavior), the child is SIGKILLed while those sockets are still bound and both files
+        // leak on disk. This test drives exactly the token-cancel path the SIGTERM handler now
+        // invokes and asserts both files are gone afterward.
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
+
+        await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
+        using var hostCts = new CancellationTokenSource();
+        var hostTask = app.RunAsync(hostCts.Token);
+
+        try
+        {
+            await WaitForFileAsync(control, TimeSpan.FromSeconds(10));
+
+            // Both listen sockets are bound while the replica waits for its first producer — this
+            // is precisely the on-disk state that leaks under SIGKILL. The producer UDS is a
+            // single-accept listener (its file disappears once a producer dials in), so we assert
+            // on the pre-connect bound state rather than connecting a producer. Wait for both to
+            // exist first; otherwise the "deleted after shutdown" assertion below could pass
+            // trivially because the sockets were never bound.
+            await WaitForFileAsync(args.ProducerUdsPath, TimeSpan.FromSeconds(10));
+            await WaitForFileAsync(args.ConsumerUdsPath, TimeSpan.FromSeconds(10));
+            Assert.True(File.Exists(args.ProducerUdsPath), "Producer socket should be bound while the replica waits.");
+            Assert.True(File.Exists(args.ConsumerUdsPath), "Consumer socket should be bound while the replica waits.");
+        }
+        finally
+        {
+            // Cancel ONLY the external token — this is precisely what Program.cs's SIGINT/SIGTERM
+            // handler does (cts.Cancel()). We deliberately do NOT call app.RequestShutdown() so the
+            // test exercises the signal-driven graceful path end to end.
+            hostCts.Cancel();
+            await hostTask.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+
+        Assert.False(
+            File.Exists(args.ProducerUdsPath),
+            $"Producer socket '{args.ProducerUdsPath}' should be deleted after graceful shutdown.");
+        Assert.False(
+            File.Exists(args.ConsumerUdsPath),
+            $"Consumer socket '{args.ConsumerUdsPath}' should be deleted after graceful shutdown.");
+    }
+
+    [Fact]
     public async Task SessionSnapshotIncludesNewFields()
     {
         // Even before any producer has connected, the snapshot must populate

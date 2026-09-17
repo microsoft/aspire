@@ -427,14 +427,7 @@ internal sealed class DcpHost
         var directoryName = Path.GetDirectoryName(socketPath);
         if (!string.IsNullOrEmpty(directoryName))
         {
-            if (OperatingSystem.IsWindows())
-            {
-                Directory.CreateDirectory(directoryName);
-            }
-            else
-            {
-                Directory.CreateDirectory(directoryName, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
-            }
+            DirectoryHelper.CreateWithOwnerOnlyPermissions(directoryName);
         }
 
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);

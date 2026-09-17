@@ -235,6 +235,45 @@ public class ResourceDependencyTests
     }
 
     [Fact]
+    public async Task PeekCachedCallbackResultsOnly_OnlySeesCachedResultsAndNeverInvokesCallback()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var param = builder.AddParameter("config");
+        var invocations = 0;
+        var executable = builder.AddExecutable("app", "myapp", ".")
+            .WithEnvironment(context =>
+            {
+                invocations++;
+                context.EnvironmentVariables["CONFIG"] = param.Resource;
+            });
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var peekOptions = new ResourceDependencyDiscoveryOptions
+        {
+            DiscoveryMode = ResourceDependencyDiscoveryMode.DirectOnly,
+            PeekCachedCallbackResultsOnly = true
+        };
+
+        // Nothing has evaluated/cached the callback yet, so peek-only discovery must not invoke it and must not
+        // discover the referenced parameter — it only reads results that were already cached.
+        var beforePriming = await executable.Resource.GetResourceDependenciesAsync(executionContext, peekOptions);
+        Assert.Equal(0, invocations);
+        Assert.Empty(beforePriming);
+
+        // Mirror what DCP does when it starts the resource: evaluate the callback once so its result is cached.
+        var annotation = executable.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>().Single();
+        await annotation.AsCallbackAnnotation().EvaluateOnceAsync(
+            new EnvironmentCallbackContext(executionContext, executable.Resource, new Dictionary<string, object>()));
+        Assert.Equal(1, invocations);
+
+        // Peek-only discovery now surfaces the cached reference without invoking the callback a second time.
+        var afterPriming = await executable.Resource.GetResourceDependenciesAsync(executionContext, peekOptions);
+        Assert.Equal(1, invocations);
+        Assert.Contains(param.Resource, afterPriming);
+    }
+
+    [Fact]
     public async Task OnlyLastLaunchToolArgsAnnotationContributesDependencies()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

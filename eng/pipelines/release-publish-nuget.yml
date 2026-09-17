@@ -4,16 +4,19 @@
 # 1. Downloads signed packages from a specified build
 # 2. Publishes packages to NuGet.org and npm
 # 3. Promotes the build to the Aspire GA channel via darc
-# 4. Submits WinGet manifests and, when SkipHomebrewValidation=false,
-#    validates the Homebrew cask
+# 4. Submits WinGet manifests
 # 5. Optionally publishes the signed VS Code extension to the Marketplace
 # 6. Dispatches the release-github-tasks GitHub Actions workflow as the
-#    aspire-repo-bot GitHub App (tag, GitHub Release, merge-back PR,
+#    aspire-repo-bot GitHub App (tag, DRAFT GitHub Release, merge-back PR,
 #    baseline PR) and waits for it to complete
 # 7. Uploads aspire-cli-* archives from the source build's BlobArtifacts
-#    onto the GitHub Release as the aspire-repo-bot
+#    onto the draft GitHub Release as the aspire-repo-bot
 # 8. Dispatches the Nix flake manifest update workflow after stable release
 #    assets are live
+#
+# The release manager publishes the prepared draft release manually as the
+# final step. Homebrew cask validation runs post-publish in
+# .github/workflows/homebrew-validate-release.yml (on release: [published]).
 #
 # For full documentation, see: docs/release-process.md
 
@@ -74,7 +77,7 @@ parameters:
   - name: SkipWinGetPublish
     displayName: '[Advanced] Skip WinGet Publishing (re-run after success)'
     type: boolean
-    default: true
+    default: false
 
   - name: SkipGitHubTasks
     displayName: '[Advanced] Skip GitHub Tasks dispatch (re-run after success)'
@@ -85,11 +88,6 @@ parameters:
     displayName: '[Advanced] Skip CLI asset upload to GitHub Release (re-run after success)'
     type: boolean
     default: false
-
-  - name: SkipHomebrewValidation
-    displayName: '[Advanced] Skip Homebrew cask validation against live GitHub release (default; set false to opt in)'
-    type: boolean
-    default: true
 
   - name: SkipNixPackageUpdate
     displayName: '[Advanced] Skip Nix flake update on baseline PR (re-run after success)'
@@ -241,7 +239,7 @@ extends:
                   displayName: 'Publish npm Signature Sidecars'
                   targetPath: '$(Pipeline.Workspace)/npm/signatures'
                   artifactName: 'NpmSignatureArtifacts'
-                - ${{ if eq(parameters.SkipWinGetPublish, false) }}:
+                - ${{ if and(eq(parameters.SkipWinGetPublish, false), eq(parameters.IsPrerelease, false)) }}:
                   - output: pipelineArtifact
                     displayName: 'Publish WinGet Manifests'
                     targetPath: '$(Pipeline.Workspace)/installers/winget-manifests-stable'
@@ -421,7 +419,7 @@ extends:
                     downloadPath: '$(Pipeline.Workspace)/aspire-build'
                     checkDownloadedFiles: true
 
-              - ${{ if eq(parameters.SkipWinGetPublish, false) }}:
+              - ${{ if and(eq(parameters.SkipWinGetPublish, false), eq(parameters.IsPrerelease, false)) }}:
                 - download: aspire-build
                   displayName: 'Download WinGet Manifests from Source Build'
                   artifact: winget-manifests-stable
@@ -2101,7 +2099,14 @@ extends:
                   } else {
                     Write-Host " (EXECUTED)"
                   }
-                  Write-Host "║ WinGet:         (runs in parallel after this job)"
+                  Write-Host "║ WinGet:         ${{ parameters.SkipWinGetPublish }}" -NoNewline
+                  if ("${{ parameters.SkipWinGetPublish }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
+                    Write-Host " (SKIPPED - prerelease)"
+                  } else {
+                    Write-Host " (runs in parallel after this job)"
+                  }
                   Write-Host "║ GitHub Tasks:   ${{ parameters.SkipGitHubTasks }}" -NoNewline
                   if ("${{ parameters.SkipGitHubTasks }}" -eq "true") {
                     Write-Host " (SKIPPED)"
@@ -2116,13 +2121,7 @@ extends:
                   } elseif ("${{ parameters.DryRun }}" -eq "true") {
                     Write-Host " (verify only; no upload in dry-run)"
                   } else {
-                    Write-Host " (uploaded after GitHub Tasks job)"
-                  }
-                  Write-Host "║ Homebrew Val:   ${{ parameters.SkipHomebrewValidation }}" -NoNewline
-                  if ("${{ parameters.SkipHomebrewValidation }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } else {
-                    Write-Host " (validates cask against live GH release after asset upload)"
+                    Write-Host " (uploaded to draft release after GitHub Tasks job)"
                   }
                   Write-Host "║ Nix Flake:      ${{ parameters.SkipNixPackageUpdate }}" -NoNewline
                   if ("${{ parameters.SkipNixPackageUpdate }}" -eq "true") {
@@ -2186,7 +2185,9 @@ extends:
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
 
-                  npm install -g @vscode/vsce@3.7.1 --registry https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+                  # Pin Azure Identity explicitly so VSCE's transitive dependency graph
+                  # remains stable across npm feed updates.
+                  npm install -g @vscode/vsce@3.7.1 @azure/identity@4.13.1 --registry https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
                   vsce --version
                 displayName: 'Install vsce'
 
@@ -2318,7 +2319,8 @@ extends:
             condition: |
               and(
                 in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
-                eq('${{ parameters.SkipWinGetPublish }}', 'false')
+                eq('${{ parameters.SkipWinGetPublish }}', 'false'),
+                eq('${{ parameters.IsPrerelease }}', 'false')
               )
             timeoutInMinutes: 30
             pool:
@@ -2346,56 +2348,56 @@ extends:
                   dryRun: ${{ parameters.DryRun }}
 
       # ===== STAGE 3: GITHUB TASKS =====
-      # Four responsibilities, all running as (or against) the aspire-repo-bot
+      # Three responsibilities, all running as (or against) the aspire-repo-bot
       # GitHub App:
       #
       #   1. DispatchGitHubTasksJob — dispatches the release-github-tasks
-      #      GitHub Actions workflow (tag, GitHub Release, merge-back PR,
+      #      GitHub Actions workflow (tag, DRAFT GitHub Release, merge-back PR,
       #      baseline PR) and polls the run to completion. Fails the pipeline
       #      if the workflow doesn't succeed.
       #
       #   2. PublishReleaseAssetsJob — downloads aspire-cli-* archives from
       #      the signed source build's BlobArtifacts, verifies their SHA512s,
-      #      and uploads them as assets on the GitHub release that the
-      #      dispatch job just created.
+      #      and uploads them as assets on the draft GitHub release that the
+      #      dispatch job just created. Asset upload against drafts is
+      #      supported by the Releases REST API.
       #
       #   3. UpdateNixPackageJob — dispatches the update-nix-cli-flake
-      #      GitHub Actions workflow after release asset upload. The workflow
-      #      reads the live .sha512 assets, commits eng/nix/versions.json to
-      #      the update-baseline-<version> branch, and opens the PR from that
-      #      branch (release-github-tasks.yml created only the branch via
+      #      GitHub Actions workflow. It reads the aspire-cli-*.tar.gz.sha512
+      #      checksums from the signed source build's BlobArtifacts and passes
+      #      them to the workflow as inputs, so the manifest is built from the
+      #      build (not the draft release, whose assets aren't publicly
+      #      downloadable). The workflow commits eng/nix/versions.json to the
+      #      update-baseline-<version> branch and opens the PR from that branch
+      #      (release-github-tasks.yml created only the branch via
       #      defer_baseline_pr=true; PR creation is handled here).
       #
-      #   4. HomebrewValidateJob — runs the full upstream-equivalent cask
-      #      validation (`brew audit --cask --online --signing` + real
-      #      `brew install`/`brew uninstall`) against the cask generated by
-      #      the source build, with the live GitHub release URL it points
-      #      at. This is the moment when the URL is actually reachable —
-      #      the source-build prepare stage can only validate offline because
-      #      the GitHub release for the version being built does not exist
-      #      yet. Catches problems that would otherwise only surface to
-      #      end users (or block Homebrew/homebrew-cask's autobump PR).
+      # After these jobs succeed the release is a fully-prepared DRAFT — the
+      # release manager publishes it manually as a final step (see
+      # docs/release-process.md "Publish the draft release"). The draft-first
+      # flow is required for compatibility with GitHub's immutable releases
+      # (https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases):
+      # publishing the release locks assets + tag, so every mutation must
+      # happen before publish.
+      #
+      # Homebrew cask validation against the live GitHub release used to
+      # run as a fourth job in this stage. It now lives in
+      # .github/workflows/homebrew-validate-release.yml and runs on the
+      # `release: [published]` event, i.e. only once the release manager
+      # publishes the draft and the asset URLs become public. See that
+      # workflow for details.
       #
       # Each job has its own skip flag (SkipGitHubTasks / SkipReleaseAssets /
-      # SkipNixPackageUpdate / SkipHomebrewValidation) so partial-failure
-      # re-runs can recover any piece independently. Skipping all four skips
-      # the stage entirely.
+      # SkipNixPackageUpdate) so partial-failure re-runs can recover any piece
+      # independently. Skipping all three skips the stage entirely.
       #
       # DryRun behavior: this stage still runs when DryRun=true. DryRun is
       # propagated to the GH workflow as dry_run=true (keeps it from
       # creating tags/releases/PRs) and to the asset script (downloads and
-      # verifies SHA512s but skips the gh release upload). When
-      # SkipHomebrewValidation=false, HomebrewValidateJob also runs under DryRun
-      # — it does not publish anything, it only audits and `brew install`/
-      # `brew uninstall` against a public URL. The Nix workflow is dispatched
-      # with dry_run=true and intentionally does not read release assets in
-      # that mode because the AzDO dry-run path does not create/upload a live
-      # GitHub release. If the release for the version being validated does not
-      # yet exist when Homebrew validation runs (DryRun, or a re-run after
-      # assets were already uploaded), the job is expected to surface that as a
-      # real failure rather than be silently skipped. This lets a release
-      # manager validate the full AzDO → GitHub path end-to-end without
-      # performing a real release.
+      # verifies SHA512s but skips the gh release upload). The Nix workflow is
+      # dispatched with dry_run=true and intentionally does not read release
+      # assets in that mode because the AzDO dry-run path does not create/upload
+      # a live GitHub release.
       - stage: GitHubTasks
         displayName: 'Dispatch GitHub Release Tasks'
         # PrepareArtifacts is listed explicitly (in addition to Release) so the
@@ -2417,8 +2419,7 @@ extends:
               and(
                 eq('${{ parameters.SkipNixPackageUpdate }}', 'false'),
                 eq('${{ parameters.IsPrerelease }}', 'false')
-              ),
-              eq('${{ parameters.SkipHomebrewValidation }}', 'false')
+              )
             )
           )
         jobs:
@@ -2650,13 +2651,17 @@ extends:
                   ASPIRE_BOT_APP_ID: $(aspire-bot-app-id)
                   ASPIRE_BOT_PRIVATE_KEY: $(aspire-bot-private-key)
 
-          # Dispatch the Nix manifest update workflow only after the GitHub
-          # release assets are live. The updater reads the release .sha512
-          # assets, commits eng/nix/versions.json to the update-baseline-<version>
-          # branch created by release-github-tasks.yml (which deferred PR creation
-          # via defer_baseline_pr=true), and opens the PR from that branch.
-          # Accepting 'Skipped' supports partial-failure re-runs where the
-          # assets were already uploaded and SkipReleaseAssets=true is used.
+          # Dispatch the Nix manifest update workflow. The checksums come from
+          # the signed source build's BlobArtifacts (the .sha512 sidecars this
+          # job downloads below), NOT from the GitHub release, so the manifest
+          # can be produced while the release is still an unpublished draft —
+          # required for immutable releases. The updater commits
+          # eng/nix/versions.json to the update-baseline-<version> branch created
+          # by release-github-tasks.yml (which deferred PR creation via
+          # defer_baseline_pr=true) and opens the PR from that branch. dependsOn
+          # PublishReleaseAssetsJob is kept for ordering (branch creation +
+          # single release upload), and accepting 'Skipped' supports
+          # partial-failure re-runs where SkipReleaseAssets=true is used.
           - job: UpdateNixPackageJob
             displayName: 'Update baseline PR with Nix flake manifest'
             dependsOn: PublishReleaseAssetsJob
@@ -2687,10 +2692,56 @@ extends:
                 displayName: 'Checkout repo (for dispatch script)'
                 fetchDepth: 1
 
+              # Download the aspire-cli-* .sha512 sidecars from the source build.
+              # These are the checksums we forward to the Nix updater so it never
+              # has to read the (draft, non-public) GitHub release assets. Only
+              # the tiny .sha512 files are needed here — not the archives — so the
+              # glob is narrowed accordingly. See PublishReleaseAssetsJob for the
+              # broader '**/aspire-cli-*' download and the reason the '**/' prefix
+              # is required (the artifact name is a path prefix on each item).
+              - download: aspire-build
+                displayName: 'Download aspire-cli-*.sha512 from Source Build'
+                artifact: BlobArtifacts
+                patterns: '**/aspire-cli-*.sha512'
+
               - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $version   = "$(ReleaseVersionEffective)"
+                  $assetsDir = Join-Path "$(Pipeline.Workspace)" 'aspire-build/BlobArtifacts'
+
+                  # The Nix flake ships the .tar.gz (macOS/Linux) archives only, so
+                  # read just those four RIDs' checksums. Map each to the workflow
+                  # input name expected by update-nix-cli-flake.yml.
+                  $ridToInput = [ordered]@{
+                    'osx-arm64'   = 'sha512_osx_arm64'
+                    'osx-x64'     = 'sha512_osx_x64'
+                    'linux-arm64' = 'sha512_linux_arm64'
+                    'linux-x64'   = 'sha512_linux_x64'
+                  }
+
                   $inputs = @{
-                    release_version = "$(ReleaseVersionEffective)"
-                    dry_run        = ([System.Convert]::ToBoolean("${{ parameters.DryRun }}")).ToString().ToLowerInvariant()
+                    release_version = $version
+                    dry_run         = ([System.Convert]::ToBoolean("${{ parameters.DryRun }}")).ToString().ToLowerInvariant()
+                  }
+
+                  foreach ($rid in $ridToInput.Keys) {
+                    $shaPath = Join-Path $assetsDir "aspire-cli-$rid-$version.tar.gz.sha512"
+                    if (-not (Test-Path $shaPath)) {
+                        Write-Host "ERROR: No .sha512 companion found for aspire-cli-$rid-$version.tar.gz (expected at $shaPath). The source build must produce the CLI archives and their checksums before the Nix manifest can be built." -ForegroundColor Red
+                        exit 1
+                    }
+
+                    # .sha512 files emitted by the build are a single line:
+                    # <hex-hash>[whitespace<filename>]. Take the first token and
+                    # lowercase it, matching publish-release-cli-assets.ps1.
+                    $hex = ((Get-Content $shaPath -Raw).Trim() -split '\s+')[0].ToLower()
+                    if ($hex -notmatch '^[0-9a-f]{128}$') {
+                        Write-Host "ERROR: '$shaPath' did not contain a 128-char hex SHA512 (got '$hex')." -ForegroundColor Red
+                        exit 1
+                    }
+
+                    $inputs[$ridToInput[$rid]] = $hex
+                    Write-Host "  $($ridToInput[$rid]) = $hex"
                   }
 
                   & "$(Build.SourcesDirectory)/eng/pipelines/scripts/dispatch-release-github-tasks.ps1" `
@@ -2714,67 +2765,3 @@ extends:
                 condition: always()
                 env:
                   DISPATCHED_RUN_URL: $(DispatchedRunUrl)
-
-          # Validate the generated Homebrew cask against the live GitHub
-          # release. Runs `brew audit --cask --online --signing` and a real
-          # `brew install`/`brew uninstall` against the cask file produced by
-          # the source build. The cask URL points at
-          # github.com/microsoft/aspire/releases/download/v#{version}/..., so
-          # the release for the version being built must already exist for
-          # this job to pass — normally that happens earlier in this stage
-          # via PublishReleaseAssetsJob. The dependsOn below is purely
-          # temporal; the cask artifact itself comes from the aspire-build
-          # resource, not from PublishReleaseAssetsJob. Accepting 'Skipped'
-          # alongside Succeeded lets you re-run with SkipReleaseAssets=true
-          # against a previously uploaded release; if the release is missing
-          # the job is expected to fail loudly rather than be silently
-          # gated out.
-          #
-          # Modeled on PublishReleaseAssetsJob (regular buildJob with checkout
-          # + a `download: aspire-build` step) rather than WingetJob's
-          # releaseJob + templateContext.inputs pattern, because we need both
-          # to check out the repo (for eng/homebrew/validate-cask-artifact.sh)
-          # and to consume an artifact from the source build — and 1ES PT's
-          # releaseJob enforces `checkout: none`.
-          - job: HomebrewValidateJob
-            displayName: 'Validate Homebrew Cask against live release'
-            dependsOn: PublishReleaseAssetsJob
-            condition: |
-              and(
-                eq('${{ parameters.SkipHomebrewValidation }}', 'false'),
-                in(dependencies.PublishReleaseAssetsJob.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
-              )
-            timeoutInMinutes: 30
-            pool:
-              name: Azure Pipelines
-              vmImage: macOS-latest-internal
-              os: macOS
-            templateContext:
-              # No ESRP publish in this job (read-only brew audit / brew install of a public cask).
-              # Skip the auto-injected publish auth task.
-              mb:
-                publish:
-                  enabled: false
-            steps:
-              - checkout: self
-                displayName: 'Checkout repo (for validate-cask-artifact.sh)'
-                fetchDepth: 1
-
-              - download: aspire-build
-                displayName: 'Download Homebrew Cask from Source Build'
-                artifact: homebrew-cask-stable
-
-              - bash: |
-                  set -euo pipefail
-                  cask_file="$(Pipeline.Workspace)/aspire-build/homebrew-cask-stable/aspire.rb"
-                  if [[ ! -f "$cask_file" ]]; then
-                    echo "##[error]Expected cask file not found: $cask_file"
-                    ls -la "$(Pipeline.Workspace)/aspire-build/homebrew-cask-stable" || true
-                    exit 1
-                  fi
-
-                  "$(Build.SourcesDirectory)/eng/homebrew/validate-cask-artifact.sh" \
-                    --cask-file "$cask_file" \
-                    --channel stable \
-                    --validation-mode LiveRelease
-                displayName: '🟣Validate cask against live GitHub release'

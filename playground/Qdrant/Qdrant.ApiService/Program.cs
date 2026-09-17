@@ -84,7 +84,7 @@ app.MapGet("/create", async (QdrantClient client, ILogger<Program> logger) =>
 
 app.MapGet("/search", async (QdrantClient client) =>
 {
-    var results = await client.SearchAsync("movie_collection", new[] { 0.12217915f, -0.034832448f }, limit: 3);
+    var results = await client.QueryAsync("movie_collection", new[] { 0.12217915f, -0.034832448f }, limit: 3);
     return results.Select(titles => titles.Payload["title"].StringValue);
 });
 

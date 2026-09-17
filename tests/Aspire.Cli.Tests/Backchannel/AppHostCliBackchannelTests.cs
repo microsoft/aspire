@@ -35,7 +35,7 @@ public class AppHostCliBackchannelTests
             await File.WriteAllBytesAsync(tempFile, new byte[2048]); // 2 KB exceeds the 1 KB limit
 
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-                () => backchannel.UploadFileAsync(tempFile, "large.bin", CancellationToken.None));
+                () => backchannel.UploadFileAsync(tempFile, "large.bin", 1, "File", CancellationToken.None));
 
             Assert.Contains("large.bin", ex.Message);
             Assert.Contains("2048", ex.Message);
@@ -74,7 +74,7 @@ public class AppHostCliBackchannelTests
             // exception proves the size check passed.
             using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
             var ex = await Assert.ThrowsAnyAsync<OperationCanceledException>(
-                () => backchannel.UploadFileAsync(tempFile, "small.bin", cts.Token));
+                () => backchannel.UploadFileAsync(tempFile, "small.bin", 1, "File", cts.Token));
 
             // If we get a cancellation exception (waiting for RPC), the size check passed.
             Assert.DoesNotContain("exceeds the maximum upload size", ex.Message);

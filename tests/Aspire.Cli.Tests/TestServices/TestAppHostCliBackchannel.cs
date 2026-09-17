@@ -235,7 +235,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         }
         else
         {
-            return ["baseline.v2", "pipeline-steps.v1"];
+            return ["baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2"];
         }
     }
 
@@ -281,7 +281,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
 
     public Func<string, string, CancellationToken, Task<UploadFileResponse>>? UploadFileAsyncCallback { get; set; }
 
-    public async Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, CancellationToken cancellationToken)
+    public async Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, int interactionId, string inputName, CancellationToken cancellationToken)
     {
         if (UploadFileAsyncCallback is not null)
         {

@@ -7,6 +7,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.NuGet;

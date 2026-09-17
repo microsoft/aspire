@@ -1,9 +1,16 @@
 # Update Nix CLI Flake Workflow
 #
-# This workflow updates eng/nix/versions.json after the AzDO release pipeline
-# uploads the stable aspire-cli-* archives and their .sha512 sidecars to the
-# GitHub release. It is dispatched by release-publish-nuget.yml after
-# PublishReleaseAssetsJob, so the release asset URLs it pins are already live.
+# This workflow updates eng/nix/versions.json for a stable Aspire CLI release.
+# It is dispatched by release-publish-nuget.yml, which passes the aspire-cli-*
+# .sha512 digests it already downloaded and verified from the signed source
+# build's BlobArtifacts. Because the checksums come from the build (not the
+# GitHub release), the manifest can be produced while the release is still an
+# unpublished draft — required for immutable releases, where draft assets aren't
+# served from the public releases/download/... URL. The url values pinned in
+# versions.json are still the public release download URLs (what Nix consumers
+# fetch once the release is published); only the checksum source changed.
+# Manual runs against an already-published release may omit the sha512_* inputs,
+# in which case the updater reads the .sha512 assets from the release directly.
 # The changes are committed to the update-baseline-<version> branch created by
 # release-github-tasks.yml, then the workflow creates or updates the PR from
 # that branch so the post-release stable-version updates land together.
@@ -22,6 +29,31 @@ on:
         required: false
         type: boolean
         default: false
+      # Optional build-provided SHA512 digests (hex), one per platform RID. When
+      # supplied (all four required), the manifest updater uses them directly and
+      # does NOT read the .sha512 assets from the GitHub release. The AzDO release
+      # pipeline passes the digests it already downloaded and verified from the
+      # signed source build's BlobArtifacts, so the Nix manifest can be built
+      # while the GitHub release is still an unpublished draft (draft assets are
+      # not served from the public releases/download/... URL). Manual runs against
+      # an already-published release can omit these and fall back to the release
+      # read. See eng/nix/update-versions.sh for the offline-mode contract.
+      sha512_osx_arm64:
+        description: 'SHA512 (hex) of aspire-cli-osx-arm64-<version>.tar.gz. Optional; omit to read from the published release.'
+        required: false
+        type: string
+      sha512_osx_x64:
+        description: 'SHA512 (hex) of aspire-cli-osx-x64-<version>.tar.gz. Optional; omit to read from the published release.'
+        required: false
+        type: string
+      sha512_linux_arm64:
+        description: 'SHA512 (hex) of aspire-cli-linux-arm64-<version>.tar.gz. Optional; omit to read from the published release.'
+        required: false
+        type: string
+      sha512_linux_x64:
+        description: 'SHA512 (hex) of aspire-cli-linux-x64-<version>.tar.gz. Optional; omit to read from the published release.'
+        required: false
+        type: string
 
 concurrency:
   group: update-nix-cli-flake-${{ inputs.release_version }}
@@ -131,8 +163,36 @@ jobs:
 
       - name: Update Nix release manifest
         if: inputs.dry_run != true
+        env:
+          # Passed through env (not string-interpolated into the run body) so the
+          # digest values can't break the shell quoting. Empty when the caller
+          # didn't supply build-provided checksums (manual/post-publish runs).
+          SHA512_OSX_ARM64: ${{ inputs.sha512_osx_arm64 }}
+          SHA512_OSX_X64: ${{ inputs.sha512_osx_x64 }}
+          SHA512_LINUX_ARM64: ${{ inputs.sha512_linux_arm64 }}
+          SHA512_LINUX_X64: ${{ inputs.sha512_linux_x64 }}
         run: |
-          eng/nix/update-versions.sh --version "${{ inputs.release_version }}"
+          set -euo pipefail
+          args=(--version "${{ inputs.release_version }}")
+
+          # If any build-provided digest is present, run the updater in offline
+          # mode (no GitHub release read). Require all four so the manifest is
+          # complete and reproducible — a partial set is a pipeline wiring bug.
+          if [[ -n "$SHA512_OSX_ARM64" || -n "$SHA512_OSX_X64" || -n "$SHA512_LINUX_ARM64" || -n "$SHA512_LINUX_X64" ]]; then
+            if [[ -z "$SHA512_OSX_ARM64" || -z "$SHA512_OSX_X64" || -z "$SHA512_LINUX_ARM64" || -z "$SHA512_LINUX_X64" ]]; then
+              echo "::error::Partial SHA512 inputs supplied. All four platform checksums (osx-arm64, osx-x64, linux-arm64, linux-x64) are required for offline mode."
+              exit 1
+            fi
+            echo "Using build-provided SHA512 checksums (offline mode); not reading the GitHub release."
+            args+=(--sha512 "osx-arm64=$SHA512_OSX_ARM64")
+            args+=(--sha512 "osx-x64=$SHA512_OSX_X64")
+            args+=(--sha512 "linux-arm64=$SHA512_LINUX_ARM64")
+            args+=(--sha512 "linux-x64=$SHA512_LINUX_X64")
+          else
+            echo "No SHA512 inputs supplied; reading checksums from the published GitHub release assets."
+          fi
+
+          eng/nix/update-versions.sh "${args[@]}"
 
       - name: Show Nix manifest diff
         if: inputs.dry_run != true

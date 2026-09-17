@@ -152,24 +152,19 @@ internal sealed class InitCommand : BaseCommand
         // ignore failures since `aspire doctor` / `aspire certs trust` provide a fallback.
         if (isCSharp)
         {
-            try
-            {
-                _ = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
-            }
-            catch (CertificateServiceException)
-            {
-                // Non-fatal: surface via aspire doctor / aspire certs trust.
-            }
+            _ = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
         }
 
-        // Step 4: Chain to aspire agent init for MCP server + skill configuration.
-        // This prompt lets users choose which skills to install — including aspireify.
+        // Step 4: Chain to aspire agent init for skill configuration.
+        // MCP remains an explicit opt-in through standalone `aspire agent init`.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
         var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
         // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
-        // (which includes aspireify as the natural follow-up wiring skill).
+        // (which includes aspireify as the natural follow-up wiring skill). This chained flow
+        // never registers `--mcp`, so MCP configuration is unavailable here by construction —
+        // it remains reachable only through standalone `aspire agent init`.
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
             InteractionService,
             CliExitCodes.Success,
@@ -177,7 +172,6 @@ internal sealed class InitCommand : BaseCommand
             agentInitBinding,
             skillLocationsBinding,
             skillsBinding,
-            null,
             cancellationToken);
 
         // Step 5: Print follow-up commands only when the user selected the one-time init skill.
@@ -439,6 +433,7 @@ internal sealed class InitCommand : BaseCommand
         // (or after a CLI update) the template will be missing. Install first.
         var installOutcome = await _templateNuGetConfigService.InstallTemplatePackageAsync(
             selection,
+            sourceOverride: null,
             _runner,
             InitCommandStrings.InstallingAspireProjectTemplates,
             statusEmoji: null,

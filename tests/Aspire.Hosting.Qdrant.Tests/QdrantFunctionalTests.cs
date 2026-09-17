@@ -59,7 +59,7 @@ public class QdrantFunctionalTests(ITestOutputHelper testOutputHelper)
 
             await CreateTestDataAsync(qdrantClient, token);
 
-            var results = await qdrantClient.SearchAsync(CollectionName, s_testVector, limit: 1, cancellationToken: token);
+            var results = await qdrantClient.QueryAsync(CollectionName, s_testVector, limit: 1, cancellationToken: token);
             Assert.Collection(results,
                 r => Assert.Equal("Test", r.Payload["title"].StringValue));
         }, cts.Token);
@@ -189,7 +189,7 @@ public class QdrantFunctionalTests(ITestOutputHelper testOutputHelper)
                         {
                             var qdrantClient = host.Services.GetRequiredService<QdrantClient>();
 
-                            var results = await qdrantClient.SearchAsync(CollectionName, s_testVector, limit: 1, cancellationToken: token);
+                            var results = await qdrantClient.QueryAsync(CollectionName, s_testVector, limit: 1, cancellationToken: token);
                             Assert.Collection(results,
                                 r => Assert.Equal("Test", r.Payload["title"].StringValue));
                         }, cts.Token);

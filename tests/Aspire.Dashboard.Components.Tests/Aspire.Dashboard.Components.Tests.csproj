@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <DefineConstants>$(DefineConstants);ASPIRE_DASHBOARD_COMPONENT_TESTS</DefineConstants>
     <!--
       CS8002: Referenced assembly does not have a strong name
     -->
@@ -10,7 +11,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj" />
+    <!-- Preview package warning suppressions do not flow through the Aspire.Dashboard project reference. -->
+    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" PrivateAssets="all" NoWarn="NU3018;NU3027;NU3042" Condition="'$(MicrosoftFluentUIAspNetCoreComponentsIsPreview)' == 'true'" />
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="bUnit" />
   </ItemGroup>
 
@@ -29,7 +33,8 @@
     <Compile Include="$(TestsSharedDir)TestDialogService.cs" Link="shared/TestDialogService.cs" />
     <Compile Include="$(TestsSharedDir)TestSessionStorage.cs" Link="shared/TestSessionStorage.cs" />
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
-    <Compile Include="$(TestsSharedDir)Telemetry\*.cs" LinkBase="shared/Telemetry" />
+    <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
+    <Compile Include="$(TestsSharedDir)Telemetry\TelemetryTestHelpers.cs" Link="shared/Telemetry/TelemetryTestHelpers.cs" />
     <Compile Include="$(TestsSharedDir)Logging\*.cs" LinkBase="shared/Logging" />
     <Compile Include="$(TestsSharedDir)DashboardModel\*.cs" LinkBase="shared/DashboardModel" />
     <Compile Include="..\Aspire.Dashboard.Tests\Model\MockKnownPropertyLookup.cs" Link="Shared\MockKnownPropertyLookup.cs" />

@@ -5,6 +5,7 @@ using System.Diagnostics;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 
@@ -146,8 +147,6 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string BackchannelSocketFile = "aspire.cli.backchannel.socket_file";
         public const string BackchannelAutoReconnect = "aspire.cli.backchannel.auto_reconnect";
         public const string BackchannelRetryCount = "aspire.cli.backchannel.retry_count";
-        public const string BackchannelExpectedHash = "aspire.cli.backchannel.expected_hash";
-        public const string BackchannelHasLegacyHash = "aspire.cli.backchannel.has_legacy_hash";
         public const string BackchannelScanCount = "aspire.cli.backchannel.scan_count";
         public const string BackchannelCapabilityCount = "aspire.cli.backchannel.capability_count";
         public const string BackchannelHasBaselineCapability = "aspire.cli.backchannel.has_baseline_capability";
@@ -410,17 +409,17 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
     internal ActivityScope StartDetachedSpawnChild(string executablePath, IReadOnlyList<string> args, string childCommand)
     {
         var activity = StartActivity(Activities.Process, ActivityKind.Client);
-        activity.SetProcessInvocation(executablePath, args);
+        // Profiling traces are exported and persisted, so the forwarded AppHost tail of the child
+        // command line is redacted for the same reason the CLI log redacts it.
+        activity.SetProcessInvocation(executablePath, AppHostArgumentRedactor.Redact(args));
         activity.SetChildCommand(childCommand);
         return activity;
     }
 
-    internal ActivityScope StartDetachedWaitForBackchannel(int childProcessId, string expectedHash, bool hasLegacyHash)
+    internal ActivityScope StartDetachedWaitForBackchannel(int childProcessId)
     {
         var activity = StartActivity(Activities.StartAppHostWaitForBackchannel);
         activity.SetProcessId(childProcessId);
-        activity.SetBackchannelExpectedHash(expectedHash);
-        activity.SetBackchannelHasLegacyHash(hasLegacyHash);
         return activity;
     }
 
@@ -1019,10 +1018,6 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
             SetTag(Tags.BackchannelHasBaselineCapability, capabilities.Any(capability => capability == baselineCapability));
         }
 
-        public void SetBackchannelExpectedHash(string expectedHash) => SetTag(Tags.BackchannelExpectedHash, expectedHash);
-
-        public void SetBackchannelHasLegacyHash(bool hasLegacyHash) => SetTag(Tags.BackchannelHasLegacyHash, hasLegacyHash);
-
         public void SetBackchannelRetryCount(int retryCount) => SetTag(Tags.BackchannelRetryCount, retryCount);
 
         public void SetBackchannelScanCount(int scanCount) => SetTag(Tags.BackchannelScanCount, scanCount);
@@ -1133,9 +1128,14 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
         public void SetDotNetMsBuildServer(string? msBuildServer) => SetTag(Tags.DotNetMsBuildServer, msBuildServer);
 
-        public void SetDotNetResolvedExecutable(string dotnetPath, IReadOnlyList<string> args, string? msBuildServer)
+        public void SetDotNetResolvedExecutable(string dotnetPath, IReadOnlyList<string> args, int? appHostArgumentStartIndex, string? msBuildServer)
         {
-            SetProcessInvocation(dotnetPath, args);
+            // `dotnet run --project AppHost.csproj -- <appHostArgs>` flows through here, and the
+            // recorded tag is persisted with the exported trace, so redact the forwarded tail.
+            // A direct AppHost launch has no separator and declares its boundary explicitly.
+            SetProcessInvocation(dotnetPath, appHostArgumentStartIndex is { } startIndex
+                ? AppHostArgumentRedactor.RedactFrom(args, startIndex)
+                : AppHostArgumentRedactor.Redact(args));
             SetDotNetMsBuildServer(msBuildServer);
         }
 

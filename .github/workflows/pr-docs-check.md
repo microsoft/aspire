@@ -125,12 +125,14 @@ jobs:
       contents: read
     steps:
       - name: Check out outcome validator
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.3.1
         with:
-          sparse-checkout: .github/workflows/pr-docs-check/validate_outcome.py
+          sparse-checkout: |
+            .github/workflows/pr-docs-check/resolve_safe_output_target.py
+            .github/workflows/pr-docs-check/validate_outcome.py
           sparse-checkout-cone-mode: false
       - name: Download agent output
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.3.0
         with:
           name: agent
           path: /tmp/gh-aw/
@@ -174,6 +176,7 @@ jobs:
         run: >-
           python .github/workflows/pr-docs-check/validate_outcome.py
           --agent-output /tmp/gh-aw/agent_output.json
+          --raw-safe-outputs /tmp/gh-aw/safeoutputs.jsonl
           --created-pr-url "${CREATED_PR_URL}"
           --created-pr-base "${CREATED_PR_BASE}"
           --expected-source-pr-number "${EXPECTED_SOURCE_PR_NUMBER}"
@@ -184,76 +187,28 @@ safe-outputs:
     private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
     owner: "microsoft"
     repositories: ["aspire.dev", "aspire"]
-  # Work around https://github.com/github/gh-aw/issues/50906 in gh-aw v0.85.4.
-  # Threat detection runs on a fresh runner, and its custom steps run before the
-  # generated Copilot installer. Run the same verified installer here so the
-  # following step can stage a cached CLI where the generated AWF command expects
-  # it. Remove these steps after upgrading to a compiler containing
-  # https://github.com/github/gh-aw/pull/50908.
-  threat-detection:
-    steps:
-      - name: Install GitHub Copilot CLI for threat detection staging
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/install_copilot_cli.sh"
-        env:
-          GH_HOST: github.com
-          GH_AW_COMPILED_VERSION: v0.85.4
-      - name: Stage GitHub Copilot CLI for threat detection
-        run: |
-          COPILOT_BIN="$(command -v copilot || true)"
-          if [[ -z "${COPILOT_BIN}" || ! -x "${COPILOT_BIN}" ]]; then
-            echo "::error::The GitHub Copilot CLI installer did not provide an executable."
-            exit 1
-          fi
-
-          if [[ "${COPILOT_BIN}" != "/usr/local/bin/copilot" ]]; then
-            sudo cp "${COPILOT_BIN}" /usr/local/bin/copilot
-            sudo chmod 755 /usr/local/bin/copilot
-          fi
-          /usr/local/bin/copilot --version
-  # gh-aw generates the target-repository checkout required by create-pull-request.
-  # An additional actions/checkout step would trigger https://github.com/github/gh-aw/issues/50905
-  # in v0.85.4 and downgrade the app token from contents: write to contents: read.
   steps:
+    - name: Check out safe-output target resolver
+      if: contains(needs.agent.outputs.output_types, 'create_pull_request')
+      uses: actions/checkout@v4.3.1
+      with:
+        path: _resolver
+        persist-credentials: false
+        sparse-checkout: .github/workflows/pr-docs-check/resolve_safe_output_target.py
+        sparse-checkout-cone-mode: false
     - name: Resolve safe-output patch base from canonical agent output
       id: resolve-target
       if: contains(needs.agent.outputs.output_types, 'create_pull_request')
+      env:
+        EXPECTED_SOURCE_PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
       run: |
         set -euo pipefail
-        python3 - "${GITHUB_OUTPUT}" <<'PY'
-        import json
-        import re
-        import sys
-        from pathlib import Path
-
-        output_path = Path("/tmp/gh-aw/agent_output.json")
-        try:
-            payload = json.loads(output_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            raise SystemExit(f"Failed to read canonical agent output: {error}")
-
-        items = payload.get("items") if isinstance(payload, dict) else None
-        create_items = [
-            item
-            for item in items if isinstance(item, dict)
-            and item.get("type") == "create_pull_request"
-        ] if isinstance(items, list) else []
-        if len(create_items) != 1:
-            raise SystemExit(
-                "Expected exactly one canonical create_pull_request item, "
-                f"found {len(create_items)}."
-            )
-
-        base_branch = create_items[0].get("base_branch")
-        if (
-            not isinstance(base_branch, str)
-            or re.fullmatch(r"main|release/[0-9]+\.[0-9]+(?:\.[0-9]+)?", base_branch)
-            is None
-        ):
-            raise SystemExit("Canonical create_pull_request base_branch is invalid.")
-
-        with open(sys.argv[1], "a", encoding="utf-8") as github_output:
-            github_output.write(f"branch={base_branch}\n")
-        PY
+        trap 'rm -rf -- _resolver' EXIT
+        python3 _resolver/.github/workflows/pr-docs-check/resolve_safe_output_target.py \
+          --agent-output /tmp/gh-aw/agent_output.json \
+          --raw-safe-outputs /tmp/gh-aw/safeoutputs.jsonl \
+          --github-output "${GITHUB_OUTPUT}" \
+          --expected-source-pr-number "${EXPECTED_SOURCE_PR_NUMBER}"
   create-pull-request:
     title-prefix: "[docs] "
     labels: [docs-from-code]
@@ -263,9 +218,9 @@ safe-outputs:
     # safe-output job below requests the SME on the drafted PR after creation.
     draft: true
     # Generate the agent-time patch against the aspire.dev branch selected below.
-    # At apply time, the separate safe-outputs job reads that trusted branch back
-    # from the canonical create_pull_request item instead of relying on a model
-    # supplied per-call `base` override.
+    # At apply time, the separate safe-outputs job resolves that trusted branch
+    # from canonical output or the safe-output server metadata retained in raw
+    # JSONL, then cross-checks it against the drafted notification.
     base-branch: ${{ steps.resolve-target.outputs.branch || 'main' }}
     allowed-base-branches:
       - main
@@ -321,10 +276,12 @@ safe-outputs:
           type: string
       steps:
         - name: Check out outcome validator
-          uses: actions/checkout@v4
+          uses: actions/checkout@v4.3.1
           with:
             path: _validator
-            sparse-checkout: .github/workflows/pr-docs-check/validate_outcome.py
+            sparse-checkout: |
+              .github/workflows/pr-docs-check/resolve_safe_output_target.py
+              .github/workflows/pr-docs-check/validate_outcome.py
             sparse-checkout-cone-mode: false
         - name: Mint aspire-bot token (microsoft/aspire.dev)
           id: aspire-dev-token
@@ -365,6 +322,7 @@ safe-outputs:
           run: >-
             python _validator/.github/workflows/pr-docs-check/validate_outcome.py
             --agent-output "${GH_AW_AGENT_OUTPUT}"
+            --raw-safe-outputs "$(dirname "${GH_AW_AGENT_OUTPUT}")/safeoutputs.jsonl"
             --created-pr-url "${CREATED_PR_URL}"
             --created-pr-base "${CREATED_PR_BASE}"
             --github-event-path "${GITHUB_EVENT_PATH}"
@@ -378,7 +336,7 @@ safe-outputs:
             owner: microsoft
             repositories: aspire
         - name: Post status comment on source PR
-          uses: actions/github-script@v9
+          uses: actions/github-script@v9.0.0
           env:
             CANONICAL_OUTCOME_PATH: ${{ runner.temp }}/pr-docs-check-side-effect-outcome.json
             DRAFT_PR_URL: ${{ needs.safe_outputs.outputs.created_pr_url }}
@@ -513,7 +471,7 @@ safe-outputs:
               core.info(`Posted ${renderKind || 'unknown'} comment on microsoft/aspire#${sourcePrNumber}`);
         - name: Request SME review on draft PR
           if: needs.safe_outputs.outputs.created_pr_url != ''
-          uses: actions/github-script@v9
+          uses: actions/github-script@v9.0.0
           env:
             CANONICAL_OUTCOME_PATH: ${{ runner.temp }}/pr-docs-check-side-effect-outcome.json
             DRAFT_PR_NUMBER: ${{ needs.safe_outputs.outputs.created_pr_number }}
@@ -573,22 +531,6 @@ safe-outputs:
 # agent starts and writes the result to .pr-docs-check/target.json. The
 # agent reads that file verbatim and never re-derives the branch.
 pre-agent-steps:
-  # gh-aw v0.85.4 can select a cached Copilot CLI but still hard-codes
-  # /usr/local/bin/copilot in the AWF command. Stage the selected binary there
-  # until the compiler includes https://github.com/github/gh-aw/pull/50908.
-  - name: Stage GitHub Copilot CLI for agent execution
-    run: |
-      COPILOT_BIN="$(command -v copilot || true)"
-      if [[ -z "${COPILOT_BIN}" || ! -x "${COPILOT_BIN}" ]]; then
-        echo "::error::The GitHub Copilot CLI installer did not provide an executable."
-        exit 1
-      fi
-
-      if [[ "${COPILOT_BIN}" != "/usr/local/bin/copilot" ]]; then
-        sudo cp "${COPILOT_BIN}" /usr/local/bin/copilot
-        sudo chmod 755 /usr/local/bin/copilot
-      fi
-      /usr/local/bin/copilot --version
   - name: Check out pre-agent scripts
     # The `checkout:` block above made microsoft/aspire.dev the current
     # workspace because that's where the doc PR is authored. We need a sparse,
@@ -599,7 +541,7 @@ pre-agent-steps:
     # For a merged pull_request:closed event, the default `ref` is the updated
     # base branch; for workflow_dispatch, it is the dispatcher-selected ref.
     # Both select the helper version associated with the workflow being run.
-    uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    uses: actions/checkout@v6.0.2
     with:
       repository: microsoft/aspire
       path: _repos/aspire

@@ -20,6 +20,25 @@ internal interface ICallbackResourceAnnotation<TContext, TResult>
     Task<TResult> EvaluateOnceAsync(TContext context);
 
     /// <summary>
+    /// Peeks at the already-cached callback result without ever executing the callback.
+    /// </summary>
+    /// <param name="result">
+    /// When this method returns <see langword="true"/>, the task previously produced by
+    /// <see cref="EvaluateOnceAsync"/>; otherwise <see langword="null"/>.
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when a cached result exists; otherwise <see langword="false"/>.
+    /// </returns>
+    /// <remarks>
+    /// This is a read-only peek: unlike <see cref="EvaluateOnceAsync"/> it never invokes the callback and never
+    /// populates the cache. It exists so that read-only consumers (such as <c>aspire describe</c> observing live
+    /// resource snapshots) can inspect values that DCP has already resolved without racing DCP's own
+    /// cache lifecycle. Invoking the callback from such a consumer would run it with the consumer's cancellation
+    /// token and could cache a canceled or faulted task that DCP would later reuse on the resource's execution path.
+    /// </remarks>
+    bool TryGetCachedResult(out Task<TResult>? result);
+
+    /// <summary>
     /// Clears the cached result so that the next call to <see cref="EvaluateOnceAsync"/> will re-execute the callback. 
     ///</summary>
     /// <remarks>

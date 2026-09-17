@@ -15,6 +15,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -150,6 +151,7 @@ internal sealed class ProjectLocator(
     private const string AspireConfigAppHostPathKey = "appHost.path";
     private const string LegacySettingsAppHostPathKey = "appHostPath";
     private const string ExplicitLaunchConfigurationSelectionOrigin = "explicit-launch-configuration";
+    private const string ExplicitCliSelectionOrigin = "explicit-cli";
     private static readonly TimeSpan s_workspaceConfigLockTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
@@ -465,36 +467,32 @@ internal sealed class ProjectLocator(
                     return;
                 }
 
-                // Windows and default macOS APFS volumes are case-insensitive, so a
-                // differently-cased settings path can still refer to the same file found
-                // by the discovery walk. See https://github.com/microsoft/aspire/issues/17635.
-                var pathComparison = environment.IsWindows() || environment.IsMacOS()
-                    ? StringComparison.OrdinalIgnoreCase
-                    : StringComparison.Ordinal;
-
-                // Canonicalize symlinks before comparing so a settings-derived candidate
+                // Canonicalize filesystem aliases before comparing so a settings-derived candidate
                 // like /tmp/L5/x.cs does not produce a duplicate entry next to the
                 // discovery-walked /private/tmp/L5/x.cs on macOS, where /tmp is a symlink
-                // to /private/tmp. See https://github.com/microsoft/aspire/issues/17626.
+                // to /private/tmp. Filesystem casing is recovered as well so equivalent paths
+                // converge on case-insensitive volumes without conflating paths on case-sensitive
+                // APFS. See https://github.com/microsoft/aspire/issues/17626 and
+                // https://github.com/microsoft/aspire/issues/17635.
                 // Resolved paths are used as comparison keys only — the surfaced
                 // AppHostProjectCandidate keeps the original FileInfo so display paths are
                 // unchanged from what the user-authored settings file pointed at.
                 //
-                // Symlink resolution does ~one syscall per path segment, so we keep it
+                // Filesystem canonicalization performs IO per path segment, so we keep it
                 // off the hot path: the exact-string compare below short-circuits before
                 // the per-candidate resolve runs at all in the common case (no symlinks
                 // involved). Pre-materializing canonical paths for every candidate would
                 // force the resolve even when the cheap compare would have matched.
-                var settingsCanonicalPath = PathNormalizer.ResolveSymlinks(settingsAppHost.FullName);
+                var settingsCanonicalPath = PathNormalizer.ResolveToFilesystemPath(settingsAppHost.FullName);
                 bool IsDuplicate(AppHostProjectCandidate candidate)
                 {
-                    if (string.Equals(candidate.AppHostFile.FullName, settingsAppHost.FullName, pathComparison))
+                    if (string.Equals(candidate.AppHostFile.FullName, settingsAppHost.FullName, StringComparisons.FileSystemPath))
                     {
                         return true;
                     }
 
-                    var candidateCanonicalPath = PathNormalizer.ResolveSymlinks(candidate.AppHostFile.FullName);
-                    return string.Equals(candidateCanonicalPath, settingsCanonicalPath, pathComparison);
+                    var candidateCanonicalPath = PathNormalizer.ResolveToFilesystemPath(candidate.AppHostFile.FullName);
+                    return string.Equals(candidateCanonicalPath, settingsCanonicalPath, StringComparisons.FileSystemPath);
                 }
 
                 if (appHostProjects.Any(IsDuplicate) || unbuildableSuspectedAppHostProjects.Any(IsDuplicate))
@@ -609,12 +607,8 @@ internal sealed class ProjectLocator(
     /// Windows paths are compared case-insensitively. Other platforms use case-sensitive comparison
     /// because macOS can use case-sensitive APFS volumes.
     /// </remarks>
-    internal static bool IsUnderDirectory(FileInfo file, DirectoryInfo directory, IEnvironment environment)
+    internal static bool IsUnderDirectory(FileInfo file, DirectoryInfo directory)
     {
-        var pathComparison = environment.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-
         // Compare the raw paths first. The discovery walk can reach a candidate by descending through
         // a symlinked subdirectory, and canonicalizing that path would relocate it outside the
         // directory the user actually named.
@@ -626,14 +620,16 @@ internal sealed class ProjectLocator(
         // Otherwise canonicalize both sides, because the same directory can be spelled two ways: on
         // macOS /tmp is a symlink to /private/tmp, so a candidate discovered as /private/tmp/x/App.csproj
         // would not textually start with /tmp/x. See https://github.com/microsoft/aspire/issues/17626.
-        return IsUnder(PathNormalizer.ResolveSymlinks(file.FullName), PathNormalizer.ResolveSymlinks(directory.FullName));
+        return IsUnder(
+            PathNormalizer.ResolveToFilesystemPath(file.FullName),
+            PathNormalizer.ResolveToFilesystemPath(directory.FullName));
 
-        bool IsUnder(string filePath, string directoryPath)
+        static bool IsUnder(string filePath, string directoryPath)
         {
             // The trailing separator keeps a sibling with a shared name prefix (".../Services2")
             // from matching ".../Services".
             var prefix = directoryPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            return filePath.StartsWith(prefix, pathComparison);
+            return filePath.StartsWith(prefix, StringComparisons.FileSystemPath);
         }
     }
 
@@ -885,6 +881,7 @@ internal sealed class ProjectLocator(
     public async Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, bool displayProgress, CancellationToken cancellationToken = default)
     {
         logger.LogDebug("Finding project file in {CurrentDirectory}", executionContext.WorkingDirectory);
+        var explicitSelectionWasPrompted = false;
 
         if (projectFile is not null)
         {
@@ -907,7 +904,7 @@ internal sealed class ProjectLocator(
                 // Keep the requested directory as the selection boundary even if additional
                 // explicit-discovery candidate sources are introduced later.
                 var appHostProjects = searchResults.BuildableAppHost
-                    .Where(c => IsUnderDirectory(c.AppHostFile, directory, environment))
+                    .Where(c => IsUnderDirectory(c.AppHostFile, directory))
                     .Select(c => c.AppHostFile)
                     .ToList();
 
@@ -919,7 +916,7 @@ internal sealed class ProjectLocator(
                 if (appHostProjects.Count == 0)
                 {
                     var unbuildableInDirectory = searchResults.UnbuildableSuspectedAppHostProjects
-                        .Where(c => IsUnderDirectory(c.AppHostFile, directory, environment))
+                        .Where(c => IsUnderDirectory(c.AppHostFile, directory))
                         .ToList();
 
                     // The user pointed at this directory, and it holds exactly one candidate that only
@@ -948,7 +945,7 @@ internal sealed class ProjectLocator(
                         throw new ProjectLocatorException(ErrorStrings.AppHostsMayNotBeBuildable, ProjectLocatorFailureReason.AppHostsMayNotBeBuildable);
                     }
 
-                    if (searchResults.UnsupportedProjects.Any(file => IsUnderDirectory(file, directory, environment)))
+                    if (searchResults.UnsupportedProjects.Any(file => IsUnderDirectory(file, directory)))
                     {
                         throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.UnsupportedProjects);
                     }
@@ -966,6 +963,7 @@ internal sealed class ProjectLocator(
                     if (multipleAppHostProjectsFoundBehavior is MultipleAppHostProjectsFoundBehavior.Prompt)
                     {
                         logger.LogDebug("Multiple AppHost project files found in directory {Directory}, prompting user to select", directory.FullName);
+                        explicitSelectionWasPrompted = true;
                         projectFile = await interactionService.PromptForSelectionAsync(
                             InteractionServiceStrings.SelectAppHostToUse,
                             appHostProjects,
@@ -989,14 +987,15 @@ internal sealed class ProjectLocator(
             {
                 // A project file was directly specified.
                 //
-                // Resolve to the filesystem-canonical path so the path used for backchannel socket
-                // hash computation matches.
-                var resolvedProjectPath = PathNormalizer.ResolveToFilesystemPath(projectFile.FullName);
+                // Preserve symlinks because single-file AppHosts load apphost.run.json and
+                // aspire.config.json beside the selected path. Backchannel and comparison call
+                // sites canonicalize their own identity keys.
+                var resolvedProjectPath = PathNormalizer.ResolvePathCasing(projectFile.FullName);
 
                 if (!string.Equals(resolvedProjectPath, projectFile.FullName, StringComparison.Ordinal))
                 {
                     logger.LogDebug(
-                        "Canonicalized explicit AppHost path from '{OriginalPath}' to '{ResolvedPath}'.",
+                        "Normalized explicit AppHost path casing from '{OriginalPath}' to '{ResolvedPath}'.",
                         projectFile.FullName,
                         resolvedProjectPath);
 
@@ -1024,10 +1023,13 @@ internal sealed class ProjectLocator(
                         logger.LogDebug("Using {Language} apphost {ProjectFile}", handler.DisplayName, projectFile.FullName);
                         if (createSettingsFile)
                         {
-                            await CreateSettingsFileAsync(projectFile, cancellationToken);
+                            await CreateSettingsFileAsync(projectFile, preserveExistingDefault: !explicitSelectionWasPrompted, cancellationToken);
                         }
 
-                        return new AppHostProjectSearchResult(projectFile, [projectFile]);
+                        return new AppHostProjectSearchResult(projectFile, [projectFile])
+                        {
+                            WasExplicitDirectorySelectionPrompted = explicitSelectionWasPrompted
+                        };
                     }
 
                     if (validationResult.IsPossiblyUnbuildable)
@@ -1072,7 +1074,7 @@ internal sealed class ProjectLocator(
             // was only kept because MSBuild failed into a confirmed choice.
             if (createSettingsFile && !settingsResult.IsUnverified)
             {
-                await CreateSettingsFileAsync(settingsAppHost, cancellationToken);
+                await CreateSettingsFileAsync(settingsAppHost, preserveExistingDefault: false, cancellationToken);
             }
 
             return new AppHostProjectSearchResult(settingsAppHost, [settingsAppHost]);
@@ -1128,13 +1130,18 @@ internal sealed class ProjectLocator(
             // Check if a previously-selected apphost is cached in settings and
             // is still among the discovered candidates. If so, reuse it to avoid
             // prompting the user every time when nothing has changed.
-            var pathComparison = environment.IsWindows()
-                ? StringComparison.OrdinalIgnoreCase
-                : StringComparison.Ordinal;
+            var settingsCanonicalPath = settingsAppHost is null
+                ? null
+                : PathNormalizer.ResolveToFilesystemPath(settingsAppHost.FullName);
 
             if (settingsAppHost is not null
                 && (settingsResult.IsUnverified
-                    || results.BuildableAppHost.Any(c => string.Equals(c.AppHostFile.FullName, settingsAppHost.FullName, pathComparison))))
+                    || results.BuildableAppHost.Any(c =>
+                        string.Equals(c.AppHostFile.FullName, settingsAppHost.FullName, StringComparisons.FileSystemPath) ||
+                        string.Equals(
+                            PathNormalizer.ResolveToFilesystemPath(c.AppHostFile.FullName),
+                            settingsCanonicalPath,
+                            StringComparisons.FileSystemPath))))
             {
                 // An unverified configured AppHost can never appear in BuildableAppHost by
                 // construction, but it is still an explicit user choice. Honoring it here keeps this
@@ -1161,11 +1168,15 @@ internal sealed class ProjectLocator(
         // above); this path is reached when MultipleAppHostProjectsFoundBehavior.None skipped it.
         var selectionIsUnverifiedSettingsAppHost = settingsResult.IsUnverified
             && selectedAppHost is not null
-            && string.Equals(selectedAppHost.FullName, settingsAppHost?.FullName, environment.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+            && settingsAppHost is not null
+            && string.Equals(
+                PathNormalizer.ResolveToFilesystemPath(selectedAppHost.FullName),
+                PathNormalizer.ResolveToFilesystemPath(settingsAppHost.FullName),
+                StringComparisons.FileSystemPath);
 
         if (createSettingsFile && !selectionIsUnverifiedSettingsAppHost)
         {
-            await CreateSettingsFileAsync(selectedAppHost!, cancellationToken);
+            await CreateSettingsFileAsync(selectedAppHost!, preserveExistingDefault: false, cancellationToken);
         }
 
         // Ensure the selected AppHost is always represented in the candidate list so callers
@@ -1173,10 +1184,24 @@ internal sealed class ProjectLocator(
         // covers cases where the configured settings AppHost is selected but lives outside
         // the discovered candidate set (e.g. parent directory or excluded by enumeration).
         var allCandidates = results.BuildableAppHost.Select(c => c.AppHostFile).ToList();
-        if (selectedAppHost is not null
-            && !allCandidates.Any(f => string.Equals(f.FullName, selectedAppHost.FullName, environment.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
+        if (selectedAppHost is not null &&
+            !allCandidates.Any(f => string.Equals(f.FullName, selectedAppHost.FullName, StringComparison.Ordinal)))
         {
-            allCandidates = [.. allCandidates, selectedAppHost];
+            var selectedAppHostCanonicalPath = PathNormalizer.ResolveToFilesystemPath(selectedAppHost.FullName);
+            var equivalentCandidateIndex = allCandidates.FindIndex(f =>
+                string.Equals(
+                    PathNormalizer.ResolveToFilesystemPath(f.FullName),
+                    selectedAppHostCanonicalPath,
+                    StringComparisons.FileSystemPath));
+
+            if (equivalentCandidateIndex >= 0)
+            {
+                allCandidates[equivalentCandidateIndex] = selectedAppHost;
+            }
+            else
+            {
+                allCandidates.Add(selectedAppHost);
+            }
         }
 
         return new AppHostProjectSearchResult(selectedAppHost, allCandidates);
@@ -1191,19 +1216,30 @@ internal sealed class ProjectLocator(
     /// <summary>
     /// Determines whether a persisted AppHost path identifies the selected project on the current platform.
     /// </summary>
-    internal static bool IsSamePersistedAppHostPath(string persistedPath, string selectedPath, IEnvironment environment)
+    internal static bool IsSamePersistedAppHostPath(string persistedPath, string selectedPath)
     {
-        var pathComparison = environment.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
+        var persistedCanonicalPath = PathNormalizer.ResolveToFilesystemPath(persistedPath);
+        var selectedCanonicalPath = PathNormalizer.ResolveToFilesystemPath(selectedPath);
 
-        return string.Equals(persistedPath, selectedPath, pathComparison);
+        return string.Equals(persistedCanonicalPath, selectedCanonicalPath, StringComparisons.FileSystemPath);
     }
 
-    private async Task CreateSettingsFileAsync(FileInfo projectFile, CancellationToken cancellationToken)
+    private async Task CreateSettingsFileAsync(FileInfo projectFile, bool preserveExistingDefault, CancellationToken cancellationToken)
     {
-        var selectionOrigin = configuration[KnownConfigNames.CliAppHostSelectionOrigin];
-        var isExplicitLaunchConfiguration = string.Equals(selectionOrigin, ExplicitLaunchConfigurationSelectionOrigin, StringComparison.OrdinalIgnoreCase);
+        var configuredSelectionOrigin = configuration[KnownConfigNames.CliAppHostSelectionOrigin];
+        var isExplicitLaunchConfigurationSelection = string.Equals(
+            configuredSelectionOrigin,
+            ExplicitLaunchConfigurationSelectionOrigin,
+            StringComparison.OrdinalIgnoreCase);
+        var isExplicitCliSelection = string.Equals(
+            configuredSelectionOrigin,
+            ExplicitCliSelectionOrigin,
+            StringComparison.OrdinalIgnoreCase);
+        var hasConfiguredSelectionOrigin = !string.IsNullOrEmpty(configuredSelectionOrigin);
+        var selectionOrigin = hasConfiguredSelectionOrigin ? configuredSelectionOrigin : "--apphost";
+        var shouldPreserveExistingDefault =
+            isExplicitLaunchConfigurationSelection ||
+            (preserveExistingDefault && (isExplicitCliSelection || !hasConfiguredSelectionOrigin));
 
         var (settingsFile, appHostDirForScopedConfig) = ResolveWorkspaceConfigTarget(projectFile);
 
@@ -1221,7 +1257,7 @@ internal sealed class ProjectLocator(
             var resolvedPath = PathNormalizer.NormalizePathForCurrentPlatform(
                 Path.IsPathRooted(existingPath) ? existingPath : Path.Combine(settingsFile.Directory!.FullName, existingPath));
 
-            if (IsSamePersistedAppHostPath(resolvedPath, projectFile.FullName, environment))
+            if (IsSamePersistedAppHostPath(resolvedPath, projectFile.FullName))
             {
                 logger.LogDebug(
                     "Config at {Path} already references apphost {AppHost}, skipping creation",
@@ -1230,9 +1266,9 @@ internal sealed class ProjectLocator(
                 return;
             }
 
-            // A launch configuration or agent-selected target is for this invocation only. Preserve
+            // An explicit CLI target or launch configuration is for this invocation only. Preserve
             // an existing workspace default, but let the selected AppHost replace a deleted target.
-            if (isExplicitLaunchConfiguration && File.Exists(resolvedPath))
+            if (shouldPreserveExistingDefault && File.Exists(resolvedPath))
             {
                 logger.LogDebug(
                     "Not replacing recorded AppHost default {RecordedAppHost} with {AppHost} because the latter was selected by {SelectionOrigin}.",
@@ -1422,7 +1458,10 @@ internal enum ProjectLocatorFailureReason
     UnsupportedProjects,
 }
 
-internal record AppHostProjectSearchResult(FileInfo? SelectedProjectFile, List<FileInfo> AllProjectFileCandidates);
+internal record AppHostProjectSearchResult(FileInfo? SelectedProjectFile, List<FileInfo> AllProjectFileCandidates)
+{
+    internal bool WasExplicitDirectorySelectionPrompted { get; init; }
+}
 
 internal enum MultipleAppHostProjectsFoundBehavior
 {

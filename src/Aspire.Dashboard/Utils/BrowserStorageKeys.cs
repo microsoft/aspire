@@ -23,6 +23,7 @@ internal static class BrowserStorageKeys
     public const string ResourcesShowResourceTypes = "Aspire_Resources_ShowResourceTypes";
 
     public const string DashboardTelemetrySettings = "Aspire_Settings_DashboardTelemetry";
+    public const string SelectedDashboardRunId = "Aspire_Settings_SelectedDashboardRunId";
     public const string ResourcesShowHiddenResources = "Aspire_Resources_ShowHiddenResources";
 
     public const string NavMenuExpanded = "Aspire_NavMenu_Expanded";

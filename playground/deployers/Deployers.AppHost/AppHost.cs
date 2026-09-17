@@ -1,5 +1,3 @@
-#pragma warning disable ASPIRECOSMOSDB001
-
 var builder = DistributedApplication.CreateBuilder(args);
 
 var computeParam = builder.AddParameter("computeParam");
@@ -29,7 +27,7 @@ var serviceBus = builder.AddAzureServiceBus("messaging")
     .RunAsEmulator();
 serviceBus.AddServiceBusQueue("myqueue");
 var cosmosDb = builder.AddAzureCosmosDB("cosmosdb")
-    .RunAsPreviewEmulator();
+    .RunAsEmulator();
 var database = cosmosDb.AddCosmosDatabase("mydatabase");
 database.AddContainer("mycontainer", "/id");
 

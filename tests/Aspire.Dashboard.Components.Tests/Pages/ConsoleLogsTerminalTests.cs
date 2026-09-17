@@ -127,8 +127,8 @@ public partial class ConsoleLogsTests
         // the live resource defaults to Terminal, so only the Terminal item is
         // checked.
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
-        Assert.Equal(MenuItemRole.MenuItemCheckbox, instance.LogsMenuItemsForTest[0].Role);
-        Assert.Equal(MenuItemRole.MenuItemCheckbox, instance.LogsMenuItemsForTest[1].Role);
+        Assert.Equal(MenuItemRole.Checkbox, instance.LogsMenuItemsForTest[0].Role);
+        Assert.Equal(MenuItemRole.Checkbox, instance.LogsMenuItemsForTest[1].Role);
         Assert.False(instance.LogsMenuItemsForTest[0].Checked);
         Assert.True(instance.LogsMenuItemsForTest[1].Checked);
 
@@ -137,6 +137,57 @@ public partial class ConsoleLogsTests
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
         Assert.True(instance.LogsMenuItemsForTest[0].Checked);
         Assert.False(instance.LogsMenuItemsForTest[1].Checked);
+    }
+
+    [Fact]
+    public async Task TerminalResource_PausedConsoleLogs_DisplaysWarningOnTerminalView()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1, state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Console)));
+        cut.FindComponent<PauseIncomingDataSwitch>().WaitForElement("fluent-button").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(Services.GetRequiredService<PauseManager>().ConsoleLogsPaused);
+            Assert.True(cut.HasComponent<PauseWarning>());
+        });
+
+        await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Terminal)));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(ConsoleLogs.ConsoleLogsView.Terminal, instance.ActiveViewForTest);
+            Assert.False(cut.HasComponent<PauseIncomingDataSwitch>());
+            Assert.True(cut.HasComponent<PauseWarning>());
+        });
     }
 
     [Fact]
@@ -294,6 +345,48 @@ public partial class ConsoleLogsTests
     }
 
     [Fact]
+    public async Task HistoricalTerminalResource_Selected_DoesNotRenderTerminalView()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var subscriptionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            isReadOnly: true,
+            consoleLogsChannelProvider: _ =>
+            {
+                subscriptionStarted.TrySetResult();
+                return consoleLogsChannel;
+            },
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        await subscriptionStarted.Task.WaitAsync(DefaultWaitTimeout);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindComponents<TerminalView>());
+            Assert.Single(cut.FindComponents<LogViewer>());
+        });
+    }
+
+    [Fact]
     public async Task SwitchingFromTerminalToNonTerminalResource_TearsDownTerminalView()
     {
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
@@ -341,8 +434,8 @@ public partial class ConsoleLogsTests
             });
         };
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        var innerSelect = resourceSelect.Find("fluent-select");
-        innerSelect.Change("plain-resource");
+        var selectedResource = resourceSelect.Instance.Resources!.Single(resource => resource.Name == "plain-resource");
+        await resourceSelect.InvokeAsync(() => resourceSelect.Instance.SelectedResourceChanged.InvokeAsync(selectedResource));
 
         cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == plainResource.Name);
         // For a non-terminal resource the TerminalView is not mounted at all
@@ -394,7 +487,7 @@ public partial class ConsoleLogsTests
         // resource restores the filter UI.
         await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Terminal)));
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
-        Assert.Empty(cut.FindComponents<FluentSearch>());
+        Assert.Empty(cut.FindComponents<FluentTextInput>());
 
         navigationManager.LocationChanged += (sender, e) =>
         {
@@ -404,8 +497,9 @@ public partial class ConsoleLogsTests
             });
         };
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        var innerSelect = resourceSelect.Find("fluent-select");
-        innerSelect.Change("plain-resource");
+        var selectedResource = resourceSelect.Instance.Resources!.Single(resource => resource.Name == "plain-resource");
+        var innerSelect = resourceSelect.FindComponent<FluentSelect<SelectViewModel<ResourceTypeDetails>, SelectViewModel<ResourceTypeDetails>>>();
+        await innerSelect.InvokeAsync(() => innerSelect.Instance.ValueChanged.InvokeAsync(selectedResource));
 
         cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == plainResource.Name);
         cut.WaitForState(() => cut.FindComponents<LogViewer>().Count > 0);
@@ -416,7 +510,7 @@ public partial class ConsoleLogsTests
         ]);
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".log-content").Count));
 
-        var search = Assert.Single(cut.FindComponents<FluentSearch>());
+        var search = Assert.Single(cut.FindComponents<FluentTextInput>());
         await cut.InvokeAsync(() => search.Instance.ValueChanged.InvokeAsync("filtered"));
 
         cut.WaitForAssertion(() =>

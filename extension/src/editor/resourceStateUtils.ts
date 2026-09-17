@@ -1,6 +1,7 @@
 import { realpathSync } from 'node:fs';
 import * as path from 'path';
-import { ResourceJson, AppHostDisplayInfo } from '../views/AppHostDataRepository';
+import { ResourceJson, AppHostDisplayInfo } from '../data/AppHostDataRepository';
+import { getComparisonKey } from '../utils/paths/comparison';
 
 export interface ResourceMatch {
     resource: ResourceJson;
@@ -85,8 +86,4 @@ function tryGetCanonicalPath(value: string): string | undefined {
         // and other filesystem failures must not break CodeLens or gutter updates.
         return undefined;
     }
-}
-
-function getComparisonKey(value: string): string {
-    return process.platform === 'win32' ? value.toLowerCase() : value;
 }

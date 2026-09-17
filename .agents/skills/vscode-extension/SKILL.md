@@ -28,14 +28,29 @@ All commands below are run from the `extension/` directory unless noted.
 
 ## Prerequisites
 
-**Do NOT run the repo-root `./build.sh` or `./restore.sh` when you are only working on the Aspire
-CLI and/or the VS Code extension.** The root scripts build the entire product (all of `src/`, native
-AOT, packages) and are slow and unnecessary for this work. Instead, **build the extension and CLI
-together with the extension build script.** From `extension/`, run `./build.sh` (Linux/macOS) or
-`./build.ps1` (Windows). This script builds the Aspire CLI
+**Do NOT run the repo-root `./build.sh` when you are only working on the Aspire CLI and/or the VS
+Code extension.** The root build compiles the entire product (all of `src/`, native AOT, packages)
+and is slow and unnecessary for this work. Root restore is needed only to bootstrap the repository's
+.NET SDK. Check the SDK from the repository root:
+
+- If `./.dotnet/dotnet --version` (Linux/macOS) or `.\.dotnet\dotnet.exe --version` (Windows)
+  succeeds, add `.dotnet` to `PATH` (`export PATH="$PWD/.dotnet:$PATH"` on Linux/macOS or
+  `$env:PATH = "$PWD\.dotnet;$env:PATH"` in PowerShell) and skip root restore.
+- Otherwise, if `dotnet --version` succeeds, skip root restore and use that host.
+- If neither succeeds, run `./restore.sh` (Linux/macOS) or `.\restore.cmd` (Windows) once, then add
+  the installed `.dotnet` directory to `PATH` as shown above.
+
+The extension build script does not install .NET.
+
+Once the required SDK is available, **build the extension and CLI together with the extension build
+script.** From `extension/`, run `./build.sh` (Linux/macOS) or `./build.ps1` (Windows). This script builds the Aspire CLI
 (`dotnet build ../src/Aspire.Cli/Aspire.Cli.csproj`) **and** the extension, and installs extension
 dependencies (seeds Corepack and runs `corepack yarn install`). You do not install Yarn yourself —
 it is pinned via `packageManager`.
+
+For changes limited to `extension/`, `src/Aspire.Cli/`, and/or `tests/Aspire.Cli*/`, start with the
+extension build script once either SDK check succeeds. It performs the project restore and build
+steps needed by this workflow. Run targeted CLI test projects separately after the build.
 
 Use **yarn** for extension commands (`corepack yarn ...` or `yarn run ...`), not `npm` / `npx`.
 The dependency graph and scripts are pinned for Yarn via `extension/package.json` and `yarn.lock`.

@@ -463,6 +463,10 @@ message UploadFileChunk {
     bytes data = 1;
     // The original file name provided by the user (sent in the first chunk).
     string file_name = 2;
+    // The interaction that owns the upload (sent in the first chunk).
+    int32 interaction_id = 3;
+    // The interaction input that owns the upload (sent in the first chunk).
+    string input_name = 4;
 }
 
 message UploadFileResponse {

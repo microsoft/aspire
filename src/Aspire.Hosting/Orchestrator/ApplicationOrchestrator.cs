@@ -103,9 +103,11 @@ internal sealed class ApplicationOrchestrator
 
             await _notificationService.PublishUpdateAsync(resourceWithConnectionString, state => state with
             {
-                Properties = [.. state.Properties,
+                Properties = state.Properties.SetResourcePropertyRange(
+                [
                     new(CustomResourceKnownProperties.ConnectionString, connectionString) { IsSensitive = true },
-                    new(CustomResourceKnownProperties.ConnectionProperties, connectionProperties) { IsSensitive = true }]
+                    new(CustomResourceKnownProperties.ConnectionProperties, connectionProperties) { IsSensitive = true }
+                ])
             })
             .ConfigureAwait(false);
         }

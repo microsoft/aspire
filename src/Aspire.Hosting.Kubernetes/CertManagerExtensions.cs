@@ -398,7 +398,8 @@ public static class CertManagerExtensions
                 Name = $"cm-issuer-delete-{captured.Name}",
                 Description = $"Deletes cert-manager ClusterIssuer '{captured.Name}'",
                 Action = ctx => DeleteClusterIssuerAsync(ctx, certManager, captured),
-                DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
+                DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq],
+                Tags = [HelmDeploymentEngine.GetKubernetesDestroyTag(certManager.Parent.Name)]
             };
 
             // Run before the cert-manager helm chart is uninstalled. Once the chart goes,
@@ -499,6 +500,14 @@ public static class CertManagerExtensions
         CertManagerIssuerResource issuer)
     {
         var environment = certManager.Parent;
+        if (environment.SkipDestroyCleanup)
+        {
+            context.Logger.LogInformation(
+                "Skipping cert-manager cleanup for Kubernetes environment '{EnvironmentName}' because the cluster no longer exists.",
+                environment.Name);
+            return;
+        }
+
         // Match the lowercase normalization used at apply time so we target the same object.
         var k8sIssuerName = issuer.Name.ToKubernetesResourceName();
 

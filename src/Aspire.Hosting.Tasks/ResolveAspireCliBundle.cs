@@ -29,6 +29,25 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     public string? AspireCliPath { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether to search <c>PATH</c> for Aspire CLI executables.
+    /// </summary>
+    /// <remarks>
+    /// Explicit paths and the Aspire home directory are still evaluated when this value is <see langword="false"/>.
+    /// </remarks>
+    public bool SearchPathForAspireCli { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether invalid explicitly configured paths produce warnings.
+    /// </summary>
+    public bool WarnOnInvalidPaths { get; set; } = true;
+
+    /// <summary>
+    /// The Aspire home directory used to find and prepare extracted bundle layouts.
+    /// </summary>
+    [Output]
+    public string? AspireHomeDirectory { get; set; }
+
+    /// <summary>
     /// The resolved DCP directory.
     /// </summary>
     [Output]
@@ -69,6 +88,9 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
 
     public override bool Execute()
     {
+        var aspireHomeDirectory = GetDefaultAspireHomeDirectory();
+        AspireHomeDirectory = aspireHomeDirectory;
+
         if (!string.IsNullOrWhiteSpace(AspireCliBundlePath))
         {
             if (TryResolveFromLayoutPath(AspireCliBundlePath, out var explicitBundle))
@@ -77,7 +99,11 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
                 return true;
             }
 
-            Log.LogWarning("The AspireCliBundlePath value '{0}' does not point to a valid Aspire CLI bundle layout.", AspireCliBundlePath);
+            if (WarnOnInvalidPaths)
+            {
+                Log.LogWarning("The AspireCliBundlePath value '{0}' does not point to a valid Aspire CLI bundle layout.", AspireCliBundlePath);
+            }
+
             return true;
         }
 
@@ -89,17 +115,21 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
                 return true;
             }
 
-            Log.LogWarning("The AspireCliPath value '{0}' does not point to an existing Aspire CLI executable with a valid bundle layout.", AspireCliPath);
+            if (WarnOnInvalidPaths)
+            {
+                Log.LogWarning("The AspireCliPath value '{0}' does not point to an existing Aspire CLI executable with a valid bundle layout.", AspireCliPath);
+            }
+
             return true;
         }
 
-        if (TryResolveFromPath(out var pathBundle))
+        if (SearchPathForAspireCli && TryResolveFromPath(out var pathBundle))
         {
             SetOutputs(pathBundle);
             return true;
         }
 
-        if (TryResolveFromLayoutPath(GetDefaultAspireHomeDirectory(), out var aspireHomeBundle))
+        if (TryResolveFromLayoutPath(aspireHomeDirectory, out var aspireHomeBundle))
         {
             SetOutputs(aspireHomeBundle);
             return true;

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { getAppHostTargetVersion, summarizeAppHostTargetVersions } from '../utils/appHostTargetVersion';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 
+import { removeDirectorySafely } from './testHelpers';
 function candidate(path: string, language: string | null): CandidateAppHostDisplayInfo {
     return { path, language, status: 'buildable' };
 }
@@ -22,7 +23,7 @@ suite('appHostTargetVersion', () => {
     teardown(() => {
         for (const dir of tempDirs) {
             if (existsSync(dir)) {
-                rmSync(dir, { recursive: true, force: true });
+                removeDirectorySafely(dir);
             }
         }
         tempDirs.length = 0;
@@ -30,7 +31,7 @@ suite('appHostTargetVersion', () => {
 
     suiteTeardown(() => {
         if (existsSync(tempParent)) {
-            rmSync(tempParent, { recursive: true, force: true });
+            removeDirectorySafely(tempParent);
         }
     });
 
@@ -320,6 +321,18 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
         assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.4.2');
         assert.strictEqual(await getAppHostTargetVersion(dir), '13.4.2');
+    });
+
+    test('reads the Rust SDK version from aspire.config.json', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'apphost.rs');
+        writeFileSync(appHostPath, 'fn main() {}');
+        writeFileSync(join(dir, 'aspire.config.json'), `{
+  // Guest AppHost SDK selected by the CLI.
+  "sdk": { "version": "13.6.0" }
+}`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.6.0');
     });
 
     test('summarizes a BOM-prefixed polyglot SDK version from aspire.config.json', async () => {

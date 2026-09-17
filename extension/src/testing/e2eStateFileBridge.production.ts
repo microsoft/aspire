@@ -5,7 +5,7 @@ import type { AppHostLaunchService } from '../services/AppHostLaunchService';
 import type { AspireExtensionStateSnapshot } from '../types/extensionApi';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import type { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import type { AppHostDataRepository } from '../views/AppHostDataRepository';
+import type { AppHostDataRepository } from '../data/AppHostDataRepository';
 
 /**
  * Build-time replacement for `e2eStateFileBridge.ts` in production bundles.

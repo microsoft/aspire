@@ -586,7 +586,7 @@ internal sealed class BundleService(
 
     /// <summary>
     /// Returns <see langword="true"/> if <paramref name="versionDir"/> contains the
-    /// essential bundle components (<c>managed/aspire-managed</c> and a DCP directory).
+    /// essential bundle components (<c>managed/aspire-managed</c> and the DCP executable).
     /// </summary>
     internal static bool IsVersionedLayoutValid(string versionDir)
     {
@@ -617,7 +617,8 @@ internal sealed class BundleService(
         }
 
         var dcpDir = Path.Combine(versionDir, BundleDiscovery.DcpDirectoryName);
-        if (!Directory.Exists(dcpDir))
+        var dcpExe = BundleDiscovery.GetDcpExecutablePath(dcpDir);
+        if (!Directory.Exists(dcpDir) || !File.Exists(dcpExe))
         {
             return false;
         }

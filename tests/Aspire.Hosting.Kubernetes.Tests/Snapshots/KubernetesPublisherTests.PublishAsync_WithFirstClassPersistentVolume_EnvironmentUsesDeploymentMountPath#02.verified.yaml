@@ -1,0 +1,12 @@
+﻿---
+apiVersion: "v1"
+kind: "PersistentVolumeClaim"
+metadata:
+  name: "media"
+spec:
+  storageClassName: "azurefile-csi"
+  accessModes:
+    - "ReadWriteMany"
+  resources:
+    requests:
+      storage: "100Gi"

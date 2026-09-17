@@ -11,11 +11,16 @@ using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Tests;
+using Aspire.Tests.Shared;
 using Bunit;
 using Google.Protobuf.Collections;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
@@ -36,23 +41,37 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, DateTime.MinValue);
         var scope = CreateOtlpScope(context);
 
-        var cut = SetUpDialog(out var dialogService);
+        var getCut = SetUpDialog(out var dialogService);
         await GenAIVisualizerDialog.OpenDialogAsync(
             dialogService: dialogService,
             span: CreateOtlpSpan(resource, trace, scope, spanId: "abc", parentSpanId: null, startDate: s_testTime),
             selectedLogEntryId: null,
-            telemetryRepository: Services.GetRequiredService<TelemetryRepository>(),
+            telemetryRepository: Services.GetRequiredService<SqliteTelemetryRepository>(),
             errorRecorder: new TestTelemetryErrorRecorder(),
             resources: [],
-            getContextGenAISpans: () => []
+            getContextGenAISpans: () => [],
+            cancellationToken: CancellationToken.None
             );
 
+        var cut = getCut();
         var instance = cut.FindComponent<GenAIVisualizerDialog>().Instance;
 
         Assert.Null(instance.Content.DisplayErrorMessage);
         Assert.Empty(instance.Content.Items);
         Assert.Equal("app", instance.Content.SourceName);
         Assert.Equal("unknown-peer", instance.Content.PeerName);
+        Assert.Single(cut.FindAll("fluent-dialog-body [slot='title']"));
+        Assert.Single(cut.FindAll("fluent-dialog-body [slot='title'] svg"));
+        Assert.Empty(cut.FindAll("header"));
+
+        var tree = cut.FindComponent<FluentTreeView>();
+        Assert.Equal("genai-span", tree.Instance.SelectedId);
+        Assert.Equal(
+            Services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.Dialogs>>()
+                [nameof(Aspire.Dashboard.Resources.Dialogs.GenAIMessageTreeLabel)].Value,
+            cut.Find(".genai-message-tree").GetAttribute("aria-label"));
+        var selectedItem = Assert.Single(cut.FindComponents<FluentTreeItem>(), item => item.Instance.Id == tree.Instance.SelectedId);
+        Assert.True(selectedItem.Find("fluent-tree-item").HasAttribute("selected"));
     }
 
     [Fact]
@@ -102,17 +121,19 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
             KeyValuePair.Create(GenAIHelpers.GenAIOutputInstructions, outputMessages)
         ]);
 
-        var cut = SetUpDialog(out var dialogService);
+        var getCut = SetUpDialog(out var dialogService);
         await GenAIVisualizerDialog.OpenDialogAsync(
             dialogService: dialogService,
             span: span,
             selectedLogEntryId: null,
-            telemetryRepository: Services.GetRequiredService<TelemetryRepository>(),
+            telemetryRepository: Services.GetRequiredService<SqliteTelemetryRepository>(),
             errorRecorder: new TestTelemetryErrorRecorder(),
             resources: [],
-            getContextGenAISpans: () => []
+            getContextGenAISpans: () => [],
+            cancellationToken: CancellationToken.None
             );
 
+        var cut = getCut();
         var instance = cut.FindComponent<GenAIVisualizerDialog>().Instance;
 
         Assert.Equal(5, instance.Content.Items.Count);
@@ -128,9 +149,9 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         var scope = CreateOtlpScope(context);
         var span = CreateOtlpSpan(resource, trace, scope, spanId: GetHexId("abc"), parentSpanId: null, startDate: s_testTime);
 
-        var cut = SetUpDialog(out var dialogService);
-        var repository = Services.GetRequiredService<TelemetryRepository>();
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+    var getCut = SetUpDialog(out var dialogService);
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -152,7 +173,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
                 }
             }
         });
-        var selectedLogEntryId = repository.GetLogsForSpan(trace.TraceId, span.SpanId).Single().InternalId;
+        var selectedLogEntryId = (await repository.GetLogsForSpanAsync(trace.TraceId, span.SpanId, CancellationToken.None)).Single().InternalId;
 
         await GenAIVisualizerDialog.OpenDialogAsync(
             dialogService: dialogService,
@@ -161,27 +182,36 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
             telemetryRepository: repository,
             errorRecorder: new TestTelemetryErrorRecorder(),
             resources: [],
-            getContextGenAISpans: () => []
+            getContextGenAISpans: () => [],
+            cancellationToken: CancellationToken.None
             );
 
+        var cut = getCut();
         var copyButton = cut.Find("fluent-button.message-copy-button");
         var copyButtonLabel = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>()
             [nameof(ControlsStrings.GridValueCopyToClipboard)].Value;
 
         Assert.Equal(copyButtonLabel, copyButton.GetAttribute("aria-label"));
         Assert.Equal(copyButtonLabel, copyButton.GetAttribute("title"));
+
+        var instance = cut.FindComponent<GenAIVisualizerDialog>().Instance;
+        var selectedMessage = Assert.Single(instance.Content.Items, item => item.InternalId == selectedLogEntryId);
+        var tree = cut.FindComponent<FluentTreeView>();
+        Assert.Equal($"genai-item-{selectedMessage.Index}", tree.Instance.SelectedId);
+        var selectedTreeItem = Assert.Single(cut.FindComponents<FluentTreeItem>(), item => item.Instance.Id == tree.Instance.SelectedId);
+        Assert.True(selectedTreeItem.Find("fluent-tree-item").HasAttribute("selected"));
     }
 
     [Fact]
     public async Task UpdateTelemetry_DifferentTrace_ContentInstanceUnchanged()
     {
         // Arrange - Setup dialog infrastructure and repository
-        var cut = SetUpDialog(out var dialogService);
-        var repository = Services.GetRequiredService<TelemetryRepository>();
+        var getCut = SetUpDialog(out var dialogService);
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
         
         // Add initial trace to repository for the dialog to display
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -203,13 +233,13 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         // Get the resource and trace
         var resources = repository.GetResources();
         var resource = resources[0];
-        var tracesResult = repository.GetTraces(new GetTracesRequest
+        var tracesResult = await repository.GetTracesAsync(new GetTracesRequest
         {
             ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
-        });
+        }, CancellationToken.None);
         var trace = tracesResult.PagedResult.Items[0];
         var span = trace.Spans[0];
 
@@ -221,14 +251,16 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
             telemetryRepository: repository,
             errorRecorder: new TestTelemetryErrorRecorder(),
             resources: resources,
-            getContextGenAISpans: () => []
+            getContextGenAISpans: () => [],
+            cancellationToken: CancellationToken.None
         );
 
+        var cut = getCut();
         var instance = cut.FindComponent<GenAIVisualizerDialog>().Instance;
         var originalContent = instance.Content;
 
         // Act - Add a DIFFERENT trace to the repository
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -259,12 +291,12 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
     public async Task UpdateTelemetry_SameTrace_ContentInstanceChanged()
     {
         // Arrange - Setup dialog infrastructure and repository
-        var cut = SetUpDialog(out var dialogService);
-        var repository = Services.GetRequiredService<TelemetryRepository>();
+        var getCut = SetUpDialog(out var dialogService);
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
         
         // Add initial trace to repository for the dialog to display
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -286,26 +318,20 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         // Get the resource and trace
         var resources = repository.GetResources();
         var resource = resources[0];
-        var tracesResult = repository.GetTraces(new GetTracesRequest
+        var tracesResult = await repository.GetTracesAsync(new GetTracesRequest
         {
             ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []
-        });
+        }, CancellationToken.None);
         var trace = tracesResult.PagedResult.Items[0];
         var span = trace.Spans[0];
 
         // Create a function that retrieves the current list of spans from the trace
         List<OtlpSpan> GetContextGenAISpans()
         {
-            var currentTrace = repository.GetTraces(new GetTracesRequest
-            {
-                ResourceKeys = [resource.ResourceKey],
-                StartIndex = 0,
-                Count = 10,
-                Filters = []
-            }).PagedResult.Items.FirstOrDefault(t => t.TraceId == trace.TraceId);
+            var currentTrace = repository.GetTrace(trace.TraceId);
             
             return currentTrace?.Spans.ToList() ?? [];
         }
@@ -318,14 +344,16 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
             telemetryRepository: repository,
             errorRecorder: new TestTelemetryErrorRecorder(),
             resources: resources,
-            getContextGenAISpans: GetContextGenAISpans
+            getContextGenAISpans: GetContextGenAISpans,
+            cancellationToken: CancellationToken.None
         );
 
+        var cut = getCut();
         var instance = cut.FindComponent<GenAIVisualizerDialog>().Instance;
         var originalContent = instance.Content;
 
         // Act - Add a new span to the SAME trace that the dialog is displaying
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -357,18 +385,38 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         });
     }
 
-    private IRenderedFragment SetUpDialog(out DashboardDialogService dialogService)
+    private Func<IRenderedFragment> SetUpDialog(out DashboardDialogService dialogService)
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
         FluentUISetupHelpers.SetupFluentTab(this);
         FluentUISetupHelpers.SetupFluentOverflow(this);
+        JSInterop.SetupModule("/Components/Controls/TextVisualizer.razor.js").SetupVoid();
+        JSInterop.SetupModule("/Components/Controls/MarkdownRenderer.razor.js").SetupVoid();
+
+        IRenderedFragment? cut = null;
+        TestDialogService? testDialogService = null;
+        testDialogService = new TestDialogService((content, _) =>
+        {
+            cut = RenderComponent<CascadingValue<IDialogInstance>>(builder =>
+            {
+                builder.Add(cascadingValue => cascadingValue.Value, testDialogService!.LastInstance!);
+                builder.AddChildContent<GenAIVisualizerDialog>(childBuilder =>
+                {
+                    childBuilder.Add(dialog => dialog.Content, Assert.IsType<GenAIVisualizerDialogViewModel>(content));
+                });
+            });
+            return Task.CompletedTask;
+        });
+        Services.RemoveAll<IDialogService>();
+        Services.AddSingleton<IDialogService>(testDialogService);
 
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
 
-        var cut = FluentUISetupHelpers.RenderDialogProvider(this);
-
-        dialogService = Services.GetRequiredService<DashboardDialogService>();
-        return cut;
+        dialogService = new DashboardDialogService(
+            testDialogService,
+            new TestStringLocalizer<Aspire.Dashboard.Resources.Dialogs>(),
+            dimensionManager);
+        return () => cut ?? throw new InvalidOperationException("The dialog was not rendered.");
     }
 }

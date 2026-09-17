@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.Loader;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
@@ -67,6 +68,64 @@ internal sealed class AssemblyLoader
             activity.SetError(ex);
             throw;
         }
+    }
+
+    public bool TryGetPackageAssemblyNamesFromProbePaths(
+        string packageId,
+        string packageVersion,
+        out IReadOnlyList<string> assemblyNames,
+        [NotNullWhen(true)] out string? canonicalPackageId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageVersion);
+
+        var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        canonicalPackageId = null;
+
+        foreach (var assembly in _packageProbeManifest.ManagedAssemblies)
+        {
+            if (assembly.Culture is not null)
+            {
+                continue;
+            }
+
+            if (assembly.PackageId is not null &&
+                assembly.PackageVersion is not null)
+            {
+                if (string.Equals(assembly.PackageId, packageId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(assembly.PackageVersion, packageVersion, StringComparison.OrdinalIgnoreCase))
+                {
+                    canonicalPackageId ??= assembly.PackageId;
+                    names.Add(assembly.Name);
+                }
+
+                continue;
+            }
+
+            // Older manifests do not record package versions, so package ownership must be
+            // recovered from the conventional global-packages path when possible.
+            if (TryGetPackageIdentityFromAssetPath(assembly.Path, out var pathPackageId, out var pathPackageVersion) &&
+                string.Equals(pathPackageId, packageId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(pathPackageVersion, packageVersion, StringComparison.OrdinalIgnoreCase))
+            {
+                if (assembly.PackageId is not null &&
+                    string.Equals(assembly.PackageId, packageId, StringComparison.OrdinalIgnoreCase))
+                {
+                    canonicalPackageId ??= assembly.PackageId;
+                }
+
+                names.Add(assembly.Name);
+            }
+        }
+
+        assemblyNames = names.ToList();
+        if (assemblyNames.Count == 0)
+        {
+            return false;
+        }
+
+        canonicalPackageId ??= packageId;
+        return true;
     }
 
     /// <summary>
@@ -143,6 +202,45 @@ internal sealed class AssemblyLoader
         }
 
         return assemblyNames;
+    }
+
+    private static bool TryGetPackageIdentityFromAssetPath(
+        string assemblyPath,
+        [NotNullWhen(true)] out string? packageId,
+        [NotNullWhen(true)] out string? packageVersion)
+    {
+        // NuGet managed assets use either:
+        //   <root>/<package-id>/<version>/lib|ref/<tfm>/<assembly>
+        //   <root>/<package-id>/<version>/runtimes/<rid>/lib/<tfm>/<assembly>
+        // Matching from the assembly upward keeps this export-only lookup independent of the
+        // configured global-packages root without guessing across unrelated restored packages.
+        var targetFrameworkDirectory = Directory.GetParent(assemblyPath);
+        var assetKindDirectory = targetFrameworkDirectory?.Parent;
+        var isLibAsset = string.Equals(assetKindDirectory?.Name, "lib", StringComparison.OrdinalIgnoreCase);
+        var isRefAsset = string.Equals(assetKindDirectory?.Name, "ref", StringComparison.OrdinalIgnoreCase);
+        var versionDirectory = assetKindDirectory?.Parent;
+        if (isLibAsset &&
+            versionDirectory?.Parent is { } runtimesDirectory &&
+            string.Equals(runtimesDirectory.Name, "runtimes", StringComparison.OrdinalIgnoreCase))
+        {
+            versionDirectory = runtimesDirectory.Parent;
+        }
+
+        var packageDirectory = versionDirectory?.Parent;
+
+        if (assetKindDirectory is null ||
+            versionDirectory is null ||
+            packageDirectory is null ||
+            (!isLibAsset && !isRefAsset))
+        {
+            packageId = null;
+            packageVersion = null;
+            return false;
+        }
+
+        packageId = packageDirectory.Name;
+        packageVersion = versionDirectory.Name;
+        return true;
     }
 
     internal static IReadOnlyList<string> DiscoverAspireHostingAssemblies(IEnumerable<string?> directories, IEnumerable<string>? manifestAssemblyNames = null)

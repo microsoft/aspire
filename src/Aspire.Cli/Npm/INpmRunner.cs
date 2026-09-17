@@ -37,7 +37,7 @@ internal interface INpmRunner
     bool IsAvailable { get; }
 
     /// <summary>
-    /// Resolves a package version from the internal npm registry.
+    /// Resolves a package version from the public npm registry.
     /// </summary>
     /// <param name="packageName">The npm package name (e.g., "@playwright/cli").</param>
     /// <param name="versionRange">The version range to resolve (e.g., "0.1").</param>

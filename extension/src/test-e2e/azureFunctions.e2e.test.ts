@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import { findResource, getCommandInvocationCount, getTaskProcessEventCount, waitForCommandOutcome, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResourceState, waitForTaskProcessEvent, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { executeE2eControlCommand, reloadWorkspaceForE2E, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { openAspireView } from './helpers/vscode';
 
@@ -27,6 +27,12 @@ suite('Aspire Azure Functions E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         await waitForWorkspaceAppHost();
+        await reloadWorkspaceForE2E();
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
+        // Reloading the window restarts the extension host and returns VS Code to Explorer.
+        // Reopen the Aspire view so its visibility-driven runtime state polling observes the AppHost.
+        await openAspireView();
 
         const appHostPath = getPrimaryAppHostProjectPath();
         const taskSequenceBeforeRun = getTaskProcessEventCount();
@@ -67,9 +73,9 @@ function shouldRunAzureFunctionsE2E(): boolean {
 }
 
 function isAzureFunctionsHostTask(event: { taskName: string; taskSource: string; taskDefinitionType: string }): boolean {
-    // startFuncProcess creates this exact task shape in vscode-azurefunctions 1.22.0.
-    // See https://github.com/microsoft/vscode-azurefunctions/blob/v1.22.0/src/commands/pickFuncProcess.ts.
+    // The Azure Functions extension contributes the literal `func` task type.
+    // Dynamic types such as `func  <buildPath>` are rejected by VS Code 1.130 and later.
     return event.taskName === 'func: host start'
         && event.taskSource === 'func'
-        && event.taskDefinitionType.startsWith('func  ');
+        && event.taskDefinitionType === 'func';
 }

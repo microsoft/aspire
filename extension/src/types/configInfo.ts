@@ -36,6 +36,21 @@ export interface ConfigInfo {
     capabilities?: string[];
 }
 
+export type CapabilityStatus = 'supported' | 'unsupported' | 'unavailable';
+
+/**
+ * Capability advertised by the CLI when interaction-service pipeline actions are available.
+ * Keep in sync with `KnownCapabilities.Pipelines` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const pipelineInteractionCapability = 'pipelines';
+
+/**
+ * Capability advertised by the CLI when `aspire do --list-steps --format json` returns pipeline
+ * metadata without executing the pipeline. Keep in sync with `KnownCapabilities.PipelineStepListJson`
+ * in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const pipelineStepListJsonCapability = 'pipeline-step-list-json.v1';
+
 /**
  * Capability advertised by the CLI when `aspire describe` supports the hidden
  * `--include-disabled-commands` flag. Tooling uses this to avoid passing the flag to older CLIs
@@ -51,3 +66,22 @@ export const describeIncludeDisabledCommandsCapability = 'describe-include-disab
  * Keep in sync with `KnownCapabilities.LsJsonStream` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
  */
 export const lsJsonStreamCapability = 'ls-json-stream.v1';
+
+/**
+ * Capability advertised by the CLI when `aspire run` accepts the `--isolated` option.
+ * Tooling uses this to avoid passing the option to older CLIs that reject it.
+ * Keep in sync with `KnownCapabilities.IsolatedLaunch` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const isolatedLaunchCapability = 'isolated-launch.v1';
+
+/**
+ * Capability advertised by the CLI when `aspire run` accepts `--launch-profile`.
+ * Tooling uses this to avoid passing the option to older CLIs that reject it.
+ * Keep in sync with `KnownCapabilities.LaunchProfile` in src/Aspire.Cli/Utils/ExtensionHelper.cs.
+ */
+export const launchProfileCapability = 'launch-profile.v1';
+
+/**
+ * First Aspire CLI version that accepts `aspire run --isolated`.
+ */
+export const isolatedLaunchMinimumVersion = '13.2.0';

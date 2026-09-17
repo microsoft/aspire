@@ -24,7 +24,7 @@ internal sealed class RunModeProvisioningContextProvider(
     IHostEnvironment environment,
     ILogger<RunModeProvisioningContextProvider> logger,
     IArmClientProvider armClientProvider,
-    IUserPrincipalProvider userPrincipalProvider,
+    IAzurePrincipalProvider azurePrincipalProvider,
     ITokenCredentialProvider tokenCredentialProvider,
     IDeploymentStateManager deploymentStateManager,
     DistributedApplicationExecutionContext distributedApplicationExecutionContext) : BaseProvisioningContextProvider(
@@ -33,7 +33,7 @@ internal sealed class RunModeProvisioningContextProvider(
         environment,
         logger,
         armClientProvider,
-        userPrincipalProvider,
+        azurePrincipalProvider,
         tokenCredentialProvider,
         deploymentStateManager,
         distributedApplicationExecutionContext), IAzureProvisioningOptionsManager, IDisposable

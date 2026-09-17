@@ -59,6 +59,13 @@ namespace Aspire.Hosting;
 [AspireExport]
 public class DistributedApplication : IHost, IAsyncDisposable
 {
+    private static readonly IReadOnlyDictionary<string, string?> s_polyglotConfigurationDefaults = new Dictionary<string, string?>
+    {
+        ["Logging:LogLevel:Default"] = nameof(LogLevel.Information),
+        ["Logging:LogLevel:Microsoft.AspNetCore"] = nameof(LogLevel.Warning),
+        ["Logging:LogLevel:Aspire.Hosting.Dcp"] = nameof(LogLevel.Warning)
+    };
+
     private readonly IHost _host;
     private ResourceCommandService? _resourceCommands;
     private LocaleOverrideContext? _localeOverrideContext;
@@ -236,12 +243,19 @@ public class DistributedApplication : IHost, IAsyncDisposable
             AllowUnsecuredTransport = options.AllowUnsecuredTransport,
             EnableResourceLogging = options.EnableResourceLogging,
             ContainerRegistryOverride = options.ContainerRegistryOverride,
-            DashboardApplicationName = options.DashboardApplicationName
+            DashboardApplicationName = options.DashboardApplicationName,
+            // These values came from the managed server's appsettings.json before polyglot AppHosts
+            // used their own content root. Keep them as fallbacks so every user configuration source
+            // can override them while existing AppHosts retain the same logging behavior.
+            DefaultConfiguration = s_polyglotConfigurationDefaults
         };
 
         if (!string.IsNullOrEmpty(options.ProjectDirectory))
         {
             realOptions.ProjectDirectory = options.ProjectDirectory;
+            // The polyglot AppHost runs in a separate guest process, so the managed server's
+            // working directory does not point at the user's appsettings files.
+            realOptions.ContentRootPath = options.ProjectDirectory;
         }
 
         if (!string.IsNullOrEmpty(options.AppHostFilePath))
@@ -463,8 +477,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
             // publish mode. In inspect mode we try to avoid lifecycle hooks
             // kickings. Eventing will still work generally since they are more
             // targetted.
-            var executionContext = _host.Services.GetRequiredService<DistributedApplicationExecutionContext>();
-            if (executionContext.IsPublishMode || executionContext.IsRunMode)
+            if (!IsInspectMode(configuration))
             {
                 await ExecuteBeforeStartHooksAsync(cancellationToken).ConfigureAwait(false);
             }
@@ -535,8 +548,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
                     // publish mode. In inspect mode we try to avoid lifecycle hooks
                     // kickings. Eventing will still work generally since they are more
                     // targetted.
-                    var executionContext = _host.Services.GetRequiredService<DistributedApplicationExecutionContext>();
-                    if (executionContext.IsPublishMode || executionContext.IsRunMode)
+                    if (!IsInspectMode(configuration))
                     {
                         await ExecuteBeforeStartHooksAsync(cancellationToken).ConfigureAwait(false);
                     }
@@ -559,6 +571,9 @@ public class DistributedApplication : IHost, IAsyncDisposable
             // Do nothing
         }
     }
+
+    private static bool IsInspectMode(IConfiguration configuration)
+        => string.Equals(configuration["AppHost:Operation"], "inspect", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Runs an application and blocks the calling thread until host shutdown is triggered and all

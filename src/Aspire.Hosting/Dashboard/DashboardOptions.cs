@@ -18,6 +18,17 @@ internal class DashboardOptions
     public string? ApiKey { get; set; }
     public string AspNetCoreEnvironment { get; set; } = "Production";
     public bool? TelemetryOptOut { get; set; }
+
+    /// <summary>
+    /// Suppresses the login URL, and only the login URL, from the AppHost's dashboard startup summary.
+    /// </summary>
+    /// <remarks>
+    /// Set by <c>Aspire.Hosting.Testing</c> when it runs a dashboard for a test application. That dashboard's
+    /// browser token is generated per application and handed to the test through
+    /// <c>GetDashboardUrlAsync</c>, so writing it to the AppHost logger only publishes a live credential
+    /// into test and CI output. The dashboard and OTLP endpoint lines are still written.
+    /// </remarks>
+    public bool SuppressLoginUrlInStartupSummary { get; set; }
 }
 
 internal class ConfigureDefaultDashboardOptions(IConfiguration configuration, IOptions<DcpOptions> dcpOptions) : IConfigureOptions<DashboardOptions>
@@ -35,6 +46,8 @@ internal class ConfigureDefaultDashboardOptions(IConfiguration configuration, IO
         options.ApiKey = configuration["AppHost:DashboardApiKey"];
 
         options.AspNetCoreEnvironment = configuration[KnownAspNetCoreConfigNames.Environment] ?? "Production";
+
+        options.SuppressLoginUrlInStartupSummary = bool.TryParse(configuration["AppHost:SuppressDashboardLoginUrlInStartupSummary"], out var suppressLoginUrl) && suppressLoginUrl;
 
         options.TelemetryOptOut = bool.TryParse(configuration["ASPIRE_DASHBOARD_TELEMETRY_OPTOUT"], out var telemetryOptOut)
             ? telemetryOptOut

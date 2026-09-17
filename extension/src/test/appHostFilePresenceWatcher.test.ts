@@ -3,12 +3,13 @@ import { EventEmitter } from 'events';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AppHostFilePresenceWatcher } from '../editor/AppHostFilePresenceWatcher';
-import { AppHostDataRepository } from '../views/AppHostDataRepository';
+import { AppHostDataRepository } from '../data/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import * as cliModule from '../debugger/languages/cli';
+import * as cliModule from '../utils/process/cliProcess';
 // Import parsers so they self-register before the watcher consults them.
 import '../editor/parsers/csharpAppHostParser';
 import '../editor/parsers/jsTsAppHostParser';
+import '../editor/parsers/rustAppHostParser';
 
 interface CapturedListeners {
     tabsListeners: Array<() => void>;
@@ -34,7 +35,7 @@ function makeDocument(filePath: string, content: string): vscode.TextDocument {
     return {
         uri: vscode.Uri.file(filePath),
         fileName: filePath,
-        languageId: filePath.endsWith('.cs') ? 'csharp' : filePath.endsWith('.ts') ? 'typescript' : 'javascript',
+        languageId: filePath.endsWith('.cs') ? 'csharp' : filePath.endsWith('.ts') ? 'typescript' : filePath.endsWith('.rs') ? 'rust' : 'javascript',
         version: 1,
         isDirty: false,
         isClosed: false,
@@ -82,6 +83,7 @@ function makeDocument(filePath: string, content: string): vscode.TextDocument {
 
 const appHostCsContent = 'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddRedis("cache");\nbuilder.Build().Run();';
 const appHostTsContent = 'import { createBuilder } from "@aspire/sdk";\nconst builder = await createBuilder();\nawait builder.addRedis("cache");';
+const appHostRustContent = 'fn main() {\n    let builder = create_builder(None)?;\n    builder.add_redis("cache")?;\n}';
 const nonAppHostCsContent = 'using System;\nclass Program { static void Main() { } }';
 const appHostProjectContent = '<Project Sdk="Aspire.AppHost.Sdk/13.5.0" />';
 const nonAppHostProjectContent = '<Project Sdk="Microsoft.NET.Sdk" />';
@@ -198,6 +200,17 @@ suite('AppHostFilePresenceWatcher', () => {
 
         assert.strictEqual(setOpenSpy.calledOnce, true);
         assert.deepStrictEqual(reportedPaths(setOpenSpy.firstCall), [fsPath('/test/AppHost.cs')]);
+        watcher.dispose();
+    });
+
+    test('reports a backgrounded open Rust AppHost tab', async () => {
+        setOpenDocuments([makeDocument('/test/apphost.rs', appHostRustContent)], []);
+
+        const watcher = new AppHostFilePresenceWatcher(repository);
+        await waitForUpdate(watcher);
+
+        assert.strictEqual(setOpenSpy.calledOnce, true);
+        assert.deepStrictEqual(reportedPaths(setOpenSpy.firstCall), [fsPath('/test/apphost.rs')]);
         watcher.dispose();
     });
 

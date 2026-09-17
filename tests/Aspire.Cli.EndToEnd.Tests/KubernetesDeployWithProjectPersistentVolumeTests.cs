@@ -9,7 +9,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
 /// E2E test for <c>aspire deploy</c> to Kubernetes that proves the
-/// <c>WithPersistentVolume(volume, mountPath)</c> overload works for project
+/// <c>WithPersistentVolume(volume, mountPath, env)</c> overload works for project
 /// resources — closes the scenario tracked by <c>aspire/issues/9430</c>.
 ///
 /// Scenario: a project mounts a first-class persistent volume at <c>/srv/data</c>,
@@ -49,10 +49,10 @@ public sealed class KubernetesDeployWithProjectPersistentVolumeTests(ITestOutput
             await auto.InstallKindAndHelmAsync(counter);
             await auto.CreateKindClusterWithRegistryAsync(counter, clusterName);
 
-            // Mount-path overload of WithPersistentVolume — works for ProjectResource
+            // Environment-variable overload of WithPersistentVolume — works for ProjectResource
             // (no ContainerMountAnnotation needs to pre-exist; the overload adds one
-            // itself) and triggers StatefulSet auto-promotion just like the name-match
-            // overload.
+            // itself), maps local and deployed paths through DATA_PATH, and triggers
+            // StatefulSet auto-promotion just like the name-match overload.
             var appHostCode = $$"""
                 #pragma warning disable ASPIRECOMPUTE002, ASPIRECOMPUTE003
                 using Aspire.Hosting;
@@ -76,7 +76,7 @@ public sealed class KubernetesDeployWithProjectPersistentVolumeTests(ITestOutput
                     .WithAccessMode(PersistentVolumeAccessMode.ReadWriteOnce);
 
                 builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
-                    .WithPersistentVolume(scratch, "/srv/data")
+                    .WithPersistentVolume(scratch, "/srv/data", env: "DATA_PATH")
                     .WithExternalHttpEndpoints();
 
                 builder.Build().Run();
@@ -91,25 +91,27 @@ public sealed class KubernetesDeployWithProjectPersistentVolumeTests(ITestOutput
                 var app = builder.Build();
                 app.MapDefaultEndpoints();
 
-                const string MarkerPath = "/srv/data/marker.txt";
+                var dataPath = Environment.GetEnvironmentVariable("DATA_PATH")
+                    ?? throw new InvalidOperationException("DATA_PATH is not configured.");
+                var markerPath = Path.Combine(dataPath, "marker.txt");
                 const string MarkerToken = "wrote-42";
 
                 app.MapGet("/test-deployment", (string? action) =>
                 {
                     if (action == "write")
                     {
-                        Directory.CreateDirectory(Path.GetDirectoryName(MarkerPath)!);
-                        File.WriteAllText(MarkerPath, MarkerToken);
+                        Directory.CreateDirectory(Path.GetDirectoryName(markerPath)!);
+                        File.WriteAllText(markerPath, MarkerToken);
                         return Results.Ok("PASSED: wrote " + MarkerToken);
                     }
 
                     if (action == "read")
                     {
-                        if (!File.Exists(MarkerPath))
+                        if (!File.Exists(markerPath))
                         {
-                            return Results.Problem("FAILED: marker file missing at " + MarkerPath);
+                            return Results.Problem("FAILED: marker file missing at " + markerPath);
                         }
-                        var content = File.ReadAllText(MarkerPath);
+                        var content = File.ReadAllText(markerPath);
                         if (content == MarkerToken)
                         {
                             return Results.Ok("PASSED: read " + content);

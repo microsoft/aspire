@@ -133,9 +133,36 @@ internal static partial class ProcessStartTimeHelper
     /// <param name="pid">The process ID to check.</param>
     /// <param name="expectedStartTimeUnixMilliseconds">The expected stable start time (Unix milliseconds), or <see langword="null"/> for PID-only.</param>
     /// <param name="tolerance">Allowed difference between the expected and observed start time. Defaults to <see cref="StableStartTimeMatchTolerance"/>.</param>
+    /// <param name="assumeRunningWhenUnableToInspect">
+    /// Whether an inaccessible process should be treated as running. Cleanup callers use this
+    /// conservative mode so an inspection failure never authorizes deletion.
+    /// </param>
     /// <returns><see langword="true"/> if the process exists and matches; otherwise <see langword="false"/>.</returns>
-    public static bool IsProcessRunning(int pid, long? expectedStartTimeUnixMilliseconds = null, TimeSpan? tolerance = null)
+    public static bool IsProcessRunning(
+        int pid,
+        long? expectedStartTimeUnixMilliseconds = null,
+        TimeSpan? tolerance = null,
+        bool assumeRunningWhenUnableToInspect = false)
+        => IsProcessRunning(
+            pid,
+            expectedStartTimeUnixMilliseconds,
+            tolerance,
+            assumeRunningWhenUnableToInspect,
+            out _);
+
+    /// <summary>
+    /// Determines whether a process is running and reports when the result used the configured
+    /// uncertainty bias because the process identity could not be inspected.
+    /// </summary>
+    public static bool IsProcessRunning(
+        int pid,
+        long? expectedStartTimeUnixMilliseconds,
+        TimeSpan? tolerance,
+        bool assumeRunningWhenUnableToInspect,
+        out bool unableToInspect)
     {
+        unableToInspect = false;
+
         try
         {
             using var process = Process.GetProcessById(pid);
@@ -148,12 +175,13 @@ internal static partial class ProcessStartTimeHelper
             {
                 // Reading the process start time can race with process exit. On macOS it can throw:
                 //   Win32Exception (3): Unable to retrieve the specified information about the process or thread.
-                // If we cannot prove this is the expected target, treat it as not running so callers
-                // never act on a recycled PID.
+                // If we cannot prove this is the expected target, honor the caller's explicit uncertainty
+                // bias: watchdogs report it gone, while destructive cleanup assumes it is still running.
                 var actual = TryGetProcessStartTimeUnixMilliseconds(pid);
                 if (actual is null)
                 {
-                    return false;
+                    unableToInspect = true;
+                    return assumeRunningWhenUnableToInspect;
                 }
 
                 if (!AreCloseMilliseconds(expected, actual.Value, tolerance))
@@ -181,9 +209,9 @@ internal static partial class ProcessStartTimeHelper
         }
         catch (Win32Exception)
         {
-            // Could not inspect the process (e.g. it exited mid-check, or is privileged). Without
-            // proof of identity, do not report it as the expected running process.
-            return false;
+            // Could not inspect the process (e.g. it exited mid-check, or is privileged).
+            unableToInspect = true;
+            return assumeRunningWhenUnableToInspect;
         }
     }
 

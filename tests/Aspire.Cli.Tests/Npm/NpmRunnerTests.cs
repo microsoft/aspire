@@ -16,7 +16,7 @@ namespace Aspire.Cli.Tests.Npm;
 public class NpmRunnerTests
 {
     [Fact]
-    public void PackageRegistry_UsesCanonicalInternalFeed()
+    public void PackageRegistry_UsesPublicNpmRegistry()
     {
         var registryConstants = typeof(NpmRunner)
             .GetFields(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
@@ -24,8 +24,8 @@ public class NpmRunnerTests
             .Select(field => (string?)field.GetRawConstantValue())
             .ToArray();
 
-        Assert.Contains("https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/", registryConstants);
-        Assert.DoesNotContain(registryConstants, value => value?.Contains("npmjs", StringComparison.OrdinalIgnoreCase) is true);
+        Assert.Contains("https://registry.npmjs.org/", registryConstants);
+        Assert.DoesNotContain(registryConstants, value => value?.Contains("pkgs.dev.azure.com", StringComparison.OrdinalIgnoreCase) is true);
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class NpmRunnerTests
 
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             @"C:\Program Files\nodejs\npm.cmd",
-            ["view", "@playwright/cli@0.1.1", "version", "--registry", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/"],
+            ["view", "@playwright/cli@0.1.1", "version", "--registry", "https://registry.npmjs.org/"],
             @"C:\temp\workdir", new TestEnvironment());
 
         Assert.Equal("cmd.exe", startInfo.FileName);
@@ -149,7 +149,7 @@ public class NpmRunnerTests
     }
 
     [Fact]
-    public async Task InstallGlobalAsync_UsesInternalRegistryForDependencies()
+    public async Task InstallGlobalAsync_UsesPublicRegistryForDependencies()
     {
         var tempDirectory = Directory.CreateTempSubdirectory("aspire-npm-runner-test-");
 
@@ -175,7 +175,7 @@ public class NpmRunnerTests
                     tarballPath,
                     "--ignore-scripts",
                     "--registry",
-                    "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/"
+                    "https://registry.npmjs.org/"
                 ],
                 await File.ReadAllLinesAsync(argumentsPath, TestContext.Current.CancellationToken));
         }

@@ -1,0 +1,16 @@
+[package]
+name = "aspire-sample-rust-app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8.9"
+tokio = { version = "1.51", features = ["rt-multi-thread", "macros", "net"] }
+opentelemetry = "0.32.0"
+opentelemetry_sdk = { version = "0.32.0", features = ["rt-tokio", "trace", "metrics", "logs"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["registry", "env-filter"] }
+tracing-opentelemetry = "0.33.0"
+opentelemetry-appender-tracing = "0.32.0"
+opentelemetry-otlp = { version = "0.32.0", features = ["grpc-tonic", "tls-roots", "tls-ring", "internal-logs", "metrics", "logs", "trace"] }
+tonic = { version = "0.14.6", default-features = false, features = ["transport", "tls-native-roots", "tls-ring"] }

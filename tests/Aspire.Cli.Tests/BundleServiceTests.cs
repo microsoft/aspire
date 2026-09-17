@@ -117,7 +117,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void IsVersionedLayoutValid_RequiresManagedExecutableAndDcpDirectory()
+    public void IsVersionedLayoutValid_RequiresManagedExecutableAndDcpExecutable()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.WorkspaceRoot.FullName;
@@ -146,6 +146,18 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
         CreateFakeBundleLayout(dir);
 
         Directory.Delete(Path.Combine(dir, BundleDiscovery.DcpDirectoryName), recursive: true);
+        Assert.False(BundleService.IsVersionedLayoutValid(dir));
+    }
+
+    [Fact]
+    public void IsVersionedLayoutValid_RequiresDcpExecutable()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dir = workspace.WorkspaceRoot.FullName;
+        CreateFakeBundleLayout(dir);
+
+        File.Delete(BundleDiscovery.GetDcpExecutablePath(Path.Combine(dir, BundleDiscovery.DcpDirectoryName)));
+
         Assert.False(BundleService.IsVersionedLayoutValid(dir));
     }
 
@@ -224,6 +236,6 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
 
         var dcpDir = Path.Combine(root, BundleDiscovery.DcpDirectoryName);
         Directory.CreateDirectory(dcpDir);
-        File.WriteAllText(Path.Combine(dcpDir, "placeholder"), "dcp");
+        File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDir), "dcp");
     }
 }

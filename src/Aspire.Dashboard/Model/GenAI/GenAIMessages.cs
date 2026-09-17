@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using Microsoft.OpenApi;
 
 namespace Aspire.Dashboard.Model.GenAI;
 
@@ -198,7 +197,7 @@ public class ToolDefinition
     public string Type { get; set; } = "function";
     public string? Name { get; set; }
     public string? Description { get; set; }
-    public OpenApiSchema? Parameters { get; set; }
+    internal ToolDefinitionSchema? Parameters { get; set; }
 }
 
 /// <summary>

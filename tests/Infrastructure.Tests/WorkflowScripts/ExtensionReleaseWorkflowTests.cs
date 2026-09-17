@@ -62,31 +62,27 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
             prompt,
             StringComparison.Ordinal);
         Assert.Contains(
-            "Use local git as the authoritative source for the exact candidate set:",
+            "`${RUNNER_TEMP}/gh-aw/extension-changelog-candidates.tsv`",
             prompt,
             StringComparison.Ordinal);
         Assert.Contains(
-            "A deterministic pre-agent step already preloaded the authoritative marker range",
+            "A deterministic pre-agent step already validated and materialized the",
             prompt,
             StringComparison.Ordinal);
         Assert.Contains(
-            "and history into this checkout.",
+            "Do not run `git` or",
             prompt,
             StringComparison.Ordinal);
         Assert.Contains(
-            "Do not perform any network fetch in the agent",
+            "perform any network fetch in the agent step.",
             prompt,
             StringComparison.Ordinal);
         Assert.Contains(
-            "step.",
+            "Each line contains the 40-character commit SHA",
             prompt,
             StringComparison.Ordinal);
         Assert.Contains(
-            "`git log --format='%H%x09%s' --no-merges <from>..<to> -- extension/`",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "Count the candidates produced by that command",
+            "Count every line and keep that exact candidate count",
             prompt,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -114,11 +110,11 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
             prompt,
             StringComparison.Ordinal);
         Assert.Contains(
-            "The local git range still cannot be enumerated after the pre-agent history",
+            "The authoritative candidate file is missing or unreadable after pre-agent",
             prompt,
             StringComparison.Ordinal);
         Assert.Contains(
-            "preload, or required enrichment searches fail outright",
+            "materialization, or required enrichment searches fail outright",
             prompt,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -142,6 +138,26 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         Assert.False(
             prompt.Contains("after explicit fetch", StringComparison.Ordinal),
             "The prompt must not describe failure handling in terms of an agent-side fetch that is no longer allowed.");
+        Assert.False(
+            prompt.Contains("Use local git as the authoritative source", StringComparison.Ordinal),
+            "The prompt must consume the pre-agent candidate file instead of invoking Git.");
+        Assert.False(
+            prompt.Contains("`git log", StringComparison.Ordinal),
+            "The prompt must not expose broad Git execution to the agent.");
+        Assert.DoesNotContain(
+            "/tmp/gh-aw/agent/extension-changelog-candidates.tsv",
+            prompt,
+            StringComparison.Ordinal);
+        var tools = GetSection(prompt, "^tools:", "^pre-agent-steps:");
+        Assert.DoesNotContain("\"git\"", tools, StringComparison.Ordinal);
+        Assert.Contains(
+            "--mount \"${RUNNER_TEMP}/gh-aw:${RUNNER_TEMP}/gh-aw:ro\"",
+            compiledWorkflow,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "/tmp/gh-aw/agent/extension-changelog-candidates.tsv",
+            compiledWorkflow,
+            StringComparison.Ordinal);
         Assert.Contains("{{#runtime-import .github/workflows/extension-changelog.md}}", compiledWorkflow, StringComparison.Ordinal);
     }
 
@@ -216,10 +232,7 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
     public void CompiledWorkflowPreloadsAuthoritativeRangeBeforeCleaningCredentials()
     {
         var workflow = File.ReadAllText(s_changelogWorkflowLockPath);
-        var preloadStep = GetSection(
-            workflow,
-            "^      - name: Preload authoritative marker range for local changelog enumeration",
-            "^      - name: Download container images");
+        var preloadScript = GetCompiledWorkflowRunScript("Preload authoritative marker range for local changelog enumeration");
 
         var configureGitCredentialsIndex = FindRequiredText(workflow, "Configure Git credentials");
         var checkoutPrBranchIndex = FindRequiredText(workflow, "Checkout PR branch");
@@ -235,12 +248,17 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         Assert.True(
             preloadIndex < cleanCredentialsIndex,
             "The authoritative range preload must finish before gh-aw removes Git credentials.");
-        Assert.Contains("extension/CHANGELOG.md", preloadStep, StringComparison.Ordinal);
-        Assert.Contains("aspire-ext-changelog", preloadStep, StringComparison.Ordinal);
-        Assert.Contains("git fetch --no-tags", preloadStep, StringComparison.Ordinal);
-        Assert.Contains("git log --format='%H%x09%s' --no-merges", preloadStep, StringComparison.Ordinal);
-        Assert.Contains("${FROM_SHA}..${TO_SHA}", preloadStep, StringComparison.Ordinal);
-        Assert.Contains("-- extension/ >/dev/null 2>&1", preloadStep, StringComparison.Ordinal);
+        Assert.Contains("extension/CHANGELOG.md", preloadScript, StringComparison.Ordinal);
+        Assert.Contains("aspire-ext-changelog", preloadScript, StringComparison.Ordinal);
+        Assert.Contains("git fetch --no-tags", preloadScript, StringComparison.Ordinal);
+        Assert.Contains(
+            "CANDIDATES_FILE=\"${RUNNER_TEMP}/gh-aw/extension-changelog-candidates.tsv\"",
+            preloadScript,
+            StringComparison.Ordinal);
+        Assert.Contains("git log --format='%H%x09%s' --no-merges", preloadScript, StringComparison.Ordinal);
+        Assert.Contains("${FROM_SHA}..${TO_SHA}", preloadScript, StringComparison.Ordinal);
+        Assert.Contains("-- extension/ > \"${CANDIDATES_FILE}\"", preloadScript, StringComparison.Ordinal);
+        Assert.Contains("candidate_count=\"$(wc -l < \"${CANDIDATES_FILE}\")\"", preloadScript, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -470,7 +470,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<InteractionService>(),
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build(),
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -540,7 +541,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<InteractionService>(),
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build(),
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -587,7 +589,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<InteractionService>(),
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build(),
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -646,7 +649,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<InteractionService>(),
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build(),
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -683,7 +687,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<InteractionService>(),
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build(),
+            new TestInteractionFileUploadStore());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -828,7 +833,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+        fileUploadStore.StartInteraction(1, [("File", InteractionHelpers.MaxFileCount)]);
         var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
 
         var data = new byte[1024]; // 1 KB
@@ -836,14 +842,72 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         var context = TestServerCallContext.Create();
         var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
-        requestStream.AddMessage(new UploadFileChunk { FileName = "test.txt", Data = ByteString.CopyFrom(data) });
+        requestStream.AddMessage(new UploadFileChunk { FileName = "test.txt", Data = ByteString.CopyFrom(data), InteractionId = 1, InputName = "File" });
         requestStream.Complete();
 
         var response = await dashboardService.UploadFile(requestStream, context);
 
         Assert.NotNull(response.FileId);
         Assert.NotEmpty(response.FileId);
-        Assert.NotNull(fileUploadStore.GetFilePath(response.FileId));
+        var filePath = Assert.IsType<string>(fileUploadStore.GetFilePath(response.FileId, 1, "File"));
+
+        fileUploadStore.CancelInteraction(1);
+
+        Assert.Null(fileUploadStore.GetFilePath(response.FileId, 1, "File"));
+        Assert.False(File.Exists(filePath));
+    }
+
+    [Theory]
+    [InlineData("../../../etc/passwd", "passwd")]
+    [InlineData("..\\..\\windows\\system32\\evil.exe", "evil.exe")]
+    [InlineData("bad*.txt", "bad*.txt")]
+    [InlineData("bad:name.txt", "bad:name.txt")]
+    [InlineData("CON.txt", "CON.txt")]
+    [InlineData("bad\0name.txt", "bad\0name.txt")]
+    public async Task UploadFile_MaliciousFileName_UsesRandomDiskName(string fileName, string expectedFileName)
+    {
+        var dashboardServiceData = CreateDashboardServiceData();
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+        fileUploadStore.StartInteraction(1, [("File", 1)]);
+        var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
+
+        var context = TestServerCallContext.Create();
+        var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
+        requestStream.AddMessage(new UploadFileChunk { FileName = fileName, InteractionId = 1, InputName = "File" });
+        requestStream.Complete();
+
+        var response = await dashboardService.UploadFile(requestStream, context);
+
+        var filePath = Assert.IsType<string>(fileUploadStore.GetFilePath(response.FileId, 1, "File"));
+        Assert.True(File.Exists(filePath));
+        Assert.NotEqual(expectedFileName, Path.GetFileName(filePath));
+        Assert.Equal(expectedFileName, Assert.Single(fileUploadStore.GetCompletedFiles(1, "File")).Name);
+    }
+
+    [Fact]
+    public async Task UploadFile_ExceedsInputFileCountLimit_ThrowsFailedPrecondition()
+    {
+        var dashboardServiceData = CreateDashboardServiceData();
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+        fileUploadStore.StartInteraction(1, [("File", 1)]);
+        var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
+
+        var firstContext = TestServerCallContext.Create();
+        var firstRequestStream = new TestAsyncStreamReader<UploadFileChunk>(firstContext);
+        firstRequestStream.AddMessage(new UploadFileChunk { FileName = "first.txt", InteractionId = 1, InputName = "File" });
+        firstRequestStream.Complete();
+        await dashboardService.UploadFile(firstRequestStream, firstContext);
+
+        var secondContext = TestServerCallContext.Create();
+        var secondRequestStream = new TestAsyncStreamReader<UploadFileChunk>(secondContext);
+        secondRequestStream.AddMessage(new UploadFileChunk { FileName = "second.txt", InteractionId = 1, InputName = "File" });
+        secondRequestStream.Complete();
+
+        var exception = await Assert.ThrowsAsync<RpcException>(() => dashboardService.UploadFile(secondRequestStream, secondContext));
+        Assert.Equal(StatusCode.FailedPrecondition, exception.StatusCode);
+        Assert.Equal("File input 'File' accepts at most 1 file.", exception.Status.Detail);
     }
 
     [Fact]
@@ -851,7 +915,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+        fileUploadStore.StartInteraction(1, [("File", InteractionHelpers.MaxFileCount)]);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -865,11 +930,16 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         var context = TestServerCallContext.Create();
         var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
-        requestStream.AddMessage(new UploadFileChunk { FileName = "large.txt", Data = ByteString.CopyFrom(data) });
+        requestStream.AddMessage(new UploadFileChunk { FileName = "large.txt", Data = ByteString.CopyFrom(data), InteractionId = 1, InputName = "File" });
         requestStream.Complete();
 
         var ex = await Assert.ThrowsAsync<RpcException>(() => dashboardService.UploadFile(requestStream, context));
         Assert.Equal(StatusCode.ResourceExhausted, ex.StatusCode);
+
+        fileUploadStore.CancelInteraction(1);
+        fileUploadStore.StartInteraction(1, [("File", InteractionHelpers.MaxFileCount)]);
+        var (_, replacementPath) = fileUploadStore.CreateEntry("replacement.txt", 1, "File");
+        Assert.True(File.Exists(replacementPath));
     }
 
     [Fact]
@@ -877,7 +947,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+        fileUploadStore.StartInteraction(1, [("File", InteractionHelpers.MaxFileCount)]);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -893,7 +964,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         var context = TestServerCallContext.Create();
         var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
-        requestStream.AddMessage(new UploadFileChunk { FileName = "large.txt", Data = ByteString.CopyFrom(chunk1) });
+        requestStream.AddMessage(new UploadFileChunk { FileName = "large.txt", Data = ByteString.CopyFrom(chunk1), InteractionId = 1, InputName = "File" });
         requestStream.AddMessage(new UploadFileChunk { Data = ByteString.CopyFrom(chunk2) });
         requestStream.Complete();
 
@@ -906,7 +977,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+        fileUploadStore.StartInteraction(1, [("File", InteractionHelpers.MaxFileCount)]);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -920,7 +992,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         var context = TestServerCallContext.Create();
         var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
-        requestStream.AddMessage(new UploadFileChunk { FileName = "medium.bin", Data = ByteString.CopyFrom(data) });
+        requestStream.AddMessage(new UploadFileChunk { FileName = "medium.bin", Data = ByteString.CopyFrom(data), InteractionId = 1, InputName = "File" });
         requestStream.Complete();
 
         var response = await dashboardService.UploadFile(requestStream, context);
@@ -934,7 +1006,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
         var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
 
         var context = TestServerCallContext.Create();
@@ -946,26 +1018,212 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(StatusCode.InvalidArgument, ex.StatusCode);
     }
 
-    [Fact]
-    public async Task UploadFile_ThenResolveFileReferences_ResolvesCorrectly()
+    [Theory]
+    [InlineData("", 1, "File", "First chunk must include a file name.")]
+    [InlineData("file.txt", 0, "File", "First chunk must include an interaction ID.")]
+    [InlineData("file.txt", 1, "", "First chunk must include an input name.")]
+    public async Task UploadFile_FirstChunkMissingRequiredMetadata_ThrowsInvalidArgument(
+        string fileName,
+        int interactionId,
+        string inputName,
+        string expectedMessage)
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+        fileUploadStore.StartInteraction(1, [("File", InteractionHelpers.MaxFileCount)]);
+        var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
+
+        var context = TestServerCallContext.Create();
+        var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
+        requestStream.AddMessage(new UploadFileChunk { FileName = fileName, InteractionId = interactionId, InputName = inputName });
+        requestStream.Complete();
+
+        var exception = await Assert.ThrowsAsync<RpcException>(() => dashboardService.UploadFile(requestStream, context));
+
+        Assert.Equal(StatusCode.InvalidArgument, exception.StatusCode);
+        Assert.Equal(expectedMessage, exception.Status.Detail);
+    }
+
+    [Fact]
+    public async Task UploadFile_UnknownInteraction_RejectsUpload()
+    {
+        var dashboardServiceData = CreateDashboardServiceData();
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+        var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
+
+        var context = TestServerCallContext.Create();
+        var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
+        requestStream.AddMessage(new UploadFileChunk { FileName = "file.txt", InteractionId = 1, InputName = "File" });
+        requestStream.Complete();
+
+        var exception = await Assert.ThrowsAsync<RpcException>(() => dashboardService.UploadFile(requestStream, context));
+
+        Assert.Equal(StatusCode.FailedPrecondition, exception.StatusCode);
+        Assert.Equal("Interaction '1' is not accepting file uploads.", exception.Status.Detail);
+    }
+
+    [Fact]
+    public async Task SendInteractionRequestAsync_ClientFileTypeForTextInput_DoesNotAttachFile()
+    {
+        var fileUploadStore = new TestInteractionFileUploadStore();
+        var interactionService = new InteractionService(
+            NullLogger<InteractionService>.Instance,
+            new DistributedApplicationOptions(),
+            new ServiceCollection().BuildServiceProvider(),
+            new ConfigurationBuilder().Build(),
+            fileUploadStore);
+        using var dashboardServiceData = CreateDashboardServiceData(interactionService: interactionService, fileUploadStore: fileUploadStore);
+        var fileInput = new InteractionInput { Name = "File", InputType = InputType.File };
+        var textInput = new InteractionInput { Name = "Text", InputType = InputType.Text };
+        var resultTask = interactionService.PromptInputsAsync("Inputs", "Enter values", [fileInput, textInput]);
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        var (fileId, _) = fileUploadStore.CreateEntry("spoofed.txt", interaction.InteractionId, textInput.Name);
+        var value = $"[{{\"Id\":\"{fileId}\",\"Name\":\"spoofed.txt\"}}]";
+
+        var request = new WatchInteractionsRequestUpdate
+        {
+            InteractionId = interaction.InteractionId,
+            InputsDialog = new InteractionInputsDialog()
+        };
+        request.InputsDialog.InputItems.Add(new Aspire.DashboardService.Proto.V1.InteractionInput
+        {
+            Name = textInput.Name,
+            InputType = Aspire.DashboardService.Proto.V1.InputType.File,
+            Value = value
+        });
+
+        await dashboardServiceData.SendInteractionRequestAsync(request, CancellationToken.None);
+        var result = await resultTask;
+        var resultInputs = Assert.IsType<InteractionInputCollection>(result.Data);
+
+        Assert.Empty(resultInputs[textInput.Name].GetFiles());
+        Assert.Equal(value, resultInputs[textInput.Name].Value);
+    }
+
+    [Fact]
+    public async Task SendInteractionRequestAsync_UsesAuthoritativeFilesAndDisposeDeletesUploads()
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+        var interactionService = new InteractionService(
+            NullLogger<InteractionService>.Instance,
+            new DistributedApplicationOptions(),
+            new ServiceCollection().BuildServiceProvider(),
+            new ConfigurationBuilder().Build(),
+            fileUploadStore);
+        using var dashboardServiceData = CreateDashboardServiceData(interactionService: interactionService, fileUploadStore: fileUploadStore);
+        var input = new InteractionInput { Name = "File", InputType = InputType.File, Required = true, AllowMultipleFiles = true };
+        var resultTask = interactionService.PromptInputAsync("Upload", "Select a file", input);
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        var (fileId, filePath) = fileUploadStore.CreateEntry("document.txt", interaction.InteractionId, input.Name);
+        var (secondFileId, secondFilePath) = fileUploadStore.CreateEntry("second.txt", interaction.InteractionId, input.Name);
+        await File.WriteAllTextAsync(filePath, "content");
+        await File.WriteAllTextAsync(secondFilePath, "second content");
+        fileUploadStore.CompleteUpload(interaction.InteractionId, fileId);
+        fileUploadStore.CompleteUpload(interaction.InteractionId, secondFileId);
+        var request = new WatchInteractionsRequestUpdate
+        {
+            InteractionId = interaction.InteractionId,
+            InputsDialog = new InteractionInputsDialog()
+        };
+        request.InputsDialog.InputItems.Add(new Aspire.DashboardService.Proto.V1.InteractionInput
+        {
+            Name = input.Name,
+            InputType = Aspire.DashboardService.Proto.V1.InputType.File,
+            Value = $"[{{\"Id\":\"{fileId}\",\"Name\":\"spoofed.txt\"}},{{\"Id\":\"{secondFileId}\",\"Name\":\"also-spoofed.txt\"}}]"
+        });
+        await dashboardServiceData.SendInteractionRequestAsync(request, CancellationToken.None);
+        var result = await resultTask;
+        var resultInput = Assert.IsType<InteractionInput>(result.Data);
+        var files = resultInput.GetFiles();
+        Assert.Equal(2, files.Count);
+        var file = files[0];
+        var secondFile = files[1];
+        Assert.Equal(filePath, file.FilePath);
+        Assert.Equal("document.txt", file.Name);
+        Assert.Equal(secondFilePath, secondFile.FilePath);
+        Assert.Equal("second.txt", secondFile.Name);
+        Assert.True(File.Exists(filePath));
+        Assert.True(File.Exists(secondFilePath));
+        Assert.Equal("content", Encoding.UTF8.GetString(await file.ReadAllBytesAsync()));
+        await using var stream = file.OpenRead();
+        using var reader = new StreamReader(stream);
+        Assert.Equal("content", await reader.ReadToEndAsync());
+        var readAllBytesTask = file.ReadAllBytesAsync();
+
+        files.Dispose();
+        files.Dispose();
+
+        Assert.False(File.Exists(filePath));
+        Assert.False(File.Exists(secondFilePath));
+        Assert.Equal("content", Encoding.UTF8.GetString(await readAllBytesTask));
+        Assert.Null(fileUploadStore.GetFilePath(fileId, interaction.InteractionId, input.Name));
+        Assert.Null(fileUploadStore.GetFilePath(secondFileId, interaction.InteractionId, input.Name));
+        Assert.Throws<ObjectDisposedException>(file.OpenRead);
+        await Assert.ThrowsAsync<ObjectDisposedException>(ReadAllBytesAfterDisposeAsync);
+
+        Task ReadAllBytesAfterDisposeAsync() => file.ReadAllBytesAsync();
+    }
+
+    [Fact]
+    public async Task SendInteractionRequestAsync_MismatchedFiles_Throws()
+    {
+        var fileUploadStore = new TestInteractionFileUploadStore();
+        var interactionService = new InteractionService(
+            NullLogger<InteractionService>.Instance,
+            new DistributedApplicationOptions(),
+            new ServiceCollection().BuildServiceProvider(),
+            new ConfigurationBuilder().Build(),
+            fileUploadStore);
+        using var dashboardServiceData = CreateDashboardServiceData(interactionService: interactionService, fileUploadStore: fileUploadStore);
+        var input = new InteractionInput { Name = "File", InputType = InputType.File };
+        var resultTask = interactionService.PromptInputAsync("Upload", "Select a file", input);
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        var (fileId, _) = fileUploadStore.CreateEntry("document.txt", interaction.InteractionId, input.Name);
+        fileUploadStore.CompleteUpload(interaction.InteractionId, fileId);
+        var request = new WatchInteractionsRequestUpdate
+        {
+            InteractionId = interaction.InteractionId,
+            InputsDialog = new InteractionInputsDialog()
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            dashboardServiceData.SendInteractionRequestAsync(request, CancellationToken.None));
+
+        Assert.Equal("Submitted files for input 'File' do not match the completed uploads.", exception.Message);
+        await dashboardServiceData.SendInteractionRequestAsync(
+            new WatchInteractionsRequestUpdate
+            {
+                InteractionId = interaction.InteractionId,
+                Complete = new InteractionComplete()
+            },
+            CancellationToken.None);
+        Assert.True((await resultTask).Canceled);
+    }
+
+    [Fact]
+    public async Task UploadFile_ThenResolveFiles_ResolvesCorrectly()
+    {
+        var dashboardServiceData = CreateDashboardServiceData();
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+        fileUploadStore.StartInteraction(1, [("CertInput", InteractionHelpers.MaxFileCount)]);
         var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
 
         // Upload a file
         var data = Encoding.UTF8.GetBytes("certificate-content");
         var context = TestServerCallContext.Create();
         var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
-        requestStream.AddMessage(new UploadFileChunk { FileName = "cert.pem", Data = ByteString.CopyFrom(data) });
+        requestStream.AddMessage(new UploadFileChunk { FileName = "cert.pem", Data = ByteString.CopyFrom(data), InteractionId = 1, InputName = "CertInput" });
         requestStream.Complete();
 
         var uploadResponse = await dashboardService.UploadFile(requestStream, context);
 
-        // Resolve the file reference using the same store
-        var json = $"[{{\"Id\":\"{uploadResponse.FileId}\",\"Name\":\"cert.pem\"}}]";
-        var resolvedFiles = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "CertInput", NullLogger.Instance);
+        var json = $"[{{\"Id\":\"{uploadResponse.FileId}\"}}]";
+        var resolvedFiles = fileUploadStore.GetCompletedFiles(1, "CertInput");
+        InteractionFileUploadStore.ValidateFileReferences(json, "CertInput", resolvedFiles);
 
         Assert.NotNull(resolvedFiles);
         var file = Assert.Single(resolvedFiles);
@@ -979,27 +1237,29 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void ResolveFileReferences_UnknownId_ReturnsNull()
+    public void ResolveFiles_UnknownInteraction_ReturnsNull()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
-        var json = "[{\"Id\":\"nonexistent-id\",\"Name\":\"file.txt\"}]";
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+        var result = fileUploadStore.GetCompletedFiles(1, "TestInput");
+        InteractionFileUploadStore.ValidateFileReferences(jsonValue: null, "TestInput", result);
 
-        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "TestInput", NullLogger.Instance);
-
-        Assert.Null(result);
+        Assert.Empty(result);
     }
 
     [Fact]
-    public void ResolveFileReferences_MalformedJson_ReturnsNull()
+    public void ResolveFiles_UnknownInput_ReturnsNull()
     {
         using var fileSystemService = new TestFileSystemService();
-        using var fileUploadStore = new FileUploadStore(fileSystemService);
-        var json = "not-valid-json";
+        using var fileUploadStore = CreateFileUploadStore(fileSystemService);
+        fileUploadStore.StartInteraction(1, [("File", 1)]);
+        var (fileId, _) = fileUploadStore.CreateEntry("file.txt", 1, "File");
+        fileUploadStore.CompleteUpload(1, fileId);
 
-        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "TestInput", NullLogger.Instance);
+        var result = fileUploadStore.GetCompletedFiles(1, "OtherFile");
+        InteractionFileUploadStore.ValidateFileReferences(jsonValue: null, "OtherFile", result);
 
-        Assert.Null(result);
+        Assert.Empty(result);
     }
 
     private static DashboardServiceImpl CreateDashboardService(
@@ -1007,7 +1267,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         IHostEnvironment? hostEnvironment = null,
         IConfiguration? configuration = null,
         ILogger<DashboardServiceImpl>? logger = null,
-        IFileUploadStore? fileUploadStore = null)
+        IInteractionFileUploadStore? fileUploadStore = null)
     {
         return new DashboardServiceImpl(
             dashboardServiceData,
@@ -1015,23 +1275,26 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new TestHostApplicationLifetime(),
             configuration ?? new ConfigurationBuilder().Build(),
             logger ?? NullLogger<DashboardServiceImpl>.Instance,
-            fileUploadStore ?? new TestFileUploadStore());
+            fileUploadStore ?? new TestInteractionFileUploadStore());
     }
 
     private static DashboardServiceData CreateDashboardServiceData(
         ResourceLoggerService? resourceLoggerService = null,
         ResourceNotificationService? resourceNotificationService = null,
         ILoggerFactory? loggerFactory = null,
-        InteractionService? interactionService = null)
+        InteractionService? interactionService = null,
+        IInteractionFileUploadStore? fileUploadStore = null)
     {
         resourceLoggerService ??= new ResourceLoggerService();
         loggerFactory ??= NullLoggerFactory.Instance;
         resourceNotificationService ??= CreateResourceNotificationService(resourceLoggerService);
+        fileUploadStore ??= new TestInteractionFileUploadStore();
         interactionService ??= new InteractionService(
             NullLogger<InteractionService>.Instance,
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build(),
+            fileUploadStore);
 
         return new DashboardServiceData(
             resourceNotificationService,
@@ -1039,7 +1302,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<DashboardServiceData>(),
             new ResourceCommandService(resourceNotificationService, resourceLoggerService, new ServiceCollection().BuildServiceProvider()),
             interactionService,
-            new TestFileUploadStore());
+            fileUploadStore);
     }
 
     private static ResourceNotificationService CreateResourceNotificationService(ResourceLoggerService resourceLoggerService)
@@ -1072,4 +1335,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             // Ok if this error is thrown.
         }
     }
+
+    private static InteractionFileUploadStore CreateFileUploadStore(IFileSystemService fileSystemService) =>
+        new(fileSystemService, NullLogger<InteractionFileUploadStore>.Instance);
 }

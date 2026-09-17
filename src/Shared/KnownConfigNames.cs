@@ -10,6 +10,7 @@ internal static class KnownConfigNames
     public const string DashboardOtlpGrpcEndpointUrl = "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL";
     public const string DashboardOtlpHttpEndpointUrl = "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL";
     public const string DashboardFrontendBrowserToken = "ASPIRE_DASHBOARD_FRONTEND_BROWSERTOKEN";
+    public const string DashboardSuppressBrowserTokenInOutput = "ASPIRE_DASHBOARD_SUPPRESS_BROWSER_TOKEN_IN_OUTPUT";
     public const string DashboardResourceServiceClientApiKey = "ASPIRE_DASHBOARD_RESOURCESERVICE_APIKEY";
     public const string DashboardUnsecuredAllowAnonymous = "ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS";
     public const string DashboardCorsAllowedOrigins = "ASPIRE_DASHBOARD_CORS_ALLOWED_ORIGINS";
@@ -40,6 +41,11 @@ internal static class KnownConfigNames
     public const string CliProcessId = "ASPIRE_CLI_PID";
     public const string CliProcessStarted = "ASPIRE_CLI_STARTED";
     public const string CliProcessStartedStable = "ASPIRE_CLI_STARTED_STABLE";
+
+    // Direct AppHost owner of an aspire-managed terminalhost process. The terminal host watches
+    // this identity so it can shut down and unlink its sockets if the AppHost disappears.
+    public const string TerminalHostParentProcessId = "ASPIRE_TERMINAL_HOST_PARENT_PID";
+    public const string TerminalHostParentProcessStartedStable = "ASPIRE_TERMINAL_HOST_PARENT_STARTED_STABLE";
 
     // Identity (PID + start time) of the foreground CLI that spawned a detached `aspire start` /
     // `aspire run --detach` child. The detached child watches this during startup and tears the

@@ -39,12 +39,10 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
         Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]?.GetValue<string>());
-        Assert.Equal("npm run aspire:lint", scripts["lint"]?.GetValue<string>());
-        Assert.Equal("npm run aspire:lint", scripts["predev"]?.GetValue<string>());
-        Assert.Equal("npm run aspire:start", scripts["dev"]?.GetValue<string>());
-        Assert.Equal("npm run aspire:lint", scripts["prebuild"]?.GetValue<string>());
-        Assert.Equal("npm run aspire:build", scripts["build"]?.GetValue<string>());
-        Assert.Equal("npm run aspire:dev", scripts["watch"]?.GetValue<string>());
+        Assert.Equal("eslint apphost.mts", scripts["lint"]?.GetValue<string>());
+        Assert.Equal("eslint apphost.mts && aspire run", scripts["dev"]?.GetValue<string>());
+        Assert.Equal("eslint apphost.mts && tsc -p tsconfig.apphost.json", scripts["build"]?.GetValue<string>());
+        Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["watch"]?.GetValue<string>());
         Assert.Equal("^4.21.0", devDependencies["tsx"]?.GetValue<string>());
         Assert.Equal("^5.9.3", devDependencies["typescript"]?.GetValue<string>());
         Assert.Equal("^10.0.3", devDependencies["eslint"]?.GetValue<string>());
@@ -256,10 +254,24 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
         var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         var watchExecute = Assert.IsType<CommandSpec>(runtimeSpec.WatchExecute);
 
+        Assert.Equal("NODE_EXTRA_CA_CERTS", _languageSupport.CertificateBundleEnvironmentVariable);
+        Assert.Equal(_languageSupport.CertificateBundleEnvironmentVariable, runtimeSpec.CertificateBundleEnvironmentVariable);
         Assert.Equal("npx", preExecute.Command);
         Assert.Equal(new[] { "--no-install", "tsc", "--noEmit", "-p", "tsconfig.apphost.json" }, preExecute.Args);
         Assert.Equal(new[] { "--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}" }, runtimeSpec.Execute.Args);
         Assert.Contains("npx --no-install tsc --noEmit -p tsconfig.apphost.json && npx --no-install tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", watchExecute.Args);
+    }
+
+    [Fact]
+    public void SetCertificateBundleEnvironmentVariableIfSupported_IgnoresLegacyRuntimeSpec()
+    {
+        var legacyRuntimeSpec = new LegacyRuntimeSpec();
+
+        TypeScriptLanguageSupport.SetCertificateBundleEnvironmentVariableIfSupported(
+            legacyRuntimeSpec,
+            "NODE_EXTRA_CA_CERTS");
+
+        Assert.NotNull(legacyRuntimeSpec);
     }
 
     [Fact]
@@ -310,5 +322,9 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
     {
         Assert.InRange(port, minInclusive, maxExclusive - 1);
         Assert.True(port < WindowsEphemeralPortMin, $"Expected port {port} to be below the Windows ephemeral range.");
+    }
+
+    private sealed class LegacyRuntimeSpec
+    {
     }
 }

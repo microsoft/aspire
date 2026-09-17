@@ -120,18 +120,17 @@ public class AtsExportsTests(ITestOutputHelper outputHelper)
     public async Task PromptInputs_ResultCarriesSubmittedFileMetadataByName()
     {
         var interactionService = new TestInteractionService();
+        var input = InteractionExports.CreateFileInput(interactionService, "artifact", new CreateInteractionInputOptions
+        {
+            Label = "Artifact",
+            MaxFileSize = 1024
+        });
 
         var promptTask = InteractionExports.PromptInputs(
             interactionService,
             "Upload",
             "Select a file.",
-            [
-                InteractionExports.CreateFileInput(interactionService, "artifact", new CreateInteractionInputOptions
-                {
-                    Label = "Artifact",
-                    MaxFileSize = 1024
-                }),
-            ]);
+            [input]);
 
         var data = await interactionService.Interactions.Reader.ReadAsync();
         data.Inputs["artifact"].Value = "/repo/artifact.zip";
@@ -139,7 +138,10 @@ public class AtsExportsTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempFile = Path.Combine(workspace.WorkspaceRoot.FullName, "artifact.zip");
         await File.WriteAllTextAsync(tempFile, "test content");
-        data.Inputs["artifact"].SetFiles([new InteractionFile("file-1", "artifact.zip", tempFile)]);
+        var releaseCount = 0;
+        data.Inputs["artifact"].SetFiles(new InteractionFileCollection(
+            [new InteractionFile("file-1", "artifact.zip", tempFile)],
+            () => releaseCount++));
 
         data.CompletionTcs.SetResult(InteractionResult.Ok(data.Inputs));
 
@@ -147,10 +149,16 @@ public class AtsExportsTests(ITestOutputHelper outputHelper)
 
         Assert.False(result.Canceled);
         Assert.Equal("/repo/artifact.zip", result.Inputs["artifact"].Value);
-        Assert.NotNull(result.Inputs["artifact"].Files);
-        var file = Assert.Single(result.Inputs["artifact"].Files!);
+        var files = result.Inputs["artifact"].GetFiles();
+        var file = Assert.Single(files);
         Assert.Equal("artifact.zip", file.Name);
         Assert.Equal(1024, result.Inputs["artifact"].MaxFileSize);
+
+        input.ReleaseFiles();
+        input.ReleaseFiles();
+
+        Assert.Equal(1, releaseCount);
+        Assert.Equal("artifact.zip", file.Name);
     }
 
     [Fact]

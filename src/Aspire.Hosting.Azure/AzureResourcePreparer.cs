@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE003
+#pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREPIPELINES002
 
 using Aspire.Dashboard.Model;
@@ -32,6 +33,15 @@ internal sealed class AzureResourcePreparer(
         var azureResources = GetAzureResourcesFromAppModel(model);
         if (azureResources.Count == 0)
         {
+            // AddAzureProvisioning creates the environment before resources are configured, so wait until
+            // preparation to hide it when the final run-mode model contains only local emulators.
+            if (executionContext.IsRunMode &&
+                model.Resources.OfType<AzureEnvironmentResource>().SingleOrDefault() is { } environmentResource &&
+                !environmentResource.HasAnnotationOfType<HiddenAnnotation>())
+            {
+                environmentResource.Annotations.Add(new HiddenAnnotation(HiddenBehavior.Always));
+            }
+
             return;
         }
 

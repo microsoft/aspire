@@ -206,12 +206,10 @@ await cache.withCommand(
             "Please wait while data is being processed...",
             {
                 title: "Processing",
-                options: {
-                    primaryButtonText: "Cancel",
-                    work: async () => {
-                        // Simulate a long-running operation.
-                        await new Promise<void>(resolve => setTimeout(resolve, 10000));
-                    }
+                primaryButtonText: "Cancel",
+                work: async () => {
+                    // Simulate a long-running operation.
+                    await new Promise<void>(resolve => setTimeout(resolve, 10000));
                 }
             });
 

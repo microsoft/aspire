@@ -119,35 +119,40 @@ public class DcpCliArgsTests
         Assert.Equal(bundleDashboardPath, dcpOptions.DashboardPath);
     }
 
-    [Fact]
-    public void DcpOptionsValidationFailsForWhitespacePaths()
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run, true)]
+    [InlineData(DistributedApplicationOperation.Publish, false)]
+    public void DcpOptionsValidationRequiresPathsOnlyInRunMode(DistributedApplicationOperation operation, bool shouldFail)
     {
-        var validator = new ValidateDcpOptions();
+        var validator = new ValidateDcpOptions(new DistributedApplicationExecutionContext(operation));
         var result = validator.Validate(null, new DcpOptions
         {
             CliPath = " ",
             DashboardPath = "\t",
         });
 
-        Assert.True(result.Failed);
-        Assert.Contains("The path to the DCP executable used for Aspire orchestration is required.", result.FailureMessage);
-        Assert.Contains("The path to the Aspire Dashboard binaries is missing.", result.FailureMessage);
+        Assert.Equal(shouldFail, result.Failed);
+        if (shouldFail)
+        {
+            Assert.Contains("The path to the DCP executable used for Aspire orchestration is required.", result.FailureMessage);
+            Assert.Contains("The path to the Aspire Dashboard binaries is missing.", result.FailureMessage);
+        }
     }
 
     [Fact]
-    public void DcpOptionsValidationFailsForInvalidProxylessEndpointPortRange()
+    public void DcpOptionsValidationStillFailsForInvalidProxylessEndpointPortRangeInPublishMode()
     {
-        var validator = new ValidateDcpOptions();
+        var validator = new ValidateDcpOptions(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
         var result = validator.Validate(null, new DcpOptions
         {
-            CliPath = "dcp",
-            DashboardPath = "dashboard",
             ProxylessEndpointPortRangeStart = 32767,
             ProxylessEndpointPortRangeEnd = 10000,
         });
 
         Assert.True(result.Failed);
-        Assert.Contains("The proxyless endpoint port range start must be less than or equal to the range end.", result.FailureMessage);
+        Assert.Contains(
+            "The proxyless endpoint port range start must be less than or equal to the range end.",
+            Assert.Single(result.Failures!));
     }
 
     [Fact]

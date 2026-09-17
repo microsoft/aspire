@@ -8,7 +8,7 @@ namespace Aspire.Hosting.Kubernetes.Resources;
 /// <summary>
 /// Represents a volume configuration definition within a Kubernetes pod.
 /// This class allows specifying different types of volume sources such as Image, HostPath,
-/// Persistent Volume Claim, ConfigMap, Secret, Projected, and others, enabling configuration of data storage in a pod.
+/// Persistent Volume Claim, ConfigMap, Secret, Projected, CSI, and others, enabling configuration of data storage in a pod.
 /// </summary>
 [YamlSerializable]
 public sealed class VolumeV1
@@ -83,6 +83,16 @@ public sealed class VolumeV1
     /// </summary>
     [YamlMember(Alias = "secret")]
     public SecretVolumeSourceV1? Secret { get; set; }
+
+    /// <summary>
+    /// Gets or sets the CSI volume source for the volume.
+    /// </summary>
+    /// <remarks>
+    /// CSI volume sources are served by Container Storage Interface drivers and can be
+    /// used to project external storage, secrets, or certificates into a pod.
+    /// </remarks>
+    [YamlMember(Alias = "csi")]
+    public CsiVolumeSourceV1? Csi { get; set; }
 
     /// <summary>
     /// Gets or sets the configuration for a projected volume source.

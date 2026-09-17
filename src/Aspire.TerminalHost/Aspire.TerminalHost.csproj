@@ -7,6 +7,7 @@
     <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RollForward>Major</RollForward>
     <!--
       CS1591: Missing XML comment for publicly visible type or member - this assembly is
@@ -37,6 +38,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\Shared\KnownConfigNames.cs" Link="Shared\KnownConfigNames.cs" />
+    <Compile Include="..\Shared\ParentProcessLivenessMonitor.cs" Link="Shared\ParentProcessLivenessMonitor.cs" />
+    <Compile Include="..\Shared\ParentProcessWatchdog.cs" Link="Shared\ParentProcessWatchdog.cs" />
+    <Compile Include="..\Shared\ProcessStartTimeHelper.cs" Link="Shared\ProcessStartTimeHelper.cs" />
     <Compile Include="..\Shared\TerminalHost\*.cs" Link="Shared\%(Filename)%(Extension)" />
   </ItemGroup>
 

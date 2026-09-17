@@ -31,6 +31,8 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
     /// <param name="name">The name of the resource.</param>
     public ProjectResource(string name) : base(name)
     {
+        Annotations.Add(new ExecutableLaunchRecipeAnnotation(ProjectExecutableLaunchRecipe.Instance));
+
         // Every ProjectResource is launched through the .NET SDK, so it always carries the project-launch
         // defaults marker — even when constructed directly via AddResource rather than AddProject. Core
         // uses the annotation (not the type) to recognize .NET-launched resources so that resources from

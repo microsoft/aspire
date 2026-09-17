@@ -8,6 +8,7 @@ import type { CandidateAppHostDisplayInfo, AppHostDiscoveryService } from '../ut
 import { MeaningfulEngagementReporter } from '../utils/meaningfulEngagement';
 import { __resetCommonPropertiesForTests, __setReporterForTests, getCommonTelemetryProperties } from '../utils/telemetry';
 
+import { removeDirectorySafely } from './testHelpers';
 interface RecordedEvent {
     name: string;
     properties?: Record<string, string>;
@@ -62,7 +63,7 @@ suite('MeaningfulEngagementReporter', () => {
         sinon.restore();
         for (const dir of tempDirs) {
             if (existsSync(dir)) {
-                rmSync(dir, { recursive: true, force: true });
+                removeDirectorySafely(dir);
             }
         }
         tempDirs.length = 0;
@@ -72,7 +73,7 @@ suite('MeaningfulEngagementReporter', () => {
 
     suiteTeardown(() => {
         if (existsSync(tempParent)) {
-            rmSync(tempParent, { recursive: true, force: true });
+            removeDirectorySafely(tempParent);
         }
     });
 

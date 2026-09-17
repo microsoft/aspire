@@ -2,28 +2,28 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.FluentUI.AspNetCore.Components;
-using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components;
 
-public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
+public partial class AspireMenuButton : FluentComponentBase
 {
-    private static readonly Icon s_defaultIcon = new Icons.Regular.Size24.ChevronDown();
-    private const int InitializationWaitMilliseconds = 100;
+    public AspireMenuButton(LibraryConfiguration configuration)
+        : base(configuration)
+    {
+    }
 
-    private IJSObjectReference? _jsModule;
+    private static readonly Icon s_defaultIcon = new Icons.Regular.Size24.ChevronDown();
+
     private bool _renderMenu;
-    private bool _menuRenderComplete;
-    private bool _openWhenMenuRenderCompletes;
     private bool _visible;
     private Icon? _icon;
     private MenuButtonItem[] _items = [];
     private bool _disabled;
+    private bool _hasActionableItems = true;
     private Func<IList<MenuButtonItem>>? _renderedItemsProvider;
 
     [Parameter]
@@ -33,10 +33,19 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
     public Icon? IconStart { get; set; }
 
     [Parameter]
+    public string? IconStartClass { get; set; }
+
+    [Parameter]
+    public Color? IconStartColor { get; set; }
+
+    [Parameter]
+    public string? IconStartCustomColor { get; set; }
+
+    [Parameter]
     public Icon? Icon { get; set; }
 
     [Parameter]
-    public Color? IconColor { get; set; }
+    public Color? IconColor { get; set; } = Color.Primary;
 
     [Parameter]
     public string? IconCustomColor { get; set; }
@@ -50,17 +59,29 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
     [Parameter]
     public required Func<IList<MenuButtonItem>> ItemsProvider { get; set; }
 
+    // Exposed only for tests to inspect the rendered menu items.
+    internal IReadOnlyList<MenuButtonItem> Items => _items;
+
     [Parameter]
-    public Appearance? ButtonAppearance { get; set; }
+    public ButtonAppearance? ButtonAppearance { get; set; }
 
     [Parameter]
     public string? Title { get; set; }
 
     [Parameter]
-    public string MenuButtonId { get; set; } = Identifier.NewId();
+    public string MenuButtonId { get; set; } = $"menu-button-{Guid.NewGuid():N}";
 
     [Parameter]
     public bool HideIcon { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the button is unconditionally disabled.
+    /// </summary>
+    /// <remarks>
+    /// This is independent of the automatic disabling that happens when the menu has no actionable items.
+    /// </remarks>
+    [Parameter]
+    public bool Disabled { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether focus should return to this menu button after a menu item is clicked.
@@ -71,9 +92,6 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
     [Parameter]
     public bool RestoreFocusOnItemClick { get; set; } = true;
 
-    [Inject]
-    public required IJSRuntime JS { get; init; }
-
     protected override void OnParametersSet()
     {
         _icon = Icon ?? s_defaultIcon;
@@ -81,10 +99,13 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
         if (!ReferenceEquals(_renderedItemsProvider, ItemsProvider))
         {
             _renderedItemsProvider = ItemsProvider;
-            _disabled = false;
+
+            // The provider hasn't run for this delegate yet, so the menu contents are unknown.
+            // Assume it has content so only Disabled can disable the button before the first open.
+            _hasActionableItems = true;
         }
 
-        if (_visible || _openWhenMenuRenderCompletes)
+        if (_visible)
         {
             RefreshItems();
 
@@ -93,9 +114,13 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
                 OnMenuOpenChanged(false);
             }
         }
+        else
+        {
+            UpdateDisabled();
+        }
     }
 
-    private async Task ToggleMenu()
+    private void ToggleMenu()
     {
         if (_visible)
         {
@@ -103,58 +128,26 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
             return;
         }
 
-        if (_renderMenu && !_menuRenderComplete)
-        {
-            _openWhenMenuRenderCompletes = true;
-            return;
-        }
-
-        if (!_menuRenderComplete)
-        {
-            // Keep the menu out of the render tree until observation is ready so a parent render
-            // during the lazy module import can't complete menu rendering before this setup.
-            _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Controls/AspireMenuButton.razor.js");
-            await _jsModule.InvokeVoidAsync("prepareForFluentMenuInitialization", MenuButtonId);
-        }
-
         RefreshItems();
 
         _renderMenu = true;
-
-        // Reopen a retained menu immediately, but defer the first open until FluentMenu has
-        // rendered and initialized its JavaScript modules.
-        if (_menuRenderComplete)
-        {
-            _visible = true;
-        }
-        else
-        {
-            _openWhenMenuRenderCompletes = true;
-        }
+        _visible = true;
     }
 
     private void RefreshItems()
     {
         _items = ItemsProvider().ToArray();
-        _disabled = !_items.Any(i => !i.IsDivider);
+        _hasActionableItems = _items.Any(i => !i.IsDivider);
+        UpdateDisabled();
     }
 
-    private async Task OnMenuRenderComplete()
+    private void UpdateDisabled()
     {
-        // FluentMenu writes aria-expanded after its JavaScript modules are initialized.
-        // Wait for that signal before opening the menu.
-        await _jsModule!.InvokeVoidAsync("waitForFluentMenuInitialization", MenuButtonId, InitializationWaitMilliseconds);
-        _menuRenderComplete = true;
-
-        if (_openWhenMenuRenderCompletes)
-        {
-            OnMenuOpenChanged(true);
-        }
+        _disabled = Disabled || !_hasActionableItems;
     }
 
     private void OnMenuOpenChanged(bool open)
     {
-        _openWhenMenuRenderCompletes = false;
         _visible = open;
     }
 
@@ -166,27 +159,4 @@ public partial class AspireMenuButton : FluentComponentBase, IAsyncDisposable
         }
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        if (_jsModule is { } jsModule)
-        {
-            if (_renderMenu && !_menuRenderComplete)
-            {
-                try
-                {
-                    await jsModule.InvokeVoidAsync("cancelFluentMenuInitialization", MenuButtonId);
-                }
-                catch (JSDisconnectedException)
-                {
-                    // The browser may already be gone when the component is disposed.
-                }
-                catch (OperationCanceledException)
-                {
-                    // The browser may already be gone when the component is disposed.
-                }
-            }
-
-            await JSInteropHelpers.SafeDisposeAsync(jsModule);
-        }
-    }
 }

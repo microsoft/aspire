@@ -10,9 +10,11 @@
 
 <FluentStack Orientation="Orientation.Vertical" Id="@Id">
     <FluentCheckbox Label="@ControlsStringsLoc[nameof(ControlsStrings.LabelAll)]"
+                    Class="aspire-checkbox"
                     ThreeState="true"
                     ShowIndeterminate="false"
                     ThreeStateOrderUncheckToIntermediate="true"
+                    Value="@(GetCheckState(Values) is true)"
                     @bind-CheckState:get="@GetCheckState(Values)"
                     @bind-CheckState:set="@OnAllValuesCheckedChangedInternalAsync" />
 
@@ -22,6 +24,7 @@
         var label = string.IsNullOrEmpty(key.ToString()) ? Loc[nameof(Resources.ResourceFilterOptionEmpty)] : key.ToString();
 
         <FluentCheckbox Label="@label"
+                        Class="aspire-checkbox"
                         @bind-Value:get="@isChecked"
                         @bind-Value:set="@(c => OnValueVisibilityChangedInternalAsync(key, c))" />
     }

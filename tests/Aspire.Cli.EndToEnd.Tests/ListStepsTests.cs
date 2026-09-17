@@ -9,9 +9,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
 /// End-to-end tests for the --list-steps feature on the aspire do, publish, and deploy commands.
-/// Verifies that the CLI can list pipeline steps without executing them, and that
-/// invalid combinations (such as `aspire do --list-steps` without a step argument)
-/// surface a friendly error instead of crashing.
+/// Verifies that the CLI can list pipeline steps without executing them.
 /// </summary>
 public sealed class ListStepsTests(ITestOutputHelper output)
 {
@@ -39,31 +37,14 @@ public sealed class ListStepsTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // 1. Regression for https://github.com/microsoft/aspire/issues/17526:
-        //    `aspire do --list-steps` with no step argument should surface a friendly error
-        //    pointing at concrete examples rather than crashing with
-        //    'Sequence contains more than one matching element'.
+        // 1. `aspire do --list-steps` lists every available step without requiring a target.
         await auto.TypeAsync("aspire do --list-steps");
         await auto.EnterAsync();
-
         await auto.WaitUntilAsync(s =>
-        {
-            if (s.ContainsText("Sequence contains more than one matching element"))
-            {
-                throw new InvalidOperationException(
-                    "aspire do --list-steps regressed: pipeline executed and crashed instead of surfacing the friendly validation error.");
-            }
-            // Match short fragments that are unlikely to straddle a wrap boundary in a narrow
-            // terminal. The full error message is a single long sentence, so asserting on the
-            // raw URL (or any 30+ char run) is flaky because the screen buffer inserts wrap
-            // newlines that defeat ContainsText's literal substring match.
-            return s.ContainsText("required when using --list-steps")
-                && s.ContainsText("aspire.dev/");
-        }, timeout: TimeSpan.FromMinutes(2),
-            description: "waiting for friendly error with example and docs link");
-
-        // The validation error returns a non-zero exit code, but the shell prompt should come back.
-        await auto.WaitForAnyPromptAsync(counter);
+            s.ContainsText("Depends on:") || s.ContainsText("No dependencies"),
+            timeout: TimeSpan.FromMinutes(3),
+            description: "waiting for aspire do --list-steps output");
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // 2. `aspire do <step> --list-steps` lists pipeline steps for that step.
         await auto.TypeAsync("aspire do deploy --list-steps");

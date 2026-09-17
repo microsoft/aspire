@@ -76,7 +76,7 @@ internal static class FormatHelpers
         var local = timeProvider.ToLocal(value);
 
         // If the date is today then only return time, otherwise return entire date time text.
-        if (local.Date == DateTime.Now.Date)
+        if (local.Date == timeProvider.GetLocalNow().Date)
         {
             // e.g. "08:57:44" (based on user's culture and preferences)
             // Don't include milliseconds as resource server returned time stamp is second precision.

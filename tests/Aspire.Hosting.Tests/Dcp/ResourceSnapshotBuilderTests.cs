@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREEXTENSION001 // Debug support annotations are experimental.
+
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
@@ -82,6 +84,42 @@ public class ResourceSnapshotBuilderTests
         AssertHighlightedProperty(snapshot, KnownProperties.Project.Path, "Project path", isSensitive: false, sortOrder: 0);
         AssertHighlightedProperty(snapshot, KnownProperties.Project.LaunchProfile, "Launch profile", isSensitive: false, sortOrder: 1);
         AssertHighlightedProperty(snapshot, KnownProperties.Executable.Pid, "Process ID", isSensitive: false, sortOrder: 2);
+    }
+
+    [Fact]
+    public void ExecutableSnapshotPublishesLaunchConfigurationTypeOnlyWhenInstallingDebuggerCanEnableDebugging()
+    {
+        const string propertyName = "resource.launchConfigurationType";
+        var resource = new TestDotnetProjectResource("python");
+        resource.Annotations.Add(SupportsDebuggingAnnotation.Create<object>(
+            resource.Name,
+            "python",
+            _ => Task.FromResult(new object())));
+
+        var executable = Executable.Create(resource.Name, "python");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, resource.Name);
+
+        var snapshotBuilder = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [resource.Name] = resource
+        });
+        var snapshot = snapshotBuilder.ToSnapshot(executable, CreatePreviousSnapshot());
+
+        Assert.Equal("python", GetProperty(snapshot, propertyName).Value);
+
+        resource.Annotations.Add(new ForceProcessExecutionAnnotation());
+        snapshot = snapshotBuilder.ToSnapshot(executable, snapshot);
+
+        Assert.Empty(snapshot.Properties.Where(property => property.Name == propertyName));
+
+        resource.Annotations.Remove(resource.Annotations.OfType<ForceProcessExecutionAnnotation>().Single());
+        resource.Annotations.Add(new ContainerLifetimeAnnotation
+        {
+            Lifetime = ContainerLifetime.Persistent
+        });
+        snapshot = snapshotBuilder.ToSnapshot(executable, snapshot);
+
+        Assert.Empty(snapshot.Properties.Where(property => property.Name == propertyName));
     }
 
     [Fact]

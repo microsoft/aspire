@@ -251,6 +251,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         var bundleManagedPath = Path.Combine(bundlePath, BundleDiscovery.ManagedDirectoryName);
         var bundleDcpPath = Path.Combine(bundlePath, BundleDiscovery.DcpDirectoryName);
         var managedExeName = BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName);
+        var bundleDcpExe = BundleDiscovery.GetDcpExecutablePath(bundleDcpPath);
 
         _logger.LogDebug("TryInferLayout: Checking layout at {Path}", layoutPath);
         _logger.LogDebug("  {Dir}/{Managed}/: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName, Directory.Exists(bundleManagedPath) ? "exists" : "MISSING");
@@ -260,8 +261,9 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         {
             var bundleManagedExe = Path.Combine(bundleManagedPath, managedExeName);
             _logger.LogDebug("  {Dir}/{Managed}/{Exe}: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName, managedExeName, File.Exists(bundleManagedExe) ? "exists" : "MISSING");
+            _logger.LogDebug("  {Dir}/{Dcp}/{Exe}: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName, Path.GetFileName(bundleDcpExe), File.Exists(bundleDcpExe) ? "exists" : "MISSING");
 
-            if (File.Exists(bundleManagedExe))
+            if (File.Exists(bundleManagedExe) && File.Exists(bundleDcpExe))
             {
                 _logger.LogDebug("TryInferLayout: New bundle/ layout is valid");
                 return new LayoutConfiguration
@@ -279,6 +281,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         // Legacy layout: top-level managed/ and dcp/ directories (or reparse points).
         var managedPath = Path.Combine(layoutPath, BundleDiscovery.ManagedDirectoryName);
         var dcpPath = Path.Combine(layoutPath, BundleDiscovery.DcpDirectoryName);
+        var dcpExePath = BundleDiscovery.GetDcpExecutablePath(dcpPath);
 
         _logger.LogDebug("  {Dir}/: {Exists}", BundleDiscovery.ManagedDirectoryName, Directory.Exists(managedPath) ? "exists" : "MISSING");
         _logger.LogDebug("  {Dir}/: {Exists}", BundleDiscovery.DcpDirectoryName, Directory.Exists(dcpPath) ? "exists" : "MISSING");
@@ -292,10 +295,11 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         // Check for aspire-managed executable
         var managedExePath = Path.Combine(managedPath, managedExeName);
         _logger.LogDebug("  managed/{ManagedExe}: {Exists}", managedExeName, File.Exists(managedExePath) ? "exists" : "MISSING");
+        _logger.LogDebug("  dcp/{DcpExe}: {Exists}", Path.GetFileName(dcpExePath), File.Exists(dcpExePath) ? "exists" : "MISSING");
 
-        if (!File.Exists(managedExePath))
+        if (!File.Exists(managedExePath) || !File.Exists(dcpExePath))
         {
-            _logger.LogDebug("TryInferLayout: Layout rejected - aspire-managed not found");
+            _logger.LogDebug("TryInferLayout: Layout rejected - required executable not found");
             return null;
         }
 
@@ -338,7 +342,9 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
 
         // Require DCP for valid layouts
         var dcpPath = layout.GetComponentPath(LayoutComponent.Dcp);
-        if (dcpPath is null || !Directory.Exists(dcpPath))
+        if (dcpPath is null ||
+            !Directory.Exists(dcpPath) ||
+            !File.Exists(BundleDiscovery.GetDcpExecutablePath(dcpPath)))
         {
             _logger.LogDebug("Layout validation failed: DCP not found");
             return false;

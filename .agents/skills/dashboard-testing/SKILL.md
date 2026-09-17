@@ -324,6 +324,39 @@ var resource = ModelTestHelpers.CreateResource(
     state: KnownResourceState.Running);
 ```
 
+## Stock/baseline dashboard verification
+
+Use this when verifying the installed/released dashboard instead of the repo-local one.
+
+- In-repo playground AppHosts can add `Projects.Aspire_Dashboard` for local dashboard development. Running an installed `aspire` CLI is not enough when the AppHost model already contains that local project.
+- Use `SkipDashboardProjectReference=true` to opt out of the shared playground dashboard project reference, and point `AspireDashboardPath` at the installed bundle.
+
+Run `aspire doctor --format json --non-interactive` and use the first installation row, which represents the running CLI. Use `canonicalPath` together with `route` to locate its bundle root. If `canonicalPath` is absent, stop rather than guessing from `path`, which can be an unresolved package-manager symlink.
+
+| Installation route | Bundle root |
+| --- | --- |
+| `script`, `pr`, `localhive` | Parent of the directory containing `canonicalPath` |
+| `winget`, `brew`, `dotnet-tool` | Directory containing `canonicalPath` |
+| `nix`, other, or no sidecar | `ASPIRE_HOME` when set; otherwise `~/.aspire` |
+
+```powershell
+$appHost = "<path-to-AppHost.csproj>"
+$bundleRoot = "<bundle-root-from-the-table>"
+$managedExecutable = if ($env:OS -eq "Windows_NT") { "aspire-managed.exe" } else { "aspire-managed" }
+$dashboard = Join-Path $bundleRoot "bundle/managed/$managedExecutable"
+if (-not (Test-Path $dashboard))
+{
+    throw "Could not find the installed dashboard at '$dashboard'."
+}
+
+dotnet build $appHost /p:SkipDashboardProjectReference=true "/p:AspireDashboardPath=$dashboard"
+$env:ASPIRE_DASHBOARD_PATH = $dashboard
+aspire run --no-build --apphost $appHost
+Remove-Item Env:ASPIRE_DASHBOARD_PATH
+```
+
+- Verify the dashboard resource in Aspire metadata/logs before treating the run as a stock baseline. Its resolved executable path must equal `$dashboard`, and its source must be `aspire-managed` (`aspire-managed.exe` on Windows), not `Aspire.Dashboard.csproj`.
+
 ## Test Conventions
 
 ### DO: Use `[UseCulture("en-US")]` for Culture-Sensitive Component Tests

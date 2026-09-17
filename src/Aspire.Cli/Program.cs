@@ -10,7 +10,7 @@ using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.ClaudeCode;
-using Aspire.Cli.Agents.CopilotCli;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Agents.VsCode;
@@ -457,7 +457,7 @@ public class Program
         // Forward the interface to the existing concrete service so consumers can depend on the
         // abstraction (used by AppHostServerSession + GuestLaunchOptions in the aspire run path).
         builder.Services.AddTransient<IProcessTreeGracefulShutdownSignaler>(sp => sp.GetRequiredService<ProcessTreeGracefulShutdownService>());
-        // Forward the AppHost-stop abstraction to the same concrete service (used by OrphanedAppHostCollector).
+        // Forward the AppHost-stop abstraction to the same concrete service.
         builder.Services.AddTransient<IAppHostStopper>(sp => sp.GetRequiredService<ProcessTreeGracefulShutdownService>());
         // On-demand collector for AppHost trees whose launching CLI has died (used by `aspire ps` and `aspire stop --all`).
         builder.Services.AddTransient<OrphanedAppHostCollector>();
@@ -504,6 +504,7 @@ public class Program
         builder.Services.AddSingleton<IInstallationCandidateSource, DotnetToolStoreInstallationCandidateSource>();
         builder.Services.AddSingleton<IInstallationDiscovery, InstallationDiscovery>();
         builder.Services.AddSingleton<IBundleService, BundleService>();
+        builder.Services.AddSingleton<ProfileCaptureState>();
         builder.Services.AddSingleton<ProfileCaptureService>();
         builder.Services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
         builder.Services.AddSingleton<IAppHostServerSessionFactory, AppHostServerSessionFactory>();
@@ -538,12 +539,12 @@ public class Program
 
         // VS Code CLI operations.
         builder.Services.AddSingleton<IVsCodeCliRunner, VsCodeCliRunner>();
-        builder.Services.AddSingleton<ICopilotCliRunner, CopilotCliRunner>();
 
         // Npm and Playwright CLI operations.
         builder.Services.AddSingleton<INpmRunner, NpmRunner>();
         builder.Services.AddHttpClient<INpmProvenanceChecker, SigstoreNpmProvenanceChecker>();
         builder.Services.AddHttpClient<IGitHubArtifactAttestationVerifier, GitHubArtifactAttestationVerifier>();
+        builder.Services.AddSingleton<IAspireSkillsBundleProvider, AspireSkillsBundleProvider>();
         builder.Services.AddSingleton<IEmbeddedAspireSkillsBundleProvider, EmbeddedAspireSkillsBundleProvider>();
         builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
         builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
@@ -551,8 +552,10 @@ public class Program
 
         // Agent environment detection.
         builder.Services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();
+        builder.Services.AddSingleton<ICopilotCliRunner, CopilotCliRunner>();
+        builder.Services.AddSingleton<ICopilotAppInstallationDetector, CopilotAppInstallationDetector>();
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, VsCodeAgentEnvironmentScanner>());
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, CopilotCliAgentEnvironmentScanner>());
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, CopilotAgentEnvironmentScanner>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, OpenCodeAgentEnvironmentScanner>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, ClaudeCodeAgentEnvironmentScanner>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, DeprecatedMcpCommandScanner>());
@@ -601,6 +604,7 @@ public class Program
 
         // Commands.
         builder.Services.AddSingleton<CommonCommandServices>();
+        builder.Services.AddSingleton<ResourceWaitService>();
         builder.Services.AddTransient<AppHostLauncher>();
         builder.Services.AddTransient<DcpWorkloadCleanupService>();
         builder.Services.AddTransient<NewCommand>();
@@ -667,6 +671,7 @@ public class Program
         builder.Services.AddTransient<SdkCommand>();
         builder.Services.AddTransient<SdkGenerateCommand>();
         builder.Services.AddTransient<SdkDumpCommand>();
+        builder.Services.AddTransient<SdkExportCommand>();
         builder.Services.AddTransient<RestoreCommand>();
         builder.Services.AddSingleton<IMigration, TypeScriptAppHostMigration>();
         builder.Services.AddTransient<SetupCommand>();
@@ -711,13 +716,22 @@ public class Program
         var nugetServiceIndexOverride = identityResolver.ResolveNuGetServiceIndexOverride();
         var packagesOverride = identityResolver.ResolvePackagesDirectory();
 
-        // The CLI is "emulating" another build whenever any identity field was supplied by an
-        // ASPIRE_CLI_* env var or the install sidecar rather than the assembly's build-time stamp.
-        // This drives the startup override notice so a diagnostic run is never mistaken for a real one.
-        // Every override source participates — including the NuGet service-index override — so a run
-        // that sets only ASPIRE_CLI_NUGET_SERVICE_INDEX is still flagged as a diagnostic emulation.
         static bool IsOverride(IdentitySource source) => source is IdentitySource.Environment or IdentitySource.Sidecar;
         var identityOverridden = IsOverride(channel.Source) || IsOverride(version.Source) || IsOverride(commit.Source) || IsOverride(nugetServiceIndexOverride.Source) || IsOverride(packagesOverride.Source);
+
+        // Installer-authored channel/version/commit fields describe the installed CLI and should not
+        // be presented as diagnostic emulation. Environment variables always require a notice, as do
+        // the sidecar-only package and service-index knobs used to redirect package resolution.
+        static bool IsEnvironmentOverride(IdentitySource source) => source is IdentitySource.Environment;
+        static bool IsDeveloperSidecarOverride(IdentitySource source) => source is IdentitySource.Sidecar;
+        var identityOverrideNoticeRequired =
+            IsEnvironmentOverride(channel.Source) ||
+            IsEnvironmentOverride(version.Source) ||
+            IsEnvironmentOverride(commit.Source) ||
+            IsEnvironmentOverride(nugetServiceIndexOverride.Source) ||
+            IsEnvironmentOverride(packagesOverride.Source) ||
+            IsDeveloperSidecarOverride(nugetServiceIndexOverride.Source) ||
+            IsDeveloperSidecarOverride(packagesOverride.Source);
 
         // A null/whitespace value means "no override"; only materialize a DirectoryInfo when a real
         // path was supplied. PackagingService validates existence + uniqueness when it consumes this.
@@ -738,6 +752,7 @@ public class Program
             nugetServiceIndexOverride: nugetServiceIndexOverride.Value,
             identityOverridden: identityOverridden,
             identityPackagesDirectory: identityPackagesDirectory,
+            identityOverrideNoticeRequired: identityOverrideNoticeRequired,
             debugMode: debugMode,
             consoleLogLevel: consoleLogLevel,
             packagesDirectory: packagesDirectory,
@@ -796,7 +811,7 @@ public class Program
     internal static async Task DisplayFirstTimeUseNoticeIfNeededAsync(IServiceProvider serviceProvider, string[] args, CancellationToken cancellationToken = default)
     {
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-        var isInformationalCommand = ContainsRootOption(args, CommonOptionNames.InformationalOptionNames.Contains);
+        var isInformationalCommand = CommonOptionNames.IsInformationalInvocation(args);
         var isMachineReadableOutput = HasMachineReadableOutput(args);
         var noLogo = ContainsRootOption(args, a => a == CommonOptionNames.NoLogo)
             || configuration.GetBool(CliConfigNames.NoLogo, defaultValue: false)
@@ -847,11 +862,11 @@ public class Program
         }
 
         // Surface a notice whenever the CLI is emulating another build via ASPIRE_CLI_* env vars
-        // or the install sidecar, so a diagnostic run is never mistaken for a real installed build.
+        // or developer-only sidecar overrides, so a diagnostic run is never mistaken for a real install.
         // This is independent of first-run/banner state but is suppressed for machine-readable
         // output so structured payloads stay clean. Written to stderr for the same reason.
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        if (executionContext.IdentityOverridden && !isMachineReadableOutput)
+        if (executionContext.IdentityOverrideNoticeRequired && !isMachineReadableOutput)
         {
             var consoleEnvironment = serviceProvider.GetRequiredService<ConsoleEnvironment>();
             var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
@@ -1057,9 +1072,15 @@ public class Program
         logger.LogInformation("CLI process ID: {ProcessId}", Environment.ProcessId);
 
         IHost? app = null;
+        TelemetryManager telemetryManager;
         try
         {
             app = await BuildApplicationAsync(args, startupContext);
+            // Create telemetry providers before hosted services start. AspireCliTelemetry starts
+            // background tag calculation as a hosted service and can complete a cache-hit detector
+            // immediately; resolving the manager first guarantees its listener is attached before
+            // the detector-health activity is created.
+            telemetryManager = app.Services.GetRequiredService<TelemetryManager>();
             await app.StartAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -1074,10 +1095,10 @@ public class Program
         // Ensure dispose of app when Main exits.
         using var _ = app;
 
-        // Immediately get telemetry and telemetry manager so they are created by DI and telemetry is configured.
+        // Immediately get telemetry so background tag calculation is available to command activities.
         var telemetry = app.Services.GetRequiredService<AspireCliTelemetry>();
-        var telemetryManager = app.Services.GetRequiredService<TelemetryManager>();
         var profilingTelemetry = app.Services.GetRequiredService<ProfilingTelemetry>();
+        var profileCaptureState = app.Services.GetRequiredService<ProfileCaptureState>();
 
         // Log feature state at startup for diagnostics
         app.Services.GetRequiredService<IFeatures>().LogFeatureState();
@@ -1132,12 +1153,20 @@ public class Program
                     profileCaptureSession = await app.Services.GetRequiredService<ProfileCaptureService>().StartAsync(profileCaptureOptions, cancellationManager.Token).ConfigureAwait(false);
                 }
 
-                // Log command invocation details for debugging
-                var commandLine = args.Length > 0 ? $"aspire {string.Join(" ", args)}" : "aspire";
+                // Parse before logging. `aspire run --ApiKey sk-live-...` forwards unmatched tokens
+                // to the AppHost even though the user never typed a `--` separator, so the parse
+                // tree is the only reliable way to tell CLI-owned tokens from AppHost input.
+                // Reordering is safe because Parse collects errors into the result instead of
+                // throwing, and nothing between here and the original call site inspects args.
+                var parseResult = rootCommand.Parse(args);
+
+                // Log command invocation details for debugging. Anything forwarded to the AppHost
+                // can contain secrets, so it is redacted.
+                var loggableArgs = ParseResultHelper.GetLoggableArguments(parseResult);
+                var commandLine = loggableArgs.Length > 0 ? $"aspire {loggableArgs}" : "aspire";
                 logger.LogInformation("Command: {CommandLine}", commandLine);
 
-                logger.LogDebug("Parsing arguments: {Args}", string.Join(" ", args));
-                var parseResult = rootCommand.Parse(args);
+                logger.LogDebug("Parsing arguments: {Args}", loggableArgs);
 
 #if DEBUG
                 WaitForDebuggerIfRequested(parseResult, app.Services, WaitForDebugger);
@@ -1197,23 +1226,9 @@ public class Program
                 mainActivity?.Stop();
             }
 
-            // The agent telemetry command runs fire-and-forget from an agent hook and the process
-            // exits immediately after. The short Release shutdown flush window is not enough to
-            // reliably export the single just-created span, so force a bounded reported-provider
-            // flush here before returning. This is a no-op when telemetry is opted out (no provider).
-            if (isAgentTelemetryInvocation)
-            {
-                try
-                {
-                    await telemetryManager.ForceFlushReportedAsync().ConfigureAwait(false);
-                }
-                catch
-                {
-                    // A telemetry flush failure must never change the hook's exit code.
-                }
-            }
-
-            if (profileCaptureSession is not null)
+            // This state is only consulted when the parent started a capture session. A successful
+            // extension handoff transfers export to the child, while the parent still disposes its session.
+            if (profileCaptureSession is not null && !profileCaptureState.IsTransferred)
             {
                 try
                 {
@@ -1244,8 +1259,30 @@ public class Program
                 await profileCaptureSession.DisposeAsync().ConfigureAwait(false);
             }
 
-            // Shutting down telemetry manager to flush any remaining telemetry and will take time.
-            // Start shutdown of telemetry manager immediately and run concurrently with app shutdown.
+            // The detector-health activity is created asynchronously after default tags resolve. Ensure
+            // it has been handed to the provider before shutdown starts so short CLI invocations do not
+            // lose the activity while the provider is flushing.
+            await telemetry.CompleteInternalMicrosoftDiagnosticsAsync().ConfigureAwait(false);
+
+            // The agent telemetry command runs fire-and-forget from an agent hook and the process
+            // exits immediately after. The short Release shutdown flush window is not enough to
+            // reliably export its just-created activity, so flush after telemetry tag calculation
+            // has completed and the agent activity has been submitted to the reported provider.
+            if (isAgentTelemetryInvocation)
+            {
+                try
+                {
+                    await telemetryManager.ForceFlushReportedAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // A telemetry flush failure must never change the hook's exit code.
+                }
+            }
+
+            // Shutting down telemetry manager to flush any remaining telemetry will take time.
+            // Run it concurrently with application shutdown after all asynchronously-created telemetry
+            // has been submitted to the providers.
             var shutdownTelemetryTask = telemetryManager.ShutdownAsync();
 
             await app.StopAsync().ConfigureAwait(false);
@@ -1314,7 +1351,6 @@ public class Program
         {
             builder.Services.AddSingleton<IExtensionRpcTarget, ExtensionRpcTarget>();
             builder.Services.AddSingleton<IExtensionBackchannel, ExtensionBackchannel>();
-
             var extensionPromptEnabled = builder.Configuration[KnownConfigNames.ExtensionPromptEnabled] is "true";
             builder.Services.AddSingleton<IInteractionService>(provider =>
             {

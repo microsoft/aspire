@@ -303,6 +303,11 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Benutzende Person</target>
         <note />
       </trans-unit>
+      <trans-unit id="GenAIMessageTreeLabel">
+        <source>Generative AI messages</source>
+        <target state="new">Generative AI messages</target>
+        <note />
+      </trans-unit>
       <trans-unit id="GenAINAText">
         <source>n/a</source>
         <target state="translated">n/v</target>

@@ -131,6 +131,22 @@ public class ScaffoldingServiceTests
     }
 
     [Fact]
+    public void AddRootTypeScriptAppHostDelegateScripts_UsesDenoTasks()
+    {
+        var scripts = new JsonObject();
+
+        var preservedScriptNames = ScaffoldingService.AddRootTypeScriptAppHostDelegateScripts(
+            scripts,
+            TypeScriptAppHostToolchain.Deno,
+            "apps/web/aspire-apphost");
+
+        Assert.Empty(preservedScriptNames);
+        Assert.Equal("deno task --cwd apps/web/aspire-apphost aspire:start", scripts["aspire:start"]?.GetValue<string>());
+        Assert.Equal("deno task --cwd apps/web/aspire-apphost aspire:build", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal("deno task --cwd apps/web/aspire-apphost aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
+    }
+
+    [Fact]
     public void AddRootTypeScriptAppHostDelegateScripts_UsesAppHostToolchain()
     {
         var rootDirectory = Directory.CreateTempSubdirectory();
@@ -260,6 +276,151 @@ public class ScaffoldingServiceTests
         Assert.Equal(
             ["node_modules/", "custom/", "dist/", ".aspire/"],
             lines);
+    }
+
+    [Fact]
+    public void GetConflictingScaffoldFiles_TreatsVsCodeSettingsAsMergeable()
+    {
+        // Almost every existing repository opened in VS Code already has a .vscode/settings.json,
+        // and the Java scaffold writes one. Reporting it as a conflict aborts init entirely.
+        var rootDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(rootDirectory.FullName, ".vscode"));
+            File.WriteAllText(Path.Combine(rootDirectory.FullName, ".vscode", "settings.json"), "{}");
+
+            var conflicts = ScaffoldingService.GetConflictingScaffoldFiles(
+                rootDirectory.FullName,
+                [".vscode/settings.json"]);
+
+            Assert.Empty(conflicts);
+        }
+        finally
+        {
+            rootDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void MergeVsCodeSettingsContent_AddsMissingSettingsAndKeepsTheDeveloperValues()
+    {
+        var existingContent = """
+            {
+              "editor.formatOnSave": true,
+              "java.compile.nullAnalysis.mode": "automatic"
+            }
+            """;
+        var scaffoldContent = """
+            {
+              "java.project.sourcePaths": [".", ".aspire/modules"],
+              "java.compile.nullAnalysis.mode": "disabled"
+            }
+            """;
+
+        var merged = JsonNode.Parse(
+            ScaffoldingService.MergeVsCodeSettingsContent(existingContent, scaffoldContent))!.AsObject();
+
+        Assert.True(merged["editor.formatOnSave"]!.GetValue<bool>());
+        // A setting the developer chose is theirs, so the scaffold does not overwrite it.
+        Assert.Equal("automatic", merged["java.compile.nullAnalysis.mode"]!.GetValue<string>());
+        Assert.Equal([".", ".aspire/modules"], merged["java.project.sourcePaths"]!.AsArray().Select(v => v!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void MergeVsCodeSettingsContent_UnionsSourcePathsWithoutDroppingExistingEntries()
+    {
+        var existingContent = """
+            {
+              "java.project.sourcePaths": ["src/main/java", "."]
+            }
+            """;
+        var scaffoldContent = """
+            {
+              "java.project.sourcePaths": [".", ".aspire/modules"]
+            }
+            """;
+
+        var merged = JsonNode.Parse(
+            ScaffoldingService.MergeVsCodeSettingsContent(existingContent, scaffoldContent))!.AsObject();
+
+        Assert.Equal(
+            ["src/main/java", ".", ".aspire/modules"],
+            merged["java.project.sourcePaths"]!.AsArray().Select(v => v!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void MergeVsCodeSettingsContent_ReadsSettingsThatUseCommentsAndTrailingCommas()
+    {
+        // VS Code settings are JSONC, and its own UI writes the "// Place your settings" header.
+        var existingContent = """
+            {
+              // Place your settings in this file.
+              "editor.tabSize": 4,
+            }
+            """;
+        var scaffoldContent = """
+            {
+              "java.project.sourcePaths": ["."]
+            }
+            """;
+
+        var merged = JsonNode.Parse(
+            ScaffoldingService.MergeVsCodeSettingsContent(existingContent, scaffoldContent))!.AsObject();
+
+        Assert.Equal(4, merged["editor.tabSize"]!.GetValue<int>());
+        Assert.Equal(["."], merged["java.project.sourcePaths"]!.AsArray().Select(v => v!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void MergeVsCodeSettingsContent_PreservesSettingsThatCannotBeParsed()
+    {
+        // A settings.json broken mid-edit, or one using a JSONC construct the parser does not accept.
+        // Overwriting it discards editor configuration the developer may have accumulated for years,
+        // and `aspire init` gives no warning that it happened.
+        var existingContent = """
+            {
+              "editor.formatOnSave": true,
+              "java.project.sourcePaths": ["src/main/java"
+            }
+            """;
+        var scaffoldContent = """
+            {
+              "java.project.sourcePaths": [".", ".aspire/modules"]
+            }
+            """;
+
+        var merged = ScaffoldingService.MergeVsCodeSettingsContent(existingContent, scaffoldContent);
+
+        Assert.Equal(existingContent, merged);
+    }
+
+    [Fact]
+    public void MergeVsCodeSettingsContent_LeavesTheFileAloneWhenEverySettingIsAlreadyPresent()
+    {
+        // Nothing to add means nothing is rewritten, so comments and formatting survive re-running init.
+        var existingContent = """
+            {
+              // keep me
+              "java.project.sourcePaths": [".", ".aspire/modules"]
+            }
+            """;
+        var scaffoldContent = """
+            {
+              "java.project.sourcePaths": [".", ".aspire/modules"]
+            }
+            """;
+
+        Assert.Equal(existingContent, ScaffoldingService.MergeVsCodeSettingsContent(existingContent, scaffoldContent));
+    }
+
+    [Fact]
+    public void MergeVsCodeSettingsContent_KeepsTheExistingFileWhenItIsNotUsableJson()
+    {
+        // Preferring the scaffold here would silently discard the developer's whole settings file.
+        var merged = ScaffoldingService.MergeVsCodeSettingsContent("not json at all", """{"a": 1}""");
+
+        Assert.Equal("not json at all", merged);
     }
 
     [Fact]

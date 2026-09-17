@@ -146,6 +146,132 @@ public class AzureBicepProvisionerTests
         Assert.Contains("Azure principal parameter was not supplied", exception.Message);
     }
 
+    [Theory]
+    [InlineData("User")]
+    [InlineData("ServicePrincipal")]
+    public async Task GetOrCreateResourceAsync_InPublishMode_PopulatesUserPrincipalParameters(string principalType)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new MockDeploymentStateManager());
+        using var services = builder.Services.BuildServiceProvider();
+
+        var resource = new AzureBicepResource("sandbox-group", templateString: "output id string = 'ok'");
+        resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId] = null;
+        resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = null;
+
+        var sentinel = new InvalidOperationException("stop-after-populate-well-known-parameters");
+        var bicepExecutor = new ThrowingBicepCompiler(sentinel);
+        var provisioner = new BicepProvisioner(
+            services.GetRequiredService<ResourceNotificationService>(),
+            services.GetRequiredService<ResourceLoggerService>(),
+            bicepExecutor,
+            new TestSecretClientProvider(),
+            services.GetRequiredService<IDeploymentStateManager>(),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            services.GetRequiredService<IFileSystemService>(),
+            NullLogger<BicepProvisioner>.Instance);
+
+        var principalId = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            principal: new AzurePrincipal(principalId, "deployment-principal", principalType),
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provisioner.GetOrCreateResourceAsync(resource, context, CancellationToken.None));
+        Assert.Same(sentinel, thrown);
+
+        Assert.Equal(principalId, resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId]);
+        Assert.Equal(principalType, resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType]);
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public async Task GetOrCreateResourceAsync_ThrowsWhenExplicitUserPrincipalIdHasNoPrincipalType(DistributedApplicationOperation operation)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(operation);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new MockDeploymentStateManager());
+        using var services = builder.Services.BuildServiceProvider();
+
+        var resource = new AzureBicepResource("sandbox-group", templateString: "output id string = 'ok'");
+        resource.Parameters[AzureBicepResource.KnownParameters.UserPrincipalId] = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = null;
+
+        var provisioner = new BicepProvisioner(
+            services.GetRequiredService<ResourceNotificationService>(),
+            services.GetRequiredService<ResourceLoggerService>(),
+            new TestBicepCliExecutor(),
+            new TestSecretClientProvider(),
+            services.GetRequiredService<IDeploymentStateManager>(),
+            new DistributedApplicationExecutionContext(operation),
+            services.GetRequiredService<IFileSystemService>(),
+            NullLogger<BicepProvisioner>.Instance);
+
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            executionContext: new DistributedApplicationExecutionContext(operation));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provisioner.GetOrCreateResourceAsync(resource, context, CancellationToken.None));
+
+        Assert.Equal(
+            "The Azure parameter 'principalType' must be supplied when 'userPrincipalId' is provided explicitly.",
+            exception.Message);
+    }
+
+    [Theory]
+    [InlineData("User")]
+    [InlineData("ServicePrincipal")]
+    [InlineData("Group")]
+    public async Task GetOrCreateResourceAsync_InRunMode_PopulatesPrincipalTypeFromContext(string principalType)
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/13933.
+        // The PrincipalType value must come from the credential's detected principal type
+        // (carried on ProvisioningContext.Principal.Type) instead of a hardcoded "User",
+        // otherwise role-assignment Bicep deployments fail under service-principal /
+        // federated workload identity credentials with PrincipalNotFound / UnmatchedPrincipalType.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDeploymentStateManager>(new MockDeploymentStateManager());
+        using var services = builder.Services.BuildServiceProvider();
+
+        var resource = new AzureBicepResource("storage-roles", templateString: "output id string = 'ok'");
+        resource.Parameters[AzureBicepResource.KnownParameters.PrincipalId] = null;
+        resource.Parameters[AzureBicepResource.KnownParameters.PrincipalName] = null;
+        resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = null;
+
+        // The compiler stub raises a sentinel so the flow stops right after
+        // PopulateWellKnownParameters mutates the resource. The downstream ARM deployment
+        // requires a live Azure connection, so short-circuiting here keeps the test hermetic.
+        var sentinel = new InvalidOperationException("stop-after-populate-well-known-parameters");
+        var bicepExecutor = new ThrowingBicepCompiler(sentinel);
+
+        var provisioner = new BicepProvisioner(
+            services.GetRequiredService<ResourceNotificationService>(),
+            services.GetRequiredService<ResourceLoggerService>(),
+            bicepExecutor,
+            new TestSecretClientProvider(),
+            services.GetRequiredService<IDeploymentStateManager>(),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            services.GetRequiredService<IFileSystemService>(),
+            NullLogger<BicepProvisioner>.Instance);
+
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            principal: new AzurePrincipal(Guid.Parse("11111111-2222-3333-4444-555555555555"), "ci-runner", principalType));
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provisioner.GetOrCreateResourceAsync(resource, context, CancellationToken.None));
+        Assert.Same(sentinel, thrown);
+
+        Assert.Equal(principalType, resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType]);
+    }
+
+    private sealed class ThrowingBicepCompiler(Exception toThrow) : IBicepCompiler
+    {
+        public Task<string> CompileBicepToArmAsync(string bicepFilePath, CancellationToken cancellationToken = default)
+        {
+            throw toThrow;
+        }
+    }
+
     [Fact]
     public async Task GetOrCreateResourceAsync_WithSubscriptionScope_UsesSubscriptionDeploymentCollection()
     {
@@ -1823,6 +1949,9 @@ public class AzureBicepProvisionerTests
         {
             return Task.FromResult(new DeploymentStateSection(sectionName, [], 0));
         }
+
+        public Task<DeploymentStateSection> AcquireCurrentSectionAsync(string sectionName, CancellationToken cancellationToken = default)
+            => AcquireSectionAsync(sectionName, cancellationToken);
 
         public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {

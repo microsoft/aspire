@@ -178,6 +178,60 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task CreateProjectFiles_ExactAspirePackageRestoresInsteadOfUsingCheckoutProject()
+    {
+        var project = CreateProject();
+        var integrations = new[]
+        {
+            IntegrationReference.FromPackage(
+                "Aspire.Hosting.Redis",
+                "[13.1.0]",
+                disableLocalProjectSubstitution: true),
+            IntegrationReference.FromPackage("Aspire.Hosting.PostgreSQL", "13.1.0")
+        };
+
+        var (projectPath, _) = await project.CreateProjectFilesAsync(integrations).DefaultTimeout();
+
+        var document = XDocument.Load(projectPath);
+        var packageReference = Assert.Single(
+            document.Descendants("PackageReference"),
+            element => element.Attribute("Include")?.Value == "Aspire.Hosting.Redis");
+
+        Assert.Equal("[13.1.0]", packageReference.Attribute("VersionOverride")?.Value);
+        Assert.Null(packageReference.Attribute("Version"));
+        Assert.DoesNotContain(
+            document.Descendants("PackageReference"),
+            element => element.Attribute("Include")?.Value == "Aspire.Hosting.PostgreSQL");
+    }
+
+    [Fact]
+    public async Task CreateProjectFiles_ExactVersionRangeUsesCheckoutProjectByDefault()
+    {
+        var integrationDirectory = _workspace.WorkspaceRoot.CreateSubdirectory(
+            Path.Combine("src", "Aspire.Hosting.Redis"));
+        var integrationProjectPath = Path.Combine(integrationDirectory.FullName, "Aspire.Hosting.Redis.csproj");
+        await File.WriteAllTextAsync(integrationProjectPath, "<Project />");
+
+        var project = CreateProject();
+        var integrations = new[]
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting.Redis", "[13.1.0]")
+        };
+
+        var (projectPath, _) = await project.CreateProjectFilesAsync(integrations).DefaultTimeout();
+
+        var document = XDocument.Load(projectPath);
+        var projectReference = Assert.Single(
+            document.Descendants("ProjectReference"),
+            element => element.Attribute("Include")?.Value == integrationProjectPath);
+
+        Assert.Equal("false", projectReference.Element("IsAspireProjectResource")?.Value);
+        Assert.DoesNotContain(
+            document.Descendants("PackageReference"),
+            element => element.Attribute("Include")?.Value == "Aspire.Hosting.Redis");
+    }
+
+    [Fact]
     public void ProjectModelPath_IsStableForSameAppPath()
     {
         // Arrange

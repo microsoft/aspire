@@ -107,6 +107,15 @@ internal sealed class LaunchToolArgsCallbackAnnotation : IResourceAnnotation, IA
         }
     }
 
+    bool IArgCallbackAnnotation.TryGetCachedResult(out Task<IList<object>>? result)
+    {
+        lock (_lock)
+        {
+            result = _callbackTask;
+            return result is not null;
+        }
+    }
+
     private async Task<IList<object>> ExecuteCallbackAsync(CommandLineArgsCallbackContext context)
     {
         await Callback(context).ConfigureAwait(false);

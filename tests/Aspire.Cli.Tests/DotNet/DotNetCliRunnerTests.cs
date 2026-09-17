@@ -50,14 +50,20 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
 
         var options = new ProcessInvocationOptions()
         {
-            NoLaunchProfile = true
+            NoLaunchProfile = true,
+            LaunchProfile = "E2E"
         };
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
             provider,
             executionContext,
-            (args, _, _, _) => Assert.Contains(args, arg => arg == "--no-launch-profile"),
+            (args, _, _, _) =>
+            {
+                Assert.Equal(
+                    ["run", "--no-launch-profile", "--project", projectFile.FullName, "--", "--operation", "inspect"],
+                    args);
+            },
             42);
 
         // This is what we are really testing here - that RunAsync reads
@@ -73,6 +79,82 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             env: new Dictionary<string, string>(),
             null,
             options,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(42, exitCode);
+    }
+
+    [Theory]
+    [InlineData("AppHost.csproj", false)]
+    [InlineData("AppHost.csproj", true)]
+    [InlineData("apphost.cs", false)]
+    public async Task RunAsyncAppliesSelectedLaunchProfile(string appHostFileName, bool watch)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, appHostFileName));
+        await File.WriteAllTextAsync(appHostFile.FullName, "Not a real AppHost.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (args, _, _, _) =>
+            {
+                string[] expectedArgs = appHostFile.Extension == ".cs"
+                    ? ["run", "--launch-profile=--no-build", $"/p:{KnownConfigNames.SuppressCliRunHook}=true", "--file", appHostFile.FullName, "--"]
+                    : watch
+                        ? ["watch", "--non-interactive", "--launch-profile=--no-build", "--project", appHostFile.FullName, "--"]
+                        : ["run", "--launch-profile=--no-build", "--project", appHostFile.FullName, "--"];
+                Assert.Equal(expectedArgs, args);
+            },
+            42);
+
+        var exitCode = await runner.RunAsync(
+            projectFile: appHostFile,
+            watch,
+            noBuild: false,
+            noRestore: false,
+            args: [],
+            env: null,
+            backchannelCompletionSource: null,
+            new ProcessInvocationOptions { LaunchProfile = "--no-build" },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(42, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsyncPreservesApplicationArgumentBoundaries()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var appHostArguments = new[] { "--custom", "value with spaces", "", "literal \"quote\"", @"C:\tools\backslash\path" };
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (args, _, _, _) => Assert.Equal(
+                ["run", "--project", projectFile.FullName, "--", .. appHostArguments],
+                args),
+            42);
+
+        var exitCode = await runner.RunAsync(
+            projectFile,
+            watch: false,
+            noBuild: false,
+            noRestore: false,
+            appHostArguments,
+            env: null,
+            backchannelCompletionSource: null,
+            new ProcessInvocationOptions(),
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(42, exitCode);
@@ -185,6 +267,38 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             0);
 
         var exitCode = await runner.BuildAsync(projectFile, noRestore: false, options, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task BuildAsyncPreservesCallerEnvironmentAndSuppressesCliRunHook()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (_, env, _, _) =>
+            {
+                Assert.NotNull(env);
+                Assert.Equal("bundle-path", env["AspireCliBundlePath"]);
+                Assert.Equal("true", env[KnownConfigNames.SuppressCliRunHook]);
+            },
+            0);
+
+        var exitCode = await runner.BuildAsync(
+            projectFile,
+            noRestore: false,
+            env: new Dictionary<string, string> { ["AspireCliBundlePath"] = "bundle-path" },
+            new ProcessInvocationOptions(),
+            CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
     }
@@ -898,7 +1012,9 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
-        var launchAppHostCalledTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var launchAppHostStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowLaunchAppHostToComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var extensionLaunchCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var backchannel = new TestAppHostBackchannel
         {
             ConnectAsyncCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
@@ -910,7 +1026,11 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             {
                 testExtensionInteractionService = new TestExtensionInteractionService(sp)
                 {
-                    LaunchAppHostCallback = () => launchAppHostCalledTcs.SetResult(),
+                    LaunchAppHostAsyncCallback = async () =>
+                    {
+                        launchAppHostStarted.TrySetResult();
+                        await allowLaunchAppHostToComplete.Task;
+                    },
                 };
                 return testExtensionInteractionService;
             };
@@ -940,10 +1060,22 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                 [KnownConfigNames.UnixSocketPath] = Path.Combine(workspace.WorkspaceRoot.FullName, "cli.sock")
             },
             backchannelCompletionSource,
-            options: new ProcessInvocationOptions(),
+            options: new ProcessInvocationOptions
+            {
+                ExtensionAppHostLaunchCompletedAsync = () =>
+                {
+                    extensionLaunchCompleted.TrySetResult();
+                    return Task.CompletedTask;
+                }
+            },
             cancellationToken: CancellationToken.None);
 
-        await launchAppHostCalledTcs.Task.DefaultTimeout();
+        await launchAppHostStarted.Task.DefaultTimeout();
+        Assert.False(extensionLaunchCompleted.Task.IsCompleted);
+        Assert.False(backchannel.ConnectAsyncCalled.Task.IsCompleted);
+
+        allowLaunchAppHostToComplete.TrySetResult();
+        await extensionLaunchCompleted.Task.DefaultTimeout();
         await backchannel.ConnectAsyncCalled.Task.DefaultTimeout();
         Assert.Same(backchannel, await backchannelCompletionSource.Task.DefaultTimeout());
 
@@ -998,47 +1130,6 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                 new ProcessInvocationOptions(),
                 CancellationToken.None).DefaultTimeout());
         Assert.Contains("Timed out waiting for AppHost backchannel", exception.Message);
-    }
-
-    [Fact]
-    public void BackchannelConnectionTimeoutUsesLongerConfiguredAppHostStartupTimeout()
-    {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [CliConfigNames.AppHostStartupTimeout] = "86400"
-            })
-            .Build();
-
-        var timeout = DotNetCliRunner.GetBackchannelConnectionTimeout(configuration);
-
-        Assert.Equal(TimeSpan.FromSeconds(86400), timeout);
-    }
-
-    [Fact]
-    public void BackchannelConnectionTimeoutUsesDefaultAppHostStartupTimeout()
-    {
-        var configuration = new ConfigurationBuilder().Build();
-
-        var timeout = DotNetCliRunner.GetBackchannelConnectionTimeout(configuration);
-
-        Assert.Equal(TimeSpan.FromSeconds(120), timeout);
-    }
-
-    [Fact]
-    public void ExplicitBackchannelConnectionTimeoutOverridesAppHostStartupTimeout()
-    {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [CliConfigNames.AppHostStartupTimeout] = "180",
-                [KnownConfigNames.CliBackchannelConnectTimeoutSeconds] = "5"
-            })
-            .Build();
-
-        var timeout = DotNetCliRunner.GetBackchannelConnectionTimeout(configuration);
-
-        Assert.Equal(TimeSpan.FromSeconds(5), timeout);
     }
 
     [Fact]
@@ -1632,7 +1723,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunAsyncDoesNotIncludeNoBuildFlagForSingleFileAppHostWhenNoBuildIsTrue()
+    public async Task RunAsyncIncludesNoBuildFlagForSingleFileAppHostWhenNoBuildIsTrue()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"));
@@ -1649,12 +1740,11 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             {
                 Assert.Collection(args,
                     arg => Assert.Equal("run", arg),
-                    arg => Assert.Equal($"/p:{KnownConfigNames.SuppressCliRunHook}=true", arg),
+                    arg => Assert.Equal("--no-build", arg),
                     arg => Assert.Equal("--file", arg),
                     arg => Assert.Equal(appHostFile.FullName, arg),
                     arg => Assert.Equal("--", arg)
                 );
-                Assert.DoesNotContain("--no-build", args);
             },
             0);
 

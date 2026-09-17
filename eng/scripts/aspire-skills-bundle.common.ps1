@@ -58,10 +58,10 @@ function ConvertTo-LfUtf8Bytes {
     return [System.Text.UTF8Encoding]::new($false).GetBytes($text)
 }
 
-function Get-AspireSkillsSha256Hex {
+function Get-AspireSkillsSha512Hex {
     param([Parameter(Mandatory = $true)][AllowEmptyCollection()][byte[]]$Bytes)
 
-    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $sha = [System.Security.Cryptography.SHA512]::Create()
     try {
         return [System.BitConverter]::ToString($sha.ComputeHash($Bytes)).Replace('-', '').ToLowerInvariant()
     }

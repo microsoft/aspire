@@ -19,20 +19,20 @@ with create_builder() as builder:
     postgres.with_data_volume()
     postgres.with_data_volume()
     # ---- WithDataBindMount: bind mount ----
-    postgres.with_data_bind_mount()
-    postgres.with_data_bind_mount()
+    postgres.with_data_bind_mount("./data")
+    postgres.with_data_bind_mount("./readonly-data", is_read_only=True)
     # ---- WithInitFiles: initialization scripts ----
-    postgres.with_init_files()
+    postgres.with_init_files("./init")
     # ---- WithHostPort: explicit port for PostgreSQL ----
     postgres.with_host_port()
     # ---- WithCreationScript: custom database creation SQL ----
-    db.with_creation_script()
+    db.with_creation_script("CREATE TABLE validation (id INT);")
     # ---- WithPassword / WithUserName: credential configuration ----
     custom_password = builder.add_parameter("parameter")
     custom_user = builder.add_parameter("parameter")
     pg2 = builder.add_postgres("resource")
-    pg2.with_password()
-    pg2.with_user_name()
+    pg2.with_password(custom_password)
+    pg2.with_user_name(custom_user)
     # ---- Property access on PostgresServerResource ----
     _endpoint = postgres.primary_endpoint
     _name_ref = postgres.user_name_reference

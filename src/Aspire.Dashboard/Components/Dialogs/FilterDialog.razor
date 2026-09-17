@@ -1,43 +1,55 @@
 ﻿@using Aspire.Dashboard.Model
 @using Aspire.Dashboard.Model.Otlp
 @using Aspire.Dashboard.Resources
-@implements IDialogContentComponent<FilterDialogViewModel>
 
 @inject IStringLocalizer<Dialogs> Loc
 @inject IStringLocalizer<StructuredFiltering> FilterLoc
+@inject IStringLocalizer<ControlsStrings> ControlsLoc
 
+<FluentDialogBody>
 <EditForm EditContext="@EditContext" OnValidSubmit="@Apply">
     <DataAnnotationsValidator />
 
+    <div class="filter-dialog-form aspire-dialog-fields">
     <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
         <div class="filter-input-container input-container">
-            <FluentSelect TOption="SelectViewModel<string>"
-                          Placeholder="@Loc[nameof(Dialogs.FilterDialogFieldPlaceholder)]"
-                          Label="@Loc[nameof(Dialogs.FilterDialogParameterInputLabel)]"
-                          Items="@_parameters"
-                          @bind-SelectedOption="@_formModel.Parameter"
-                          @bind-SelectedOption:after="ParameterChangedAsync"
-                          Width="100%"
-                          Height="400px"
-                          OptionText="@(c => c.Name)"
-                          OptionDisabled="@(c => c.Id is null)"
-                          OptionTitle="@(c => DashboardUIHelpers.ResolveTooltip(c.Name))">
-            </FluentSelect>
+            <div class="input-line-container aspire-field-row">
+                <FluentSelect TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
+                              Class="aspire-input"
+                              Placeholder="@Loc[nameof(Dialogs.FilterDialogFieldPlaceholder)]"
+                              Label="@Loc[nameof(Dialogs.FilterDialogParameterInputLabel)]"
+                              Items="@_parameters"
+                              @bind-Value="@_formModel.Parameter"
+                              @bind-Value:after="ParameterChangedAsync"
+                              Width="100%"
+                              Height="400px"
+                              Disabled="@_loadingPropertyKeys"
+                              OptionText="@((SelectViewModel<string>? c) => c?.Name)"
+                              OptionDisabled="@((SelectViewModel<string>? c) => c is not null && c.Id is null)"
+                              OptionTitle="@((SelectViewModel<string> c) => DashboardUIHelpers.ResolveTooltip(c.Name))">
+                </FluentSelect>
+                @if (_loadingPropertyKeys)
+                {
+                    <AspireProgressRing Width="20px" Class="input-progress" AriaLabel="@ControlsLoc[nameof(ControlsStrings.Loading)]" />
+                }
+            </div>
         </div>
 
         <div class="filter-input-container input-container">
-            <FluentSelect TOption="SelectViewModel<FilterCondition>"
+            <FluentSelect TOption="SelectViewModel<FilterCondition>" TValue="SelectViewModel<FilterCondition>"
+                          Class="aspire-input"
                           Items="@_filterConditions"
-                          @bind-SelectedOption="@_formModel.Condition"
+                          @bind-Value="@_formModel.Condition"
                           Label="@Loc[nameof(Dialogs.FilterDialogConditionInputLabel)]"
-                          OptionText="@(i => i.Name)"
+                          OptionText="@((SelectViewModel<FilterCondition>? i) => i?.Name)"
                           Width="100%" />
         </div>
 
         @if (_formModel.ValueIsNumeric)
         {
             <div class="filter-input-container input-container">
-                <FluentNumberField TValue="double?"
+                <FluentNumberInput TValue="int?"
+                                   Class="aspire-input"
                                    @bind-Value="_formModel.NumericValue"
                                    Min="0"
                                    Step="50"
@@ -45,7 +57,6 @@
                                    Immediate="true"
                                    ImmediateDelay="@FluentUIExtensions.InputDelay"
                                    Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]" />
-                <ValidationMessage For="() => _formModel.NumericValue" />
             </div>
         }
         else if (_formModel.ValueIsDate)
@@ -53,54 +64,82 @@
             <div class="filter-input-container input-container">
                 @* Position relative to correctly align the absolute positioned date picker *@
                 <div style="position: relative;">
-                    <FluentTextField @bind-Value="_formModel.Value"
+                    <FluentTextInput @bind-Value="_formModel.Value"
+                                    Class="aspire-input"
                                     Style="min-width: 100%"
+                                    AutoComplete="off"
                                     Immediate="true"
                                     ImmediateDelay="@FluentUIExtensions.InputDelay"
                                     Placeholder="@Loc[nameof(Dialogs.FilterDialogDatePlaceholder)]"
                                     Label="@Loc[nameof(Dialogs.FilterDialogDateValueLabel)]">
-                        <FluentIcon slot="end"
-                                    Value="@(new Icons.Regular.Size16.Calendar())"
-                                    Title="@Loc[nameof(Dialogs.FilterDialogPickDateButtonTitle)]"
-                                    OnClick="OpenDatePickerAsync"
-                                    Style="cursor: pointer;" />
-                    </FluentTextField>
+                        <EndTemplate>
+                            <FluentButton Appearance="ButtonAppearance.Transparent"
+                                          IconOnly="true"
+                                          Type="ButtonType.Button"
+                                          Class="aspire-icon-button"
+                                          Title="@Loc[nameof(Dialogs.FilterDialogPickDateButtonTitle)]"
+                                          aria-label="@Loc[nameof(Dialogs.FilterDialogPickDateButtonTitle)]"
+                                          OnClick="OpenDatePickerAsync">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Calendar())" Color="Color.Primary" />
+                            </FluentButton>
+                        </EndTemplate>
+                    </FluentTextInput>
                     <input type="datetime-local"
-                        @ref="_datePickerInput"
-                        step="1"
-                        value="@_formModel.DateTimeLocalValue"
-                        @oninput="OnDateTimePickerChanged"
-                        style="position: absolute; right: 0; bottom: 0; height: 0; width: 0; overflow: hidden; border: none; padding: 0; margin: 0; pointer-events: none; opacity: 0;" />
+                           @ref="_datePickerInput"
+                           step="1"
+                           value="@_formModel.DateTimeLocalValue"
+                           @oninput="OnDateTimePickerChanged"
+                           style="position: absolute; right: 0; bottom: 0; height: 0; width: 0; overflow: hidden; border: none; padding: 0; margin: 0; pointer-events: none; opacity: 0;" />
                 </div>
-                <ValidationMessage For="() => _formModel.Value" />
             </div>
         }
         else
         {
             <div class="filter-input-container input-container">
-                <FluentCombobox TOption="SelectViewModel<FieldValue>"
-                                @bind-Value="_formModel.Value"
-                                @bind-Value:after="ValueChanged"
-                                Items="@_filteredValues"
-                                Width="100%"
-                                Height="400px"
-                                OptionText="@(c => c.Name)"
-                                OptionValue="@(c => c.Name)"
-                                OptionTitle="@(c => DashboardUIHelpers.ResolveTooltip(c.Name))"
-                                Immediate="true"
-                                ImmediateDelay="@FluentUIExtensions.InputDelay"
-                                Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]">
-                    <OptionTemplate Context="optionContext">
-                        <FluentBadge Circular=true Appearance="Appearance.Neutral" Slot="end">
-                            @* There is FluentUI bug that causes bad data if there is additional text in an option. *@
-                            @* https://github.com/microsoft/fluentui-blazor/issues/2695 *@
-                            @* Workaround this issue by inserting extra text using CSS. *@
-                            <span data-filtercount="@optionContext.Id!.Count"></span>
-                        </FluentBadge>
-                        <FluentHighlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
-                    </OptionTemplate>
-                </FluentCombobox>
-                <ValidationMessage For="() => _formModel.Value" />
+                <div class="input-line-container aspire-field-row">
+                    <FluentField Id="filter-dialog-text-value-field"
+                                 Class="aspire-input"
+                                 ForId="filter-dialog-text-value"
+                                 ValueExpression="@(() => _formModel.Value)"
+                                 Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]"
+                                 IncludeInputSlot="false">
+                        <CascadingValue Name="HideFluentField" Value="@true" IsFixed="true">
+                            <FluentCombobox TOption="SelectViewModel<FieldValue>" TValue="SelectViewModel<FieldValue>"
+                                            Id="filter-dialog-text-value"
+                                            slot="input"
+                                            @bind-Value="_selectedValue"
+                                            @bind-Value:after="SelectedValueChanged"
+                                            @bind-ImmediateText="_formModel.Value"
+                                            @bind-ImmediateText:after="UpdateValueState"
+                                            Immediate="true"
+                                            ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                            Items="@_filteredValues"
+                                            Width="100%"
+                                            Height="400px"
+                                            Disabled="@_loadingFieldValues"
+                                            OptionText="@((SelectViewModel<FieldValue>? c) => c?.Name)"
+                                            OptionTitle="@((SelectViewModel<FieldValue> c) => DashboardUIHelpers.ResolveTooltip(c.Name))">
+                                @* The native dropdown needs a freeform option to retain unmatched text on blur. *@
+                                <FreeOption>
+                                    <FreeOptionOutput />
+                                </FreeOption>
+                                <OptionTemplate Context="optionContext">
+                                    <FluentHighlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
+                                    <FluentBadge slot="description" Circular="true" Appearance="BadgeAppearance.Tint" Color="BadgeColor.Subtle">
+                                        @* There is FluentUI bug that causes bad data if there is additional text in an option. *@
+                                        @* https://github.com/microsoft/fluentui-blazor/issues/2695 *@
+                                        @* Workaround this issue by inserting extra text using CSS. *@
+                                        <span data-filtercount="@optionContext.Id!.Count"></span>
+                                    </FluentBadge>
+                                </OptionTemplate>
+                            </FluentCombobox>
+                        </CascadingValue>
+                    </FluentField>
+                    @if (_loadingFieldValues)
+                    {
+                        <AspireProgressRing Width="20px" Class="input-progress" AriaLabel="@ControlsLoc[nameof(ControlsStrings.Loading)]" />
+                    }
+                </div>
             </div>
         }
 
@@ -110,21 +149,23 @@
                 {
                     if (Content.Filter.Enabled)
                     {
-                        <FluentButton Appearance="Appearance.Stealth" Title="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" OnClick="Disable"><FluentIcon Value="@(new Icons.Regular.Size16.Pause())" /></FluentButton>
+                        <FluentButton Class="aspire-button" Appearance="ButtonAppearance.Default" Title="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" OnClick="Disable"><FluentIcon Value="@(new Icons.Regular.Size16.Pause())" Color="Color.Primary" /></FluentButton>
                     }
                     else
                     {
-                        <FluentButton Appearance="Appearance.Stealth" Title="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" OnClick="Enable"><FluentIcon Value="@(new Icons.Regular.Size16.Play())" /></FluentButton>
+                        <FluentButton Class="aspire-button" Appearance="ButtonAppearance.Default" Title="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" OnClick="Enable"><FluentIcon Value="@(new Icons.Regular.Size16.Play())" Color="Color.Primary" /></FluentButton>
                     }
-                    <FluentButton Appearance="Appearance.Stealth" Title="@Loc[nameof(Dialogs.FilterDialogRemoveFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogRemoveFilterButtonText)]" OnClick="Delete"><FluentIcon Value="@(new Icons.Regular.Size16.Delete())" /></FluentButton>
+                    <FluentButton Class="aspire-button" Appearance="ButtonAppearance.Default" Title="@Loc[nameof(Dialogs.FilterDialogRemoveFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogRemoveFilterButtonText)]" OnClick="Delete"><FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Primary" /></FluentButton>
                 }
             </FluentStack>
 
             <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.Right">
-                <FluentButton OnClick="Cancel">@Loc[nameof(Dialogs.FilterDialogCancelButtonText)]</FluentButton>
-                <FluentButton Appearance="Appearance.Accent" Type="ButtonType.Submit">@Loc[nameof(Dialogs.FilterDialogApplyFilterButtonText)]</FluentButton>
+                <FluentButton Class="aspire-button" OnClick="Cancel">@Loc[nameof(Dialogs.FilterDialogCancelButtonText)]</FluentButton>
+                <FluentButton Class="aspire-button" Appearance="ButtonAppearance.Primary" Type="ButtonType.Submit">@Loc[nameof(Dialogs.FilterDialogApplyFilterButtonText)]</FluentButton>
             </FluentStack>
         </div>
     </FluentStack>
+    </div>
 
 </EditForm>
+</FluentDialogBody>

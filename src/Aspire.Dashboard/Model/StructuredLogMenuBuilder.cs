@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
@@ -24,6 +25,7 @@ public sealed class StructuredLogMenuBuilder
     private readonly IStringLocalizer<StructuredLogs> _loc;
     private readonly IStringLocalizer<ControlsStrings> _controlsLoc;
     private readonly DashboardDialogService _dialogService;
+    private readonly DashboardDataSource _dataSource;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StructuredLogMenuBuilder"/> class.
@@ -31,11 +33,13 @@ public sealed class StructuredLogMenuBuilder
     public StructuredLogMenuBuilder(
         IStringLocalizer<StructuredLogs> loc,
         IStringLocalizer<ControlsStrings> controlsLoc,
-        DashboardDialogService dialogService)
+        DashboardDialogService dialogService,
+        DashboardDataSource dataSource)
     {
         _loc = loc;
         _controlsLoc = controlsLoc;
         _dialogService = dialogService;
+        _dataSource = dataSource;
     }
 
     /// <summary>
@@ -50,6 +54,32 @@ public sealed class StructuredLogMenuBuilder
         OtlpLogEntry logEntry,
         EventCallback onViewDetails,
         bool showViewDetails = true)
+    {
+        AddMenuItems(menuItems, logEntry.Message, () => logEntry, onViewDetails, showViewDetails);
+    }
+
+    /// <summary>
+    /// Adds menu items for a structured log summary to the provided list.
+    /// </summary>
+    /// <param name="menuItems">The list to add menu items to.</param>
+    /// <param name="summary">The log summary to create menu items for.</param>
+    /// <param name="onViewDetails">Callback when View Details is clicked. Ignored when <paramref name="showViewDetails"/> is <c>false</c>.</param>
+    /// <param name="showViewDetails">Whether to include the View Details menu item. Defaults to <c>true</c>.</param>
+    public void AddMenuItems(
+        List<MenuButtonItem> menuItems,
+        LogSummary summary,
+        EventCallback onViewDetails,
+        bool showViewDetails = true)
+    {
+        AddMenuItems(menuItems, summary.Message, () => _dataSource.TelemetryRepository.GetLog(summary.InternalId), onViewDetails, showViewDetails);
+    }
+
+    private void AddMenuItems(
+        List<MenuButtonItem> menuItems,
+        string message,
+        Func<OtlpLogEntry?> getLogEntry,
+        EventCallback onViewDetails,
+        bool showViewDetails)
     {
         if (showViewDetails)
         {
@@ -72,7 +102,7 @@ public sealed class StructuredLogMenuBuilder
                 {
                     DialogService = _dialogService,
                     ValueDescription = header,
-                    Value = logEntry.Message
+                    Value = message
                 }).ConfigureAwait(false);
             }
         });
@@ -83,6 +113,12 @@ public sealed class StructuredLogMenuBuilder
             Icon = s_bracesIcon,
             OnClick = async () =>
             {
+                var logEntry = getLogEntry();
+                if (logEntry is null)
+                {
+                    return;
+                }
+
                 var result = ExportHelpers.GetLogEntryAsJson(logEntry);
                 await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
                 {

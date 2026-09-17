@@ -47,6 +47,11 @@
         <target state="translated">Nezalamovat řádky protokolu</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConsoleLogsNotCapturedForRun">
+        <source>Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</source>
+        <target state="new">Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConsoleLogsPageTitle">
         <source>{0} console logs</source>
         <target state="translated">Protokoly konzoly aplikace {0}</target>
@@ -126,6 +131,11 @@
         <source>Service log status</source>
         <target state="translated">Stav protokolu služby</target>
         <note />
+      </trans-unit>
+      <trans-unit id="PauseInProgressText">
+        <source>Console logs capture paused at {0}</source>
+        <target state="new">Console logs capture paused at {0}</target>
+        <note>{0} is a time</note>
       </trans-unit>
       <trans-unit id="TerminalToolbarDecreaseFontSize">
         <source>Decrease font size</source>

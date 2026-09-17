@@ -145,8 +145,12 @@ public sealed class AzureStorageRunModeTests(ITestOutputHelper output)
             await auto.RunCommandAsync(contextCommand, counter);
 
             output.WriteLine("Step 7: Starting AppHost with live Azure provisioning...");
-            await auto.RunCommandAsync("aspire start --non-interactive --format Json", counter, TimeSpan.FromMinutes(20));
+            // Set before starting, not after: `aspire start` detaches the AppHost before it finishes
+            // waiting for startup, so a failure here can still leave a live AppHost provisioning into
+            // the resource group that `finally` is about to delete. StopAppHostAsync swallows and logs
+            // its own failures, so claiming a session that was never created is harmless.
             appHostStarted = true;
+            await auto.RunCommandAsync("aspire start --non-interactive --format Json", counter, TimeSpan.FromMinutes(20));
 
             output.WriteLine("Step 8: Waiting for Azure Storage resource to be running...");
             // `aspire start` returns after the AppHost is detached. Run-mode Azure provisioning
@@ -164,7 +168,10 @@ public sealed class AzureStorageRunModeTests(ITestOutputHelper output)
             output.WriteLine("Step 11: Deleting live Azure resources through the visible Azure control resource...");
             await auto.RunCommandAsync("aspire resource azure-environment delete-azure-resources --non-interactive", counter, TimeSpan.FromMinutes(10));
             cleanupCommandSucceeded = true;
-            await auto.RunCommandAsync($"az group exists --name {resourceGroupName} -o tsv | grep '^false$'", counter, TimeSpan.FromSeconds(30));
+            // Scoped explicitly: this asserts the group is *gone*, so querying the Azure CLI's default
+            // subscription would report "false" simply because the group never existed there, passing
+            // the assertion for the wrong reason and masking a failed delete.
+            await auto.RunCommandAsync($"az group exists --subscription {subscriptionId} --name {resourceGroupName} -o tsv | grep '^false$'", counter, TimeSpan.FromSeconds(30));
 
             var duration = DateTime.UtcNow - startTime;
             output.WriteLine($"Run-mode Azure resource command test completed in {duration}");
@@ -190,15 +197,8 @@ public sealed class AzureStorageRunModeTests(ITestOutputHelper output)
         {
             if (appHostStarted)
             {
-                try
-                {
-                    output.WriteLine("Stopping AppHost...");
-                    await auto.RunCommandAsync("aspire stop --non-interactive 2>/dev/null || true", counter, TimeSpan.FromMinutes(2));
-                }
-                catch (Exception ex)
-                {
-                    output.WriteLine($"Failed to stop AppHost: {ex.Message}");
-                }
+                output.WriteLine("Stopping AppHost...");
+                await DeploymentE2ETestHelpers.StopAppHostAsync(workspace.WorkspaceRoot.FullName, output.WriteLine);
             }
 
             try
@@ -215,12 +215,12 @@ public sealed class AzureStorageRunModeTests(ITestOutputHelper output)
             if (!cleanupCommandSucceeded)
             {
                 output.WriteLine($"Cleaning up resource group: {resourceGroupName}");
-                await CleanupResourceGroupAsync(resourceGroupName);
+                await CleanupResourceGroupAsync(resourceGroupName, subscriptionId);
             }
         }
     }
 
-    private async Task CleanupResourceGroupAsync(string resourceGroupName)
+    private async Task CleanupResourceGroupAsync(string resourceGroupName, string subscriptionId)
     {
         try
         {
@@ -229,7 +229,11 @@ public sealed class AzureStorageRunModeTests(ITestOutputHelper output)
                 StartInfo = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = "az",
-                    Arguments = $"group delete --name {resourceGroupName} --yes --no-wait",
+                    // The AppHost provisions into AZURE__SUBSCRIPTIONID, which is not necessarily the
+                    // Azure CLI's default subscription: the documented local setup only exports
+                    // ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION and never runs `az account set`. An unscoped
+                    // delete would target the wrong subscription and leave billable resources behind.
+                    Arguments = $"group delete --subscription {subscriptionId} --name {resourceGroupName} --yes --no-wait",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false

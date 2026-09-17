@@ -406,6 +406,15 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAILLMBadgeText", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Generative AI messages.
+        /// </summary>
+        public static string GenAIMessageTreeLabel {
+            get {
+                return ResourceManager.GetString("GenAIMessageTreeLabel", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Message.
@@ -1117,7 +1126,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogDashboardLogsAndTelemetry", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Runtime: {0}.
         /// </summary>

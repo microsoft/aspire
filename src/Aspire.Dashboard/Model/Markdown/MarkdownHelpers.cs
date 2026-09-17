@@ -85,9 +85,15 @@ public static class MarkdownHelpers
 
         static LinkType DetectLink(string? url, HashSet<string>? allowedUrlSchemes)
         {
-            if (url == null || !Uri.TryCreate(url, UriKind.RelativeOrAbsolute, out var uri))
+            if (url is null)
             {
                 return LinkType.None;
+            }
+
+            // Browsers and protocol handlers can accept URLs rejected by System.Uri, so don't render an unclassified URL.
+            if (!Uri.TryCreate(url, UriKind.RelativeOrAbsolute, out var uri))
+            {
+                return LinkType.Prohibited;
             }
 
             if (!uri.IsAbsoluteUri)

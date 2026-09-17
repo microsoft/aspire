@@ -820,7 +820,7 @@ internal sealed class RenderCommand : BaseCommand
         protected override string OperationCompletedPrefix => "Publish";
         protected override string OperationFailedPrefix => "Publish failed";
         protected override string GetOutputPathDescription() => "Test output path";
-        protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult, CancellationToken cancellationToken) => Task.FromResult(Array.Empty<string>());
+        protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, string? targetStep, ParseResult parseResult, CancellationToken cancellationToken) => Task.FromResult(Array.Empty<string>());
         protected override string GetCanceledMessage() => "Test canceled";
         protected override string GetProgressMessage(ParseResult parseResult) => "Test progress";
     }

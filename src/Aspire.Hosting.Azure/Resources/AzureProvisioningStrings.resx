@@ -244,7 +244,16 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
     <value>Change location</value>
   </data>
   <data name="ChangeResourceLocationCommandDescription" xml:space="preserve">
-    <value>Overrides the Azure location for this resource and reprovisions it using that location.</value>
+    <value>Changes the Azure location for this resource. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</value>
+  </data>
+  <data name="ChangeResourceLocationConfirmDeleteLabel" xml:space="preserve">
+    <value>Allow deletion and possible permanent data loss</value>
+  </data>
+  <data name="ChangeResourceLocationConfirmDeleteDescription" xml:space="preserve">
+    <value>Allow Aspire to delete and recreate the existing Azure resource when changing its location. Any data in the deleted resource may be permanently lost.</value>
+  </data>
+  <data name="ChangeResourceLocationDeleteConfirmationRequiredFormat" xml:space="preserve">
+    <value>Changing the location of Azure resource '{0}' requires deleting and recreating it. Any data in the deleted resource may be permanently lost. Set the '{1}' command argument to true to continue.</value>
   </data>
   <data name="ChangeResourceLocationCommandSuccess" xml:space="preserve">
     <value>Azure resource location updated and reprovisioning completed.</value>
@@ -289,7 +298,7 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/pro
     <value>Change Azure resource location</value>
   </data>
   <data name="ChangeResourceLocationPromptMessage" xml:space="preserve">
-    <value>Select or enter a new Azure location for '{0}'. The resource will then be reprovisioned using that location.</value>
+    <value>Select or enter a new Azure location for '{0}'. If Aspire must delete and recreate the existing Azure resource, any data in it may be permanently lost.</value>
   </data>
   <data name="ReprovisionResourceCommandName" xml:space="preserve">
     <value>Reprovision</value>

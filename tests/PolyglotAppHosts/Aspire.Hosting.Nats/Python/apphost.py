@@ -15,16 +15,16 @@ with create_builder() as builder:
     nats2 = builder.add_nats("resource")
     # withDataBindMount — bind mount a host directory
     nats3 = builder.add_nats("resource")
-    nats3.with_data_bind_mount()
+    nats3.with_data_bind_mount("./data")
     # addNats — with custom userName and password parameters
     custom_user = builder.add_parameter("parameter")
     custom_pass = builder.add_parameter("parameter")
     nats4 = builder.add_nats("resource")
     # withReference — a container referencing a NATS resource (connection string)
     consumer = builder.add_container("resource", "image")
-    consumer.with_reference()
+    consumer.with_reference(nats)
     # withReference — with explicit connection name option
-    consumer.with_reference()
+    consumer.with_reference(nats2, connection_name="secondary")
     # ---- Property access on NatsServerResource ----
     _endpoint = nats.primary_endpoint
     _host = nats.host

@@ -3,16 +3,20 @@
 
 using System.Collections.Concurrent;
 using System.Text;
-using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Utils;
 
 internal static class DashboardUIHelpers
 {
+    // Virtualize represents unloaded rows with CSS spacers. Browser engines clamp very tall
+    // elements, causing the spacer observer to report inconsistent measurements and render forever.
+    // At the dashboard's 46px grid row height, 200,000 items use a 9.2 million pixel spacer.
+    public const int MaxVirtualizedItemCount = 200_000;
+
     public const string MessageBarSection = "MessagesTop";
 
     // Blazor SectionOutlet/SectionContent name used to teleport the current page's title
@@ -39,31 +43,12 @@ internal static class DashboardUIHelpers
     // Given the size of rows on dashboard grids, 100 rows should always fill the grid on the screen.
     public const int DefaultDataGridResultCount = 100;
 
+    public static int GetVirtualizedItemCount(int totalItemCount) => Math.Min(totalItemCount, MaxVirtualizedItemCount);
+
     // Don't attempt to display more than 2 highlighted commands. Many commands will take up too much space.
     public const int MaxHighlightedCommands = 2;
 
     public static readonly TimeSpan ToastTimeout = TimeSpan.FromMilliseconds(5000);
-
-    public static (ColumnResizeLabels resizeLabels, ColumnSortLabels sortLabels) CreateGridLabels(IStringLocalizer<ControlsStrings> loc)
-    {
-        var resizeLabels = ColumnResizeLabels.Default with
-        {
-            ExactLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellResizeLabel)],
-            ResizeMenu = loc[nameof(ControlsStrings.FluentDataGridHeaderCellResizeButtonText)],
-            DiscreteLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellResizeDiscreteLabel)],
-            GrowAriaLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellGrowAriaLabelText)],
-            ResetAriaLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellResetAriaLabelText)],
-            ShrinkAriaLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellShrinkAriaLabelText)],
-            SubmitAriaLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellSubmitAriaLabelText)]
-        };
-        var sortLabels = ColumnSortLabels.Default with
-        {
-            SortMenu = loc[nameof(ControlsStrings.FluentDataGridHeaderCellSortButtonText)],
-            SortMenuAscendingLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellSortAscendingButtonText)],
-            SortMenuDescendingLabel = loc[nameof(ControlsStrings.FluentDataGridHeaderCellSortDescendingButtonText)]
-        };
-        return (resizeLabels, sortLabels);
-    }
 
     private static readonly ConcurrentDictionary<int, TextMask> s_cachedMasking = new();
 
@@ -85,21 +70,21 @@ internal static class DashboardUIHelpers
         });
     }
 
-    public static async Task<Message> DisplayMaxLimitMessageAsync(IMessageService messageService, string title, string message, Action onClose)
+    public static Task<DashboardMessageBarReference> DisplayMaxLimitMessageAsync(DashboardMessageBarService messageService, string title, string message, Action onClose)
     {
-        return await messageService.ShowMessageBarAsync(options =>
-        {
-            options.Title = title;
-            options.Body = message;
-            options.Intent = MessageIntent.Info;
-            options.Section = "MessagesTop";
-            options.AllowDismiss = true;
-            options.OnClose = m =>
+        return messageService.ShowAsync(
+            new DashboardMessageBarContent
+            {
+                Title = title,
+                Message = message
+            },
+            MessageBarIntent.Info,
+            MessageBarSection,
+            _ =>
             {
                 onClose();
                 return Task.CompletedTask;
-            };
-        }).ConfigureAwait(false);
+            });
     }
 
     public static string? ResolveTooltip(string value)

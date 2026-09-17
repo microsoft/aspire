@@ -7,7 +7,7 @@ import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import * as sinon from 'sinon';
-import { terminateCliProcess } from '../debugger/languages/cli';
+import { terminateCliProcess } from '../utils/process/cliProcess';
 
 suite('CLI process termination', () => {
     teardown(() => {
@@ -35,9 +35,77 @@ suite('CLI process termination', () => {
         sinon.assert.notCalled(taskkillUnref);
         sinon.assert.notCalled(childProcess.kill);
     });
+
+    test('forcefully terminates a live process when graceful signaling fails', async () => {
+        sinon.stub(process, 'platform').value('linux');
+        const clock = sinon.useFakeTimers();
+        const childProcess = createFakeCliProcess(4242, null);
+        childProcess.kill.onFirstCall().returns(false);
+        childProcess.kill.onSecondCall().returns(true);
+
+        const termination = terminateCliProcess(childProcess, 'Aspire CLI');
+        await clock.tickAsync(5000);
+
+        assert.deepStrictEqual(childProcess.kill.args, [
+            [undefined],
+            ['SIGKILL'],
+        ]);
+        (childProcess as unknown as { signalCode: NodeJS.Signals | null }).signalCode = 'SIGKILL';
+        childProcess.emit('close', null);
+        await termination;
+    });
+
+    test('rejects when a PID-less child cannot be signaled', async () => {
+        sinon.stub(process, 'platform').value('linux');
+        const clock = sinon.useFakeTimers();
+        const childProcess = createFakeCliProcess(undefined, null);
+        childProcess.kill.returns(false);
+
+        const termination = terminateCliProcess(childProcess, 'Aspire CLI');
+
+        await assert.rejects(termination, /Could not terminate Aspire CLI because no process identifier was available/);
+        sinon.assert.calledOnceWithExactly(childProcess.kill, undefined);
+        assert.strictEqual(childProcess.listenerCount('close'), 0);
+        assert.strictEqual(childProcess.listenerCount('exit'), 0);
+        assert.strictEqual(clock.countTimers(), 0);
+    });
+
+    test('forcefully terminates a live process when graceful signaling throws', async () => {
+        sinon.stub(process, 'platform').value('linux');
+        const clock = sinon.useFakeTimers();
+        const childProcess = createFakeCliProcess(4242, null);
+        childProcess.kill.onFirstCall().throws(new Error('signal failed'));
+        childProcess.kill.onSecondCall().returns(true);
+
+        const termination = terminateCliProcess(childProcess, 'Aspire CLI');
+        await clock.tickAsync(5000);
+
+        assert.deepStrictEqual(childProcess.kill.args, [
+            [undefined],
+            ['SIGKILL'],
+        ]);
+        (childProcess as unknown as { signalCode: NodeJS.Signals | null }).signalCode = 'SIGKILL';
+        childProcess.emit('close', null);
+        await termination;
+    });
+
+    test('rejects when signaling a PID-less child throws', async () => {
+        sinon.stub(process, 'platform').value('linux');
+        const clock = sinon.useFakeTimers();
+        const childProcess = createFakeCliProcess(undefined, null);
+        childProcess.kill.throws(new Error('signal failed'));
+
+        const termination = terminateCliProcess(childProcess, 'Aspire CLI');
+
+        await assert.rejects(termination, /Could not terminate Aspire CLI because no process identifier was available/);
+        sinon.assert.calledOnceWithExactly(childProcess.kill, undefined);
+        assert.strictEqual(childProcess.listenerCount('close'), 0);
+        assert.strictEqual(childProcess.listenerCount('exit'), 0);
+        assert.strictEqual(clock.countTimers(), 0);
+    });
 });
 
-function createFakeCliProcess(pid: number, exitCode: number | null): ChildProcessWithoutNullStreams & { kill: sinon.SinonStub } {
+function createFakeCliProcess(pid: number | undefined, exitCode: number | null): ChildProcessWithoutNullStreams & { kill: sinon.SinonStub } {
     const kill = sinon.stub().returns(true);
     return Object.assign(new EventEmitter(), {
         stdin: new PassThrough(),

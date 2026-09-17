@@ -5,7 +5,6 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -13,11 +12,10 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class UrlsColumnDisplayTests : DashboardTestContext
 {
     [Fact]
-    public void Render_MoreThanMaxUrls_CapsRenderedOverflowItems()
+    public void Render_MoreThanMaxRenderedItems_RendersAllSourceItemsWithBoundedPayload()
     {
         // Arrange
         const int totalUrls = 30;
-        const int maxRenderedUrls = 20;
 
         JSInterop.Mode = JSRuntimeMode.Loose;
         FluentUISetupHelpers.SetupFluentOverflow(this);
@@ -35,8 +33,10 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         });
 
         // Assert
-        var overflowItems = cut.FindComponents<FluentOverflowItem>();
-        Assert.Equal(maxRenderedUrls, overflowItems.Count);
+    var overflow = cut.Find("fluent-overflow");
+        var overflowItems = cut.FindAll("fluent-overflow > div:not(.fluent-overflow-more)");
+    Assert.Equal("20", overflow.GetAttribute("max-rendered-items"));
+    Assert.Equal(totalUrls, overflowItems.Count);
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         });
 
         // Assert
-        var overflowItems = cut.FindComponents<FluentOverflowItem>();
+        var overflowItems = cut.FindAll("fluent-overflow > div:not(.fluent-overflow-more)");
         Assert.Equal(totalUrls, overflowItems.Count);
     }
 

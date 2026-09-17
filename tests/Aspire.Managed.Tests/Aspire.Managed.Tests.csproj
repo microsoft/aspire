@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,6 +15,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Managed\Aspire.Managed.csproj" />
 
+    <!-- Preview package warning suppressions do not flow through the Aspire.Managed project reference. -->
+    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" PrivateAssets="all" NoWarn="NU3018;NU3027;NU3042" Condition="'$(MicrosoftFluentUIAspNetCoreComponentsIsPreview)' == 'true'" />
     <PackageReference Include="Microsoft.DotNet.RemoteExecutor" />
   </ItemGroup>
 

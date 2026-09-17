@@ -4,7 +4,7 @@ This directory contains code vendored from the ASP.NET Core repository's shared 
 
 **Source:** https://github.com/dotnet/aspnetcore/tree/main/src/Shared/CertificateGeneration
 
-**Last synced:** 2026-02-24 from commit [`3a973a5f4d28242262f27c86eb3f14299fe712ba`](https://github.com/dotnet/aspnetcore/commit/3a973a5f4d28242262f27c86eb3f14299fe712ba) — "Fix memory leaks in CertificateManager by improving certificate disposal patterns (#63321)"
+**Last synced:** 2026-07-02 from commit [`fa8126f62f64eaf37292ff1e334ace99bc757bcf`](https://github.com/dotnet/aspnetcore/commit/fa8126f62f64eaf37292ff1e334ace99bc757bcf) — "Fix typos in code. (#67428)"
 
 ## Local modifications
 
@@ -14,6 +14,8 @@ This directory contains code vendored from the ASP.NET Core repository's shared 
 - Changed `GetDescription` and `ToCertificateDescription` from `static` to instance methods
 - Removed `catch when (Log.IsEnabled())` filter pattern (incompatible with ILogger)
 - Replaced `new X509Certificate2(...)` with `X509CertificateLoader.LoadPkcs12FromFile(...)` (fixes SYSLIB0057)
+- Adapted .NET 11 `Process.Run` and `StandardOutputHandle` usage to `CertificateProcessRunner`, which concurrently drains redirected output on .NET 10
+- Retained support for both the HRESULT and raw Win32 error-code forms of Windows trust cancellation
 
 ## Updating
 

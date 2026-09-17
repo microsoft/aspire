@@ -386,13 +386,14 @@ void main() throws Exception {
                 new PromptNotificationOptions().options(notificationOptions));
 
             var progressOptions = new InteractionProgressOptions();
+            progressOptions.setTitle("Progress");
             progressOptions.setPrimaryButtonText("Cancel");
             progressOptions.setEnableMessageMarkdown(true);
             progressOptions.setWork((progressContext) -> {
                 var _progressCancellationToken = progressContext.cancellationToken();
             });
             var progress = interactionService.promptProgress("Completing **work**...",
-                new PromptProgressOptions().title("Progress").options(progressOptions));
+                new PromptProgressOptions().options(progressOptions));
 
             var textOptions = new CreateInteractionInputOptions();
             textOptions.setLabel("Name");

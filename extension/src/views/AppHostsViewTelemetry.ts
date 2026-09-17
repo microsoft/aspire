@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AppHostDataRepository, isMatchingAppHostPath } from '../views/AppHostDataRepository';
+import { AppHostDataRepository, isMatchingAppHostPath } from '../data/AppHostDataRepository';
 import { sendTelemetryEvent } from '../utils/telemetry';
 
 /**
