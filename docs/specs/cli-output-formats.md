@@ -767,6 +767,8 @@ The top-level arrays are:
 | `exportedValues` | Exported constants or structured values. |
 | `diagnostics` | Errors, warnings, and informational diagnostics from capability discovery. |
 
+Each entry in `capabilities` includes an `isExperimental` boolean indicating whether the callable API is experimental. It is `true` when `System.Diagnostics.CodeAnalysis.ExperimentalAttribute` applies to the member (including a property accessor), an enclosing type, its module, or its assembly; otherwise it is `false` (the default). Consumers of older output that omits this field should treat it as `false`.
+
 `aspire sdk dump --format ci` emits a stable text format intended for diffs rather than JSON parsing.
 
 ### `aspire sdk export`

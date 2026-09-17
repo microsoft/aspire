@@ -100,6 +100,28 @@ public class ChartFiltersTests : DashboardTestContext
     }
 
     [Fact]
+    public void Render_MoreThanMaxTags_RendersBoundedPayloadAndHighlightsSelectedOverflow()
+    {
+        SetupChartFilters();
+        var dimensionFilter = new DimensionFilterViewModel { Name = "http.status_code" };
+        for (var i = 0; i < 30; i++)
+        {
+            dimensionFilter.Values.Add(new DimensionValueViewModel { Text = i.ToString(), Value = i.ToString() });
+        }
+        dimensionFilter.SetSelectedValues([dimensionFilter.Values[25]]);
+
+        var cut = RenderChartFilters(dimensionFilter);
+
+        var overflow = cut.Find(".dimension-overflow");
+        var overflowItems = cut.FindAll(".dimension-overflow > div:not(.fluent-overflow-more)");
+        var moreButton = cut.Find(".dimension-overflow .fluent-overflow-more .filter-value-tag");
+        Assert.Equal("10", overflow.GetAttribute("pre-overflow-count"));
+        Assert.Equal(20, overflowItems.Count);
+        Assert.Equal("+10", moreButton.TextContent.Trim());
+        Assert.Contains("included-in-filters", moreButton.ClassList);
+    }
+
+    [Fact]
     public void Render_PartiallySelectedValues_ShowsIndeterminateAllCheckbox()
     {
         SetupChartFilters();

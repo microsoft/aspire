@@ -8,6 +8,7 @@
   },
   "packages": {
     "Aspire.Hosting.Azure.CosmosDB": "",
+    "Aspire.Hosting.Azure.Provisioning.CosmosDB": "",
     "Aspire.Hosting.Azure.KeyVault": ""
   }
 }

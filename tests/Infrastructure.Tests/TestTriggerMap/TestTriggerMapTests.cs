@@ -51,6 +51,23 @@ public sealed class TestTriggerMapTests
         Assert.Contains(s_map.Ignore, pattern => TestTriggerMap.GlobMatches(pattern, path));
     }
 
+    [Theory]
+    [InlineData("eng/WarningPolicy.proj")]
+    [InlineData("eng/build.ps1")]
+    [InlineData("eng/build.sh")]
+    [InlineData("build.sh")]
+    [InlineData("restore.sh")]
+    public void WarningPolicyChangesSelectAllTests(string path)
+    {
+        var targets = s_map.PathRules
+            .Where(rule => rule.Paths.Any(glob => TestTriggerMap.GlobMatches(glob, path)))
+            .SelectMany(rule => rule.Targets)
+            .Distinct()
+            .ToArray();
+
+        Assert.Equal(["ALL"], targets);
+    }
+
     [Fact]
     public void ExtensionUnitWorkflowChangesSelectUnitAndE2eJobs()
     {
@@ -236,6 +253,27 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
+    public void ProvisioningProjectsSelectPolyglotJob()
+    {
+        var projects = LoadSolutionProjectPaths()
+            .Where(path => path.StartsWith("src/Aspire.Hosting.Azure.Provisioning", StringComparison.Ordinal))
+            .Select(path => Path.GetFileNameWithoutExtension(path))
+            .ToArray();
+
+        Assert.NotEmpty(projects);
+        Assert.All(projects, project =>
+        {
+            var targets = s_map.AffectedProjectRules
+                .Where(rule => rule.Projects.Any(pattern =>
+                    System.IO.Enumeration.FileSystemName.MatchesSimpleExpression(pattern, project, ignoreCase: false)))
+                .SelectMany(rule => rule.Targets)
+                .ToHashSet(StringComparer.Ordinal);
+
+            Assert.Contains("job:polyglot", targets);
+        });
+    }
+
+    [Fact]
     public void EveryAffectedProjectRuleGlobMatchesASolutionProject()
     {
         // affected_project_rules key off the affected PROJECT set (Layer 1), matched by project-name
@@ -389,6 +427,14 @@ public sealed class TestTriggerMapTests
 
     public static TheoryData<string, string[]> AuditedLoosePathCases => new()
     {
+        {
+            "tools/CreateFailingTestIssue/Program.cs",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            "tools/CreateFailingTestIssue/CreateFailingTestIssue.csproj",
+            ["test:Infrastructure.Tests"]
+        },
         {
             ".github/workflows/prepare-installer-artifacts.yml",
             ["test:Infrastructure.Tests", "job:winget-installer", "job:homebrew-installer"]
@@ -626,6 +672,33 @@ public sealed class TestTriggerMapTests
         Assert.False(result.SelectsAll);
         Assert.Empty(result.UnmatchedFiles);
         Assert.Empty(result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
+    [Theory]
+    [InlineData("src/Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.csproj", "Aspire.Hosting.Dotnet")]
+    [InlineData("src/Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.csproj", "Aspire.Hosting.Foundry")]
+    public void DeploymentE2eIsSelectedWhenRuntimeHostingDependencyIsAffected(string path, string affectedProject)
+    {
+        var result = SelectWithRealMap(path, affectedProject);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("job:deployment-e2e", result.Jobs);
+        Assert.Contains(result.JobCauses["job:deployment-e2e"], cause =>
+            cause.Kind == CauseKind.AffectedProject && cause.Trigger == affectedProject);
+    }
+
+    [Fact]
+    public void DeploymentE2eIsNotSelectedForFoundryTestOnlyChange()
+    {
+        var result = SelectWithRealMap(
+            "tests/Aspire.Hosting.Foundry.Tests/Aspire.Hosting.Foundry.Tests.csproj",
+            "Aspire.Hosting.Foundry.Tests");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal("Aspire.Hosting.Foundry.Tests", Assert.Single(result.TestProjects));
         Assert.Empty(result.Jobs);
     }
 

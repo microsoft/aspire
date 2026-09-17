@@ -81,7 +81,8 @@ public static class MongoDBBuilderExtensions
                 name: healthCheckKey,
                 clientFactory: sp => client ??= new MongoClient(connectionString ?? throw new InvalidOperationException("Connection string is unavailable")),
                 // NOTE: Without a database as the target of the healthcheck, the healthcheck runs a `listDatabases` command against the Mongo server. This is problematic in cases where the Mongo server is a replica set secondary node, because during the phase in which the replica set is being initialized, the secondary node will return an error when `listDatabases` is called. To avoid this, we specify a database to use for the healthcheck. The healthcheck will then run a `ping` command against the specified database instead of `listDatabases`, which works even on a secondary node during replica set initialization.
-                databaseNameFactory: _ => mongoServerResource.Databases.Values.FirstOrDefault(defaultValue: MongoDBServerResource.DefaultAuthenticationDatabase)
+                databaseNameFactory: _ => mongoServerResource.Databases.Values.FirstOrDefault(defaultValue: MongoDBServerResource.DefaultAuthenticationDatabase),
+                singleMemberReplicaSetFactory: _ => mongoServerResource.TryGetLastAnnotation<MongoDBSingleMemberReplicaSetAnnotation>(out var replicaSet) ? replicaSet : null
             );
 
         var mongoBuilder = builder
@@ -369,32 +370,85 @@ public static class MongoDBBuilderExtensions
     }
 
     /// <summary>
-    /// Annotates a MongoDB server resource as a member of a replica set with the specified name. This will configure the necessary command line arguments on the MongoDB container to initialize it as a member of the replica set.
+    /// Configures and initializes the MongoDB server as a single-member replica set for local development.
     /// </summary>
     /// <remarks>
-    /// This method will normally be called by the replica set resource builder when you add a MongoDB server resource as a member of the replica set using <see cref="MongoDBReplicaSetBuilderExtensions.WithMember(IResourceBuilder{MongoDBReplicaSetResource}, IResourceBuilder{MongoDBServerResource})"/>. It can also be called directly if you are looking for lower-level control.
+    /// <para>
+    /// Enables transactions and change streams without changing database resources or references. The server becomes
+    /// healthy only after initialization and primary election. Connections use the server's normal endpoint directly;
+    /// a developer certificate, topology discovery, and fixed host ports are not required.
+    /// </para>
+    /// <para>
+    /// A key file is generated for authentication unless <see cref="WithKeyFile"/> was called first.
+    /// Existing single-member data is reused without reconfiguration. Keep the set name and credentials unchanged when
+    /// reusing a data volume. Publishing and deploying this configuration are not supported.
+    /// </para>
+    /// <para>
+    /// Unlike the previous low-level behavior of this experimental method, this method initializes the set.
+    /// For multiple members, use <see cref="MongoDBReplicaSetBuilderExtensions.AddMongoDBReplicaSet"/> and
+    /// <see cref="MongoDBReplicaSetBuilderExtensions.WithMember"/> instead, without calling this method on the members.
+    /// </para>
     /// </remarks>
     /// <param name="builder">The MongoDB server resource builder.</param>
-    /// <param name="name">The name of the replica set the server is a member of.</param>
+    /// <param name="name">The replica set name. Defaults to the resource name, or the name previously configured by this method.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
+    /// <exception cref="ArgumentNullException">The builder is null.</exception>
+    /// <exception cref="ArgumentException">The name is empty or whitespace.</exception>
+    /// <exception cref="InvalidOperationException">The server is configured for a different set or for advanced membership.</exception>
+    /// <exception cref="NotSupportedException">The application is running in publish mode.</exception>
+    /// <example>
+    /// <code lang="csharp">
+    /// var mongo = builder.AddMongoDB("mongo").WithReplicaSet();
+    /// var database = mongo.AddDatabase("orders");
+    /// builder.AddProject&lt;Projects.Api&gt;("api").WithReference(database).WaitFor(database);
+    /// </code>
+    /// </example>
     [AspireExport]
     [Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<MongoDBServerResource> WithReplicaSet(this IResourceBuilder<MongoDBServerResource> builder, string name)
+    public static IResourceBuilder<MongoDBServerResource> WithReplicaSet(this IResourceBuilder<MongoDBServerResource> builder, string? name = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(name);
+        name ??= builder.Resource.ReplicaSetName ?? builder.Resource.Name;
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ThrowIfPublishMode(builder.ApplicationBuilder, nameof(WithReplicaSet));
 
-        // NOTE: `mongod` refuses to start when `--replSet` is given more than once, so calling this twice has to either be
-        // a no-op or an error rather than appending a second option.
         if (builder.Resource.ReplicaSetName is { } existingName)
         {
-            return string.Equals(existingName, name, StringComparisons.ResourceName)
+            if (!builder.Resource.HasAnnotationOfType<MongoDBSingleMemberReplicaSetAnnotation>())
+            {
+                throw new InvalidOperationException($"The MongoDB server resource '{builder.Resource.Name}' belongs to the advanced replica set '{existingName}'. Configure it with WithMember instead of WithReplicaSet.");
+            }
+
+            return string.Equals(existingName, name, StringComparison.Ordinal)
                 ? builder
                 : throw new InvalidOperationException($"The MongoDB server resource '{builder.Resource.Name}' is already configured as a member of the replica set '{existingName}' and cannot also be a member of '{name}'.");
         }
 
+        if (!builder.Resource.HasAnnotationOfType<MongoDBServerKeyFileAnnotation>())
+        {
+            builder.WithKeyFile(CreateReplicaSetKeyFile(builder.ApplicationBuilder, builder.Resource.Name));
+        }
+
+        var annotation = new MongoDBSingleMemberReplicaSetAnnotation(name);
+        return ConfigureReplicaSetMember(builder, name)
+            .WithAnnotation(annotation)
+            .OnInitializeResource((resource, evt, ct) => MongoDBSingleMemberReplicaSet.InitializeAsync(resource, annotation, evt, ct));
+    }
+
+    internal static ParameterResource CreateReplicaSetKeyFile(IDistributedApplicationBuilder builder, string name) =>
+        ParameterResourceBuilderExtensions.CreateGeneratedParameter(builder, $"{name}-keyfile-content", secret: true,
+            new GenerateParameterDefault
+            {
+                // MongoDB key files require 6-1024 base64 characters:
+                // https://www.mongodb.com/docs/manual/tutorial/deploy-replica-set-with-keyfile-access-control/#create-a-keyfile
+                MinLength = 512,
+                Special = false,
+            });
+
+    // Only configures mongod. The single-member initializer and the advanced facade own their respective initialization.
+    internal static IResourceBuilder<MongoDBServerResource> ConfigureReplicaSetMember(IResourceBuilder<MongoDBServerResource> builder, string name)
+    {
         builder.Resource.ReplicaSetName = name;
         return builder
             .WithAnnotation(new MongoDBServerReplicaSetAnnotation(name))
@@ -677,6 +731,7 @@ internal static class MyMongoDbHealthCheckBuilderExtensions
 
     public static IHealthChecksBuilder AddMyMongoDb(
         this IHealthChecksBuilder builder,
+        Func<IServiceProvider, MongoDBSingleMemberReplicaSetAnnotation?> singleMemberReplicaSetFactory,
         Func<IServiceProvider, IMongoClient>? clientFactory = default,
         Func<IServiceProvider, string>? databaseNameFactory = default,
         string? name = default,
@@ -686,18 +741,18 @@ internal static class MyMongoDbHealthCheckBuilderExtensions
     {
         return builder.Add(new HealthCheckRegistration(
             name ?? NAME,
-            sp => Factory(sp, clientFactory, databaseNameFactory),
+            sp => Factory(sp, clientFactory, databaseNameFactory, singleMemberReplicaSetFactory),
             failureStatus,
             tags,
             timeout));
 
-        static MyMongoDbHealthCheck Factory(IServiceProvider sp, Func<IServiceProvider, IMongoClient>? clientFactory, Func<IServiceProvider, string>? databaseNameFactory)
+        static MyMongoDbHealthCheck Factory(IServiceProvider sp, Func<IServiceProvider, IMongoClient>? clientFactory, Func<IServiceProvider, string>? databaseNameFactory, Func<IServiceProvider, MongoDBSingleMemberReplicaSetAnnotation?> singleMemberReplicaSetFactory)
         {
             // The user might have registered a factory for MongoClient type, but not for the abstraction (IMongoClient).
             // That is why we try to resolve MongoClient first.
             IMongoClient client = clientFactory?.Invoke(sp) ?? sp.GetService<MongoClient>() ?? sp.GetRequiredService<IMongoClient>();
             string? databaseName = databaseNameFactory?.Invoke(sp);
-            return new(client, databaseName);
+            return new(client, databaseName, singleMemberReplicaSetFactory(sp));
         }
     }
 }
@@ -715,11 +770,13 @@ internal class MyMongoDbHealthCheck : IHealthCheck
     private static readonly Lazy<BsonDocumentCommand<BsonDocument>> s_command = new(() => new(BsonDocument.Parse("{ping:1}")));
     private readonly IMongoClient _client;
     private readonly string? _specifiedDatabase;
+    private readonly MongoDBSingleMemberReplicaSetAnnotation? _singleMemberReplicaSet;
 
-    public MyMongoDbHealthCheck(IMongoClient client, string? databaseName = default)
+    public MyMongoDbHealthCheck(IMongoClient client, string? databaseName, MongoDBSingleMemberReplicaSetAnnotation? singleMemberReplicaSet)
     {
         _client = client;
         _specifiedDatabase = databaseName;
+        _singleMemberReplicaSet = singleMemberReplicaSet;
     }
 
     /// <inheritdoc />
@@ -727,6 +784,22 @@ internal class MyMongoDbHealthCheck : IHealthCheck
     {
         try
         {
+            if (_singleMemberReplicaSet is { } replicaSet)
+            {
+                if (replicaSet.InitializationError is { } error)
+                {
+                    return HealthCheckResult.Unhealthy(error);
+                }
+
+                var status = await _client.GetDatabase(MongoDBServerResource.DefaultAuthenticationDatabase)
+                    .RunCommandAsync<BsonDocument>(new BsonDocument("replSetGetStatus", 1), ReadPreference.Nearest, cancellationToken)
+                    .ConfigureAwait(false);
+
+                return MongoDBSingleMemberReplicaSet.IsPrimary(status, replicaSet.Name)
+                    ? HealthCheckResult.Healthy()
+                    : HealthCheckResult.Unhealthy($"MongoDB replica set '{replicaSet.Name}' is not a writable single-member primary.");
+            }
+
             if (!string.IsNullOrEmpty(_specifiedDatabase))
             {
                 // some users can't list all databases depending on database privileges, with

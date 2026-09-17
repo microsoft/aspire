@@ -7,6 +7,7 @@
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIRECONTAINERRUNTIME001
+#pragma warning disable ASPIREPROJECTS001
 
 using System.Data.Common;
 using System.Diagnostics;
@@ -1488,7 +1489,7 @@ internal static class AzureSandboxContainerDeployment
                 continue;
             }
 
-            if (resource.TargetResource is ProjectResource &&
+            if (resource.TargetResource is IDotnetProgramResource &&
                 string.Equals(resolvedEndpoint.Endpoint.UriScheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
                 !resolvedEndpoints.Any(candidate =>
                     string.Equals(candidate.Endpoint.UriScheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
@@ -1568,7 +1569,7 @@ internal static class AzureSandboxContainerDeployment
         // .NET project publishing uses ContainerPortReference for the shared HTTP/HTTPS
         // destination when no target port is specified. Sandbox ingress terminates TLS,
         // so both app-model endpoints route to the framework's HTTP container port.
-        return resource is ProjectResource && endpoint.Endpoint.Transport is "http" or "http2"
+        return resource is IDotnetProgramResource && endpoint.Endpoint.Transport is "http" or "http2"
             ? DefaultContainerPort
             : null;
     }

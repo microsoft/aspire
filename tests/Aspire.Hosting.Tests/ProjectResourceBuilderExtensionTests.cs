@@ -215,6 +215,303 @@ public class ProjectResourceBuilderExtensionTests
         Assert.False(metadata.IsPfxPathReferenced);
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public async Task WithProjectDefaultsPreservesPemCertificateConfiguration(bool configureBeforeDefaults, bool hasPassword)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Parameters:password"] = "test-password";
+        using var cert = CreateTestCertificateWithPrivateKey();
+        var password = hasPassword ? builder.AddParameter("password", secret: true) : null;
+        var expectedEnvironment = new Dictionary<string, object>();
+
+        var project = builder.AddResource(new ProjectResource("test"))
+            .WithAnnotation<IProjectMetadata>(new TestProject())
+            .WithHttpsEndpoint()
+            .WithHttpsCertificate(cert, password);
+
+        if (configureBeforeDefaults)
+        {
+            project.WithHttpsCertificateConfiguration(ConfigureCertificate);
+        }
+
+        project.WithProjectDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true });
+
+        if (!configureBeforeDefaults)
+        {
+            project.WithHttpsCertificateConfiguration(ConfigureCertificate);
+        }
+
+        await builder.BuildAsync();
+
+        var context = new ExecutionConfigurationGathererContext();
+        await new HttpsCertificateExecutionConfigurationGatherer(CreateHttpsCertificateConfigurationContextFactory())
+            .GatherAsync(context, project.Resource, NullLogger.Instance, builder.ExecutionContext);
+
+        AssertSameEnvironment(expectedEnvironment, context.EnvironmentVariables);
+
+        var certificatePath = Assert.IsAssignableFrom<IValueProvider>(context.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath]);
+        var keyPath = Assert.IsAssignableFrom<IValueProvider>(context.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultKeyPath]);
+        Assert.Equal("/etc/ssl/certs/server.crt", await certificatePath.GetValueAsync());
+        Assert.Equal("/etc/ssl/private/server.key", await keyPath.GetValueAsync());
+
+        var metadata = Assert.Single(context.AdditionalConfigurationData.OfType<HttpsCertificateExecutionConfigurationData>());
+        Assert.True(metadata.IsKeyPathReferenced);
+        Assert.False(metadata.IsCertificateWithKeyPathReferenced);
+        Assert.False(metadata.IsPfxPathReferenced);
+
+        Task ConfigureCertificate(HttpsCertificateConfigurationCallbackAnnotationContext callbackContext)
+        {
+            expectedEnvironment[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath] = callbackContext.CertificatePath;
+            expectedEnvironment[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultKeyPath] = callbackContext.KeyPath;
+            if (callbackContext.Password is not null)
+            {
+                expectedEnvironment[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword] = callbackContext.Password;
+            }
+
+            foreach (var (name, value) in expectedEnvironment)
+            {
+                callbackContext.EnvironmentVariables[name] = value;
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
+    [Theory]
+    [InlineData("pfx", true, false)]
+    [InlineData("pfx", false, true)]
+    [InlineData("pem", true, true)]
+    [InlineData("pem", false, false)]
+    [InlineData("store", true, false)]
+    [InlineData("store", false, true)]
+    public async Task WithProjectDefaultsPreservesCertificateEnvironment(string certificateFormat, bool configureBeforeDefaults, bool hasAspirePassword)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Parameters:password"] = "aspire-password";
+        using var cert = CreateTestCertificateWithPrivateKey();
+        var password = hasAspirePassword ? builder.AddParameter("password", secret: true) : null;
+        Dictionary<string, string> environment = certificateFormat switch
+        {
+            "pfx" => new()
+            {
+                [KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath] = "custom.pfx",
+                [KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword] = "custom-password"
+            },
+            "pem" => new()
+            {
+                [KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath] = "custom.crt",
+                [KnownAspNetCoreConfigNames.KestrelCertificatesDefaultKeyPath] = "custom.key",
+                [KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword] = "custom-password"
+            },
+            "store" => new()
+            {
+                [KnownAspNetCoreConfigNames.KestrelCertificatesDefaultSubject] = "custom-certificate",
+                ["Kestrel__Certificates__Default__Store"] = "My",
+                ["Kestrel__Certificates__Default__Location"] = "CurrentUser"
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(certificateFormat))
+        };
+
+        var project = builder.AddResource(new ProjectResource("test"))
+            .WithAnnotation<IProjectMetadata>(new TestProject())
+            .WithHttpsEndpoint()
+            .WithHttpsCertificate(cert, password);
+
+        if (configureBeforeDefaults)
+        {
+            ConfigureEnvironment();
+        }
+
+        project.WithProjectDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true });
+
+        if (!configureBeforeDefaults)
+        {
+            ConfigureEnvironment();
+        }
+
+        await builder.BuildAsync();
+
+        var context = new ExecutionConfigurationGathererContext();
+        await new EnvironmentVariablesExecutionConfigurationGatherer()
+            .GatherAsync(context, project.Resource, NullLogger.Instance, builder.ExecutionContext);
+        var expectedEnvironment = new Dictionary<string, object>(context.EnvironmentVariables);
+
+        await new HttpsCertificateExecutionConfigurationGatherer(CreateHttpsCertificateConfigurationContextFactory())
+            .GatherAsync(context, project.Resource, NullLogger.Instance, builder.ExecutionContext);
+
+        AssertSameEnvironment(expectedEnvironment, context.EnvironmentVariables);
+
+        var metadata = Assert.Single(context.AdditionalConfigurationData.OfType<HttpsCertificateExecutionConfigurationData>());
+        Assert.False(metadata.IsKeyPathReferenced);
+        Assert.False(metadata.IsCertificateWithKeyPathReferenced);
+        Assert.False(metadata.IsPfxPathReferenced);
+
+        void ConfigureEnvironment()
+        {
+            foreach (var (name, value) in environment)
+            {
+                project.WithEnvironment(name, value);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath, "")]
+    [InlineData(DistributedApplicationOperation.Publish, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath, "custom.pfx")]
+    [InlineData(DistributedApplicationOperation.Run, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultKeyPath, "")]
+    [InlineData(DistributedApplicationOperation.Publish, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultKeyPath, "custom.key")]
+    [InlineData(DistributedApplicationOperation.Run, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultSubject, "")]
+    [InlineData(DistributedApplicationOperation.Publish, KnownAspNetCoreConfigNames.KestrelCertificatesDefaultSubject, "custom-certificate")]
+    [InlineData(DistributedApplicationOperation.Run, "KESTREL__CERTIFICATES__DEFAULT__PATH", "custom.pfx")]
+    [InlineData(DistributedApplicationOperation.Publish, "kestrel__certificates__default__keypath", "custom.key")]
+    [InlineData(DistributedApplicationOperation.Run, "kestrel__Certificates__default__Subject", "custom-certificate")]
+    public async Task WithProjectDefaultsPreservesExplicitCertificateSelection(DistributedApplicationOperation operation, string name, string value)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(operation);
+        using var cert = CreateTestCertificateWithPrivateKey();
+        var resource = builder.AddProject<TestProject>("test", options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithHttpsCertificate(cert)
+            .Resource;
+
+        await builder.BuildAsync();
+
+        var context = new ExecutionConfigurationGathererContext();
+        context.EnvironmentVariables[name] = value;
+        var expectedEnvironment = new Dictionary<string, object>(context.EnvironmentVariables);
+
+        await new HttpsCertificateExecutionConfigurationGatherer(CreateHttpsCertificateConfigurationContextFactory())
+            .GatherAsync(context, resource, NullLogger.Instance, builder.ExecutionContext);
+
+        AssertSameEnvironment(expectedEnvironment, context.EnvironmentVariables);
+
+        var metadata = Assert.Single(context.AdditionalConfigurationData.OfType<HttpsCertificateExecutionConfigurationData>());
+        Assert.False(metadata.IsKeyPathReferenced);
+        Assert.False(metadata.IsCertificateWithKeyPathReferenced);
+        Assert.False(metadata.IsPfxPathReferenced);
+    }
+
+    [Fact]
+    public async Task WithProjectDefaultsDoesNotResolveExplicitCertificateSelection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var cert = CreateTestCertificateWithPrivateKey();
+        var expectedEnvironment = new Dictionary<string, object>();
+        var resource = builder.AddResource(new ProjectResource("test"))
+            .WithAnnotation<IProjectMetadata>(new TestProject())
+            .WithHttpsEndpoint()
+            .WithHttpsCertificate(cert)
+            .WithHttpsCertificateConfiguration(context =>
+            {
+                // Wrapping a tracked reference detects both replacement and eager resolution.
+                var path = ReferenceExpression.Create($"{context.PfxPath}");
+                context.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath] = path;
+                expectedEnvironment[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath] = path;
+                return Task.CompletedTask;
+            })
+            .WithProjectDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true })
+            .Resource;
+
+        await builder.BuildAsync();
+
+        var context = new ExecutionConfigurationGathererContext();
+        await new HttpsCertificateExecutionConfigurationGatherer(CreateHttpsCertificateConfigurationContextFactory())
+            .GatherAsync(context, resource, NullLogger.Instance, builder.ExecutionContext);
+
+        AssertSameEnvironment(expectedEnvironment, context.EnvironmentVariables);
+
+        var metadata = Assert.Single(context.AdditionalConfigurationData.OfType<HttpsCertificateExecutionConfigurationData>());
+        Assert.False(metadata.IsPfxPathReferenced);
+    }
+
+    [Theory]
+    [InlineData("OTHER_CERTIFICATE_PATH")]
+    [InlineData("Kestrel__Certificates__Default__Store")]
+    [InlineData("Kestrel__Certificates__Default__Location")]
+    [InlineData("Kestrel__Certificates__Default__AllowInvalid")]
+    [InlineData(KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword)]
+    [InlineData("Kestrel__Certificates__Default__PathSuffix")]
+    [InlineData("Kestrel__Certificates__Named__Path")]
+    [InlineData("Kestrel__Endpoints__https__Certificate__Path")]
+    public async Task WithProjectDefaultsAddsCertificateDefaultsWithoutExplicitSelection(string name)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var cert = CreateTestCertificateWithPrivateKey();
+        var resource = builder.AddResource(new ProjectResource("test"))
+            .WithAnnotation<IProjectMetadata>(new TestProject())
+            .WithHttpsEndpoint()
+            .WithHttpsCertificate(cert)
+            .WithHttpsCertificateConfiguration(context =>
+            {
+                context.EnvironmentVariables[name] = "existing";
+                return Task.CompletedTask;
+            })
+            .WithProjectDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true })
+            .Resource;
+
+        await builder.BuildAsync();
+
+        var context = new ExecutionConfigurationGathererContext();
+        await new HttpsCertificateExecutionConfigurationGatherer(CreateHttpsCertificateConfigurationContextFactory())
+            .GatherAsync(context, resource, NullLogger.Instance, builder.ExecutionContext);
+
+        var certificatePath = Assert.IsAssignableFrom<IValueProvider>(context.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath]);
+        Assert.Equal("/etc/ssl/certs/server.pfx", await certificatePath.GetValueAsync());
+        if (name == KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword)
+        {
+            Assert.Single(context.EnvironmentVariables);
+        }
+        else
+        {
+            Assert.Equal(2, context.EnvironmentVariables.Count);
+            Assert.Equal("existing", context.EnvironmentVariables[name]);
+        }
+
+        var metadata = Assert.Single(context.AdditionalConfigurationData.OfType<HttpsCertificateExecutionConfigurationData>());
+        Assert.False(metadata.IsKeyPathReferenced);
+        Assert.False(metadata.IsCertificateWithKeyPathReferenced);
+        Assert.True(metadata.IsPfxPathReferenced);
+    }
+
+    [Fact]
+    public async Task WithProjectDefaultsReplacesStaleKestrelCertificatePassword()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Parameters:password"] = "test-password";
+        using var cert = CreateTestCertificateWithPrivateKey();
+        var password = builder.AddParameter("password", secret: true);
+        var resource = builder.AddProject<TestProject>("test", options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithEnvironment(KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword, "stale-password")
+            .WithHttpsCertificate(cert, password)
+            .Resource;
+
+        await builder.BuildAsync();
+
+        var context = new ExecutionConfigurationGathererContext();
+        await new EnvironmentVariablesExecutionConfigurationGatherer()
+            .GatherAsync(context, resource, NullLogger.Instance, builder.ExecutionContext);
+        await new HttpsCertificateExecutionConfigurationGatherer(CreateHttpsCertificateConfigurationContextFactory())
+            .GatherAsync(context, resource, NullLogger.Instance, builder.ExecutionContext);
+
+        var certificatePath = Assert.IsAssignableFrom<IValueProvider>(context.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath]);
+        Assert.Equal("/etc/ssl/certs/server.pfx", await certificatePath.GetValueAsync());
+        Assert.Same(password.Resource, context.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword]);
+    }
+
+    private static void AssertSameEnvironment(IReadOnlyDictionary<string, object> expected, IReadOnlyDictionary<string, object> actual)
+    {
+        Assert.Equal(expected.Count, actual.Count);
+        foreach (var (name, value) in expected)
+        {
+            Assert.Same(value, actual[name]);
+        }
+    }
+
     private static X509Certificate2 CreateTestCertificateWithPrivateKey()
     {
         using var rsa = RSA.Create(2048);
