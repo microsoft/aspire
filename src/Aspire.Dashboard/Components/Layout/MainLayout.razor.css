@@ -96,7 +96,7 @@
     gap: 8px;
 }
 
-::deep.layout > .messagebar-container:has(> .top-messagebar:empty) {
+::deep.layout > .messagebar-container > .top-messagebar:empty {
     display: none;
 }
 
@@ -118,6 +118,10 @@
     display: grid;
     background-color: var(--colorNeutralBackground2);
     color: var(--colorNeutralForeground1);
+}
+
+::deep.layout.historical-run :is(.url-button, .url-container a, .url-overflow-popover a, .resource-details-layout a, .property-grid a, .log-content a) {
+    opacity: 0.7;
 }
 
 ::deep.layout > .layout-body-container {

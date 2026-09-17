@@ -142,7 +142,7 @@
                                 </div>
                             </AspireTemplateColumn>
                             <AspireTemplateColumn ColumnId="@SpansColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Traces.TracesSpansColumnHeader)]">
-                                <FluentOverflow>
+                                <FluentOverflow TItem="object">
                                     <ChildContent>
                                         @foreach (var item in context.Resources)
                                         {
@@ -163,13 +163,13 @@
 
                                         @if (items.Count > 0)
                                         {
-                                            <FluentTooltip aria-label="@(string.Join(", ", items.Select(i => i.Text)))" UseTooltipService="false" Anchor="@overflow.IdMoreButton">
-                                                @foreach (var item in items)
-                                                {
-                                                    <div style="margin-top: 8px; margin-bottom: 8px;">
+                                            <FluentTooltip aria-label="@(string.Join(", ", items.Select(i => i.Text)))" UseTooltipService="false" Anchor="@overflow.IdMoreButton" Class="trace-overflow-tooltip">
+                                                <div class="trace-overflow-tooltip-content">
+                                                    @foreach (var item in items)
+                                                    {
                                                         @RenderTraceResourceSummary(context.Resources[item.Index])
-                                                    </div>
-                                                }
+                                                    }
+                                                </div>
                                             </FluentTooltip>
                                         }
                                     </OverflowTemplate>

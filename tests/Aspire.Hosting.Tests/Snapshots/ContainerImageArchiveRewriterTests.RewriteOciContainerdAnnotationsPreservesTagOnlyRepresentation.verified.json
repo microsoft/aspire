@@ -1,0 +1,41 @@
+﻿{
+  "index.json": {
+    "schemaVersion": 2,
+    "mediaType": "application/vnd.oci.image.index.v1+json",
+    "manifests": [
+      {
+        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+        "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "size": 1234,
+        "annotations": {
+          "org.opencontainers.image.ref.name": "latest",
+          "io.containerd.image.name": "docker.io/library/widget:latest",
+          "example.com/unknown": "preserved"
+        },
+        "platform": {
+          "architecture": "amd64",
+          "os": "linux",
+          "os.version": "fixture"
+        },
+        "x-descriptor-field": [
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+        "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "size": 4321,
+        "annotations": {
+          "org.opencontainers.image.ref.name": "aspire-layered-0123456789abcdef",
+          "io.containerd.image.name": "docker.io/library/other:aspire-layered-0123456789abcdef",
+          "vnd.docker.reference.type": "attestation-manifest"
+        }
+      }
+    ],
+    "x-index-field": {
+      "preserved": true
+    }
+  }
+}
