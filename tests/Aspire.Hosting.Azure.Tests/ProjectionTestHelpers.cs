@@ -11,8 +11,10 @@ internal static class ProjectionTestHelpers
         where T : class, IResource
     {
         Assert.Same(
-            owner.Resource,
+            projection,
             Assert.Single(owner.ApplicationBuilder.Resources, resource => resource.Name == owner.Resource.Name));
+        Assert.True(owner.ApplicationBuilder.Resources.Contains(owner.Resource));
+        Assert.True(owner.ApplicationBuilder.Resources.Contains(projection));
         Assert.Same(projection, owner.Resource.AsContainer());
         Assert.Same(owner.Resource, projection.GetOwnerOrSelf());
         Assert.Same(owner.Resource.Annotations, projection.Annotations);

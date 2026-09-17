@@ -20,6 +20,18 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 public static class ResourceExtensions
 {
+    internal static IEnumerable<IResource> GetResourceOwners(this IResourceCollection resources)
+    {
+        ArgumentNullException.ThrowIfNull(resources);
+
+        if (resources is ResourceCollection resourceCollection)
+        {
+            return resourceCollection.Owners;
+        }
+
+        return resources.Select(static resource => resource.GetOwnerOrSelf());
+    }
+
     internal static IResource GetEffectiveResource(this IResource resource)
     {
         ArgumentNullException.ThrowIfNull(resource);
@@ -35,9 +47,10 @@ public static class ResourceExtensions
     /// <remarks>
     /// <para>
     /// A projection is a typed configuration view that shares its owner's name and annotations, but is a distinct
-    /// object. Only the owner is added to the application model. Use this method when storing resource identity,
-    /// comparing resources, or looking up a resource in the model. For an ordinary resource, this method returns
-    /// the same instance; it does not search the model by name or unwrap arbitrary resource wrappers.
+    /// object. The owner is retained as the canonical model identity while resource collection reads expose the
+    /// projection as its effective resource. Use this method when storing resource identity or comparing resources.
+    /// For an ordinary resource, this method returns the same instance; it does not search the model by name or
+    /// unwrap arbitrary resource wrappers.
     /// </para>
     /// <para>
     /// Keep using the projection for container-specific configuration. The owner need not have the same CLR type

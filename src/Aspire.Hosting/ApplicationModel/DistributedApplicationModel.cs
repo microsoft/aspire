@@ -24,6 +24,11 @@ public class DistributedApplicationModel(IResourceCollection resources)
     /// <summary>
     /// Gets the collection of resources associated with the distributed application.
     /// </summary>
+    /// <remarks>
+    /// When a resource has a selected projection for the current operation, collection reads return the
+    /// projection as its effective resource. The projection's owner remains the canonical model identity
+    /// and can be obtained with <see cref="ResourceExtensions.GetOwnerOrSelf(IResource)"/>.
+    /// </remarks>
     [DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
     public IResourceCollection Resources { get; } = resources ?? throw new ArgumentNullException(nameof(resources));
 }

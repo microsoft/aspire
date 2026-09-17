@@ -83,7 +83,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        Assert.Collection(model.Resources, resource => Assert.Same(executable.Resource, resource));
+        Assert.Collection(model.Resources, resource => Assert.Same(executable.Resource.AsContainer(), resource));
 
         var appExecutor = CreateAppExecutor(
             model,

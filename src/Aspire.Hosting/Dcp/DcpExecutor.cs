@@ -652,7 +652,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         _logger.LogDebug("Preparing services. Ports randomized: {RandomizePorts}", _options.Value.RandomizePorts);
 
         var serviceProducers = _model.Resources
-            .Select(r => (ModelResource: r, Endpoints: r.Annotations.OfType<EndpointAnnotation>().ToArray()))
+            .Select(r => (ModelResource: r.GetOwnerOrSelf(), Endpoints: r.Annotations.OfType<EndpointAnnotation>().ToArray()))
             .Where(sp => sp.Endpoints.Any())
             .ToArray();
 

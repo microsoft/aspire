@@ -135,6 +135,10 @@ public class AzureManagedRedisExtensionsTests
 
         var cacheInModel = builder.Resources.Single(r => r.Name == "cache");
 
+        Assert.Same(projection, cacheInModel);
+        Assert.Same(projection, Assert.Single(builder.Resources.OfType<RedisResource>()));
+        Assert.Empty(builder.Resources.OfType<AzureManagedRedisResource>());
+        Assert.True(builder.Resources.Contains(cache.Resource));
         Assert.True(cacheInModel.TryGetAnnotationsOfType<Dummy1Annotation>(out var cacheAnnotations1));
         Assert.Single(cacheAnnotations1);
 

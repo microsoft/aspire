@@ -14,7 +14,8 @@ internal static class RelationshipEvaluator
     {
         // parent -> children lookup
         // Built from IResourceWithParent first, then from annotations.
-        return model.Resources.OfType<IResourceWithParent>()
+        return model.Resources.GetResourceOwners()
+                              .OfType<IResourceWithParent>()
                               .Where(x => x.Parent is not null)
                               .Select(x => (Child: (IResource)x, Parent: x.Parent!.GetOwnerOrSelf()))
                               .Concat(GetParentChildRelationshipsFromAnnotations(model))
@@ -42,10 +43,10 @@ internal static class RelationshipEvaluator
             _ => null
         };
 
-        var result = model.Resources
-                                    .Select(resource => (Child: resource, Parent: SelectParentResource(resource)))
-                                    .Where(x => x.Parent is not null)
-                                    .ToArray();
+        var result = model.Resources.GetResourceOwners()
+            .Select(resource => (Child: resource, Parent: SelectParentResource(resource)))
+            .Where(x => x.Parent is not null)
+            .ToArray();
 
         ValidateRelationships(result!);
 

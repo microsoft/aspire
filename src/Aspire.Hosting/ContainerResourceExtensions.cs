@@ -14,7 +14,7 @@ public static class ContainerResourceExtensions
     /// Returns a collection of container resources in the specified distributed application model.
     /// </summary>
     /// <param name="model">The distributed application model to search for container resources.</param>
-    /// <returns>A collection of container resources in the specified distributed application model.</returns>
+    /// <returns>A collection containing each resource's effective container view.</returns>
     [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<IResource> GetContainerResources(this DistributedApplicationModel model)
     {
@@ -43,10 +43,8 @@ public static class ContainerResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        // Check the owner reference rather than merely the shared annotation collection so a bare
-        // ContainerResource without an image still uses the legacy image annotation fallback below.
         if (resource.Annotations.OfType<ContainerResourceProjectionAnnotation>().SingleOrDefault() is { } registration &&
-            ReferenceEquals(resource, registration.Owner))
+            (ReferenceEquals(resource, registration.Owner) || ReferenceEquals(resource, registration.Projection)))
         {
             return true;
         }

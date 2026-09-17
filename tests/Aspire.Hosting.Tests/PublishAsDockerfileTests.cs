@@ -25,8 +25,8 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         var frontend = builder.AddJavaScriptApp("frontend", path)
             .PublishAsDockerFile();
 
-        Assert.Collection(builder.Resources, resource => Assert.Same(frontend.Resource, resource));
-        var containerResource = GetContainerConfiguredOwner(frontend.Resource);
+        var containerResource = GetContainerProjection(frontend.Resource);
+        Assert.Collection(builder.Resources, resource => Assert.Same(containerResource, resource));
         Assert.Equal("frontend", containerResource.Name);
 
         var manifest = await ManifestUtils.GetManifest(frontend.Resource, manifestDirectory: path).DefaultTimeout();
@@ -70,7 +70,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
             ]);
 #pragma warning restore CS0618 // Type or member is obsolete
 
-        var containerResource = GetContainerConfiguredOwner(frontend.Resource);
+        var containerResource = GetContainerProjection(frontend.Resource);
         Assert.Equal("frontend", containerResource.Name);
 
         var manifest = await ManifestUtils.GetManifest(frontend.Resource, manifestDirectory: path).DefaultTimeout();
@@ -117,7 +117,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
             ]);
 #pragma warning restore CS0618 // Type or member is obsolete
 
-        var containerResource = GetContainerConfiguredOwner(frontend.Resource);
+        var containerResource = GetContainerProjection(frontend.Resource);
         Assert.Equal("frontend", containerResource.Name);
 
         var manifest = await ManifestUtils.GetManifest(frontend.Resource, manifestDirectory: path).DefaultTimeout();
@@ -159,7 +159,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
                 configure: container => container.WithArgs("/app"));
 #pragma warning restore CS0618 // Type or member is obsolete
 
-        var containerResource = GetContainerConfiguredOwner(frontend.Resource);
+        var containerResource = GetContainerProjection(frontend.Resource);
         Assert.Equal("frontend", containerResource.Name);
 
         var manifest = await ManifestUtils.GetManifest(frontend.Resource, manifestDirectory: path).DefaultTimeout();
@@ -209,7 +209,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
                 c.WithVolume("vol", "/app/node_modules");
             });
 
-        var containerResource = GetContainerConfiguredOwner(frontend.Resource);
+        var containerResource = GetContainerProjection(frontend.Resource);
         Assert.Equal("frontend", containerResource.Name);
 
         var manifest = await ManifestUtils.GetManifest(frontend.Resource, manifestDirectory: path).DefaultTimeout();
@@ -325,8 +325,8 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
                                  c.WithArgs("/app");
                                  c.WithVolume("vol", "/app/shared");
                              });
-        Assert.Collection(builder.Resources, resource => Assert.Same(project.Resource, resource));
-        var containerResource = GetContainerConfiguredOwner(project.Resource);
+        var containerResource = GetContainerProjection(project.Resource);
+        Assert.Collection(builder.Resources, resource => Assert.Same(containerResource, resource));
         Assert.Equal("project", containerResource.Name);
 
         var manifest = await ManifestUtils.GetManifest(project.Resource, manifestDirectory: path).DefaultTimeout();
@@ -396,7 +396,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         var project = builder.AddProject("project", projectPath, o => o.ExcludeLaunchProfile = true)
                               .PublishAsDockerFile();
 
-        var container = GetContainerConfiguredOwner(project.Resource);
+        var container = GetContainerProjection(project.Resource);
         // No endpoints should have been created since createIfNotExists=false and the project had none.
         Assert.Empty(container.Annotations.OfType<EndpointAnnotation>());
     }
@@ -414,7 +414,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
                              .WithHttpEndpoint()
                              .PublishAsDockerFile();
 
-        var container = GetContainerConfiguredOwner(project.Resource);
+        var container = GetContainerProjection(project.Resource);
         var endpoint = Assert.Single(container.Annotations.OfType<EndpointAnnotation>());
 
         Assert.Equal("http", endpoint.Name);
@@ -438,7 +438,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
                              })
                              .PublishAsDockerFile();
 
-        var container = GetContainerConfiguredOwner(project.Resource);
+        var container = GetContainerProjection(project.Resource);
         var endpoint = Assert.Single(container.Annotations.OfType<EndpointAnnotation>());
 
         Assert.Equal("http", endpoint.Name);
@@ -456,7 +456,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         var project = builder.AddProject<TestProjectWithHttpAndHttpsProfile>("project", o => o.LaunchProfileName = "https")
                              .PublishAsDockerFile();
 
-        var container = GetContainerConfiguredOwner(project.Resource);
+        var container = GetContainerProjection(project.Resource);
 
         var endpoints = container.Annotations.OfType<EndpointAnnotation>().OrderBy(e => e.Name).ToList();
 
@@ -485,7 +485,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
             .PublishAsDockerFile()
             .PublishAsDockerFile(); // Call again - should not throw
 
-        var containerResource = GetContainerConfiguredOwner(frontend.Resource);
+        var containerResource = GetContainerProjection(frontend.Resource);
         Assert.Equal("frontend", containerResource.Name);
     }
 
@@ -510,7 +510,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
                 c.WithBuildArg("ARG2", "value2");
             });
 
-        var containerResource = GetContainerConfiguredOwner(frontend.Resource);
+        var containerResource = GetContainerProjection(frontend.Resource);
         Assert.Equal("frontend", containerResource.Name);
         
         // Both callbacks should have been invoked
@@ -532,7 +532,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
             .PublishAsDockerFile(container => container.WithArgs("second"))
             .WithArgs("after");
 
-        var containerResource = GetContainerConfiguredOwner(executable.Resource);
+        var containerResource = GetContainerProjection(executable.Resource);
 
         // Executable conversion historically clears on every call. The second clear removes the owner argument,
         // the first callback's argument, and the argument registered between calls.
@@ -555,7 +555,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
             .PublishAsDockerFile(container => container.WithArgs("second"))
             .WithArgs("after");
 
-        var containerResource = GetContainerConfiguredOwner(project.Resource);
+        var containerResource = GetContainerProjection(project.Resource);
 
         // Project conversion historically clears only on its first call. Arguments registered by or after that
         // call therefore remain when the resource is converted again.
@@ -585,7 +585,7 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
                 c.WithBuildArg("ARG2", "value2");
             });
 
-        var containerResource = GetContainerConfiguredOwner(project.Resource);
+        var containerResource = GetContainerProjection(project.Resource);
         Assert.Equal("project", containerResource.Name);
         
         // Both callbacks should have been invoked
@@ -660,14 +660,14 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         return workspace;
     }
 
-    private static IResource GetContainerConfiguredOwner(IResource owner)
+    private static ContainerResource GetContainerProjection(IResource owner)
     {
         Assert.Same(owner, owner.GetOwnerOrSelf());
         var projection = Assert.Single(owner.Annotations.OfType<ContainerResourceProjectionAnnotation>());
         Assert.NotNull(projection.Projection);
         Assert.Same(owner, projection.Projection.GetOwnerOrSelf());
         Assert.True(owner.IsContainer());
-        return owner;
+        return projection.Projection;
     }
 
     private sealed class TestProject : IProjectMetadata

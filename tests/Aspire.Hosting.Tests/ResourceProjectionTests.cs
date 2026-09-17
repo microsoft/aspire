@@ -107,8 +107,9 @@ public class ResourceProjectionTests
 
         Assert.NotNull(configuredProjection);
         Assert.Same(owner.Resource, configuredProjection.GetOwnerOrSelf().GetOwnerOrSelf());
-        Assert.Same(owner.Resource, Assert.Single(builder.Resources));
-        Assert.False(builder.Resources.Contains(configuredProjection));
+        Assert.Same(configuredProjection, Assert.Single(builder.Resources));
+        Assert.True(builder.Resources.Contains(owner.Resource));
+        Assert.True(builder.Resources.Contains(configuredProjection));
     }
 
     [Theory]
@@ -202,7 +203,9 @@ public class ResourceProjectionTests
         {
             var context = Assert.Single(contexts);
             Assert.Same(owner.Resource, context.Resource);
-            Assert.Same(owner.Resource, Assert.Single(context.Model.Resources));
+            Assert.Same(
+                useProjection ? owner.Resource.AsContainer() : owner.Resource,
+                Assert.Single(context.Model.Resources));
             Assert.True(context.Model.Resources.Contains(context.Resource));
             Assert.Same(app.Services, context.Services);
         }
@@ -252,7 +255,7 @@ public class ResourceProjectionTests
     }
 
     [Fact]
-    public async Task TypedProjectionConfiguresOwnerAndOwnerRemainsSoleModelMember()
+    public async Task TypedProjectionBecomesEffectiveCollectionResourceWhileOwnerRemainsCanonical()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -273,19 +276,30 @@ public class ResourceProjectionTests
             .WithEnvironment("OWNER_SETTING", "owner");
 
         var model = new DistributedApplicationModel(builder.Resources);
+        var projection = executable.Resource.AsContainer();
 
-        Assert.Collection(builder.Resources, resource => Assert.Same(executable.Resource, resource));
-        Assert.Collection(model.Resources, resource => Assert.Same(executable.Resource, resource));
+        Assert.NotNull(projection);
+        Assert.Collection(builder.Resources, resource => Assert.Same(projection, resource));
+        Assert.Collection(model.Resources, resource => Assert.Same(projection, resource));
         Assert.True(model.Resources.TryGetByName("worker", out var modelResource));
-        Assert.Same(executable.Resource, modelResource);
-        Assert.Collection(model.GetContainerResources(), resource => Assert.Same(executable.Resource, resource));
-        Assert.Collection(model.GetComputeResources(), resource => Assert.Same(executable.Resource, resource));
+        Assert.Same(projection, modelResource);
+        Assert.Collection(model.Resources.OfType<ContainerResource>(), resource => Assert.Same(projection, resource));
+        Assert.Empty(model.Resources.OfType<ExecutableResource>());
+        Assert.True(model.Resources.Contains(executable.Resource));
+        Assert.True(model.Resources.Contains(projection));
+        Assert.Equal(0, model.Resources.IndexOf(executable.Resource));
+        Assert.Equal(0, model.Resources.IndexOf(projection));
+        var copiedResources = new IResource[1];
+        model.Resources.CopyTo(copiedResources, 0);
+        Assert.Same(projection, copiedResources[0]);
+        Assert.Collection(model.GetContainerResources(), resource => Assert.Same(projection, resource));
+        Assert.Collection(model.GetComputeResources(), resource => Assert.Same(projection, resource));
         Assert.Empty(model.GetExecutableResources());
 
         Assert.True(builder.TryCreateResourceBuilder<ExecutableResource>("worker", out var ownerBuilder));
         Assert.Same(executable.Resource, ownerBuilder.Resource);
         Assert.True(builder.TryCreateResourceBuilder<ContainerResource>("worker", out var projectionBuilder));
-        Assert.NotSame(executable.Resource, projectionBuilder.Resource);
+        Assert.Same(projection, projectionBuilder.Resource);
         Assert.Same(executable.Resource.Annotations, projectionBuilder.Resource.Annotations);
         Assert.Same(projectionBuilder.Resource, executable.Resource.AsContainer());
 
@@ -302,6 +316,34 @@ public class ResourceProjectionTests
 
         Assert.Equal("owner", environment["OWNER_SETTING"]);
         Assert.Equal("projection", environment["PROJECTION_SETTING"]);
+    }
+
+    [Fact]
+    public void EffectiveCollectionAliasesRemoveTheCanonicalOwnerSlot()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var owner = builder.AddResource(new PlainOwnerResource("worker"))
+            .RunAsContainerImage("contoso/worker:1.0");
+        var projection = owner.Resource.AsContainer();
+
+        Assert.NotNull(projection);
+        Assert.True(builder.Resources.Remove(projection));
+        Assert.Empty(builder.Resources);
+        Assert.False(builder.Resources.Contains(owner.Resource));
+        Assert.False(builder.Resources.Contains(projection));
+        Assert.False(builder.Resources.TryGetByName(owner.Resource.Name, out _));
+    }
+
+    [Fact]
+    public void ResourceWithoutProjectionRemainsItsOwnEffectiveCollectionResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var owner = builder.AddResource(new PlainOwnerResource("worker"));
+
+        Assert.Same(owner.Resource, Assert.Single(builder.Resources));
+        Assert.Same(owner.Resource, builder.Resources[0]);
+        Assert.True(builder.Resources.TryGetByName(owner.Resource.Name, out var resource));
+        Assert.Same(owner.Resource, resource);
     }
 
     [Fact]
@@ -352,7 +394,7 @@ public class ResourceProjectionTests
     }
 
     [Fact]
-    public void BuildResourceEnumerationReturnsOwner()
+    public void BuildResourceEnumerationReturnsEffectiveProjection()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -360,8 +402,10 @@ public class ResourceProjectionTests
             .PublishAsDockerFile();
         var model = new DistributedApplicationModel(builder.Resources);
 
-        Assert.Same(executable.Resource, Assert.Single(model.GetBuildResources()));
-        Assert.Same(executable.Resource, Assert.Single(model.GetBuildAndPushResources()));
+        var projection = executable.Resource.AsContainer();
+        Assert.NotNull(projection);
+        Assert.Same(projection, Assert.Single(model.GetBuildResources()));
+        Assert.Same(projection, Assert.Single(model.GetBuildAndPushResources()));
     }
 
     [Fact]
@@ -742,7 +786,7 @@ public class ResourceProjectionTests
             TestContext.Current.CancellationToken);
 
         var ownerEndpoint = Assert.Single(executable.Resource.Annotations.OfType<EndpointAnnotation>());
-        Assert.Same(executable.Resource, Assert.Single(model.GetContainerResources()));
+        Assert.Same(executable.Resource.AsContainer(), Assert.Single(model.GetContainerResources()));
         Assert.Equal("http2", ownerEndpoint.Transport);
     }
 
@@ -930,8 +974,9 @@ public class ResourceProjectionTests
         var model = new DistributedApplicationModel(builder.Resources);
 
         Assert.True(executable.Resource.IsContainer());
-        Assert.NotNull(executable.Resource.AsContainer());
-        Assert.Collection(model.GetContainerResources(), resource => Assert.Same(executable.Resource, resource));
+        var projection = executable.Resource.AsContainer();
+        Assert.NotNull(projection);
+        Assert.Collection(model.GetContainerResources(), resource => Assert.Same(projection, resource));
         Assert.Empty(model.GetExecutableResources());
     }
 
@@ -1072,7 +1117,7 @@ public class ResourceProjectionTests
         });
 
         Assert.Same(originalProjection, owner.Resource.AsContainer());
-        Assert.Same(owner.Resource, Assert.Single(builder.Resources));
+        Assert.Same(originalProjection, Assert.Single(builder.Resources));
         var image = Assert.Single(owner.Resource.Annotations.OfType<ContainerImageAnnotation>());
         Assert.Equal("contoso/worker", image.Image);
         Assert.Equal("2.0", image.Tag);

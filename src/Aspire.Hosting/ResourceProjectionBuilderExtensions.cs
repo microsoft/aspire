@@ -45,9 +45,10 @@ public static class ResourceProjectionBuilderExtensions
     /// overload for its own type rather than from overriding a shared implementation.
     /// </para>
     /// <para>
-    /// The projection is a typed configuration view, not a logical model member, so it is never added to
-    /// <see cref="IDistributedApplicationBuilder.Resources"/>; the owner remains the only member representing the
-    /// pair. That keeps references, events, and notifications addressed to a single canonical identity.
+    /// The projection is a typed configuration view, not a separately added logical model member. The resource
+    /// collection retains the owner as the pair's canonical identity while exposing the projection as its effective
+    /// resource for enumeration and typed queries. This preserves a single model slot while references, events, and
+    /// notifications remain addressed to the owner.
     /// Extension authors storing resource references in custom annotations or dictionaries should call
     /// <see cref="ResourceExtensions.GetOwnerOrSelf"/> inside <paramref name="configure"/> when those references
     /// represent logical identity. During <paramref name="createProjection"/>, use the original owner directly:

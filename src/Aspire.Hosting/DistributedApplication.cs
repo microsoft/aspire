@@ -826,7 +826,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
                 }
 
                 var results = new List<ResourceStateDebugView>(app._model.Resources.Count);
-                foreach (var resource in app._model.Resources)
+                foreach (var resource in app._model.Resources.GetResourceOwners())
                 {
                     foreach (var instanceName in resource.GetResolvedResourceNames())
                     {

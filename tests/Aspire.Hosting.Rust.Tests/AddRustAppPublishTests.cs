@@ -319,8 +319,8 @@ public class AddRustAppPublishTests(ITestOutputHelper outputHelper)
         var frontendBuildStep = CreateBuildComputeStep("build-frontend", frontend.Resource);
         var assetsBuildStep = CreateBuildComputeStep("build-assets", assets.Resource);
 
-        // Run every configuration callback the pipeline would from the canonical model. The Rust owner
-        // remains the sole model member while its container projection supplies the effective build steps.
+        // Run every configuration callback the pipeline would from the effective model view. The Rust owner
+        // remains the canonical identity while its container projection supplies the effective build steps.
         foreach (var annotation in model.Resources.SelectMany(resource => resource.Annotations.OfType<PipelineConfigurationAnnotation>()))
         {
             await annotation.Callback(new PipelineConfigurationContext

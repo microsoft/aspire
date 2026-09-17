@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using System.Runtime.Loader;
+using Aspire.Hosting.Utils;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -11,7 +12,7 @@ namespace Aspire.Hosting.Tests;
 public class ResourceProjectionBinaryCompatibilityTests
 {
     [Fact]
-    public void ResourceCompiledAgainstAspireHosting135LoadsAndMutatesAnnotations()
+    public void IntegrationCompiledAgainstAspireHosting135LoadsMutatesAnnotationsAndQueriesEffectiveResources()
     {
         var baselineAssemblyPath = Path.Combine(
             AppContext.BaseDirectory,
@@ -22,6 +23,9 @@ public class ResourceProjectionBinaryCompatibilityTests
         // Compile a community-integration-shaped resource against the released 13.5 binary. Loading
         // the emitted assembly below binds that reference to the current Aspire.Hosting assembly.
         const string source = """
+            using System;
+            using System.Linq;
+            using Aspire.Hosting;
             using Aspire.Hosting.ApplicationModel;
 
             public sealed class LegacyAnnotation : IResourceAnnotation;
@@ -40,6 +44,15 @@ public class ResourceProjectionBinaryCompatibilityTests
                     var resource = new LegacyResource("legacy");
                     resource.Annotations.Add(new LegacyAnnotation());
                     return resource;
+                }
+
+                public static ContainerResource? FindContainer(
+                    IDistributedApplicationBuilder builder,
+                    string name)
+                {
+                    return builder.Resources
+                        .OfType<ContainerResource>()
+                        .SingleOrDefault(resource => string.Equals(resource.Name, name, StringComparison.OrdinalIgnoreCase));
                 }
             }
             """;
@@ -81,5 +94,18 @@ public class ResourceProjectionBinaryCompatibilityTests
 
         Assert.Same(currentAnnotation, resource.Annotations[1]);
         Assert.Equal(2, resource.Annotations.Count);
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var owner = builder.AddExecutable("worker", "worker", ".")
+            .RunAsContainerImage("contoso/worker:1.0");
+        var projection = owner.Resource.AsContainer();
+        var discoveredContainer = factory.GetMethod(
+            "FindContainer",
+            BindingFlags.Public | BindingFlags.Static)!.Invoke(null, [builder, owner.Resource.Name]);
+
+        Assert.NotNull(projection);
+        Assert.Same(projection, discoveredContainer);
+        var discoveredResource = Assert.IsAssignableFrom<IResource>(discoveredContainer);
+        Assert.Same(owner.Resource, discoveredResource.GetOwnerOrSelf());
     }
 }

@@ -299,6 +299,10 @@ public class AzurePostgresExtensionsTests
         var postgresResourceInModel = builder.Resources.Single(r => r.Name == "postgres-data");
         var dbResourceInModel = builder.Resources.Single(r => r.Name == "db1");
 
+        Assert.Same(projection, postgresResourceInModel);
+        Assert.Same(projection, Assert.Single(builder.Resources.OfType<PostgresServerResource>()));
+        Assert.Empty(builder.Resources.OfType<AzurePostgresFlexibleServerResource>());
+        Assert.True(builder.Resources.Contains(postgres.Resource));
         Assert.True(postgresResourceInModel.TryGetAnnotationsOfType<Dummy1Annotation>(out var postgresAnnotations1));
         Assert.Single(postgresAnnotations1);
 

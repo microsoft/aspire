@@ -175,7 +175,7 @@ public class WithTerminalTests : IAsyncLifetime
         var host = Assert.Single(model.Resources.OfType<TerminalHostResource>());
         Assert.Same(resource.Resource, host.Parent);
         Assert.True(model.Resources.Contains(host.Parent));
-        Assert.Same(resource.Resource, Assert.Single(model.Resources, r => r.Name == "worker"));
+        Assert.Same(resource.Resource.AsContainer(), Assert.Single(model.Resources, r => r.Name == "worker"));
         Assert.Same(host, Assert.Single(resource.Resource.Annotations.OfType<WaitAnnotation>()).Resource);
     }
 

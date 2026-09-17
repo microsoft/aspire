@@ -365,7 +365,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         using var app = builder.Build();
         await app.StartAsync();
 
-        var serviceBusEmulatorResource = builder.Resources.OfType<AzureServiceBusResource>().Single(x => x is { } serviceBusResource && serviceBusResource.IsEmulator);
+        var serviceBusEmulatorResource = builder.Resources.OfType<AzureServiceBusEmulatorResource>().Single();
         var configAnnotation = serviceBusEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/ServiceBus_Emulator/ConfigFiles", configAnnotation.DestinationPath);
@@ -464,7 +464,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         using var app = builder.Build();
         await app.StartAsync();
 
-        var serviceBusEmulatorResource = builder.Resources.OfType<AzureServiceBusResource>().Single(x => x is { } serviceBusResource && serviceBusResource.IsEmulator);
+        var serviceBusEmulatorResource = builder.Resources.OfType<AzureServiceBusEmulatorResource>().Single();
         var configAnnotation = serviceBusEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/ServiceBus_Emulator/ConfigFiles", configAnnotation.DestinationPath);
@@ -520,7 +520,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         using var app = builder.Build();
         await app.StartAsync();
 
-        var serviceBusEmulatorResource = builder.Resources.OfType<AzureServiceBusResource>().Single(x => x is { } serviceBusResource && serviceBusResource.IsEmulator);
+        var serviceBusEmulatorResource = builder.Resources.OfType<AzureServiceBusEmulatorResource>().Single();
         var configAnnotation = serviceBusEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/ServiceBus_Emulator/ConfigFiles", configAnnotation.DestinationPath);
@@ -579,7 +579,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
 
         using var app = builder.Build();
 
-        var serviceBusEmulatorResource = builder.Resources.OfType<AzureServiceBusResource>().Single(x => x is { } serviceBusResource && serviceBusResource.IsEmulator);
+        var serviceBusEmulatorResource = builder.Resources.OfType<AzureServiceBusEmulatorResource>().Single();
         var configAnnotation = serviceBusEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/ServiceBus_Emulator/ConfigFiles", configAnnotation.DestinationPath);

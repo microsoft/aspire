@@ -477,9 +477,9 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
             .WithHttpEndpoint()
             .PublishAsDockerFile();
 
-        Assert.Same(resource.Resource, Assert.Single(builder.Resources));
         var container = resource.Resource.AsContainer();
         Assert.NotNull(container);
+        Assert.Same(container, Assert.Single(builder.Resources));
         Assert.Same(resource.Resource, container.GetOwnerOrSelf());
         Assert.False(resource.Resource.SupportsDotnetProgramPublishing());
         var dockerfile = Assert.Single(container.Annotations.OfType<DockerfileBuildAnnotation>());
