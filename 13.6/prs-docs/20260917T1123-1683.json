@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Adds CodeQL security scanning workflow to the docs repo's own CI; not documentation of a product feature, no matching changelog entry",
+  "mergedAt": "2026-09-17T11:23:15Z",
+  "number": 1683,
+  "runDate": "2026-09-17T12:05:00Z",
+  "status": "excluded",
+  "title": "Add scheduled CodeQL scanning"
+}
