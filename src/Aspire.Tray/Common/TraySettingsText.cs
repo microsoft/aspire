@@ -15,7 +15,7 @@ internal static class TraySettingsText
     internal const string General = "General";
     internal const string About = "About";
     internal const string StartupOption = "Launch Aspire Tray when I sign in";
-    internal const string SignedBinariesOnly = "Launch at sign-in is only available for signed binaries.";
+    internal const string StableNativeInstallationRequired = "Launch at sign-in requires a stable native CLI installation.";
 
     internal static string GetAboutText(bool preview)
     {
@@ -30,7 +30,7 @@ internal static class TraySettingsText
     internal static string GetStartupStatus(TrayStartupState state, string? error)
         => Join(error,
             error is null ? null : state.Enabled ? "Launch at sign-in is on." : "Launch at sign-in is off.",
-            state.CanEnable ? null : SignedBinariesOnly);
+            state.CanEnable ? null : StableNativeInstallationRequired);
 
     internal static string GetReadError(Exception exception, string? writeError)
         => Join(writeError, $"Could not read launch at sign-in: {exception.Message}", "Close and reopen Settings to retry.");

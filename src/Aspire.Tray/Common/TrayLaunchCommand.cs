@@ -81,13 +81,9 @@ internal static class TrayLaunchCommand
         }
     }
 
-    public static ProcessStartInfo CreateStartInfo(TrayOptions options, string logPath)
+    public static ProcessStartInfo CreateStartInfo(TrayOptions options)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(options.BundleRoot);
-        if (!Path.IsPathFullyQualified(logPath))
-        {
-            throw new ArgumentException("An absolute log path is required.", nameof(logPath));
-        }
 
         var appPath = Path.Combine(options.BundleRoot, "tray", "Aspire Tray.app");
         var executable = Path.Combine(appPath, "Contents", "MacOS", "aspire-tray");
@@ -96,17 +92,14 @@ internal static class TrayLaunchCommand
             throw new FileNotFoundException("The bundle does not contain the macOS Aspire Tray app.", appPath);
         }
 
-        var startInfo = new ProcessStartInfo("/usr/bin/open")
+        var startInfo = new ProcessStartInfo(executable)
         {
             UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
             WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
         };
         foreach (var argument in new[]
         {
-            "-n", "-g", "--stdout", logPath, "--stderr", logPath, appPath,
-            "--args", "--cli", options.CliPath, "--bundle-root", options.BundleRoot
+            "--cli", options.CliPath, "--bundle-root", options.BundleRoot
         })
         {
             startInfo.ArgumentList.Add(argument);

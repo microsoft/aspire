@@ -143,9 +143,10 @@ An unavailable stop RPC or shutdown timeout fails without escalation. `--pid`
 cannot be combined with `--all` or `--force`. Without `--pid`, existing project-level
 stop behavior is unchanged.
 
-### Experimental macOS tray companion
+### Experimental macOS and Windows tray companion
 
-The native macOS CLI bundle can include the Aspire menu bar companion:
+The native macOS and Windows CLI bundles include the experimental Aspire menu
+bar or system tray companion:
 
 ```bash
 aspire tray start
@@ -161,15 +162,19 @@ first Ctrl+C waits for its bounded readiness and lease handoff rather than killi
 it prematurely. The command then reports the helper's result.
 
 The companion comes from the leased CLI bundle at
-`tray/Aspire Tray.app/Contents/MacOS/aspire-tray`. Starting it passes the absolute
+`tray/Aspire Tray.app/Contents/MacOS/aspire-tray` on macOS, or
+`tray/aspire-tray.exe` alongside `tray/Aspire.ico` on Windows. Starting it passes the absolute
 invoking CLI executable and the leased version directory; it never copies a
 private CLI, searches `PATH`, or falls back to a checkout-relative executable.
 The CLI holds its bundle lease until the helper exits, and the native GUI holds
-its own lease for its lifetime.
+its own lease for its lifetime. If readiness fails, the helper terminates and
+waits for its newly launched GUI process before releasing the launcher lease;
+an already-running companion is not terminated by a failed start.
 
-These commands are experimental and macOS-only. Starting the companion requires
+These commands are experimental and available on macOS and Windows (x64/ARM64).
+Starting the companion requires an interactive desktop and
 a native CLI, not a managed development build or `dotnet aspire.dll`. A missing
-bundle or tray payload fails explicitly; install a macOS bundle containing the
+bundle or tray payload fails explicitly; install a platform-matching bundle containing the
 companion rather than using a standalone CLI binary.
 
 Before upgrading from an older preview, quit its running companion using its

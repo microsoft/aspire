@@ -16,6 +16,93 @@ namespace Aspire.Cli.Tests.Backchannel;
 public class AuxiliaryBackchannelMonitorTests
 {
     [Fact]
+    public async Task ReadOnlyWatchEmitsOnlyConnectionReferenceChanges()
+    {
+        var homeDirectory = CreateSocketSafeHomeDirectory();
+        try
+        {
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            var time = new FakeTimeProvider();
+            using var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), time, profiling);
+            using var cancellation = new CancellationTokenSource();
+            await using var watch = monitor.WatchConnectionsAsync(cancellation.Token, readOnly: true).GetAsyncEnumerator();
+
+            Assert.True(await watch.MoveNextAsync().AsTask().DefaultTimeout());
+            Assert.Empty(watch.Current);
+            var next = watch.MoveNextAsync().AsTask();
+            for (var tick = 0; tick < 3; tick++)
+            {
+                time.Advance(TimeSpan.FromSeconds(1));
+                Assert.False(next.IsCompleted);
+            }
+
+            var socketPath = CreateLiveOwnerSocketPath(homeDirectory);
+            var appHostPath = Path.Combine(homeDirectory.FullName, "MyApp.AppHost.csproj");
+            using var first = new TestAuxiliaryBackchannelServer(socketPath, appHostPath);
+            var accepted = first.AcceptAsync(cancellation.Token);
+            time.Advance(TimeSpan.FromSeconds(1));
+            Assert.True(await next.DefaultTimeout());
+            await accepted.DefaultTimeout();
+            var firstConnection = Assert.Single(watch.Current);
+
+            next = watch.MoveNextAsync().AsTask();
+            for (var tick = 0; tick < 3; tick++)
+            {
+                time.Advance(TimeSpan.FromSeconds(1));
+                Assert.False(next.IsCompleted);
+            }
+
+            var secondSocketPath = socketPath.Replace("a1b2C3d4", "e5f6G7h8", StringComparison.Ordinal);
+            using var second = new TestAuxiliaryBackchannelServer(secondSocketPath, appHostPath);
+            accepted = second.AcceptAsync(cancellation.Token);
+            time.Advance(TimeSpan.FromSeconds(1));
+            Assert.True(await next.DefaultTimeout());
+            await accepted.DefaultTimeout();
+            Assert.Equal(2, watch.Current.Count);
+            Assert.Contains(firstConnection, watch.Current);
+            var secondConnection = Assert.Single(watch.Current, connection => !ReferenceEquals(connection, firstConnection));
+
+            next = watch.MoveNextAsync().AsTask();
+            first.RemoveSocketFile();
+            time.Advance(TimeSpan.FromSeconds(1));
+            Assert.True(await next.DefaultTimeout());
+            Assert.Same(secondConnection, Assert.Single(watch.Current));
+
+            // Replace the only connection between polls with another connection for the same
+            // AppHost identity. Comparing identities or connection counts would miss this.
+            next = watch.MoveNextAsync().AsTask();
+            second.RemoveSocketFile();
+            var replacementSocketPath = socketPath.Replace("a1b2C3d4", "i9j0K1l2", StringComparison.Ordinal);
+            using var replacement = new TestAuxiliaryBackchannelServer(replacementSocketPath, appHostPath);
+            accepted = replacement.AcceptAsync(cancellation.Token);
+            time.Advance(TimeSpan.FromSeconds(1));
+            Assert.True(await next.DefaultTimeout());
+            await accepted.DefaultTimeout();
+            var replacementConnection = Assert.Single(watch.Current);
+            Assert.NotSame(secondConnection, replacementConnection);
+            Assert.Equal(secondConnection.AppHostInfo!.AppHostPath, replacementConnection.AppHostInfo!.AppHostPath);
+            Assert.Equal(secondConnection.AppHostInfo.ProcessId, replacementConnection.AppHostInfo.ProcessId);
+
+            next = watch.MoveNextAsync().AsTask();
+            replacement.RemoveSocketFile();
+            time.Advance(TimeSpan.FromSeconds(1));
+            Assert.True(await next.DefaultTimeout());
+            Assert.Empty(watch.Current);
+
+            next = watch.MoveNextAsync().AsTask();
+            time.Advance(TimeSpan.FromSeconds(1));
+            Assert.False(next.IsCompleted);
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next).DefaultTimeout();
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task ReadOnlyWatchEmitsInitialEmptyStateWithoutCreatingDirectories()
     {
         var homeDirectory = Directory.CreateTempSubdirectory("tray-readonly-");

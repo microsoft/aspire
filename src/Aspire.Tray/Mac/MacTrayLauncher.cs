@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Aspire.Shared;
@@ -36,52 +35,20 @@ internal static class MacTrayLauncher
             return;
         }
 
-        DirectoryHelper.CreateWithOwnerOnlyPermissions(SingleInstance.LegacyStateDirectoryPath);
         var logPath = Path.Combine(SingleInstance.LegacyStateDirectoryPath, "aspire-tray.log");
-        using (var log = new FileStream(logPath, new FileStreamOptions
-        {
-            Mode = FileMode.Append,
-            Access = FileAccess.Write,
-            Share = FileShare.ReadWrite,
-            UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite
-        }))
-        {
-        }
-
-        // Launch Services gives the GUI its own lifetime and log handles. Inheriting a CLI
-        // stdout pipe would leave the long-lived app writing to a closed pipe after start exits.
-        // -n ensures arguments reach our executable instead of activating another bundle version.
-        var startInfo = TrayLaunchCommand.CreateStartInfo(options, logPath);
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("macOS could not launch the tray.");
-        using var timeout = new CancellationTokenSource(TrayActivation.RequestTimeout);
-        var stdout = CliProcess.DrainAsync(process.StandardOutput, timeout.Token);
-        var stderr = CliProcess.DrainAsync(process.StandardError, timeout.Token);
+        using var log = MacTrayLog.Open(logPath);
+        // Spawn the actual GUI in a new session. Launch Services would reopen log paths
+        // and hide the GUI process from us, preventing exact cleanup on a failed handoff.
+        var process = MacDetachedProcess.Start(TrayLaunchCommand.CreateStartInfo(options), log);
         try
         {
-            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
-            await Task.WhenAll(stdout, stderr).ConfigureAwait(false);
-            // The CLI retains its bundle lease until this succeeds. The GUI acquires its
-            // own lease before exposing the endpoint; the reply also requires a live UI loop.
-            // Even if open was interrupted, Launch Services may already have accepted the
-            // launch. Wait for the acknowledgement before releasing either launcher lease.
-            await TrayActivation.WaitUntilReadyAsync(SingleInstance.ActivationPipeName, timeout.Token).ConfigureAwait(false);
+            // The GUI acquires its own bundle lease before exposing this endpoint.
+            await process.CompleteStartupAsync(
+                () => TrayActivation.WaitUntilReadyAsync(SingleInstance.ActivationPipeName, CancellationToken.None)).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        catch (Exception ex)
         {
-            await CliProcess.TerminateOwnedChildAsync(process).ConfigureAwait(false);
-            throw new TimeoutException($"The tray did not become ready (macOS launch exit {process.ExitCode}). See {logPath}.");
-        }
-        finally
-        {
-            await timeout.CancelAsync().ConfigureAwait(false);
-            try
-            {
-                await Task.WhenAll(stdout, stderr).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (timeout.IsCancellationRequested)
-            {
-            }
+            throw new InvalidOperationException($"The tray did not become ready. See {logPath}. {ex.Message}", ex);
         }
     }
 

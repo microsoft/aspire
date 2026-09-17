@@ -22,10 +22,8 @@ public class TrayStartupOptionsTests
         Assert.Equal(startup, options.StartupCliPath);
 
         var start = windows ? TrayLaunchCommand.CreateWindowsStartInfo(options)
-            : TrayLaunchCommand.CreateStartInfo(options, Path.Combine(bundle.Root, "tray.log"));
-        var expected = windows ? new[] { "--cli", bundle.CliPath, "--bundle-root", bundle.Root, "--startup-cli", startup }
-            : new[] { "-n", "-g", "--stdout", Path.Combine(bundle.Root, "tray.log"), "--stderr", Path.Combine(bundle.Root, "tray.log"),
-                bundle.AppPath, "--args", "--cli", bundle.CliPath, "--bundle-root", bundle.Root, "--startup-cli", startup };
+            : TrayLaunchCommand.CreateStartInfo(options);
+        var expected = new[] { "--cli", bundle.CliPath, "--bundle-root", bundle.Root, "--startup-cli", startup };
         Assert.Equal(expected, start.ArgumentList);
     }
 

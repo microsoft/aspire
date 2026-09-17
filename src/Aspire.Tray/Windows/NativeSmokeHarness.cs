@@ -422,13 +422,13 @@ internal sealed class NativeSmokeHarness
         _startupSettings.CanEnable = false;
         _application.RefreshSettingsForSmoke();
         _application.VerifySettingsForSmoke(0, false,
-            "Launch at sign-in is only available for signed binaries.");
+            "Launch at sign-in requires a stable native CLI installation.");
         _application.ClickSettingsControlForSmoke("Startup");
         Require(_startupSettings.WriteCount == 2, "An unavailable startup setting was enabled.");
         _startupSettings.Store.SetEnabled(true);
         _application.RefreshSettingsForSmoke();
         _application.VerifySettingsForSmoke(1, true,
-            "Launch at sign-in is only available for signed binaries.");
+            "Launch at sign-in requires a stable native CLI installation.");
         _application.ClickSettingsControlForSmoke("Startup");
         Require(!_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 3,
             "An existing registration could not be disabled when enabling was unavailable.");
@@ -468,7 +468,7 @@ internal sealed class NativeSmokeHarness
             "Launch at sign-in requires a verified stable native CLI installation; development builds cannot register startup.", 8));
         _application.RefreshSettingsForSmoke();
         _application.VerifySettingsForSmoke(0, false,
-            "Launch at sign-in is only available for signed binaries.");
+            "Launch at sign-in requires a stable native CLI installation.");
         _startupSettings.Detail = null;
         _startupSettings.CanEnable = true;
         _application.RefreshSettingsForSmoke();

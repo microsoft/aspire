@@ -165,7 +165,7 @@ internal sealed class TrayActivation : IAsyncDisposable
                         Console.Error.WriteLine("The tray activation request timed out.");
                     }
                 }
-                catch (IOException ex)
+                catch (Exception ex) when (ex is IOException or InvalidDataException)
                 {
                     Console.Error.WriteLine($"Tray activation connection ended ({ex.GetType().Name}).");
                 }

@@ -461,6 +461,8 @@ internal sealed class NativeSmokeHarness
                 Require(menu.Rows.Count == 0 && menu.RecentPaths.Contains(_savedHost.AppHostPath),
                     "A stopped unpinned AppHost was not retained in Open Recent.");
                 var recentBeforeCancel = menu.RecentPaths.ToArray();
+                _application.VerifyInaccessibleRecentProjectForSmoke(_savedHost.AppHostPath);
+                Require(_removeConfirmations == 0, "An inaccessible project prompted to remove recent history.");
                 VerifyCopy(_savedHost.AppHostPath);
                 _failCopy = true;
                 var copiedBeforeFailure = _copiedPaths.Count;

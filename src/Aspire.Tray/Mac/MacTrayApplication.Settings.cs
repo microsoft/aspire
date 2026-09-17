@@ -153,7 +153,7 @@ internal sealed partial class MacTrayApplication
         AppKit.Set(_startupStatus, "setStringValue:", AppKit.String(text));
         var showDetails = text.Length != 0;
         AppKit.SendBool(_startupStatus, AppKit.Selector("setHidden:"), showDetails ? (byte)0 : (byte)1);
-        var detailHeight = text == TraySettingsText.SignedBinariesOnly ? 42 : 142;
+        var detailHeight = text == TraySettingsText.StableNativeInstallationRequired ? 42 : 142;
         var height = showDetails ? 268 + detailHeight : 250;
         AppKit.SendSize(_settingsWindow, AppKit.Selector("setContentSize:"), new(540, height));
         AppKit.SetRect(_startupStatus, AppKit.Selector("setFrame:"), new(new(44, 160), new(472, detailHeight)));
@@ -176,7 +176,7 @@ internal sealed partial class MacTrayApplication
             var current = _startupSettings.Read();
             if (enabled && !current.CanEnable)
             {
-                error = TraySettingsText.SignedBinariesOnly;
+                error = TraySettingsText.StableNativeInstallationRequired;
             }
             else
             {

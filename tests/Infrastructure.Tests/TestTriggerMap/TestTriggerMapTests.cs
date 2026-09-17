@@ -581,6 +581,10 @@ public sealed class TestTriggerMapTests
             ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
         },
         {
+            "tools/CreateLayout/verify-tray-payload.sh",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+        },
+        {
             "tools/CreateLayout/verify-windows-tray-payload.ps1",
             ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
         },

@@ -12,6 +12,35 @@ public class WindowsTrayActivationTests
 
     [Fact(Skip = "The acknowledgement protects Windows pipe buffers.", SkipUnless = nameof(SupportsWindows))]
     [SupportedOSPlatform("windows")]
+    public async Task InvalidAcknowledgementDoesNotStopTheTrayOrDisableSubsequentRequests()
+    {
+        var name = $"at-{Guid.NewGuid():N}";
+        var quit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var server = new TrayActivation(name, _ => Task.CompletedTask,
+            _ => Task.CompletedTask, () => quit.TrySetResult());
+        using (var client = new NamedPipeClientStream(".", name, PipeDirection.InOut,
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly))
+        {
+            await client.ConnectAsync(TestContext.Current.CancellationToken);
+            await client.WriteAsync(new byte[] { 2 }, TestContext.Current.CancellationToken);
+            var response = new byte[13];
+            await client.ReadExactlyAsync(response, TestContext.Current.CancellationToken);
+            Assert.Equal(1, response[0]);
+            await client.WriteAsync(new byte[] { 0 }, TestContext.Current.CancellationToken);
+            // EOF acknowledges that the server handled this invalid client before reconnecting.
+            Assert.Equal(0, await client.ReadAsync(new byte[1], TestContext.Current.CancellationToken));
+        }
+
+        Assert.False(quit.Task.IsCompleted);
+        var restored = await TrayActivation.ShowExistingAsync(name, TestContext.Current.CancellationToken);
+        Assert.Equal(Environment.ProcessId, restored.ProcessId);
+        var stopped = await TrayActivation.StopExistingAsync(name, TestContext.Current.CancellationToken);
+        Assert.Equal(restored, stopped);
+        await quit.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+    }
+
+    [Fact(Skip = "The acknowledgement protects Windows pipe buffers.", SkipUnless = nameof(SupportsWindows))]
+    [SupportedOSPlatform("windows")]
     public async Task StopWaitsForTheClientToConsumeTheProcessIdentityBeforeQuitting()
     {
         var name = $"at-{Guid.NewGuid():N}";

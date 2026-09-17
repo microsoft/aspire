@@ -8,23 +8,21 @@ namespace Aspire.Tray.Tests;
 public class TrayLaunchCommandTests
 {
     [Fact]
-    public void LaunchServicesGetsExactBundleAndCliPathsWithoutShellQuoting()
+    public void DetachedLaunchGetsExactBundleAndCliPathsWithoutShellQuoting()
     {
         using var bundle = new TestTrayBundle();
-        var log = Path.Combine(bundle.Root, "tray log.txt");
         var options = TrayOptions.Parse(["--cli", bundle.CliPath, "--bundle-root", bundle.Root]);
 
-        var start = TrayLaunchCommand.CreateStartInfo(options, log);
+        var start = TrayLaunchCommand.CreateStartInfo(options);
 
-        Assert.Equal("/usr/bin/open", start.FileName);
+        Assert.Equal(Path.Combine(bundle.AppPath, "Contents", "MacOS", "aspire-tray"), start.FileName);
         Assert.False(start.UseShellExecute);
-        Assert.True(start.RedirectStandardOutput);
-        Assert.True(start.RedirectStandardError);
+        Assert.False(start.RedirectStandardOutput);
+        Assert.False(start.RedirectStandardError);
         Assert.Equal(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), start.WorkingDirectory);
         Assert.Equal(new[]
         {
-            "-n", "-g", "--stdout", log, "--stderr", log, bundle.AppPath,
-            "--args", "--cli", bundle.CliPath, "--bundle-root", bundle.Root
+            "--cli", bundle.CliPath, "--bundle-root", bundle.Root
         }, start.ArgumentList);
     }
 
@@ -35,7 +33,7 @@ public class TrayLaunchCommandTests
         File.Delete(Path.Combine(bundle.AppPath, "Contents", "MacOS", "aspire-tray"));
 
         Assert.Throws<FileNotFoundException>(() => TrayLaunchCommand.CreateStartInfo(
-            new(bundle.CliPath, null, bundle.Root, null), Path.Combine(bundle.Root, "tray.log")));
+            new(bundle.CliPath, null, bundle.Root, null)));
     }
 
     [Fact]
@@ -45,15 +43,7 @@ public class TrayLaunchCommandTests
         File.Delete(Path.Combine(bundle.AppPath, "Contents", "Info.plist"));
 
         Assert.Throws<FileNotFoundException>(() => TrayLaunchCommand.CreateStartInfo(
-            new(bundle.CliPath, null, bundle.Root, null), Path.Combine(bundle.Root, "tray.log")));
-    }
-
-    [Fact]
-    public void RelativeLogPathsAreRejected()
-    {
-        using var bundle = new TestTrayBundle();
-        Assert.Throws<ArgumentException>(() =>
-            TrayLaunchCommand.CreateStartInfo(new(bundle.CliPath, null, bundle.Root, null), "tray.log"));
+            new(bundle.CliPath, null, bundle.Root, null)));
     }
 
     [Fact]

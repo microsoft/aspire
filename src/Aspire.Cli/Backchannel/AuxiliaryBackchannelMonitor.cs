@@ -65,10 +65,18 @@ internal sealed class AuxiliaryBackchannelMonitor(
             // Polling also observes directories created after an initially empty discovery, without
             // creating those directories ourselves. This path owns no detached watcher tasks.
             using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1), _timeProvider);
+            HashSet<IAppHostAuxiliaryBackchannel>? previousConnections = null;
             do
             {
                 await ScanAsync(cancellationToken, pruneOrphanedSockets: false, throwOnDiscoveryFailure: true).ConfigureAwait(false);
-                yield return Connections.ToList();
+                var connections = Connections.ToList();
+                if (previousConnections is null || !previousConnections.SetEquals(connections))
+                {
+                    // A new connection for the same AppHost must restart its resource subscription.
+                    // Unchanged polls must not trigger another round of dashboard enrichment RPCs.
+                    previousConnections = new(connections, ReferenceEqualityComparer.Instance);
+                    yield return connections;
+                }
             }
             while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false));
             yield break;

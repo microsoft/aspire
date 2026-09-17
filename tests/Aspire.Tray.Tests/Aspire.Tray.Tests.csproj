@@ -9,10 +9,18 @@
     <PackageReference Include="System.IO.Hashing" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Common/*.cs" Link="Common/%(Filename)%(Extension)" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Mac/SingleInstance.cs" Link="Mac/SingleInstance.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Mac/MacTrayLog.cs" Link="Mac/MacTrayLog.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Mac/MacDetachedProcess.cs" Link="Mac/MacDetachedProcess.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Windows/WindowsTrayLauncher.cs" Link="Windows/WindowsTrayLauncher.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Windows/WindowsTrayLog.cs" Link="Windows/WindowsTrayLog.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Windows/SingleInstance.cs" Link="Windows/SingleInstance.cs" />
+    <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Shared/BundleVersionLease.cs" />
+    <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Shared/BundleDiscovery.cs" />
+    <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Shared/HeldFileLease.cs" />
     <Compile Include="$(SharedDir)DirectoryHelper.cs" Link="Shared/DirectoryHelper.cs" />
     <Compile Include="$(SharedDir)TrayCliProtocol.cs" Link="Shared/TrayCliProtocol.cs" />
     <Compile Include="$(RepoRoot)tests/Shared/WindowsTrayTestPayload.cs" Link="Shared/WindowsTrayTestPayload.cs" />
     <Using Include="Xunit" />
+    <Content Include="$(RepoRoot)tools/CreateLayout/verify-tray-payload.sh" Link="verify-tray-payload.sh" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

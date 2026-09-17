@@ -16,9 +16,9 @@ public class TraySettingsTextTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void UnavailableStartupShowsOnlyTheShortSignedBinariesNote(bool enabled)
+    public void UnavailableStartupShowsOnlyTheStableNativeInstallationRequirement(bool enabled)
     {
-        Assert.Equal("Launch at sign-in is only available for signed binaries.",
+        Assert.Equal("Launch at sign-in requires a stable native CLI installation.",
             TraySettingsText.GetStartupStatus(new(enabled, false, "Long installation and operating system details."), null));
     }
 

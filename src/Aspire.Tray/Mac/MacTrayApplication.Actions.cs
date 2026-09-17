@@ -104,8 +104,9 @@ internal sealed partial class MacTrayApplication
 
     private bool RequireProjectFile(string path)
     {
-        if (File.Exists(path))
+        if (!TrayAppHostPath.IsMissing(path))
         {
+            TrayAppHostPath.RequireExistingFile(path);
             return true;
         }
         if (_controller.State.AppHosts.Any(host => host.IsPinned && host.Id.AppHostPath == path))

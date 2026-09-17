@@ -38,11 +38,15 @@ Managed development CLIs cannot start the bundled companion.
 
 Start extracts the payload into the CLI installation's versioned bundle layout.
 A short-lived helper launches the native GUI and waits for an acknowledgement
-from its running UI loop. macOS uses Launch Services. The GUI acquires its own
+from its running UI loop. On macOS, the helper spawns the executable inside the
+app bundle in a detached session, retaining ownership of the exact child until
+readiness succeeds. The GUI acquires its own
 bundle lease before acknowledging readiness; the CLI and helper retain their
 leases until the handoff completes. The GUI then survives the launching command
 and terminal, while its lease prevents Aspire's bundle cleanup from removing its
-files. Stop waits for that exact tray process lifetime to exit.
+files. A failed handoff terminates and waits for the exact newly launched child
+on either platform; it does not terminate an already-running companion.
+Stop waits for that exact tray process lifetime to exit.
 
 There is one companion per OS user across CLI installations. Starting from a
 different CLI restores an already-running companion; it does not hot-swap its
@@ -55,7 +59,10 @@ The macOS same-user control endpoint is
 user profile directly, independent of `ASPIRE_HOME` and CLI installation, so all
 launchers can find the same per-user tray.
 Launch diagnostics remain at `~/Library/Application Support/Aspire/Tray/aspire-tray.log`, with
-user-only creation permissions and no raw discovery payloads or dashboard URLs.
+user-only permissions and no raw discovery payloads or dashboard URLs.
+The launcher opens the log relative to no-follow directory handles and passes
+the open descriptor to the GUI, rather than asking another process to reopen a
+log pathname. Symlinked log files or parent directories are rejected.
 Quit the tray using its original CLI or **Quit Aspire** before upgrading from an
 earlier preview. The state directory has been renamed; a still-running older
 preview uses a separate control endpoint and must be stopped before starting this build.
@@ -246,7 +253,9 @@ file: the tray refuses to overwrite changes made by another writer while running
 
 The General section in **Settings...** offers **Launch Aspire Tray when I sign in**.
 Normally, only the checkbox is shown. When unavailable, the optional note reads
-"Launch at sign-in is only available for signed binaries." Read/write failures
+"Launch at sign-in requires a stable native CLI installation." This checks
+installation metadata, executable placement, and native executable shape, not
+Authenticode or a macOS signing trust chain. Read/write failures
 still show their error messages; Windows also shows **Refresh startup status** in
 that state. Reopening Settings re-reads the registration on either platform. Availability
 depends on a supported, verified native CLI installation, not just executable signing.

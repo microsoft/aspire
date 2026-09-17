@@ -13,7 +13,8 @@ fi
 archive="$1"
 rid="$2"
 case "$rid" in
-    osx-arm64|osx-x64) ;;
+    osx-arm64) expected_arch=arm64 ;;
+    osx-x64) expected_arch=x86_64 ;;
     *) echo "Unsupported macOS tray RID: $rid" >&2; exit 1 ;;
 esac
 if [[ ! -f "$archive" ]]; then
@@ -42,6 +43,12 @@ executable="$app/Contents/MacOS/aspire-tray"
 mode="$(stat -f '%Lp' "$executable")"
 if (( (8#$mode & 0111) != 0111 )); then
     echo "Tray executable lost execute permissions in payload (mode $mode)." >&2
+    exit 1
+fi
+# lipo understands both thin and universal Mach-O files. Require a slice for the
+# requested RID rather than assuming that the archive directory identifies it.
+if ! /usr/bin/lipo "$executable" -verify_arch "$expected_arch"; then
+    echo "Tray executable does not contain the required $expected_arch architecture for $rid." >&2
     exit 1
 fi
 if [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")" != aspire-tray ]]; then

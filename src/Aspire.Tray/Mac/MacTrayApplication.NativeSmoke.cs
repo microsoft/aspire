@@ -27,6 +27,38 @@ internal sealed partial class MacTrayApplication
     private bool _interactiveSmoke;
     internal event Action<TrayViewState>? MenuUpdated;
 
+    internal void VerifyInaccessibleRecentProjectForSmoke(string path)
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            throw new PlatformNotSupportedException("Native permission smoke requires macOS.");
+        }
+        VerifyUIThread();
+        var directory = Path.GetDirectoryName(path)!;
+        var mode = File.GetUnixFileMode(directory);
+        var accessDenied = false;
+        try
+        {
+            File.SetUnixFileMode(directory, UnixFileMode.None);
+            try
+            {
+                RequireProjectFile(path);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                accessDenied = true;
+            }
+        }
+        finally
+        {
+            File.SetUnixFileMode(directory, mode);
+        }
+        if (!accessDenied || !_controller.State.RecentAppHosts.Any(host => host.Id.AppHostPath == path))
+        {
+            throw new InvalidOperationException("An inaccessible recent project must report access denied without removing its history.");
+        }
+    }
+
     internal void EnableInteractiveSmoke()
     {
         _interactiveSmoke = true;
@@ -422,10 +454,10 @@ internal sealed partial class MacTrayApplication
         startupSettings.CanEnable = false;
         OpenFromStatusMenu();
         if (Enabled(_startupCheckbox)
-            || AppKit.Text(AppKit.Get(_startupStatus, "stringValue")) != "Launch at sign-in is only available for signed binaries."
+            || AppKit.Text(AppKit.Get(_startupStatus, "stringValue")) != "Launch at sign-in requires a stable native CLI installation."
             || AppKit.GetBool(_startupStatus, AppKit.Selector("isHidden")) != 0)
         {
-            throw new InvalidOperationException("Unavailable startup must show only the short signed-binaries note.");
+            throw new InvalidOperationException("Unavailable startup must show only the stable native installation requirement.");
         }
         startupSettings.CanEnable = true;
         OpenFromStatusMenu();

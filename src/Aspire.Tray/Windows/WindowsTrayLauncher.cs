@@ -39,12 +39,33 @@ internal static partial class WindowsTrayLauncher
         {
             // The GUI acquires its lease before creating this endpoint. Readiness must be
             // acknowledged by a working native UI loop, not merely by a connected pipe.
-            await TrayActivation.WaitUntilReadyAsync(WindowsSingleInstance.ActivationPipeName, CancellationToken.None).ConfigureAwait(false);
+            await CompleteStartupAsync(child,
+                () => TrayActivation.WaitUntilReadyAsync(WindowsSingleInstance.ActivationPipeName, CancellationToken.None)).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is TimeoutException or IOException or InvalidOperationException)
+        catch (Exception ex)
         {
             throw new InvalidOperationException(
                 $"The Windows tray did not acknowledge startup. See {WindowsTrayLog.LogPath}. {ex.Message}", ex);
+        }
+    }
+
+    internal static async Task CompleteStartupAsync(SafeProcessHandle child, Func<Task> ready)
+    {
+        try
+        {
+            await ready().ConfigureAwait(false);
+        }
+        catch (Exception startupError)
+        {
+            try
+            {
+                TerminateAndWait(child);
+            }
+            catch (Exception cleanupError)
+            {
+                throw new AggregateException("Tray startup failed and the child could not be cleaned up.", startupError, cleanupError);
+            }
+            throw;
         }
     }
 
@@ -137,25 +158,33 @@ internal static partial class WindowsTrayLauncher
                 // discovery; never terminate a running tray or any AppHost during stop.
                 using (child)
                 {
-                    var terminated = TerminateProcess(child, 1);
-                    var error = Marshal.GetLastPInvokeError();
-                    var wait = WaitForSingleObject(child, terminated ? 10000u : 0u);
-                    if (wait != 0)
-                    {
-                        if (!terminated)
-                        {
-                            throw new Win32Exception(error, "Windows could not terminate the suspended tray launch.");
-                        }
-                        if (wait == 258)
-                        {
-                            throw new TimeoutException("The suspended tray launch did not exit after termination.");
-                        }
-                        throw new Win32Exception(Marshal.GetLastPInvokeError(), "Windows could not wait for the suspended tray launch to exit.");
-                    }
+                    TerminateAndWait(child);
                 }
                 throw;
             }
         }
+    }
+
+    private static void TerminateAndWait(SafeProcessHandle child)
+    {
+        // Keep the exact CreateProcess handle until exit is observed. A PID lookup or a
+        // global stop request could target a different tray that won a concurrent start.
+        var terminated = TerminateProcess(child, 1);
+        var error = Marshal.GetLastPInvokeError();
+        var wait = WaitForSingleObject(child, terminated ? 10000u : 0u);
+        if (wait == 0)
+        {
+            return;
+        }
+        if (!terminated)
+        {
+            throw new Win32Exception(error, "Windows could not terminate the failed tray launch.");
+        }
+        if (wait == 258)
+        {
+            throw new TimeoutException("The failed tray launch did not exit after termination.");
+        }
+        throw new Win32Exception(Marshal.GetLastPInvokeError(), "Windows could not wait for the failed tray launch to exit.");
     }
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
