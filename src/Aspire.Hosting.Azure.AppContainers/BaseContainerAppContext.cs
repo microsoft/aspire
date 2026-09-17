@@ -235,8 +235,6 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is EndpointReference ep)
         {
-            ValidateExpressEndpointReference(ep);
-
             // The referenced endpoint may belong to a resource deployed to a different compute
             // environment (for example a Foundry hosted agent). In that case delegate to the owning
             // compute environment instead of looking it up in this environment's local endpoint map.
@@ -245,6 +243,8 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             {
                 return ProcessValue(crossExpr, secretType, parent);
             }
+
+            ValidateExpressEndpointReference(ep);
 
             var context = ep.Resource == resource
                 ? this
@@ -298,17 +298,17 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is EndpointReferenceExpression epExpr)
         {
+            if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                epExpr, [_containerAppEnvironmentContext.Environment], out var crossExpr))
+            {
+                return ProcessValue(crossExpr, secretType, parent);
+            }
+
             // Express cannot use a standard environment's private DNS either. Check visibility
             // before delegating, while the original endpoint metadata is still available.
             if (epExpr.Property is EndpointProperty.Url or EndpointProperty.Host or EndpointProperty.IPV4Host or EndpointProperty.HostAndPort)
             {
                 ValidateExpressEndpointReference(epExpr.Endpoint);
-            }
-
-            if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
-                epExpr, [_containerAppEnvironmentContext.Environment], out var crossExpr))
-            {
-                return ProcessValue(crossExpr, secretType, parent);
             }
 
             var context = epExpr.Endpoint.Resource == resource
