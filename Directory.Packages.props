@@ -71,7 +71,6 @@
     <PackageVersion Include="Azure.Provisioning.WebPubSub" Version="1.1.0" />
     <PackageVersion Include="Azure.ResourceManager.Authorization" Version="1.1.7" />
     <PackageVersion Include="Azure.ResourceManager.KeyVault" Version="1.4.0" />
-    <PackageVersion Include="Azure.ResourceManager.Resources" Version="1.12.0" />
     <PackageVersion Include="Azure.ResourceManager.Resources.Deployments" Version="1.0.0" />
     <!-- AspNetCore.HealthChecks dependencies (3rd party packages) -->
     <PackageVersion Include="AspNetCore.HealthChecks.ApplicationStatus" Version="9.0.0" />
