@@ -169,7 +169,7 @@ internal sealed class AtsMarshaller
     private JsonNode? MarshalUnion(object value, AtsTypeRef typeRef)
     {
         // Union properties can return either a literal or a handle (for example a Bicep
-        // expression). Marshal the matching declared member so handles retain its type ID.
+        // expression). Marshal the matching declared member so handles retain their type IDs.
         if (typeRef.UnionTypes is { } members)
         {
             foreach (var member in members)
