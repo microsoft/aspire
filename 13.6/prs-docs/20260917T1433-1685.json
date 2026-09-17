@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal aspire.dev site infrastructure (YouTube WebSub diagnostics for live-status feature on the docs site); not documentation of a product feature, no matching changelog entry",
+  "mergedAt": "2026-09-17T14:33:14Z",
+  "number": 1685,
+  "runDate": "2026-09-17T18:07:25Z",
+  "status": "excluded",
+  "title": "Improve YouTube WebSub handling and live-status diagnostics"
+}

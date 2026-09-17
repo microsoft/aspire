@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Simpler single-member replica-set opt-in on MongoDBServerResource; grouped with existing MongoDB replica set resource entry (#18196)",
+  "mergedAt": "2026-09-17T16:28:44Z",
+  "number": 19961,
+  "runDate": "2026-09-17T18:07:16Z",
+  "status": "included",
+  "title": "Add a simple single-member MongoDB replica set path"
+}

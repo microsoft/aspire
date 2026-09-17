@@ -7,15 +7,16 @@
   "communityContributors": [
     "@aradalvand"
   ],
-  "description": "Introduced a new MongoDBReplicaSetResource meta-resource type for modeling a MongoDB replica set as a single Aspire resource.",
+  "description": "Introduced a new MongoDBReplicaSetResource meta-resource type for modeling a MongoDB replica set as a single Aspire resource. A follow-up adds a simpler `WithReplicaSet()` opt-in directly on the standalone MongoDB server resource, enabling transactions and change streams for the common single-member inner-loop scenario without a separate replica-set resource or TLS configuration.",
   "docsPrs": [],
   "docsRequired": true,
   "emoji": "🍃",
   "firstMergedAt": "2026-09-04T19:35:43Z",
-  "lastMergedAt": "2026-09-04T19:35:43Z",
+  "lastMergedAt": "2026-09-17T16:28:44Z",
   "name": "MongoDB replica set resource",
   "owner": "sebastienros",
   "prs": [
-    18196
+    18196,
+    19961
   ]
 }

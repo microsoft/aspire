@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal aspire.dev frontend navigation/lifecycle fix (Astro site infrastructure); not documentation of a product feature, no matching changelog entry",
+  "mergedAt": "2026-09-17T13:53:54Z",
+  "number": 1681,
+  "runDate": "2026-09-17T18:07:25Z",
+  "status": "excluded",
+  "title": "fix: preserve client navigation lifecycles across pages and deployments"
+}
