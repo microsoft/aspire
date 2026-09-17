@@ -195,7 +195,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             var dimensions = page.GetByRole(AriaRole.Combobox, new() { Name = "Terminal dimensions", Exact = true });
             await dimensions.ClickAsync();
             await page.GetByRole(AriaRole.Option, new() { Name = "80×24", Exact = true }).ClickAsync();
-            await Assertions.Expect(page.Locator(".terminal-dimensions")).ToHaveTextAsync("80 × 24");
+            await Assertions.Expect(dimensions).ToHaveJSPropertyAsync("value", "80x24");
             Assert.NotNull(connection.Presentation.PrimaryPeerId);
             Assert.NotEqual(primaryId, connection.Presentation.PrimaryPeerId);
             await page.WaitForFunctionAsync("() => window.terminalObserver.geometry.columns === 80 && window.terminalObserver.geometry.rows === 24").DefaultTimeout();
@@ -276,8 +276,8 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     }
 
     private static Task ExpectProducerDimensionsAsync(IPage page) =>
-        Assertions.Expect(page.Locator(".terminal-dimensions"))
-            .ToHaveTextAsync($"{TestTerminalConnection.Columns} × {TestTerminalConnection.Rows}");
+        Assertions.Expect(page.GetByRole(AriaRole.Combobox, new() { Name = "Terminal dimensions", Exact = true }))
+            .ToHaveJSPropertyAsync("value", $"{TestTerminalConnection.Columns}x{TestTerminalConnection.Rows}");
 
     private static Task SetReadOnlyAsync(IPage page, int terminalId, TerminalViewSession session, bool readOnly)
     {

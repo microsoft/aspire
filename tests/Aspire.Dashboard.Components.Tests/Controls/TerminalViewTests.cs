@@ -124,15 +124,14 @@ public class TerminalViewTests : DashboardTestContext
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         module.Setup<int>("initTerminal", _ => true).SetResult(1);
         var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
-        var fitButton = cut.FindComponents<FluentButton>().Single(p => p.Instance.Class == "terminal-fit");
-        Assert.True(fitButton.Instance.Disabled);
+        Assert.True(cut.Find(".terminal-fit").HasAttribute("disabled"));
 
         await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
         {
             TerminalId = 1, Generation = 1, Connected = true, FitEnabled = true,
             Cols = 97, Rows = 38, SizeKey = "97x38", SizeSelectEnabled = true
         }));
-        Assert.False(fitButton.Instance.Disabled);
+        Assert.False(cut.Find(".terminal-fit").HasAttribute("disabled"));
         Assert.Equal(Resources.ConsoleLogs.TerminalToolbarGridSizeAuto, cut.Find(".terminal-fit").TextContent.Trim());
         var items = cut.FindComponent<FluentSelect<TerminalSizePreset, string>>().Instance.Items;
         Assert.NotNull(items);
@@ -145,7 +144,7 @@ public class TerminalViewTests : DashboardTestContext
             TerminalId = 1, Generation = 1, Connected = true, FitEnabled = false,
             Cols = 97, Rows = 38, SizeKey = "97x38"
         }));
-        Assert.True(fitButton.Instance.Disabled);
+        Assert.True(cut.Find(".terminal-fit").HasAttribute("disabled"));
     }
 
     [Fact]
