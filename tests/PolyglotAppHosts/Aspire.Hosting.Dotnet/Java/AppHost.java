@@ -6,6 +6,9 @@ void main() throws Exception {
         var options = new DotnetProjectOptions();
         options.setLaunchProfileName("https");
         var project = builder.addDotnetProject("project", "./src/Project/Project.csproj", options);
+        project.withReplicas(2);
+        project.disableForwardedHeaders();
+        project.withEndpointsInEnvironment(new String[] { "http" });
         project.name();
         project.command();
         project.workingDirectory();

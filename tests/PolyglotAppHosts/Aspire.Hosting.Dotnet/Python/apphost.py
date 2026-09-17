@@ -7,6 +7,9 @@ with create_builder() as builder:
         "./src/Project/Project.csproj",
         options={"LaunchProfileName": "https"},
     )
+    project.with_replicas(2)
+    project.disable_forwarded_headers()
+    project.with_endpoints_in_env(["http"])
     _ = project.name
     _ = project.command
     _ = project.working_dir

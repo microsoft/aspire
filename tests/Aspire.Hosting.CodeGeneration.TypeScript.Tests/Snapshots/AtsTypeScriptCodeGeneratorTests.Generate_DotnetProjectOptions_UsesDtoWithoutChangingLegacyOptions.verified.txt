@@ -1,4 +1,4 @@
-{
+﻿{
   ProjectV2Options:
 export interface DotnetProjectOptions {
     /** The launch profile to use. If omitted or null, the default launch profile is used. */

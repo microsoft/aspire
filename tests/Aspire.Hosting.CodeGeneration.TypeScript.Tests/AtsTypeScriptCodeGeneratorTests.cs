@@ -231,6 +231,109 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_WithExperimentalCapability_EmitsExperimentalMetadata()
+    {
+        var context = CreateContextFromTestAssembly();
+        var capability = CreateDistributedApplicationBuilderCapability(
+            context,
+            methodName: "withExperimentalFeature",
+            description: null,
+            documentation: new AtsDocumentationInfo { Summary = "Configures an experimental feature." },
+            isExperimental: true);
+        context = WithAdditionalCapabilities(context, capability);
+
+        var aspireTs = _generator.GenerateDistributedApplication(context)["aspire.mts"];
+        Assert.Contains(
+            "     * @experimental\n     */\n    withExperimentalFeature(",
+            aspireTs.ReplaceLineEndings("\n"),
+            StringComparison.Ordinal);
+
+        var model = ProjectApi(context, "Aspire.Hosting");
+        var member = Assert.Single(
+            model.Modules.SelectMany(static module => module.Items)
+                .SelectMany(static item => item.Members),
+            static member => member.Name == "withExperimentalFeature");
+        Assert.True(member.IsExperimental);
+
+        using var document = System.Text.Json.JsonDocument.Parse(TypeScriptApiExportWriter.WriteToJson(model));
+        var exportedMember = Assert.Single(
+            document.RootElement.GetProperty("modules")[0].GetProperty("items")
+                .EnumerateArray()
+                .Where(static item => item.TryGetProperty("members", out _))
+                .SelectMany(static item => item.GetProperty("members").EnumerateArray()),
+            static member => member.GetProperty("name").GetString() == "withExperimentalFeature");
+        Assert.True(exportedMember.GetProperty("experimental").GetBoolean());
+    }
+
+    [Fact]
+    public async Task GenerateDistributedApplication_WithExperimentalProperty_EmitsExperimentalMetadata()
+    {
+        var targetType = new AtsTypeRef
+        {
+            TypeId = $"{ApiExportPackageName}/PropertyContext",
+            Category = AtsTypeCategory.Handle
+        };
+        var stringType = new AtsTypeRef
+        {
+            TypeId = AtsConstants.String,
+            Category = AtsTypeCategory.Primitive
+        };
+        var context = CreateApiContext(
+            new AtsCapabilityInfo
+            {
+                CapabilityId = $"{ApiExportPackageName}/PropertyContext.name",
+                MethodName = "name",
+                OwningTypeName = "PropertyContext",
+                Parameters = [],
+                ReturnType = stringType,
+                TargetTypeId = targetType.TypeId,
+                TargetType = targetType,
+                CapabilityKind = AtsCapabilityKind.PropertyGetter,
+                IsExperimental = true
+            },
+            new AtsCapabilityInfo
+            {
+                CapabilityId = $"{ApiExportPackageName}/PropertyContext.setName",
+                MethodName = "setName",
+                OwningTypeName = "PropertyContext",
+                Parameters = [new AtsParameterInfo { Name = "value", Type = stringType }],
+                ReturnType = targetType,
+                TargetTypeId = targetType.TypeId,
+                TargetType = targetType,
+                CapabilityKind = AtsCapabilityKind.PropertySetter,
+                IsExperimental = true
+            });
+
+        var model = ProjectApi(context, ApiExportPackageName);
+        var member = Assert.Single(
+            model.Modules.SelectMany(static module => module.Items).SelectMany(static item => item.Members),
+            static member => member.Name == "name");
+        Assert.Equal(TypeScriptApiItemKind.Property, member.Kind);
+        Assert.True(member.IsExperimental);
+
+        using var document = System.Text.Json.JsonDocument.Parse(TypeScriptApiExportWriter.WriteToJson(model));
+        var exportedMember = Assert.Single(
+            document.RootElement.GetProperty("modules")[0].GetProperty("items").EnumerateArray()
+                .Where(static item => item.TryGetProperty("members", out _))
+                .SelectMany(static item => item.GetProperty("members").EnumerateArray()),
+            static member => member.GetProperty("name").GetString() == "name");
+        Assert.True(exportedMember.GetProperty("experimental").GetBoolean());
+
+        var source = _generator.GenerateDistributedApplication(context)["aspire.mts"].ReplaceLineEndings("\n");
+        var interfaceStart = source.IndexOf("export interface PropertyContext {", StringComparison.Ordinal);
+        Assert.True(interfaceStart >= 0);
+        // The property has nested accessors, so find the interface's unindented closing brace.
+        var interfaceEnd = source.IndexOf("\n}", interfaceStart, StringComparison.Ordinal);
+        Assert.True(interfaceEnd >= 0);
+
+        await Verify(new
+        {
+            Source = source[interfaceStart..(interfaceEnd + 2)],
+            Api = exportedMember.GetRawText()
+        }).UseFileName("AtsExperimentalProperty");
+    }
+
+    [Fact]
     public void GenerateDistributedApplication_WithVoidReturn_DoesNotEmitReturnsDocumentation()
     {
         var context = CreateContextFromTestAssembly();
@@ -1646,7 +1749,8 @@ public class AtsTypeScriptCodeGeneratorTests
         AtsContext context,
         string methodName,
         string? description,
-        AtsDocumentationInfo documentation)
+        AtsDocumentationInfo documentation,
+        bool isExperimental = false)
     {
         var addTestRedis = context.Capabilities.First(c => c.CapabilityId == "Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestRedis");
 
@@ -1656,6 +1760,7 @@ public class AtsTypeScriptCodeGeneratorTests
             MethodName = methodName,
             Description = description,
             Documentation = documentation,
+            IsExperimental = isExperimental,
             Parameters = [],
             ReturnType = new AtsTypeRef
             {

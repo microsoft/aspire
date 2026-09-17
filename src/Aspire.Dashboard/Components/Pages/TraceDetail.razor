@@ -424,24 +424,14 @@
         var trace = _trace;
         Debug.Assert(trace is not null, "Trace should be available here");
 
-        return @<FluentOverflow Class="trace-header-details">
-            <ChildContent>
+        var items = GetTraceDetailItems(trace);
+
+        return @<FluentOverflow TItem="TraceDetailItem" Items="@items" Class="trace-header-details">
+            <ItemTemplate Context="item">
                 <div>
-                    @Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceStartHeader)] <strong title="@FormatHelpers.FormatDateTime(TimeProvider, trace.FirstSpan.StartTime, MillisecondsDisplay.Full)">@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, trace.FirstSpan.StartTime, MillisecondsDisplay.Truncated)</strong>
+                    @item.Name <strong title="@item.Tooltip">@item.Value</strong>
                 </div>
-                <div>
-                    @Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailDurationHeader)] <strong>@DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)</strong>
-                </div>
-                <div>
-                    @Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailResourcesHeader)] <strong>@_resourceCount</strong>
-                </div>
-                <div>
-                    @Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailDepthHeader)] <strong>@_maxDepth</strong>
-                </div>
-                <div>
-                    @Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTotalSpansHeader)] <strong>@trace.Spans.Count</strong>
-                </div>
-            </ChildContent>
+            </ItemTemplate>
             <MoreTemplate Context="overflow">
                 <FluentBadge Class="trace-header-overflow-badge"
                              Style="min-width: 32px; max-width: 32px;"
@@ -451,9 +441,9 @@
             <OverflowTemplate Context="overflow">
                 <FluentTooltip UseTooltipService="false" Anchor="@overflow.IdMoreButton"
                                Class="trace-header-tooltip">
-                    @foreach (var item in overflow.ItemsOverflow)
+                    @foreach (var item in overflow.Items)
                     {
-                        <div style="margin: 5px;">@item.Text</div>
+                        <div style="margin: 5px;" title="@item.Tooltip">@item.Name <strong>@item.Value</strong></div>
                     }
                 </FluentTooltip>
             </OverflowTemplate>

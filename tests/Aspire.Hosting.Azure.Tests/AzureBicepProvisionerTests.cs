@@ -15,8 +15,8 @@ using Aspire.Hosting.Utils;
 using Azure;
 using Azure.Core;
 using Azure.ResourceManager;
-using Azure.ResourceManager.Resources;
-using Azure.ResourceManager.Resources.Models;
+using Azure.ResourceManager.Resources.Deployments;
+using Azure.ResourceManager.Resources.Deployments.Models;
 using Azure.Security.KeyVault.Secrets;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
@@ -1840,7 +1840,7 @@ public class AzureBicepProvisionerTests
     private static async Task SeedRunningDeploymentStateAsync(IDeploymentStateManager deploymentStateManager, AzureBicepResource resource, string deploymentId)
     {
         var parameters = new JsonObject();
-        await BicepUtilities.SetParametersAsync(parameters, resource);
+        await BicepUtilities.SetParametersAsync(parameters, resource, new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
 
         var scope = new JsonObject();
         await BicepUtilities.SetScopeAsync(scope, resource);

@@ -193,6 +193,12 @@ fluent-dialog-body {
     max-height: calc(100dvh - 48px) !important;
 }
 
+fluent-dialog-body::part(content) {
+    /* Browser scaling can round the content's client height below its scroll height. Let an
+       unconstrained dialog absorb that rounding while preserving scrolling at max-height. */
+    padding-block-end: 1px;
+}
+
 fluent-dialog-body fluent-dropdown,
 fluent-dialog-body fluent-text-input {
     --colorNeutralBackground1: var(--dialog-control-background);
@@ -523,7 +529,6 @@ fluent-dialog-body.toolbar-panel-body > [slot="action"] .mobile-toolbar {
 }
 
 fluent-dialog-body::part(content) {
-    min-height: 80px;
     align-content: center;
 }
 
@@ -563,6 +568,10 @@ fluent-dialog-body::part(content) {
         overflow: auto;
         align-content: normal;
     }
+}
+
+fluent-dialog-body .fluent-message-box {
+    margin-top: 0 !important;
 }
 
 .dialog-format fluent-dropdown {
@@ -753,10 +762,11 @@ fluent-dialog-body::part(content) {
 }
 
 /* Floating scroll-to-bottom button for overflowing live-data regions. Position and visibility
-   classes are managed by app.js so the control can follow Blazor-owned scroll containers. */
+    classes are managed by app-scroll.js so the control can follow Blazor-owned scroll containers. */
 .scroll-buttons {
     position: fixed;
-    z-index: 9000;
+    /* Modal dialogs and their backdrops render in the browser's top layer above this control. */
+    z-index: 100;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;

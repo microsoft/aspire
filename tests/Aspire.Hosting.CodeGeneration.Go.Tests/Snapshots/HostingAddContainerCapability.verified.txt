@@ -21,6 +21,7 @@
       }
     ]
   },
+  IsExperimental: false,
   IsObsolete: false,
   Parameters: [
     {

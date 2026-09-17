@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOTNETPROJECT001, ASPIREEXTENSION001, ASPIREPIPELINES001
+#pragma warning disable ASPIREDOTNETPROJECT001, ASPIREEXTENSION001, ASPIREPIPELINES001, ASPIREPROJECTS001
 
 using System.Reflection;
 using System.Text.Json;
@@ -100,6 +100,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
 
         Assert.Empty(builder.Resources.OfType<DotnetProjectBuildResource>());
+        Assert.Empty(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
         Assert.False(Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>()).SuppressBuild);
         Assert.Equal(
             KnownLaunchConfigurationTypes.Project,
@@ -210,7 +211,8 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         builder.Configuration["AppHost:Run:WatchEnabled"] = watchEnabled.ToString();
 
-        var project = builder.AddDotnetProject("api", "Api.csproj", options => options.ExcludeLaunchProfile = true);
+        var project = builder.AddDotnetProject("api", "Api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithReplicas(2);
 
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
         AssertBuildDependency(project.Resource, buildResource);
@@ -1590,7 +1592,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
         Assert.Equal([NormalizeProjectPath(apiPath), NormalizeProjectPath(workerPath)], buildResource.ProjectPaths);
-        Assert.Equal(sourceRoot, buildResource.WorkingDirectory);
+        Assert.Equal(TestPathNormalizer.ResolveSymlinks(sourceRoot), buildResource.WorkingDirectory);
         Assert.Equal(runtimeWorkingDirectory, worker.Resource.WorkingDirectory);
     }
 
@@ -2201,6 +2203,92 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
     [Fact]
     [RequiresTools(["dotnet"])]
+    public async Task ReplicasShareOneCoordinatedBuildAndLaunchDistinctProcesses()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sharedProject = CreateSharedProject(workspace.Path);
+        var projectPath = CreateConsoleProject(workspace.Path, "Api", sharedProject);
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(projectPath)!, "Program.cs"), """
+            using Shared;
+
+            File.WriteAllText(
+                Path.Combine(args[0], $"{Environment.ProcessId}.txt"),
+                SharedValue.Value);
+            """);
+        var sentinels = Directory.CreateDirectory(Path.Combine(workspace.Path, "instances")).FullName;
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper).WithResourceCleanUp(true);
+        var resource = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithReplicas(2)
+            .WithArgs(sentinels);
+        await using var app = builder.Build();
+
+        using (var startCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.StartAsync(startCts.Token);
+        }
+
+        var instances = resource.Resource.GetResolvedResourceNames();
+        Assert.Equal(2, instances.Length);
+        using (var completionCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await Task.WhenAll(instances.Select(name =>
+                app.ResourceNotifications.WaitForResourceAsync(
+                    resource.Resource.Name,
+                    resourceEvent => resourceEvent.ResourceId == name && resourceEvent.Snapshot.State?.Text == KnownResourceStates.Finished,
+                    completionCts.Token)));
+        }
+
+        using (var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.StopAsync(stopCts.Token);
+        }
+
+        var files = Directory.GetFiles(sentinels, "*.txt");
+        Assert.Equal(2, files.Length);
+        Assert.All(files, path => Assert.Equal("shared", File.ReadAllText(path)));
+        Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        Assert.Single(File.ReadAllLines(GetBuildCountPath(sharedProject)));
+        Assert.Single(File.ReadAllLines(GetBuildCountPath(projectPath)));
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task FailedCoordinatedBuildPreventsEveryReplicaFromStarting()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateBrokenProject(workspace.Path, "REPLICAS_BUILD_FAILED");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper).WithResourceCleanUp(true);
+        var resource = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithReplicas(2);
+        await using var app = builder.Build();
+
+        using (var startCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.StartAsync(startCts.Token);
+        }
+
+        var instances = resource.Resource.GetResolvedResourceNames();
+        Assert.Equal(2, instances.Length);
+        using (var failureCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await Task.WhenAll(instances.Select(name =>
+                app.ResourceNotifications.WaitForResourceAsync(
+                    resource.Resource.Name,
+                    resourceEvent => resourceEvent.ResourceId == name && resourceEvent.Snapshot.State?.Text == KnownResourceStates.FailedToStart,
+                    failureCts.Token)));
+        }
+
+        Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        using var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync(stopCts.Token);
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
     public async Task MultipleBuildGroupsRunSeriallyBeforeServicesStart()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -2526,6 +2614,273 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         {
             await app.StopAsync(stopCts.Token);
         }
+    }
+
+    [Fact]
+    public async Task BuildCompletionCapabilityWaitsBeforeMaterializationForFinalBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        var filePath = Path.Combine(workspace.Path, "worker.cs");
+        File.WriteAllText(filePath, "System.Console.WriteLine(\"Started\");");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path, outputHelper);
+        var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        builder.AddDotnetProject("worker", filePath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+
+        var wait = completion.Callback(app.Services, TestContext.Current.CancellationToken);
+        Assert.False(wait.IsCompleted);
+        await PublishBeforeStartAsync(builder, app);
+        var builds = builder.Resources.OfType<DotnetProjectBuildResource>().ToArray();
+        Assert.Equal(2, builds.Length);
+        await app.ResourceNotifications.PublishUpdateAsync(builds[0], snapshot => snapshot with
+        {
+            State = KnownResourceStates.Finished,
+            ExitCode = 1
+        });
+        await app.ResourceNotifications.PublishUpdateAsync(builds[1], snapshot => snapshot with
+        {
+            State = KnownResourceStates.Finished,
+            ExitCode = 0
+        });
+
+        await wait.WaitAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task ConcurrentBuildPlanMaterializationJoinsCurrentAttempt()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path, outputHelper);
+        builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        var coordinator = app.Services.GetRequiredService<DotnetProjectBuildCoordinator.CoordinatorState>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var firstMaterializationEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondInvocationFinished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var releaseMaterialization = new ManualResetEventSlim();
+        var applicationStoppedAccessCount = 0;
+        var lifetime = new TestHostApplicationLifetime(() =>
+        {
+            Interlocked.Increment(ref applicationStoppedAccessCount);
+            firstMaterializationEntered.TrySetResult();
+            releaseMaterialization.Wait(TestContext.Current.CancellationToken);
+            return default;
+        });
+        using var services = new ServiceCollection()
+            .AddSingleton<IHostApplicationLifetime>(lifetime)
+            .BuildServiceProvider();
+
+        Task? firstAttempt = null;
+        var firstInvocation = Task.Run(() =>
+        {
+            firstAttempt = coordinator.MaterializeBuildPlan(model, services);
+        });
+        await firstMaterializationEntered.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        Task? secondAttempt = null;
+        Exception? secondException = null;
+        var secondInvocation = Task.Run(() =>
+        {
+            try
+            {
+                secondAttempt = coordinator.MaterializeBuildPlan(model, services);
+            }
+            catch (Exception ex)
+            {
+                secondException = ex;
+            }
+            finally
+            {
+                secondInvocationFinished.TrySetResult();
+            }
+        });
+
+        try
+        {
+            await secondInvocationFinished.Task.WaitAsync(TestContext.Current.CancellationToken);
+            Assert.Null(secondException);
+            Assert.NotNull(secondAttempt);
+            Assert.False(secondAttempt.IsCompleted);
+            Assert.Equal(1, Volatile.Read(ref applicationStoppedAccessCount));
+        }
+        finally
+        {
+            releaseMaterialization.Set();
+        }
+
+        await Task.WhenAll(firstInvocation, secondInvocation);
+        Assert.NotNull(firstAttempt);
+        await Task.WhenAll(firstAttempt, secondAttempt);
+        Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+    }
+
+    [Theory]
+    [InlineData(nameof(KnownResourceStates.Finished), 1)]
+    [InlineData(nameof(KnownResourceStates.FailedToStart), null)]
+    public async Task BuildCompletionCapabilityWaitsForKnownExitAndAllowsRetry(string finalState, int? exitCode)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path, outputHelper);
+        var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await PublishBeforeStartAsync(builder, app);
+        var build = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        await app.ResourceNotifications.PublishUpdateAsync(build, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Finished,
+            ExitCode = null
+        });
+
+        var wait = completion.Callback(app.Services, TestContext.Current.CancellationToken);
+        Assert.False(wait.IsCompleted);
+        await app.ResourceNotifications.PublishUpdateAsync(build, snapshot => snapshot with
+        {
+            State = finalState,
+            ExitCode = exitCode
+        });
+        await Assert.ThrowsAsync<DistributedApplicationException>(() => wait);
+
+        await app.ResourceNotifications.PublishUpdateAsync(build, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running,
+            ExitCode = null
+        });
+        var retry = completion.Callback(app.Services, TestContext.Current.CancellationToken);
+        Assert.False(retry.IsCompleted);
+        await app.ResourceNotifications.PublishUpdateAsync(build, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Finished,
+            ExitCode = 0
+        });
+        await retry;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BuildCompletionCapabilityCancellationDoesNotCancelOtherConsumers(bool materializeFirst)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path, outputHelper);
+        var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        if (materializeFirst)
+        {
+            await PublishBeforeStartAsync(builder, app);
+        }
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        using var canceled = new CancellationTokenSource();
+        var canceledWait = completion.Callback(app.Services, canceled.Token);
+        var otherWait = completion.Callback(app.Services, TestContext.Current.CancellationToken);
+
+        canceled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceledWait);
+        Assert.False(otherWait.IsCompleted);
+        if (!materializeFirst)
+        {
+            await PublishBeforeStartAsync(builder, app);
+        }
+        var build = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        await app.ResourceNotifications.PublishUpdateAsync(build, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Finished,
+            ExitCode = 0
+        });
+        await otherWait;
+        await completion.Callback(app.Services, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task BuildCompletionCapabilityObservesRebuildGenerations()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path, outputHelper);
+        var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+        await PublishBeforeStartAsync(builder, app);
+        var build = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        await app.ResourceNotifications.PublishUpdateAsync(build, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Finished,
+            ExitCode = 0
+        });
+        await app.ResourceNotifications.PublishUpdateAsync(rebuilder, snapshot => snapshot with
+        {
+            State = KnownResourceStates.NotStarted
+        });
+        await completion.Callback(app.Services, TestContext.Current.CancellationToken);
+
+        foreach (var exitCode in new[] { 1, 0 })
+        {
+            await app.ResourceNotifications.PublishUpdateAsync(rebuilder, snapshot => snapshot with
+            {
+                State = KnownResourceStates.Running,
+                ExitCode = null
+            });
+            var wait = completion.Callback(app.Services, TestContext.Current.CancellationToken);
+            Assert.False(wait.IsCompleted);
+            await app.ResourceNotifications.PublishUpdateAsync(rebuilder, snapshot => snapshot with
+            {
+                State = KnownResourceStates.Exited,
+                ExitCode = exitCode
+            });
+            if (exitCode == 0)
+            {
+                await wait;
+            }
+            else
+            {
+                await Assert.ThrowsAsync<DistributedApplicationException>(() => wait);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task BuildCompletionCapabilityObservesMaterializationFailureAndRetry()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        var filePath = Path.Combine(workspace.Path, "worker.cs");
+        File.WriteAllText(filePath, "System.Console.WriteLine(\"Started\");");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path, outputHelper);
+        var project = builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        builder.AddDotnetProject("worker", filePath, options => options.ExcludeLaunchProfile = true);
+        var conflict = new ParameterResource($"{DotnetProjectBuildCoordinator.BuildResourceName}-2", _ => "conflict");
+        conflict.Annotations.Add(NameValidationPolicyAnnotation.None);
+        builder.AddResource(conflict);
+        await using var app = builder.Build();
+        var completion = Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        var wait = completion.Callback(app.Services, TestContext.Current.CancellationToken);
+
+        await Assert.ThrowsAsync<DistributedApplicationException>(() => PublishBeforeStartAsync(builder, app));
+        await Assert.ThrowsAsync<DistributedApplicationException>(() => wait);
+
+        builder.Resources.Remove(conflict);
+        var retry = completion.Callback(app.Services, TestContext.Current.CancellationToken);
+        Assert.False(retry.IsCompleted);
+        await PublishBeforeStartAsync(builder, app);
+        var finalBuild = builder.Resources.OfType<DotnetProjectBuildResource>().Last();
+        await app.ResourceNotifications.PublishUpdateAsync(finalBuild, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Finished,
+            ExitCode = 0
+        });
+        await retry;
     }
 
     [Fact]

@@ -10,6 +10,35 @@ namespace Infrastructure.Tests;
 public sealed class NuGetConfigTests
 {
     [Fact]
+    public void AuditSourceIsSeparateFromPackageSources()
+    {
+        var root = XDocument.Load(Path.Combine(RepoRoot.Path, "NuGet.config")).Root!;
+        var auditSources = Assert.Single(root.Elements("auditSources"));
+
+        Assert.Collection(auditSources.Elements(),
+            clear =>
+            {
+                Assert.Equal("clear", clear.Name.LocalName);
+                Assert.Empty(clear.Attributes());
+                Assert.Empty(clear.Nodes());
+            },
+            source =>
+            {
+                Assert.Equal("add", source.Name.LocalName);
+                Assert.Equal("nuget.org", (string?)source.Attribute("key"));
+                Assert.Equal("https://data.nuget.org/v3/index.json", (string?)source.Attribute("value"));
+                Assert.Equal(2, source.Attributes().Count());
+                Assert.Empty(source.Nodes());
+            });
+
+        Assert.All(root.Element("packageSources")!.Elements("add"), source =>
+        {
+            var uri = new Uri(source.Attribute("value")!.Value);
+            Assert.Contains(uri.Host, new[] { "pkgs.dev.azure.com", "dnceng.pkgs.visualstudio.com" });
+        });
+    }
+
+    [Fact]
     public void DiagnosticsPackagesAreMappedToPublicAndToolsFeeds()
     {
         var document = XDocument.Load(Path.Combine(RepoRoot.Path, "NuGet.config"));
