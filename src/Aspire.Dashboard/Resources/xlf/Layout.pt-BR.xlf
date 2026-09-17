@@ -78,8 +78,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutToggleTerminalDock">
-        <source>Toggle terminal (Shift+`)</source>
-        <target state="new">Toggle terminal (Shift+`)</target>
+        <source>Toggle terminal (`)</source>
+        <target state="new">Toggle terminal (`)</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutUnhandledErrorMessage">
@@ -193,8 +193,8 @@
         <note>{0} is the terminal dock height in CSS pixels.</note>
       </trans-unit>
       <trans-unit id="TerminalDockHide">
-        <source>Hide terminal panel (Shift+`)</source>
-        <target state="new">Hide terminal panel (Shift+`)</target>
+        <source>Hide terminal panel (`)</source>
+        <target state="new">Hide terminal panel (`)</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockMoreInformation">
@@ -213,8 +213,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockPanelHint">
-        <source>Press Shift+` to hide this panel.</source>
-        <target state="new">Press Shift+` to hide this panel.</target>
+        <source>Press ` to hide this panel.</source>
+        <target state="new">Press ` to hide this panel.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockResizeHelp">

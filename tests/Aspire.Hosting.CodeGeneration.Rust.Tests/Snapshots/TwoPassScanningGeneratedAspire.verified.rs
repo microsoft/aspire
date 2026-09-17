@@ -1,4 +1,4 @@
-//! aspire.rs - Capability-based Aspire SDK
+﻿//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -422,8 +422,6 @@ pub enum InputType {
     Number,
     #[serde(rename = "File")]
     File,
-    #[serde(rename = "Terminal")]
-    Terminal,
 }
 
 impl std::fmt::Display for InputType {
@@ -435,7 +433,6 @@ impl std::fmt::Display for InputType {
             Self::Boolean => write!(f, "Boolean"),
             Self::Number => write!(f, "Number"),
             Self::File => write!(f, "File"),
-            Self::Terminal => write!(f, "Terminal"),
         }
     }
 }

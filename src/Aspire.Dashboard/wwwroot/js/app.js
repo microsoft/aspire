@@ -348,14 +348,6 @@ window.registerGlobalKeydownListener = function (shortcutManager) {
 
     function calculateShortcut(e) {
         if (modifierKeysExceptShiftNotPressed(e)) {
-            // Match the physical Shift+Backquote gesture across keyboard layouts, not the produced character.
-            // The focused-input guard runs before this, so terminal and text inputs still receive their keys.
-            // To toggle from terminal input, press F6 first to focus its controls.
-            // https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code
-            if (e.shiftKey && e.code === "Backquote") {
-                return 400;
-            }
-
             /* general shortcuts */
             switch (e.key) {
                 case "?": // help
@@ -379,6 +371,14 @@ window.registerGlobalKeydownListener = function (shortcutManager) {
         }
 
         if (hasNoModifiers(e)) {
+            // Match the unmodified physical Backquote key across keyboard layouts, not the produced character.
+            // The focused-input guard runs before this, so terminal and text inputs still receive their keys.
+            // To toggle from terminal input, press F6 first to focus its controls.
+            // https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/code
+            if (e.code === "Backquote") {
+                return 400;
+            }
+
             switch (e.key) {
                 case "r": // go to resources
                     return 200;

@@ -97,7 +97,7 @@ public sealed class TerminalService : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        return CreateTerminal(options.Title, options.Placement, CreateBuilder(options));
+        return CreateTerminal(options.Title, options.Placement, CreateBuilder(options), options.Columns, options.Rows);
     }
 
     /// <summary>
@@ -114,7 +114,6 @@ public sealed class TerminalService : IAsyncDisposable
     private static Hex1bTerminalBuilder CreateBuilder(TerminalLaunchOptions options)
     {
         return Hex1bTerminal.CreateBuilder()
-            .WithDimensions(options.Columns, options.Rows)
             .WithPtyProcess(process =>
             {
                 process.FileName = options.Executable;
@@ -136,10 +135,12 @@ public sealed class TerminalService : IAsyncDisposable
     /// <see cref="TerminalLaunchOptions"/> cannot describe — notably the dock's built-in terminal, which runs an
     /// in-process Hex1b app rather than a child process.
     /// </remarks>
-    internal AspireTerminal CreateTerminal(string title, TerminalPlacement placement, Hex1bTerminalBuilder builder)
+    internal AspireTerminal CreateTerminal(string title, TerminalPlacement placement, Hex1bTerminalBuilder builder, int columns, int rows)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
         ArgumentNullException.ThrowIfNull(builder);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(columns);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rows);
 
         // AppHost-owned terminals have no resource view. Validate both creation paths here before registration,
         // while retaining None for terminals driven only through automation.
@@ -159,7 +160,7 @@ public sealed class TerminalService : IAsyncDisposable
         lock (_syncLock)
         {
             ObjectDisposedException.ThrowIf(_disposed != 0, this);
-            terminal = new Hex1bAspireTerminal(this, id, title, placement, builder, _logger);
+            terminal = new Hex1bAspireTerminal(this, id, title, placement, builder, columns, rows, _logger);
             _terminals[id] = terminal;
 
             if (terminal.Placement == TerminalPlacement.Dock)

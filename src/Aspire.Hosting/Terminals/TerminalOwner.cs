@@ -9,9 +9,8 @@ namespace Aspire.Hosting.Terminals;
 /// Identifies whether the AppHost or an application resource controls a terminal's workload lifetime.
 /// </summary>
 /// <remarks>
-/// This is fixed when the terminal is created and never changes. It is distinct from
-/// <see cref="TerminalPlacement"/>, which describes where the terminal is currently displayed and can change
-/// over the terminal's life.
+/// Ownership is fixed when a terminal is created. It is distinct from <see cref="TerminalPlacement"/>,
+/// which describes where the terminal is displayed and is also fixed at creation.
 /// </remarks>
 [Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public enum TerminalOwner

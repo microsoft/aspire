@@ -8,6 +8,13 @@ import { runInNewContext } from "node:vm";
 
 const source = await readFile(new URL("../../../src/Aspire.Dashboard/wwwroot/js/app.js", import.meta.url), "utf8");
 
+const backquote = { key: "`", code: "Backquote", shiftKey: false, altKey: false, ctrlKey: false, metaKey: false };
+const dashboardKeys = [
+    ...["c", "r", "s", "t", "m", "?", "S", "+", "-"].map(key => ({ key })),
+    backquote,
+    { ...backquote, key: "~", shiftKey: true },
+];
+
 function element(tagName, activeElement, parentElement = null) {
     return {
         tagName, children: [], parentElement,
@@ -23,7 +30,7 @@ function element(tagName, activeElement, parentElement = null) {
     };
 }
 
-function shortcutsFor(activeElement) {
+function shortcutsFor(activeElement, events = dashboardKeys) {
     const listeners = new Map();
     const shortcuts = [];
     const document = {
@@ -45,8 +52,8 @@ function shortcutsFor(activeElement) {
             shortcuts.push(shortcut);
         },
     });
-    for (const key of ["c", "r", "s", "t", "m", "?", "S", "+", "-"]) {
-        listeners.get("keydown")({ key });
+    for (const event of events) {
+        listeners.get("keydown")(event);
     }
     window.unregisterGlobalKeydownListener(registration);
     assert.equal(listeners.has("keydown"), false);
@@ -83,6 +90,24 @@ test("Fluent dropdown controls and options suppress dashboard shortcuts", () => 
 
 test("dashboard shortcuts remain available outside inputs", () => {
     for (const target of [element("BODY"), element("BUTTON"), element("DIV", element("BUTTON"))]) {
-        assert.deepEqual(shortcutsFor(target), [210, 200, 220, 230, 240, 100, 110, 330, 340]);
+        assert.deepEqual(shortcutsFor(target), [210, 200, 220, 230, 240, 100, 110, 330, 340, 400]);
+    }
+});
+
+test("the unmodified physical Backquote key toggles the dock across keyboard layouts", () => {
+    for (const key of ["`", "^", "Dead"]) {
+        assert.deepEqual(shortcutsFor(element("BUTTON"), [{ ...backquote, key }]), [400]);
+    }
+});
+
+test("modified Backquote keys and backticks from other physical keys do not toggle the dock", () => {
+    for (const event of [
+        { ...backquote, key: "~", shiftKey: true },
+        { ...backquote, altKey: true },
+        { ...backquote, ctrlKey: true },
+        { ...backquote, metaKey: true },
+        { ...backquote, code: "BracketRight" },
+    ]) {
+        assert.deepEqual(shortcutsFor(element("BUTTON"), [event]), []);
     }
 });

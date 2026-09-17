@@ -21,9 +21,8 @@ namespace Aspire.Hosting.Terminals;
 [Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public sealed class TerminalLaunchOptions
 {
-    // Start wider than 80x24 so output is not wrapped before a viewer negotiates its size.
-    private const int DefaultColumns = 120;
-    private const int DefaultRows = 32;
+    private const int DefaultColumns = 80;
+    private const int DefaultRows = 24;
 
     /// <summary>
     /// Gets or sets the title shown on the terminal's dock tab, and in the title bar when the terminal is
@@ -80,12 +79,11 @@ public sealed class TerminalLaunchOptions
     public IDictionary<string, string> EnvironmentVariables { get; } = new Dictionary<string, string>(StringComparer.Ordinal);
 
     /// <summary>
-    /// Gets or sets the requested initial number of columns. Defaults to 120.
+    /// Gets or sets the initial number of columns. Defaults to 80.
     /// </summary>
     /// <remarks>
-    /// This is only the initial grid. A viewer that attaches renegotiates the size to fit the space it has,
-    /// so this matters mainly for terminals driven by automation before anyone attaches.
-    /// The current HMP server initializes at 80 columns and 24 rows, overriding these requested dimensions.
+    /// The process starts with this grid and retains it while no viewer requests a resize.
+    /// Dock and interaction dialog viewers resize the grid to fit their available space when shown.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="value"/> is less than one.</exception>
     public int Columns
@@ -99,7 +97,7 @@ public sealed class TerminalLaunchOptions
     } = DefaultColumns;
 
     /// <summary>
-    /// Gets or sets the requested initial number of rows. Defaults to 32.
+    /// Gets or sets the initial number of rows. Defaults to 24.
     /// </summary>
     /// <inheritdoc cref="Columns" path="/remarks"/>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="value"/> is less than one.</exception>

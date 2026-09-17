@@ -21,6 +21,112 @@ namespace Aspire.Hosting.Tests.Terminals;
 public class Hex1bAspireTerminalTests
 {
     [Theory]
+    [InlineData(80, 24)]
+    [InlineData(82, 28)]
+    [InlineData(160, 48)]
+    [InlineData(40, 12)]
+    public async Task CreateTerminal_InitialScreenUsesRequestedDimensions(int columns, int rows)
+    {
+        await using var service = TestTerminalService.Create();
+        var output = new Pipe();
+        await using var outputReader = output.Reader.AsStream();
+        await using var outputWriter = output.Writer.AsStream();
+        await using var terminal = service.CreateTerminal("Initial grid", TerminalPlacement.None,
+            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, Stream.Null)), columns, rows);
+        terminal.Start();
+        await outputWriter.WriteAsync("ready"u8.ToArray());
+        await terminal.WaitForTextAsync("ready").DefaultTimeout();
+
+        var lines = terminal.GetScreenText().Split('\n');
+        Assert.Equal(rows, lines.Length);
+        Assert.All(lines, line => Assert.Equal(columns, line.Length));
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(80, 24)]
+    [InlineData(82, 28)]
+    [InlineData(160, 48)]
+    [InlineData(40, 12)]
+    public async Task CreateTerminal_HeadlessProcessRetainsInitialDimensions(int? columns, int? rows)
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(), "The workload uses POSIX stty.");
+
+        var options = new TerminalLaunchOptions
+        {
+            Title = "Headless dimensions",
+            Executable = "/bin/sh",
+            Arguments = ["-c", ReportDimensionsScript],
+            Placement = TerminalPlacement.None
+        };
+        if (columns is { } width)
+        {
+            options.Columns = width;
+        }
+        if (rows is { } height)
+        {
+            options.Rows = height;
+        }
+
+        var expectedColumns = options.Columns;
+        var expectedRows = options.Rows;
+        await using var service = TestTerminalService.Create();
+        await using var terminal = service.CreateTerminal(options);
+        // Creation captures the initial dimensions; later edits to the options must not alter startup.
+        options.Columns = 1;
+        options.Rows = 1;
+        terminal.Start();
+        await terminal.WaitForTextAsync("initial-ready").DefaultTimeout();
+        AssertReportedDimensions(terminal, "initial", expectedColumns, expectedRows);
+
+        await terminal.SendTextAsync("automation\r").DefaultTimeout();
+        await terminal.WaitForTextAsync("automation-ready").DefaultTimeout();
+        AssertReportedDimensions(terminal, "automation", expectedColumns, expectedRows);
+    }
+
+    [Theory]
+    [InlineData(TerminalPlacement.Dock)]
+    [InlineData(TerminalPlacement.Dialog)]
+    public async Task CreateTerminal_ViewerCanResizeInitiallySizedProcess(TerminalPlacement placement)
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(), "The workload uses POSIX stty.");
+
+        await using var service = TestTerminalService.Create();
+        await using var terminal = service.CreateTerminal(new TerminalLaunchOptions
+        {
+            Title = "Viewer dimensions",
+            Executable = "/bin/sh",
+            Arguments = ["-c", ReportDimensionsScript],
+            Placement = placement,
+            Columns = 82,
+            Rows = 28
+        });
+        terminal.Start();
+        await terminal.WaitForTextAsync("initial-ready").DefaultTimeout();
+        AssertReportedDimensions(terminal, "initial", 82, 28);
+
+        await using var viewer = await TestAppHostTerminalViewer.ConnectAsync(service, terminal.Id);
+        await terminal.SendTextAsync("attached\r").DefaultTimeout();
+        await terminal.WaitForTextAsync("attached-ready").DefaultTimeout();
+        AssertReportedDimensions(terminal, "attached", 82, 28);
+
+        await viewer.ResizeAsync(100, 30);
+        await terminal.SendTextAsync("resized\r").DefaultTimeout();
+        await terminal.WaitForTextAsync("resized-ready").DefaultTimeout();
+        AssertReportedDimensions(terminal, "resized", 100, 30);
+
+        await viewer.ResizeAsync(60, 18);
+        await terminal.SendTextAsync("narrowed\r").DefaultTimeout();
+        await terminal.WaitForTextAsync("narrowed-ready").DefaultTimeout();
+        AssertReportedDimensions(terminal, "narrowed", 60, 18);
+
+        await viewer.DisconnectPeerAsync().DefaultTimeout();
+        await terminal.SendTextAsync("detached\r").DefaultTimeout();
+        await terminal.WaitForTextAsync("detached-ready").DefaultTimeout();
+        AssertReportedDimensions(terminal, "detached", 60, 18);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task CreateTerminal_UsesProcessOptions(bool overrideEnvironment)
@@ -130,7 +236,7 @@ public class Hex1bAspireTerminalTests
         await using var outputReader = output.Reader.AsStream();
         await using var outputWriter = output.Writer.AsStream();
         await using var terminal = service.CreateTerminal("Reflow", placement,
-            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, Stream.Null)));
+            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, Stream.Null)), 80, 24);
         await using var viewer = await TestAppHostTerminalViewer.ConnectAsync(service, terminal.Id);
         var lines = Enumerable.Range(0, 7).Select(i => $"{i}:" + new string('x', 63) + "-END").ToArray();
         var expected = string.Join('\n', lines.Select(line => line.PadRight(80)).Append("ready"));
@@ -152,7 +258,7 @@ public class Hex1bAspireTerminalTests
         await using var outputReader = output.Reader.AsStream();
         await using var outputWriter = output.Writer.AsStream();
         await using var terminal = service.CreateTerminal("Alternate", TerminalPlacement.Dock,
-            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, Stream.Null)));
+            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, Stream.Null)), 80, 24);
         await using var viewer = await TestAppHostTerminalViewer.ConnectAsync(service, terminal.Id);
         const string main = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-END";
         await outputWriter.WriteAsync(Encoding.UTF8.GetBytes(main + "\r\nready"));
@@ -182,7 +288,7 @@ public class Hex1bAspireTerminalTests
         await using var outputWriter = output.Writer.AsStream();
         var workload = new StreamWorkloadAdapter(outputReader, Stream.Null);
         await using var terminal = service.CreateTerminal("Ended", TerminalPlacement.Dock,
-            Hex1bTerminal.CreateBuilder().WithWorkload(workload));
+            Hex1bTerminal.CreateBuilder().WithWorkload(workload), 80, 24);
         await using var viewer = attachViewer ? await TestAppHostTerminalViewer.ConnectAsync(service, terminal.Id) : null;
         terminal.Start();
         await outputWriter.WriteAsync("ready\r\n"u8.ToArray());
@@ -233,7 +339,7 @@ public class Hex1bAspireTerminalTests
         await using var inputWriter = input.Writer.AsStream();
         var workload = new StreamWorkloadAdapter(outputReader, inputWriter);
         await using var terminal = service.CreateTerminal("Shared", TerminalPlacement.Dialog,
-            Hex1bTerminal.CreateBuilder().WithDimensions(80, 24).WithWorkload(workload));
+            Hex1bTerminal.CreateBuilder().WithWorkload(workload), 80, 24);
 
         // Attach starts the previously idle workload. The other viewer must survive the first peer's EOF,
         // and a later viewer must receive the same terminal's existing screen rather than a fresh process.
@@ -282,7 +388,7 @@ public class Hex1bAspireTerminalTests
         await using var outputWriter = output.Writer.AsStream();
         var workload = new StreamWorkloadAdapter(outputReader, Stream.Null);
         await using var terminal = service.CreateTerminal("Handshake", TerminalPlacement.Dialog,
-            Hex1bTerminal.CreateBuilder().WithWorkload(workload));
+            Hex1bTerminal.CreateBuilder().WithWorkload(workload), 80, 24);
 
         var (serverStream, clientStream) = TestDuplexStream.CreatePair();
         using var serverOwner = serverStream;
@@ -323,4 +429,96 @@ public class Hex1bAspireTerminalTests
         await outputWriter.WriteAsync("replacement-ready\r\n"u8.ToArray());
         await replacement.WaitForTextAsync("replacement-ready").DefaultTimeout();
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AttachAsync_UnfinishedHandshakeDoesNotBlockOtherViewers(bool closePeer)
+    {
+        await using var service = TestTerminalService.Create();
+        var output = new Pipe();
+        await using var outputReader = output.Reader.AsStream();
+        await using var outputWriter = output.Writer.AsStream();
+        await using var terminal = service.CreateTerminal("Concurrent handshakes", TerminalPlacement.Dock,
+            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, Stream.Null)), 80, 24);
+        var (serverStream, clientStream) = TestDuplexStream.CreatePair();
+        using var serverOwner = serverStream;
+        using var clientOwner = clientStream;
+        using var cts = new CancellationTokenSource();
+        var attachment = service.AttachAsync(terminal.Id, serverStream, _ => Task.CompletedTask, cts.Token);
+
+        try
+        {
+            // This peer never sends ClientHello. Another viewer must still complete its handshake.
+            await using var viewer = await TestAppHostTerminalViewer.ConnectAsync(service, terminal.Id);
+            await outputWriter.WriteAsync("connected-ready\r\n"u8.ToArray());
+            await viewer.WaitForTextAsync("connected-ready").DefaultTimeout();
+            Assert.False(attachment.IsCompleted);
+
+            if (closePeer)
+            {
+                clientStream.Dispose();
+            }
+            else
+            {
+                await cts.CancelAsync();
+            }
+            await attachment.DefaultTimeout();
+            Assert.False(serverStream.Disposed);
+
+            await outputWriter.WriteAsync("still-connected\r\n"u8.ToArray());
+            await viewer.WaitForTextAsync("still-connected").DefaultTimeout();
+        }
+        finally
+        {
+            await cts.CancelAsync();
+            await attachment.DefaultTimeout();
+        }
+    }
+
+    [Fact]
+    public async Task DisposeAsync_CancelsUnfinishedHandshakeWithoutDisposingCallerTransport()
+    {
+        await using var service = TestTerminalService.Create();
+        var output = new Pipe();
+        await using var outputReader = output.Reader.AsStream();
+        await using var outputWriter = output.Writer.AsStream();
+        await using var terminal = service.CreateTerminal("Pending handshake", TerminalPlacement.Dock,
+            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, Stream.Null)), 80, 24);
+        terminal.Start();
+        await outputWriter.WriteAsync("ready\r\n"u8.ToArray());
+        await terminal.WaitForTextAsync("ready").DefaultTimeout();
+
+        var (serverStream, clientStream) = TestDuplexStream.CreatePair();
+        using var serverOwner = serverStream;
+        using var clientOwner = clientStream;
+        var attachment = service.AttachAsync(terminal.Id, serverStream, _ => Task.CompletedTask, CancellationToken.None);
+        Assert.False(attachment.IsCompleted);
+
+        await terminal.DisposeAsync().AsTask().DefaultTimeout();
+        await attachment.DefaultTimeout();
+        Assert.False(serverStream.Disposed);
+    }
+
+    private static void AssertReportedDimensions(AspireTerminal terminal, string marker, int columns, int rows)
+    {
+        var line = Assert.Single(
+            terminal.GetScreenText().Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries),
+            line => line.StartsWith(marker + ":", StringComparison.Ordinal));
+        Assert.Equal($"{marker}:{rows} {columns}", line);
+    }
+
+    // stty reports the actual PTY as "<rows> <columns>". Marker-prefixed output such as
+    // "initial:28 82" distinguishes measurements from input echoed by the shell.
+    private const string ReportDimensionsScript = """
+        set -eu
+        printf 'initial:'
+        stty size
+        printf 'initial-ready\n'
+        while read -r marker; do
+            printf '%s:' "$marker"
+            stty size
+            printf '%s-ready\n' "$marker"
+        done
+        """;
 }

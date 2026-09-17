@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Threading.Channels;
 using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Reflow;
@@ -15,16 +14,12 @@ namespace Aspire.Hosting.Terminals;
 /// The Hex1b-backed implementation of <see cref="AspireTerminal"/>.
 /// </summary>
 /// <remarks>
-/// Clients are handed to Hex1b's HMP1 server through a channel, which lets a single terminal serve several
-/// attached viewers (for example two dashboard browser tabs, or a dock tab reopened after being closed)
-/// using HMP1's multi-head support. The AppHost owns the workload, so terminal state survives a viewer
-/// disconnecting entirely.
+/// Each viewer is attached to the same HMP1 presentation adapter, allowing several dashboard views to
+/// share one terminal. The AppHost owns the workload, so terminal state survives a viewer disconnecting.
 /// </remarks>
 internal sealed class Hex1bAspireTerminal : ITerminalBackend
 {
-    // Unbounded because the producer is a viewer attaching; the queue depth is realistically 0 or 1 and
-    // dropping or blocking an attach would strand the RPC that is waiting to be served.
-    private readonly Channel<Stream> _clients = Channel.CreateUnbounded<Stream>();
+    private readonly HashSet<Task> _clientTasks = [];
 
     // Cancellation requests a stop; workload completion updates viewers; session completion reports that
     // teardown has finished. Keeping these separate lets viewers display an ended state without allowing
@@ -38,18 +33,23 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
 
     private readonly TerminalService _owner;
     private readonly Hex1bTerminalBuilder _builder;
+    private readonly int _columns;
+    private readonly int _rows;
     private readonly ILogger _logger;
 
+    private Hmp1PresentationAdapter? _presentation;
     private Hex1bTerminal? _terminal;
     private Hex1bTerminalAutomator? _automator;
     private Task? _runTask;
     private Task? _stopTask;
     private bool _stopped;
 
-    public Hex1bAspireTerminal(TerminalService owner, string id, string title, TerminalPlacement placement, Hex1bTerminalBuilder builder, ILogger logger)
+    public Hex1bAspireTerminal(TerminalService owner, string id, string title, TerminalPlacement placement, Hex1bTerminalBuilder builder, int columns, int rows, ILogger logger)
     {
         _owner = owner;
         _builder = builder;
+        _columns = columns;
+        _rows = rows;
         _logger = logger;
         Id = id;
         Title = title;
@@ -116,28 +116,77 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
         // I/O and waits for outstanding accesses, even when Hex1b's other pump is still winding down.
         var attachment = new TerminalClientStream(clientStream);
         await using var _ = attachment.ConfigureAwait(false);
+        using var clientCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = cancellationToken.Register(static state => ((TaskCompletionSource)state!).TrySetResult(), cancelled);
+        var lifetimeEnded = Task.WhenAny(_workloadEnded.Task, attachment.Released, cancelled.Task);
+        var clientTask = Task.CompletedTask;
         lock (_gate)
         {
             if (!_workloadEnded.Task.IsCompleted)
             {
                 EnsureStarted();
-                if (!_clients.Writer.TryWrite(attachment))
-                {
-                    throw new InvalidOperationException($"Terminal '{Id}' is no longer accepting clients.");
-                }
+                clientTask = RunClientAsync(_presentation!, attachment, lifetimeEnded, clientCts.Token, _workloadCts.Token);
+                _clientTasks.Add(clientTask);
             }
         }
 
-        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var registration = cancellationToken.Register(static state => ((TaskCompletionSource)state!).TrySetResult(), cancelled);
-        await Task.WhenAny(_workloadEnded.Task, attachment.Released, cancelled.Task).ConfigureAwait(false);
-        if (_workloadEnded.Task.IsCompleted)
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            await onEnded(cancellationToken).ConfigureAwait(false);
-        }
+            await lifetimeEnded.ConfigureAwait(false);
+            if (_workloadEnded.Task.IsCompleted)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await onEnded(cancellationToken).ConfigureAwait(false);
+            }
 
-        await Task.WhenAny(_sessionEnded.Task, attachment.Released, cancelled.Task).ConfigureAwait(false);
+            await Task.WhenAny(_sessionEnded.Task, attachment.Released, cancelled.Task).ConfigureAwait(false);
+        }
+        finally
+        {
+            try
+            {
+                await clientCts.CancelAsync().ConfigureAwait(false);
+                await clientTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                lock (_gate)
+                {
+                    _clientTasks.Remove(clientTask);
+                }
+            }
+        }
+    }
+
+    private async Task RunClientAsync(
+        Hmp1PresentationAdapter presentation,
+        TerminalClientStream attachment,
+        Task lifetimeEnded,
+        CancellationToken clientCancellationToken,
+        CancellationToken workloadCancellationToken)
+    {
+        // Keep handshake I/O off the thread holding _gate. Task registration and shutdown's snapshot
+        // share that lock, so a stalled viewer neither blocks other viewers nor escapes cleanup.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(clientCancellationToken, workloadCancellationToken);
+        await Task.Yield();
+
+        try
+        {
+            var client = await presentation.AddClient(attachment, cts.Token).ConfigureAwait(false);
+            await using var _ = client.ConfigureAwait(false);
+            await lifetimeEnded.ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException or InvalidOperationException)
+        {
+            _logger.LogDebug(ex, "Terminal {TerminalId} viewer connection ended.", Id);
+        }
+        finally
+        {
+            // AddClient can fail before Hex1b owns the stream (for example before ClientHello). Always
+            // release our wrapper, but leave the underlying gRPC transport with its caller.
+            await attachment.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     /// <summary>
@@ -162,11 +211,13 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
                 return _terminal;
             }
 
-            // Aspire owns the transport: the caller configures only the workload, and the HMP1 server is
-            // attached here so the terminal is reachable over the dashboard gRPC tunnel rather than a Unix
-            // domain socket.
+            // WithHmp1Server creates an 80x24 adapter regardless of WithDimensions. Supply the adapter
+            // directly so the PTY starts at the requested size, before any viewer can resize it.
+            // Revisit the manual client wiring when https://github.com/mitchdenny/hex1b/issues/548 is fixed.
+            _presentation = new Hmp1PresentationAdapter(_columns, _rows);
             _terminal = _builder
-                .WithHmp1Server(_clients.Reader.ReadAllAsync)
+                .WithDimensions(_columns, _rows)
+                .WithPresentation(_presentation)
                 .WithReflow(GhosttyReflowStrategy.Instance)
                 .WithScrollback(10000)
                 .Build();
@@ -202,21 +253,32 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
         }
         finally
         {
+            Task[] clients;
             lock (_gate)
             {
                 // Hex1b cannot serve completion to later HMP clients. Keep Aspire's registry entry (and dock tab),
                 // but report completion ourselves rather than attaching to the disposed terminal.
                 // Replace the separate notification when native ended-session support is available:
                 // https://github.com/mitchdenny/hex1b/issues/483.
-                _clients.Writer.TryComplete();
                 _workloadEnded.TrySetResult();
+                clients = [.. _clientTasks];
             }
 
             // Complete _sessionEnded only after disposal. Unlike _workloadEnded's UI notification, this signal
             // releases attached clients; Hex1b may still write to their transports during teardown.
             try
             {
-                await terminal.DisposeAsync().ConfigureAwait(false);
+                try
+                {
+                    // Natural process exit must also cancel handshakes that have not sent ClientHello;
+                    // those streams are not yet owned by the presentation adapter.
+                    await _workloadCts.CancelAsync().ConfigureAwait(false);
+                    await Task.WhenAll(clients).ConfigureAwait(false);
+                }
+                finally
+                {
+                    await terminal.DisposeAsync().ConfigureAwait(false);
+                }
                 _sessionEnded.TrySetResult();
             }
             catch (Exception ex)
@@ -275,8 +337,6 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
             }
 
             _stopped = true;
-            _clients.Writer.TryComplete();
-
             if (_runTask is null)
             {
                 // Registered but never started, so there is nothing to wind down.

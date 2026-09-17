@@ -160,7 +160,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Press Shift+` to hide this panel..
+        ///   Looks up a localized string similar to Press ` to hide this panel..
         /// </summary>
         public static string TerminalDockPanelHint {
             get {
@@ -214,7 +214,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Hide terminal panel (Shift+`).
+        ///   Looks up a localized string similar to Hide terminal panel (`).
         /// </summary>
         public static string TerminalDockHide {
             get {
@@ -295,7 +295,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Toggle terminal (Shift+`).
+        ///   Looks up a localized string similar to Toggle terminal (`).
         /// </summary>
         public static string MainLayoutToggleTerminalDock {
             get {

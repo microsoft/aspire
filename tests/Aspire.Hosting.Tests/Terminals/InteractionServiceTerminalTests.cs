@@ -363,7 +363,7 @@ public class InteractionServiceTerminalTests
         await using var outputReader = output.Reader.AsStream();
         await using var outputWriter = output.Writer.AsStream();
         await using var terminal = terminals.CreateTerminal("Reusable", TerminalPlacement.Dialog,
-            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, Stream.Null)));
+            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, Stream.Null)), 80, 24);
         terminal.Start();
 
         foreach (var cancel in new[] { false, true })
@@ -397,7 +397,7 @@ public class InteractionServiceTerminalTests
         await using var outputWriter = output.Writer.AsStream();
         var workload = new StreamWorkloadAdapter(outputReader, Stream.Null);
         await using var terminal = terminals.CreateTerminal("Ending", TerminalPlacement.Dialog,
-            Hex1bTerminal.CreateBuilder().WithWorkload(workload));
+            Hex1bTerminal.CreateBuilder().WithWorkload(workload), 80, 24);
         terminal.Start();
         var prompt = service.PromptTerminalAsync("Message", terminal);
         var interaction = Assert.Single(service.GetCurrentInteractions());

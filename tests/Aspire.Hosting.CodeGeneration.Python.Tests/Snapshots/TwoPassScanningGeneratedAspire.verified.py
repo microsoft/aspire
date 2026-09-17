@@ -1,4 +1,4 @@
-#   -------------------------------------------------------------
+﻿#   -------------------------------------------------------------
 #   Copyright (c) Microsoft Corporation. All rights reserved.
 #   Licensed under the MIT License. See LICENSE in project root for information.
 #
@@ -1555,7 +1555,7 @@ IconVariant = typing.Literal["Regular", "Filled"]
 
 ImagePullPolicy = typing.Literal["Default", "Always", "Missing", "Never"]
 
-InputType = typing.Literal["Text", "SecretText", "Choice", "Boolean", "Number", "File", "Terminal"]
+InputType = typing.Literal["Text", "SecretText", "Choice", "Boolean", "Number", "File"]
 
 MessageIntent = typing.Literal["None", "Success", "Warning", "Error", "Information", "Confirmation"]
 

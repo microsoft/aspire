@@ -1818,11 +1818,11 @@ internal sealed class ListTerminalsResponse
 }
 
 /// <summary>
-/// One terminal whose workload runs in the AppHost process.
+/// One terminal whose workload is owned by the AppHost.
 /// </summary>
 /// <remarks>
-/// These have no replicas and no terminal host: the workload runs in-process and reaches the dashboard over
-/// the gRPC tunnel, so there is no liveness to report beyond the terminal's presence in this list.
+/// These terminals have no resource replicas or separate terminal host. The AppHost owns the workload
+/// and tunnels terminal I/O to the dashboard over gRPC. This summary does not report workload liveness.
 /// </remarks>
 internal sealed class AppHostTerminalSummary
 {

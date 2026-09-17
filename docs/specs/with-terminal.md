@@ -54,9 +54,10 @@ terminal.Show();
 ```
 
 Here, `app` is the built `DistributedApplication`. Environment entries add to or
-override the AppHost's inherited environment. Requested dimensions default to 120
-columns and 32 rows. The current HMP server overrides those initial dimensions to
-80 columns and 24 rows; viewer-driven resizing still applies after attachment.
+override the AppHost's inherited environment. Initial dimensions default to 80
+columns and 24 rows. The process starts at the requested size, which headless
+terminals retain. Dock and interaction dialog viewers resize the grid to fit
+their available space when shown.
 Placement defaults to the dock;
 use `Dialog` for terminal interactions or `None` for automation-only terminals.
 
@@ -362,6 +363,11 @@ explicit footer sizing actions request primary and wait for confirmation before
 changing the grid. The bottom-left footer hint advertises <kbd>F6</kbd>, which moves
 keyboard focus from terminal input to the footer controls; <kbd>Shift+F6</kbd>
 moves focus to the preceding dashboard control.
+
+Press the backtick key (<kbd>`</kbd>), without Shift, to show or hide the terminal
+dock. The shortcut is suppressed while a terminal or text input has focus so it
+does not consume typed input. Press <kbd>F6</kbd> first to move from terminal input
+to its footer controls before toggling the dock.
 
 Dock panes, interaction dialogs and detached windows automatically fit when
 opened. A detached window takes primary once, carrying the originating view's

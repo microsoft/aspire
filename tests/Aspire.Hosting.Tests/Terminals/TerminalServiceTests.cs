@@ -564,7 +564,7 @@ public class TerminalServiceTests
         GatedTerminalWorkloadAdapter[] workloads = [new(), new()];
         var terminals = workloads.Select((workload, index) =>
             service.CreateTerminal($"Terminal {index}", TerminalPlacement.Dock,
-                Hex1bTerminal.CreateBuilder().WithWorkload(workload))).ToArray();
+                Hex1bTerminal.CreateBuilder().WithWorkload(workload), 80, 24)).ToArray();
         foreach (var terminal in terminals)
         {
             terminal.Start();
@@ -609,7 +609,7 @@ public class TerminalServiceTests
         var expected = new IOException("Workload disposal failed.");
         var workload = new GatedTerminalWorkloadAdapter { DisposalException = expected };
         var terminal = service.CreateTerminal("Failure", TerminalPlacement.Dock,
-            Hex1bTerminal.CreateBuilder().WithWorkload(workload));
+            Hex1bTerminal.CreateBuilder().WithWorkload(workload), 80, 24);
         terminal.Start();
         var disposal = service.DisposeAsync().AsTask();
         try
@@ -813,7 +813,7 @@ public class TerminalServiceTests
 
     private static AspireTerminal CreateTerminal(TerminalService service, TerminalPlacement placement, bool useBuilder, string title)
         => useBuilder
-            ? service.CreateTerminal(title, placement, Hex1bTerminal.CreateBuilder().WithPtyProcess("bash"))
+            ? service.CreateTerminal(title, placement, Hex1bTerminal.CreateBuilder().WithPtyProcess("bash"), 80, 24)
             : service.CreateTerminal(new TerminalLaunchOptions
             {
                 Title = title,

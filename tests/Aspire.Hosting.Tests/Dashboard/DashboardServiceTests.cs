@@ -1502,7 +1502,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         await using var writer = output.Writer.AsStream();
         var workload = new StreamWorkloadAdapter(reader, Stream.Null);
         await using var terminal = terminalService.CreateTerminal("Ended", TerminalPlacement.Dock,
-            Hex1bTerminal.CreateBuilder().WithWorkload(workload));
+            Hex1bTerminal.CreateBuilder().WithWorkload(workload), 80, 24);
         terminal.Start();
         await writer.WriteAsync("ready\r\n"u8.ToArray());
         await terminal.WaitForTextAsync("ready").DefaultTimeout();
@@ -1564,7 +1564,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         await using var reader = output.Reader.AsStream();
         await using var writer = output.Writer.AsStream();
         await using var terminal = terminalService.CreateTerminal("Close", TerminalPlacement.Dock,
-            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(reader, Stream.Null)));
+            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(reader, Stream.Null)), 80, 24);
         if (started)
         {
             terminal.Start();
@@ -1591,7 +1591,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         await using var outputReader = output.Reader.AsStream();
         await using var outputWriter = output.Writer.AsStream();
         await using var terminal = terminalService.CreateTerminal("Closing", TerminalPlacement.Dock,
-            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, Stream.Null)));
+            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, Stream.Null)), 80, 24);
         var (serverStream, clientStream) = TestDuplexStream.CreatePair();
         using var serverOwner = serverStream;
         using var clientOwner = clientStream;

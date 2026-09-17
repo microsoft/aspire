@@ -9,9 +9,8 @@ namespace Aspire.Hosting.Terminals;
 /// Identifies where a terminal is displayed in the dashboard.
 /// </summary>
 /// <remarks>
-/// Placement is a property of the view, not of the workload: terminals with different
-/// <see cref="TerminalOwner"/> values can share a placement, and a terminal can in principle move between
-/// placements without its workload being affected.
+/// Placement is fixed when a terminal is created. It describes where the terminal is displayed,
+/// while <see cref="TerminalOwner"/> identifies which component owns its workload.
 /// </remarks>
 [Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public enum TerminalPlacement

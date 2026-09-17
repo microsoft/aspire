@@ -1,4 +1,4 @@
-// ===== aspire/AddContainerOptions.java =====
+﻿// ===== aspire/AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -17371,8 +17371,7 @@ public enum InputType implements WireValueEnum {
     CHOICE("Choice"),
     BOOLEAN("Boolean"),
     NUMBER("Number"),
-    FILE("File"),
-    TERMINAL("Terminal");
+    FILE("File");
 
     private final String value;
 

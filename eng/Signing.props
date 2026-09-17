@@ -32,6 +32,7 @@
     <FileSignInfo Include="Dapper.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Fractions.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Hex1b.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="hex1bpty.exe" CertificateName="3PartySHA2" />
     <FileSignInfo Include="IdentityModel.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="IdentityModel.OidcClient.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="KubernetesClient.Basic.dll" CertificateName="3PartySHA2" />

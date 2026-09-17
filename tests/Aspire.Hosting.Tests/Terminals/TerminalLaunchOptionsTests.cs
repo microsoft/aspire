@@ -127,12 +127,12 @@ public class TerminalLaunchOptionsTests
     }
 
     [Fact]
-    public void Dimensions_DefaultToAModernGrid()
+    public void Dimensions_DefaultTo80ColumnsAnd24Rows()
     {
         var options = new TerminalLaunchOptions { Title = "Shell", Executable = "bash" };
 
-        Assert.Equal(120, options.Columns);
-        Assert.Equal(32, options.Rows);
+        Assert.Equal(80, options.Columns);
+        Assert.Equal(24, options.Rows);
     }
 
     [Fact]

@@ -316,7 +316,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
             if (hideDock)
             {
                 await page.Locator(".terminal-dock-collapse").ClickAsync();
-                focusTarget = page.GetByRole(AriaRole.Button, new() { Name = "Toggle terminal (Shift+`)", Exact = true });
+                focusTarget = page.GetByRole(AriaRole.Button, new() { Name = "Toggle terminal (`)", Exact = true });
             }
             else
             {

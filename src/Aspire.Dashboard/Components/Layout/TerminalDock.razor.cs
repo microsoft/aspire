@@ -15,7 +15,7 @@ using FluentMessageIntent = Microsoft.FluentUI.AspNetCore.Components.MessageBarI
 namespace Aspire.Dashboard.Components.Layout;
 
 /// <summary>
-/// A collapsible, tabbed dock of terminals owned by the AppHost process, toggled with <c>Shift+`</c>.
+/// A collapsible, tabbed dock of terminals owned by the AppHost process, toggled with <c>`</c>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -112,8 +112,8 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     /// Shows the dock, or hides it if it is already showing.
     /// </summary>
     /// <remarks>
-    /// Public so the header button can drive the dock. The keyboard chord alone is not enough: <c>Shift+`</c> is
-    /// suppressed whenever focus is in a terminal or any other text input, because it types <c>~</c> there, so the
+    /// Public so the header button can drive the dock. The keyboard shortcut alone is not enough: <c>`</c> is
+    /// suppressed whenever focus is in a terminal or any other text input, because it types <c>`</c> there, so the
     /// dock needs an affordance that works regardless of where focus happens to be.
     /// </remarks>
     public Task ToggleAsync() => InvokeAsync(() =>

@@ -1,4 +1,4 @@
-// aspire.go - Capability-based Aspire SDK
+﻿// aspire.go - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -187,7 +187,6 @@ const (
 	InputTypeBoolean InputType = "Boolean"
 	InputTypeNumber InputType = "Number"
 	InputTypeFile InputType = "File"
-	InputTypeTerminal InputType = "Terminal"
 )
 
 // HealthStatus represents HealthStatus.

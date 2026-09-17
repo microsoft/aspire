@@ -123,7 +123,7 @@ public partial class TerminalDockTests : DashboardTestContext
         Assert.Equal("https://aka.ms/aspire/dashboard-terminals", helpLink.GetAttribute("href"));
         Assert.Equal("_blank", helpLink.GetAttribute("target"));
         Assert.Equal("noopener noreferrer", helpLink.GetAttribute("rel"));
-        Assert.Equal(["Open terminal in a new window", "Hide terminal panel (Shift+`)"],
+        Assert.Equal(["Open terminal in a new window", "Hide terminal panel (`)"],
             cut.FindAll(".terminal-dock-tabstrip fluent-button").Select(button => button.GetAttribute("aria-label")));
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
         cut.WaitForAssertion(() => Assert.Equal("first", cut.Find(".terminal-dock-tab.active").TextContent.Trim()));
@@ -330,7 +330,7 @@ public partial class TerminalDockTests : DashboardTestContext
             Assert.Empty(cut.FindAll("[role=tablist]"));
             Assert.Empty(cut.FindAll("[role=tabpanel]"));
             Assert.Equal("No terminals", cut.Find(".terminal-dock-panel-heading").TextContent);
-            Assert.Equal(["Open terminal in a new window", "Hide terminal panel (Shift+`)"],
+            Assert.Equal(["Open terminal in a new window", "Hide terminal panel (`)"],
                 cut.FindAll(".terminal-dock-tabstrip fluent-button").Select(button => button.GetAttribute("aria-label")));
         });
 

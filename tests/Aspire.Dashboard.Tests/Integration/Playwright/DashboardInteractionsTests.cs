@@ -22,7 +22,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task TerminalDockShortcut_UsesPhysicalKeyAndPreservesInputGuard()
+    public async Task TerminalDockShortcut_UsesUnmodifiedPhysicalKeyAndPreservesInputGuard()
     {
         await RunTestAsync(async page =>
         {
@@ -46,19 +46,18 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
 
             var cases = new (string Key, string Code, bool Shift, bool Alt, bool Ctrl, bool Meta, string Target, int? Expected)[]
             {
-                ("~", "Backquote", true, false, false, false, "control", 400),
-                ("\u00b0", "Backquote", true, false, false, false, "control", 400),
-                ("Dead", "Backquote", true, false, false, false, "control", 400),
-                ("~", "BracketRight", true, false, false, false, "control", null),
-                ("`", "Backquote", false, false, false, false, "control", null),
-                ("~", "Backquote", false, false, false, false, "control", null),
-                ("~", "Backquote", true, true, false, false, "control", null),
-                ("~", "Backquote", true, false, true, false, "control", null),
-                ("~", "Backquote", true, false, false, true, "control", null),
-                ("~", "Backquote", true, false, false, false, "input", null),
-                ("\u00b0", "Backquote", true, false, false, false, "textarea", null),
-                ("~", "Backquote", true, false, false, false, "terminal", null),
-                ("\u00b0", "Backquote", true, false, false, false, "fluent", null),
+                ("`", "Backquote", false, false, false, false, "control", 400),
+                ("^", "Backquote", false, false, false, false, "control", 400),
+                ("Dead", "Backquote", false, false, false, false, "control", 400),
+                ("`", "BracketRight", false, false, false, false, "control", null),
+                ("~", "Backquote", true, false, false, false, "control", null),
+                ("`", "Backquote", false, true, false, false, "control", null),
+                ("`", "Backquote", false, false, true, false, "control", null),
+                ("`", "Backquote", false, false, false, true, "control", null),
+                ("`", "Backquote", false, false, false, false, "input", null),
+                ("^", "Backquote", false, false, false, false, "textarea", null),
+                ("`", "Backquote", false, false, false, false, "terminal", null),
+                ("^", "Backquote", false, false, false, false, "fluent", null),
                 ("S", "KeyS", true, false, false, false, "control", 110),
                 ("r", "KeyR", false, false, false, false, "control", 200)
             };
