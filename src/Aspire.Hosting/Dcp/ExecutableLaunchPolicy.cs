@@ -6,6 +6,7 @@
 
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.Dcp;
@@ -86,9 +87,12 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
             return false;
         }
 
-        // Visual Studio's compatibility launcher can only launch projects loaded in the solution. File-based apps
-        // are plain .cs files, so keep their complete dotnet run command and use Process as the primary mechanism.
-        if (resource.TryGetProjectMetadata(out var projectMetadata) && projectMetadata.IsFileBasedApp)
+        // Capability-less Visual Studio sessions can only launch projects loaded in the solution, so bare .cs files
+        // stay on the Process path. An IDE that explicitly advertises "project" can launch the same .cs project
+        // configuration through this compatibility path even when the resource has no SupportsDebuggingAnnotation.
+        if (resource.TryGetProjectMetadata(out var projectMetadata) &&
+            projectMetadata.IsFileBasedApp &&
+            !HasExplicitProjectLaunchCapability())
         {
             return false;
         }
@@ -108,6 +112,14 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
         // historical Visual Studio-compatible behavior and treat it as a project launch whenever a debug session is
         // active. Project v2 resources declare their capability explicitly and do not use this compatibility path.
         return true;
+    }
+
+    private bool HasExplicitProjectLaunchCapability()
+    {
+        return DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(
+            _configuration[KnownConfigNames.DebugSessionInfo],
+            out var supportedLaunchConfigurations)
+            && supportedLaunchConfigurations?.Contains(KnownLaunchConfigurationTypes.Project) is true;
     }
 
     private string GetLaunchMode(string? launchConfigurationType)

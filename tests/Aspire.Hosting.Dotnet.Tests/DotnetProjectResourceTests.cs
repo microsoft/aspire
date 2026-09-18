@@ -822,12 +822,18 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         using var application = builder.Build();
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
 
-        Assert.Equal("run", args[0]);
-        Assert.Equal("--file", args[1]);
-        Assert.Equal(appPath, args[2]);
-        Assert.Equal("--no-cache", args[3]);
-        Assert.Contains("--no-launch-profile", args);
-        Assert.Equal("--flag", args[^1]);
+        List<string> expectedArgs =
+        [
+            "run",
+            "--file",
+            appPath,
+            "--no-cache"
+        ];
+        AddExpectedConfiguration(builder, expectedArgs);
+        expectedArgs.Add("--no-launch-profile");
+        expectedArgs.Add("--flag");
+
+        Assert.Equal(expectedArgs, args);
     }
 
     [Fact]

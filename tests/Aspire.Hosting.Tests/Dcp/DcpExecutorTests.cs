@@ -7598,16 +7598,22 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfiguration.Type);
     }
 
-    [Fact]
-    public async Task FileBasedProjectResource_WithExplicitProjectCapability_UsesIdeWithoutProcessFallback()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FileBasedProjectResource_WithExplicitProjectCapability_UsesIdeWithoutProcessFallback(bool addProjectDebugSupport)
     {
         var builder = DistributedApplication.CreateBuilder();
         var projectPath = Path.Combine("src", "app.cs");
-        builder.AddResource(new ProjectResource("file-project"))
-            .WithAnnotation(new TestFileBasedProject(projectPath))
-            .WithDebugSupport(
+        var fileProject = builder.AddResource(new ProjectResource("file-project"))
+            .WithAnnotation(new TestFileBasedProject(projectPath));
+
+        if (addProjectDebugSupport)
+        {
+            fileProject.WithDebugSupport(
                 mode => new ProjectLaunchConfiguration { ProjectPath = projectPath, Mode = mode },
                 KnownLaunchConfigurationTypes.Project);
+        }
 
         var configDict = new Dictionary<string, string?>
         {
