@@ -15,7 +15,9 @@ public enum LayoutComponent
     /// <summary>Developer Control Plane.</summary>
     Dcp,
     /// <summary>Unified managed binary (dashboard, server, nuget).</summary>
-    Managed
+    Managed,
+    /// <summary>Optional native tray executable.</summary>
+    Tray
 }
 
 /// <summary>
@@ -64,6 +66,7 @@ public sealed class LayoutConfiguration
             LayoutComponent.Cli => Components.Cli,
             LayoutComponent.Dcp => Components.Dcp,
             LayoutComponent.Managed => Components.Managed,
+            LayoutComponent.Tray => Components.Tray,
             _ => null
         };
 
@@ -74,6 +77,12 @@ public sealed class LayoutConfiguration
     /// Gets the path to the DCP directory.
     /// </summary>
     public string? GetDcpPath() => GetComponentPath(LayoutComponent.Dcp);
+
+    /// <summary>
+    /// Gets the path to the optional native tray executable.
+    /// </summary>
+    /// <returns>The executable path, or <see langword="null"/> when the layout has no tray.</returns>
+    public string? GetTrayPath() => GetComponentPath(LayoutComponent.Tray);
 
     /// <summary>
     /// Gets the path to the aspire-managed executable.
@@ -96,6 +105,8 @@ public sealed class LayoutConfiguration
 /// </summary>
 public sealed class LayoutComponents
 {
+    internal const string MacTrayExecutablePath = "tray/Aspire Tray.app/Contents/MacOS/aspire-tray";
+
     /// <summary>
     /// Path to CLI executable (e.g., "aspire" or "aspire.exe").
     /// </summary>
@@ -110,4 +121,9 @@ public sealed class LayoutComponents
     /// Path to the unified managed binary directory.
     /// </summary>
     public string? Managed { get; set; } = BundleDiscovery.ManagedDirectoryName;
+
+    /// <summary>
+    /// Path to the optional native tray executable, relative to the layout root.
+    /// </summary>
+    public string? Tray { get; set; }
 }

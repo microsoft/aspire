@@ -112,11 +112,26 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         WriteFile(Path.Combine(packages, $"microsoft.developercontrolplane.{packageRid}", "1.0.0", "tools", "dcp"), "dcp");
         var layout = Path.Combine(_workspace.Path, "layout");
         var testAssembly = typeof(Hex1bNativePublishingTests).Assembly.Location;
-        var result = await RunDotNetAsync(
+        List<string> arguments =
             ["exec", "--runtimeconfig", Path.ChangeExtension(testAssembly, ".runtimeconfig.json"),
              "--depsfile", Path.ChangeExtension(testAssembly, ".deps.json"),
              typeof(Aspire.Tools.CreateLayout.Program).Assembly.Location,
-             "--output", layout, "--artifacts", artifacts, "--rid", rid],
+             "--output", layout, "--artifacts", artifacts, "--rid", rid];
+        // Layout assembly now requires the native tray payload for desktop RIDs, even
+        // when the scenario focuses on the managed bundle's PTY sidecars.
+        if (rid.StartsWith("win-", StringComparison.Ordinal))
+        {
+            var tray = Path.Combine(_workspace.Path, "windows-tray");
+            WindowsTrayTestPayload.Create(tray, rid);
+            arguments.AddRange(["--tray-windows", tray]);
+        }
+        else if (rid.StartsWith("osx-", StringComparison.Ordinal))
+        {
+            arguments.AddRange(["--tray-app", MacTrayTestPayload.Create(_workspace.Path)]);
+        }
+
+        var result = await RunDotNetAsync(
+            [.. arguments],
             packages);
         if (missingSidecar is not null)
         {

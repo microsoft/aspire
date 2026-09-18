@@ -44,6 +44,14 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
+    [InlineData("eng/scripts/tray-registration-control/control.cpp")]
+    [InlineData("eng/scripts/tray-registration-control/run.ps1")]
+    public void TrayRegistrationControlRunsInUnconditionalNativeArchiveJobs(string path)
+    {
+        Assert.Contains(s_map.Ignore, pattern => TestTriggerMap.GlobMatches(pattern, path));
+    }
+
+    [Theory]
     [InlineData("eng/WarningPolicy.proj")]
     [InlineData("eng/build.ps1")]
     [InlineData("eng/build.sh")]
@@ -566,11 +574,23 @@ public sealed class TestTriggerMapTests
         },
         {
             "tools/CreateLayout/Program.cs",
-            ["test:Aspire.Cli.EndToEnd.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
         },
         {
             "eng/Bundle.proj",
-            ["test:Aspire.Cli.EndToEnd.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+        },
+        {
+            "tools/CreateLayout/verify-tray-payload.sh",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+        },
+        {
+            "tools/CreateLayout/verify-windows-tray-payload.ps1",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+        },
+        {
+            "src/Aspire.Tray/Windows/publish.ps1",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
         },
         {
             "playground/JavaSpringBoot/JavaSpringBoot.AppHost.Java/aspire.config.json",

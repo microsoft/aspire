@@ -454,6 +454,8 @@ public class Program
         // reparenting + ordinary signal delivery cover the same case, so nothing is needed.
         builder.Services.AddTransient<LayoutProcessRunner>();
         builder.Services.AddTransient<ProcessTreeGracefulShutdownService>();
+        builder.Services.AddSingleton<IProcessIdentityProvider, ProcessIdentityProvider>();
+        builder.Services.AddSingleton(_ => TrayProtocolOutput.CreateStandardOutput());
         // Forward the interface to the existing concrete service so consumers can depend on the
         // abstraction (used by AppHostServerSession + GuestLaunchOptions in the aspire run path).
         builder.Services.AddTransient<IProcessTreeGracefulShutdownSignaler>(sp => sp.GetRequiredService<ProcessTreeGracefulShutdownService>());
@@ -638,6 +640,10 @@ public class Program
         builder.Services.AddTransient<DoctorCommand>();
         builder.Services.AddTransient<DashboardCommand>();
         builder.Services.AddTransient<DashboardRunCommand>();
+        builder.Services.AddTransient<TrayCommand>();
+        builder.Services.AddTransient<TrayStartCommand>();
+        builder.Services.AddTransient<TrayStopCommand>();
+        builder.Services.AddTransient<TrayLifecycleService>();
         builder.Services.AddTransient<UpdateCommand>();
         builder.Services.AddTransient<DeployCommand>();
         builder.Services.AddTransient<DestroyCommand>();
@@ -830,7 +836,7 @@ public class Program
         // Show banner if explicitly requested OR on first run (unless suppressed by noLogo).
         // Always require interactive output support — the animated banner uses Spectre.Console's Live display
         // which manipulates the cursor and fails when console handles are invalid (e.g., stdout is redirected).
-        if ((showBanner || (isFirstRun && !noLogo)) && hostEnvironment.SupportsInteractiveOutput)
+        if ((showBanner || (isFirstRun && !noLogo)) && hostEnvironment.SupportsInteractiveOutput && !HasProtocolOutput(args))
         {
             var bannerService = serviceProvider.GetRequiredService<IBannerService>();
             await bannerService.DisplayBannerAsync(cancellationToken);
@@ -912,6 +918,11 @@ public class Program
     // accidentally suppress the first-run experience.
     private static bool HasMachineReadableOutput(string[] args)
     {
+        if (HasProtocolOutput(args))
+        {
+            return true;
+        }
+
         if (IsLegacyExtensionGetAppHostsCommand(args))
         {
             return true;
@@ -944,6 +955,27 @@ public class Program
             if (arg.Equals("--format", StringComparison.OrdinalIgnoreCase)
                 && i + 1 < args.Length
                 && args[i + 1].Equals("json", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasProtocolOutput(string[] args)
+    {
+        if (ContainsRootOption(args, arg => arg == "--protocol-version" || arg.StartsWith("--protocol-version=", StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
+        var isPs = false;
+        for (var i = 0; i < args.Length && args[i] != "--"; i++)
+        {
+            isPs |= args[i] == "ps";
+            if (isPs && (args[i].Equals("--output=snapshot", StringComparison.OrdinalIgnoreCase)
+                || (args[i] == "--output" && i + 1 < args.Length && args[i + 1].Equals("snapshot", StringComparison.OrdinalIgnoreCase))))
             {
                 return true;
             }

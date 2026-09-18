@@ -1,0 +1,75 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PublishAot>true</PublishAot>
+    <OptimizationPreference>Size</OptimizationPreference>
+    <AssemblyName>aspire-tray</AssemblyName>
+    <TrayAppPath Condition="'$(TrayAppPath)' == ''">$(BaseOutputPath)$(Configuration)/$(TargetFramework)/$(RuntimeIdentifier)/app/Aspire Tray.app</TrayAppPath>
+    <TraySigningArchive>$(BaseOutputPath)$(Configuration)/$(TargetFramework)/$(RuntimeIdentifier)/signing/AspireTray.app</TraySigningArchive>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="$(SharedDir)Aspire_icon_256.png" LogicalName="aspire.png" />
+    <EmbeddedResource Include="Assets/AspireTrayTemplate.png" LogicalName="AspireTrayTemplate.png" />
+    <EmbeddedResource Include="Assets/AspireTrayTemplate@2x.png" LogicalName="AspireTrayTemplate@2x.png" />
+    <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Shared/BundleVersionLease.cs" />
+    <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Shared/BundleDiscovery.cs" />
+    <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Shared/HeldFileLease.cs" />
+    <Compile Include="$(SharedDir)DirectoryHelper.cs" Link="Shared/DirectoryHelper.cs" />
+  </ItemGroup>
+
+  <Target Name="ValidateTrayPublish" BeforeTargets="PrepareForPublish">
+    <Error Condition="!$([MSBuild]::IsOSPlatform('OSX'))" Text="Publishing the native tray app requires macOS and the Xcode command-line tools (no .NET macOS workload is required)." />
+    <Error Condition="'$(RuntimeIdentifier)' != 'osx-arm64' and '$(RuntimeIdentifier)' != 'osx-x64'" Text="The tray app supports only osx-arm64 and osx-x64." />
+    <Error Condition="'$(PublishAot)' != 'true'" Text="The bundled tray must be published with NativeAOT." />
+  </Target>
+
+  <!-- This is the only app assembly path, shared by Bundle.proj and publish.sh.
+       Reassembling or stamping an app after official signing invalidates its seal. -->
+  <Target Name="PackageTray" AfterTargets="Publish" DependsOnTargets="ValidateTrayPublish">
+    <PropertyGroup>
+      <_TrayIconSet>$(IntermediateOutputPath)Aspire.iconset</_TrayIconSet>
+    </PropertyGroup>
+    <RemoveDir Directories="$(TrayAppPath);$(_TrayIconSet)" />
+    <MakeDir Directories="$(TrayAppPath)/Contents/MacOS;$(TrayAppPath)/Contents/Resources;$(_TrayIconSet)" />
+    <Copy SourceFiles="$(PublishDir)aspire-tray" DestinationFiles="$(TrayAppPath)/Contents/MacOS/aspire-tray" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/Info.plist" DestinationFiles="$(TrayAppPath)/Contents/Info.plist" />
+    <!-- Apple's bundle version keys are numeric. Keep the complete prerelease
+         version separately rather than putting an invalid semver suffix in them.
+         https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundleversion -->
+    <Exec Command="/usr/libexec/PlistBuddy -c &quot;Set :CFBundleShortVersionString $(VersionPrefix)&quot; &quot;$(TrayAppPath)/Contents/Info.plist&quot;" />
+    <Exec Command="/usr/libexec/PlistBuddy -c &quot;Set :CFBundleVersion $(VersionPrefix)&quot; &quot;$(TrayAppPath)/Contents/Info.plist&quot;" />
+    <Exec Command="/usr/libexec/PlistBuddy -c &quot;Set :AspireVersion $(Version)&quot; &quot;$(TrayAppPath)/Contents/Info.plist&quot;" />
+    <Copy SourceFiles="$(SharedDir)Aspire_icon_256.png" DestinationFiles="$(_TrayIconSet)/icon_256x256.png" />
+    <Exec Command="sips -z 128 128 &quot;$(_TrayIconSet)/icon_256x256.png&quot; --out &quot;$(_TrayIconSet)/icon_128x128.png&quot;" StandardOutputImportance="low" />
+    <Exec Command="sips -z 32 32 &quot;$(_TrayIconSet)/icon_256x256.png&quot; --out &quot;$(_TrayIconSet)/icon_32x32.png&quot;" StandardOutputImportance="low" />
+    <Exec Command="sips -z 16 16 &quot;$(_TrayIconSet)/icon_256x256.png&quot; --out &quot;$(_TrayIconSet)/icon_16x16.png&quot;" StandardOutputImportance="low" />
+    <Exec Command="iconutil -c icns &quot;$(_TrayIconSet)&quot; -o &quot;$(TrayAppPath)/Contents/Resources/Aspire.icns&quot;" />
+    <Exec Command="chmod +x &quot;$(TrayAppPath)/Contents/MacOS/aspire-tray&quot;" />
+    <!-- Local and GitHub builds use an ad-hoc signature; official signing replaces
+         the entire app signature before CreateLayout copies it. NativeAOT needs no JIT entitlements. -->
+    <Exec Command="codesign --force --sign - --options runtime &quot;$(TrayAppPath)&quot;" />
+    <Exec Command="codesign --verify --strict &quot;$(TrayAppPath)&quot;" />
+    <Message Importance="high" Text="Tray app: $(TrayAppPath)" />
+  </Target>
+
+  <!-- Arcade/MicroBuild's .app input is a ZIP containing Contents/, not a directory.
+       Match Microsoft.DotNet.MacOsPkg.Core.AppBundle.Pack's ditto contract:
+       https://github.com/dotnet/arcade/blob/main/src/Microsoft.DotNet.MacOsPkg/Core/AppBundle.cs -->
+  <Target Name="PrepareTraySigning">
+    <Error Condition="!Exists('$(TrayAppPath)/Contents/MacOS/aspire-tray')" Text="Publish the tray app before preparing signing input." />
+    <MakeDir Directories="$([System.IO.Path]::GetDirectoryName('$(TraySigningArchive)'))" />
+    <Delete Files="$(TraySigningArchive)" />
+    <Exec Command="ditto -c -k --sequesterRsrc &quot;$(TrayAppPath)&quot; &quot;$(TraySigningArchive)&quot;" />
+  </Target>
+
+  <Target Name="RestoreSignedTray">
+    <Error Condition="!Exists('$(TraySigningArchive)')" Text="Signed tray app archive is missing: $(TraySigningArchive)" />
+    <RemoveDir Directories="$(TrayAppPath)" />
+    <MakeDir Directories="$(TrayAppPath)" />
+    <Exec Command="ditto -xk &quot;$(TraySigningArchive)&quot; &quot;$(TrayAppPath)&quot;" />
+    <Exec Command="chmod +x &quot;$(TrayAppPath)/Contents/MacOS/aspire-tray&quot;" />
+    <!-- Reject ad-hoc input as well as broken resource seals. Never publish again
+         between restoring this signed app and embedding its payload in the CLI. -->
+    <Exec Command="codesign --verify --strict -R=&quot;anchor apple generic&quot; &quot;$(TrayAppPath)&quot;" />
+  </Target>
+</Project>

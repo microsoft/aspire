@@ -115,7 +115,7 @@ internal static class AppHostSocketManager
         var socketPaths = GetSocketKeyPaths(appHostPath)
             .SelectMany(path => BackchannelConstants.FindMatchingSockets(path, homeDirectory))
             .Distinct(StringComparers.FileSystemPath);
-        return CreateSocketHandles(socketPaths, currentProcessId, logger);
+        return CreateSocketHandles(socketPaths, currentProcessId, logger, pruneOrphanedSockets: true);
     }
 
     /// <summary>
@@ -140,22 +140,47 @@ internal static class AppHostSocketManager
 
     /// <summary>
     /// Finds all candidate auxiliary backchannel sockets.
-    /// PID-qualified orphaned sockets are removed before results are returned.
+    /// PID-qualified orphaned sockets are excluded and, by default, removed before results are returned.
     /// </summary>
+    /// <param name="homeDirectory">The user home directory to search.</param>
+    /// <param name="currentProcessId">The calling process identifier.</param>
+    /// <param name="logger">The diagnostic logger.</param>
+    /// <param name="pruneOrphanedSockets">Whether to delete sockets whose owning process is gone.</param>
+    /// <param name="throwOnDiscoveryFailure">Whether directory access failures must propagate instead of appearing as an absent directory.</param>
     public static IReadOnlyList<IAppHostSocket> FindSockets(
         string homeDirectory,
         int currentProcessId,
-        ILogger logger)
+        ILogger logger,
+        bool pruneOrphanedSockets = true,
+        bool throwOnDiscoveryFailure = false)
     {
         ArgumentException.ThrowIfNullOrEmpty(homeDirectory);
         ArgumentNullException.ThrowIfNull(logger);
 
         var socketPaths = GetSocketDirectories(homeDirectory)
-            .Where(socketDirectory => Directory.Exists(socketDirectory.DirectoryPath))
-            .SelectMany(socketDirectory => Directory.GetFiles(socketDirectory.DirectoryPath, socketDirectory.SearchPattern))
+            .SelectMany(socketDirectory => GetSocketFiles(socketDirectory, throwOnDiscoveryFailure))
             .Where(socketPath => BackchannelConstants.ExtractHash(socketPath) is not null);
 
-        return CreateSocketHandles(socketPaths, currentProcessId, logger);
+        return CreateSocketHandles(socketPaths, currentProcessId, logger, pruneOrphanedSockets);
+    }
+
+    private static string[] GetSocketFiles(AppHostSocketDirectory socketDirectory, bool throwOnDiscoveryFailure)
+    {
+        if (!throwOnDiscoveryFailure && !Directory.Exists(socketDirectory.DirectoryPath))
+        {
+            return [];
+        }
+
+        try
+        {
+            return Directory.GetFiles(socketDirectory.DirectoryPath, socketDirectory.SearchPattern);
+        }
+        catch (DirectoryNotFoundException) when (throwOnDiscoveryFailure && !File.Exists(socketDirectory.DirectoryPath))
+        {
+            // Never-created directories are empty, but access/IO failures are not an empty
+            // snapshot. Directory.Exists would hide those failures from strict tray discovery.
+            return [];
+        }
     }
 
     /// <summary>
@@ -203,7 +228,8 @@ internal static class AppHostSocketManager
     private static IReadOnlyList<IAppHostSocket> CreateSocketHandles(
         IEnumerable<string> socketPaths,
         int currentProcessId,
-        ILogger logger)
+        ILogger logger,
+        bool pruneOrphanedSockets)
     {
         var sockets = new List<IAppHostSocket>();
         foreach (var socketPath in socketPaths.Distinct(StringComparers.FileSystemPath))
@@ -217,7 +243,10 @@ internal static class AppHostSocketManager
                 pidValue != currentProcessId &&
                 !BackchannelConstants.ProcessExists(pidValue))
             {
-                appHostSocket.TryDelete();
+                if (pruneOrphanedSockets)
+                {
+                    appHostSocket.TryDelete();
+                }
                 continue;
             }
 

@@ -121,6 +121,97 @@ aspire docs api search "RunAsEmulator" --language csharp
 aspire docs search "redis"
 ```
 
+## Stopping a specific AppHost instance
+
+Use the AppHost PID reported by `aspire ps` (not its launcher CLI PID) to stop one
+instance, including an instance outside the current working directory or worktree:
+
+```bash
+aspire stop --pid 12345
+aspire stop --apphost /absolute/path/AppHost.csproj --pid 12345 --non-interactive --nologo
+```
+
+`--pid` requires a positive integer. When combined with `--apphost`, the full
+project or file path must match the connected AppHost's path exactly (case-insensitive
+on Windows); directories are not searched. A missing instance, path mismatch, or
+ambiguous connection fails with a nonzero exit code without selecting another instance.
+
+Instance-targeted stops use only the selected live backchannel and wait for that
+AppHost to exit. They do not stop sibling instances of the same project, clean up
+orphaned sockets or persistent resources, or fall back to killing process trees.
+An unavailable stop RPC or shutdown timeout fails without escalation. `--pid`
+cannot be combined with `--all` or `--force`. Without `--pid`, existing project-level
+stop behavior is unchanged.
+
+### Experimental macOS and Windows tray companion
+
+The native macOS and Windows CLI bundles include the experimental Aspire menu
+bar or system tray companion:
+
+```bash
+aspire tray start
+aspire tray stop
+```
+
+`start` starts the companion or restores its existing icon, and returns only after
+the native UI is ready and protects its bundle version with its own lease.
+`stop` requests and acknowledges graceful companion shutdown; it does not stop
+user AppHosts. Both helper invocations have a 30-second deadline.
+Cancellation is honored before startup, but once the start helper launches, a
+first Ctrl+C waits for its bounded readiness and lease handoff rather than killing
+it prematurely. The command then reports the helper's result.
+
+The companion comes from the leased CLI bundle at
+`tray/Aspire Tray.app/Contents/MacOS/aspire-tray` on macOS, or
+`tray/aspire-tray.exe` alongside `tray/Aspire.ico` on Windows. Starting it passes the absolute
+invoking CLI executable and the leased version directory; it never copies a
+private CLI, searches `PATH`, or falls back to a checkout-relative executable.
+The CLI holds its bundle lease until the helper exits, and the native GUI holds
+its own lease for its lifetime. If readiness fails, the helper terminates and
+waits for its newly launched GUI process before releasing the launcher lease;
+an already-running companion is not terminated by a failed start.
+
+These commands are experimental and available on macOS and Windows (x64/ARM64).
+Starting the companion requires an interactive desktop and
+a native CLI, not a managed development build or `dotnet aspire.dll`. A missing
+bundle or tray payload fails explicitly; install a platform-matching bundle containing the
+companion rather than using a standalone CLI binary.
+
+Before upgrading from an older preview, quit its running companion using its
+**Quit** menu action. Preview single-instance identifiers have changed, so
+`aspire tray stop` in this version does not manage an older preview's instance.
+
+### AppHost snapshot output
+
+`aspire ps --output <default|snapshot>` selects the output mode. The default
+preserves existing output. Monitoring tools, including the native tray, can use
+`snapshot` with `--follow --format json` for complete AppHost lists, process
+identities, aggregate resource health, heartbeats, and typed errors:
+
+```bash
+aspire ps --output snapshot --follow --format json --non-interactive --nologo
+```
+
+Snapshot discovery is read-only and emits only NDJSON on stdout. Messages include
+`version: 1` for compatibility; callers do not select a protocol version.
+See the [snapshot output contract](../../docs/specs/cli-output-formats.md#snapshot-output)
+for fields, empty snapshots, health values, heartbeats, errors, and limits.
+
+### Experimental native tray stop protocol
+
+The tray's separate, hidden stop mode provides typed, lifetime-guarded results:
+
+```bash
+aspire stop --protocol-version 1 --format json --apphost /absolute/path/AppHost.csproj --pid 12345 --started-at 1789250000000 --non-interactive --nologo
+```
+
+Pass `--started-at` from the selected row's `processStartTimeUnixMilliseconds`;
+do not enable Stop if that value is unavailable. `--started-at` requires
+`--protocol-version 1 --format json`; incomplete requests are rejected rather
+than falling back to legacy PID-only stopping. This experimental mode uses
+protocol-only stdout and does not change ordinary stop behavior. See the
+[exact stop contract and outcomes](../../docs/specs/cli-output-formats.md#experimental-exact-stop-response).
+
 ## Additional documentation
 
 * [CLI output formats](../../docs/specs/cli-output-formats.md)
