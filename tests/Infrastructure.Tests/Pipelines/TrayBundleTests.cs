@@ -48,7 +48,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     public void MacLayoutRejectsIncompleteTray(string missingFile)
     {
         using var workspace = TemporaryWorkspace.Create(output);
-        var source = CreateApp(workspace.Path);
+        var source = MacTrayTestPayload.Create(workspace.Path);
         File.Delete(Path.Combine(source, missingFile));
         using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "test", false, source, null);
 
@@ -63,7 +63,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix executable mode check.");
         using var workspace = TemporaryWorkspace.Create(output);
-        var source = CreateApp(workspace.Path);
+        var source = MacTrayTestPayload.Create(workspace.Path);
         File.SetUnixFileMode(Path.Combine(source, "Contents/MacOS/aspire-tray"), UnixFileMode.UserRead);
         using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "test", false, source, null);
 
@@ -78,7 +78,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "macOS bundles are assembled on Unix.");
         using var workspace = TemporaryWorkspace.Create(output);
-        var source = CreateApp(workspace.Path);
+        var source = MacTrayTestPayload.Create(workspace.Path);
         var layout = Path.Combine(workspace.Path, "osx-arm64");
         var destination = Path.Combine(layout, "tray", "Aspire Tray.app");
         using var builder = new LayoutBuilder(layout, workspace.Path, "osx-arm64", "test", false, source, null);
@@ -394,29 +394,4 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
 
     private static XElement Target(XDocument project, string name)
         => Assert.Single(project.Descendants("Target"), target => target.Attribute("Name")?.Value == name);
-
-    private static string CreateApp(string workspace)
-    {
-        var source = Path.Combine(workspace, "source with spaces", "Aspire Tray.app");
-        foreach (var file in new[]
-        {
-            "Contents/MacOS/aspire-tray",
-            "Contents/Info.plist",
-            "Contents/Resources/Aspire.icns",
-            "Contents/Resources/.hidden",
-            "Contents/_CodeSignature/CodeResources"
-        })
-        {
-            var path = Path.Combine(source, file);
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, file);
-        }
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(Path.Combine(source, "Contents/MacOS/aspire-tray"),
-                UnixFileMode.UserRead | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
-        }
-
-        return source;
-    }
 }

@@ -75,6 +75,19 @@ internal sealed class ResourceSnapshotWatcher : IDisposable, IAsyncDisposable
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            // Only an abandoned pump needs a late-fault observer. Registering this in finally
+            // races with consumers disposing after a delivered failure, logging that same
+            // failure again as if it happened after cancellation.
+            // The pump owns its enumerator and disposes it only after MoveNext ends.
+            _ = watchTask.ContinueWith(
+                task =>
+                {
+                    var exception = task.Exception;
+                    _logger.LogDebug(exception, "Resource snapshot watch failed after cancellation.");
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
             _initialLoadTcs.TrySetCanceled(cancellationToken);
             _updateSignal?.Writer.TryComplete();
         }
@@ -82,23 +95,6 @@ internal sealed class ResourceSnapshotWatcher : IDisposable, IAsyncDisposable
         {
             _initialLoadTcs.TrySetException(ex);
             _updateSignal?.Writer.TryComplete(ex);
-        }
-        finally
-        {
-            // Keep one observer on the existing pump, not a replacement watch or a task per
-            // retry. The pump owns its enumerator and disposes it only after MoveNext ends.
-            _ = watchTask.ContinueWith(
-                task =>
-                {
-                    var exception = task.Exception;
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        _logger.LogDebug(exception, "Resource snapshot watch failed after cancellation.");
-                    }
-                },
-                CancellationToken.None,
-                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
         }
     }
 
