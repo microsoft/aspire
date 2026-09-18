@@ -18,6 +18,7 @@ import {
   setDashboardMode,
   setReposFor,
   startInstance,
+  startMirrorMonitoring,
   stopInstance,
   toggleAccount,
 } from "./server.mjs";
@@ -163,6 +164,7 @@ const session = await joinSession({
                 })),
                 mode: dashboard.mode,
                 health: healthSummaryForAgent(dashboard),
+                mirror: dashboard.mirror ? { status: dashboard.mirror.statusLabel, ...dashboard.mirror.mirror } : null,
               };
             }
             const c = dashboard.counts;
@@ -179,6 +181,7 @@ const session = await joinSession({
               counts: c,
               notifications: (dashboard.notifications ?? []).length,
               health: healthSummaryForAgent(dashboard),
+              mirror: dashboard.mirror ? { status: dashboard.mirror.statusLabel, ...dashboard.mirror.mirror } : null,
             };
           },
         },
@@ -229,6 +232,8 @@ const session = await joinSession({
     }),
   ],
 });
+
+startMirrorMonitoring((message) => session.log(message, { level: "warning" }));
 
 // Bridge card action buttons (Test / Review / Resolve conflicts / Address review) to
 // the main session.

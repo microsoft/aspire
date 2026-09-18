@@ -134,6 +134,40 @@ source only when GitHub exposes both bot authorship and auto-merge metadata; and
 a deployment **likely blocked upstream** only when the same Azure DevOps timeline has
 a failed build stage and a skipped deployment stage.
 
+### Internal mirror freshness
+
+When an active github.com account watches `microsoft/aspire`, a separate monitor
+compares GitHub `main` with the `dnceng/internal/microsoft-aspire` mirror every
+15 minutes. It starts with the extension session, without requiring an open
+canvas or Health mode. It stops when the session exits; it cannot monitor while
+the app is closed or the machine is asleep.
+
+The **Internal mirror** health card reports both tips, the missing-commit count
+when known, the oldest outstanding main change's age, and the last successful
+check. Matching tips are healthy even on inactive branches. The monitor verifies
+ancestry and uses verified merge evidence for when a change landed on main,
+never author or committer dates. When arrival evidence is unavailable, it uses
+a persisted first-observed lower bound, displayed as **at least**. Partial
+catch-up advances that clock to the next outstanding change rather than timing
+how long the branch tips have differed.
+
+Lag becomes **Warning at 6 hours** and **Critical at 24 hours**. The notification
+bell records warning, escalation, and recovery once per incident. A status banner
+also appears across modes, including when automatic queue updates are paused.
+**Settings -> Notifications -> Internal mirror lag** controls bell notifications,
+not monitoring or the health indicator. Notifications are in-canvas, not native
+OS or app-wide push notifications.
+
+Authentication failures, request failures, and unavailable history show **Unknown**
+with stale last-successful evidence; they never count as recovery. Divergent
+history is a separate diagnostic state. **Diagnose here** requests a read-only
+investigation and never pushes commits or bypasses secret scanning.
+
+Non-secret observation and notification state is stored atomically in
+`mirror-main.json` alongside the extension preferences, preserving lower-bound
+clocks and notification IDs across session restarts. GitHub and Azure DevOps
+credentials remain owned by the existing credential providers.
+
 Health cards do not invoke AI during refresh. **Diagnose here** asks the current
 session to refetch and investigate the canonical source. **Fix in repo** opens a
 mapped github.com repository session; sources without a mapped GitHub repository use
@@ -155,6 +189,8 @@ without refetching provider data.
 | `accounts.mjs` | Credential discovery, per-account repo-access probing, host/enterprise detection. |
 | `github.mjs` | GraphQL queries, lane bucketing, signals, avatars, cross-account merge. |
 | `health.mjs` | GitHub default-branch health and provider-neutral health aggregation. |
+| `mirror.mjs` | Main-branch ancestry, arrival-time evidence, and mirror incident transitions. |
+| `mirror-monitor.mjs` | Session-level polling, stale-state handling, health cards, and mirror notifications. |
 | `azure-devops.mjs` | Pipeline URL validation, read-only Azure CLI queries, build timelines, Azure health inference. |
 | `model.mjs` | Attention buckets, focus queue, core-team / community classification. |
 | `constants.mjs` | Configuration: core-team members, release milestone, personal picks. |

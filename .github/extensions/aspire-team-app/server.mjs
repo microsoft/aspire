@@ -13,6 +13,7 @@ import { loadDashboard } from "./github.mjs";
 import { loadHealthDashboard } from "./health.mjs";
 import { resolveAzureDevOpsPipeline } from "./azure-devops.mjs";
 import { resolveAccounts } from "./accounts.mjs";
+import { createMirrorMonitor, decorateMirrorDashboard } from "./mirror-monitor.mjs";
 import { buildAgentActionPrompt, buildAgentActionLog, resolveActionTarget, toActionPrNumber } from "./agent.mjs";
 import {
   buildHealthActionLog,
@@ -22,6 +23,8 @@ import {
 import {
   addAzurePipeline,
   loadPrefs,
+  loadMirrorState,
+  saveMirrorState,
   removeAzurePipeline,
   updatePrefs,
   parseRepos,
@@ -56,6 +59,47 @@ let stateSeq = 0;
 // Logger captured from the most recent startInstance so background (non-request) work —
 // the poller and stale-while-revalidate refreshes — has somewhere to report failures.
 let bgLog = null;
+let mirrorMonitor = null;
+
+export function startMirrorMonitoring(log) {
+  if (mirrorMonitor) return mirrorMonitor;
+  mirrorMonitor = createMirrorMonitor({
+    loadState: loadMirrorState,
+    saveState: saveMirrorState,
+    log,
+    getTokens: async () => {
+      const prefs = await loadPrefs();
+      const auth = await resolveAuth(prefs);
+      const watchers = auth.accounts.filter((account) => account.active
+        && account.host === "github.com"
+        && account.repos?.some((repo) => repo.toLowerCase() === "microsoft/aspire"));
+      if (!watchers.length) {
+        // Credential discovery can lose an account entirely after logout. A configured
+        // watch must become Unknown, not disappear as though monitoring were disabled.
+        const configured = Object.entries(prefs.accounts ?? {}).some(([id, account]) =>
+          account.active && (id.startsWith("acct:github.com/") || /^acct:[^/]+$/.test(id))
+          && account.repos?.some((repo) => repo.toLowerCase() === "microsoft/aspire"));
+        return configured ? [] : null;
+      }
+      return watchers.map((account) => auth.tokenById.get(account.id)).filter(Boolean);
+    },
+    onChange: async () => {
+      const prefs = await loadPrefs();
+      const record = mirrorMonitor.getState();
+      const dashboards = new Set([cache?.dashboard, resolveSnapshot, ...displayedSnapshots.values()]);
+      for (const dashboard of dashboards) {
+        if (!dashboard) continue;
+        decorateMirrorDashboard(dashboard, record, prefs);
+        applyHealthOrder(dashboard, prefs.healthOrder);
+      }
+      const payload = decorateMirrorDashboard({ mode: "review" }, record, prefs);
+      // Mirror alerts remain live even when automatic queue replacement is paused.
+      writeSse("mirror", JSON.stringify({ mirror: payload.mirror, notifications: payload.notifications }));
+    },
+  });
+  mirrorMonitor.start();
+  return mirrorMonitor;
+}
 
 // Stale-while-revalidate window: /api/state serves the cached dashboard instantly and
 // only kicks a background refresh once the cache is older than this.
@@ -125,6 +169,7 @@ async function resolveAuth(prefs, { reprobe = false } = {}) {
 
 function invalidateAuth() {
   authCache = null;
+  mirrorMonitor?.invalidate();
 }
 
 // Decorate a loaded dashboard with the account context the canvas actions in extension.mjs
@@ -241,6 +286,14 @@ async function computeDashboard({ progress = true, background = false } = {}) {
   const latestPrefs = await loadPrefs();
   if (cache && dashboardInputKey(prefs) !== dashboardInputKey(latestPrefs)) return cache;
 
+  if (mirrorMonitor) {
+    // Backlog evidence can take longer than a dashboard refresh. Keep it independent
+    // and publish its result through the mirror event rather than blocking other sources.
+    mirrorMonitor.refresh().catch((error) => {
+      Promise.resolve().then(() => bgLog?.(`Mirror monitor refresh failed: ${error.message}`)).catch(() => {});
+    });
+    decorateMirrorDashboard(dashboard, mirrorMonitor.getState(), latestPrefs);
+  }
   decorateDashboard(dashboard, auth, active, latestPrefs);
   const changed = dashboardChanged(previous, dashboard);
   dashboard.seq = !previous || changed ? ++stateSeq : previous.seq;
@@ -625,6 +678,7 @@ async function handle(req, res, log, instanceId) {
       return send(res, 200, next);
     }
     if (req.method === "POST" && path === "/api/refresh") {
+      await mirrorMonitor?.refresh(true);
       const next = await getDashboard(true);
       displayedSnapshots.set(instanceId, next.dashboard);
       return send(res, 200, next);
@@ -915,6 +969,7 @@ export async function stopInstance(instanceId) {
 }
 
 export async function forceRefresh() {
+  await mirrorMonitor?.refresh(true);
   return getDashboard(true);
 }
 

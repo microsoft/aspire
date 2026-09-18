@@ -474,7 +474,7 @@ export function healthSummaryForAgent(dashboard) {
   const countKeys = ["total", "healthy", "running", "degraded", "failing", "unavailable", "unknown"];
   const counts = Object.fromEntries(countKeys.map((key) => [key, nonnegativeInteger(health.counts?.[key])]));
   const items = health.items.map((item) => {
-    const provider = item?.provider === "azure-devops" ? "azure-devops" : "github";
+    const provider = item?.provider === "mirror" ? "mirror" : item?.provider === "azure-devops" ? "azure-devops" : "github";
     const states = new Set(["healthy", "running", "degraded", "failing", "unavailable", "unknown"]);
     const summary = {
       provider,
@@ -485,6 +485,14 @@ export function healthSummaryForAgent(dashboard) {
         .map((reason) => String(reason?.code ?? ""))
         .filter((code) => /^[a-z0-9_]{1,64}$/.test(code)),
     };
+    if (provider === "mirror") {
+      summary.repository = "microsoft/aspire";
+      summary.branch = "main";
+      summary.status = item.statusLabel;
+      summary.missingCount = item.mirror?.missingCount ?? null;
+      summary.oldestOutstandingAge = item.mirror?.ageText ?? null;
+      summary.lastCheckedAt = item.mirror?.checkedAt ?? null;
+    }
     if (provider === "github" && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(String(item?.repository ?? ""))) {
       summary.repository = item.repository;
     } else if (provider === "azure-devops") {
