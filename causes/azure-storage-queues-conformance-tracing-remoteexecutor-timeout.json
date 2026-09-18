@@ -1,0 +1,20 @@
+{
+  "id": "azure-storage-queues-conformance-tracing-remoteexecutor-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: Aspire.Azure.Storage.Queues.Tests ConformanceTests.TracingEnablesTheRightActivitySource(_Keyed) RemoteExecutor hangs due to Azure Identity IMDS credential probes on Windows",
+  "test_name": "Aspire.Azure.Storage.Queues.Tests.ConformanceTests.TracingEnablesTheRightActivitySource / TracingEnablesTheRightActivitySource_Keyed",
+  "job_name": "Tests / No-package tests (regular, Aspire.Azure.Storage.Queues.Tests, Azure.Storage.Queues, Azure.Storage... / Azure.Storage.Queues (windows-latest)",
+  "error_pattern": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Half-way through waiting for remote process.\n   at Microsoft.DotNet.RemoteExecutor.RemoteInvokeHandle.Dispose(Boolean disposing)\n   at Aspire.Azure.Storage.Queues.Tests.ConformanceTests.TracingEnablesTheRightActivitySource[_Keyed]()\nCaused by: DefaultAzureCredential sequentially probing Environment/WorkloadIdentity/ManagedIdentity credentials and hanging on http://169.254.169.254 IMDS endpoint",
+  "analysis": "The RemoteExecutor child process hangs while DefaultAzureCredential sequentially attempts Environment, WorkloadIdentity, and ManagedIdentity credential sources, ultimately probing the sandboxed IMDS endpoint (169.254.169.254) which is unavailable/unresponsive on the GitHub-hosted Windows runner, exceeding the RemoteExecutor wait timeout. This is an environmental/infrastructure credential-probe timing issue unrelated to the PR's Radius-only changes, and closely mirrors an existing tracked pattern for the same root cause in a different Azure conformance test suite (Azure.AI.OpenAI, issue #18920).",
+  "failure_details": "**Error:**\nMicrosoft.DotNet.RemoteExecutor.RemoteExecutionException : Half-way through waiting for remote process.\n\n**Stack Trace:**\nat Microsoft.DotNet.RemoteExecutor.RemoteInvokeHandle.Dispose(Boolean disposing) in /_/src/Microsoft.DotNet.RemoteExecutor/src/RemoteInvokeHandle.cs:line 157\n   at Microsoft.DotNet.RemoteExecutor.RemoteInvokeHandle.Dispose() in /_/src/Microsoft.DotNet.RemoteExecutor/src/RemoteInvokeHandle.cs:line 58\n   at Aspire.Components.ConformanceTests.ConformanceTests`2.RemoteInvokeWithLogging(Action action, ITestOutputHelper testOutput, RemoteInvokeOptions options) in /_/tests/Aspire.Components.Common.TestUtilities/ConformanceTests.cs:line 638\n   at Aspire.Azure.Storage.Queues.Tests.ConformanceTests.TracingEnablesTheRightActivitySource() in /_/tests/Aspire.Azure.Storage.Queues.Tests/ConformanceTests.cs:line 123\n\n**Standard Output (redacted):**\n[RemoteExecutor] info: Azure.Identity[3]\n[RemoteExecutor]       EnvironmentCredential.GetToken was unable to retrieve an access token. Exception: Azure.Identity.CredentialUnavailableException (0x80131500): EnvironmentCredential authentication unavailable.\n[RemoteExecutor] info: Azure.Identity[3]\n[RemoteExecutor]       WorkloadIdentityCredential.GetToken was unable to retrieve an access token. Exception: Azure.Identity.CredentialUnavailableException (0x80131500): WorkloadIdentityCredential authentication unavailable.\n[RemoteExecutor] info: Azure.Identity[26]\n[RemoteExecutor]       Managed Identity source selected: Imds with ID: SystemAssigned\n[RemoteExecutor] info: Azure.Core[1]\n[RemoteExecutor]       Request GET http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=[REDACTED]\n[RemoteExecutor] warn: Azure.Core[8]\n[RemoteExecutor]       Error response 400 Bad Request (00.0s)\n[RemoteExecutor] info: Azure.Identity[8]\n[RemoteExecutor]       False MSAL 4.84.2.0 MSAL.NetCore .NET 9.0.10 Microsoft Windows 10.0.26100 ...",
+  "occurrences": [
+    {
+      "run_id": 35373021439,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35373021439",
+      "job": "Tests / No-package tests (regular, Aspire.Azure.Storage.Queues.Tests, Azure.Storage.Queues, Azure.Storage... / Azure.Storage.Queues (windows-latest)",
+      "pr_number": 20148,
+      "observed_at": "2026-09-18T18:23:45Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20241"
+}

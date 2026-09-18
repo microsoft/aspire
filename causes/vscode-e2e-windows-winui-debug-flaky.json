@@ -5,8 +5,8 @@
   "test_name": "VS Code extension E2E (Windows, winui-debug)",
   "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)",
   "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted.",
-  "analysis": "The 'Run extension E2E tests' step failed with a bare exit code 1 and no retrievable job logs or TRX test failures. The PR only modifies Aspire.Hosting.Dotnet options code and does not touch the VS Code extension, so this failure is unrelated to the PR changes. This exact shard/pattern has recurred multiple times previously as a flaky/environmental E2E failure.",
-  "failure_details": "### Job: Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)\n- Conclusion: failure\n- Failed Steps: Run extension E2E tests\n- Annotation: failure - Process completed with exit code 1.\n- Job logs: (Failed to fetch logs for job 105384835984)\n- No TRX test failure entries were extracted for this job/shard.\nPR changed files are limited to src/Aspire.Hosting.Dotnet/*, its README, and Aspire.Hosting.Dotnet/CodeGeneration tests, none of which relate to the VS Code extension.",
+  "analysis": "The job fails with a bare 'Process completed with exit code 1' annotation and no fetchable job logs or extracted TRX test failures, making it impossible to attribute this failure to PR changes. This matches a previously tracked recurring pattern (issue #19935) with 5 prior occurrences of the identical unattributable exit-code-1 failure on this shard, and the PR only changes Radius installation pins/tests, unrelated to VS Code extension E2E infrastructure.",
+  "failure_details": "**Job:** Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)\n**Annotation:** failure: Process completed with exit code 1.\n**Job log:** (Failed to fetch logs for job 105699710566)\nNo TRX test failure entries were extracted for this shard.",
   "occurrences": [
     {
       "run_id": 33887016795,
@@ -42,6 +42,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)",
       "pr_number": 20157,
       "observed_at": "2026-09-17T21:41:00Z"
+    },
+    {
+      "run_id": 35373021439,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35373021439",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)",
+      "pr_number": 20148,
+      "observed_at": "2026-09-18T18:23:45Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19935"
