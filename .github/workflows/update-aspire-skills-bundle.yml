@@ -44,7 +44,7 @@ jobs:
       - name: Restore solution
         run: ./restore.sh
 
-      - name: Test Aspire skills installer
+      - name: Test Aspire skills bundle and telemetry hooks
         run: >
           dotnet test --project tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj
           --no-launch-profile
@@ -52,6 +52,8 @@ jobs:
           --filter-class "*.AspireSkillsInstallerTests"
           --filter-class "*.AspireSkillsBundleTests"
           --filter-class "*.AgentInitCommandTests"
+          --filter-class "*.TelemetryHookInstallerTests"
+          --filter-class "*.TelemetryHookScriptTests"
           --filter-not-trait "quarantined=true"
           --filter-not-trait "outerloop=true"
 

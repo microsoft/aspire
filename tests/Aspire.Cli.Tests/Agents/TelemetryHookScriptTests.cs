@@ -30,7 +30,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     public async Task Bash_SkillInvocation_Copilot_ForwardsSkillName()
     {
         var run = await RunBashHookAsync(
-            """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
+            """{"toolName":"skill","sessionId":"11111111-2222-3333-4444-555555555555","toolArgs":{"skill":"aspire"}}""",
             new() { ["COPILOT_CLI"] = "1" });
 
         AssertContinue(run);
@@ -38,13 +38,13 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--event-type", "skill_invocation");
         AssertArg(args, "--client-name", "copilot-cli");
         AssertArg(args, "--skill-name", "aspire");
-        AssertArg(args, "--session-id", "session-1");
+        AssertArg(args, "--session-id", "11111111-2222-3333-4444-555555555555");
     }
 
     [Fact]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
-    public async Task Bash_SkillInvocation_CopilotApp_ForwardsClientName()
+    public async Task Bash_SkillInvocation_CopilotApp_UsesCopilotCliClientName()
     {
         var run = await RunBashHookAsync(
             """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
@@ -57,7 +57,24 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "skill_invocation");
-        AssertArg(args, "--client-name", "copilot-app");
+        AssertArg(args, "--client-name", "copilot-cli");
+        AssertArg(args, "--skill-name", "aspire");
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_SkillInvocation_InvalidSessionId_ForwardsOnlyAllowlistedArguments()
+    {
+        var run = await RunBashHookAsync(
+            """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
+            new() { ["COPILOT_CLI"] = "1" });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        Assert.Equal(
+            ["--event-type", "--client-name", "--timestamp", "--skill-name"],
+            args.Where(arg => arg.StartsWith("--", StringComparison.Ordinal)));
         AssertArg(args, "--skill-name", "aspire");
     }
 
@@ -82,13 +99,26 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     public async Task Bash_ReferenceFileRead_ForwardsRelativePath()
     {
         var run = await RunBashHookAsync(
-            """{"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":".agents/skills/aspire/references/deploy.md"}}""");
+            """{"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":".agents/skills/aspire-deployment/references/azure.md"}}""");
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "reference_file_read");
         // Only the repo-relative path after skills/<skill>/ is forwarded — never the absolute path.
-        AssertArg(args, "--file-reference", "aspire/references/deploy.md");
+        AssertArg(args, "--file-reference", "aspire-deployment/references/azure.md");
+    }
+
+    [Theory]
+    [InlineData("""{"toolName":"aspire-unlisted_tool"}""")]
+    [InlineData("""{"toolName":"view","toolArgs":{"path":".agents/skills/aspire/references/private-notes.md"}}""")]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_UnlistedToolOrReference_DoesNotInvokeCli(string payload)
+    {
+        var run = await RunBashHookAsync(payload);
+
+        AssertContinue(run);
+        AssertNotInvoked(run);
     }
 
     [Fact]
@@ -231,13 +261,13 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     public async Task Bash_ReferenceFileRead_CopilotStringArgs_ForwardsRelativePath()
     {
         var run = await RunBashHookAsync(
-            """{"toolName":"view","sessionId":"session-1","toolArgs":"{\"path\":\"workspace/.agents/skills/aspire/references/deploy.md\"}"}""",
+            """{"toolName":"view","sessionId":"session-1","toolArgs":"{\"path\":\"workspace/.agents/skills/aspire-deployment/references/azure.md\"}"}""",
             new() { ["COPILOT_CLI"] = "1" });
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "reference_file_read");
-        AssertArg(args, "--file-reference", "aspire/references/deploy.md");
+        AssertArg(args, "--file-reference", "aspire-deployment/references/azure.md");
     }
 
     [Fact]
@@ -245,7 +275,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     public async Task Pwsh_SkillInvocation_Copilot_ForwardsSkillName()
     {
         var run = await RunPwshHookAsync(
-            """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
+            """{"toolName":"skill","sessionId":"11111111-2222-3333-4444-555555555555","toolArgs":{"skill":"aspire"}}""",
             new() { ["COPILOT_CLI"] = "1" });
 
         AssertContinue(run);
@@ -253,12 +283,12 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--event-type", "skill_invocation");
         AssertArg(args, "--client-name", "copilot-cli");
         AssertArg(args, "--skill-name", "aspire");
-        AssertArg(args, "--session-id", "session-1");
+        AssertArg(args, "--session-id", "11111111-2222-3333-4444-555555555555");
     }
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task Pwsh_SkillInvocation_CopilotApp_ForwardsClientName()
+    public async Task Pwsh_SkillInvocation_CopilotApp_UsesCopilotCliClientName()
     {
         var run = await RunPwshHookAsync(
             """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
@@ -271,7 +301,23 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "skill_invocation");
-        AssertArg(args, "--client-name", "copilot-app");
+        AssertArg(args, "--client-name", "copilot-cli");
+        AssertArg(args, "--skill-name", "aspire");
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task Pwsh_SkillInvocation_InvalidSessionId_ForwardsOnlyAllowlistedArguments()
+    {
+        var run = await RunPwshHookAsync(
+            """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
+            new() { ["COPILOT_CLI"] = "1" });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        Assert.Equal(
+            ["--event-type", "--client-name", "--timestamp", "--skill-name"],
+            args.Where(arg => arg.StartsWith("--", StringComparison.Ordinal)));
         AssertArg(args, "--skill-name", "aspire");
     }
 
@@ -327,13 +373,25 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     public async Task Pwsh_ReferenceFileRead_ForwardsRelativePath()
     {
         var run = await RunPwshHookAsync(
-            """{"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":".agents/skills/aspire/references/deploy.md"}}""");
+            """{"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":".agents/skills/aspire-deployment/references/azure.md"}}""");
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "reference_file_read");
         // Only the repo-relative path after skills/<skill>/ is forwarded — never the absolute path.
-        AssertArg(args, "--file-reference", "aspire/references/deploy.md");
+        AssertArg(args, "--file-reference", "aspire-deployment/references/azure.md");
+    }
+
+    [Theory]
+    [InlineData("""{"toolName":"aspire-unlisted_tool"}""")]
+    [InlineData("""{"toolName":"view","toolArgs":{"path":".agents/skills/aspire/references/private-notes.md"}}""")]
+    [RequiresTools(["pwsh"])]
+    public async Task Pwsh_UnlistedToolOrReference_DoesNotInvokeCli(string payload)
+    {
+        var run = await RunPwshHookAsync(payload);
+
+        AssertContinue(run);
+        AssertNotInvoked(run);
     }
 
     [Fact]
@@ -418,13 +476,13 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     public async Task Pwsh_ReferenceFileRead_CopilotStringArgs_ForwardsRelativePath()
     {
         var run = await RunPwshHookAsync(
-            """{"toolName":"view","sessionId":"session-1","toolArgs":"{\"path\":\"workspace/.agents/skills/aspire/references/deploy.md\"}"}""",
+            """{"toolName":"view","sessionId":"session-1","toolArgs":"{\"path\":\"workspace/.agents/skills/aspire-deployment/references/azure.md\"}"}""",
             new() { ["COPILOT_CLI"] = "1" });
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "reference_file_read");
-        AssertArg(args, "--file-reference", "aspire/references/deploy.md");
+        AssertArg(args, "--file-reference", "aspire-deployment/references/azure.md");
     }
 
     private async Task<HookRun> RunBashHookAsync(string payload, Dictionary<string, string?>? extraEnv = null)
@@ -507,7 +565,10 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
             : null;
 
     private static void AssertContinue(HookRun run)
-        => Assert.Equal(ContinueResponse, run.Result.StdOut.Trim());
+    {
+        Assert.Equal(0, run.Result.ExitCode);
+        Assert.Equal(ContinueResponse, run.Result.StdOut.Trim());
+    }
 
     private static string[] AssertInvoked(HookRun run)
     {
