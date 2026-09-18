@@ -1285,7 +1285,7 @@ public static class FailingTestIssueLogic
     {
         var stableSignature = ComputeStableSignature(matchResult.CanonicalTestName!, workflow.ResolvedWorkflowFile);
         var metadataMarker = $"<!-- failing-test-signature: v1:{stableSignature} -->";
-        var title = $"[Failing test]: {EscapeMarkdownInline(matchResult.DisplayTestName)}";
+        var title = $"[Failing test]: {matchResult.DisplayTestName}";
         var testFailingLine = EscapeMarkdownInline(matchResult.CanonicalTestName ?? matchResult.DisplayTestName!);
 
         var errorTemplateMessage = CreateKnownIssueErrorMessage(primaryOccurrence.ErrorMessage);
