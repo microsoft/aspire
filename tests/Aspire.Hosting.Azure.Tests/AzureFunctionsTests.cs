@@ -575,6 +575,24 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
         };
     }
 
+    private sealed class TestProjectWithEnvironmentVariables : IProjectMetadata
+    {
+        public string ProjectPath => "some-path";
+        public static string CustomEnvironmentVariable = "SOME_NAME";
+        public LaunchSettings LaunchSettings => new()
+        {
+            Profiles = new Dictionary<string, LaunchProfile>
+            {
+                ["funcapp"] = new()
+                {
+                    CommandLineArgs = "--useHttps",
+                    LaunchBrowser = false,
+                    EnvironmentVariables = { { CustomEnvironmentVariable, "Some value" } }
+                }
+            }
+        };
+    }
+
     [Fact]
     public void AddAzureFunctionsProject_AddsDefaultLaunchProfileAnnotation_WhenConfigured()
     {
@@ -815,5 +833,43 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
         return (IResourceBuilder<TDestination>)s_polyglotWithReferenceMethod
             .MakeGenericMethod(typeof(TDestination))
             .Invoke(null, [builder, source, connectionName, optional, name])!;
+    }
+
+    [Fact]
+    public async Task AddAzureFunctionsProject_AddsEnvironmentVariables_FromLaunchProfile()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.AddAzureFunctionsProject<TestProjectWithEnvironmentVariables>("funcapp");
+
+        var functionsResource = Assert.Single(builder.Resources.OfType<AzureFunctionsProjectResource>());
+        Assert.True(functionsResource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var envAnnotations));
+
+        var context = new EnvironmentCallbackContext(builder.ExecutionContext);
+        foreach (var envAnnotation in envAnnotations)
+        {
+            await envAnnotation.Callback(context);
+        }
+
+        Assert.Equal("Some value", context.EnvironmentVariables[TestProjectWithEnvironmentVariables.CustomEnvironmentVariable]);
+    }
+
+    [Fact]
+    public async Task AddAzureFunctionsProject_DoesNotAddEnvironmentVariables_FromLaunchProfile_WhenInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureFunctionsProject<TestProjectWithEnvironmentVariables>("funcapp");
+
+        var functionsResource = Assert.Single(builder.Resources.OfType<AzureFunctionsProjectResource>());
+        Assert.True(functionsResource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var envAnnotations));
+
+        var context = new EnvironmentCallbackContext(builder.ExecutionContext);
+        foreach (var envAnnotation in envAnnotations)
+        {
+            await envAnnotation.Callback(context);
+        }
+
+        Assert.False(context.EnvironmentVariables.ContainsKey(TestProjectWithEnvironmentVariables.CustomEnvironmentVariable));
     }
 }
