@@ -1009,15 +1009,11 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: extension-e2e-diagnostics-${{ matrix.rid }}-${{ matrix.shardName }}-attempt${{ github.run_attempt }}
+          # File selection belongs to the runner; these are prepared diagnostic directories.
           path: |
             extension/.test-results/**
-            extension/.test-storage/**/settings/User/**
-            extension/.test-storage/**/settings/logs/**
-            extension/.test-storage/**/screenshots/**
-            extension/.test-storage/**/aspire-home/logs/**
-            extension/.test-storage/**/aspire-home/cache/apphost-info/**
-            extension/.test-workspaces/**/.aspire/**
-            extension/.test-workspaces/**/*.log
+            extension/.test-storage/**
+            extension/.test-workspaces/**
             extension/.test-recordings/**
           if-no-files-found: ignore
           include-hidden-files: true

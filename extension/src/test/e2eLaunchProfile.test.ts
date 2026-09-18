@@ -536,10 +536,25 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes('debugSessions: state.state.debugSessions?.map(redactDebugSessionForDiagnostics)'));
         assert.ok(runner.includes('sanitizeDashboardUrlForDiagnostics'));
         assert.ok(runner.includes('redactTextFilesForArtifacts(resultsDir)'));
-        assert.ok(runner.includes('redactTextFilesForArtifacts(storageDiagnosticsDir)'));
+        assert.ok(runner.includes('const redacted = redactSensitiveArtifactText(text);'));
+        assert.ok(runner.includes('fs.writeFileSync(destinationPath, redacted === text ? contents : redacted)'));
         assert.ok(runner.includes('skipAspireLeaseFiles'));
         assert.ok(runner.includes('/login?t=<redacted>'));
         assert.ok(runner.includes('new URL(stripResourceSuffix(url)).origin'));
+    });
+
+    test('uploads prepared diagnostic directories without selecting files again', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const uploadStart = workflow.indexOf('id: upload_e2e_diagnostics');
+        const uploadEnd = workflow.indexOf('- name: Print E2E diagnostics links', uploadStart);
+        assert.ok(uploadStart >= 0 && uploadEnd > uploadStart);
+        const uploadStep = workflow.slice(uploadStart, uploadEnd);
+        // The path: | input lists one unquoted glob per line, e.g. extension/.test-results/**.
+        const patterns = uploadStep.match(/^\s+extension\/[^\s]+$/gm)?.map(line => line.trim()) ?? [];
+        const diagnosticDirectories = ['.test-results', '.test-storage', '.test-workspaces', '.test-recordings'];
+        assert.deepStrictEqual(patterns, diagnosticDirectories.map(directory => `extension/${directory}/**`));
+        assert.match(uploadStep, /^\s+include-hidden-files: true\s*$/m);
     });
 
     test('installs the E2E runner dependencies from the internal npm feed', () => {
