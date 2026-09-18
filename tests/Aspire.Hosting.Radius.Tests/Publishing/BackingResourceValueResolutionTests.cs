@@ -1017,11 +1017,8 @@ public class BackingResourceValueResolutionTests
     }
 
     /// <summary>
-    /// The connection name can be aliased, and <c>WithReference</c> records the override nowhere in
-    /// the model - so an aliased reference splats to <c>ADMIN_PASSWORD</c>, a name that would
-    /// otherwise be indistinguishable from the author-owned variable above. The alias is recovered
-    /// from the <c>ConnectionStrings__admin</c> entry the same call injects, so the genuine
-    /// injection stays silent while the author-owned variable of the same name does not.
+    /// The logical connection name recorded by <c>WithReference</c> identifies an aliased property's
+    /// prefix, so the genuine injection stays silent while an unrelated author-owned variable does not.
     /// </summary>
     [Fact]
     public void AliasedReferenceToTheOwningResource_IsNotReportedAsAnUnrelatedUse()
@@ -1035,6 +1032,52 @@ public class BackingResourceValueResolutionTests
         });
 
         Assert.Empty(logger.Matching(LogLevel.Warning, "references parameter"));
+    }
+
+    [Fact]
+    public Task NestedConnectionName_PreservesLogicalPropertyPrefixes()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+        {
+            var shared = b.AddParameter("shared", "hunter2", secret: true);
+            var sql = b.AddSqlServer("sql", password: shared);
+
+            b.AddContainer("api", "myapp/api", "1.0").WithReference(sql, "db__primary");
+        });
+
+        Assert.Equal(
+            ["The password parameter 'shared' supplied for 'sql' is not used when deploying " +
+             "to Radius. The recipe that provisions that resource generates its own credentials, and consumers are given " +
+             "those instead. Remove the parameter, or provision the resource yourself if the value must be fixed."],
+            logger.Entries.Where(e => e.Level == LogLevel.Warning).Select(e => e.Message));
+
+        return Verify(bicep, extension: "bicep");
+    }
+
+    [Fact]
+    public Task NestedConnectionName_UserAuthoredPortablePrefix_IsReportedAsAnUnrelatedUse()
+    {
+        var (bicep, logger) = GenerateBicep(b =>
+        {
+            var shared = b.AddParameter("shared", "hunter2", secret: true);
+            var sql = b.AddSqlServer("sql", password: shared);
+
+            // Exclude the splat so a warning on an injected property cannot mask a missed warning
+            // on the user-authored value: Radius deduplicates warnings by resource and parameter.
+            b.AddContainer("api", "myapp/api", "1.0")
+                .WithReferenceEnvironment(ReferenceEnvironmentInjectionFlags.ConnectionString)
+                .WithReference(sql, "db__primary")
+                .WithEnvironment("DB_PRIMARY_PASSWORD", ReferenceExpression.Create($"{shared}"));
+        });
+
+        Assert.Equal(
+            "Resource 'api' references parameter 'shared', which is also the credential of " +
+            "'sql'. That resource is provisioned by a Radius recipe which generates its own credential, " +
+            "so the referencing resource receives the recipe's value rather than the parameter's. Use a separate " +
+            "parameter if that is not intended. Diagnostic: ASPIRERADIUS070.",
+            Assert.Single(logger.Matching(LogLevel.Warning, "references parameter")));
+
+        return Verify(bicep, extension: "bicep");
     }
 
     /// <summary>

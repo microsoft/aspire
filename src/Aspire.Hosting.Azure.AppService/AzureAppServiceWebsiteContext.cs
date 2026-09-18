@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECONNECTIONSTRINGS001
+
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
@@ -70,6 +72,37 @@ internal sealed class AzureAppServiceWebsiteContext(
             foreach (var c in environmentCallbacks)
             {
                 await c.Callback(context).ConfigureAwait(true);
+            }
+        }
+
+        ProjectPortableConnectionStringAliases();
+    }
+
+    private void ProjectPortableConnectionStringAliases()
+    {
+        var aliases = resource.Annotations
+            .OfType<ConnectionStringReferenceAnnotation>()
+            .Select(static annotation => annotation.EnvironmentVariableNames)
+            .Where(static names =>
+                !names.IsExplicit &&
+                !string.Equals(names.LegacyName, names.PortableName, StringComparison.OrdinalIgnoreCase))
+            .Where(names => EnvironmentVariables.ContainsKey(names.PortableName))
+            .Distinct()
+            .OrderBy(static names => names.LegacyName, StringComparer.Ordinal)
+            .ToArray();
+
+        if (aliases.Length == 0)
+        {
+            return;
+        }
+
+        foreach (var alias in aliases)
+        {
+            if (EnvironmentVariables.Remove(alias.LegacyName, out var legacyValue))
+            {
+                // The exact logical name wins when both aliases are present in the same configuration
+                // provider. Preserve that precedence when App Service can only receive the portable alias.
+                EnvironmentVariables[alias.PortableName] = legacyValue;
             }
         }
     }
