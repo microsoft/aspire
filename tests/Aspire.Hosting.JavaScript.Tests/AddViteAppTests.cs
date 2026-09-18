@@ -1108,7 +1108,7 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(nextDir, "next.config.ts"), "const nextConfig = {}; export default nextConfig;");
 
         var nextJs = builder.AddNextJsApp("nextjs", nextDir);
-        Assert.Collection(builder.Resources, resource => Assert.Same(nextJs.Resource, resource));
+        Assert.Collection(builder.Resources, resource => Assert.Same(nextJs.Resource.AsContainer(), resource));
 
         var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();

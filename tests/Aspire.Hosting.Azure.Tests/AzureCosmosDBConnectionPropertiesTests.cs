@@ -60,7 +60,7 @@ public class AzureCosmosDBConnectionPropertiesTests
         var cosmos = builder.AddAzureCosmosDB("cosmos");
         cosmos = useClassic ? cosmos.RunAsClassicEmulator() : cosmos.RunAsEmulator();
 
-        var resource = Assert.Single(builder.Resources.OfType<AzureCosmosDBResource>());
+        var resource = cosmos.Resource;
         var properties = ((IResourceWithConnectionString)resource).GetConnectionProperties().ToArray();
         var expectedConnectionString = useClassic
             ? "AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==;AccountEndpoint=https://{cosmos.bindings.emulator.host}:{cosmos.bindings.emulator.port};DisableServerCertificateValidation=True;"

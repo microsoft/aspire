@@ -53,7 +53,7 @@ public class AddAzureKustoTests
         Assert.Equal(expectedTag, containerAnnotation.Tag);
         var container = Assert.IsType<AzureKustoEmulatorResource>(projection);
         Assert.Same(
-            resourceBuilder.Resource,
+            container,
             Assert.Single(builder.Resources, resource => resource.Name == resourceBuilder.Resource.Name));
         Assert.Same(container, resourceBuilder.Resource.AsContainer());
         Assert.Same(resourceBuilder.Resource, container.GetOwnerOrSelf());

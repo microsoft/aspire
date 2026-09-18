@@ -317,7 +317,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         Assert.True(stepExecuted);
         Assert.True(configurationCallbackInvoked);
         Assert.Same(owner.Resource, factoryResource);
-        Assert.Collection(context.Model.Resources, resource => Assert.Same(owner.Resource, resource));
+        Assert.Collection(context.Model.Resources, resource => Assert.Same(owner.Resource.AsContainer(), resource));
     }
 
     [Fact]
@@ -402,8 +402,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
 
         var steps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
 
-        // The projection facade is not a member of the model, so a step registered through it must still point at
-        // the owner. The pipeline only fills in a null Resource, so this cannot be fixed up during collection.
+        // The model exposes the projection as the effective resource, but pipeline step identity remains owner-addressed.
         var projectedStep = Assert.Single(steps, step => step.Name == "projected-step");
         Assert.Same(owner.Resource, projectedStep.Resource);
     }

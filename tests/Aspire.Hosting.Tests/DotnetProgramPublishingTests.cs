@@ -220,7 +220,7 @@ public class DotnetProgramPublishingTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        Assert.Same(program, Assert.Single(model.Resources));
+        Assert.Same(program.AsContainer(), Assert.Single(model.Resources));
         Assert.False(program.SupportsDotnetProgramPublishing());
         Assert.Equal(imageSource is "dockerfile", program.RequiresImageBuild());
         Assert.Equal(imageSource is "dockerfile", program.RequiresImageBuildAndPush());

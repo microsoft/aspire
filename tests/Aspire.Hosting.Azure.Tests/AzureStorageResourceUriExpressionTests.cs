@@ -19,7 +19,7 @@ public class AzureStorageResourceUriExpressionTests
             storage.RunAsEmulator();
         }
 
-        var resource = Assert.Single(builder.Resources.OfType<AzureStorageResource>());
+        var resource = storage.Resource;
         var uriExpression = resource.BlobUriExpression;
         Assert.Equal(
             isEmulator ? "{storage.bindings.blob.url}" : "{storage.outputs.blobEndpoint}",
@@ -38,7 +38,7 @@ public class AzureStorageResourceUriExpressionTests
             storage.RunAsEmulator();
         }
 
-        var resource = Assert.Single(builder.Resources.OfType<AzureStorageResource>());
+        var resource = storage.Resource;
         if (isEmulator)
         {
             Assert.Throws<InvalidOperationException>(() => resource.DataLakeUriExpression);
@@ -61,7 +61,7 @@ public class AzureStorageResourceUriExpressionTests
             storage.RunAsEmulator();
         }
 
-        var resource = Assert.Single(builder.Resources.OfType<AzureStorageResource>());
+        var resource = storage.Resource;
         var uriExpression = resource.QueueUriExpression;
         Assert.Equal(
             isEmulator ? "{storage.bindings.queue.url}" : "{storage.outputs.queueEndpoint}",
@@ -80,7 +80,7 @@ public class AzureStorageResourceUriExpressionTests
             storage.RunAsEmulator();
         }
 
-        var resource = Assert.Single(builder.Resources.OfType<AzureStorageResource>());
+        var resource = storage.Resource;
         var uriExpression = resource.TableUriExpression;
         Assert.Equal(
             isEmulator ? "{storage.bindings.table.url}" : "{storage.outputs.tableEndpoint}",
