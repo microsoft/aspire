@@ -1,8 +1,12 @@
 {
   "id": "vscode-e2e-windows-apphost-tree-flaky",
   "type": "flaky-test",
-  "title": "Flaky: VS Code extension E2E (Windows, apphost-tree) shard fails with generic exit code 1, unrelated to PR changes",
-  "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. Occurs on 'VS Code extension E2E (Windows, apphost-tree)' shard.",
+  "title": "Flaky: VS Code extension E2E (Windows, apphost-tree) shard fails waiting for AppHost tree item, unrelated to PR changes",
+  "test_name": "Aspire AppHost tree E2E discovers the workspace AppHost and renders it in the Aspire view",
+  "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
+  "error_pattern": "TimeoutError: Timed out waiting for child tree item 'Run AppHost' on 'Deploy AppHost'.\nWait timed out after 30174ms\n    at D:\\a\\aspire\\aspire\\extension\\node_modules\\selenium-webdriver\\lib\\webdriver.js:929:22",
+  "analysis": "This is a Selenium-based E2E UI test timing out waiting for a tree item to render within 30 seconds on a Windows runner. This job/shard has a documented history of flaky, environment-timing-related failures unrelated to PR content (see prior occurrences of 'VS Code extension E2E (Windows, apphost-tree)' across multiple unrelated PRs). The current PR does modify VS Code extension test files (extension/src/test/e2eLaunchProfile.test.ts) and dashboard terminal UI, but not the AppHost tree view or its rendering logic, and the failure is a generic UI timing timeout consistent with prior flaky occurrences of this same shard.",
+  "failure_details": "Error:\nTimed out waiting for child tree item 'Run AppHost' on 'Deploy AppHost'.\nWait timed out after 30174ms\nStack Trace:\nTimeoutError: Timed out waiting for child tree item 'Run AppHost' on 'Deploy AppHost'.\nWait timed out after 30174ms\n    at D:\\a\\aspire\\aspire\\extension\\node_modules\\selenium-webdriver\\lib\\webdriver.js:929:22\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
   "occurrences": [
     {
       "run_id": 32205890727,
@@ -38,6 +42,13 @@
       "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
       "pr_number": 20057,
       "observed_at": "2026-09-11T05:40:00Z"
+    },
+    {
+      "run_id": 35322237059,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35322237059",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
+      "pr_number": 19887,
+      "observed_at": "2026-09-18T08:42:00Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19485"

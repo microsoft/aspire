@@ -1,9 +1,12 @@
 {
   "id": "templates-canewandbuild-roslyn-methodnotfound-macos",
   "type": "flaky-test",
-  "title": "Flaky: CanNewAndBuild(aspire-mstest, Net8) fails with Roslyn Method not found TryGetMaxCharCount on macOS",
-  "test_name": "Aspire.Templates.Tests.MSTest_NewUpAndBuildSupportProjectTemplatesTests.CanNewAndBuild(templateName: \"aspire-mstest\", extraTestCreationArgs: \"\", sdk: Net8, tfm: Net8, error: null)",
-  "error_pattern": "CSC : error CS1504: Source file '...GlobalUsings.g.cs' could not be opened -- Method not found: 'Boolean Microsoft.CodeAnalysis.EncodingExtensions.TryGetMaxCharCount(System.Text.Encoding, Int64, Int32 ByRef)'. Build FAILED.\nat Aspire.Templates.Tests.CommandResult.EnsureExitCode\nat Aspire.Templates.Tests.AspireProject.BuildAsync\nat Aspire.Templates.Tests.NewUpAndBuildSupportProjectTemplatesBase.CanNewAndBuildActual",
+  "title": "Flaky: CanNewAndBuild(aspire-nunit, Net9) fails with Roslyn Method not found HashAlgorithmToPal on macOS",
+  "test_name": "Aspire.Templates.Tests.NUnit_NewUpAndBuildSupportProjectTemplatesTests.CanNewAndBuild(templateName: \"aspire-nunit\", extraTestCreationArgs: \"\", sdk: Net9, tfm: Net9, error: null)",
+  "job_name": "Tests / Package tests - macOS (class, Aspire.Templates.Tests, Templates-NUnit_NewUpAndBuildSupportProjectTemplatesTests... / Templates-NUnit_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+  "error_pattern": "CSC : error CS1504: Source file '...AssemblyInfo.cs' could not be opened -- Method not found: 'PAL_HashAlgorithm System.Security.Cryptography.HashAlgorithmNames.HashAlgorithmToPal(System.String)'. Build FAILED.\nat Aspire.Templates.Tests.CommandResult.EnsureExitCode\nat Aspire.Templates.Tests.AspireProject.BuildAsync\nat Aspire.Templates.Tests.NewUpAndBuildSupportProjectTemplatesBase.CanNewAndBuildActual",
+  "analysis": "The build fails inside the Roslyn compiler process (csc) itself with a 'Method not found' reflection error on a .NET Cryptography API, indicating a corrupted or mismatched Roslyn/SDK toolset installation on the macOS runner rather than any issue with generated template code. This matches a previously seen pattern (templates-canewandbuild-roslyn-methodnotfound-macos) where a similar Method not found error occurred in the same CanNewAndBuild flow on macos-latest for a different template/SDK combination. The PR does not modify the Templates test infrastructure or template content that would cause this compiler-level failure.",
+  "failure_details": "Error:\nAspire.Templates.Tests.ToolCommandException :  Expected 0 exit code but got 1: dotnet build ... /p:TreatWarningsAsErrors=true -c Debug /p:AspireUseCliBundle=false\nStandard Output:\n  Determining projects to restore...\n  All projects are up-to-date for restore.\nCSC : error CS1504: Source file '.../new_build_aspire_nunit_2xksfaki_f44.AppHost.AssemblyInfo.cs' could not be opened -- Method not found: 'PAL_HashAlgorithm System.Security.Cryptography.HashAlgorithmNames.HashAlgorithmToPal(System.String)'.\nStack Trace:\nat Aspire.Templates.Tests.CommandResult.EnsureExitCode(Int32 expectedExitCode, String messagePrefix, Boolean suppressOutput) in /_/tests/Shared/TemplatesTesting/CommandResult.cs:line 36\n   at Aspire.Templates.Tests.CommandResult.EnsureSuccessful(String messagePrefix, Boolean suppressOutput) in /_/tests/Shared/TemplatesTesting/CommandResult.cs:line 20\n   at Aspire.Templates.Tests.AspireProject.BuildAsync(String[] extraBuildArgs, CancellationToken token, String workingDirectory) in /_/tests/Shared/TemplatesTesting/AspireProject.cs:line 347\n   at Aspire.Templates.Tests.NewUpAndBuildSupportProjectTemplatesBase.CanNewAndBuildActual(String templateName, String extraTestCreationArgs, TestSdk sdk, TestTargetFramework tfm, String error) in /_/tests/Aspire.Templates.Tests/NewUpAndBuildSupportProjectTemplatesTests.cs:line 56",
   "occurrences": [
     {
       "run_id": 30654518872,
@@ -11,6 +14,13 @@
       "job": "Tests / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
       "pr_number": 18947,
       "observed_at": "2026-07-31T18:51:06Z"
+    },
+    {
+      "run_id": 35322237059,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35322237059",
+      "job": "Tests / Package tests - macOS (class, Aspire.Templates.Tests, Templates-NUnit_NewUpAndBuildSupportProjectTemplatesTests... / Templates-NUnit_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "pr_number": 19887,
+      "observed_at": "2026-09-18T08:42:00Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18950"
