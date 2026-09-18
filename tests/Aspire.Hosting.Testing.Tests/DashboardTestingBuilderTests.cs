@@ -26,14 +26,18 @@ public class DashboardTestingBuilderTests
     private const string AppHostResourceServiceApiKey = "AppHost:ResourceService:ApiKey";
 
     [Fact]
-    public void DashboardIsDisabledByDefault()
+    public async Task DashboardIsDisabledByDefault()
     {
         var options = new DistributedApplicationTestingBuilderOptions();
 
         Assert.False(options.EnableDashboard);
 
         using var builder = DistributedApplicationTestingBuilder.Create();
-        Assert.Null(builder.Services.FirstOrDefault(descriptor => descriptor.ServiceType == typeof(DashboardServiceHost)));
+
+        // Dashboard service registration is unconditional in run mode (see DistributedApplicationBuilder), so the
+        // absence of DashboardServiceHost is no longer a valid signal for "disabled". Instead, the dashboard
+        // resource is present but marked explicit-start so it does not auto-start.
+        await AssertDashboardIsExplicitStartAsync(builder);
     }
 
     [Theory]
@@ -127,8 +131,13 @@ public class DashboardTestingBuilderTests
         await using var typeBuilder =
             await DistributedApplicationTestingBuilder.CreateAsync(typeof(Projects.TestingAppHost1_AppHost), default);
 
-        Assert.Null(genericBuilder.Services.FirstOrDefault(descriptor => descriptor.ServiceType == typeof(DashboardServiceHost)));
-        Assert.Null(typeBuilder.Services.FirstOrDefault(descriptor => descriptor.ServiceType == typeof(DashboardServiceHost)));
+        // Dashboard service registration is unconditional in run mode (see DistributedApplicationBuilder), so the
+        // absence of DashboardServiceHost is no longer a valid signal for "hardening not applied". These builders
+        // wrap a real AppHost entry point, and building them would let it run past Build() in the background
+        // (racing this test's own assertions), so assert against configuration instead of building: the
+        // EnableDashboard-only hardening in ConfigureDashboardTesting is the only thing that sets this key.
+        AssertDashboardTestingHardeningNotApplied(genericBuilder);
+        AssertDashboardTestingHardeningNotApplied(typeBuilder);
 
         await using var genericOptionsBuilder =
             await DistributedApplicationTestingBuilder.CreateAsync<Projects.TestingAppHost1_AppHost>(
@@ -254,6 +263,23 @@ public class DashboardTestingBuilderTests
         {
             EnableDashboard = true
         };
+    }
+
+    private static async Task AssertDashboardIsExplicitStartAsync(IDistributedApplicationTestingBuilder builder)
+    {
+        var app = await builder.BuildAsync();
+        await app.ExecuteBeforeStartHooksAsync(default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dashboard = Assert.Single(model.Resources, r => r.Name == KnownResourceNames.AspireDashboard);
+        Assert.True(dashboard.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _));
+    }
+
+    private static void AssertDashboardTestingHardeningNotApplied(IDistributedApplicationTestingBuilder builder)
+    {
+        // Set only by ConfigureDashboardTesting when DistributedApplicationTestingBuilderOptions.EnableDashboard
+        // is used, so its absence confirms the old-style default overloads did not opt into dashboard hardening.
+        Assert.Null(builder.Configuration["AppHost:SuppressDashboardLoginUrlInStartupSummary"]);
     }
 
     private static void AssertDashboardTestingDefaults(IDistributedApplicationTestingBuilder builder)
