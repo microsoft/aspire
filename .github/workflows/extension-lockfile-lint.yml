@@ -1,0 +1,72 @@
+name: Extension lockfile lint
+
+permissions:
+  contents: read
+
+# Run on every PR so we can make this a required check, regardless of which
+# files the PR touches. The internal microsoft-aspire pipeline runs
+# `yarn install` from extension/Extension.proj on a build agent that can only
+# reach the dotnet-public-npm mirror at pkgs.dev.azure.com, so any `resolved`
+# URL pointing elsewhere in extension/yarn.lock or extension/package-lock.json
+# breaks `main` post-merge with `connect EACCES 192.0.2.14:443`. This has
+# happened twice (#16489 / #16507, then #17361 / #17399); GitHub runners have
+# unrestricted egress, so the bad URLs cleared PR CI undetected both times.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'release/*'
+
+jobs:
+  lint:
+    name: Extension lockfile lint
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'microsoft' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Assert lockfile tarball hosts and .npmrc / .yarnrc knobs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mirror_prefix='https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/'
+          status=0
+
+          # 1. Reject any `resolved` URL outside the dotnet-public-npm mirror.
+          #    Matches both yarn.lock ("resolved \"https://...\"") and
+          #    package-lock.json ("\"resolved\": \"https://...\"").
+          for f in extension/yarn.lock extension/package-lock.json; do
+            if [ ! -f "$f" ]; then
+              continue
+            fi
+            offenders=$(grep -nE '"?resolved"?[[:space:]:]+"https?://' "$f" \
+                       | grep -v "${mirror_prefix}" || true)
+            if [ -n "$offenders" ]; then
+              echo "::error file=$f::Lockfile contains 'resolved' URLs outside the dotnet-public-npm mirror. The internal microsoft-aspire pipeline cannot reach those hosts."
+              echo "Offending entries in $f:"
+              printf '%s\n' "$offenders"
+              echo
+              echo "Fix: rewrite each non-mirror host prefix to:"
+              echo "  ${mirror_prefix}"
+              echo "The feed proxies upstream npmjs.org, so tarball bytes and integrity hashes are unchanged."
+              status=1
+            fi
+          done
+
+          # 2. Reject knobs that disable Yarn's default host rewrite. PR #17361
+          #    set `replace-registry-host=never` in extension/.npmrc, which is
+          #    what made the bad URLs stick in yarn.lock in the first place.
+          for f in extension/.npmrc extension/.yarnrc; do
+            if [ ! -f "$f" ]; then
+              continue
+            fi
+            if grep -nE '^[[:space:]]*replace-registry-host[[:space:]]*=[[:space:]]*never' "$f"; then
+              echo "::error file=$f::Do not set 'replace-registry-host=never'. This disables Yarn's rewrite of resolved hosts back to the dotnet-public-npm mirror and breaks the internal microsoft-aspire build."
+              status=1
+            fi
+          done
+
+          exit $status
