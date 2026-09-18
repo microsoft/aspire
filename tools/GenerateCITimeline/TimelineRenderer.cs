@@ -472,7 +472,14 @@ internal static partial class TimelineRenderer
             return "⚠️ No job data available for timeline.\n";
         }
 
+        // Use run_started_at as the baseline when available and earlier than the first
+        // job's created_at so that initial workflow queue/wait time is captured.
         var t0 = allCreated.Min();
+        var runStartedAt = ParseTs(runInfo, "run_started_at");
+        if (runStartedAt is not null && runStartedAt.Value < t0)
+        {
+            t0 = runStartedAt.Value;
+        }
 
         var totalSeconds = 0.0;
         if (allCompleted.Count > 0)
@@ -499,11 +506,10 @@ internal static partial class TimelineRenderer
         var runAttempt = GetInt(runInfo, "run_attempt", 1);
         if (runAttempt <= 1)
         {
-            var runStarted = ParseTs(runInfo, "run_started_at");
             var runUpdated = ParseTs(runInfo, "updated_at");
-            if (runStarted is not null && runUpdated is not null)
+            if (runStartedAt is not null && runUpdated is not null)
             {
-                totalSeconds = Math.Max(totalSeconds, (runUpdated.Value - runStarted.Value).TotalSeconds);
+                totalSeconds = Math.Max(totalSeconds, (runUpdated.Value - runStartedAt.Value).TotalSeconds);
             }
         }
 
