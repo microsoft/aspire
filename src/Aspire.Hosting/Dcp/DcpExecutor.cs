@@ -8,7 +8,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Globalization;
-using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -253,7 +252,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             {
                 await createWorkloadEndpoints.ConfigureAwait(false);
 
-                await CreateRenderedResourcesAsync(_executableCreator, executables, EmptyCreationContext.s_instance, ct).ConfigureAwait(false);
+                await CreateRenderedResourcesAsync(_executableCreator, executables, cctx, ct).ConfigureAwait(false);
             }, ct);
 
             var createContainers = Task.Run(async () =>
@@ -273,85 +272,6 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             _containerContextSource.TrySetException(ex);
             throw;
         }
-    }
-
-    private async Task PrepareExecutableConfigurationAsync(
-        IExecutionConfigurationGathererContext context,
-        IResource resource,
-        CancellationToken cancellationToken)
-    {
-        var endpointsByResource = new Dictionary<IResourceWithEndpoints, HashSet<EndpointAnnotation>>(ReferenceEqualityComparer.Instance);
-        var executableResources = _appResources.Get()
-            .OfType<RenderedModelResource<Executable>>()
-            .Select(executable => executable.ModelResource)
-            .ToHashSet(ReferenceEqualityComparer.Instance);
-        var hasContainerResources = _model.Resources.Any(resource => resource.IsContainer());
-
-        foreach (var endpointReference in context.GetReferences<EndpointReference>())
-        {
-            if (endpointReference.ContextNetworkID != KnownNetworkIdentifiers.DefaultAspireContainerNetwork ||
-                !endpointReference.Exists ||
-                !executableResources.Contains(endpointReference.Resource))
-            {
-                continue;
-            }
-
-            if (!hasContainerResources)
-            {
-                throw new FailedToApplyEnvironmentException(
-                    $"Resource '{resource.Name}' references endpoint '{endpointReference.EndpointName}' on executable resource " +
-                    $"'{endpointReference.Resource.Name}' using the default Aspire container network, but the application does not contain any container resources.");
-            }
-
-            if (_options.Value.EnableAspireContainerTunnel && endpointReference.EndpointAnnotation.Protocol != ProtocolType.Tcp)
-            {
-                throw new FailedToApplyEnvironmentException(
-                    $"Resource '{resource.Name}' references endpoint '{endpointReference.EndpointName}' on executable resource " +
-                    $"'{endpointReference.Resource.Name}' using the default Aspire container network, but the Aspire container tunnel only supports TCP endpoints.");
-            }
-
-            if (!endpointsByResource.TryGetValue(endpointReference.Resource, out var endpoints))
-            {
-                endpoints = new HashSet<EndpointAnnotation>(ReferenceEqualityComparer.Instance);
-                endpointsByResource.Add(endpointReference.Resource, endpoints);
-            }
-
-            endpoints.Add(endpointReference.EndpointAnnotation);
-        }
-
-        if (endpointsByResource.Count == 0)
-        {
-            return;
-        }
-
-        var hostEndpoints =
-            endpointsByResource
-                .Select(pair => new HostResourceWithEndpoints(pair.Key, pair.Value))
-                .ToImmutableArray();
-        var cctx = await _containerContextSource.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
-
-        await _containerCreator.EnsureHostConnectivityAsync(
-            hostEndpoints,
-            cctx,
-            this,
-            cancellationToken).ConfigureAwait(false);
-
-        var allocatedEndpointTasks = hostEndpoints
-            .SelectMany(host => host.Endpoints)
-            .Select(endpoint => endpoint.AllAllocatedEndpoints.GetAllocatedEndpointAsync(
-                KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
-                cancellationToken))
-            .ToArray();
-
-        await Task.WhenAll(allocatedEndpointTasks).ConfigureAwait(false);
-    }
-
-    Task IDcpObjectFactory.PrepareExecutableConfigurationAsync(
-        IExecutionConfigurationGathererContext context,
-        IResource resource,
-        CancellationToken cancellationToken)
-    {
-        return PrepareExecutableConfigurationAsync(context, resource, cancellationToken);
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -1367,8 +1287,8 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
-                    var cctx = await _containerContextSource.Task.ConfigureAwait(false);
-                    await _containerCreator.CreateObjectAsync(cr, cctx, resourceLogger, this, cancellationToken).ConfigureAwait(false);
+                    var containerCreationContext = await _containerContextSource.Task.ConfigureAwait(false);
+                    await _containerCreator.CreateObjectAsync(cr, containerCreationContext, resourceLogger, this, cancellationToken).ConfigureAwait(false);
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     break;
                 case RenderedModelResource<Executable> er:
@@ -1379,7 +1299,8 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
-                    await _executableCreator.CreateObjectAsync(er, EmptyCreationContext.s_instance, resourceLogger, this, cancellationToken).ConfigureAwait(false);
+                    var executableCreationContext = await _containerContextSource.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    await _executableCreator.CreateObjectAsync(er, executableCreationContext, resourceLogger, this, cancellationToken).ConfigureAwait(false);
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     break;
 

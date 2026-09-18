@@ -10633,19 +10633,6 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var appResources = new DcpAppResourceStore();
         var proxylessEndpointPortAllocator = new ProxylessEndpointPortAllocator(Options.Create(dcpOptions));
         var applicationOptions = distributedApplicationOptions ?? new DistributedApplicationOptions();
-        var executableConfigurationResolver = new ExecutableConfigurationResolver(executionContext, locations, aspireStore);
-        var executableLaunchPolicy = new ExecutableLaunchPolicy(configuration);
-
-        var executableCreator = new ExecutableCreator(
-            nameGenerator,
-            distributedAppModel,
-            appResources,
-            executableConfigurationResolver,
-            configuration,
-            applicationOptions,
-            executableLaunchPolicy,
-            NullLogger<ExecutableCreator>.Instance);
-
         var containerCreator = new ContainerCreator(
             configuration,
             Options.Create(dcpOptions),
@@ -10657,6 +10644,21 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             hostEnv,
             containerCreatorLogger ?? NullLogger<ContainerCreator>.Instance,
             appResources);
+
+        var executableConfigurationResolver = new ExecutableConfigurationResolver(executionContext, locations, aspireStore);
+        var executableLaunchPolicy = new ExecutableLaunchPolicy(configuration);
+
+        var executableCreator = new ExecutableCreator(
+            nameGenerator,
+            distributedAppModel,
+            appResources,
+            containerCreator,
+            executableConfigurationResolver,
+            configuration,
+            Options.Create(dcpOptions),
+            applicationOptions,
+            executableLaunchPolicy,
+            NullLogger<ExecutableCreator>.Instance);
 
         return new DcpExecutor(
             logger ?? NullLogger<DcpExecutor>.Instance,

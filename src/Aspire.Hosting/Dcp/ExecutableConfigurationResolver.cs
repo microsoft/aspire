@@ -31,7 +31,7 @@ internal sealed class ExecutableConfigurationResolver(
     public async Task<ExecutableConfigurationResult> ResolveAsync(
         RenderedModelResource<Executable> renderedResource,
         ILogger resourceLogger,
-        IDcpObjectFactory factory,
+        IExecutionConfigurationGatherer preparationGatherer,
         CancellationToken cancellationToken)
     {
         var executable = renderedResource.DcpResource;
@@ -81,7 +81,7 @@ internal sealed class ExecutableConfigurationResolver(
                 CertificateWithKeyPath = ReferenceExpression.Create($"{Path.Join(baseServerAuthOutputPath, $"{certificate.Thumbprint}.pem")}"),
                 PfxPath = ReferenceExpression.Create($"{Path.Join(baseServerAuthOutputPath, $"{certificate.Thumbprint}.pfx")}"),
             })
-            .AddExecutionConfigurationGatherer(new PrepareExecutableConfigurationGatherer(factory))
+            .AddExecutionConfigurationGatherer(preparationGatherer)
             .BuildAsync(_executionContext, resourceLogger, cancellationToken)
             .ConfigureAwait(false);
 
@@ -147,22 +147,6 @@ internal sealed class ExecutableConfigurationResolver(
         }
 
         return new(configuration, pemCertificates);
-    }
-
-    /// <summary>
-    /// Prepares network-scoped endpoints after configuration gathering and before value resolution.
-    /// </summary>
-    private sealed class PrepareExecutableConfigurationGatherer(IDcpObjectFactory factory) : IExecutionConfigurationGatherer
-    {
-        public async ValueTask GatherAsync(
-            IExecutionConfigurationGathererContext context,
-            IResource resource,
-            ILogger resourceLogger,
-            DistributedApplicationExecutionContext executionContext,
-            CancellationToken cancellationToken = default)
-        {
-            await factory.PrepareExecutableConfigurationAsync(context, resource, cancellationToken).ConfigureAwait(false);
-        }
     }
 
     private static void CreatePrivateDirectory(string path)
