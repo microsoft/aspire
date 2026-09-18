@@ -44,7 +44,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     [Fact]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
-    public async Task Bash_SkillInvocation_CopilotApp_UsesCopilotCliClientName()
+    public async Task Bash_SkillInvocation_CopilotAppMarker_DoesNotProvideDistinctAttribution()
     {
         var run = await RunBashHookAsync(
             """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
@@ -57,6 +57,8 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "skill_invocation");
+        // v0.0.2 ignores AI_AGENT; App attribution must be added upstream, not in these copied scripts.
+        // https://github.com/microsoft/aspire-skills/issues/71
         AssertArg(args, "--client-name", "copilot-cli");
         AssertArg(args, "--skill-name", "aspire");
     }
@@ -288,7 +290,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task Pwsh_SkillInvocation_CopilotApp_UsesCopilotCliClientName()
+    public async Task Pwsh_SkillInvocation_CopilotAppMarker_DoesNotProvideDistinctAttribution()
     {
         var run = await RunPwshHookAsync(
             """{"toolName":"skill","sessionId":"session-1","toolArgs":{"skill":"aspire"}}""",
@@ -301,6 +303,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "skill_invocation");
+        // Keep this limitation explicit until https://github.com/microsoft/aspire-skills/issues/71 ships.
         AssertArg(args, "--client-name", "copilot-cli");
         AssertArg(args, "--skill-name", "aspire");
     }
