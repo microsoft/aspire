@@ -70,7 +70,7 @@ internal static partial class MeterProviderBuilderExtensions
         Guard.ThrowIfNull(builder);
 
         return builder
-            .AddMeter(ConfluentKafkaCommon.InstrumentationName)
+            .AddMeter(ConfluentKafkaCommon.Meter.Name)
             .AddInstrumentation(sp =>
             {
                 if (name == null)

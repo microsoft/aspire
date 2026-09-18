@@ -216,7 +216,7 @@ public class OtlpSpan
                 else if (!string.IsNullOrEmpty(OtlpHelpers.GetValue(span.Attributes, "messaging.system")))
                 {
                     var messagingSystem = OtlpHelpers.GetValue(span.Attributes, "messaging.system");
-                    var messagingOperation = OtlpHelpers.GetValue(span.Attributes, "messaging.operation");
+                    var messagingOperation = span.Attributes.GetValueWithFallback("messaging.operation.name", "messaging.operation");
                     var destinationName = OtlpHelpers.GetValue(span.Attributes, "messaging.destination.name");
 
                     return $"MSG {messagingSystem} {messagingOperation} {destinationName}";
