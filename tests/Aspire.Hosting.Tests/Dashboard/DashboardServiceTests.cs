@@ -1557,6 +1557,40 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         Assert.NotNull(response);
     }
 
+    [Fact]
+    public async Task CloseTerminal_ResourceOwnedTerminal_RejectsWithoutDisposingSharedHandle()
+    {
+        using var fileSystem = new TestFileSystemService();
+        using var directory = fileSystem.TempDirectory.CreateTempSubdirectory();
+        var resource = new TestResource("myapp");
+        var layout = new TerminalHostLayout(
+            replicaId: "test0000000",
+            parentReplicaIndex: 0,
+            producerUdsPath: Path.Combine(directory.Path, "producer.sock"),
+            consumerUdsPath: Path.Combine(directory.Path, "consumer.sock"),
+            controlUdsPath: Path.Combine(directory.Path, "control.sock"),
+            metadataPath: Path.Combine(directory.Path, "metadata.json"));
+        var annotation = new TerminalAnnotation(new TerminalOptions());
+        annotation.Initialize([new TerminalHostResource("myapp-terminalhost-0", resource, layout)]);
+        resource.Annotations.Add(annotation);
+
+        await using var catalog = new ResourceTerminalCatalog(new DistributedApplicationModel([resource]), NullLogger.Instance);
+        await using var terminalService = TestTerminalService.Create();
+        terminalService.ResourceTerminals = catalog;
+        using var serviceData = CreateDashboardServiceData();
+        var service = CreateDashboardService(serviceData, terminalService: terminalService);
+        Assert.True(terminalService.TryGetTerminal(ResourceTerminalCatalog.BuildId(resource.Name, 0), out var terminal));
+        var backend = Assert.IsType<ResourceAspireTerminal>(terminal.Backend);
+
+        var exception = await Assert.ThrowsAsync<RpcException>(() => service.CloseTerminal(
+            new CloseTerminalRequest { TerminalId = terminal.Id }, TestServerCallContext.Create())).DefaultTimeout();
+
+        Assert.Equal(StatusCode.InvalidArgument, exception.StatusCode);
+        Assert.False(backend.IsDisposed);
+        Assert.True(terminalService.TryGetTerminal(terminal.Id, out var registered));
+        Assert.Same(terminal, registered);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

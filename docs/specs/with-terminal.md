@@ -76,6 +76,8 @@ it from discovery immediately, but the service retains teardown ownership until
 cleanup finishes. Dashboard close waits at most 10 seconds; a timeout or disconnect
 ends only that wait, not cleanup. Host-stop cancellation likewise bounds the wait,
 and subsequent AppHost disposal joins the same cleanup operation.
+The dashboard's `CloseTerminal` RPC rejects resource-owned handles with
+`InvalidArgument`; it must not disconnect their shared automation peer.
 
 ### Sending keys from AppHost code
 
@@ -112,6 +114,10 @@ Control+I from Tab, Control+M from Enter, or Control+Shift+C from Control+C.
 Windows workloads receive input through ConPTY and may interpret it differently.
 Numeric-keypad keys, extended modifiers, key-down/up events, and Kitty keyboard
 protocol are not part of this API. Typing text is not bracketed paste.
+
+Public C# lookup currently requires a terminal ID. A resource-name/replica lookup
+API that avoids constructing internal IDs is deferred to
+[#20219](https://github.com/microsoft/aspire/issues/20219).
 
 On a newly connected resource terminal, the first mode-dependent key can race
 initial state replay. Await expected screen text before mode-sensitive input

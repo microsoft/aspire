@@ -742,6 +742,12 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
     {
         if (terminalService.TryGetTerminal(request.TerminalId, out var terminal))
         {
+            // Resource handles are shared automation peers, not workloads owned by the dock.
+            if (terminal.Owner != Aspire.Hosting.Terminals.TerminalOwner.AppHost)
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Only AppHost-owned terminals can be closed from the dashboard."));
+            }
+
             await CloseTerminalAsync(terminal, context.CancellationToken).ConfigureAwait(false);
         }
 
