@@ -1,9 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text;
 using Hex1b;
 using Hex1b.Automation;
+using Hex1b.Input;
 
 #pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
 
@@ -28,10 +28,24 @@ internal static class TerminalAutomation
     public static Task SendTextAsync(Hex1bTerminalAutomator automator, string text, CancellationToken cancellationToken)
         => automator.TypeAsync(text, cancellationToken);
 
-    public static Task SendKeyAsync(Hex1bTerminal terminal, AspireTerminalKey key, CancellationToken cancellationToken)
+    public static Task SendKeyAsync(
+        Hex1bTerminal terminal,
+        Hex1bTerminalAutomator automator,
+        AspireTerminalKey key,
+        CancellationToken cancellationToken)
     {
-        var sequence = AspireTerminalKeySequences.Get(key);
-        return terminal.SendInputAsync(Encoding.UTF8.GetBytes(sequence), cancellationToken);
+        if (key.Key is >= Hex1bKey.A and <= Hex1bKey.Z &&
+            (key.Modifiers & (Hex1bModifiers.Alt | Hex1bModifiers.Control)) == Hex1bModifiers.Alt)
+        {
+            // Hex1b's automator drops the printable text for Alt+letter, so its encoder sends nothing.
+            // Send the legacy ESC+letter sequence (for example, ESC e for Alt+E) as one input write.
+            // Remove this workaround when https://github.com/mitchdenny/hex1b/issues/550 is fixed.
+            var firstLetter = (key.Modifiers & Hex1bModifiers.Shift) != 0 ? 'A' : 'a';
+            var letter = (byte)(firstLetter + (key.Key - Hex1bKey.A));
+            return terminal.SendInputAsync([0x1b, letter], cancellationToken);
+        }
+
+        return automator.KeyAsync(key.Key, key.Modifiers, cancellationToken);
     }
 
     public static async Task WaitForTextAsync(

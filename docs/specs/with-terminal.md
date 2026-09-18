@@ -73,6 +73,47 @@ cleanup finishes. Dashboard close waits at most 10 seconds; a timeout or disconn
 ends only that wait, not cleanup. Host-stop cancellation likewise bounds the wait,
 and subsequent AppHost disposal joins the same cleanup operation.
 
+### Sending keys from AppHost code
+
+`AspireTerminal.SendKeyAsync` accepts an immutable `AspireTerminalKey` value.
+Named properties represent individual keys, and the static `Ctrl`, `Shift`, and
+`Alt` methods on that same type add modifiers:
+
+```csharp
+await terminal.SendKeyAsync(AspireTerminalKey.F5, cancellationToken);
+await terminal.SendKeyAsync(
+    AspireTerminalKey.Ctrl(AspireTerminalKey.R), cancellationToken);
+await terminal.SendKeyAsync(
+    AspireTerminalKey.Shift(AspireTerminalKey.Tab), cancellationToken);
+await terminal.SendKeyAsync(
+    AspireTerminalKey.Ctrl(AspireTerminalKey.Shift(AspireTerminalKey.Left)),
+    cancellationToken);
+```
+
+The catalog includes `A`-`Z`, `D0`-`D9`, `F1`-`F12`, navigation and editing keys,
+`Space`, and punctuation keys such as `EqualsSign`, `LeftBracket`, and
+`Apostrophe`. Letters are lowercase unless shifted; digits and punctuation use
+US-layout key pairs. Use `SendTextAsync` for arbitrary text and Unicode rather
+than treating these keys as a keyboard-layout abstraction.
+
+Modifier composition is order-independent and idempotent: `Ctrl(Shift(R))`
+and `Shift(Ctrl(R))` describe the same keypress. It does not hold modifiers down
+for subsequent calls. `default(AspireTerminalKey)` is invalid and is rejected
+before starting a workload or connecting to a resource terminal.
+
+Both AppHost-owned and resource-owned terminals use the same key semantics.
+Encoding honors application-cursor mode for arrows, Home, and End. This is
+terminal input, not OS keyboard injection: legacy encoding cannot distinguish
+Control+I from Tab, Control+M from Enter, or Control+Shift+C from Control+C.
+Windows workloads receive input through ConPTY and may interpret it differently.
+Numeric-keypad keys, extended modifiers, key-down/up events, and Kitty keyboard
+protocol are not part of this API. Typing text is not bracketed paste.
+
+On a newly connected resource terminal, the first mode-dependent key can race
+initial state replay. Await expected screen text before mode-sensitive input
+when necessary; a replay-completion barrier is tracked in
+[mitchdenny/hex1b#551](https://github.com/mitchdenny/hex1b/issues/551).
+
 ### Terminal interactions
 
 `IInteractionService.PromptTerminalAsync` displays one caller-owned terminal in

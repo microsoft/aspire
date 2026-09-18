@@ -300,7 +300,7 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
     public async Task SendKeyAsync(AspireTerminalKey key, CancellationToken cancellationToken = default)
     {
         var terminal = EnsureStarted();
-        await TerminalAutomation.SendKeyAsync(terminal, key, cancellationToken).ConfigureAwait(false);
+        await TerminalAutomation.SendKeyAsync(terminal, _automator!, key, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task WaitForTextAsync(string text, TimeSpan? timeout = null, CancellationToken cancellationToken = default)

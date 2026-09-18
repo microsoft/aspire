@@ -110,7 +110,7 @@ internal sealed class ResourceAspireTerminal : ITerminalBackend
     public async Task SendKeyAsync(AspireTerminalKey key, CancellationToken cancellationToken = default)
     {
         var connection = await EnsureConnectedAsync(cancellationToken).ConfigureAwait(false);
-        await TerminalAutomation.SendKeyAsync(connection.Terminal, key, cancellationToken).ConfigureAwait(false);
+        await TerminalAutomation.SendKeyAsync(connection.Terminal, connection.Automator, key, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task WaitForTextAsync(string text, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
@@ -240,6 +240,9 @@ internal sealed class ResourceAspireTerminal : ITerminalBackend
             }
 
             var (width, height) = await connected.Task.ConfigureAwait(false);
+            // TODO: Await initial state replay before exposing readiness once Hex1b provides a public barrier.
+            // Handshake completion alone can leave the first cursor key using the mirror's default mode.
+            // https://github.com/mitchdenny/hex1b/issues/551
             var automator = new Hex1bTerminalAutomator(terminal, TerminalAutomation.DefaultTimeout);
             lock (_gate)
             {

@@ -13,11 +13,9 @@ namespace Aspire.Hosting.Tests.Terminals;
 public class AspireTerminalTests
 {
     [Theory]
-    [InlineData(-1, false)]
-    [InlineData(-1, true)]
-    [InlineData(int.MaxValue, false)]
-    [InlineData(int.MaxValue, true)]
-    public async Task SendKeyAsync_InvalidKey_DoesNotInvokeBackend(int value, bool canceled)
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SendKeyAsync_UninitializedKey_DoesNotInvokeBackend(bool canceled)
     {
         var invoked = false;
         var backend = new TestTerminalBackend("invalid-key")
@@ -35,14 +33,12 @@ public class AspireTerminalTests
             cts.Cancel();
         }
 
-        var key = (AspireTerminalKey)value;
-        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+        var exception = Assert.Throws<ArgumentException>(() =>
         {
-            _ = terminal.SendKeyAsync(key, cts.Token);
+            _ = terminal.SendKeyAsync(default, cts.Token);
         });
 
         Assert.Equal("key", exception.ParamName);
-        Assert.Equal(key, exception.ActualValue);
         Assert.False(invoked);
     }
 
@@ -60,7 +56,18 @@ public class AspireTerminalTests
         };
         await using var terminal = new AspireTerminal(backend);
         using var cts = new CancellationTokenSource();
-        var keys = Enum.GetValues<AspireTerminalKey>();
+        var keys = typeof(AspireTerminalKey).GetProperties(BindingFlags.Public | BindingFlags.Static)
+            .Where(property => property.PropertyType == typeof(AspireTerminalKey))
+            .Select(property => Assert.IsType<AspireTerminalKey>(property.GetValue(null)))
+            .SelectMany(key => new[]
+            {
+                key,
+                AspireTerminalKey.Ctrl(key),
+                AspireTerminalKey.Shift(key),
+                AspireTerminalKey.Alt(key),
+                AspireTerminalKey.Ctrl(AspireTerminalKey.Shift(AspireTerminalKey.Alt(key)))
+            })
+            .ToArray();
 
         foreach (var key in keys)
         {

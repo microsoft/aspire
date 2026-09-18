@@ -97,17 +97,25 @@ public sealed class AspireTerminal : IAsyncDisposable
         => Backend.SendTextAsync(text, cancellationToken);
 
     /// <summary>
-    /// Sends a single non-printable key to the terminal's workload.
+    /// Sends a single key, optionally combined with modifiers, to the terminal's workload.
     /// </summary>
+    /// <remarks>
+    /// Use the named values on <see cref="AspireTerminalKey"/> and combine them with
+    /// <see cref="AspireTerminalKey.Ctrl"/>, <see cref="AspireTerminalKey.Shift"/>, and
+    /// <see cref="AspireTerminalKey.Alt"/>. For example, <c>AspireTerminalKey.Ctrl(AspireTerminalKey.R)</c>
+    /// sends Control+R. Use <see cref="SendTextAsync"/> for arbitrary text rather than individual keys.
+    /// Key encoding follows the terminal's current input mode; a key does not represent a physical
+    /// key-down or key-up event.
+    /// </remarks>
     /// <param name="key">The key to send.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task representing the input operation.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="key"/> is not a supported key.</exception>
+    /// <exception cref="ArgumentException"><paramref name="key"/> is an uninitialized value.</exception>
     /// <exception cref="InvalidOperationException">The AppHost-owned terminal has already stopped.</exception>
     public Task SendKeyAsync(AspireTerminalKey key, CancellationToken cancellationToken = default)
     {
         // Reject invalid keys before the backend can start a workload or connect to a resource terminal.
-        _ = AspireTerminalKeySequences.Get(key);
+        key.Validate(nameof(key));
         return Backend.SendKeyAsync(key, cancellationToken);
     }
 

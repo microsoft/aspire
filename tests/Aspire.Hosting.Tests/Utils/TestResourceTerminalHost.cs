@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Hex1b;
+using Hex1b.Automation;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests.Utils;
@@ -13,13 +14,12 @@ internal sealed class TestResourceTerminalHost : IAsyncDisposable
     private readonly Task _runTask;
     private Task? _disposeTask;
 
-    private TestResourceTerminalHost(string socketPath)
+    private TestResourceTerminalHost(string socketPath, Hex1bTerminalBuilder builder)
     {
         SocketPath = socketPath;
-        _terminal = Hex1bTerminal.CreateBuilder()
+        _terminal = builder
             .WithHeadless()
             .WithDimensions(120, 40)
-            .WithPtyProcess("bash")
             .WithHmp1UdsServer(socketPath)
             .Build();
         _runTask = _terminal.RunAsync(_cts.Token);
@@ -27,9 +27,18 @@ internal sealed class TestResourceTerminalHost : IAsyncDisposable
 
     public string SocketPath { get; }
 
-    public static async Task<TestResourceTerminalHost> StartAsync(string socketPath)
+    public static Task<TestResourceTerminalHost> StartAsync(string socketPath)
+        => StartAsync(socketPath, Hex1bTerminal.CreateBuilder().WithPtyProcess("bash"));
+
+    public static Task<TestResourceTerminalHost> StartAsync(string socketPath, IHex1bTerminalWorkloadAdapter workload)
+        => StartAsync(socketPath, Hex1bTerminal.CreateBuilder().WithWorkload(workload));
+
+    public Task WaitForTextAsync(string text)
+        => new Hex1bTerminalAutomator(_terminal, TimeSpan.FromSeconds(30)).WaitUntilTextAsync(text);
+
+    private static async Task<TestResourceTerminalHost> StartAsync(string socketPath, Hex1bTerminalBuilder builder)
     {
-        var host = new TestResourceTerminalHost(socketPath);
+        var host = new TestResourceTerminalHost(socketPath, builder);
         try
         {
             await AsyncTestHelpers.AssertIsTrueRetryAsync(() =>
