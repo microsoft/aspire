@@ -34,6 +34,14 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
                        .withReference(db);
 ```
 
+## REPL
+
+During local development, the PostgreSQL server resource includes a **REPL** command in the dashboard.
+When the container is running, this opens `psql` in the terminal dock, connected to the `postgres`
+database with the resource's configured credentials. Use `\connect` to switch databases and `\q` to exit.
+The session runs inside the container using Docker (or the configured Podman runtime); no local
+PostgreSQL client is required. Passwords are passed through environment variables, not command-line arguments.
+
 ## Connection Properties
 
 When you reference a PostgreSQL resource using `WithReference`, the following connection properties are made available to the consuming project:

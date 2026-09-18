@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+#pragma warning disable ASPIRETERMINAL001
 
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.MySql;
+using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
@@ -87,7 +89,30 @@ public static class MySqlBuilderExtensions
                       {
                           context.EnvironmentVariables[PasswordEnvVarName] = resource.PasswordParameter;
                       })
-                      .WithHealthCheck(healthCheckKey);
+                      .WithHealthCheck(healthCheckKey)
+                      .WithReplCommand(ct => CreateReplOptionsAsync(resource, ct));
+    }
+
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(MySqlServerResource resource, CancellationToken cancellationToken)
+    {
+        var password = await resource.PasswordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(password))
+        {
+            throw new DistributedApplicationException("The MySQL REPL password is not available.");
+        }
+
+        return new TerminalLaunchOptions
+        {
+            Title = $"mysql ({resource.Name})",
+            Executable = "mysql",
+            Arguments = ["--no-defaults", "--no-login-paths", "--user=root", "--host=127.0.0.1", "--port=3306"],
+            EnvironmentVariables =
+            {
+                // The bundled MySQL 9.7 client still supports MYSQL_PWD. Forward it by name
+                // through the container runtime so the password never appears in argv or SQL history.
+                ["MYSQL_PWD"] = password
+            }
+        };
     }
 
     /// <summary>

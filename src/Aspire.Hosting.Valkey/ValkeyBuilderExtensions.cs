@@ -3,8 +3,11 @@
 
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Valkey;
 using Microsoft.Extensions.DependencyInjection;
+
+#pragma warning disable ASPIRETERMINAL001
 
 namespace Aspire.Hosting;
 
@@ -182,7 +185,32 @@ public static class ValkeyBuilderExtensions
                 context.Args.Add(string.Join(' ', valkeyCommand));
 
                 return Task.CompletedTask;
-            });
+            })
+            .WithReplCommand(ct => CreateReplOptionsAsync(valkey, ct));
+    }
+
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(ValkeyResource resource, CancellationToken cancellationToken)
+    {
+        var port = resource.PrimaryEndpoint.TargetPort ?? throw new DistributedApplicationException("The Valkey REPL port is not available.");
+        var options = new TerminalLaunchOptions
+        {
+            Title = $"valkey-cli ({resource.Name})",
+            Executable = "valkey-cli",
+            Arguments = ["-h", "127.0.0.1", "-p", port.ToString(CultureInfo.InvariantCulture)]
+        };
+
+        if (resource.PasswordParameter is { } passwordParameter)
+        {
+            var password = await passwordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrEmpty(password))
+            {
+                throw new DistributedApplicationException("The Valkey REPL password is not available.");
+            }
+
+            options.EnvironmentVariables["VALKEYCLI_AUTH"] = password;
+        }
+
+        return options;
     }
 
     /// <summary>

@@ -34,6 +34,13 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
                        .withReference(valkey);
 ```
 
+## REPL
+
+During local development, the Valkey resource includes a **REPL** command in the dashboard.
+When the container is running, this opens an authenticated `valkey-cli` session in the terminal dock.
+Use `quit` to exit. The session runs inside the container using Docker (or the configured Podman runtime);
+no local Valkey client is required. Passwords are passed through environment variables, not command-line arguments.
+
 ## Connection Properties
 
 When you reference a Valkey resource using `WithReference`, the following connection properties are made available to the consuming project:

@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <ItemGroup>
+    <Compile Include="..\Shared\ContainerReplCommandTestBase.cs" Link="ContainerReplCommandTestBase.cs" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
   </PropertyGroup>
