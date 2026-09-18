@@ -4,8 +4,8 @@
   "title": "Multiple unrelated 'Build test project' jobs (Hosting.RemoteHost, Hosting.Azure, Hosting.Azure.Kubernetes, Playground, Dashboard) fail with generic exit code 1",
   "job_name": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
   "error_pattern": "Process completed with exit code 1. (Build test project step failed across multiple unrelated jobs simultaneously; job logs unavailable: 'Failed to fetch logs for job').",
-  "analysis": "The 'Build test project' step failed with a bare exit code 1 and no retrievable job logs. The PR only modifies Aspire.Hosting.Dotnet source/tests and does not touch Hosting.RemoteHost, so this is unrelated to the PR's changes. This exact generic failure signature has recurred across multiple unrelated test-build jobs in past runs.",
-  "failure_details": "### Job: Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)\n- Conclusion: failure\n- Failed Steps: Build test project\n- Annotation: failure - Process completed with exit code 1.\n- Job logs: (Failed to fetch logs for job 105381679335)\nPR changed files are limited to src/Aspire.Hosting.Dotnet/* and its tests/PolyglotAppHosts samples, none of which relate to Hosting.RemoteHost.",
+  "analysis": "The 'Build test project' step failed with a generic exit code 1 and no detailed job logs were retrievable. The PR only modifies Aspire.Dashboard Razor/CSS files and a Dashboard component test, which have no relationship to the Hosting.RemoteHost.Tests project build. This matches a known widespread infra pattern where unrelated 'Build test project' jobs fail simultaneously, indicating a shared build/runner infrastructure issue rather than a code defect.",
+  "failure_details": "### Job: Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)\n- Conclusion: failure\n- Failed Steps: Build test project\n- Annotation: failure: Process completed with exit code 1.\n- Job logs unavailable: 'Failed to fetch logs for job'\nPR changed files: src/Aspire.Dashboard/Components/Controls/Chart/ChartFilterTags.razor, ChartFilterTags.razor.css, tests/Aspire.Dashboard.Components.Tests/Controls/ChartFiltersTests.cs - unrelated to Hosting.RemoteHost.Tests.",
   "occurrences": [
     {
       "run_id": 33494022725,
@@ -90,6 +90,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
       "pr_number": 20157,
       "observed_at": "2026-09-17T21:41:00Z"
+    },
+    {
+      "run_id": 35313069592,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35313069592",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
+      "pr_number": 20220,
+      "observed_at": "2026-09-18T06:38:24Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19838"
