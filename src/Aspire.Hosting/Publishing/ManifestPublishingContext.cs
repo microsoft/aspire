@@ -328,17 +328,10 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
         var deploymentTarget = container.GetDeploymentTargetAnnotation();
 
-        // Container-specific fields come from the projection, but the connection string contract belongs to the
-        // owner: the projection facade is a plain ContainerResource, so a projected owner implementing
-        // IResourceWithConnectionString would otherwise silently lose its connectionString field. WriteConnectionString
-        // takes an IResource and re-tests the contract itself, so this only has to pick which resource to hand it.
-        var owner = container.GetOwnerOrSelf();
-        var connectionStringSource = owner is IResourceWithConnectionString ? owner : container;
-
         if (container.Annotations.OfType<DockerfileBuildAnnotation>().Any())
         {
             Writer.WriteString("type", "container.v1");
-            WriteConnectionString(connectionStringSource);
+            WriteConnectionString(container);
             await WriteBuildContextAsync(container).ConfigureAwait(false);
         }
         else
@@ -357,7 +350,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 Writer.WriteString("type", "container.v0");
             }
 
-            WriteConnectionString(connectionStringSource);
+            WriteConnectionString(container);
             Writer.WriteString("image", image);
         }
 
@@ -486,12 +479,12 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     }
 
     /// <summary>
-    /// Writes the "connectionString" field for the underlying resource.
+    /// Writes the "connectionString" field for the effective resource capability.
     /// </summary>
     /// <param name="resource">The <see cref="IResource"/>.</param>
     public void WriteConnectionString(IResource resource)
     {
-        if (resource is IResourceWithConnectionString resourceWithConnectionString &&
+        if (resource.GetEffectiveCapability<IResourceWithConnectionString>() is { } resourceWithConnectionString &&
             resourceWithConnectionString.ConnectionStringExpression is { } connectionString)
         {
             TryAddDependentResources(connectionString);

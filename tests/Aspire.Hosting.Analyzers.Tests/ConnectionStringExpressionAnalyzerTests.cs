@@ -100,6 +100,52 @@ public class ConnectionStringExpressionAnalyzerTests
     }
 
     [Fact]
+    public async Task ProjectionAwareLocalAccessReportsNoDiagnostic()
+    {
+        var test = AnalyzerTest.Create<AppHostAnalyzer>("""
+            using Aspire.Hosting.ApplicationModel;
+
+            static ReferenceExpression GetExpression(IResourceWithConnectionString resource)
+            {
+                var effective = resource.GetEffectiveCapability<IResourceWithConnectionString>()!;
+                return effective.ConnectionStringExpression;
+            }
+
+            static ReferenceExpression GetOwnerExpression(IResourceWithConnectionString resource)
+            {
+                var owner = resource.GetEffectiveCapability<IResourceWithConnectionString>(preferOwner: true)!;
+                return owner.ConnectionStringExpression;
+            }
+            """,
+            []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ReassignedProjectionAwareLocalReportsDiagnostic()
+    {
+        var diagnostic = AppHostAnalyzer.Diagnostics.s_connectionStringExpressionMustBeResolved;
+
+        var test = AnalyzerTest.Create<AppHostAnalyzer>("""
+            using Aspire.Hosting.ApplicationModel;
+
+            static ReferenceExpression GetExpression(IResourceWithConnectionString resource)
+            {
+                var effective = resource.GetEffectiveCapability<IResourceWithConnectionString>()!;
+                effective = resource;
+                return effective.ConnectionStringExpression;
+            }
+            """,
+            [
+                CompilerWarning(diagnostic.Id)
+                    .WithLocation(7, 22)
+            ]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
     public async Task ExplicitOwnerAccessReportsNoDiagnostic()
     {
         var test = AnalyzerTest.Create<AppHostAnalyzer>("""

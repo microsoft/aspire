@@ -82,8 +82,7 @@ internal sealed class ApplicationOrchestrator
     private async Task PublishConnectionStringValue(ConnectionStringAvailableEvent @event, CancellationToken token)
     {
         var owner = @event.Resource.GetOwnerOrSelf();
-        var resourceWithConnectionString = owner as IResourceWithConnectionString ??
-            owner.GetEffectiveResource() as IResourceWithConnectionString;
+        var resourceWithConnectionString = owner.GetEffectiveCapability<IResourceWithConnectionString>();
 
         if (resourceWithConnectionString is not null)
         {

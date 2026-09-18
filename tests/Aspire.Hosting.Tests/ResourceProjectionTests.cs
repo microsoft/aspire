@@ -1185,14 +1185,10 @@ public class ResourceProjectionTests
     }
 
     [Fact]
-    public async Task ConnectionStringManifestCurrentlyResolvesToTheOwnerWhenBothDeclareTheContract()
+    public async Task ConnectionStringManifestPrefersProjectionWhenBothDeclareTheContract()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        // The owner is the identity other resources reference, so it wins a contract both sides declare. The
-        // sanctioned way to vary a connection string by shape is for the owner to branch on it, which is what the
-        // Azure emulators do (AzureSignalRResource.ConnectionStringExpression tests IsEmulator). If the projection
-        // won instead, a resource's effective connection string would change with the operation being run.
         var resource = builder.AddResource(new ConnectionStringOwnerResource("db"));
         resource.WithContainerProjection(
             DistributedApplicationOperation.Publish,
@@ -1201,16 +1197,14 @@ public class ResourceProjectionTests
 
         var manifest = await ManifestUtils.GetManifest(resource.Resource.AsContainer()!);
 
-        Assert.Equal("Host=owner", manifest["connectionString"]?.ToString());
+        Assert.Equal("Host=projection", manifest["connectionString"]?.ToString());
     }
 
     [Fact]
-    public async Task ProjectionContractsFallBackToTheProjectionWhenTheOwnerLacksThem()
+    public async Task ConnectionStringManifestUsesProjectionWhenTheOwnerLacksTheContract()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        // Resolving to the owner must not drop a contract only the projection declares: there is no ambiguity to
-        // settle here, so this is purely additive and a typed projection can still contribute one.
         var resource = builder.AddResource(new PlainOwnerResource("db"));
         resource.WithContainerProjection(
             DistributedApplicationOperation.Publish,
@@ -1220,6 +1214,21 @@ public class ResourceProjectionTests
         var manifest = await ManifestUtils.GetManifest(resource.Resource.AsContainer()!);
 
         Assert.Equal("Host=projection", manifest["connectionString"]?.ToString());
+    }
+
+    [Fact]
+    public async Task ConnectionStringManifestFallsBackToOwnerWhenProjectionLacksTheContract()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var resource = builder.AddResource(new ConnectionStringOwnerResource("db"));
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            container => container.WithImage("contoso/db", "1.0"));
+
+        var manifest = await ManifestUtils.GetManifest(resource.Resource.AsContainer()!);
+
+        Assert.Equal("Host=owner", manifest["connectionString"]?.ToString());
     }
 
     [Fact]

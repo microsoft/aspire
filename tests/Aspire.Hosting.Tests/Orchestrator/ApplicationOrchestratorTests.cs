@@ -543,7 +543,12 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             connectionPropertiesProperty =>
             {
                 Assert.Equal(KnownProperties.Resource.ConnectionProperties, connectionPropertiesProperty.Name);
-                Assert.Empty(Assert.IsAssignableFrom<IReadOnlyDictionary<string, string?>>(connectionPropertiesProperty.Value));
+                Assert.Equal(
+                    new Dictionary<string, string?>
+                    {
+                        ["Provider"] = "projection"
+                    },
+                    Assert.IsAssignableFrom<IReadOnlyDictionary<string, string?>>(connectionPropertiesProperty.Value));
                 Assert.True(connectionPropertiesProperty.IsSensitive);
             });
     }
@@ -1338,7 +1343,15 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         }
     }
 
-    private sealed class ProjectedConnectionStringOwner(string name) : Resource(name);
+    private sealed class ProjectedConnectionStringOwner(string name) : Resource(name), IResourceWithConnectionString
+    {
+        public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"Host=owner");
+
+        public IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties()
+        {
+            yield return new("Provider", ReferenceExpression.Create($"owner"));
+        }
+    }
 
     private sealed class ProjectedConnectionStringResource(ProjectedConnectionStringOwner owner)
         : ContainerResource(owner.Name), IResourceWithConnectionString
@@ -1346,6 +1359,11 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         public override ResourceAnnotationCollection Annotations => owner.Annotations;
 
         public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"Host=projection");
+
+        public IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties()
+        {
+            yield return new("Provider", ReferenceExpression.Create($"projection"));
+        }
     }
 
     [Fact]

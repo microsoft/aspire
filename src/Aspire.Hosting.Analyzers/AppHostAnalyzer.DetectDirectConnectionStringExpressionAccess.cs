@@ -86,11 +86,21 @@ public partial class AppHostAnalyzer
             instance = conversion.Operand;
         }
 
-        if (instance is not IInvocationOperation invocation)
+        if (instance is IInvocationOperation invocation)
         {
-            return false;
+            return IsResolverInvocation(invocation, resourceExtensions);
         }
 
+        return instance is ILocalReferenceOperation localReference &&
+            IsLocalInitializedByResolver(
+                localReference,
+                resourceExtensions);
+    }
+
+    private static bool IsResolverInvocation(
+        IInvocationOperation invocation,
+        INamedTypeSymbol resourceExtensions)
+    {
         var targetMethod = invocation.TargetMethod.ReducedFrom ?? invocation.TargetMethod;
         if (!SymbolEqualityComparer.Default.Equals(targetMethod.ContainingType, resourceExtensions))
         {
@@ -98,5 +108,102 @@ public partial class AppHostAnalyzer
         }
 
         return targetMethod.Name is "GetEffectiveCapability" or "GetOwnerOrSelf";
+    }
+
+    private static bool IsLocalInitializedByResolver(
+        ILocalReferenceOperation localReference,
+        INamedTypeSymbol resourceExtensions)
+    {
+        var operationBlock = GetOperationBlock(localReference);
+        var declarator = FindVariableDeclarator(operationBlock, localReference.Local);
+        if (declarator?.Initializer?.Value is not { } initializer)
+        {
+            return false;
+        }
+
+        if (!IsExplicitlyResolved(initializer, resourceExtensions))
+        {
+            return false;
+        }
+
+        // Only trust the resolved capability while the local still has its initializer value. A later assignment
+        // could replace it with the owner and bypass projection-first resolution.
+        return !ContainsWrite(operationBlock, localReference.Local);
+    }
+
+    private static IOperation GetOperationBlock(IOperation operation)
+    {
+        while (operation.Parent is { } parent)
+        {
+            operation = parent;
+        }
+
+        return operation;
+    }
+
+    private static IVariableDeclaratorOperation? FindVariableDeclarator(IOperation operation, ILocalSymbol local)
+    {
+        if (operation is IVariableDeclaratorOperation declarator &&
+            SymbolEqualityComparer.Default.Equals(declarator.Symbol, local))
+        {
+            return declarator;
+        }
+
+        foreach (var child in operation.ChildOperations)
+        {
+            if (FindVariableDeclarator(child, local) is { } childDeclarator)
+            {
+                return childDeclarator;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool ContainsWrite(IOperation operation, ILocalSymbol local)
+    {
+        if (operation switch
+            {
+                ISimpleAssignmentOperation assignment => ContainsLocalReference(assignment.Target, local),
+                ICompoundAssignmentOperation assignment => ContainsLocalReference(assignment.Target, local),
+                IDeconstructionAssignmentOperation assignment => ContainsLocalReference(assignment.Target, local),
+                IIncrementOrDecrementOperation increment => ContainsLocalReference(increment.Target, local),
+                IArgumentOperation argument
+                    when argument.Parameter?.RefKind is RefKind.Ref or RefKind.Out =>
+                    ContainsLocalReference(argument.Value, local),
+                _ => false
+            })
+        {
+            return true;
+        }
+
+        foreach (var child in operation.ChildOperations)
+        {
+            if (ContainsWrite(child, local))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ContainsLocalReference(IOperation operation, ILocalSymbol local)
+    {
+        if (operation is ILocalReferenceOperation localReference &&
+            SymbolEqualityComparer.Default.Equals(localReference.Local, local))
+        {
+            return true;
+        }
+
+        foreach (var child in operation.ChildOperations)
+        {
+            if (ContainsLocalReference(child, local))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
