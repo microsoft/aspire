@@ -33,6 +33,8 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private const int DefaultHeightPx = 320;
     private const int MinimumHeightPx = 120;
     private const int MaximumHeightPx = 1200;
+    private const string UserTrigger = "User";
+    private const string AppHostTrigger = "AppHost";
 
     private readonly List<TerminalDescriptor> _terminals = [];
     private readonly Dictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
@@ -145,13 +147,13 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         }
         else
         {
-            Show(TerminalDockTrigger.User);
-            StateHasChanged();
+            Show(UserTrigger);
         }
 
+        StateHasChanged();
     });
 
-    private void Show(TerminalDockTrigger trigger)
+    private void Show(string trigger)
     {
         if (_isVisible)
         {
@@ -163,7 +165,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         TelemetryContext = new ComponentTelemetryContext(ComponentType.Control, TelemetryComponentIds.TerminalDock);
         TelemetryContextProvider.Initialize(TelemetryContext);
         TelemetryContext.UpdateTelemetryProperties(
-            [new(TelemetryPropertyKeys.TerminalDockTrigger, new AspireTelemetryProperty(trigger.ToString()))], Logger);
+            [new(TelemetryPropertyKeys.TerminalDockTrigger, new AspireTelemetryProperty(trigger))], Logger);
         _hasBeenOpened = true;
         _isVisible = true;
         if (_resourceWatchTask is null && DashboardClient.IsEnabled && !DashboardClient.IsReadOnly)
@@ -191,7 +193,8 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     {
         try
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Layout/TerminalDock.razor.js").ConfigureAwait(true);
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>(
+                "import", $"./{Assets["Components/Layout/TerminalDock.razor.js"]}").ConfigureAwait(true);
             if (_disposed)
             {
                 return;
@@ -255,7 +258,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         }
 
         _activeTerminalId = terminalId;
-        StateHasChanged();
     }
 
     private bool IsPanelVisible => _terminals.Count == 0;
@@ -431,7 +433,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                         {
                             // An overflow snapshot retains the latest Show() request even if its terminal has
                             // since been removed. Reveal the dock, but never resurrect a removed terminal's tab.
-                            Show(TerminalDockTrigger.AppHost);
+                            Show(AppHostTrigger);
                             if (_terminals.Any(t => t.TerminalId == update.Snapshot.ActivatedTerminalId))
                             {
                                 _activeTerminalId = update.Snapshot.ActivatedTerminalId;
@@ -602,7 +604,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                     _terminals.Add(descriptor);
                 }
                 _activeTerminalId = descriptor.TerminalId;
-                Show(TerminalDockTrigger.AppHost);
+                Show(AppHostTrigger);
                 break;
         }
 
@@ -720,12 +722,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             _selfRef?.Dispose();
             _selfRef = null;
         }
-    }
-
-    private enum TerminalDockTrigger
-    {
-        User,
-        AppHost
     }
 
     private sealed record ResourceTerminalLink(string Name, string Url);
