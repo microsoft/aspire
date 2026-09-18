@@ -7665,13 +7665,22 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal("project", launchConfigs[0].Type);
     }
 
-    [Fact]
-    public async Task FileBasedProjectResource_InDebugSession_UsesIdeWithoutProcessFallback()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FileBasedProjectResource_InCapabilitylessDebugSession_UsesProcessExecution(bool addProjectDebugSupport)
     {
         var builder = DistributedApplication.CreateBuilder();
         var projectPath = Path.Combine("src", "app.cs");
-        builder.AddResource(new ProjectResource("file-project"))
+        var fileProject = builder.AddResource(new ProjectResource("file-project"))
             .WithAnnotation(new TestFileBasedProject(projectPath));
+
+        if (addProjectDebugSupport)
+        {
+            fileProject.WithDebugSupport(
+                mode => new ProjectLaunchConfiguration { ProjectPath = projectPath, Mode = mode },
+                KnownLaunchConfigurationTypes.Project);
+        }
 
         var configDict = new Dictionary<string, string?>
         {
@@ -7688,9 +7697,52 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         await appExecutor.RunApplicationAsync();
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "file-project");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.NotNull(exe.Spec.Args);
+        Assert.Equal("run", exe.Spec.Args[0]);
+        Assert.Equal("--file", exe.Spec.Args[1]);
+        Assert.Equal(projectPath, exe.Spec.Args[2]);
+        Assert.Equal("--no-cache", exe.Spec.Args[3]);
+        Assert.Contains("--no-launch-profile", exe.Spec.Args);
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
+
+        Assert.True(exe.TryGetProjectLaunchConfiguration(out var launchConfiguration));
+        Assert.Equal(projectPath, launchConfiguration.ProjectPath);
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfiguration.Type);
+    }
+
+    [Fact]
+    public async Task FileBasedProjectResource_WithExplicitProjectCapability_UsesIdeWithoutProcessFallback()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var projectPath = Path.Combine("src", "app.cs");
+        builder.AddResource(new ProjectResource("file-project"))
+            .WithAnnotation(new TestFileBasedProject(projectPath))
+            .WithDebugSupport(
+                mode => new ProjectLaunchConfiguration { ProjectPath = projectPath, Mode = mode },
+                KnownLaunchConfigurationTypes.Project);
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
+            {
+                ProtocolsSupported = ["test"],
+                SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.Project]
+            }),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "file-project");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
-        // File-based projects used to keep a `dotnet run --file` candidate for Process fallback.
-        // IDE-only launch is now intentional, so no second command remains in the rendered spec.
         Assert.Null(exe.Spec.Args);
         Assert.Null(exe.Spec.FallbackExecutionTypes);
 

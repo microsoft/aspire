@@ -807,6 +807,54 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddDotnetProject_FileBasedApp_InCapabilitylessDebugSession_KeepsDotnetRunFileArgs()
+    {
+        // Visual Studio does not advertise launch capabilities and cannot launch a bare .cs file as a loaded project.
+        // Keep the complete process invocation instead of handing the resource to the IDE.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
+
+        var appPath = Path.Combine(builder.AppHostDirectory, "service.cs");
+        var app = builder.AddDotnetProject("svc", appPath, o => o.ExcludeLaunchProfile = true)
+                         .WithArgs("--flag");
+
+        using var application = builder.Build();
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
+
+        Assert.Equal("run", args[0]);
+        Assert.Equal("--file", args[1]);
+        Assert.Equal(appPath, args[2]);
+        Assert.Equal("--no-cache", args[3]);
+        Assert.Contains("--no-launch-profile", args);
+        Assert.Equal("--flag", args[^1]);
+    }
+
+    [Fact]
+    public async Task AddDotnetProject_FileBasedApp_InDebugSessionWithProjectCapability_OmitsDotnetRunScaffolding()
+    {
+        // The VS Code extension explicitly advertises project support and accepts .cs files, so it owns the
+        // file-based app invocation just as it does for a .csproj.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
+        builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.Project]
+        });
+
+        var appPath = Path.Combine(builder.AppHostDirectory, "service.cs");
+        var app = builder.AddDotnetProject("svc", appPath, o => o.ExcludeLaunchProfile = true)
+                         .WithArgs("--flag");
+
+        using var application = builder.Build();
+        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource, application.Services);
+
+        Assert.Equal(["--flag"], args);
+    }
+
+    [Fact]
     public async Task AddDotnetProject_InDebugSession_KeepsDotnetRunArgs_WhenProjectLaunchUnsupported()
     {
         // When the IDE does not advertise project support, the resource runs as a plain process, so the full

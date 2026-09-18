@@ -86,6 +86,13 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
             return false;
         }
 
+        // Visual Studio's compatibility launcher can only launch projects loaded in the solution. File-based apps
+        // are plain .cs files, so keep their complete dotnet run command and use Process as the primary mechanism.
+        if (resource.TryGetProjectMetadata(out var projectMetadata) && projectMetadata.IsFileBasedApp)
+        {
+            return false;
+        }
+
         if (resource.TryGetLastAnnotation<ExecutableAnnotation>(out _) &&
             debugSupport?.LaunchConfigurationType is not null and not KnownLaunchConfigurationTypes.Project)
         {
