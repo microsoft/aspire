@@ -17,21 +17,21 @@
              role="separator"
              tabindex="0"
              aria-orientation="horizontal"
-             aria-label="@Loc[nameof(Resources.Layout.TerminalDockTabs)]"
+             aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockTabs)]"
              aria-controls="@_elementIdPrefix"
              aria-valuemin="@EffectiveMinimumHeightPx"
              aria-valuemax="@_maximumHeightPx"
              aria-valuenow="@_heightPx"
-             aria-valuetext="@Loc[nameof(Resources.Layout.TerminalDockHeight), _heightPx]"
+             aria-valuetext="@Loc[nameof(Resources.TerminalStrings.TerminalDockHeight), _heightPx]"
              aria-describedby="@($"{_elementIdPrefix}-resize-help")"
              aria-keyshortcuts="ArrowUp ArrowDown Shift+ArrowUp Shift+ArrowDown Home End"></div>
-        <span id="@($"{_elementIdPrefix}-resize-help")" hidden>@Loc[nameof(Resources.Layout.TerminalDockResizeHelp)]</span>
+        <span id="@($"{_elementIdPrefix}-resize-help")" hidden>@Loc[nameof(Resources.TerminalStrings.TerminalDockResizeHelp)]</span>
         <div class="terminal-dock-tabstrip">
             @* FluentTabs resets selection when closing an inactive tab (https://github.com/microsoft/fluentui-blazor/issues/3392).
                Keep selection and removal driven by AppHost updates, with separate tab/close buttons and mounted panes. *@
             @if (_terminals.Count > 0)
             {
-                <div class="terminal-dock-tablist" role="tablist" aria-label="@Loc[nameof(Resources.Layout.TerminalDockTabs)]">
+                <div class="terminal-dock-tablist" role="tablist" aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockTabs)]">
                     @foreach (var terminal in _terminals)
                     {
                         <div class="terminal-dock-tab @(IsPaneActive(terminal.TerminalId) ? "active" : string.Empty)"
@@ -49,8 +49,8 @@
                             <FluentButton Appearance="ButtonAppearance.Transparent"
                                           IconOnly="true"
                                           Class="aspire-icon-button terminal-dock-tab-close"
-                                          Title="@Loc[nameof(Resources.Layout.TerminalDockCloseTab), terminal.Title]"
-                                          aria-label="@Loc[nameof(Resources.Layout.TerminalDockCloseTab), terminal.Title]"
+                                          Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
+                                          aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
                                           tabindex="@(IsPaneActive(terminal.TerminalId) ? 0 : -1)"
                                           OnClick="@(() => CloseTerminalAsync(terminal.TerminalId, terminal.Title))">
                                 <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Color="Color.Default" />
@@ -62,11 +62,11 @@
             <div class="terminal-dock-filler"></div>
             @if (_popupBlocked)
             {
-                <span class="terminal-dock-popup-blocked">@Loc[nameof(Resources.Layout.TerminalDockDetachBlocked)]</span>
+                <span class="terminal-dock-popup-blocked">@Loc[nameof(Resources.TerminalStrings.TerminalDockDetachBlocked)]</span>
             }
             <TerminalWindowButton @ref="_windowButton"
                                   Class="terminal-dock-detach"
-                                  Label="@Loc[nameof(Resources.Layout.TerminalDockDetach)]"
+                                  Label="@Loc[nameof(Resources.TerminalStrings.TerminalDockDetach)]"
                                   TerminalKey="@_activeTerminalId"
                                   Url="@ActiveTerminalWindowUrl"
                                   FontSize="@ActiveTerminalFontSize"
@@ -76,8 +76,8 @@
             <FluentButton Appearance="ButtonAppearance.Transparent"
                           IconOnly="true"
                           Class="aspire-icon-button terminal-dock-collapse"
-                          Title="@Loc[nameof(Resources.Layout.TerminalDockHide)]"
-                          aria-label="@Loc[nameof(Resources.Layout.TerminalDockHide)]"
+                          Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockHide)]"
+                          aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockHide)]"
                           OnClick="@Hide">
                 <FluentIcon Value="@(new Icons.Regular.Size16.ChevronDown())" Color="Color.Default" />
             </FluentButton>
@@ -100,17 +100,17 @@
                            second attached viewer would contend for the HMP1 primary role and resize the PTY behind
                            the window the user is actually typing into. *@
                         <div class="terminal-dock-detached">
-                            <span>@Loc[nameof(Resources.Layout.TerminalDockDetached)]</span>
+                            <span>@Loc[nameof(Resources.TerminalStrings.TerminalDockDetached)]</span>
                             <div class="terminal-dock-detached-actions">
                                 <FluentButton Appearance="ButtonAppearance.Primary"
                                               Class="aspire-button"
                                               OnClick="@(() => FocusDetachedWindowAsync(terminal.TerminalId))">
-                                    @Loc[nameof(Resources.Layout.TerminalDockFocusWindow)]
+                                    @Loc[nameof(Resources.TerminalStrings.TerminalDockFocusWindow)]
                                 </FluentButton>
                                 <FluentButton Appearance="ButtonAppearance.Default"
                                               Class="aspire-button"
                                               OnClick="@(() => ReturnToDockAsync(terminal.TerminalId))">
-                                    @Loc[nameof(Resources.Layout.TerminalDockReturnToDock)]
+                                    @Loc[nameof(Resources.TerminalStrings.TerminalDockReturnToDock)]
                                 </FluentButton>
                             </div>
                         </div>
@@ -132,12 +132,12 @@
                 <div class="terminal-dock-panel">
                     <div class="terminal-dock-panel-card">
                         <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="24px" Color="Color.Default" />
-                        <h3 class="terminal-dock-panel-heading">@Loc[nameof(Resources.Layout.TerminalDockPanelHeading)]</h3>
-                        <p class="terminal-dock-panel-body">@Loc[nameof(Resources.Layout.TerminalDockPanelBody)]</p>
+                        <h3 class="terminal-dock-panel-heading">@Loc[nameof(Resources.TerminalStrings.TerminalDockPanelHeading)]</h3>
+                        <p class="terminal-dock-panel-body">@Loc[nameof(Resources.TerminalStrings.TerminalDockPanelBody)]</p>
                         @if (_resourceTerminalLinks.Length > 0)
                         {
                             <p class="terminal-dock-panel-body terminal-dock-resource-links">
-                                @Loc[nameof(Resources.Layout.TerminalDockResourceTerminals)]@(" ")
+                                @Loc[nameof(Resources.TerminalStrings.TerminalDockResourceTerminals)]@(" ")
                                 @for (var i = 0; i < _resourceTerminalLinks.Length; i++)
                                 {
                                     if (i > 0)
@@ -149,8 +149,8 @@
                                 }
                             </p>
                         }
-                        <a class="aspire-link-button" href="https://aka.ms/aspire/dashboard-terminals" target="_blank" rel="noopener noreferrer">@Loc[nameof(Resources.Layout.TerminalDockMoreInformation)]</a>
-                        <p class="terminal-dock-panel-hint">@Loc[nameof(Resources.Layout.TerminalDockPanelHint)]</p>
+                        <a class="aspire-link-button" href="https://aka.ms/aspire/dashboard-terminals" target="_blank" rel="noopener noreferrer">@Loc[nameof(Resources.TerminalStrings.TerminalDockMoreInformation)]</a>
+                        <p class="terminal-dock-panel-hint">@Loc[nameof(Resources.TerminalStrings.TerminalDockPanelHint)]</p>
                     </div>
                 </div>
             }

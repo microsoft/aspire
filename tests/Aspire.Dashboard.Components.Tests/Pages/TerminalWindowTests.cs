@@ -80,9 +80,9 @@ public class TerminalWindowTests : DashboardTestContext
         Assert.Equal(1, client.TerminalSubscriptionCount);
 
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Removed, "terminal"));
-        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".terminal-window-ended")));
+        cut.WaitForAssertion(() => Assert.Equal("This terminal has ended.", cut.Find(".terminal-window-ended").TextContent));
         cut.SetParametersAndRender(builder => builder.Add(p => p.TerminalId, "terminal"));
-        Assert.Single(cut.FindAll(".terminal-window-ended"));
+        Assert.Equal("This terminal has ended.", cut.Find(".terminal-window-ended").TextContent);
         Assert.Equal(1, client.ActiveTerminalSubscriptionCount);
     }
 

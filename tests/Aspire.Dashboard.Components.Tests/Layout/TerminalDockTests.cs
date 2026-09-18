@@ -223,7 +223,7 @@ public partial class TerminalDockTests : DashboardTestContext
         Assert.Equal("No docked terminals", cut.Find(".terminal-dock-panel-heading").TextContent);
         Assert.Equal("Press the backtick key (`) to hide this panel.", cut.Find(".terminal-dock-panel-hint").TextContent);
         var helpLink = cut.Find(".terminal-dock-panel a");
-        Assert.Equal(Resources.Layout.TerminalDockMoreInformation, helpLink.TextContent);
+        Assert.Equal(Resources.TerminalStrings.TerminalDockMoreInformation, helpLink.TextContent);
         Assert.Equal("https://aka.ms/aspire/dashboard-terminals", helpLink.GetAttribute("href"));
         Assert.Equal("_blank", helpLink.GetAttribute("target"));
         Assert.Equal("noopener noreferrer", helpLink.GetAttribute("rel"));
@@ -788,7 +788,7 @@ public partial class TerminalDockTests : DashboardTestContext
         Assert.False(cut.Find(".terminal-dock-detach").HasAttribute("disabled"));
         var launcher = TerminalSetupHelpers.GetWindowLauncher(this, cut);
         await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync("terminal", "blocked"));
-        Assert.Equal(Resources.Layout.TerminalDockDetachBlocked, cut.Find(".terminal-dock-popup-blocked").TextContent);
+        Assert.Equal(Resources.TerminalStrings.TerminalDockDetachBlocked, cut.Find(".terminal-dock-popup-blocked").TextContent);
         Assert.Same(view, cut.FindComponent<TerminalView>().Instance);
         Assert.Empty(cut.FindAll(".terminal-dock-detached"));
         await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync("terminal", "opened"));

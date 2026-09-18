@@ -57,7 +57,7 @@
             {
                 <FluentButton Class="header-button"
                               Appearance="ButtonAppearance.Default" OnClick="@ToggleTerminalDockAsync"
-                              Title="@Loc[nameof(Layout.MainLayoutToggleTerminalDock)]" aria-label="@Loc[nameof(Layout.MainLayoutToggleTerminalDock)]">
+                              Title="@TerminalLoc[nameof(TerminalStrings.MainLayoutToggleTerminalDock)]" aria-label="@TerminalLoc[nameof(TerminalStrings.MainLayoutToggleTerminalDock)]">
                     @* WindowConsole only ships at Size20 in this Fluent version, so it is scaled to 24px to line up with
                        the rest of the header cluster. The Size24 alternatives (WindowDevTools, Code) read as "developer
                        tools" rather than "terminal". *@

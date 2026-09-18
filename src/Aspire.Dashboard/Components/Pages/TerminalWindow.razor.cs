@@ -59,7 +59,7 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
     public required IDashboardClient DashboardClient { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Dashboard.Resources.Layout> Loc { get; init; }
+    public required IStringLocalizer<Dashboard.Resources.TerminalStrings> Loc { get; init; }
 
     [Inject]
     public required ILogger<TerminalWindow> Logger { get; init; }

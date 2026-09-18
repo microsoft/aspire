@@ -38,7 +38,7 @@ public partial class MainLayoutTests
 
         var cut = RenderComponent<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
             new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
-        var label = Services.GetRequiredService<IStringLocalizer<Resources.Layout>>()[nameof(Resources.Layout.MainLayoutToggleTerminalDock)].Value;
+        var label = Services.GetRequiredService<IStringLocalizer<Resources.TerminalStrings>>()[nameof(Resources.TerminalStrings.MainLayoutToggleTerminalDock)].Value;
         var shortcuts = Services.GetRequiredService<ShortcutManager>();
         var toggleSelector = isDesktop ? $"fluent-button[aria-label='{label}']" : $"fluent-menu-item[title='{label}']";
         if (!isDesktop)
@@ -103,7 +103,7 @@ public partial class MainLayoutTests
         var cut = RenderComponent<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
             new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
         var shortcuts = Services.GetRequiredService<ShortcutManager>();
-        var label = Services.GetRequiredService<IStringLocalizer<Resources.Layout>>()[nameof(Resources.Layout.MainLayoutToggleTerminalDock)].Value;
+        var label = Services.GetRequiredService<IStringLocalizer<Resources.TerminalStrings>>()[nameof(Resources.TerminalStrings.MainLayoutToggleTerminalDock)].Value;
         var toggleSelector = isDesktop ? $"fluent-button[aria-label='{label}']" : $"fluent-menu-item[title='{label}']";
         if (!isDesktop)
         {
@@ -169,7 +169,7 @@ public partial class MainLayoutTests
 
         var cut = RenderComponent<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
             new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false)));
-        var label = Services.GetRequiredService<IStringLocalizer<Resources.Layout>>()[nameof(Resources.Layout.MainLayoutToggleTerminalDock)].Value;
+        var label = Services.GetRequiredService<IStringLocalizer<Resources.TerminalStrings>>()[nameof(Resources.TerminalStrings.MainLayoutToggleTerminalDock)].Value;
         var dock = cut.FindComponent<TerminalDock>().Instance;
         Assert.Empty(cut.FindAll(".terminal-dock"));
 

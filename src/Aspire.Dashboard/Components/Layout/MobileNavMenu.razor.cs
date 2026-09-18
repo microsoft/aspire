@@ -57,6 +57,9 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
 
     [Inject]
+    public required IStringLocalizer<Resources.TerminalStrings> TerminalLoc { get; init; }
+
+    [Inject]
     public required IStringLocalizer<Resources.StructuredLogs> StructuredLogsLoc { get; init; }
 
     [Inject]
@@ -214,7 +217,7 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
         if (IsTerminalDockEnabled)
         {
             yield return new MobileNavMenuEntry(
-                Loc[nameof(Resources.Layout.MainLayoutToggleTerminalDock)],
+                TerminalLoc[nameof(Resources.TerminalStrings.MainLayoutToggleTerminalDock)],
                 ToggleTerminalDockAsync,
                 new Icons.Regular.Size20.WindowConsole()
             );

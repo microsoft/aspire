@@ -85,7 +85,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     public required ShortcutManager ShortcutManager { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Resources.Layout> Loc { get; init; }
+    public required IStringLocalizer<Resources.TerminalStrings> Loc { get; init; }
 
     [Inject]
     public required ILogger<TerminalDock> Logger { get; init; }
@@ -366,8 +366,8 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
             // Removal can arrive on the watch stream before disposal times out. Keep the clicked title rather
             // than looking it up in the remaining tabs, and retain the warning in the notification center.
-            var title = Loc[nameof(Resources.Layout.TerminalDockCloseTimedOutTitle)].Value;
-            var message = Loc[nameof(Resources.Layout.TerminalDockCloseTimedOutMessage), terminalTitle].Value;
+            var title = Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTimedOutTitle)].Value;
+            var message = Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTimedOutMessage), terminalTitle].Value;
             NotificationService.AddNotification(new NotificationEntry
             {
                 Title = title,
