@@ -234,7 +234,7 @@ internal sealed class TerminalPsCommand : BaseCommand
     }
 
     /// <summary>
-    /// Renders terminals whose workload runs in the AppHost process.
+    /// Renders terminals whose lifetime is owned by the AppHost.
     /// </summary>
     /// <remarks>
     /// Kept in its own table rather than merged with the resource table because none of the resource
