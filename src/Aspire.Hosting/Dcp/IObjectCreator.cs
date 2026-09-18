@@ -18,7 +18,7 @@ internal sealed class EmptyCreationContext
 /// Defines the contract for components that prepare and create DCP resources corresponding to Aspire model resources.
 /// </summary>
 /// <typeparam name="TDcpResource">The type of DCP custom resource this creator handles.</typeparam>
-/// <typeparam name="TContext">The type of context passed during creation (e.g. ContainerCreationContext).</typeparam>
+/// <typeparam name="TContext">The type of context passed during creation (e.g. ContainerNetworkEndpointContext).</typeparam>
 internal interface IObjectCreator<TDcpResource, TContext>
     where TDcpResource : CustomResource, IKubernetesStaticMetadata
 {

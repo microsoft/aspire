@@ -8,9 +8,7 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Diagnostics;
@@ -28,24 +26,14 @@ using Polly.Timeout;
 
 namespace Aspire.Hosting.Dcp;
 
-internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDisposable
+internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDisposable
 {
     internal const string DebugSessionPortVar = "DEBUG_SESSION_PORT";
-
-    // The base name for ephemeral container (Docker, Podman etc) networks
-    internal const string DefaultAspireNetworkName = "aspire-session-network";
-
-    // The base name for persistent container (Docker, Podman etc) networks
-    internal const string DefaultAspirePersistentNetworkName = "aspire-persistent-network";
 
     // Disposal of the DcpExecutor means shutting down watches and log streams,
     // and asking DCP to start the shutdown process. If we cannot complete these tasks within 10 seconds,
     // it probably means DCP crashed and there is no point trying further.
     private static readonly TimeSpan s_disposeTimeout = TimeSpan.FromSeconds(10);
-
-    // Regex for normalizing application names.
-    [GeneratedRegex("""^(?<name>.+?)\.?AppHost$""", RegexOptions.ExplicitCapture | RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant)]
-    private static partial Regex ApplicationNameRegex();
 
     private readonly ILogger<DistributedApplication> _distributedApplicationLogger;
     private readonly IKubernetesService _kubernetesService;
@@ -74,11 +62,12 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
     private readonly ExecutableCreator _executableCreator;
     private readonly ContainerCreator _containerCreator;
+    private readonly ContainerNetworkEndpointProvisioner _containerNetworkEndpointProvisioner;
     private readonly ProxylessEndpointPortAllocator _proxylessEndpointPortAllocator;
 
-    // We need to preserve the container creation context from the application startup phase
-    // so that container explicit start does not suffer from timing issues.
-    private readonly TaskCompletionSource<ContainerCreationContext> _containerContextSource;
+    // Preserve the application-run endpoint context so explicit-start workloads use the same
+    // container-network prerequisites and shared provisioning lifetime as initial workloads.
+    private readonly TaskCompletionSource<ContainerNetworkEndpointContext> _containerNetworkEndpointContextSource;
 
     // Internal for testing.
     internal ResiliencePipeline<bool> DeleteResourceRetryPipeline { get; set; }
@@ -101,6 +90,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                         DcpAppResourceStore appResources,
                         ExecutableCreator executableCreator,
                         ContainerCreator containerCreator,
+                        ContainerNetworkEndpointProvisioner containerNetworkEndpointProvisioner,
                         ProfilingTelemetry profilingTelemetry,
                         ProxylessEndpointPortAllocator proxylessEndpointPortAllocator,
                         IUserSecretsManager userSecretsManager)
@@ -124,9 +114,10 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
         DeleteResourceRetryPipeline = DcpPipelineBuilder.BuildDeleteRetryPipeline(logger);
 
-        _containerContextSource = new TaskCompletionSource<ContainerCreationContext>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _containerNetworkEndpointContextSource = new TaskCompletionSource<ContainerNetworkEndpointContext>(TaskCreationOptions.RunContinuationsAsynchronously);
         _executableCreator = executableCreator;
         _containerCreator = containerCreator;
+        _containerNetworkEndpointProvisioner = containerNetworkEndpointProvisioner;
         _proxylessEndpointPortAllocator = proxylessEndpointPortAllocator;
     }
 
@@ -154,7 +145,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
         try
         {
-            _containerCreator.PrepareContainerNetworks();
+            _containerNetworkEndpointProvisioner.PrepareContainerNetwork();
 
             using (var prepareServicesActivity = ProfilingTelemetry.StartDcpPrepareServices(_configuration))
             {
@@ -245,21 +236,21 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             }, ct);
 
             // Container creation and executable configuration may both require endpoints expressed within the container network.
-            var cctx = new ContainerCreationContext(createContainerNetworks, createWorkloadEndpoints, ct);
-            _containerContextSource.SetResult(cctx);
+            var endpointContext = new ContainerNetworkEndpointContext(createContainerNetworks, createWorkloadEndpoints, ct);
+            _containerNetworkEndpointContextSource.SetResult(endpointContext);
 
             var createExecutables = Task.Run(async () =>
             {
                 await createWorkloadEndpoints.ConfigureAwait(false);
 
-                await CreateRenderedResourcesAsync(_executableCreator, executables, cctx, ct).ConfigureAwait(false);
+                await CreateRenderedResourcesAsync(_executableCreator, executables, endpointContext, ct).ConfigureAwait(false);
             }, ct);
 
             var createContainers = Task.Run(async () =>
             {
                 await createWorkloadEndpoints.ConfigureAwait(false);
 
-                await CreateRenderedResourcesAsync(_containerCreator, containers, cctx, ct).ConfigureAwait(false);
+                await CreateRenderedResourcesAsync(_containerCreator, containers, endpointContext, ct).ConfigureAwait(false);
             }, ct);
 
             // Now wait for all "leaf" creations to complete.
@@ -269,7 +260,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         {
             activity.SetError(ex);
             _shutdownCancellation.Cancel();
-            _containerContextSource.TrySetException(ex);
+            _containerNetworkEndpointContextSource.TrySetException(ex);
             throw;
         }
     }
@@ -330,46 +321,6 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         {
             ar.Dispose();
         }
-    }
-
-    /// <summary>
-    /// Normalizes the application name for use in physical container resource names (only guaranteed valid as a suffix).
-    /// Removes the ".AppHost" suffix if present and takes only characters that are valid in resource names.
-    /// Invalid characters are simply omitted from the name as the result doesn't need to be identical.
-    /// </summary>
-    /// <param name="applicationName">The application name to normalize.</param>
-    /// <returns>The normalized application name with invalid characters removed.</returns>
-    internal static string NormalizeApplicationName(string applicationName)
-    {
-        if (string.IsNullOrEmpty(applicationName))
-        {
-            return applicationName;
-        }
-
-        applicationName = ApplicationNameRegex().Match(applicationName) switch
-        {
-            Match { Success: true } match => match.Groups["name"].Value,
-            _ => applicationName
-        };
-
-        if (string.IsNullOrEmpty(applicationName))
-        {
-            return applicationName;
-        }
-
-        var normalizedName = new StringBuilder();
-        for (var i = 0; i < applicationName.Length; i++)
-        {
-            if ((applicationName[i] is >= 'a' and <= 'z') ||
-                (applicationName[i] is >= 'A' and <= 'Z') ||
-                (applicationName[i] is >= '0' and <= '9') ||
-                (applicationName[i] is '_' or '-' or '.'))
-            {
-                normalizedName.Append(applicationName[i]);
-            }
-        }
-
-        return normalizedName.ToString();
     }
 
     internal static string GetResourceType<T>(T resource, IResource appModelResource) where T : CustomResource
@@ -747,7 +698,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
         foreach (var re in hostResources)
         {
-            var containerNetworkServices = _containerCreator.CreateContainerNetworkServicesForHostResource(re);
+            var containerNetworkServices = _containerNetworkEndpointProvisioner.CreateContainerNetworkServices(re);
             _appResources.AddRange(containerNetworkServices.Select(cns => cns.ServiceResource));
         }
     }
@@ -1287,8 +1238,8 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
-                    var containerCreationContext = await _containerContextSource.Task.ConfigureAwait(false);
-                    await _containerCreator.CreateObjectAsync(cr, containerCreationContext, resourceLogger, this, cancellationToken).ConfigureAwait(false);
+                    var containerEndpointContext = await _containerNetworkEndpointContextSource.Task.ConfigureAwait(false);
+                    await _containerCreator.CreateObjectAsync(cr, containerEndpointContext, resourceLogger, this, cancellationToken).ConfigureAwait(false);
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     break;
                 case RenderedModelResource<Executable> er:
@@ -1299,8 +1250,8 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
-                    var executableCreationContext = await _containerContextSource.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
-                    await _executableCreator.CreateObjectAsync(er, executableCreationContext, resourceLogger, this, cancellationToken).ConfigureAwait(false);
+                    var executableEndpointContext = await _containerNetworkEndpointContextSource.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    await _executableCreator.CreateObjectAsync(er, executableEndpointContext, resourceLogger, this, cancellationToken).ConfigureAwait(false);
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     break;
 

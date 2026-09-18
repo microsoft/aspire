@@ -10633,6 +10633,17 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var appResources = new DcpAppResourceStore();
         var proxylessEndpointPortAllocator = new ProxylessEndpointPortAllocator(Options.Create(dcpOptions));
         var applicationOptions = distributedApplicationOptions ?? new DistributedApplicationOptions();
+        var containerNetworkEndpointProvisioner = new ContainerNetworkEndpointProvisioner(
+            configuration,
+            Options.Create(dcpOptions),
+            nameGenerator,
+            distributedAppModel,
+            resourceLoggerService,
+            dcpDependencyCheckService,
+            hostEnv,
+            NullLogger<ContainerNetworkEndpointProvisioner>.Instance,
+            appResources);
+
         var containerCreator = new ContainerCreator(
             configuration,
             Options.Create(dcpOptions),
@@ -10641,9 +10652,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             executionContext,
             resourceLoggerService,
             dcpDependencyCheckService,
-            hostEnv,
             containerCreatorLogger ?? NullLogger<ContainerCreator>.Instance,
-            appResources);
+            appResources,
+            containerNetworkEndpointProvisioner);
 
         var executableConfigurationResolver = new ExecutableConfigurationResolver(executionContext, locations, aspireStore);
         var executableLaunchPolicy = new ExecutableLaunchPolicy(configuration);
@@ -10652,10 +10663,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             nameGenerator,
             distributedAppModel,
             appResources,
-            containerCreator,
+            containerNetworkEndpointProvisioner,
             executableConfigurationResolver,
             configuration,
-            Options.Create(dcpOptions),
             applicationOptions,
             executableLaunchPolicy,
             NullLogger<ExecutableCreator>.Instance);
@@ -10676,6 +10686,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             appResources,
             executableCreator,
             containerCreator,
+            containerNetworkEndpointProvisioner,
             new ProfilingTelemetry(configuration),
             proxylessEndpointPortAllocator,
             userSecretsManager ?? NoopUserSecretsManager.Instance);
