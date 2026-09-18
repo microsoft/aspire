@@ -166,9 +166,11 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
     }
 
     [Theory]
-    [InlineData(StatusCode.NotFound, StatusCodes.Status404NotFound)]
-    [InlineData(StatusCode.Unavailable, StatusCodes.Status503ServiceUnavailable)]
-    public async Task TerminalStream_HandshakeFailureReturnsHttpErrorBeforeUpgrade(StatusCode statusCode, int expectedStatus)
+    [InlineData(StatusCode.NotFound, true)]
+    [InlineData(StatusCode.FailedPrecondition, true)]
+    [InlineData(StatusCode.Unavailable, false)]
+    [InlineData(StatusCode.DeadlineExceeded, false)]
+    public async Task TerminalStream_HandshakeFailurePreservesPermanentAndTransientStatus(StatusCode statusCode, bool permanentFailure)
     {
         var channel = Channel.CreateUnbounded<TerminalServerFrame>();
         channel.Writer.TryComplete(new RpcException(new Status(statusCode, "Terminal is unavailable.")));
@@ -183,6 +185,7 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         using var stream = new GrpcTerminalClientStream(call, "terminal");
         var dashboardClient = new TestDashboardClient(attachTerminal: (_, _) => Task.FromResult<Stream>(stream));
         var sessions = new TerminalViewSessionRegistry();
+        using var session = sessions.Create("/api/apphost-terminal?terminalId=terminal", readOnly: false);
         using var server = new TestServer(new WebHostBuilder().Configure(app =>
         {
             app.UseWebSockets();
@@ -195,12 +198,31 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         }));
         var client = server.CreateWebSocketClient();
         client.ConfigureRequest = request => request.Headers.Origin = "https://dashboard.example.com";
+        var uri = new Uri($"wss://dashboard.example.com/api/apphost-terminal?terminalId=terminal&viewId={session.Id}");
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.ConnectAsync(
-            new Uri("wss://dashboard.example.com/api/apphost-terminal?terminalId=terminal"), CancellationToken.None).DefaultTimeout());
+        if (permanentFailure)
+        {
+            using var socket = await client.ConnectAsync(uri, CancellationToken.None).DefaultTimeout();
+            var message = await socket.ReceiveAsync(new ArraySegment<byte>(new byte[64]), CancellationToken.None).DefaultTimeout();
 
-        Assert.Contains(expectedStatus.ToString(System.Globalization.CultureInfo.InvariantCulture), exception.Message);
+            Assert.Equal(WebSocketMessageType.Close, message.MessageType);
+            Assert.Equal((WebSocketCloseStatus)4000, message.CloseStatus);
+            Assert.Equal("Terminal ended", message.CloseStatusDescription);
+            await session.Ended.DefaultTimeout();
+            Assert.True(session.ReadOnly);
+            await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Received", CancellationToken.None).DefaultTimeout();
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.ConnectAsync(uri, CancellationToken.None).DefaultTimeout());
+
+            Assert.Contains(StatusCodes.Status503ServiceUnavailable.ToString(System.Globalization.CultureInfo.InvariantCulture), exception.Message);
+            Assert.False(session.Ended.IsCompleted);
+            Assert.False(session.ReadOnly);
+        }
+
         await disposed.Task.DefaultTimeout();
+        // The proxy classifies the RPC status; the stream never received an Ended frame.
         Assert.False(stream.TerminalEnded);
     }
 
