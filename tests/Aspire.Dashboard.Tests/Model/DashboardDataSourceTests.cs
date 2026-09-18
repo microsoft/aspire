@@ -345,6 +345,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     public void NoneMode_DeletesOnlyUnheldTemporaryLocks()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var now = DateTimeOffset.UtcNow;
         var temporaryRoot = Path.GetTempPath();
         var abandonedLockPath = Path.Combine(temporaryRoot, $"aspire-dashboard-{Guid.NewGuid():N}.lock");
         var activeLockPath = Path.Combine(temporaryRoot, $"aspire-dashboard-{Guid.NewGuid():N}.lock");
@@ -352,11 +353,15 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         File.WriteAllText(abandonedLockPath, string.Empty);
         File.WriteAllText(activeLockPath, string.Empty);
         File.WriteAllText(unrelatedLockPath, string.Empty);
+        File.SetLastWriteTimeUtc(abandonedLockPath, now.AddDays(-2).UtcDateTime);
+        File.SetLastWriteTimeUtc(activeLockPath, now.AddDays(-2).UtcDateTime);
 
         try
         {
             using var activeLock = new FileStream(activeLockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-            using var runStore = CreateRunStore(CreateOptions(workspace, persistenceMode: DashboardPersistenceMode.None));
+            using var runStore = CreateRunStore(
+                CreateOptions(workspace, persistenceMode: DashboardPersistenceMode.None),
+                new FixedTimeProvider(now));
 
             Assert.False(File.Exists(abandonedLockPath));
             Assert.True(File.Exists(activeLockPath));
@@ -368,6 +373,38 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             File.Delete(abandonedLockPath);
             File.Delete(activeLockPath);
             File.Delete(unrelatedLockPath);
+        }
+    }
+
+    [Fact]
+    public void NoneMode_DelaysDeletingLockForInitializingTemporaryDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var now = DateTimeOffset.UtcNow;
+        var initializingDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-").FullName;
+        var initializingLockPath = DashboardRunStore.GetRunLockPath(initializingDirectory);
+        File.WriteAllText(initializingLockPath, string.Empty);
+        File.SetLastWriteTimeUtc(initializingLockPath, now.UtcDateTime);
+
+        try
+        {
+            using var runStore = CreateRunStore(
+                CreateOptions(workspace, persistenceMode: DashboardPersistenceMode.None),
+                new FixedTimeProvider(now));
+
+            Assert.True(File.Exists(initializingLockPath));
+
+            File.SetLastWriteTimeUtc(initializingLockPath, now.AddDays(-2).UtcDateTime);
+            using var nextRunStore = CreateRunStore(
+                CreateOptions(workspace, persistenceMode: DashboardPersistenceMode.None),
+                new FixedTimeProvider(now));
+
+            Assert.False(File.Exists(initializingLockPath));
+        }
+        finally
+        {
+            File.Delete(initializingLockPath);
+            Directory.Delete(initializingDirectory, recursive: true);
         }
     }
 
@@ -831,6 +868,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     public async Task RunMode_PruningDeletesOnlyUnheldRunLocks()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var now = DateTimeOffset.UtcNow;
         var options = CreateOptions(workspace);
         var runsDirectory = DashboardRunStore.GetRunsDirectory(workspace.Path);
         Directory.CreateDirectory(runsDirectory);
@@ -838,9 +876,11 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         var activeLockPath = Path.Combine(runsDirectory, "active.lock");
         File.WriteAllText(abandonedLockPath, string.Empty);
         File.WriteAllText(activeLockPath, string.Empty);
+        File.SetLastWriteTimeUtc(abandonedLockPath, now.AddDays(-2).UtcDateTime);
+        File.SetLastWriteTimeUtc(activeLockPath, now.AddDays(-2).UtcDateTime);
 
         using var activeLock = new FileStream(activeLockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-        using var runStore = CreateRunStore(options);
+        using var runStore = CreateRunStore(options, new FixedTimeProvider(now));
         await InitializeAndPublishRunAsync(runStore);
 
         Assert.False(File.Exists(abandonedLockPath));

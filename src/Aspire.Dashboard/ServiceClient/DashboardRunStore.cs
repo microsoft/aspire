@@ -71,6 +71,8 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 {
     private const string TemporaryDirectoryPrefix = "aspire-dashboard-";
 
+    private static readonly TimeSpan s_minimumLockAge = TimeSpan.FromDays(1);
+
     internal const string DatabaseFileName = "dashboard.db";
     internal const int MaxApplicationDirectoryNameLength = 80;
     internal const int MaxRuns = 10;
@@ -245,12 +247,20 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             GetRunLockPath(CurrentWorkingDirectory));
     }
 
-    private static void DeleteUnheldLocks(string directory, string searchPattern, string currentLockPath)
+    private void DeleteUnheldLocks(string directory, string searchPattern, string currentLockPath)
     {
+        var lockCutoff = _timeProvider.GetUtcNow().UtcDateTime - s_minimumLockAge;
         foreach (var lockPath in Directory.EnumerateFiles(directory, searchPattern, SearchOption.TopDirectoryOnly))
         {
             if (string.Equals(lockPath, currentLockPath, StringComparison.OrdinalIgnoreCase))
             {
+                continue;
+            }
+
+            if (File.GetLastWriteTimeUtc(lockPath) > lockCutoff)
+            {
+                // On Unix, another process can observe a newly created lock file before FileStream has applied its
+                // exclusive lock. Delay cleanup so initialization has ample time to establish ownership.
                 continue;
             }
 
