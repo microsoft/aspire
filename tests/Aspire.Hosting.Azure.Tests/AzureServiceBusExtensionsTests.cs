@@ -502,6 +502,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
 
     [Fact]
     [RequiresFeature(TestFeature.ContainerRuntime)]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/20224")]
     public async Task AzureServiceBusEmulatorResourceGeneratesConfigJsonWithCustomizations()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
