@@ -89,7 +89,10 @@ internal sealed partial class WindowsTrayLog : IDisposable
 
     internal static SafeFileHandle OpenDirectory(string path)
     {
-        var handle = CreateFile(path, 0x0080 /* FILE_READ_ATTRIBUTES */,
+        // Attribute-only opens do not participate in Windows sharing checks. Request
+        // directory-list access too so withholding write/delete sharing actually blocks
+        // ancestor replacement and reparse mutation during the component walk.
+        var handle = CreateFile(path, 0x0081 /* FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES */,
             0x0001 /* FILE_SHARE_READ */, 0, 3 /* OPEN_EXISTING */,
             0x02000000 | 0x00200000 /* FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT */, 0);
         try
