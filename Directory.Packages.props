@@ -147,7 +147,6 @@
     <PackageVersion Include="NATS.Net" Version="2.8.2" />
     <PackageVersion Include="NCrontab.Signed" Version="3.4.0" />
     <PackageVersion Include="Npgsql.DependencyInjection" Version="10.0.3" />
-    <!-- Microsoft.Extensions.AI.OpenAI 10.10.0 requires OpenAI >= 2.13.0. -->
     <PackageVersion Include="OpenAI" Version="2.13.0" />
     <PackageVersion Include="Oracle.ManagedDataAccess.OpenTelemetry" Version="23.26.300" />
     <PackageVersion Include="Polly.Core" Version="8.7.0" />
