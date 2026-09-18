@@ -19,6 +19,8 @@ namespace Aspire.Dashboard.Serialization;
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(ViewportSize))]
 [JsonSerializable(typeof(BrowserInfo))]
+[JsonSerializable(typeof(TerminalViewOptions))]
+[JsonSerializable(typeof(TerminalToolbarState))]
 [JsonSerializable(typeof(TerminalSizePreset[]))]
 [JsonSerializable(typeof(KeyCode[]))]
 [JsonSerializable(typeof(ConsoleLogsFilters))]

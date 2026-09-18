@@ -62,6 +62,7 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
 {
     private readonly IJSRuntime _js;
     private readonly NavigationManager _navigationManager;
+    private readonly string _modulePath;
     private readonly Func<string, TerminalWindowOpenResult, Task> _onWindowOpened;
     private readonly Func<string, Task> _onWindowClosed;
     private readonly string _id = Guid.NewGuid().ToString("N");
@@ -76,6 +77,7 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
     /// </summary>
     /// <param name="js">The JS runtime for the owning component's circuit.</param>
     /// <param name="navigationManager">The navigation manager providing the dashboard's base URI.</param>
+    /// <param name="modulePath">The asset-resolved path to the terminal window JavaScript module.</param>
     /// <param name="onWindowOpened">Invoked after opening, focusing, or adopting a window, with its captured key and outcome.</param>
     /// <param name="onWindowClosed">
     /// Invoked with the terminal key when the user closes a detached window. Not raised for windows closed through
@@ -84,16 +86,19 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
     public TerminalWindowLauncher(
         IJSRuntime js,
         NavigationManager navigationManager,
+        string modulePath,
         Func<string, TerminalWindowOpenResult, Task> onWindowOpened,
         Func<string, Task> onWindowClosed)
     {
         ArgumentNullException.ThrowIfNull(js);
         ArgumentNullException.ThrowIfNull(navigationManager);
+        ArgumentException.ThrowIfNullOrEmpty(modulePath);
         ArgumentNullException.ThrowIfNull(onWindowOpened);
         ArgumentNullException.ThrowIfNull(onWindowClosed);
 
         _js = js;
         _navigationManager = navigationManager;
+        _modulePath = modulePath;
         _onWindowOpened = onWindowOpened;
         _onWindowClosed = onWindowClosed;
     }
@@ -109,7 +114,7 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
     private async Task RegisterCoreAsync(string buttonId)
     {
         _selfRef = DotNetObjectReference.Create(this);
-        var moduleUri = new Uri(new Uri(_navigationManager.BaseUri), "js/app-terminalwindow.js");
+        var moduleUri = new Uri(new Uri(_navigationManager.BaseUri), _modulePath);
         _module = await _js.InvokeAsync<IJSObjectReference>("import", moduleUri.PathAndQuery).ConfigureAwait(false);
         if (!_disposed)
         {

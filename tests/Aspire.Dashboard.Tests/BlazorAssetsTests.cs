@@ -38,6 +38,25 @@ public class BlazorAssetsTests
         Assert.Equal("""<script src="@Assets["_framework/blazor.web.js"]"></script>""", blazorScript);
     }
 
+    [Fact]
+    public void TerminalModules_UseAssetReferences()
+    {
+        var componentsPath = Path.Combine(GetRepoRoot(), "src", "Aspire.Dashboard", "Components");
+
+        Assert.Contains(
+            """Assets["Components/Layout/TerminalDock.razor.js"]""",
+            File.ReadAllText(Path.Combine(componentsPath, "Layout", "TerminalDock.razor.cs")),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            """Assets["js/app-terminalwindow.js"]""",
+            File.ReadAllText(Path.Combine(componentsPath, "Pages", "TerminalWindow.razor.cs")),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            """Assets["js/app-terminalwindow.js"]""",
+            File.ReadAllText(Path.Combine(componentsPath, "Controls", "TerminalWindowButton.razor.cs")),
+            StringComparison.Ordinal);
+    }
+
     private static string GetRepoRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

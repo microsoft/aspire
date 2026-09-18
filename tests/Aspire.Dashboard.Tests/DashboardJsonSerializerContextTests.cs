@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
@@ -44,6 +45,15 @@ public class DashboardJsonSerializerContextTests
             DashboardJsonSerializerContext.Default.ListInt32);
 
         Assert.Equal("[1,3]", json);
+    }
+
+    [Theory]
+    [InlineData(typeof(TerminalViewOptions))]
+    [InlineData(typeof(TerminalToolbarState))]
+    [InlineData(typeof(TerminalSizePreset[]))]
+    public void TerminalInteropType_UsesGeneratedMetadata(Type interopType)
+    {
+        Assert.NotNull(DashboardJsonSerializerContext.Default.GetTypeInfo(interopType));
     }
 
     [Theory]

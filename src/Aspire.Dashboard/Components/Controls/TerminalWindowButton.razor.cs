@@ -169,7 +169,7 @@ public partial class TerminalWindowButton : ComponentBase, IAsyncDisposable
     private async Task RegisterAsync()
     {
         // Assign before awaiting registration so later renders cannot register a second listener.
-        _launcher = new TerminalWindowLauncher(JS, NavigationManager, OnOpenedAsync,
+        _launcher = new TerminalWindowLauncher(JS, NavigationManager, Assets["js/app-terminalwindow.js"], OnOpenedAsync,
             key => InvokeAsync(() => _disposed ? Task.CompletedTask : OnWindowClosed.InvokeAsync(key)));
         try
         {
