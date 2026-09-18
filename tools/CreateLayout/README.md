@@ -29,12 +29,14 @@ for local validation without overwriting an executable that is currently running
 |--------|-------------|
 | `-o, --output <path>` | Required output directory (replaced on each build) |
 | `-a, --artifacts <path>` | Required build artifacts directory |
-| `--rid <rid>` | Required target runtime identifier |
+| `--rid <rid>` | Required target runtime identifier: `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `linux-musl-x64`, `osx-x64`, or `osx-arm64` |
 | `--bundle-version <version>` | Archive version; default `0.0.0-dev` |
 | `--tray-app <path>` | Prepared `.app` directory, required for macOS; ignored on Linux/Windows |
 | `--tray-windows <path>` | Prepared native tray directory containing `aspire-tray.exe` and `Aspire.ico`, required for Windows |
 | `--archive` | Create a tar.gz payload archive |
 | `--verbose` | Enable detailed output |
+
+Unsupported runtime identifiers, including `win-x86`, are rejected before the output directory is changed.
 
 ## macOS Example
 

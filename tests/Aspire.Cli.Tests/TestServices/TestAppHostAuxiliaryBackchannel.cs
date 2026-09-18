@@ -367,8 +367,15 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public GetTerminalInfoResponse TerminalInfoResponse { get; set; } = new GetTerminalInfoResponse { IsAvailable = false };
 
+    public Func<string, CancellationToken, Task<GetTerminalInfoResponse>>? GetTerminalInfoHandler { get; set; }
+
     public Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
     {
+        if (GetTerminalInfoHandler is not null)
+        {
+            return GetTerminalInfoHandler(resourceName, cancellationToken);
+        }
+
         return Task.FromResult(TerminalInfoResponse);
     }
 
@@ -376,7 +383,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// Gets or sets the response returned by ListTerminalsAsync. Defaults to an empty list so
     /// existing tests that don't care about the new RPC don't have to set anything.
     /// </summary>
-    public ListTerminalsResponse ListTerminalsResponse { get; set; } = new ListTerminalsResponse { Terminals = Array.Empty<TerminalSummary>() };
+    public ListTerminalsResponse ListTerminalsResponse { get; set; } = new ListTerminalsResponse { ResourceTerminals = [], AppHostTerminals = [] };
 
     public Task<ListTerminalsResponse> ListTerminalsAsync(CancellationToken cancellationToken = default)
     {

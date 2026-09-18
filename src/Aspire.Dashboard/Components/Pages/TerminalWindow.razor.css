@@ -1,0 +1,25 @@
+/* The detached window has no dashboard chrome, so the terminal is laid out against the viewport itself rather than
+   against a page container. Fixed positioning keeps it correct while the user drags the window edge, which is the
+   whole reason to detach a terminal. */
+.terminal-window {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    background: #0d1117;
+    overflow: hidden;
+}
+
+.terminal-window ::deep .aspire-terminal-host {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+}
+
+.terminal-window-ended {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #8b949e;
+    font-size: 13px;
+}

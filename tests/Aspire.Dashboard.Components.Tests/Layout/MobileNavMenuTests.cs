@@ -123,6 +123,8 @@ public class MobileNavMenuTests : DashboardTestContext
             builder.Add(p => p.LaunchHelpAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchAIAgentsAsync, () => Task.CompletedTask);
             builder.Add(p => p.IsAgentHelpEnabled, false);
+            builder.Add(p => p.IsTerminalDockEnabled, false);
+            builder.Add(p => p.ToggleTerminalDockAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchNotificationsAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchSettingsAsync, () => Task.CompletedTask);
         });

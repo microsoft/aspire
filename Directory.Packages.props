@@ -7,7 +7,7 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
     <!-- Set this to false when switching Microsoft.FluentUI.AspNetCore.Components to a release package. -->
-    <MicrosoftFluentUIAspNetCoreComponentsVersion>5.0.0-preview.26259.4</MicrosoftFluentUIAspNetCoreComponentsVersion>
+    <MicrosoftFluentUIAspNetCoreComponentsVersion>5.0.0-preview.26260.3</MicrosoftFluentUIAspNetCoreComponentsVersion>
     <MicrosoftFluentUIAspNetCoreComponentsIsPreview>true</MicrosoftFluentUIAspNetCoreComponentsIsPreview>
     <!-- The Npgsql versions used when using Npgsql EF Core on net8/net9. The major versions need to match between Npgsql and EF Core. -->
     <Npgsql8Version>8.0.9</Npgsql8Version>
@@ -117,7 +117,9 @@
     <PackageVersion Include="Grpc.AspNetCore" Version="2.83.0" />
     <PackageVersion Include="Grpc.Net.ClientFactory" Version="2.83.0" />
     <PackageVersion Include="Grpc.Tools" Version="2.83.0" />
-    <PackageVersion Include="Hex1b" Version="0.165.0" />
+    <!-- Keep compatible with @hex1b/web-terminal in src/Aspire.Dashboard/package.json.
+         Native-only Hex1b builds can differ without changing the web terminal package. -->
+    <PackageVersion Include="Hex1b" Version="0.168.0" />
     <PackageVersion Include="Hex1b.McpServer" Version="0.165.0" />
     <PackageVersion Include="Hex1b.Tool" Version="0.165.0" />
     <PackageVersion Include="Humanizer.Core" Version="3.0.10" />

@@ -57,7 +57,7 @@ jobs:
       issues: read
     steps:
       - name: "Download Issues"
-        uses: dotnet/issue-labeler/download@46125e85e6a568dc712f358c39f35317366f5eed # v2.0.0
+        uses: dotnet/issue-labeler/download@160b6b1e1e8d36da09beb34ef1e4806d2c0520a3 # v2.2.0
         with:
           type: "issues"
           cache_key: ${{ env.CACHE_KEY }}
@@ -77,7 +77,7 @@ jobs:
       pull-requests: read
     steps:
       - name: "Download Pull Requests"
-        uses: dotnet/issue-labeler/download@46125e85e6a568dc712f358c39f35317366f5eed # v2.0.0
+        uses: dotnet/issue-labeler/download@160b6b1e1e8d36da09beb34ef1e4806d2c0520a3 # v2.2.0
         with:
           type: "pulls"
           cache_key: ${{ env.CACHE_KEY }}
@@ -97,7 +97,7 @@ jobs:
     needs: download-issues
     steps:
       - name: "Train Model for Issues"
-        uses: dotnet/issue-labeler/train@46125e85e6a568dc712f358c39f35317366f5eed # v2.0.0
+        uses: dotnet/issue-labeler/train@160b6b1e1e8d36da09beb34ef1e4806d2c0520a3 # v2.2.0
         with:
           type: "issues"
           data_cache_key: ${{ env.CACHE_KEY }}
@@ -110,7 +110,7 @@ jobs:
     needs: download-pulls
     steps:
       - name: "Train Model for Pull Requests"
-        uses: dotnet/issue-labeler/train@46125e85e6a568dc712f358c39f35317366f5eed # v2.0.0
+        uses: dotnet/issue-labeler/train@160b6b1e1e8d36da09beb34ef1e4806d2c0520a3 # v2.2.0
         with:
           type: "pulls"
           data_cache_key: ${{ env.CACHE_KEY }}
@@ -124,7 +124,7 @@ jobs:
     needs: train-issues
     steps:
       - name: "Test Model for Issues"
-        uses: dotnet/issue-labeler/test@46125e85e6a568dc712f358c39f35317366f5eed # v2.0.0
+        uses: dotnet/issue-labeler/test@160b6b1e1e8d36da09beb34ef1e4806d2c0520a3 # v2.2.0
         with:
           type: "issues"
           cache_key: ${{ env.CACHE_KEY }}
@@ -146,7 +146,7 @@ jobs:
     needs: train-pulls
     steps:
       - name: "Test Model for Pull Requests"
-        uses: dotnet/issue-labeler/test@46125e85e6a568dc712f358c39f35317366f5eed # v2.0.0
+        uses: dotnet/issue-labeler/test@160b6b1e1e8d36da09beb34ef1e4806d2c0520a3 # v2.2.0
         with:
           type: "pulls"
           cache_key: ${{ env.CACHE_KEY }}

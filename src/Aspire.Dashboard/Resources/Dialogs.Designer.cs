@@ -847,7 +847,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HelpDialogTogglePanelOrientation", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Toggle terminal.
+        /// </summary>
+        public static string HelpDialogToggleTerminalDock {
+            get {
+                return ResourceManager.GetString("HelpDialogToggleTerminalDock", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Cancel.
         /// </summary>

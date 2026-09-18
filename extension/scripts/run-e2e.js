@@ -2132,9 +2132,16 @@ function writeNuGetConfigIfLocalPackageSourcesExist() {
   const sourceEntries = packageSources
     .map((source, index) => `    <add key="e2e-source-${index}" value="${escapeXml(source)}" />`)
     .join('\n');
-  const fallbackSourceEntries = getApprovedFallbackPackageSources()
+  const fallbackSources = getApprovedFallbackPackageSources();
+  const fallbackSourceEntries = fallbackSources
     .map(source => `    <add key="${escapeXml(source.key)}" value="${escapeXml(source.value)}" />`)
     .join('\n');
+  const sourceMappingEntries = [
+    ...packageSources.map((_, index) => `e2e-source-${index}`),
+    ...fallbackSources.map(source => source.key),
+  ].map(key => `    <packageSource key="${escapeXml(key)}">
+      <package pattern="*" />
+    </packageSource>`).join('\n');
   const nugetConfig = `<?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <packageSources>
@@ -2144,6 +2151,7 @@ ${fallbackSourceEntries}
   </packageSources>
   <packageSourceMapping>
     <clear />
+${sourceMappingEntries}
   </packageSourceMapping>
 </configuration>
 `;
