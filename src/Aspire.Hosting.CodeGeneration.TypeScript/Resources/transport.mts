@@ -187,6 +187,10 @@ export class Handle<T extends string = string> {
         };
     }
 
+    toTransportValue(): MarshalledHandle {
+        return this.toJSON();
+    }
+
     /** String representation for debugging */
     toString(): string {
         return `Handle<${this.$type}>(${this.$handle})`;
