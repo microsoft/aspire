@@ -309,6 +309,7 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
             Assert.Equal(insight.Name, managementUrl.Endpoint?.Resource.Name);
             Assert.Equal("http", managementUrl.Endpoint?.EndpointName);
             Assert.Equal("/", managementUrl.Url);
+            Assert.Single(insight.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == redis);
         }
     }
 
@@ -334,6 +335,7 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
             Assert.Equal(commander.Name, managementUrl.Endpoint?.Resource.Name);
             Assert.Equal("http", managementUrl.Endpoint?.EndpointName);
             Assert.Equal("/", managementUrl.Url);
+            Assert.Single(commander.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == redis);
         }
     }
 

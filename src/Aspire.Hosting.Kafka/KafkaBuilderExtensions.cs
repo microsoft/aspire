@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Dashboard.Model;
 using Confluent.Kafka;
 using HealthChecks.Kafka;
 using Microsoft.Extensions.DependencyInjection;
@@ -100,6 +101,7 @@ public static class KafkaBuilderExtensions
         {
             var builderForExistingResource = builder.ApplicationBuilder.CreateResourceBuilder(existingKafkaUIResource);
             configureContainer?.Invoke(builderForExistingResource);
+            builderForExistingResource.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
             return builder;
         }
         else
@@ -113,6 +115,8 @@ public static class KafkaBuilderExtensions
                 .WithIconName("WindowDatabase")
                 .WithHttpEndpoint(targetPort: KafkaUIPort)
                 .ExcludeFromManifest();
+
+            AddManagementLinks(kafkaUiBuilder, "http", "Manage");
 
             builder.ApplicationBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>(kafkaUi, (e, ct) =>
             {
@@ -133,6 +137,8 @@ public static class KafkaBuilderExtensions
 
             configureContainer?.Invoke(kafkaUiBuilder);
 
+            kafkaUiBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
+
             return builder;
         }
 
@@ -148,6 +154,40 @@ public static class KafkaBuilderExtensions
             context.EnvironmentVariables[$"KAFKA_CLUSTERS_{index}_BOOTSTRAPSERVERS"] = bootstrapServers;
         }
 
+    }
+
+    /// <summary>
+    /// Hides <paramref name="resourceBuilder"/> and adds a "Manage" URL pointing at its <paramref name="endpointName"/>
+    /// endpoint to every <see cref="KafkaServerResource"/> in the app.
+    /// </summary>
+    private static void AddManagementLinks<T>(IResourceBuilder<T> resourceBuilder, string endpointName, string displayText)
+        where T : IResourceWithEndpoints
+    {
+        resourceBuilder.WithHidden();
+
+        var endpoint = resourceBuilder.GetEndpoint(endpointName);
+        resourceBuilder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
+        {
+            foreach (var kafkaResource in @event.Model.Resources.OfType<KafkaServerResource>())
+            {
+                if (!resourceBuilder.Resource.Annotations.OfType<ResourceRelationshipAnnotation>().Any(r => r.Type == KnownRelationshipTypes.Manages && r.Resource == kafkaResource))
+                {
+                    resourceBuilder.WithRelationship(kafkaResource, KnownRelationshipTypes.Manages);
+                }
+
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
+                kafkaResource.Annotations.Add(new ResourceUrlAnnotation
+                {
+                    Url = "/",
+                    DisplayText = displayText,
+                    Endpoint = endpoint,
+                    DisplayOrder = 1
+                });
+#pragma warning restore CS0618
+            }
+
+            return Task.CompletedTask;
+        });
     }
 
     /// <summary>

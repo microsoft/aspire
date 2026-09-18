@@ -4,9 +4,8 @@
 using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using Aspire.Dashboard.Model;
-using FluentUIIconVariant = Microsoft.FluentUI.AspNetCore.Components.IconVariant;
 using Aspire.Dashboard.Resources;
-using Aspire.Hosting;
+using FluentUIIconVariant = Microsoft.FluentUI.AspNetCore.Components.IconVariant;
 using Google.Protobuf.Collections;
 
 namespace Aspire.DashboardService.Proto.V1;
@@ -92,20 +91,33 @@ partial class Resource
 
         ImmutableArray<UrlViewModel> GetUrls()
         {
-            static string TranslateKnownUrlName(Url url)
+            const string ManagePrefix = "Manage (";
+
+            // Hosting integrations that hide a management UI container behind a link back to the resource(s) it
+            // manages (Redis Commander, pgAdmin, phpMyAdmin, etc.) label that link "Manage" or "Manage (Tool Name)".
+            // Localize just that common "Manage" text, keeping any "(Tool Name)" suffix as-is since it's a proper noun.
+            static string TranslateDisplayName(Url url)
             {
-                return (url.EndpointName, url.DisplayProperties.DisplayName) switch
+                var displayName = url.DisplayProperties.DisplayName;
+
+                if (displayName == "Manage")
                 {
-                    (KnownUrls.DataExplorer.EndpointName, KnownUrls.DataExplorer.DisplayText) => KnownUrlsDisplay.DataExplorer,
-                    _ => url.DisplayProperties.DisplayName
-                };
+                    return KnownUrlsDisplay.Manage;
+                }
+
+                if (displayName.StartsWith(ManagePrefix, StringComparison.Ordinal))
+                {
+                    return KnownUrlsDisplay.Manage + displayName["Manage".Length..];
+                }
+
+                return displayName;
             }
 
             // Filter out bad urls
             return (from u in Urls
                     let parsedUri = Uri.TryCreate(u.FullUrl, UriKind.Absolute, out var uri) ? uri : null
                     where parsedUri != null
-                    select new UrlViewModel(u.EndpointName, parsedUri, u.IsInternal, u.IsInactive, new UrlDisplayPropertiesViewModel(TranslateKnownUrlName(u), u.DisplayProperties.SortOrder)))
+                    select new UrlViewModel(u.EndpointName, parsedUri, u.IsInternal, u.IsInactive, new UrlDisplayPropertiesViewModel(TranslateDisplayName(u), u.DisplayProperties.SortOrder)))
                 .ToImmutableArray();
         }
 
