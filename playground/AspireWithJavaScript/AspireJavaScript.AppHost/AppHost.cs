@@ -65,4 +65,18 @@ builder.AddNodeApp("node", "../AspireJavaScript.NodeApp", "app.js")
 
 weatherApi.PublishWithContainerFiles(reactvite, "./wwwroot");
 
+// Workspaces
+
+var pnpmWorkspace = builder.AddPnpmWorkspace("pnpm-workspace", "../AspireJavaScript.PnpmWorkspace");
+
+pnpmWorkspace.AddViteApp("pnpm-workspace-vite", "pnpm-workspace-web", packagePath: "packages/web", runScriptName: "dev")
+    .WithReference(weatherApi)
+    .WaitFor(weatherApi)
+    .WithExternalHttpEndpoints();
+
+pnpmWorkspace.AddNodeApp("pnpm-workspace-node", "pnpm-workspace-api", "dist/index.js", "packages/api")
+    .WithBuildScript("build")
+    .WithHttpEndpoint(env: "PORT")
+    .WithExternalHttpEndpoints();
+
 builder.Build().Run();
