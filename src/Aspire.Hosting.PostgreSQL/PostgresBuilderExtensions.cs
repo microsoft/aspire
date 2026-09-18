@@ -2,12 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREMCP001
+#pragma warning disable ASPIRETERMINAL001
 
 using System.Text;
 using System.Text.Json;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Postgres;
+using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -120,7 +122,26 @@ public static class PostgresBuilderExtensions
                           context.EnvironmentVariables[UserEnvVarName] = postgresServer.UserNameReference;
                           context.EnvironmentVariables[PasswordEnvVarName] = postgresServer.PasswordParameter;
                       })
-                      .WithHealthCheck(healthCheckKey);
+                      .WithHealthCheck(healthCheckKey)
+                      .WithReplCommand(ct => CreateReplOptionsAsync(postgresServer, ct));
+    }
+
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(PostgresServerResource resource, CancellationToken cancellationToken)
+    {
+        var username = await resource.UserNameReference.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        var password = await resource.PasswordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+        {
+            throw new DistributedApplicationException("The PostgreSQL REPL credentials are not available.");
+        }
+
+        return new TerminalLaunchOptions
+        {
+            Title = $"psql ({resource.Name})",
+            Executable = "psql",
+            Arguments = ["--username", username, "--dbname", "postgres", "--no-password"],
+            EnvironmentVariables = { ["PGPASSWORD"] = password }
+        };
     }
 
     /// <summary>

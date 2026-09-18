@@ -6,9 +6,12 @@ using System.Text.RegularExpressions;
 using System.Text;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Terminals;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+
+#pragma warning disable ASPIRETERMINAL001
 
 namespace Aspire.Hosting;
 
@@ -89,7 +92,47 @@ public static partial class SqlServerBuilderExtensions
                           {
                               await CreateDatabaseAsync(sqlConnection, sqlDatabase, @event.Services, ct).ConfigureAwait(false);
                           }
-                      });
+                      })
+                      .WithReplCommand(ct => CreateReplOptionsAsync(sqlServer, ct));
+    }
+
+    /// <summary>
+    /// Creates authenticated sqlcmd launch options for the running container.
+    /// </summary>
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(SqlServerServerResource resource, CancellationToken cancellationToken)
+    {
+        var password = await resource.PasswordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(password))
+        {
+            throw new DistributedApplicationException("The SQL Server REPL password is not available.");
+        }
+
+        var port = resource.PrimaryEndpoint.TargetPort ?? throw new DistributedApplicationException("The SQL Server REPL port is not available.");
+
+        // SQL Server 2022 CU14 / 2019 CU28 moved sqlcmd to mssql-tools18. Inspect the
+        // installed binary rather than guessing from tags, which may be overridden or pinned.
+        // https://learn.microsoft.com/sql/linux/quickstart-install-connect-docker
+        // Only the fixed script is interpreted by the shell; "$@" preserves argument boundaries.
+        const string selectSqlCmd = """
+            if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then
+                exec /opt/mssql-tools18/bin/sqlcmd "$@"
+            elif [ -x /opt/mssql-tools/bin/sqlcmd ]; then
+                exec /opt/mssql-tools/bin/sqlcmd "$@"
+            else
+                echo 'The SQL Server REPL requires sqlcmd in /opt/mssql-tools18/bin or /opt/mssql-tools/bin.' >&2
+                exit 127
+            fi
+            """;
+
+        return new TerminalLaunchOptions
+        {
+            Title = $"sqlcmd ({resource.Name})",
+            Executable = "/bin/sh",
+            // The client connects over container loopback and trusts the local server's
+            // self-signed certificate, matching the integration's connection string.
+            Arguments = ["-c", selectSqlCmd, "sqlcmd", "-S", $"127.0.0.1,{port.ToString(CultureInfo.InvariantCulture)}", "-U", "sa", "-d", "master", "-C"],
+            EnvironmentVariables = { ["SQLCMDPASSWORD"] = password }
+        };
     }
 
     /// <summary>

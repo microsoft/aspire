@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.MongoDB;
+using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using MongoDB.Bson;
@@ -12,6 +13,7 @@ using MongoDB.Driver;
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
 #pragma warning disable ASPIREMONGODB001
+#pragma warning disable ASPIRETERMINAL001
 
 namespace Aspire.Hosting;
 
@@ -109,6 +111,12 @@ public static class MongoDBBuilderExtensions
                 {
                     context.Arguments.Add("--tlsCAFile");
                     context.Arguments.Add(context.CertificateBundlePath);
+                    if (context.ExecutionContext.IsRunMode)
+                    {
+                        // docker/podman exec inherits this environment. mongosh needs an explicit CA bundle,
+                        // because Node.js does not use the OpenSSL certificate directories configured by Aspire.
+                        context.EnvironmentVariables["ASPIRE_MONGODB_REPL_CA_FILE"] = context.CertificateBundlePath;
+                    }
                 }
 
                 return Task.CompletedTask;
@@ -166,7 +174,56 @@ public static class MongoDBBuilderExtensions
             });
         }
 
-        return mongoBuilder;
+        return mongoBuilder.WithReplCommand(ct => CreateReplOptionsAsync(mongoServerResource, ct));
+    }
+
+    /// <summary>
+    /// Creates the in-container MongoDB shell launch options.
+    /// </summary>
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(MongoDBServerResource resource, CancellationToken cancellationToken)
+    {
+        var port = resource.PrimaryEndpoint.TargetPort
+            ?? throw new DistributedApplicationException("The MongoDB REPL port is not available.");
+        var credentials = "";
+        if (resource.PasswordParameter is { } passwordParameter)
+        {
+            var username = await resource.UserNameReference.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            var password = await passwordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+            {
+                throw new DistributedApplicationException("The MongoDB REPL credentials are not available.");
+            }
+
+            credentials = $"{Uri.EscapeDataString(username)}:{Uri.EscapeDataString(password)}@";
+        }
+
+        // Connect directly over loopback even for replica set members: their advertised addresses can refer
+        // to host-side proxies. localhost also matches the developer certificate's subject alternative name.
+        var connectionString = $"mongodb://{credentials}localhost:{port.ToString(CultureInfo.InvariantCulture)}/admin?directConnection=true";
+        if (resource.PasswordParameter is not null)
+        {
+            connectionString += "&authSource=admin&authMechanism=SCRAM-SHA-256";
+        }
+
+        if (resource.TlsEnabled)
+        {
+            connectionString += "&tls=true";
+        }
+
+        return new TerminalLaunchOptions
+        {
+            Title = $"mongosh ({resource.Name})",
+            Executable = "mongosh",
+            // --nodb avoids connecting before the script can read credentials from the environment.
+            // --shell keeps the authenticated connection interactive after --eval completes.
+            // https://www.mongodb.com/docs/mongodb-shell/reference/options/
+            Arguments = ["--quiet", "--nodb", "--shell", "--eval", """
+                const uri = process.env.ASPIRE_MONGODB_REPL_CONNECTION_STRING;
+                const ca = process.env.ASPIRE_MONGODB_REPL_CA_FILE;
+                db = new Mongo(ca ? `${uri}&tlsCAFile=${encodeURIComponent(ca)}` : uri).getDB("admin");
+                """],
+            EnvironmentVariables = { ["ASPIRE_MONGODB_REPL_CONNECTION_STRING"] = connectionString }
+        };
     }
 
     /// <summary>

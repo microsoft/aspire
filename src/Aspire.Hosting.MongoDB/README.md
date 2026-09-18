@@ -44,6 +44,12 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
 
 Omit `WithReplicaSet()` / `withReplicaSet()` when a standalone server is sufficient.
 
+### Interactive REPL
+
+In run mode, each MongoDB server includes a **REPL** resource command. Select it while the container is running to open the bundled `mongosh` client in the terminal dock; no local MongoDB client installation is required.
+
+The shell authenticates against `admin` using the configured credentials, passed through the environment rather than command-line arguments. It connects directly to the server inside its container, including replica set members. When TLS is enabled, it uses the configured certificate trust bundle and validates the server certificate for `localhost`. Custom certificates must cover `localhost`, and their issuing CA must be trusted through Aspire's certificate configuration. The command is not included in published applications.
+
 ### Single-member replica set
 
 `WithReplicaSet()` configures **and initializes** a single-member replica set on the same `MongoDBServerResource`; it is no longer just a low-level `mongod` option. No separate replica set resource is needed. `AddDatabase`, `WithReference`, and `WaitFor` continue to work with the server or its databases. Initialization runs during the resource lifecycle, not in health checks. Readiness waits for initialization and primary election, so consumers can use transactions and change streams after `WaitFor`.

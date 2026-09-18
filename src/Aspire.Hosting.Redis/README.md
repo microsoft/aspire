@@ -34,6 +34,14 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
                        .withReference(redis);
 ```
 
+## REPL
+
+During local development, the Redis resource includes a **REPL** command in the dashboard.
+When the container is running, this opens an authenticated `redis-cli` session in the terminal dock.
+Use `quit` to exit. The session runs inside the container using Docker (or the configured Podman runtime);
+no local Redis client is required. Passwords are passed through environment variables, not command-line
+arguments. When TLS is enabled, the in-container REPL uses the non-TLS port over loopback.
+
 ## Connection Properties
 
 When you reference a Redis resource using `WithReference`, the following connection properties are made available to the consuming project:

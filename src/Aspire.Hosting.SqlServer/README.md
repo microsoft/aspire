@@ -34,6 +34,21 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
    .withReference(db);
 ```
 
+## SQL REPL
+
+While the SQL Server container is running, its **REPL** command opens `sqlcmd` in the terminal dock. It connects inside the container as `sa` to the `master` database, using the configured password without putting it in command-line arguments. No local SQL client installation is required.
+
+Enter SQL statements followed by `GO` on its own line to execute a batch:
+
+```sql
+SELECT DB_NAME();
+GO
+```
+
+Use `USE [db];` followed by `GO` to switch databases, and `QUIT` to exit. The command trusts the local server's self-signed certificate, matching the integration's local connection string.
+
+The REPL supports both `/opt/mssql-tools18/bin/sqlcmd` in newer SQL Server images and `/opt/mssql-tools/bin/sqlcmd` in older images. Custom images must include one of these clients. This command is available only in run mode and uses the configured Docker or Podman runtime.
+
 ## Connection Properties
 
 When you reference a SQL Server resource using `WithReference`, the following connection properties are made available to the consuming project:

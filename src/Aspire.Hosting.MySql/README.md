@@ -34,6 +34,12 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
                        .withReference(db);
 ```
 
+## MySQL REPL
+
+During local development, the MySQL resource includes a **REPL** command. When the container is running, the command opens the bundled `mysql` client in the terminal dock, authenticated as `root` with the resource's configured password. No local MySQL client installation is required.
+
+The password is passed through an environment variable, not command-line arguments or SQL history. The command uses the configured Docker or Podman runtime and is not added in publish mode.
+
 ## Connection Properties
 
 When you reference a MySQL resource using `WithReference`, the following connection properties are made available to the consuming project:
