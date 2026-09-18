@@ -2,7 +2,10 @@
   "id": "artifact-upload-etimedout",
   "type": "infra-failure",
   "title": "GitHub artifact upload fails with ETIMEDOUT network timeout",
+  "job_name": "Tests / Package tests - macOS (class, Aspire.Templates.Tests, Templates-MSTest_NewUpAndBuildSupportProjec... / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
   "error_pattern": "Failed to CreateArtifact: Unable to make request: ETIMEDOUT\nIf you are using self-hosted runners, please make sure your runner has access to all GitHub endpoints",
+  "analysis": "The 'Upload logs, and test results' step failed with a GitHub Actions artifact upload network timeout (ETIMEDOUT), a transient infrastructure issue unrelated to PR changes (which only touch package validation baseline version and CompatibilitySuppressions.xml).",
+  "failure_details": "**failure**: Failed to CreateArtifact: Unable to make request: ETIMEDOUT\nIf you are using self-hosted runners, please make sure your runner has access to all GitHub endpoints: https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#communication-between-self-hosted-runners-and-github",
   "occurrences": [
     {
       "run_id": 33671638017,
@@ -24,6 +27,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
       "pr_number": 20040,
       "observed_at": "2026-09-10T19:46:42Z"
+    },
+    {
+      "run_id": 35377484081,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35377484081",
+      "job": "Tests / Package tests - macOS (class, Aspire.Templates.Tests, Templates-MSTest_NewUpAndBuildSupportProjec... / Templates-MSTest_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "pr_number": 20156,
+      "observed_at": "2026-09-18T18:56:39Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19876"
