@@ -4,9 +4,11 @@
 using System.Collections.Immutable;
 using System.CommandLine;
 using System.Globalization;
+using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -26,6 +28,7 @@ internal sealed class AddCommand : BaseCommand
 
     private readonly IProjectLocator _projectLocator;
     private readonly IntegrationPackageSearchService _integrationPackageSearchService;
+    private readonly INuGetSettingsProvider _nugetSettingsProvider;
     private readonly IAddCommandPrompter _prompter;
     private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly ICliHostEnvironment _hostEnvironment;
@@ -52,11 +55,12 @@ internal sealed class AddCommand : BaseCommand
         Description = AddCommandStrings.AllArgumentDescription
     };
 
-    public AddCommand(IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, IAddCommandPrompter prompter, IDotNetSdkInstaller sdkInstaller, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, ProfilingTelemetry profilingTelemetry, CommonCommandServices services)
+    public AddCommand(IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, INuGetSettingsProvider nugetSettingsProvider, IAddCommandPrompter prompter, IDotNetSdkInstaller sdkInstaller, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, ProfilingTelemetry profilingTelemetry, CommonCommandServices services)
         : base("add", AddCommandStrings.Description, services)
     {
         _projectLocator = projectLocator;
         _integrationPackageSearchService = integrationPackageSearchService;
+        _nugetSettingsProvider = nugetSettingsProvider;
         _prompter = prompter;
         _sdkInstaller = sdkInstaller;
         _hostEnvironment = hostEnvironment;
@@ -106,6 +110,13 @@ internal sealed class AddCommand : BaseCommand
             var version = parseResult.GetValue(s_versionOption);
             var source = parseResult.GetValue(s_sourceOption);
             var includeAllIntegrations = parseResult.GetValue(s_allOption);
+            if (!string.IsNullOrWhiteSpace(source) &&
+                PackageSourceOverrideMappings.HasCredentialMaterial(source))
+            {
+                InteractionService.DisplayError(AddCommandStrings.SourceWithCredentialsNotSupported);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand);
+            }
+
             addActivity = _profilingTelemetry.StartAddCommand(integrationName, version, source, passedAppHostProjectFile);
 
             AppHostProjectSearchResult searchResult;
@@ -122,6 +133,12 @@ internal sealed class AddCommand : BaseCommand
             {
                 return AddCommandFailure(CliExitCodes.FailedToFindProject);
             }
+
+            var resolvedSource = string.IsNullOrWhiteSpace(source)
+                ? null
+                : PackageSourceOverrideMappings.ResolveForWorkingDirectory(
+                    source,
+                    ExecutionContext.WorkingDirectory);
 
             // Get the appropriate project handler
             var project = _projectFactory.GetProject(effectiveAppHostProjectFile);
@@ -181,7 +198,11 @@ internal sealed class AddCommand : BaseCommand
                 {
                     var (discoveredPackages, discoveredPolyglotIds) = await InteractionService.ShowStatusAsync(
                         AddCommandStrings.SearchingForAspirePackages,
-                        async () => await _integrationPackageSearchService.GetIntegrationPackagesWithPolyglotCompatibilityAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, cancellationToken));
+                        async () => await _integrationPackageSearchService.GetIntegrationPackagesWithPolyglotCompatibilityAsync(
+                            effectiveAppHostProjectFile.Directory!,
+                            configuredChannel,
+                            resolvedSource,
+                            cancellationToken));
                     packagesWithChannels = discoveredPackages as List<(NuGetPackage Package, PackageChannel Channel)> ?? discoveredPackages.ToList();
                     polyglotCompatibleIds = discoveredPolyglotIds;
                 }
@@ -189,7 +210,11 @@ internal sealed class AddCommand : BaseCommand
                 {
                     var discoveredPackages = await InteractionService.ShowStatusAsync(
                         AddCommandStrings.SearchingForAspirePackages,
-                        async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, cancellationToken));
+                        async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(
+                            effectiveAppHostProjectFile.Directory!,
+                            configuredChannel,
+                            resolvedSource,
+                            cancellationToken));
                     packagesWithChannels = discoveredPackages as List<(NuGetPackage Package, PackageChannel Channel)> ?? discoveredPackages.ToList();
                 }
 
@@ -293,6 +318,7 @@ internal sealed class AddCommand : BaseCommand
                     integrationName,
                     version,
                     configuredChannel,
+                    resolvedSource,
                     cancellationToken,
                     promptForSinglePackage: integrationName is not null),
                 1 when packageMatchKind == ProfilingTelemetry.Values.AddPackageMatchKindExact
@@ -303,6 +329,7 @@ internal sealed class AddCommand : BaseCommand
                     filteredPackagesWithShortName,
                     version,
                     configuredChannel,
+                    resolvedSource,
                     cancellationToken,
                     promptForSingleFuzzyPackage)
             };
@@ -316,39 +343,32 @@ internal sealed class AddCommand : BaseCommand
             // When installing from a PR channel, ensure the project has access to
             // the PR hive as a NuGet source so `dotnet add package` can resolve the
             // PR-version package. We add the hive source to the project's nuget.config
-            // WITHOUT package source mapping restrictions, so that transitive deps
-            // (including RID-specific and stable-versioned packages) can still resolve
-            // from NuGet.org via the normal NuGet source hierarchy.
+            // while preserving the effective package source mapping policy, if present.
             //
             // IsBackedByLocalPackageDirectory (not just the local-build NAME) is required so this
             // also fires when emulating a released build via ASPIRE_CLI_PACKAGES: there the channel
             // is named stable/daily/staging but its Aspire.* packages live in a local directory, and
             // without the local source in nuget.config the C# `dotnet add package` restore of the
             // local-only version fails. See docs/specs/cli-identity-sidecar.md.
-            if (string.IsNullOrEmpty(source) &&
+            if (project.LanguageId == KnownLanguageId.CSharp &&
+                string.IsNullOrEmpty(source) &&
                 (VersionHelper.IsLocalBuildChannel(selectedNuGetPackage.Channel.Name) || selectedNuGetPackage.Channel.IsBackedByLocalPackageDirectory))
             {
                 var mappings = selectedNuGetPackage.Channel.Mappings;
                 if (mappings is { Length: > 0 })
                 {
-                    var hiveSources = mappings
-                        .Select(m => m.Source)
-                        .Where(s => !s.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                        .Distinct(StringComparer.OrdinalIgnoreCase);
-
                     var projectDir = effectiveAppHostProjectFile.Directory!;
+                    projectDir.Create();
                     var nugetConfigPath = Path.Combine(projectDir.FullName, "nuget.config");
                     if (!File.Exists(nugetConfigPath))
                     {
-                        projectDir.Create(); // ensure directory exists
-                        var configXml = new System.Xml.Linq.XDocument(
-                            new System.Xml.Linq.XElement("configuration",
-                                new System.Xml.Linq.XElement("packageSources",
-                                    hiveSources.Select(s =>
-                                        new System.Xml.Linq.XElement("add",
-                                            new System.Xml.Linq.XAttribute("key", s),
-                                            new System.Xml.Linq.XAttribute("value", s))))));
-                        configXml.Save(nugetConfigPath);
+                        var packageSourceMappingEnabled = await _nugetSettingsProvider.IsPackageSourceMappingEnabledAsync(
+                            projectDir,
+                            cancellationToken);
+                        CreateAdditiveLocalSourceNuGetConfig(
+                            projectDir,
+                            mappings,
+                            packageSourceMappingEnabled);
                         InteractionService.DisplayMessage(KnownEmojis.Package, Aspire.Cli.Resources.TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
                     }
                 }
@@ -359,7 +379,14 @@ internal sealed class AddCommand : BaseCommand
                 AppHostFile = effectiveAppHostProjectFile,
                 PackageId = selectedNuGetPackage.Package.Id,
                 PackageVersion = selectedNuGetPackage.Package.Version,
-                Source = source
+                RequestedChannel = GetRequestedRestoreChannel(
+                    selectedNuGetPackage.Channel,
+                    selectedNuGetPackage.Package.Id,
+                    resolvedSource),
+                Source = resolvedSource,
+                SourcePackagePattern = resolvedSource is null
+                    ? null
+                    : selectedNuGetPackage.Package.Id
             };
 
             // Stop any running AppHost instance before adding the package.
@@ -445,17 +472,97 @@ internal sealed class AddCommand : BaseCommand
         }
     }
 
-    private static async Task<IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>> GetAllPackageVersions(DirectoryInfo workingDirectory, IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, CancellationToken cancellationToken)
+    private static string? GetRequestedRestoreChannel(
+        PackageChannel channel,
+        string packageId,
+        string? source)
+    {
+        if (channel.Type is PackageChannelType.Explicit)
+        {
+            return channel.Name;
+        }
+
+        // A source-scoped search always identifies one canonical package ID. Mapping that exact
+        // package to the source can coexist with the project's channel while ambient policy
+        // remains available for the dependency closure.
+        if (!string.IsNullOrWhiteSpace(source) ||
+            !packageId.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        // A null requested channel means "use the channel persisted by the project". Selecting an
+        // Aspire package from the implicit channel must instead retain ambient NuGet policy for
+        // this operation, which is the stable-channel contract.
+        return PackageChannelNames.Stable;
+    }
+
+    internal static void CreateAdditiveLocalSourceNuGetConfig(
+        DirectoryInfo projectDirectory,
+        PackageMapping[] mappings,
+        bool packageSourceMappingEnabled)
+    {
+        var localMappings = mappings
+            .Where(static mapping => !mapping.Source.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var localSources = localMappings
+            .Select(static mapping => mapping.Source)
+            .Distinct(PackageSourceIdentity.Comparer);
+        var configuration = new XElement(
+            "configuration",
+            new XElement(
+                "packageSources",
+                localSources.Select(static source =>
+                    new XElement(
+                        "add",
+                        new XAttribute("key", source),
+                        new XAttribute("value", source)))));
+
+        if (packageSourceMappingEnabled)
+        {
+            // NuGet retains the higher-precedence key when the same source value exists in an
+            // inherited config, so the child mapping must use the exact local key written above.
+            configuration.Add(
+                new XElement(
+                    "packageSourceMapping",
+                    localMappings
+                        .GroupBy(static mapping => mapping.Source, PackageSourceIdentity.Comparer)
+                        .Select(static group =>
+                            new XElement(
+                                "packageSource",
+                                new XAttribute("key", group.Key),
+                                group.Select(static mapping =>
+                                    new XElement(
+                                        "package",
+                                        new XAttribute("pattern", mapping.PackageFilter)))))));
+        }
+
+        new XDocument(configuration).Save(
+            Path.Combine(projectDirectory.FullName, "nuget.config"));
+    }
+
+    private static async Task<IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>> GetAllPackageVersions(
+        DirectoryInfo workingDirectory,
+        IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages,
+        string? source,
+        CancellationToken cancellationToken)
     {
         var distinctPackageIds = possiblePackages.DistinctBy(package => package.Package.Id);
         var channels = possiblePackages.Select(package => package.Channel).Distinct();
+        var sourceMappings = source is null
+            ? null
+            : PackageSourceOverrideMappings.CreateForSourceOnlyOperations(source);
 
         var versions = new List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>();
         foreach (var channel in channels)
         {
             foreach (var package in distinctPackageIds)
             {
-                var packages = await channel.GetPackageVersionsAsync(package.Package.Id, workingDirectory, cancellationToken);
+                var packages = await channel.GetPackageVersionsAsync(
+                    package.Package.Id,
+                    workingDirectory,
+                    sourceMappings ?? channel.Mappings,
+                    cancellationToken);
                 versions.AddRange(packages.Select(p => (FriendlyName: package.FriendlyName, Package: p, Channel: channel)));
             }
         }
@@ -467,6 +574,7 @@ internal sealed class AddCommand : BaseCommand
         IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages,
         string? preferredVersion,
         string? configuredChannel,
+        string? source,
         CancellationToken cancellationToken,
         bool promptForSinglePackage = false)
     {
@@ -498,7 +606,7 @@ internal sealed class AddCommand : BaseCommand
 
             var allVersions = await InteractionService.ShowStatusAsync(
                 string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SearchingForSpecifiedPackageVersion, selectedPackage.Package.Id, preferredVersion),
-                async () => await GetAllPackageVersions(workingDirectory, packageVersions, cancellationToken));
+                async () => await GetAllPackageVersions(workingDirectory, packageVersions, source, cancellationToken));
             var matchedPreferredVersionPackage = allVersions.FirstOrDefault(packageVersion => packageVersion.Package.Version == preferredVersion);
             if (matchedPreferredVersionPackage.Package is not null)
             {
@@ -579,6 +687,7 @@ internal sealed class AddCommand : BaseCommand
         string? searchTerm,
         string? preferredVersion,
         string? configuredChannel,
+        string? source,
         CancellationToken cancellationToken,
         bool promptForSinglePackage = false)
     {
@@ -587,7 +696,14 @@ internal sealed class AddCommand : BaseCommand
             InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.NoPackagesMatchedSearchTerm, searchTerm));
         }
 
-        return await GetPackageByInteractiveFlow(workingDirectory, possiblePackages, preferredVersion, configuredChannel, cancellationToken, promptForSinglePackage);
+        return await GetPackageByInteractiveFlow(
+            workingDirectory,
+            possiblePackages,
+            preferredVersion,
+            configuredChannel,
+            source,
+            cancellationToken,
+            promptForSinglePackage);
     }
 
 }

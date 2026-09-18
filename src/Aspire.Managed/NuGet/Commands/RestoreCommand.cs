@@ -66,9 +66,11 @@ public static class RestoreCommand
         };
         command.Options.Add(sourceOption);
 
-        var configOption = new Option<string?>("--nuget-config")
+        var configOption = new Option<string[]>("--nuget-config")
         {
-            Description = "Path to nuget.config file"
+            Description = "NuGet.config path, ordered from highest to lowest precedence",
+            DefaultValueFactory = _ => [],
+            AllowMultipleArgumentsPerToken = true
         };
         command.Options.Add(configOption);
 
@@ -98,7 +100,7 @@ public static class RestoreCommand
             var runtimeIdentifier = parseResult.GetValue(runtimeIdentifierOption);
             var output = parseResult.GetValue(outputOption)!;
             var sources = parseResult.GetValue(sourceOption) ?? [];
-            var nugetConfigPath = parseResult.GetValue(configOption);
+            var nugetConfigPaths = parseResult.GetValue(configOption) ?? [];
             var workingDir = parseResult.GetValue(workingDirOption);
             var noNugetOrg = parseResult.GetValue(noNugetOrgOption);
             var verbose = parseResult.GetValue(verboseOption);
@@ -120,7 +122,7 @@ public static class RestoreCommand
                 packages.Add((parts[0], parts[1]));
             }
 
-            return await ExecuteRestoreAsync(packages, framework, runtimeIdentifier, output, sources, nugetConfigPath, workingDir, noNugetOrg, verbose).ConfigureAwait(false);
+            return await ExecuteRestoreAsync(packages, framework, runtimeIdentifier, output, sources, nugetConfigPaths, workingDir, noNugetOrg, verbose).ConfigureAwait(false);
         });
 
         return command;
@@ -132,7 +134,7 @@ public static class RestoreCommand
         string? runtimeIdentifier,
         string output,
         string[] cliSources,
-        string? nugetConfigPath,
+        string[] nugetConfigPaths,
         string? workingDir,
         bool noNugetOrg,
         bool verbose)
@@ -144,9 +146,10 @@ public static class RestoreCommand
 
         try
         {
-            // Load NuGet settings once — handles working dir, config file, and machine-wide settings.
             var machineWideSettings = new XPlatMachineWideSetting();
-            var settings = Settings.LoadDefaultSettings(workingDir, nugetConfigPath, machineWideSettings);
+            var settings = nugetConfigPaths.Length > 0
+                ? Settings.LoadSettingsGivenConfigPaths(nugetConfigPaths)
+                : Settings.LoadDefaultSettings(workingDir, configFileName: null, machineWideSettings);
 
             if (verbose)
             {
@@ -160,7 +163,7 @@ public static class RestoreCommand
                 {
                     Console.WriteLine($"Working dir: {workingDir}");
                 }
-                if (nugetConfigPath is not null)
+                foreach (var nugetConfigPath in nugetConfigPaths)
                 {
                     Console.WriteLine($"NuGet config: {nugetConfigPath}");
                 }
@@ -232,7 +235,7 @@ public static class RestoreCommand
         }
     }
 
-    private static List<PackageSource> ResolvePackageSources(ISettings settings, string[] cliSources, bool noNugetOrg)
+    internal static List<PackageSource> ResolvePackageSources(ISettings settings, string[] cliSources, bool noNugetOrg)
     {
         // Load enabled sources from NuGet config
         var provider = new PackageSourceProvider(settings);
@@ -241,9 +244,10 @@ public static class RestoreCommand
         // Append CLI --source values (matching NuGet's behavior of merging, not replacing)
         foreach (var cliSource in cliSources)
         {
-            if (!sources.Any(s => s.Source.Equals(cliSource, StringComparison.OrdinalIgnoreCase)))
+            var configuredSource = sources.FirstOrDefault(source => AreEquivalentPackageSources(source.Source, cliSource));
+            if (configuredSource is null)
             {
-                sources.Add(new PackageSource(cliSource));
+                sources.Add(new PackageSource(cliSource, cliSource));
             }
         }
 
@@ -261,7 +265,47 @@ public static class RestoreCommand
         return sources;
     }
 
-    private static PackageSpec BuildPackageSpec(
+    private static bool AreEquivalentPackageSources(string first, string second)
+    {
+        var firstIsAbsoluteUri = Uri.TryCreate(first, UriKind.Absolute, out var firstUri);
+        var secondIsAbsoluteUri = Uri.TryCreate(second, UriKind.Absolute, out var secondUri);
+        if (firstIsAbsoluteUri != secondIsAbsoluteUri)
+        {
+            return false;
+        }
+
+        if (firstUri is not null && secondUri is not null)
+        {
+            if (firstUri.IsFile || secondUri.IsFile)
+            {
+                return firstUri.IsFile &&
+                    secondUri.IsFile &&
+                    string.Equals(firstUri.Host, secondUri.Host, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(
+                        firstUri.LocalPath,
+                        secondUri.LocalPath,
+                        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+            }
+
+            // URI schemes and hosts are case-insensitive, while paths, queries, fragments, and
+            // user information can identify different package sources.
+            // https://www.rfc-editor.org/rfc/rfc3986#section-6.2.2.1
+            return string.Equals(firstUri.Scheme, secondUri.Scheme, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(firstUri.IdnHost, secondUri.IdnHost, StringComparison.OrdinalIgnoreCase) &&
+                firstUri.Port == secondUri.Port &&
+                string.Equals(firstUri.UserInfo, secondUri.UserInfo, StringComparison.Ordinal) &&
+                string.Equals(firstUri.AbsolutePath, secondUri.AbsolutePath, StringComparison.Ordinal) &&
+                string.Equals(firstUri.Query, secondUri.Query, StringComparison.Ordinal) &&
+                string.Equals(firstUri.Fragment, secondUri.Fragment, StringComparison.Ordinal);
+        }
+
+        return string.Equals(
+            first,
+            second,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    }
+
+    internal static PackageSpec BuildPackageSpec(
         List<(string Id, string Version)> packages,
         NuGetFramework framework,
         string? runtimeIdentifier,
@@ -300,6 +344,7 @@ public static class RestoreCommand
             ProjectStyle = ProjectStyle.PackageReference,
             OutputPath = outputPath,
             PackagesPath = SettingsUtility.GetGlobalPackagesFolder(settings),
+            FallbackFolders = SettingsUtility.GetFallbackPackageFolders(settings).ToList(),
             OriginalTargetFrameworks = [tfmShort],
             ConfigFilePaths = settings.GetConfigFilePaths().ToList(),
         };

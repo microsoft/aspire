@@ -71,7 +71,7 @@ internal static class NuGetPackageAssetResolver
                 $"Target framework '{framework}' not found in assets file. Available targets: {string.Join(", ", lockFile.Targets.Select(t => t.TargetFramework.GetShortFolderName()))}");
         }
 
-        var packagesPath = GetPackagesPath(lockFile);
+        var packageFolders = GetPackageFolders(lockFile);
         var targetFramework = target.TargetFramework.GetShortFolderName();
         var assets = new List<NuGetPackageAsset>();
         var skippedCount = 0;
@@ -88,7 +88,7 @@ internal static class NuGetPackageAssetResolver
             var (libraryAssets, librarySkippedCount) = ResolveLibrary(
                 library,
                 packageLibrary,
-                packagesPath,
+                packageFolders,
                 targetFramework,
                 runtimeIdentifiers,
                 verboseLog);
@@ -98,7 +98,7 @@ internal static class NuGetPackageAssetResolver
 
         return new NuGetPackageAssetResolution
         {
-            PackagesPath = packagesPath,
+            PackagesPath = packageFolders[0],
             TargetFramework = targetFramework,
             RuntimeIdentifier = effectiveRuntimeIdentifier,
             LibraryCount = target.Libraries.Count,
@@ -114,24 +114,30 @@ internal static class NuGetPackageAssetResolver
             ?? lockFile.GetTarget(nugetFramework, runtimeIdentifier: null);
     }
 
-    private static string GetPackagesPath(LockFile lockFile)
+    private static IReadOnlyList<string> GetPackageFolders(LockFile lockFile)
     {
-        var packagesPath = lockFile.PackageFolders.FirstOrDefault()?.Path;
-        if (!string.IsNullOrEmpty(packagesPath))
+        var packageFolders = lockFile.PackageFolders
+            .Select(static folder => folder.Path)
+            .Where(static path => !string.IsNullOrEmpty(path))
+            .ToArray();
+        if (packageFolders.Length > 0)
         {
-            return packagesPath;
+            return packageFolders;
         }
 
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".nuget",
-            "packages");
+        return
+        [
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".nuget",
+                "packages")
+        ];
     }
 
     private static (IReadOnlyList<NuGetPackageAsset> Assets, int SkippedCount) ResolveLibrary(
         LockFileTargetLibrary library,
         LockFileLibrary? packageLibrary,
-        string packagesPath,
+        IReadOnlyList<string> packageFolders,
         string targetFramework,
         IReadOnlyList<string> runtimeIdentifiers,
         Action<string>? verboseLog)
@@ -143,11 +149,17 @@ internal static class NuGetPackageAssetResolver
 
         var libraryName = library.Name ?? string.Empty;
         var libraryVersion = library.Version?.ToString() ?? string.Empty;
-        var packagePath = Path.Combine(packagesPath, libraryName.ToLowerInvariant(), libraryVersion);
+        var packageRelativePath = Path.Combine(libraryName.ToLowerInvariant(), libraryVersion);
+        // The assets file orders the writable global packages folder before configured fallback
+        // folders. Use the first folder containing the package so probing follows restore precedence.
+        var packagePath = packageFolders
+            .Select(folder => Path.Combine(folder, packageRelativePath))
+            .FirstOrDefault(Directory.Exists);
 
-        if (!Directory.Exists(packagePath))
+        if (packagePath is null)
         {
-            verboseLog?.Invoke($"  Skip (not found): {libraryName}/{libraryVersion} at {packagePath}");
+            verboseLog?.Invoke(
+                $"  Skip (not found): {libraryName}/{libraryVersion} under {string.Join(", ", packageFolders)}");
             return ([], 1);
         }
 

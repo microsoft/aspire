@@ -1,20 +1,23 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Text.Json;
+using System.Xml.Linq;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
-using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -1383,6 +1386,90 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddCommandUsesChannelMappingsWhenSearchingForSpecifiedVersion()
+    {
+        const string source = "https://packages.example.com/v3/index.json";
+        var selectedPackageVersion = string.Empty;
+        string? exactVersionNuGetConfig = null;
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+                Task.FromResult<IEnumerable<NuGetPackage>>(
+                    [CreatePackage("Aspire.Hosting.Redis", "13.3.0")]),
+            GetPackageVersionsAsyncCallback = (_, _, _, nugetConfigFile, _, _) =>
+            {
+                exactVersionNuGetConfig = nugetConfigFile is null
+                    ? null
+                    : File.ReadAllText(nugetConfigFile.FullName);
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                    [CreatePackage("Aspire.Hosting.Redis", "13.2.0")]);
+            }
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            "daily",
+            PackageChannelQuality.Stable,
+            [new PackageMapping("Aspire*", source)],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "daily"
+            }
+            """);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+            };
+        });
+        var tsFactory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        tsFactory.Project.AddPackageAsyncCallback = (context, _) =>
+        {
+            selectedPackageVersion = context.PackageVersion;
+            return Task.FromResult(true);
+        };
+        services.AddSingleton<IAppHostProjectFactory>(tsFactory);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add redis --version 13.2.0");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal("13.2.0", selectedPackageVersion);
+        Assert.NotNull(exactVersionNuGetConfig);
+        var config = XDocument.Parse(exactVersionNuGetConfig);
+        Assert.Equal(
+            source,
+            config.Root?
+                .Element("packageSources")?
+                .Elements("add")
+                .Single()
+                .Attribute("value")?
+                .Value);
+        Assert.Equal(
+            "Aspire*",
+            config.Root?
+                .Element("packageSourceMapping")?
+                .Element("packageSource")?
+                .Element("package")?
+                .Attribute("pattern")?
+                .Value);
+    }
+
+    [Fact]
     public async Task AddCommandInteractiveDoesNotPromptForVersionWhenSpecifiedVersionIsFoundViaExactMatchSearch()
     {
         var promptedForIntegration = false;
@@ -1992,13 +2079,19 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddCommandPreservesSourceArgumentInBothCommands()
+    public async Task AddCommandUsesSourceForDiscoveryAndPackageRestore()
     {
         // Arrange
         string? addUsedSource = null;
+        var searchConfigs = new ConcurrentBag<(bool HasClear, string[] Sources)>();
         const string expectedSource = "https://custom-nuget-source.test/v3/index.json";
 
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "unavailable-channel"
+            }
+            """);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
 
@@ -2017,8 +2110,17 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = (sp) =>
             {
                 var runner = new TestDotNetCliRunner();
-                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetConfigFile, useCache, options, cancellationToken) =>
                 {
+                    Assert.NotNull(nugetConfigFile);
+                    var config = XDocument.Load(nugetConfigFile.FullName);
+                    searchConfigs.Add((
+                        config.Descendants("packageSources").Elements("clear").Any(),
+                        config.Descendants("packageSources")
+                            .Elements("add")
+                            .Select(element => element.Attribute("value")!.Value)
+                            .ToArray()));
+
                     var redisPackage = new NuGetPackage()
                     {
                         Id = "Aspire.Hosting.Redis",
@@ -2055,6 +2157,34 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // Assert
         Assert.Equal(0, exitCode);
         Assert.Equal(expectedSource, addUsedSource);
+        Assert.NotEmpty(searchConfigs);
+        Assert.All(searchConfigs, searchConfig =>
+        {
+            Assert.True(searchConfig.HasClear);
+            Assert.Equal([expectedSource], searchConfig.Sources);
+        });
+    }
+
+    [Fact]
+    public async Task AddCommandRejectsCredentialBearingSourceBeforeDiscovery()
+    {
+        const string source = "https://user:secret@custom-nuget-source.test/v3/index.json";
+        var testInteractionService = new TestInteractionService();
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add redis --source {source}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Contains(AddCommandStrings.SourceWithCredentialsNotSupported, testInteractionService.DisplayedErrors);
     }
 
     [Fact]
@@ -2312,7 +2442,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // Create two different channels
         var fakeCache = new FakeNuGetPackageCache();
         var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
-        
+
         var mappings = new[] { new PackageMapping("Aspire*", "https://preview-feed") };
         var explicitChannel = PackageChannel.CreateExplicitChannel("preview", PackageChannelQuality.Prerelease, mappings, fakeCache, new TestFeatures(), NullLogger.Instance);
 
@@ -2652,9 +2782,9 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        
+
         var selectedPackageId = string.Empty;
-        
+
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
@@ -2691,7 +2821,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        
+
         using var provider = services.BuildServiceProvider();
 
         // Act - without hives, should automatically select from implicit channel without prompting
@@ -2795,6 +2925,139 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
         Assert.False(prompted);
         Assert.Equal(cliVersion, selectedVersion);
+    }
+
+    [Fact]
+    public async Task AddCommand_WithInheritedPrHiveSource_WritesMatchingLocalSourceMapping()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectDirectory = workspace.CreateDirectory("AppHost");
+        var localSource = workspace.CreateDirectory(Path.Combine(".aspire", "hives", "pr-12345", "packages")).FullName;
+        var parentConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        File.WriteAllText(
+            parentConfigPath,
+            $"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="aspire-0" value="{localSource}" />
+                <add key="aspire-1" value="https://api.nuget.org/v3/index.json" />
+              </packageSources>
+              <packageSourceMapping>
+                <packageSource key="aspire-0">
+                  <package pattern="Aspire*" />
+                </packageSource>
+                <packageSource key="aspire-1">
+                  <package pattern="*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        Assert.True(await NuGetSettingsProvider.HasPackageSourceMappingAsync(
+            [parentConfigPath],
+            CancellationToken.None));
+
+        AddCommand.CreateAdditiveLocalSourceNuGetConfig(
+            projectDirectory,
+            [
+                new PackageMapping("Aspire*", localSource),
+                new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+            ],
+            packageSourceMappingEnabled: true);
+
+        var config = XDocument.Load(Path.Combine(projectDirectory.FullName, "nuget.config"));
+        var localSourceElement = Assert.Single(config
+            .Descendants("packageSources")
+            .Elements("add"));
+        Assert.Equal(localSource, localSourceElement.Attribute("key")?.Value);
+        Assert.Equal(localSource, localSourceElement.Attribute("value")?.Value);
+
+        var localSourceMapping = Assert.Single(
+            config.Descendants("packageSourceMapping").Elements("packageSource"));
+        Assert.Equal(localSource, localSourceMapping.Attribute("key")?.Value);
+        var packagePattern = Assert.Single(localSourceMapping.Elements("package"));
+        Assert.Equal("Aspire*", packagePattern.Attribute("pattern")?.Value);
+
+        var higherPrecedenceConfigPath = Path.Combine(projectDirectory.FullName, "NuGet.Config");
+        File.WriteAllText(
+            higherPrecedenceConfigPath,
+            """
+            <configuration>
+              <packageSourceMapping>
+                <clear />
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        Assert.False(await NuGetSettingsProvider.HasPackageSourceMappingAsync(
+            [higherPrecedenceConfigPath, parentConfigPath],
+            CancellationToken.None));
+
+        var projectWithoutInheritedMapping = workspace.CreateDirectory("AppHostWithoutInheritedMapping");
+        AddCommand.CreateAdditiveLocalSourceNuGetConfig(
+            projectWithoutInheritedMapping,
+            [new PackageMapping("Aspire*", localSource)],
+            packageSourceMappingEnabled: false);
+
+        var configWithoutInheritedMapping = XDocument.Load(
+            Path.Combine(projectWithoutInheritedMapping.FullName, "nuget.config"));
+        Assert.Empty(configWithoutInheritedMapping.Descendants("packageSourceMapping"));
+    }
+
+    [Fact]
+    public async Task HasPackageSourceMappingAsync_MatchesNuGetSectionAndItemSemantics()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var nonCanonicalSectionPath = Path.Combine(workspace.WorkspaceRoot.FullName, "noncanonical.config");
+        var mappingThenClearPath = Path.Combine(workspace.WorkspaceRoot.FullName, "mapping-then-clear.config");
+        var clearThenMappingPath = Path.Combine(workspace.WorkspaceRoot.FullName, "clear-then-mapping.config");
+
+        File.WriteAllText(
+            nonCanonicalSectionPath,
+            """
+            <configuration>
+              <PackageSourceMapping>
+                <packageSource key="private">
+                  <package pattern="*" />
+                </packageSource>
+              </PackageSourceMapping>
+            </configuration>
+            """);
+        File.WriteAllText(
+            mappingThenClearPath,
+            """
+            <configuration>
+              <packageSourceMapping>
+                <packageSource key="private">
+                  <package pattern="*" />
+                </packageSource>
+                <clear />
+              </packageSourceMapping>
+            </configuration>
+            """);
+        File.WriteAllText(
+            clearThenMappingPath,
+            """
+            <configuration>
+              <packageSourceMapping>
+                <clear />
+                <PackageSource key="private">
+                  <package pattern="*" />
+                </PackageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        Assert.False(await NuGetSettingsProvider.HasPackageSourceMappingAsync(
+            [nonCanonicalSectionPath],
+            CancellationToken.None));
+        Assert.False(await NuGetSettingsProvider.HasPackageSourceMappingAsync(
+            [mappingThenClearPath],
+            CancellationToken.None));
+        Assert.True(await NuGetSettingsProvider.HasPackageSourceMappingAsync(
+            [clearThenMappingPath],
+            CancellationToken.None));
     }
 
     [Fact]
@@ -3050,11 +3313,20 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(string.Empty, addedPackageId);
     }
 
-    [Fact]
-    public async Task AddCommandPolyglotAppHostAddsPolyglotIntegration()
+    [Theory]
+    [InlineData("redis", "Aspire.Hosting.Redis", "Aspire.Hosting.Redis", null, true)]
+    [InlineData("Aspire.Hosting.Redis", "Aspire.Hosting.Redis", "Aspire.Hosting.Redis", null, true)]
+    [InlineData("CommunityToolkit.Aspire.Hosting.Redis", "CommunityToolkit.Aspire.Hosting.Redis", "CommunityToolkit.Aspire.Hosting.Redis", null, true)]
+    [InlineData("CommunityToolkit.Aspire.Hosting.Redis", "CommunityToolkit.Aspire.Hosting.Redis", null, null, false)]
+    public async Task AddCommandPolyglotAppHostPassesSelectedRestorePolicy(
+        string integrationName,
+        string packageId,
+        string? expectedSourcePackagePattern,
+        string? expectedRequestedChannel,
+        bool includeSource = true)
     {
-        // The polyglot-compatible integration (Redis) survives filtering and installs normally.
-        var addedPackageId = string.Empty;
+        AddPackageContext? addPackageContext = null;
+        const string sourceOverride = "https://example.invalid/aspire";
 
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
@@ -3063,15 +3335,15 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var implicitCache = new FakeNuGetPackageCache
         {
             GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
-                [CreatePackage("Aspire.Hosting.Redis", "1.0.0"), CreatePackage("Aspire.Hosting.Foo", "1.0.0")]),
+                [CreatePackage(packageId, "1.0.0")]),
             GetPackagesAsyncCallback = (_, query, _, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
-                query == "tags:polyglot" ? [CreatePackage("Aspire.Hosting.Redis", "1.0.0")] : [])
+                query == "tags:polyglot" ? [CreatePackage(packageId, "1.0.0")] : [])
         };
 
         var tsFactory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
         tsFactory.Project.AddPackageAsyncCallback = (context, _) =>
         {
-            addedPackageId = context.PackageId;
+            addPackageContext = context;
             return Task.FromResult(true);
         };
 
@@ -3092,12 +3364,126 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse($"add Aspire.Hosting.Redis --apphost \"{appHostFile.FullName}\"");
+        var sourceArgument = includeSource ? $" --source {sourceOverride}" : string.Empty;
+        var result = command.Parse($"add {integrationName} --apphost \"{appHostFile.FullName}\"{sourceArgument}");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
-        Assert.Equal("Aspire.Hosting.Redis", addedPackageId);
+        Assert.NotNull(addPackageContext);
+        Assert.Equal(packageId, addPackageContext.PackageId);
+        Assert.Equal(expectedRequestedChannel, addPackageContext.RequestedChannel);
+        Assert.Equal(includeSource ? sourceOverride : null, addPackageContext.Source);
+        Assert.Equal(expectedSourcePackagePattern, addPackageContext.SourcePackagePattern);
+    }
+
+    [Fact]
+    public async Task AddCommandPolyglotAppHostResolvesRelativeSourceAgainstInvocationDirectory()
+    {
+        AddPackageContext? addPackageContext = null;
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("src");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        var sourceDirectory = workspace.CreateDirectory("feed");
+        File.WriteAllText(
+            Path.Combine(sourceDirectory.FullName, "Aspire.Hosting.Redis.1.0.0.nupkg"),
+            string.Empty);
+
+        var implicitCache = new FakeNuGetPackageCache();
+
+        var tsFactory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        tsFactory.Project.AddPackageAsyncCallback = (context, _) =>
+        {
+            addPackageContext = context;
+            return Task.FromResult(true);
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance)
+                ])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(tsFactory);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add redis --apphost \"{appHostFile.FullName}\" --source ./feed");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(addPackageContext);
+        Assert.Equal(sourceDirectory.FullName, addPackageContext.Source);
+    }
+
+    [Fact]
+    public async Task AddCommandPolyglotAppHostWithLocalChannelDoesNotWriteNuGetConfig()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+
+        const string channelName = "pr-12345";
+        const string packageVersion = "13.2.0-pr.12345.gabc";
+        workspace.CreateDirectory(Path.Combine(".aspire", "hives", channelName));
+        var localSource = workspace.CreateDirectory("packages");
+        File.WriteAllText(
+            Path.Combine(localSource.FullName, $"Aspire.Hosting.Redis.{packageVersion}.nupkg"),
+            string.Empty);
+
+        var localChannel = PackageChannel.CreateExplicitChannel(
+            channelName,
+            PackageChannelQuality.Both,
+            [
+                new PackageMapping("Aspire*", localSource.FullName),
+                new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+            ],
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: packageVersion);
+
+        AddPackageContext? addPackageContext = null;
+        var tsFactory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        tsFactory.Project.AddPackageAsyncCallback = (context, _) =>
+        {
+            addPackageContext = context;
+            return Task.FromResult(true);
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([localChannel])
+            };
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                GetNuGetConfigPathsAsyncCallback = (_, _, _) => (0, [])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(tsFactory);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add Aspire.Hosting.Redis --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(addPackageContext);
+        Assert.Equal(channelName, addPackageContext.RequestedChannel);
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
     }
 
     [Fact]

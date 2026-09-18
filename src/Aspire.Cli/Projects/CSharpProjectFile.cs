@@ -89,18 +89,20 @@ internal sealed class CSharpProjectFile(string sdk = "Microsoft.NET.Sdk")
             if (integrationReference.Name.StartsWith("Aspire.Hosting", StringComparison.OrdinalIgnoreCase) &&
                 !integrationReference.DisableLocalProjectSubstitution)
             {
-                if (TryGetRepositoryProject(repoRoot, integrationReference.Name, out var projectPath) &&
-                    addedIntegrations.Add(integrationReference.Name))
+                if (TryGetRepositoryProject(repoRoot, integrationReference.Name, out var projectPath))
                 {
-                    AddProjectReference(
-                        projectPath,
-                        isAspireProjectResource,
-                        referenceOutputAssembly,
-                        privateReference,
-                        addedProjectPaths);
-                }
+                    if (addedIntegrations.Add(integrationReference.Name))
+                    {
+                        AddProjectReference(
+                            projectPath,
+                            isAspireProjectResource,
+                            referenceOutputAssembly,
+                            privateReference,
+                            addedProjectPaths);
+                    }
 
-                continue;
+                    continue;
+                }
             }
 
             if (integrationReference.Version is null)
