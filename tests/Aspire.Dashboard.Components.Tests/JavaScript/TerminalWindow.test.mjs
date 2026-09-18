@@ -477,6 +477,21 @@ test("reopening a closed window suppresses its obsolete queued close notificatio
     ]);
 });
 
+test("a browser close failure still forgets the handle and releases polling", async () => {
+    const { button } = register();
+    button.click();
+    await flushNotifications();
+    notifications.length = 0;
+    button.click();
+    mock.method(calls[0].popup, "close", () => { throw new Error("Browser close denied"); });
+
+    assert.throws(() => terminalWindows.closeTerminalWindow("terminal"), /Browser close denied/);
+    assert.equal(terminalWindows.isTerminalWindowOpen("terminal"), false);
+    assert.equal(poll, null);
+    await flushNotifications();
+    assert.deepEqual(notifications, []);
+});
+
 test("failed browser operations and rejected notifications are observed without poisoning later clicks", async () => {
     const errors = [];
     const warnings = [];
@@ -810,6 +825,114 @@ describe("cross-document terminal tracking", async () => {
             assert.deepEqual(recovered.notifications, []);
         }
     });
+
+    for (const failure of ["corrupt-json", "invalid-record", "read-denied", "remove-denied"]) {
+        test(`explicit return releases its live handle even when durable revocation fails: ${failure}`, async () => {
+            const browser = createBrowser();
+            const { main, launcher, popup } = await openCoordinatedWindow(browser);
+            const store = browser.stores.get(main.window.location.origin);
+            const recordKey = [...store.values.keys()].find(key => key.startsWith("aspire-terminal-window:"));
+            const raw = store.getItem(recordKey);
+            let restore = () => {};
+            if (failure === "corrupt-json") {
+                store.setItem(recordKey, "{invalid-json");
+            } else if (failure === "invalid-record") {
+                store.setItem(recordKey, JSON.stringify({ ...JSON.parse(raw), version: 2 }));
+            } else {
+                const method = failure === "read-denied" ? "getItem" : "removeItem";
+                const fault = mock.method(main.window.localStorage, method, () => { throw new Error("Storage denied"); });
+                restore = () => fault.mock.restore();
+            }
+
+            main.notifications.length = 0;
+            launcher.button.click(); // Queue an acknowledgement that must not survive the explicit return.
+            assert.throws(() => main.module.closeTerminalWindow("terminal"),
+                failure === "corrupt-json" ? SyntaxError
+                    : failure === "invalid-record" ? /Invalid detached terminal window record/ : /Storage denied/);
+            restore();
+            assert.equal(popup.window.closed, true);
+            assert.equal(main.module.isTerminalWindowOpen("terminal"), false);
+            assert.equal(main.window.timers.size, 0);
+            emit(main.window.events, "message", browser.messages[0]);
+            await flushNotifications();
+            assert.deepEqual(main.notifications, []);
+            assert.equal(store.getItem(recordKey),
+                failure === "corrupt-json" || failure === "invalid-record" ? null : raw);
+
+            if (store.getItem(recordKey) === null) {
+                const reloadedPopup = await loadDocument(popup.window);
+                assert.equal(reloadedPopup.registerPopup(), false);
+            }
+        });
+    }
+
+    test("explicit return of an old handle preserves a newer durable generation", async () => {
+        const browser = createBrowser();
+        const { main, popup } = await openCoordinatedWindow(browser);
+        const store = browser.stores.get(main.window.location.origin);
+        const recordKey = [...store.values.keys()].find(key => key.startsWith("aspire-terminal-window:"));
+        const record = JSON.parse(store.getItem(recordKey));
+        const url = new URL(record.url);
+        url.searchParams.set("windowGeneration", "replacement");
+        const replacement = JSON.stringify({ ...record, generation: "replacement", url: url.href });
+        store.setItem(recordKey, replacement);
+
+        main.module.closeTerminalWindow("terminal");
+        assert.equal(popup.window.closed, true);
+        assert.equal(main.module.isTerminalWindowOpen("terminal"), false);
+        assert.equal(store.getItem(recordKey), replacement);
+    });
+
+    for (const failure of ["later-record", "discovery"]) {
+        for (const reload of [false, true]) {
+            test(`failed adoption leaves no partial acknowledgements or ownership: ${failure}, reload=${reload}`, async () => {
+                const browser = createBrowser();
+                const { main, launcher: oldLauncher, popup } = await openCoordinatedWindow(browser);
+                main.module.unregisterTerminalWindowButton(oldLauncher.id);
+                const current = reload ? await loadDocument(main.window) : main;
+                const launcher = current.register();
+                const store = browser.stores.get(main.window.location.origin);
+                const recordKey = [...store.values.keys()].find(key => key.startsWith("aspire-terminal-window:"));
+                const identity = JSON.parse(recordKey.slice("aspire-terminal-window:".length));
+                identity[2] = "later";
+                const laterKey = "aspire-terminal-window:" + JSON.stringify(identity);
+                let restore;
+                if (failure === "later-record") {
+                    store.setItem(laterKey, "{invalid-json");
+                    restore = () => store.removeItem(laterKey);
+                } else {
+                    const fault = mock.method(main.window.localStorage, "setItem", () => { throw new Error("Discovery denied"); });
+                    restore = () => fault.mock.restore();
+                }
+                current.notifications.length = 0;
+                assert.throws(() => current.module.adoptTerminalWindows(launcher.id, ["terminal", "later"]),
+                    failure === "later-record" ? SyntaxError : /Discovery denied/);
+                await flushNotifications();
+                const afterFailure = [...current.notifications];
+                const trackedAfterFailure = current.module.isTerminalWindowOpen("terminal");
+
+                // Even if queued acknowledgements are suppressed, a failed batch must not acquire ownership:
+                // a later close callback would clear the failure placeholder without setting batch readiness.
+                popup.window.close();
+                current.poll();
+                await flushNotifications();
+                restore();
+                assert.deepEqual({
+                    afterFailure, afterClose: current.notifications, trackedAfterFailure,
+                }, {
+                    afterFailure: [], afterClose: [], trackedAfterFailure: !reload,
+                });
+                assert.equal(main.window.openCalls.length, 1);
+                assert.equal(popup.window.focusCalls, 0);
+
+                await current.module.adoptTerminalWindows(launcher.id, ["terminal", "later"]);
+                assert.deepEqual(current.notifications, reload
+                    ? [["OnTerminalWindowOpenedAsync", "terminal", "recovering"]]
+                    : []);
+                current.module.closeTerminalWindow("terminal");
+            });
+        }
+    }
 
     test("a blocked or failed native popup does not leave a phantom durable detachment after reload", async () => {
         mock.method(console, "error", () => {});

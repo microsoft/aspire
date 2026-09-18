@@ -19,15 +19,22 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 public partial class TerminalDockTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ReloadRecovery_KeepsPlaceholderUntilExplicitReturnOrConfirmedClosure(bool storageFailure)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ReloadRecovery_KeepsPlaceholderUntilExplicitReturnOrConfirmedClosure(bool storageFailure, bool closeFailure)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var module = TerminalSetupHelpers.SetupTerminalWindows(this);
         var adoption = module.SetupVoid("adoptTerminalWindows", _ => true);
+        if (closeFailure)
+        {
+            // JS reports failed durable revocation after unconditionally releasing its live popup handle.
+            module.SetupVoid("closeTerminalWindow", _ => true).SetException(new JSException("Storage denied"));
+        }
         var cut = RenderComponent<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("terminal"));
@@ -59,6 +66,8 @@ public partial class TerminalDockTests
 
         await cut.InvokeAsync(() => cut.FindAll(".terminal-dock-detached-actions .aspire-button")[1].ClickAsync(new()));
         cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
+        var close = Assert.Single(module.Invocations, i => i.Identifier == "closeTerminalWindow");
+        Assert.Equal("terminal", close.Arguments[0]);
         Assert.Empty(client.ClosedTerminals);
     }
 

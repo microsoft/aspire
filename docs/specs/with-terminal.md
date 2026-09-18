@@ -427,6 +427,13 @@ handle recovery leaves an unconfirmed placeholder until **Focus window** or
 **Return to dock** is used. Focus reuses the named window through user activation;
 Return revokes its generation so delayed discovery cannot restore the old window.
 
+Adoption validates the complete record batch and discovery request before
+transferring live-window ownership or acknowledging any detached pane. A failed
+batch keeps the recovery placeholder rather than partially adopting windows.
+Explicit Return always releases tracking and attempts to close a known live window, even
+if durable storage cleanup fails. Corrupt records are removed when storage is
+writable; storage failures remain visible through the dashboard's warning log.
+
 The terminal frame keeps font decrease/increase buttons, the current font
 size, and the live columns-by-rows selector together in its bottom-right
 footer. A separate Fit button switches to container-sized rows and columns

@@ -136,25 +136,34 @@ export function adoptTerminalWindows(id, keys) {
     // Only adopt the caller's current terminal identities, never every window in this module. In particular,
     // AppHost dock IDs come from its metadata snapshot, not resource names or persisted titles from another run.
     const context = getOpenerContext(launcher.baseUri);
-    const notifications = [];
+    const candidates = [];
     for (const key of keys) {
-        launcher.dockKeys.add(key);
         let entry = openWindows.get(key);
         let record = readRecord(context, key);
         if (entry?.win?.closed) {
             removeRecord(entry);
-            openWindows.delete(key);
             entry = null;
             record = readRecord(context, key);
         }
         if (record && entry?.record?.generation !== record.generation) {
             entry = { win: null, owner: launcher, record, context };
-            openWindows.set(key, entry);
         }
+        candidates.push({ key, entry });
+    }
+    // Validate the whole batch, including the discovery write, before transferring ownership or queuing any
+    // acknowledgements. Otherwise a later failure leaves earlier panes adopted without batch readiness, and a
+    // subsequent close notification removes their failure placeholders without allowing a dock viewer to mount.
+    requestDiscovery(context);
+
+    const notifications = [];
+    for (const { key, entry } of candidates) {
+        launcher.dockKeys.add(key);
         if (!entry) {
+            openWindows.delete(key);
             continue;
         }
 
+        openWindows.set(key, entry);
         entry.owner = launcher;
         notifications.push(notify(launcher, () => {
             if (openWindows.get(key) === entry && entry.owner === launcher && !entry.win?.closed) {
@@ -163,8 +172,6 @@ export function adoptTerminalWindows(id, keys) {
             }
         }));
     }
-    requestDiscovery(context);
-
     // The dock must reconcile these acknowledgements before mounting ANY candidate viewer. Returning just a
     // snapshot could overtake a close/return notification and resurrect a stale detached state.
     return Promise.all(notifications);
@@ -261,19 +268,27 @@ export function focusTerminalWindow(key) {
  */
 export function closeTerminalWindow(key) {
     const entry = openWindows.get(key);
-    // Revocation is durable before returning control to the dock. A suspended or reloading detached page checks
-    // this generation before it mounts again, and a late ready message cannot resurrect a returned window.
-    removeRecord(entry);
-    if (!entry && openerContext) {
-        // Explicit return must also recover from a corrupt record that passive adoption could not parse.
-        window.localStorage.removeItem(recordKey(openerContext, key));
-    }
-    openWindows.delete(key);
+    try {
+        // Attempt durable revocation before returning control to the dock, including corrupt records. Propagate
+        // storage failures to the caller for logging, but never let them leave a known live viewer competing
+        // with the dock that the caller reattaches even when this operation fails.
+        removeRecord(entry, true);
+        if (!entry && openerContext) {
+            window.localStorage.removeItem(recordKey(openerContext, key));
+        }
+    } finally {
+        // Forget the handle before closing it so queued acknowledgements and late ready messages cannot
+        // resurrect this detachment, even if durable storage or the browser close operation fails.
+        openWindows.delete(key);
 
-    if (entry?.win && !entry.win.closed) {
-        entry.win.close();
+        try {
+            if (entry?.win && !entry.win.closed) {
+                entry.win.close();
+            }
+        } finally {
+            stopPollingIfEmpty();
+        }
     }
-    stopPollingIfEmpty();
 }
 
 export function isTerminalWindowOpen(key) {
@@ -353,7 +368,10 @@ function coordinatedWindowName(context, record) {
 }
 
 function readRecord(context, key) {
-    const raw = window.localStorage.getItem(recordKey(context, key));
+    return parseRecord(context, key, window.localStorage.getItem(recordKey(context, key)));
+}
+
+function parseRecord(context, key, raw) {
     if (raw === null) {
         return null;
     }
@@ -369,9 +387,25 @@ function readRecord(context, key) {
     return record;
 }
 
-function removeRecord(entry) {
-    if (entry?.record && readRecord(entry.context, entry.record.key)?.generation === entry.record.generation) {
-        window.localStorage.removeItem(recordKey(entry.context, entry.record.key));
+function removeRecord(entry, removeInvalid = false) {
+    if (!entry?.record) {
+        return;
+    }
+    const key = recordKey(entry.context, entry.record.key);
+    // A failed read cannot establish which generation is stored; do not erase a possible replacement. A
+    // successfully read but invalid record, however, cannot authorize a viewer and explicit return can clear it.
+    const raw = window.localStorage.getItem(key);
+    let record;
+    try {
+        record = parseRecord(entry.context, entry.record.key, raw);
+    } catch (error) {
+        if (removeInvalid) {
+            window.localStorage.removeItem(key);
+        }
+        throw error;
+    }
+    if (record?.generation === entry.record.generation) {
+        window.localStorage.removeItem(key);
     }
 }
 
