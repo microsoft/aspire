@@ -23,6 +23,14 @@ await env2.withDashboard();
 // Test withHttpsUpgrade with no args (uses default)
 await env2.withHttpsUpgrade();
 
+// Test internal load-balancer configuration across AppContainers and Azure.Network.
+const vnet = await builder.addAzureVirtualNetwork("vnet");
+const subnet = await vnet.addSubnet("app-subnet", "10.0.0.0/23");
+await subnet.withServiceDelegation("Microsoft.App/environments");
+const internalEnv = await builder.addAzureContainerAppEnvironment("internal-env");
+await internalEnv.withDelegatedSubnet(subnet);
+await internalEnv.withInternalLoadBalancer(vnet);
+
 // === WithAzureLogAnalyticsWorkspace ===
 // Test withAzureLogAnalyticsWorkspace with a Log Analytics Workspace resource
 const laws = await builder.addAzureLogAnalyticsWorkspace("laws");

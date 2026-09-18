@@ -6,6 +6,7 @@
     <PackageTags>aspire integration hosting azure container cloud appcontainers</PackageTags>
     <Description>Azure container apps resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>
+    <NoWarn>$(NoWarn);AZPROVISION001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,11 +22,17 @@
     <PackageReference Include="Azure.Provisioning.AppContainers" />
     <PackageReference Include="Azure.Provisioning.ContainerRegistry" />
     <PackageReference Include="Azure.Provisioning.OperationalInsights" />
+    <PackageReference Include="Azure.Provisioning.PrivateDns" />
     <PackageReference Include="Azure.Provisioning.KeyVault" />
     <PackageReference Include="Azure.Provisioning.Storage" />
     <ProjectReference Include="..\Aspire.Hosting.Azure\Aspire.Hosting.Azure.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Azure.ContainerRegistry\Aspire.Hosting.Azure.ContainerRegistry.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Azure.OperationalInsights\Aspire.Hosting.Azure.OperationalInsights.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Network\Aspire.Hosting.Azure.Network.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.ApiManagement" />
   </ItemGroup>
 
 </Project>
