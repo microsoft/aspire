@@ -413,7 +413,7 @@ public sealed partial class SqliteTelemetryRepository
         };
     }
 
-    private static TraceQuery BuildSpanQuery(GetSpansRequest context)
+    private TraceQuery BuildSpanQuery(GetSpansRequest context)
     {
         var sql = new StringBuilder("""
             FROM telemetry_spans s
@@ -525,7 +525,16 @@ public sealed partial class SqliteTelemetryRepository
             {
                 var parameterName = $"SpanTextFragment{index}";
                 parameters.Add(parameterName, CreateContainsLikePattern(context.TextFragments[index]));
-                 sql.Append(CultureInfo.InvariantCulture, $"""
+                var displayNameAliasResourceIds = GetResourceIdsMatchingDisplayNameAlias(context.TextFragments[index]);
+                var displayNamePredicate = string.Empty;
+                if (displayNameAliasResourceIds.Length > 0)
+                {
+                    var resourceIdsParameterName = $"SpanTextFragmentResourceIds{index}";
+                    parameters.Add(resourceIdsParameterName, displayNameAliasResourceIds);
+                    displayNamePredicate = $" OR r.resource_id IN @{resourceIdsParameterName} OR pr.resource_id IN @{resourceIdsParameterName}";
+                }
+
+                sql.Append(CultureInfo.InvariantCulture, $"""
                      AND (
                         s.name LIKE @{parameterName} ESCAPE '!' OR
                         s.span_id LIKE @{parameterName} ESCAPE '!' OR
@@ -538,7 +547,7 @@ public sealed partial class SqliteTelemetryRepository
                         sk.kind_name LIKE @{parameterName} ESCAPE '!' OR
                         COALESCE(s.status_message, '') LIKE @{parameterName} ESCAPE '!' OR
                         EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND (a.attribute_key LIKE @{parameterName} ESCAPE '!' OR a.attribute_value LIKE @{parameterName} ESCAPE '!')) OR
-                        EXISTS (SELECT 1 FROM telemetry_span_events e WHERE e.trace_id = s.trace_id AND e.span_id = s.span_id AND e.event_name LIKE @{parameterName} ESCAPE '!')
+                        EXISTS (SELECT 1 FROM telemetry_span_events e WHERE e.trace_id = s.trace_id AND e.span_id = s.span_id AND e.event_name LIKE @{parameterName} ESCAPE '!'){displayNamePredicate}
                     )
                     """);
             }

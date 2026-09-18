@@ -96,33 +96,38 @@ public static partial class OtlpHelpers
                 count++;
                 if (count >= 2)
                 {
-                    var instanceId = resource.InstanceId;
-
-                    // Convert long GUID into a shorter, more human friendly format.
-                    // The last characters are used because version 7 GUIDs created close
-                    // in time share the same leading characters, e.g. Guid.CreateVersion7().
-                    // Before: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
-                    // After:  eeeeeeee
-                    if (instanceId != null && Guid.TryParse(instanceId, out var guid))
-                    {
-                        Span<char> chars = stackalloc char[32];
-                        var result = guid.TryFormat(chars, out var charsWritten, format: "N");
-                        Debug.Assert(result, "Guid.TryFormat not successful.");
-
-                        instanceId = chars.Slice(charsWritten - 8, 8).ToString();
-                    }
-
-                    if (instanceId == null)
-                    {
-                        return item.ResourceName;
-                    }
-
-                    return $"{item.ResourceName}-{instanceId}";
+                    return GetResourceName(resource, includeInstanceId: true);
                 }
             }
         }
 
         return resource.ResourceName;
+    }
+
+    internal static string GetResourceName(IOtlpResource resource, bool includeInstanceId)
+    {
+        if (!includeInstanceId)
+        {
+            return resource.ResourceName;
+        }
+
+        var instanceId = resource.InstanceId;
+
+        // Convert long GUID into a shorter, more human friendly format.
+        // The last characters are used because version 7 GUIDs created close
+        // in time share the same leading characters, e.g. Guid.CreateVersion7().
+        // Before: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+        // After:  eeeeeeee
+        if (instanceId is not null && Guid.TryParse(instanceId, out var guid))
+        {
+            Span<char> chars = stackalloc char[32];
+            var result = guid.TryFormat(chars, out var charsWritten, format: "N");
+            Debug.Assert(result, "Guid.TryFormat not successful.");
+
+            instanceId = chars.Slice(charsWritten - 8, 8).ToString();
+        }
+
+        return instanceId is null ? resource.ResourceName : $"{resource.ResourceName}-{instanceId}";
     }
 
     /// <summary>
