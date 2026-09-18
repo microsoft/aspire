@@ -470,6 +470,7 @@ affected_project_rules:
       - Aspire.Hosting.Azure.ContainerRegistry
       - Aspire.Hosting.Azure.CosmosDB
       - Aspire.Hosting.Azure.EventHubs
+      - Aspire.Hosting.Azure.FrontDoor
       - Aspire.Hosting.Azure.Functions
       - Aspire.Hosting.Azure.KeyVault
       - Aspire.Hosting.Azure.Kubernetes

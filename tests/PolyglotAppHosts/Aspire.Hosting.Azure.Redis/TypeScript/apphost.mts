@@ -1,9 +1,29 @@
-import { createBuilder } from './.aspire/modules/aspire.mjs';
+import { RedisEnterpriseTlsVersion, RedisSkuFamily, RedisSkuName, createBuilder } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 
 const keyVault = await builder.addAzureKeyVault("vault");
 const cache = await builder.addAzureManagedRedis("cache");
+await cache.configureInfrastructure(async infrastructure => {
+    const cluster = await infrastructure.getRedisEnterpriseCluster();
+    await cluster.minimumTlsVersion.set(RedisEnterpriseTlsVersion.Tls1_2);
+    const _minimumTlsVersion = await cluster.minimumTlsVersion.get();
+});
+
+// The legacy Azure Redis hosting API is obsolete and is not exported to polyglot hosts.
+const legacyCache = await builder.addAzureInfrastructure("legacyRedis", async infrastructure => {
+    const redis = await infrastructure.addRedisResource("legacyRedis");
+    const sku = await infrastructure.createRedisSku();
+    await sku.name.set(RedisSkuName.Basic);
+    await sku.family.set(RedisSkuFamily.BasicOrStandard);
+    await sku.capacity.set(0);
+    await redis.sku.set(sku);
+});
+await legacyCache.configureInfrastructure(async infrastructure => {
+    const redis = await infrastructure.getRedisResource();
+    await redis.enableNonSslPort.set(false);
+    const _enableNonSslPort = await redis.enableNonSslPort.get();
+});
 const accessKeyCache = await builder.addAzureManagedRedis("cache-access-key");
 const containerCache = await builder.addAzureManagedRedis("cache-container");
 

@@ -7,6 +7,11 @@ void main() throws Exception {
         // === Azure Container App Environment ===
         // Test addAzureContainerAppEnvironment factory method
         var env = builder.addAzureContainerAppEnvironment("myenv");
+        env.configureInfrastructure(infrastructure -> {
+            var environment = infrastructure.getContainerAppManagedEnvironment();
+            environment.setIsZoneRedundant(false);
+            var _zoneRedundant = environment.isZoneRedundant();
+        });
         // Test fluent chaining on AzureContainerAppEnvironmentResource
         env
             .withAzdResourceNaming()
@@ -29,6 +34,13 @@ void main() throws Exception {
         // Test publishAsAzureContainerApp on a container resource with callback
         var web = builder.addContainer("web", "myregistry/web:latest");
         web.publishAsAzureContainerApp((infrastructure, app) -> {
+            var provisionedApp = infrastructure.getContainerAppByIdentifier("web");
+            provisionedApp.setWorkloadProfileName("consumption");
+            var _workloadProfile = provisionedApp.workloadProfileName();
+            // Outbound addresses are service outputs, not writable configuration.
+            if (provisionedApp.outboundIPAddressList().count() != 0) {
+                throw new IllegalStateException("Unprovisioned container app outbound address list should be empty");
+            }
             app.configureCustomDomain(customDomain, certificateName);
             var scale = new AzureContainerAppScaleConfig();
             scale.setMinReplicas(1.0);
@@ -44,6 +56,10 @@ void main() throws Exception {
         // Test publishAsAzureContainerAppJob (with callback)
         var processor = builder.addContainer("processor", "myregistry/processor:latest");
         processor.publishAsAzureContainerAppJob((infrastructure, job) -> {
+            var provisionedJob = infrastructure.getContainerAppJobByIdentifier("processor");
+            var configuration = provisionedJob.configuration();
+            configuration.setReplicaTimeout(300);
+            var _replicaTimeout = configuration.replicaTimeout();
         });
         // Test publishAsScheduledAzureContainerAppJob (simple - no callback)
         var scheduler = builder.addContainer("scheduler", "myregistry/scheduler:latest");
