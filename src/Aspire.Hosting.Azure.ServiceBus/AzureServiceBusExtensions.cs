@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTIONS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 
@@ -419,12 +420,6 @@ public static class AzureServiceBusExtensions
             .WithEndpoint(name: "emulator", targetPort: 5672)
             .WithHttpEndpoint(name: EmulatorHealthEndpointName, targetPort: 5300)
             .WithEndpoint(EmulatorHealthEndpointName, e => e.ExcludeReferenceEndpoint = true)
-            .WithAnnotation(new ContainerImageAnnotation
-            {
-                Registry = ServiceBusEmulatorContainerImageTags.Registry,
-                Image = ServiceBusEmulatorContainerImageTags.Image,
-                Tag = ServiceBusEmulatorContainerImageTags.Tag
-            })
             .WithUrlForEndpoint(EmulatorHealthEndpointName, u => u.DisplayLocation = UrlDisplayLocation.DetailsOnly);
 
         var sqlServerResource = builder.ApplicationBuilder
@@ -449,67 +444,68 @@ public static class AzureServiceBusExtensions
             context.EnvironmentVariables["MSSQL_SA_PASSWORD"] = passwordParameter;
         }));
 
-        var surrogate = new AzureServiceBusEmulatorResource(builder.Resource);
-        var surrogateBuilder = builder.ApplicationBuilder.CreateResourceBuilder(surrogate);
-
-        if (configureContainer != null)
-        {
-            configureContainer(surrogateBuilder);
-            sqlServerResource = sqlServerResource.WithLifetimeOf(surrogateBuilder);
-        }
-
-        // RunAsEmulator() can be followed by custom model configuration so we need to delay the creation of the Config.json file
-        // until all resources are about to be prepared and annotations can't be updated anymore.
-        surrogateBuilder.WithContainerFiles(
-            AzureServiceBusEmulatorResource.EmulatorConfigFilesPath,
-            (_, _) =>
+        builder.RunAsContainerImage<AzureServiceBusResource, AzureServiceBusEmulatorResource>(
+            $"{ServiceBusEmulatorContainerImageTags.Registry}/{ServiceBusEmulatorContainerImageTags.Image}:{ServiceBusEmulatorContainerImageTags.Tag}",
+            container =>
             {
-                var customConfigFile = builder.Resource.Annotations.OfType<ConfigFileAnnotation>().FirstOrDefault();
-                if (customConfigFile != null)
+                if (configureContainer is not null)
                 {
-                    return Task.FromResult<IEnumerable<ContainerFileSystemItem>>([
-                        new ContainerFile
+                    configureContainer(container);
+                    sqlServerResource = sqlServerResource.WithLifetimeOf(container);
+                }
+
+                // RunAsEmulator() can be followed by custom model configuration so we need to delay the creation of the Config.json file
+                // until all resources are about to be prepared and annotations can't be updated anymore.
+                container.WithContainerFiles(
+                    AzureServiceBusEmulatorResource.EmulatorConfigFilesPath,
+                    (_, _) =>
+                    {
+                        var customConfigFile = builder.Resource.Annotations.OfType<ConfigFileAnnotation>().FirstOrDefault();
+                        if (customConfigFile != null)
                         {
-                            Name = AzureServiceBusEmulatorResource.EmulatorConfigJsonFile,
-                            SourcePath = customConfigFile.SourcePath,
-                        },
-                    ]);
-                }
+                            return Task.FromResult<IEnumerable<ContainerFileSystemItem>>([
+                                new ContainerFile
+                                {
+                                    Name = AzureServiceBusEmulatorResource.EmulatorConfigJsonFile,
+                                    SourcePath = customConfigFile.SourcePath,
+                                },
+                            ]);
+                        }
 
-                // Create default Config.json file content
-                var tempConfig = JsonNode.Parse(CreateEmulatorConfigJson(builder.Resource));
+                        // Create default Config.json file content
+                        var tempConfig = JsonNode.Parse(CreateEmulatorConfigJson(builder.Resource));
 
-                if (tempConfig == null)
-                {
-                    throw new InvalidOperationException("The configuration file mount could not be parsed.");
-                }
+                        if (tempConfig == null)
+                        {
+                            throw new InvalidOperationException("The configuration file mount could not be parsed.");
+                        }
 
-                // Apply ConfigJsonAnnotation modifications
-                var configJsonAnnotations = builder.Resource.Annotations.OfType<ConfigJsonAnnotation>();
+                        // Apply ConfigJsonAnnotation modifications
+                        var configJsonAnnotations = builder.Resource.Annotations.OfType<ConfigJsonAnnotation>();
 
-                if (configJsonAnnotations.Any())
-                {
-                    foreach (var annotation in configJsonAnnotations)
-                    {
-                        annotation.Configure(tempConfig);
-                    }
-                }
+                        if (configJsonAnnotations.Any())
+                        {
+                            foreach (var annotation in configJsonAnnotations)
+                            {
+                                annotation.Configure(tempConfig);
+                            }
+                        }
 
-                using var writeStream = new MemoryStream();
-                using var writer = new Utf8JsonWriter(writeStream, new JsonWriterOptions { Indented = true });
-                tempConfig.WriteTo(writer);
+                        using var writeStream = new MemoryStream();
+                        using var writer = new Utf8JsonWriter(writeStream, new JsonWriterOptions { Indented = true });
+                        tempConfig.WriteTo(writer);
 
-                writer.Flush();
+                        writer.Flush();
 
-                return Task.FromResult<IEnumerable<ContainerFileSystemItem>>([
-                    new ContainerFile
-                    {
-                        Name = AzureServiceBusEmulatorResource.EmulatorConfigJsonFile,
-                        Contents = Encoding.UTF8.GetString(writeStream.ToArray()),
-                    },
-                ]);
-            }
-        );
+                        return Task.FromResult<IEnumerable<ContainerFileSystemItem>>([
+                            new ContainerFile
+                            {
+                                Name = AzureServiceBusEmulatorResource.EmulatorConfigJsonFile,
+                                Contents = Encoding.UTF8.GetString(writeStream.ToArray()),
+                            },
+                        ]);
+                    });
+            });
 
         builder.WithHttpHealthCheck(endpointName: EmulatorHealthEndpointName, path: "/health");
 

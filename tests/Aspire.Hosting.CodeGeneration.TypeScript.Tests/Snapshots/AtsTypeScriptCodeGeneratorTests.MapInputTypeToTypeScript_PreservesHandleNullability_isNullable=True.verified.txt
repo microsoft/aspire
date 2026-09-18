@@ -1,0 +1,27 @@
+﻿[
+  {
+    Type: TestResourceContext,
+    Input: Awaitable<TestResourceContext | null>,
+    UnionInput: string | TestResourceContext | null | Awaitable<TestResourceContext | null>
+  },
+  {
+    Type: TestEnvironmentContext,
+    Input: Awaitable<TestEnvironmentContext | null>,
+    UnionInput: string | TestEnvironmentContext | null | Awaitable<TestEnvironmentContext | null>
+  },
+  {
+    Type: IResourceWithConnectionString,
+    Input: Awaitable<ResourceWithConnectionString | TestRedisResource | null>,
+    UnionInput: string | ResourceWithConnectionString | TestRedisResource | null | Awaitable<ResourceWithConnectionString | TestRedisResource | null>
+  },
+  {
+    Type: IDisposable,
+    Input: Awaitable<HandleReference | null>,
+    UnionInput: string | IDisposableHandle | null | Awaitable<IDisposableHandle | null>
+  },
+  {
+    Type: ReferenceExpression,
+    Input: ReferenceExpression | null,
+    UnionInput: string | ReferenceExpression | null
+  }
+]

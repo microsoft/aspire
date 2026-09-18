@@ -208,6 +208,23 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DirectlyConstructedDotnetProjectResource_WithRawContainerImageAnnotation_ManifestRequiresPublishingConfiguration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var resource = builder.AddResource(new DotnetProjectResource("svc", workspace.Path))
+            .WithAnnotation(new ContainerImageAnnotation { Image = "example" });
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ManifestUtils.GetManifest(resource.Resource, workspace.Path));
+
+        Assert.Equal(
+            "The .NET program resource 'svc' is not configured for publishing. " +
+            "Create it with a supported builder API or call WithDotnetProgramPublishing() after attaching project metadata.",
+            exception.Message);
+    }
+
+    [Fact]
     public async Task DirectlyConstructedDotnetProjectResource_ManifestRequiresPublishingConfiguration()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -455,12 +472,16 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(projectDirectory.FullName, "Dockerfile"), "FROM scratch");
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
+        var resource = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true)
             .WithWorkingDirectory(runtimeDirectory.FullName)
             .WithHttpEndpoint()
             .PublishAsDockerFile();
 
-        var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var container = resource.Resource.AsContainer();
+        Assert.NotNull(container);
+        Assert.Same(container, Assert.Single(builder.Resources));
+        Assert.Same(resource.Resource, container.GetOwnerOrSelf());
+        Assert.False(resource.Resource.SupportsDotnetProgramPublishing());
         var dockerfile = Assert.Single(container.Annotations.OfType<DockerfileBuildAnnotation>());
         var endpoint = Assert.Single(container.Annotations.OfType<EndpointAnnotation>());
 

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTIONS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.ApplicationModel;
@@ -93,21 +94,34 @@ public static class AzureManagedRedisExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
-        {
-            return builder;
-        }
-
         var azureResource = builder.Resource;
-        builder.ApplicationBuilder.Resources.Remove(azureResource);
+        return builder.WithContainerProjection(
+            DistributedApplicationOperation.Run,
+            () =>
+            {
+                var password = ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(
+                    builder.ApplicationBuilder,
+                    $"{azureResource.Name}-password",
+                    special: false);
+                return new AzureManagedRedisContainerResource(azureResource, password);
+            },
+            container =>
+            {
+                if (!container.Resource.IsConfigured)
+                {
+                    azureResource.SetInnerResource(container.Resource);
+                    container.ConfigureRedis();
+                    container.Resource.IsConfigured = true;
+                }
+                else
+                {
+                    container
+                        .ApplyRedisContainerDefaults()
+                        .ApplyRedisEnvironmentDefaults();
+                }
 
-        var redisContainer = builder.ApplicationBuilder.AddRedis(azureResource.Name);
-
-        azureResource.SetInnerResource(redisContainer.Resource);
-
-        configureContainer?.Invoke(redisContainer);
-
-        return builder;
+                configureContainer?.Invoke(container);
+            });
     }
 
     /// <summary>

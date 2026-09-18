@@ -75,7 +75,7 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
     /// <inheritdoc />
     /// <remarks>This property is not available in polyglot app hosts.</remarks>
     [AspireExportIgnore]
-    public override ResourceAnnotationCollection Annotations => InnerResource?.Annotations ?? base.Annotations;
+    public override ResourceAnnotationCollection Annotations => base.Annotations;
 
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure Managed Redis resource.
@@ -155,10 +155,12 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
 
     internal void SetInnerResource(RedisResource innerResource)
     {
-        // Copy the annotations to the inner resource before making it the inner resource
-        foreach (var annotation in Annotations)
+        if (!ReferenceEquals(Annotations, innerResource.Annotations))
         {
-            innerResource.Annotations.Add(annotation);
+            foreach (var annotation in Annotations)
+            {
+                innerResource.Annotations.Add(annotation);
+            }
         }
 
         InnerResource = innerResource;

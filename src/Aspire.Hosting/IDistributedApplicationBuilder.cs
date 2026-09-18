@@ -132,7 +132,14 @@ public interface IDistributedApplicationBuilder
     /// Gets the collection of resources for the distributed application.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This can be mutated by adding more resources, which will update its current view.
+    /// </para>
+    /// <para>
+    /// When a resource has a selected projection for the current operation, collection reads return the
+    /// projection as its effective resource. The projection's owner remains the canonical model identity
+    /// and can be obtained with <see cref="ResourceExtensions.GetOwnerOrSelf(IResource)"/>.
+    /// </para>
     /// </remarks>
     public IResourceCollection Resources { get; }
 

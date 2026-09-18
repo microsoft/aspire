@@ -81,7 +81,10 @@ internal sealed class ApplicationOrchestrator
 
     private async Task PublishConnectionStringValue(ConnectionStringAvailableEvent @event, CancellationToken token)
     {
-        if (@event.Resource is IResourceWithConnectionString resourceWithConnectionString)
+        var owner = @event.Resource.GetOwnerOrSelf();
+        var resourceWithConnectionString = owner.GetEffectiveCapability<IResourceWithConnectionString>();
+
+        if (resourceWithConnectionString is not null)
         {
             var connectionString = await resourceWithConnectionString.GetConnectionStringAsync(token).ConfigureAwait(false);
             var connectionProperties = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
@@ -101,7 +104,7 @@ internal sealed class ApplicationOrchestrator
                 }
             }
 
-            await _notificationService.PublishUpdateAsync(resourceWithConnectionString, state => state with
+            await _notificationService.PublishUpdateAsync(owner, state => state with
             {
                 Properties = state.Properties.SetResourcePropertyRange(
                 [
@@ -715,7 +718,7 @@ internal sealed class ApplicationOrchestrator
         await _parameterProcessor.InitializeParametersAsync(_model.Resources.OfType<ParameterResource>(), waitForResolution: false).ConfigureAwait(false);
 
         // Publish the initial state of the resources that have a snapshot annotation.
-        foreach (var resource in _model.Resources)
+        foreach (var resource in _model.Resources.GetResourceOwners())
         {
             // Process relationships for the resource.
             var relationships = ApplicationModel.ResourceSnapshotBuilder.BuildRelationships(resource);
@@ -754,8 +757,12 @@ internal sealed class ApplicationOrchestrator
 
     private async Task PublishConnectionStringAvailableEvent(IResource resource, CancellationToken cancellationToken)
     {
-        // If the resource itself has a connection string then publish that the connection string is available.
-        if (resource is IResourceWithConnectionString)
+        resource = resource.GetOwnerOrSelf();
+
+        // The event retains canonical owner identity even when the selected projection supplies the effective
+        // connection-string contract consumed by PublishConnectionStringValue.
+        if (resource is IResourceWithConnectionString ||
+            resource.GetEffectiveResource() is IResourceWithConnectionString)
         {
             var connectionStringAvailableEvent = new ConnectionStringAvailableEvent(resource, _serviceProvider);
             await _eventing.PublishAsync(connectionStringAvailableEvent, cancellationToken).ConfigureAwait(false);

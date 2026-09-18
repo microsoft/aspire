@@ -14,7 +14,7 @@ public static class ContainerResourceExtensions
     /// Returns a collection of container resources in the specified distributed application model.
     /// </summary>
     /// <param name="model">The distributed application model to search for container resources.</param>
-    /// <returns>A collection of container resources in the specified distributed application model.</returns>
+    /// <returns>A collection containing each resource's effective container view.</returns>
     [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<IResource> GetContainerResources(this DistributedApplicationModel model)
     {
@@ -22,7 +22,7 @@ public static class ContainerResourceExtensions
 
         foreach (var resource in model.Resources)
         {
-            if (resource.Annotations.OfType<ContainerImageAnnotation>().Any())
+            if (resource.IsContainer())
             {
                 yield return resource;
             }
@@ -30,15 +30,53 @@ public static class ContainerResourceExtensions
     }
 
     /// <summary>
-    /// Determines whether the specified resource is a container resource.
+    /// Determines whether the specified resource is configured to execute as a container in the current AppHost invocation.
     /// </summary>
     /// <param name="resource">The resource to check.</param>
-    /// <returns>true if the specified resource is a container resource; otherwise, false.</returns>
+    /// <returns><see langword="true"/> if the resource is configured to execute as a container; otherwise, <see langword="false"/>.</returns>
+    /// <remarks>
+    /// An applied projection is authoritative for the active operation. Container image annotations
+    /// remain supported as the compatibility fallback for resources without a projection.
+    /// </remarks>
     [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static bool IsContainer(this IResource resource)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
+        if (resource.Annotations.OfType<ContainerResourceProjectionAnnotation>().SingleOrDefault() is { } registration &&
+            (ReferenceEquals(resource, registration.Owner) || ReferenceEquals(resource, registration.Projection)))
+        {
+            return true;
+        }
+
         return resource.Annotations.OfType<ContainerImageAnnotation>().Any();
+    }
+
+    /// <summary>
+    /// Gets the effective container for a resource.
+    /// </summary>
+    /// <param name="resource">The resource to inspect.</param>
+    /// <returns>
+    /// The resource itself when it is a <see cref="ContainerResource"/>, its selected container projection,
+    /// or <see langword="null"/> when the resource has no projection or is classified as a container only through
+    /// legacy annotations.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="resource"/> is <see langword="null"/>.</exception>
+    /// <ats-summary>Gets a resource's effective container.</ats-summary>
+    [AspireExport]
+    public static ContainerResource? AsContainer(this IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        if (resource is ContainerResource container)
+        {
+            return container;
+        }
+
+        var registration = resource.Annotations
+            .OfType<ContainerResourceProjectionAnnotation>()
+            .SingleOrDefault();
+
+        return registration?.Projection;
     }
 }

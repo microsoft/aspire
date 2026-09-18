@@ -111,6 +111,27 @@ public class ResourceBuilderLifetimeTests
     }
 
     [Fact]
+    public void WithLifetimeOfProjectionStoresOwnerAndTracksLaterLifetimeChanges()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var source = builder.AddExecutable("source", "source", ".");
+        var dependent = builder.AddContainer("dependent", "image");
+
+        source.RunAsContainerImage("contoso/source:1.0", container =>
+        {
+            container.WithPersistentLifetime();
+            dependent.WithLifetimeOf(container);
+        });
+
+        var annotation = Assert.Single(dependent.Resource.Annotations.OfType<PersistenceAnnotation>());
+        Assert.Same(source.Resource, annotation.SourceResource);
+        Assert.Equal(Lifetime.Persistent, dependent.Resource.GetLifetimeType());
+
+        source.WithSessionLifetime();
+        Assert.Equal(Lifetime.Session, dependent.Resource.GetLifetimeType());
+    }
+
+    [Fact]
     public void ExplicitLifetimeOverridesWithLifetimeOf()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

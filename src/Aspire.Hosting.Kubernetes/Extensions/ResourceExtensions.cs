@@ -374,7 +374,8 @@ internal static class ResourceExtensions
 
     private static ContainerV1 WithContainerEntrypoint(this ContainerV1 container, KubernetesResource context)
     {
-        if (context.TargetResource is ContainerResource { Entrypoint: { } entrypoint })
+        var entrypoint = context.TargetResource.AsContainer()?.Entrypoint;
+        if (entrypoint is not null)
         {
             container.Command.Add(entrypoint);
         }

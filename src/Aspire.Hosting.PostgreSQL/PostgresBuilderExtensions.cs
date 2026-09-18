@@ -58,9 +58,17 @@ public static class PostgresBuilderExtensions
 
         var postgresServer = new PostgresServerResource(name, userName?.Resource, passwordParameter);
 
+        return builder.AddResource(postgresServer).ConfigurePostgres(port);
+    }
+
+    internal static IResourceBuilder<PostgresServerResource> ConfigurePostgres(
+        this IResourceBuilder<PostgresServerResource> builder,
+        int? port = null)
+    {
+        var postgresServer = builder.Resource;
         string? connectionString = null;
 
-        builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(postgresServer, async (@event, ct) =>
+        builder.ApplicationBuilder.Eventing.Subscribe<ConnectionStringAvailableEvent>(postgresServer, async (@event, ct) =>
         {
             connectionString = await postgresServer.GetConnectionStringAsync(ct).ConfigureAwait(false);
 
@@ -70,7 +78,7 @@ public static class PostgresBuilderExtensions
             }
         });
 
-        builder.Eventing.Subscribe<ResourceReadyEvent>(postgresServer, async (@event, ct) =>
+        builder.ApplicationBuilder.Eventing.Subscribe<ResourceReadyEvent>(postgresServer, async (@event, ct) =>
         {
             if (connectionString is null)
             {
@@ -87,17 +95,14 @@ public static class PostgresBuilderExtensions
                 throw new InvalidOperationException($"Could not open connection to '{postgresServer.Name}'");
             }
 
-            foreach (var name in postgresServer.Databases.Keys)
+            foreach (var postgresDatabase in postgresServer.DatabaseResources)
             {
-                if (builder.Resources.FirstOrDefault(n => string.Equals(n.Name, name, StringComparisons.ResourceName)) is PostgresDatabaseResource postgreDatabase)
-                {
-                    await CreateDatabaseAsync(npgsqlConnection, postgreDatabase, @event.Services, ct).ConfigureAwait(false);
-                }
+                await CreateDatabaseAsync(npgsqlConnection, postgresDatabase, @event.Services, ct).ConfigureAwait(false);
             }
         });
 
-        var healthCheckKey = $"{name}_check";
-        builder.Services.AddHealthChecks().AddNpgSql(sp => connectionString ?? throw new InvalidOperationException("Connection string is unavailable"), name: healthCheckKey, configure: (connection) =>
+        var healthCheckKey = $"{postgresServer.Name}_check";
+        builder.ApplicationBuilder.Services.AddHealthChecks().AddNpgSql(sp => connectionString ?? throw new InvalidOperationException("Connection string is unavailable"), name: healthCheckKey, configure: (connection) =>
         {
             // HACK: The Npgsql client defaults to using the username in the connection string if the database is not specified. Here
             //       we override this default behavior because we are working with a non-database scoped connection string. The Aspirified
@@ -108,19 +113,36 @@ public static class PostgresBuilderExtensions
             connection.ConnectionString += ";Database=postgres;";
         });
 
-        return builder.AddResource(postgresServer)
-                      .WithEndpoint(port: port, targetPort: 5432, name: PostgresServerResource.PrimaryEndpointName) // Internal port is always 5432.
-                      .WithImage(PostgresContainerImageTags.Image, PostgresContainerImageTags.Tag)
-                      .WithImageRegistry(PostgresContainerImageTags.Registry)
-                      .WithIconName("DatabaseMultiple")
-                      .WithEnvironment("POSTGRES_HOST_AUTH_METHOD", "scram-sha-256")
-                      .WithEnvironment("POSTGRES_INITDB_ARGS", "--auth-host=scram-sha-256 --auth-local=scram-sha-256")
-                      .WithEnvironment(context =>
-                      {
-                          context.EnvironmentVariables[UserEnvVarName] = postgresServer.UserNameReference;
-                          context.EnvironmentVariables[PasswordEnvVarName] = postgresServer.PasswordParameter;
-                      })
-                      .WithHealthCheck(healthCheckKey);
+        builder
+            .ApplyPostgresContainerDefaults(port)
+            .ApplyPostgresEnvironmentDefaults()
+            .WithHealthCheck(healthCheckKey);
+
+        return builder;
+    }
+
+    internal static IResourceBuilder<PostgresServerResource> ApplyPostgresContainerDefaults(
+        this IResourceBuilder<PostgresServerResource> builder,
+        int? port = null)
+    {
+        return builder
+            .WithEndpoint(port: port, targetPort: 5432, name: PostgresServerResource.PrimaryEndpointName) // Internal port is always 5432.
+            .WithImage(PostgresContainerImageTags.Image, PostgresContainerImageTags.Tag)
+            .WithImageRegistry(PostgresContainerImageTags.Registry)
+            .WithIconName("DatabaseMultiple");
+    }
+
+    internal static IResourceBuilder<PostgresServerResource> ApplyPostgresEnvironmentDefaults(
+        this IResourceBuilder<PostgresServerResource> builder)
+    {
+        return builder
+            .WithEnvironment("POSTGRES_HOST_AUTH_METHOD", "scram-sha-256")
+            .WithEnvironment("POSTGRES_INITDB_ARGS", "--auth-host=scram-sha-256 --auth-local=scram-sha-256")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables[UserEnvVarName] = builder.Resource.UserNameReference;
+                context.EnvironmentVariables[PasswordEnvVarName] = builder.Resource.PasswordParameter;
+            });
     }
 
     /// <summary>
@@ -155,7 +177,7 @@ public static class PostgresBuilderExtensions
 
         var postgresDatabase = new PostgresDatabaseResource(name, databaseName, builder.Resource);
 
-        builder.Resource.AddDatabase(postgresDatabase.Name, postgresDatabase.DatabaseName);
+        builder.Resource.AddDatabase(postgresDatabase);
 
         string? connectionString = null;
 

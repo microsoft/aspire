@@ -1717,8 +1717,8 @@ internal sealed class RadiusInfrastructureBuilder
             resolved[resource] = resolvedType;
             var resourceType = resolvedType.ResourceType;
 
-            if (resource is IDotnetProgramResource ||
-                (resource is ContainerResource && resourceType == RadiusResourceTypes.Containers))
+            if ((resource is IDotnetProgramResource && !resource.IsContainer()) ||
+                (resource.IsContainer() && resourceType == RadiusResourceTypes.Containers))
             {
                 compute.Add(resource);
             }
@@ -2050,21 +2050,8 @@ internal sealed class RadiusInfrastructureBuilder
 
     private static string GetContainerImage(IResource resource)
     {
-        var imageAnnotation = resource.Annotations.OfType<ContainerImageAnnotation>().FirstOrDefault();
-
-        if (imageAnnotation is not null)
+        if (resource.TryGetContainerImageName(useBuiltImage: false, out var image))
         {
-            var image = imageAnnotation.Image;
-            if (!string.IsNullOrEmpty(imageAnnotation.Tag))
-            {
-                image = $"{image}:{imageAnnotation.Tag}";
-            }
-
-            if (!string.IsNullOrEmpty(imageAnnotation.Registry))
-            {
-                image = $"{imageAnnotation.Registry}/{image}";
-            }
-
             return image;
         }
 

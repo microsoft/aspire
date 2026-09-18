@@ -36,17 +36,36 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
 
         // Assert that default storage resource is configured
         Assert.Contains(builder.Resources, resource =>
-            resource is AzureStorageResource && resource.Name.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName));
+            resource is AzureStorageEmulatorResource && resource.Name.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName));
         // Assert that custom project resource type is configured
         Assert.Contains(builder.Resources, resource =>
             resource is AzureFunctionsProjectResource && resource.Name == "funcapp");
 
-        var storage = Assert.Single(builder.Resources.OfType<AzureStorageResource>());
+        var storage = Assert.Single(builder.Resources.OfType<AzureStorageEmulatorResource>()).GetOwnerOrSelf();
         Assert.True(funcApp.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relAnnotations));
 
         var rel = Assert.Single(relAnnotations);
         Assert.Equal("Reference", rel.Type);
         Assert.Equal(storage, rel.Resource);
+    }
+
+    [Fact]
+    public async Task ProjectedAzureFunctionsProjectRetainsDefaultHostStorage()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var functions = builder.AddAzureFunctionsProject<TestProjectWithDirectory>("funcapp")
+            .PublishAsDockerFile();
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var storage = Assert.Single(
+            builder.Resources.OfType<AzureStorageResource>(),
+            resource => resource.Name.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName));
+        var relationship = Assert.Single(functions.Resource.Annotations.OfType<ResourceRelationshipAnnotation>());
+
+        Assert.Equal("Reference", relationship.Type);
+        Assert.Same(storage, relationship.Resource);
     }
 
     [Fact]
@@ -149,7 +168,7 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
         builder.AddAzureFunctionsProject<TestProjectWithMalformedPort>("funcapp");
 
         // Assert that the default storage resource is unique
-        var storageResources = Assert.Single(builder.Resources.OfType<AzureStorageResource>());
+        var storageResources = Assert.Single(builder.Resources.OfType<AzureStorageEmulatorResource>());
         Assert.NotEqual(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName, storageResources.Name);
         Assert.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName, storageResources.Name);
     }
@@ -168,9 +187,9 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
 
         // Assert that the default storage resource is not present
         var model = host.Services.GetRequiredService<DistributedApplicationModel>();
-        Assert.DoesNotContain(model.Resources.OfType<AzureStorageResource>(),
+        Assert.DoesNotContain(model.Resources.OfType<AzureStorageEmulatorResource>(),
             r => r.Name.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName));
-        var storageResource = Assert.Single(model.Resources.OfType<AzureStorageResource>());
+        var storageResource = Assert.Single(model.Resources.OfType<AzureStorageEmulatorResource>());
         Assert.Equal("my-own-storage", storageResource.Name);
 
         Assert.True(funcApp.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relAnnotations));
@@ -194,7 +213,7 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
 
         // Assert that the default storage resource is not present
         var model = host.Services.GetRequiredService<DistributedApplicationModel>();
-        Assert.Single(model.Resources.OfType<AzureStorageResource>(),
+        Assert.Single(model.Resources.OfType<AzureStorageEmulatorResource>(),
             r => r.Name.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName));
 
         await host.StopAsync();
@@ -474,6 +493,13 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
         };
     }
 
+    private sealed class TestProjectWithDirectory : IProjectMetadata
+    {
+        public string ProjectPath => "some-path/TestProject.csproj";
+
+        public LaunchSettings LaunchSettings => new();
+    }
+
     private sealed class TestProjectWithMalformedPort : IProjectMetadata
     {
         public string ProjectPath => "some-path";
@@ -654,7 +680,7 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
 
         // Assert that default storage resource is configured
         Assert.Contains(builder.Resources, resource =>
-            resource is AzureStorageResource && resource.Name.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName));
+            resource is AzureStorageEmulatorResource && resource.Name.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName));
         // Assert that custom project resource type is configured
         Assert.Contains(builder.Resources, resource =>
             resource is AzureFunctionsProjectResource && resource.Name == "funcapp");
@@ -733,7 +759,7 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
         builder.AddAzureFunctionsProject("funcapp2", projectPath2);
 
         // Assert that only one default storage resource exists and is shared
-        var storageResources = builder.Resources.OfType<AzureStorageResource>()
+        var storageResources = builder.Resources.OfType<AzureStorageEmulatorResource>()
             .Where(r => r.Name.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName))
             .ToList();
         Assert.Single(storageResources);
@@ -759,9 +785,9 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
 
         // Assert that the custom storage is used and default storage is not present
         var model = host.Services.GetRequiredService<DistributedApplicationModel>();
-        Assert.DoesNotContain(model.Resources.OfType<AzureStorageResource>(),
+        Assert.DoesNotContain(model.Resources.OfType<AzureStorageEmulatorResource>(),
             r => r.Name.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName));
-        var storageResource = Assert.Single(model.Resources.OfType<AzureStorageResource>());
+        var storageResource = Assert.Single(model.Resources.OfType<AzureStorageEmulatorResource>());
         Assert.Equal("my-custom-storage", storageResource.Name);
 
         Assert.True(funcApp.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relAnnotations));

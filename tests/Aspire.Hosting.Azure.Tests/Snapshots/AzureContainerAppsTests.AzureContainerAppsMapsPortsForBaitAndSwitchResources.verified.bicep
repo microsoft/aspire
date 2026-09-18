@@ -35,6 +35,9 @@ resource api 'Microsoft.App/containerApps@2025-07-01' = {
         {
           image: api_containerimage
           name: 'api'
+          command: [
+            '/app/api'
+          ]
           env: [
             {
               name: 'PORT'

@@ -348,7 +348,7 @@ public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
         using var app = builder.Build();
         await app.StartAsync();
 
-        var eventHubsEmulatorResource = builder.Resources.OfType<AzureEventHubsResource>().Single(x => x is { } eventHubsResource && eventHubsResource.IsEmulator);
+        var eventHubsEmulatorResource = builder.Resources.OfType<AzureEventHubsEmulatorResource>().Single();
         var configAnnotation = eventHubsEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/Eventhubs_Emulator/ConfigFiles", configAnnotation.DestinationPath);
@@ -409,7 +409,7 @@ public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
         using var app = builder.Build();
         await app.StartAsync();
 
-        var eventHubsEmulatorResource = builder.Resources.OfType<AzureEventHubsResource>().Single(x => x is { } eventHubsResource && eventHubsResource.IsEmulator);
+        var eventHubsEmulatorResource = builder.Resources.OfType<AzureEventHubsEmulatorResource>().Single();
         var configAnnotation = eventHubsEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/Eventhubs_Emulator/ConfigFiles", configAnnotation.DestinationPath);
@@ -483,7 +483,7 @@ public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
         using var app = builder.Build();
         await app.StartAsync();
 
-        var eventHubsEmulatorResource = builder.Resources.OfType<AzureEventHubsResource>().Single(x => x is { } eventHubsResource && eventHubsResource.IsEmulator);
+        var eventHubsEmulatorResource = builder.Resources.OfType<AzureEventHubsEmulatorResource>().Single();
         var configAnnotation = eventHubsEmulatorResource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>().Single();
 
         Assert.Equal("/Eventhubs_Emulator/ConfigFiles", configAnnotation.DestinationPath);
@@ -644,12 +644,14 @@ public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
     public void RunAsEmulatorAppliesEmulatorResourceAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
+        AzureEventHubsEmulatorResource? projection = null;
         var eventHubs = builder.AddAzureEventHubs("eventhubs")
-                              .RunAsEmulator();
+                              .RunAsEmulator(container => projection = container.Resource);
 
         // Verify that the EmulatorResourceAnnotation is applied
         Assert.True(eventHubs.Resource.IsEmulator());
         Assert.Contains(eventHubs.Resource.Annotations, a => a is EmulatorResourceAnnotation);
+        ProjectionTestHelpers.AssertProjection(eventHubs, Assert.IsType<AzureEventHubsEmulatorResource>(projection));
     }
 
     [Fact]

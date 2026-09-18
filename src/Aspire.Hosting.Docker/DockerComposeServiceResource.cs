@@ -134,8 +134,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
 
     private bool TryGetContainerImageName(IResource resourceInstance, out string? containerImageName)
     {
-        // If the resource has a Dockerfile build annotation, we don't have the image name
-        // it will come as a parameter
+        // SDK and Dockerfile builds supply the image name later, while prebuilt images can be used directly.
         if (resourceInstance.RequiresImageBuild())
         {
             containerImageName = this.AsContainerImagePlaceholder();
@@ -155,7 +154,8 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
 
     private void SetEntryPoint(Service composeService)
     {
-        if (TargetResource is ContainerResource { Entrypoint: { } entrypoint })
+        var entrypoint = TargetResource.AsContainer()?.Entrypoint;
+        if (entrypoint is not null)
         {
             composeService.Entrypoint.Add(entrypoint);
 

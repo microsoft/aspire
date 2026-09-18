@@ -139,6 +139,8 @@ public static class AzureFunctionsProjectResourceExtensions
         // Add the default storage resource if it doesn't already exist.
         var storageResourceName = builder.CreateDefaultStorageName();
         var storage = builder.Resources
+            // Resource enumeration exposes effective projections, but host storage remains a logical owner reference.
+            .Select(static resource => resource.GetOwnerOrSelf())
             .OfType<AzureStorageResource>()
             .FirstOrDefault(r => r.Name == storageResourceName);
 
@@ -161,7 +163,9 @@ public static class AzureFunctionsProjectResourceExtensions
             var removeStorage = true;
             // Look at all of the resources and if none of them use the default storage, then we can remove it.
             // This is because we're unable to cleanly add a resource to the builder from within a callback.
-            foreach (var item in data.Model.Resources.OfType<AzureFunctionsProjectResource>())
+            foreach (var item in data.Model.Resources
+                .Select(static resource => resource.GetOwnerOrSelf())
+                .OfType<AzureFunctionsProjectResource>())
             {
                 if (item.HostStorage == storage)
                 {

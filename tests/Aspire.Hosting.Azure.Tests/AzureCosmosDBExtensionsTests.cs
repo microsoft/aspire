@@ -549,12 +549,14 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     public void RunAsEmulatorAppliesEmulatorResourceAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
+        AzureCosmosDBEmulatorResource? projection = null;
         var cosmos = builder.AddAzureCosmosDB("cosmos")
-                           .RunAsEmulator();
+                           .RunAsEmulator(container => projection = container.Resource);
 
         // Verify that the EmulatorResourceAnnotation is applied
         Assert.True(cosmos.Resource.IsEmulator());
         Assert.Contains(cosmos.Resource.Annotations, a => a is EmulatorResourceAnnotation);
+        ProjectionTestHelpers.AssertProjection(cosmos, Assert.IsType<AzureCosmosDBEmulatorResource>(projection));
     }
 
     [Fact]

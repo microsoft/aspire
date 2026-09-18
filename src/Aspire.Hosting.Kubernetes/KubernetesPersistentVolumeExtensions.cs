@@ -473,7 +473,10 @@ public static class KubernetesPersistentVolumeExtensions
         IResourceBuilder<KubernetesPersistentVolumeResource> volume)
         where T : IComputeResource
     {
-        if (!builder.ApplicationBuilder.ExecutionContext.IsRunMode || builder.Resource is not ContainerResource)
+        // Resource shape can change later in the fluent chain through either legacy annotations or
+        // an applied projection. Build the candidate for every run-mode binding and decide whether
+        // to apply it from the resource's final effective shape during environment finalization.
+        if (!builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
             return null;
         }

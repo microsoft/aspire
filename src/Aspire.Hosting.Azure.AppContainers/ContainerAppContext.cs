@@ -121,7 +121,7 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
         }
         // Express does not support platform language-stack configuration.
         // Otherwise default autoConfigureDataProtection to true for .NET projects.
-        else if (Resource is IDotnetProgramResource)
+        else if (Resource is IDotnetProgramResource && Resource.AsContainer() is null)
         {
             const string latestPreview = "2025-10-02-preview"; // this property is currently only available in preview
             containerApp.ResourceVersion = latestPreview;
@@ -224,7 +224,8 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
             // We're processed the http ingress, remove it from the list
             endpointsByTargetPort.Remove(httpIngress);
 
-            var targetPort = httpIngress.Port ?? (Resource is IDotnetProgramResource ? null : 80);
+            var targetPort = httpIngress.Port ??
+                (Resource is IDotnetProgramResource && Resource.AsContainer() is null ? null : 80);
 
             _httpIngress = (targetPort, httpIngress.AnyH2, httpIngress.External);
 

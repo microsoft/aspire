@@ -594,7 +594,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
 
         var terminals = new List<TerminalSummary>();
-        foreach (var resource in appModel.Resources)
+        foreach (var resource in appModel.Resources.GetResourceOwners())
         {
             var terminalAnnotation = resource.Annotations.OfType<TerminalAnnotation>().FirstOrDefault();
             if (terminalAnnotation is null)
@@ -1003,7 +1003,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         var results = new List<ResourceSnapshot>();
 
         // Get current state for each resource directly using TryGetCurrentState
-        foreach (var resource in appModel.Resources)
+        foreach (var resource in appModel.Resources.GetResourceOwners())
         {
             foreach (var instanceName in resource.GetResolvedResourceNames())
             {
@@ -2004,7 +2004,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// </summary>
     private static List<string> ResolveResourceIds(DistributedApplicationModel appModel, string resourceName)
     {
-        foreach (var resource in appModel.Resources)
+        foreach (var resource in appModel.Resources.GetResourceOwners())
         {
             var resolvedNames = resource.GetResolvedResourceNames();
 
@@ -2029,7 +2029,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     private static List<string> ResolveAllResourceIds(DistributedApplicationModel appModel)
     {
         var result = new List<string>();
-        foreach (var resource in appModel.Resources)
+        foreach (var resource in appModel.Resources.GetResourceOwners())
         {
             result.AddRange(resource.GetResolvedResourceNames());
         }

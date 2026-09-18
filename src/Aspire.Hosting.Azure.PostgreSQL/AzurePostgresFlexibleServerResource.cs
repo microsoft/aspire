@@ -66,7 +66,7 @@ public class AzurePostgresFlexibleServerResource(string name, Action<AzureResour
     internal PostgresServerResource? InnerResource { get; private set; }
 
     /// <inheritdoc />
-    public override ResourceAnnotationCollection Annotations => InnerResource?.Annotations ?? base.Annotations;
+    public override ResourceAnnotationCollection Annotations => base.Annotations;
 
     /// <summary>
     /// Gets or sets the parameter that contains the PostgreSQL server user name.
@@ -214,10 +214,12 @@ public class AzurePostgresFlexibleServerResource(string name, Action<AzureResour
 
     internal void SetInnerResource(PostgresServerResource innerResource)
     {
-        // Copy the annotations to the inner resource before making it the inner resource
-        foreach (var annotation in Annotations)
+        if (!ReferenceEquals(Annotations, innerResource.Annotations))
         {
-            innerResource.Annotations.Add(annotation);
+            foreach (var annotation in Annotations)
+            {
+                innerResource.Annotations.Add(annotation);
+            }
         }
 
         InnerResource = innerResource;

@@ -13,7 +13,7 @@ namespace Aspire.Hosting.ApplicationModel;
 public static class ProjectResourceExtensions
 {
     /// <summary>
-    /// Returns all project resources in the distributed application model.
+    /// Returns project resources whose effective shape remains a project for the current AppHost invocation.
     /// </summary>
     /// <param name="model">The distributed application model.</param>
     /// <returns>An enumerable collection of project resources.</returns>
@@ -22,7 +22,9 @@ public static class ProjectResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        return model.Resources.OfType<ProjectResource>();
+        return model.Resources
+            .OfType<ProjectResource>()
+            .Where(static resource => resource.AsContainer() is null);
     }
 
     /// <summary>
@@ -66,7 +68,8 @@ public static class ProjectResourceExtensions
     /// </summary>
     /// <param name="resource">The resource to inspect.</param>
     /// <returns>
-    /// <see langword="true"/> when the resource is a .NET program configured for SDK container publishing;
+    /// <see langword="true"/> when the resource is a .NET program configured for SDK container publishing
+    /// without a selected container projection;
     /// otherwise, <see langword="false"/>.
     /// </returns>
     [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -75,7 +78,10 @@ public static class ProjectResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(resource);
 
+        // A projection retains its owner's CLR type and annotations. Its container configuration, not the
+        // inherited SDK publishing marker, must determine how the effective resource is built and published.
         return resource is IDotnetProgramResource &&
+            resource.AsContainer() is null &&
             resource.HasAnnotationOfType<DotnetProgramPublishingAnnotation>();
     }
 

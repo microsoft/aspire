@@ -113,7 +113,8 @@ public static class KubernetesEnvironmentExtensions
             var environmentVariableName = GetLocalPathEnvironmentVariableName(resource, annotation);
 
             if (environmentVariableName is not null &&
-                resource is not ProjectResource and not ExecutableResource and not ContainerResource)
+                resource is not ProjectResource and not ExecutableResource &&
+                !resource.IsContainer())
             {
                 throw new DistributedApplicationException(
                     $"Resource '{resource.Name}' cannot resolve the '{environmentVariableName}' persistent-volume path in run mode. " +
@@ -169,7 +170,7 @@ public static class KubernetesEnvironmentExtensions
                 item => item.Annotation.Volume.Name,
                 StringComparer.OrdinalIgnoreCase))
             {
-                var containers = volumeGroup.Where(item => item.Resource is ContainerResource).ToArray();
+                var containers = volumeGroup.Where(item => item.Resource.IsContainer()).ToArray();
 
                 // Only host processes that asked for the environment path materialize an IAspireStore
                 // directory. A project or executable bound to a publish-only volume consumes no local
@@ -180,6 +181,7 @@ public static class KubernetesEnvironmentExtensions
                 // runs here rather than when either builder method was called.
                 var hostProcesses = volumeGroup.Where(item =>
                     item.Resource is ProjectResource or ExecutableResource &&
+                    !item.Resource.IsContainer() &&
                     GetLocalPathEnvironmentVariableName(item.Resource, item.Annotation) is not null).ToArray();
 
                 if (containers.Length > 0 && hostProcesses.Length > 0)
@@ -255,7 +257,8 @@ public static class KubernetesEnvironmentExtensions
         IResource resource,
         KubernetesPersistentVolumeBindingAnnotation binding)
     {
-        if (resource is not ContainerResource || binding.RunModeContainerVolumeName is not { } localVolumeName)
+        if (!resource.IsContainer() ||
+            binding.RunModeContainerVolumeName is not { } localVolumeName)
         {
             return;
         }

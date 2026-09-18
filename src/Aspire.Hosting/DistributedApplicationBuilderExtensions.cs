@@ -64,18 +64,23 @@ public static class DistributedApplicationBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder, nameof(builder));
         ArgumentException.ThrowIfNullOrEmpty(name, nameof(name));
-        var resource = builder.Resources.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
-        if (resource is null)
+        if (!builder.Resources.TryGetByName(name, out var resource))
         {
             throw new InvalidOperationException($"Resource '{name}' was not found.");
         }
 
-        if (resource is not T typedResource)
+        var owner = resource.GetOwnerOrSelf();
+        if (owner is T typedOwner)
         {
-            throw new InvalidOperationException($"Resource '{name}' of type '{resource.GetType()}' is not assignable to requested type '{typeof(T).Name}'.");
+            return builder.CreateResourceBuilder(typedOwner);
         }
 
-        return builder.CreateResourceBuilder(typedResource);
+        if (owner.GetEffectiveResource() is not T effectiveResource)
+        {
+            throw new InvalidOperationException($"Resource '{name}' of type '{owner.GetType()}' is not assignable to requested type '{typeof(T).Name}'.");
+        }
+
+        return builder.CreateResourceBuilder(effectiveResource);
     }
 
     /// <summary>
@@ -97,15 +102,26 @@ public static class DistributedApplicationBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder, nameof(builder));
         ArgumentException.ThrowIfNullOrEmpty(name, nameof(name));
 
-        var resource = builder.Resources.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
-        if (resource is null || resource is not T typedResource)
+        if (!builder.Resources.TryGetByName(name, out var resource))
         {
             resourceBuilder = null;
             return false;
         }
 
-        resourceBuilder = builder.CreateResourceBuilder(typedResource);
+        var owner = resource.GetOwnerOrSelf();
+        if (owner is T typedOwner)
+        {
+            resourceBuilder = builder.CreateResourceBuilder(typedOwner);
+            return true;
+        }
+
+        if (owner.GetEffectiveResource() is not T effectiveResource)
+        {
+            resourceBuilder = null;
+            return false;
+        }
+
+        resourceBuilder = builder.CreateResourceBuilder(effectiveResource);
         return true;
     }
 }
-

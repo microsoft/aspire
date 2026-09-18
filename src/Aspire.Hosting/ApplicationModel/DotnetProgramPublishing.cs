@@ -42,7 +42,9 @@ internal static class DotnetProgramPublishing
 
             ValidatePrebuiltContainerImageConfiguration(stepResource);
 
-            if (!stepResource.RequiresImageBuild())
+            // Container projections retain this annotation, but their Dockerfile factory owns build/push steps.
+            // Do not emit duplicate SDK steps for the same canonical resource.
+            if (!stepResource.SupportsDotnetProgramPublishing() || !stepResource.RequiresImageBuild())
             {
                 return steps;
             }

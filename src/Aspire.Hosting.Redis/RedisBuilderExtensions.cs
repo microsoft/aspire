@@ -77,9 +77,17 @@ public static class RedisBuilderExtensions
 
         var redis = new RedisResource(name, passwordParameter);
 
+        return builder.AddResource(redis).ConfigureRedis(port);
+    }
+
+    internal static IResourceBuilder<RedisResource> ConfigureRedis(
+        this IResourceBuilder<RedisResource> builder,
+        int? port = null)
+    {
+        var redis = builder.Resource;
         string? connectionString = null;
 
-        builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(redis, async (@event, ct) =>
+        builder.ApplicationBuilder.Eventing.Subscribe<ConnectionStringAvailableEvent>(redis, async (@event, ct) =>
         {
             connectionString = await redis.GetConnectionStringAsync(ct).ConfigureAwait(false);
 
@@ -89,24 +97,13 @@ public static class RedisBuilderExtensions
             }
         });
 
-        var healthCheckKey = $"{name}_check";
-        builder.Services.AddHealthChecks().AddRedis(sp => connectionString ?? throw new InvalidOperationException("Connection string is unavailable"), name: healthCheckKey);
+        var healthCheckKey = $"{redis.Name}_check";
+        builder.ApplicationBuilder.Services.AddHealthChecks().AddRedis(sp => connectionString ?? throw new InvalidOperationException("Connection string is unavailable"), name: healthCheckKey);
 
-        var redisBuilder = builder.AddResource(redis)
-            .WithEndpoint(port: port, targetPort: 6379, name: RedisResource.PrimaryEndpointName, scheme: RedisResource.StandardRedisScheme)
-            .WithImage(RedisContainerImageTags.Image, RedisContainerImageTags.Tag)
-            .WithImageRegistry(RedisContainerImageTags.Registry)
-            .WithIconName("Database")
+        var redisBuilder = builder
+            .ApplyRedisContainerDefaults(port)
             .WithHealthCheck(healthCheckKey)
-            // see https://github.com/microsoft/aspire/issues/3838 for why the password is passed this way
-            .WithEntrypoint("/bin/sh")
-            .WithEnvironment(context =>
-            {
-                if (redis.PasswordParameter is { } password)
-                {
-                    context.EnvironmentVariables["REDIS_PASSWORD"] = password;
-                }
-            })
+            .ApplyRedisEnvironmentDefaults()
             .WithArgs(context =>
             {
                 var additionalArgs = new List<string>
@@ -185,7 +182,7 @@ public static class RedisBuilderExtensions
                 return Task.CompletedTask;
             });
 
-        if (builder.ExecutionContext.IsRunMode)
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
             redisBuilder.SubscribeHttpsEndpointsUpdate(ctx =>
             {
@@ -209,6 +206,31 @@ public static class RedisBuilderExtensions
         }
 
         return redisBuilder;
+    }
+
+    internal static IResourceBuilder<RedisResource> ApplyRedisContainerDefaults(
+        this IResourceBuilder<RedisResource> builder,
+        int? port = null)
+    {
+        return builder
+            .WithEndpoint(port: port, targetPort: 6379, name: RedisResource.PrimaryEndpointName, scheme: RedisResource.StandardRedisScheme)
+            .WithImage(RedisContainerImageTags.Image, RedisContainerImageTags.Tag)
+            .WithImageRegistry(RedisContainerImageTags.Registry)
+            .WithIconName("Database")
+            // See https://github.com/microsoft/aspire/issues/3838 for why the password is passed this way.
+            .WithEntrypoint("/bin/sh");
+    }
+
+    internal static IResourceBuilder<RedisResource> ApplyRedisEnvironmentDefaults(
+        this IResourceBuilder<RedisResource> builder)
+    {
+        return builder.WithEnvironment(context =>
+        {
+            if (builder.Resource.PasswordParameter is { } password)
+            {
+                context.EnvironmentVariables["REDIS_PASSWORD"] = password;
+            }
+        });
     }
 
     /// <summary>

@@ -85,7 +85,7 @@ public class AzureSqlDatabaseResource(string name, string databaseName, AzureSql
     /// <inheritdoc />
     /// <remarks>This property is not available in polyglot app hosts.</remarks>
     [AspireExportIgnore]
-    public override ResourceAnnotationCollection Annotations => InnerResource?.Annotations ?? base.Annotations;
+    public override ResourceAnnotationCollection Annotations => base.Annotations;
 
     private static string ThrowIfNullOrEmpty([NotNull] string? argument, [CallerArgumentExpression(nameof(argument))] string? paramName = null)
     {
@@ -95,10 +95,12 @@ public class AzureSqlDatabaseResource(string name, string databaseName, AzureSql
 
     internal void SetInnerResource(SqlServerDatabaseResource innerResource)
     {
-        // Copy the annotations to the inner resource before making it the inner resource
-        foreach (var annotation in Annotations)
+        if (!ReferenceEquals(Annotations, innerResource.Annotations))
         {
-            innerResource.Annotations.Add(annotation);
+            foreach (var annotation in Annotations)
+            {
+                innerResource.Annotations.Add(annotation);
+            }
         }
 
         InnerResource = innerResource;

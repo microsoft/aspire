@@ -492,6 +492,68 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ConnectionStringProjectionSuppliesEffectiveCapabilityWithOwnerEventIdentity()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var resource = builder.AddResource(new ProjectedConnectionStringOwner("test-resource"));
+#pragma warning disable ASPIREPROJECTIONS001
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Run,
+            () => new ProjectedConnectionStringResource(resource.Resource),
+            container => container.WithImage("contoso/test"));
+#pragma warning restore ASPIREPROJECTIONS001
+        var projection = Assert.IsType<ProjectedConnectionStringResource>(resource.Resource.AsContainer());
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var applicationEventing = new DistributedApplicationEventing();
+        IResource? eventResource = null;
+        applicationEventing.Subscribe<ConnectionStringAvailableEvent>(resource.Resource, (@event, _) =>
+        {
+            eventResource = @event.Resource;
+            return Task.CompletedTask;
+        });
+
+        var appOrchestrator = CreateOrchestrator(
+            distributedAppModel,
+            notificationService: resourceNotificationService,
+            dcpEvents: events,
+            applicationEventing: applicationEventing);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnConnectionStringAvailableContext(
+            CancellationToken.None,
+            projection));
+
+        Assert.Same(resource.Resource, eventResource);
+        Assert.True(resourceNotificationService.TryGetCurrentState(resource.Resource.Name, out var currentState));
+        Assert.Collection(
+            currentState.Snapshot.Properties,
+            connectionStringProperty =>
+            {
+                Assert.Equal(KnownProperties.Resource.ConnectionString, connectionStringProperty.Name);
+                Assert.Equal("Host=projection", connectionStringProperty.Value);
+                Assert.True(connectionStringProperty.IsSensitive);
+            },
+            connectionPropertiesProperty =>
+            {
+                Assert.Equal(KnownProperties.Resource.ConnectionProperties, connectionPropertiesProperty.Name);
+                Assert.Equal(
+                    new Dictionary<string, string?>
+                    {
+                        ["Provider"] = "projection"
+                    },
+                    Assert.IsAssignableFrom<IReadOnlyDictionary<string, string?>>(connectionPropertiesProperty.Value));
+                Assert.True(connectionPropertiesProperty.IsSensitive);
+            });
+    }
+
+    [Fact]
     public async Task OnResourceFailedToStart_WithErrorMessage_SetsErrorStyleOnState()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -1278,6 +1340,29 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             {
                 yield return new("Unavailable", unresolvedProperty);
             }
+        }
+    }
+
+    private sealed class ProjectedConnectionStringOwner(string name) : Resource(name), IResourceWithConnectionString
+    {
+        public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"Host=owner");
+
+        public IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties()
+        {
+            yield return new("Provider", ReferenceExpression.Create($"owner"));
+        }
+    }
+
+    private sealed class ProjectedConnectionStringResource(ProjectedConnectionStringOwner owner)
+        : ContainerResource(owner.Name), IResourceWithConnectionString
+    {
+        public override ResourceAnnotationCollection Annotations => owner.Annotations;
+
+        public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"Host=projection");
+
+        public IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties()
+        {
+            yield return new("Provider", ReferenceExpression.Create($"projection"));
         }
     }
 

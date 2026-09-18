@@ -89,6 +89,7 @@ public class PostgresServerResource : ContainerResource, IResourceWithConnection
     }
 
     private readonly Dictionary<string, string> _databases = new Dictionary<string, string>(StringComparers.ResourceName);
+    private readonly List<PostgresDatabaseResource> _databaseResources = [];
 
     /// <summary>
     /// A dictionary where the key is the resource name and the value is the database name.
@@ -99,6 +100,14 @@ public class PostgresServerResource : ContainerResource, IResourceWithConnection
     {
         _databases.TryAdd(name, databaseName);
     }
+
+    internal void AddDatabase(PostgresDatabaseResource database)
+    {
+        AddDatabase(database.Name, database.DatabaseName);
+        _databaseResources.Add(database);
+    }
+
+    internal IReadOnlyList<PostgresDatabaseResource> DatabaseResources => _databaseResources;
 
     // Expose Host and Port properties for convenience,
     // maybe removing the need for IResourceWithConnectionProperties<T> in some cases.

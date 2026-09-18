@@ -700,6 +700,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         foreach (var resource in context.Model.Resources)
         {
+            var owner = resource.GetOwnerOrSelf();
             var annotations = resource.Annotations
                 .OfType<PipelineStepAnnotation>();
 
@@ -708,14 +709,16 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 var factoryContext = new PipelineStepFactoryContext
                 {
                     PipelineContext = context,
-                    Resource = resource
+                    Resource = owner
                 };
 
                 var annotationSteps = await annotation.CreateStepsAsync(factoryContext).ConfigureAwait(false);
                 foreach (var step in annotationSteps)
                 {
                     steps.Add(step);
-                    step.Resource ??= resource;
+                    // Pipeline steps use resources as logical identities. Keep them owner-addressed even when the
+                    // annotation was discovered through the effective projection exposed by model enumeration.
+                    step.Resource = (step.Resource ?? owner).GetOwnerOrSelf();
                 }
             }
         }

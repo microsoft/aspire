@@ -84,6 +84,9 @@ type TestDatabaseResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScri
 /** Test environment context used in callbacks. Verifies property-like object pattern (ctx.name.get(), ctx.name.set()). */
 type TestEnvironmentContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext'>;
 
+/** Handle to TestHandlePropertyContext */
+type TestHandlePropertyContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestHandlePropertyContext'>;
+
 /** Handle to TestMutableCollectionContext */
 type TestMutableCollectionContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext'>;
 
@@ -1675,6 +1678,11 @@ export interface PublishAsDockerFileOptions {
 export interface PublishResourceUpdateOptions {
     state?: string;
     stateStyle?: string;
+}
+
+export interface RunAsContainerImageOptions {
+    /** Optional configuration applied to the container. */
+    configure?: (obj: ContainerResource) => Promise<void>;
 }
 
 export interface RunOptions {
@@ -3572,7 +3580,7 @@ export interface DistributedApplicationModel {
      * @param name The resource name.
      * @returns The matching resource, or `null` when not found.
      */
-    findResourceByName(name: string): ResourcePromise;
+    findResourceByName(name: string): Promise<Resource | null>;
 }
 
 export interface DistributedApplicationModelPromise extends PromiseLike<DistributedApplicationModel> {
@@ -3586,7 +3594,7 @@ export interface DistributedApplicationModelPromise extends PromiseLike<Distribu
      * @param name The resource name.
      * @returns The matching resource, or `null` when not found.
      */
-    findResourceByName(name: string): ResourcePromise;
+    findResourceByName(name: string): Promise<Resource | null>;
 }
 
 // ============================================================================
@@ -3612,23 +3620,18 @@ class DistributedApplicationModelImpl implements DistributedApplicationModel {
         );
     }
 
-    /** @internal */
-    async _findResourceByNameInternal(name: string): Promise<Resource> {
-        const rpcArgs: Record<string, unknown> = { model: this._handle, name };
-        const result = await this._client.invokeCapability<IResourceHandle>(
-            'Aspire.Hosting/findResourceByName',
-            rpcArgs
-        );
-        return new ResourceImpl(result, this._client);
-    }
-
     /**
      * Finds a resource by name.
      * @param name The resource name.
      * @returns The matching resource, or `null` when not found.
      */
-    findResourceByName(name: string): ResourcePromise {
-        return new ResourcePromiseImpl(this._findResourceByNameInternal(name), this._client);
+    async findResourceByName(name: string): Promise<Resource | null> {
+        const rpcArgs: Record<string, unknown> = { model: this._handle, name };
+        const handle = await this._client.invokeCapability<IResourceHandle | null>(
+            'Aspire.Hosting/findResourceByName',
+            rpcArgs
+        );
+        return handle === null ? null : new ResourceImpl(handle, this._client);
     }
 
 }
@@ -3636,7 +3639,7 @@ class DistributedApplicationModelImpl implements DistributedApplicationModel {
 /** @internal */
 const DistributedApplicationModelPromiseImpl = $aspireCreateFluentPromiseClass<DistributedApplicationModel, DistributedApplicationModelPromise>((): $aspireFluentPromiseTransitions => ({
     ["getResources"]: null,
-    ["findResourceByName"]: () => ResourcePromiseImpl,
+    ["findResourceByName"]: null,
 }));
 
 // ============================================================================
@@ -4284,7 +4287,13 @@ const DockerfileStagePromiseImpl = $aspireCreateFluentPromiseClass<DockerfileSta
 /** Represents an endpoint reference for a resource with endpoints. */
 export interface EndpointReference {
     toJSON(): MarshalledHandle;
-    /** Gets the resource owner of the endpoint reference. */
+    /**
+     * Gets the resource owner of the endpoint reference.
+     *
+     * For a projection, returns the model owner when it implements `IResourceWithEndpoints`;
+     * otherwise, retains the typed projection that supplies the endpoint contract. Use
+     * `GetOwnerOrSelf` when logical resource identity is required.
+     */
     resource(): ResourceWithEndpointsPromise;
     /** Gets the name of the endpoint associated with the endpoint reference. */
     endpointName(): Promise<string>;
@@ -4351,7 +4360,13 @@ export interface EndpointReference {
 }
 
 export interface EndpointReferencePromise extends PromiseLike<EndpointReference> {
-    /** Gets the resource owner of the endpoint reference. */
+    /**
+     * Gets the resource owner of the endpoint reference.
+     *
+     * For a projection, returns the model owner when it implements `IResourceWithEndpoints`;
+     * otherwise, retains the typed projection that supplies the endpoint contract. Use
+     * `GetOwnerOrSelf` when logical resource identity is required.
+     */
     resource(): ResourceWithEndpointsPromise;
     /** Gets the name of the endpoint associated with the endpoint reference. */
     endpointName(): Promise<string>;
@@ -8646,7 +8661,7 @@ export interface ResourceUrlsCallbackContext {
      * Gets an endpoint reference from the associated resource
      * @param name The name of the endpoint.
      */
-    getEndpoint(name: string): EndpointReferencePromise;
+    getEndpoint(name: string): Promise<EndpointReference | null>;
 }
 
 export interface ResourceUrlsCallbackContextPromise extends PromiseLike<ResourceUrlsCallbackContext> {
@@ -8662,7 +8677,7 @@ export interface ResourceUrlsCallbackContextPromise extends PromiseLike<Resource
      * Gets an endpoint reference from the associated resource
      * @param name The name of the endpoint.
      */
-    getEndpoint(name: string): EndpointReferencePromise;
+    getEndpoint(name: string): Promise<EndpointReference | null>;
 }
 
 // ============================================================================
@@ -8720,22 +8735,17 @@ class ResourceUrlsCallbackContextImpl implements ResourceUrlsCallbackContext {
         return new DistributedApplicationExecutionContextPromiseImpl(promise, this._client, false);
     }
 
-    /** @internal */
-    async _getEndpointInternal(name: string): Promise<EndpointReference> {
-        const rpcArgs: Record<string, unknown> = { context: this._handle, name };
-        const result = await this._client.invokeCapability<EndpointReferenceHandle>(
-            'Aspire.Hosting.ApplicationModel/getEndpoint',
-            rpcArgs
-        );
-        return new EndpointReferenceImpl(result, this._client);
-    }
-
     /**
      * Gets an endpoint reference from the associated resource
      * @param name The name of the endpoint.
      */
-    getEndpoint(name: string): EndpointReferencePromise {
-        return new EndpointReferencePromiseImpl(this._getEndpointInternal(name), this._client);
+    async getEndpoint(name: string): Promise<EndpointReference | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle, name };
+        const handle = await this._client.invokeCapability<EndpointReferenceHandle | null>(
+            'Aspire.Hosting.ApplicationModel/getEndpoint',
+            rpcArgs
+        );
+        return handle === null ? null : new EndpointReferenceImpl(handle, this._client);
     }
 
 }
@@ -8746,7 +8756,7 @@ const ResourceUrlsCallbackContextPromiseImpl = $aspireCreateFluentPromiseClass<R
     ["urls"]: [() => ResourceUrlsEditorPromiseImpl, false] as const,
     ["log"]: [() => LogFacadePromiseImpl, false] as const,
     ["executionContext"]: [() => DistributedApplicationExecutionContextPromiseImpl, false] as const,
-    ["getEndpoint"]: () => EndpointReferencePromiseImpl,
+    ["getEndpoint"]: null,
 }));
 
 // ============================================================================
@@ -9095,6 +9105,180 @@ class TestEnvironmentContextImpl implements TestEnvironmentContext {
     };
 
 }
+
+// ============================================================================
+// TestHandlePropertyContext
+// ============================================================================
+
+export interface TestHandlePropertyContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the OptionalResource property */
+    optionalResource: {
+        get: () => Promise<TestResourceContext | null>;
+        set: (value: Awaitable<TestResourceContext | null>) => Promise<void>;
+    };
+    /** Gets the ReadOnlyOptionalResource property */
+    readOnlyOptionalResource(): Promise<TestResourceContext | null>;
+    /** Gets the RequiredResource property */
+    requiredResource: {
+        get: () => TestResourceContextPromise;
+        set: (value: Awaitable<TestResourceContext>) => Promise<void>;
+    };
+    /** Gets the ReadOnlyRequiredResource property */
+    readOnlyRequiredResource(): TestResourceContextPromise;
+    /** Gets the OptionalContext property */
+    optionalContext: {
+        get: () => Promise<TestEnvironmentContext | null>;
+        set: (value: Awaitable<TestEnvironmentContext | null>) => Promise<void>;
+    };
+    /** Gets the ReadOnlyOptionalContext property */
+    readOnlyOptionalContext(): Promise<TestEnvironmentContext | null>;
+    /** Gets the RequiredContext property */
+    requiredContext: {
+        get: () => Promise<TestEnvironmentContext>;
+        set: (value: Awaitable<TestEnvironmentContext>) => Promise<void>;
+    };
+    /** Gets the ReadOnlyRequiredContext property */
+    readOnlyRequiredContext(): Promise<TestEnvironmentContext>;
+}
+
+export interface TestHandlePropertyContextPromise extends PromiseLike<TestHandlePropertyContext> {
+    /** Gets the ReadOnlyOptionalResource property */
+    readOnlyOptionalResource(): Promise<TestResourceContext | null>;
+    /** Gets the ReadOnlyRequiredResource property */
+    readOnlyRequiredResource(): TestResourceContextPromise;
+    /** Gets the ReadOnlyOptionalContext property */
+    readOnlyOptionalContext(): Promise<TestEnvironmentContext | null>;
+    /** Gets the ReadOnlyRequiredContext property */
+    readOnlyRequiredContext(): Promise<TestEnvironmentContext>;
+}
+
+// ============================================================================
+// TestHandlePropertyContextImpl
+// ============================================================================
+
+/** Type class for TestHandlePropertyContext. */
+class TestHandlePropertyContextImpl implements TestHandlePropertyContext {
+    constructor(private _handle: TestHandlePropertyContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    optionalResource = {
+        get: async (): Promise<TestResourceContext | null> => {
+            const handle = await this._client.invokeCapability<TestResourceContextHandle | null>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalResource',
+                { context: this._handle }
+            );
+            return handle === null ? null : new TestResourceContextImpl(handle, this._client);
+        },
+        set: async (value: Awaitable<TestResourceContext | null>): Promise<void> => {
+            value = isPromiseLike(value) ? await value : value;
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalResource',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    async readOnlyOptionalResource(): Promise<TestResourceContext | null> {
+        const handle = await this._client.invokeCapability<TestResourceContextHandle | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalResource',
+            { context: this._handle }
+        );
+        return handle === null ? null : new TestResourceContextImpl(handle, this._client);
+    }
+
+    requiredResource = {
+        get: (): TestResourceContextPromise => {
+            const promise = (async () => {
+                const handle = await this._client.invokeCapability<TestResourceContextHandle>(
+                    'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredResource',
+                    { context: this._handle }
+                );
+                return new TestResourceContextImpl(handle, this._client);
+            })();
+            return new TestResourceContextPromiseImpl(promise, this._client, false);
+        },
+        set: async (value: Awaitable<TestResourceContext>): Promise<void> => {
+            value = isPromiseLike(value) ? await value : value;
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredResource',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    readOnlyRequiredResource(): TestResourceContextPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<TestResourceContextHandle>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredResource',
+                { context: this._handle }
+            );
+            return new TestResourceContextImpl(handle, this._client);
+        })();
+        return new TestResourceContextPromiseImpl(promise, this._client, false);
+    }
+
+    optionalContext = {
+        get: async (): Promise<TestEnvironmentContext | null> => {
+            const handle = await this._client.invokeCapability<TestEnvironmentContextHandle | null>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalContext',
+                { context: this._handle }
+            );
+            return handle === null ? null : new TestEnvironmentContextImpl(handle, this._client);
+        },
+        set: async (value: Awaitable<TestEnvironmentContext | null>): Promise<void> => {
+            value = isPromiseLike(value) ? await value : value;
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalContext',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    async readOnlyOptionalContext(): Promise<TestEnvironmentContext | null> {
+        const handle = await this._client.invokeCapability<TestEnvironmentContextHandle | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalContext',
+            { context: this._handle }
+        );
+        return handle === null ? null : new TestEnvironmentContextImpl(handle, this._client);
+    }
+
+    requiredContext = {
+        get: async (): Promise<TestEnvironmentContext> => {
+            const handle = await this._client.invokeCapability<TestEnvironmentContextHandle>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredContext',
+                { context: this._handle }
+            );
+            return new TestEnvironmentContextImpl(handle, this._client);
+        },
+        set: async (value: Awaitable<TestEnvironmentContext>): Promise<void> => {
+            value = isPromiseLike(value) ? await value : value;
+            await this._client.invokeCapability<void>(
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredContext',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    async readOnlyRequiredContext(): Promise<TestEnvironmentContext> {
+        const handle = await this._client.invokeCapability<TestEnvironmentContextHandle>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredContext',
+            { context: this._handle }
+        );
+        return new TestEnvironmentContextImpl(handle, this._client);
+    }
+
+}
+
+/** @internal */
+const TestHandlePropertyContextPromiseImpl = $aspireCreateFluentPromiseClass<TestHandlePropertyContext, TestHandlePropertyContextPromise>((): $aspireFluentPromiseTransitions => ({
+    ["readOnlyOptionalResource"]: null,
+    ["readOnlyRequiredResource"]: [() => TestResourceContextPromiseImpl, false] as const,
+    ["readOnlyOptionalContext"]: null,
+    ["readOnlyRequiredContext"]: null,
+}));
 
 // ============================================================================
 // TestMutableCollectionContext
@@ -12993,6 +13177,11 @@ export interface ContainerRegistryResource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise;
     /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
+    /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
      * The command is considered valid if either:
@@ -13173,6 +13362,19 @@ export interface ContainerRegistryResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ContainerRegistryResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ContainerRegistryResourcePromise;
     /**
@@ -13325,6 +13527,11 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise;
     /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
+    /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
      * The command is considered valid if either:
@@ -13505,6 +13712,19 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ContainerRegistryResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ContainerRegistryResourcePromise;
     /**
@@ -13693,6 +13913,19 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
         const buildImage = options?.buildImage;
         const runtimeImage = options?.runtimeImage;
         return new ContainerRegistryResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
+    }
+
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -14311,6 +14544,39 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
+    private async _runAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<ContainerRegistryResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
+            const obj = new ContainerResourceImpl(objHandle, this._client);
+            await configure(obj);
+        }) : undefined;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
+        if (configure !== undefined) rpcArgs.configure = configureId;
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/runAsContainerImage',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ContainerRegistryResourcePromise {
+        const configure = options?.configure;
+        return new ContainerRegistryResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
+    }
+
+    /** @internal */
     private async _withTerminalInternal(): Promise<ContainerRegistryResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
@@ -14917,6 +15183,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
 const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRegistryResource, ContainerRegistryResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ContainerRegistryResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ContainerRegistryResourcePromiseImpl,
+    ["asContainer"]: null,
     ["withRequiredCommand"]: () => ContainerRegistryResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ContainerRegistryResourcePromiseImpl,
     ["withSessionLifetime"]: () => ContainerRegistryResourcePromiseImpl,
@@ -14940,6 +15207,7 @@ const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<Con
     ["excludeFromMcp"]: () => ContainerRegistryResourcePromiseImpl,
     ["withHidden"]: () => ContainerRegistryResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ContainerRegistryResourcePromiseImpl,
+    ["runAsContainerImage"]: () => ContainerRegistryResourcePromiseImpl,
     ["withTerminal"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ContainerRegistryResourcePromiseImpl,
@@ -15207,6 +15475,11 @@ export interface ContainerResource {
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): ContainerResourcePromise;
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -16040,6 +16313,11 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): ContainerResourcePromise;
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -17209,6 +17487,19 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      */
     withContainerNetworkAlias(alias: string): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withContainerNetworkAliasInternal(alias), this._client);
+    }
+
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -19429,6 +19720,7 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withDockerfileBuilder"]: () => ContainerResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ContainerResourcePromiseImpl,
     ["withContainerNetworkAlias"]: () => ContainerResourcePromiseImpl,
+    ["asContainer"]: null,
     ["withMcpServer"]: () => ContainerResourcePromiseImpl,
     ["withOtlpExporter"]: () => ContainerResourcePromiseImpl,
     ["publishAsConnectionString"]: () => ContainerResourcePromiseImpl,
@@ -19560,6 +19852,11 @@ export interface CSharpAppResource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
     /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
+    /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
@@ -19588,7 +19885,7 @@ export interface CSharpAppResource {
     /**
      * Publishes a project as a Docker file with optional container configuration
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the project resource is projected as a container resource, the arguments to the project
      * are not used. This is because arguments to the project often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param options Additional options.
@@ -20039,6 +20336,19 @@ export interface CSharpAppResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): CSharpAppResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): CSharpAppResourcePromise;
     /**
@@ -20216,6 +20526,11 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
     /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
+    /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
@@ -20244,7 +20559,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     /**
      * Publishes a project as a Docker file with optional container configuration
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the project resource is projected as a container resource, the arguments to the project
      * are not used. This is because arguments to the project often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param options Additional options.
@@ -20695,6 +21010,19 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): CSharpAppResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): CSharpAppResourcePromise;
     /**
@@ -20910,6 +21238,19 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
         return new CSharpAppResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
     }
 
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
+    }
+
     /** @internal */
     private async _withMcpServerInternal(path?: string, endpointName?: string): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
@@ -21013,7 +21354,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Publishes a project as a Docker file with optional container configuration
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the project resource is projected as a container resource, the arguments to the project
      * are not used. This is because arguments to the project often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param options Additional options.
@@ -22478,6 +22819,39 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _runAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<CSharpAppResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
+            const obj = new ContainerResourceImpl(objHandle, this._client);
+            await configure(obj);
+        }) : undefined;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
+        if (configure !== undefined) rpcArgs.configure = configureId;
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/runAsContainerImage',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): CSharpAppResourcePromise {
+        const configure = options?.configure;
+        return new CSharpAppResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
+    }
+
+    /** @internal */
     private async _withTerminalInternal(): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
@@ -23186,6 +23560,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
 const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppResource, CSharpAppResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => CSharpAppResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => CSharpAppResourcePromiseImpl,
+    ["asContainer"]: null,
     ["withMcpServer"]: () => CSharpAppResourcePromiseImpl,
     ["withOtlpExporter"]: () => CSharpAppResourcePromiseImpl,
     ["withReplicas"]: () => CSharpAppResourcePromiseImpl,
@@ -23246,6 +23621,7 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["withImagePushOptions"]: () => CSharpAppResourcePromiseImpl,
     ["withRemoteImageName"]: () => CSharpAppResourcePromiseImpl,
     ["withRemoteImageTag"]: () => CSharpAppResourcePromiseImpl,
+    ["runAsContainerImage"]: () => CSharpAppResourcePromiseImpl,
     ["withTerminal"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => CSharpAppResourcePromiseImpl,
@@ -23321,6 +23697,11 @@ export interface DotnetToolResource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise;
     /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
+    /**
      * Sets the package identifier for the tool configuration associated with the resource builder.
      * @param packageId The package identifier to assign to the tool configuration. Cannot be null.
      * @returns The resource builder.
@@ -23362,7 +23743,7 @@ export interface DotnetToolResource {
     /**
      * Publishes an executable as a Docker file
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the executable resource is projected as a container resource, the arguments to the executable
      * are not used. This is because arguments to the executable often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param configure Optional action to configure the container resource
@@ -23834,6 +24215,19 @@ export interface DotnetToolResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): DotnetToolResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): DotnetToolResourcePromise;
     /**
@@ -24005,6 +24399,11 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise;
     /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
+    /**
      * Sets the package identifier for the tool configuration associated with the resource builder.
      * @param packageId The package identifier to assign to the tool configuration. Cannot be null.
      * @returns The resource builder.
@@ -24046,7 +24445,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     /**
      * Publishes an executable as a Docker file
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the executable resource is projected as a container resource, the arguments to the executable
      * are not used. This is because arguments to the executable often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param configure Optional action to configure the container resource
@@ -24518,6 +24917,19 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): DotnetToolResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): DotnetToolResourcePromise;
     /**
@@ -24727,6 +25139,19 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
         return new DotnetToolResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
     }
 
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
+    }
+
     /** @internal */
     private async _withToolPackageInternal(packageId: string): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, packageId };
@@ -24862,7 +25287,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Publishes an executable as a Docker file
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the executable resource is projected as a container resource, the arguments to the executable
      * are not used. This is because arguments to the executable often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param configure Optional action to configure the container resource
@@ -26391,6 +26816,39 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _runAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<DotnetToolResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
+            const obj = new ContainerResourceImpl(objHandle, this._client);
+            await configure(obj);
+        }) : undefined;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
+        if (configure !== undefined) rpcArgs.configure = configureId;
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/runAsContainerImage',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): DotnetToolResourcePromise {
+        const configure = options?.configure;
+        return new DotnetToolResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
+    }
+
+    /** @internal */
     private async _withTerminalInternal(): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
@@ -27080,6 +27538,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
 const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetToolResource, DotnetToolResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => DotnetToolResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => DotnetToolResourcePromiseImpl,
+    ["asContainer"]: null,
     ["withToolPackage"]: () => DotnetToolResourcePromiseImpl,
     ["withToolVersion"]: () => DotnetToolResourcePromiseImpl,
     ["withToolPrerelease"]: () => DotnetToolResourcePromiseImpl,
@@ -27145,6 +27604,7 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["withImagePushOptions"]: () => DotnetToolResourcePromiseImpl,
     ["withRemoteImageName"]: () => DotnetToolResourcePromiseImpl,
     ["withRemoteImageTag"]: () => DotnetToolResourcePromiseImpl,
+    ["runAsContainerImage"]: () => DotnetToolResourcePromiseImpl,
     ["withTerminal"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => DotnetToolResourcePromiseImpl,
@@ -27226,9 +27686,14 @@ export interface ExecutableResource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise;
     /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
+    /**
      * Publishes an executable as a Docker file
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the executable resource is projected as a container resource, the arguments to the executable
      * are not used. This is because arguments to the executable often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param configure Optional action to configure the container resource
@@ -27700,6 +28165,19 @@ export interface ExecutableResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ExecutableResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ExecutableResourcePromise;
     /**
@@ -27871,9 +28349,14 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise;
     /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
+    /**
      * Publishes an executable as a Docker file
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the executable resource is projected as a container resource, the arguments to the executable
      * are not used. This is because arguments to the executable often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param configure Optional action to configure the container resource
@@ -28345,6 +28828,19 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ExecutableResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ExecutableResourcePromise;
     /**
@@ -28561,6 +29057,19 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
         return new ExecutableResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
     }
 
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
+    }
+
     /** @internal */
     private async _publishAsDockerFileInternal(configure: (obj: ContainerResource) => Promise<void>): Promise<ExecutableResource> {
         const configureId = registerCallback(async (objData: unknown) => {
@@ -28579,7 +29088,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Publishes an executable as a Docker file
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the executable resource is projected as a container resource, the arguments to the executable
      * are not used. This is because arguments to the executable often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param configure Optional action to configure the container resource
@@ -30108,6 +30617,39 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _runAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<ExecutableResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
+            const obj = new ContainerResourceImpl(objHandle, this._client);
+            await configure(obj);
+        }) : undefined;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
+        if (configure !== undefined) rpcArgs.configure = configureId;
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/runAsContainerImage',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ExecutableResourcePromise {
+        const configure = options?.configure;
+        return new ExecutableResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
+    }
+
+    /** @internal */
     private async _withTerminalInternal(): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
@@ -30797,6 +31339,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
 const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<ExecutableResource, ExecutableResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ExecutableResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ExecutableResourcePromiseImpl,
+    ["asContainer"]: null,
     ["publishAsDockerFile"]: () => ExecutableResourcePromiseImpl,
     ["withExecutableCommand"]: () => ExecutableResourcePromiseImpl,
     ["withWorkingDirectory"]: () => ExecutableResourcePromiseImpl,
@@ -30856,6 +31399,7 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["withImagePushOptions"]: () => ExecutableResourcePromiseImpl,
     ["withRemoteImageName"]: () => ExecutableResourcePromiseImpl,
     ["withRemoteImageTag"]: () => ExecutableResourcePromiseImpl,
+    ["runAsContainerImage"]: () => ExecutableResourcePromiseImpl,
     ["withTerminal"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExecutableResourcePromiseImpl,
@@ -30929,6 +31473,11 @@ export interface ExternalServiceResource {
      * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise;
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Adds an HTTP health check to the external service for polyglot app hosts.
      * @param options Additional options.
@@ -31115,6 +31664,19 @@ export interface ExternalServiceResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ExternalServiceResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ExternalServiceResourcePromise;
     /**
@@ -31267,6 +31829,11 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise;
     /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
+    /**
      * Adds an HTTP health check to the external service for polyglot app hosts.
      * @param options Additional options.
      */
@@ -31452,6 +32019,19 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ExternalServiceResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ExternalServiceResourcePromise;
     /**
@@ -31640,6 +32220,19 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
         const buildImage = options?.buildImage;
         const runtimeImage = options?.runtimeImage;
         return new ExternalServiceResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
+    }
+
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -32282,6 +32875,39 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
+    private async _runAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<ExternalServiceResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
+            const obj = new ContainerResourceImpl(objHandle, this._client);
+            await configure(obj);
+        }) : undefined;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
+        if (configure !== undefined) rpcArgs.configure = configureId;
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/runAsContainerImage',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ExternalServiceResourcePromise {
+        const configure = options?.configure;
+        return new ExternalServiceResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
+    }
+
+    /** @internal */
     private async _withTerminalInternal(): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
@@ -32888,6 +33514,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
 const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<ExternalServiceResource, ExternalServiceResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ExternalServiceResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ExternalServiceResourcePromiseImpl,
+    ["asContainer"]: null,
     ["withHttpHealthCheck"]: () => ExternalServiceResourcePromiseImpl,
     ["withRequiredCommand"]: () => ExternalServiceResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ExternalServiceResourcePromiseImpl,
@@ -32912,6 +33539,7 @@ const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<Exter
     ["excludeFromMcp"]: () => ExternalServiceResourcePromiseImpl,
     ["withHidden"]: () => ExternalServiceResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ExternalServiceResourcePromiseImpl,
+    ["runAsContainerImage"]: () => ExternalServiceResourcePromiseImpl,
     ["withTerminal"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExternalServiceResourcePromiseImpl,
@@ -32982,6 +33610,11 @@ export interface ParameterResource {
      * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Sets the description of the parameter resource.
      * @param description The parameter description.
@@ -33176,6 +33809,19 @@ export interface ParameterResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ParameterResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ParameterResourcePromise;
     /**
@@ -33328,6 +33974,11 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
     /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
+    /**
      * Sets the description of the parameter resource.
      * @param description The parameter description.
      * @param options Additional options.
@@ -33521,6 +34172,19 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ParameterResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ParameterResourcePromise;
     /**
@@ -33710,6 +34374,19 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
         const buildImage = options?.buildImage;
         const runtimeImage = options?.runtimeImage;
         return new ParameterResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
+    }
+
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -34369,6 +35046,39 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
+    private async _runAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<ParameterResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
+            const obj = new ContainerResourceImpl(objHandle, this._client);
+            await configure(obj);
+        }) : undefined;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
+        if (configure !== undefined) rpcArgs.configure = configureId;
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/runAsContainerImage',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ParameterResourcePromise {
+        const configure = options?.configure;
+        return new ParameterResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
+    }
+
+    /** @internal */
     private async _withTerminalInternal(): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
@@ -34975,6 +35685,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
 const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterResource, ParameterResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ParameterResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ParameterResourcePromiseImpl,
+    ["asContainer"]: null,
     ["withDescription"]: () => ParameterResourcePromiseImpl,
     ["withCustomInput"]: () => ParameterResourcePromiseImpl,
     ["withRequiredCommand"]: () => ParameterResourcePromiseImpl,
@@ -35000,6 +35711,7 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["excludeFromMcp"]: () => ParameterResourcePromiseImpl,
     ["withHidden"]: () => ParameterResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ParameterResourcePromiseImpl,
+    ["runAsContainerImage"]: () => ParameterResourcePromiseImpl,
     ["withTerminal"]: () => ParameterResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ParameterResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ParameterResourcePromiseImpl,
@@ -35071,6 +35783,11 @@ export interface ProjectResource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
     /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
+    /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
@@ -35099,7 +35816,7 @@ export interface ProjectResource {
     /**
      * Publishes a project as a Docker file with optional container configuration
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the project resource is projected as a container resource, the arguments to the project
      * are not used. This is because arguments to the project often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param options Additional options.
@@ -35550,6 +36267,19 @@ export interface ProjectResource {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ProjectResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ProjectResourcePromise;
     /**
@@ -35727,6 +36457,11 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
     /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
+    /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
@@ -35755,7 +36490,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     /**
      * Publishes a project as a Docker file with optional container configuration
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the project resource is projected as a container resource, the arguments to the project
      * are not used. This is because arguments to the project often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param options Additional options.
@@ -36206,6 +36941,19 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ProjectResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ProjectResourcePromise;
     /**
@@ -36422,6 +37170,19 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
         return new ProjectResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
     }
 
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
+    }
+
     /** @internal */
     private async _withMcpServerInternal(path?: string, endpointName?: string): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
@@ -36525,7 +37286,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Publishes a project as a Docker file with optional container configuration
      *
-     * When the executable resource is converted to a container resource, the arguments to the executable
+     * When the project resource is projected as a container resource, the arguments to the project
      * are not used. This is because arguments to the project often contain physical paths that are not valid
      * in the container. The container can be set up with the correct arguments using the `configure` action.
      * @param options Additional options.
@@ -37990,6 +38751,39 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _runAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<ProjectResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
+            const obj = new ContainerResourceImpl(objHandle, this._client);
+            await configure(obj);
+        }) : undefined;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
+        if (configure !== undefined) rpcArgs.configure = configureId;
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/runAsContainerImage',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ProjectResourcePromise {
+        const configure = options?.configure;
+        return new ProjectResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
+    }
+
+    /** @internal */
     private async _withTerminalInternal(): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
@@ -38698,6 +39492,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
 const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResource, ProjectResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ProjectResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ProjectResourcePromiseImpl,
+    ["asContainer"]: null,
     ["withMcpServer"]: () => ProjectResourcePromiseImpl,
     ["withOtlpExporter"]: () => ProjectResourcePromiseImpl,
     ["withReplicas"]: () => ProjectResourcePromiseImpl,
@@ -38758,6 +39553,7 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["withImagePushOptions"]: () => ProjectResourcePromiseImpl,
     ["withRemoteImageName"]: () => ProjectResourcePromiseImpl,
     ["withRemoteImageTag"]: () => ProjectResourcePromiseImpl,
+    ["runAsContainerImage"]: () => ProjectResourcePromiseImpl,
     ["withTerminal"]: () => ProjectResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ProjectResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ProjectResourcePromiseImpl,
@@ -39029,6 +39825,11 @@ export interface TestDatabaseResource {
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestDatabaseResourcePromise;
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -39862,6 +40663,11 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestDatabaseResourcePromise;
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -41030,6 +41836,19 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      */
     withContainerNetworkAlias(alias: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withContainerNetworkAliasInternal(alias), this._client);
+    }
+
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -43250,6 +44069,7 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withDockerfileBuilder"]: () => TestDatabaseResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => TestDatabaseResourcePromiseImpl,
     ["withContainerNetworkAlias"]: () => TestDatabaseResourcePromiseImpl,
+    ["asContainer"]: null,
     ["withMcpServer"]: () => TestDatabaseResourcePromiseImpl,
     ["withOtlpExporter"]: () => TestDatabaseResourcePromiseImpl,
     ["publishAsConnectionString"]: () => TestDatabaseResourcePromiseImpl,
@@ -43577,6 +44397,11 @@ export interface TestRedisResource {
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestRedisResourcePromise;
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -44494,6 +45319,11 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestRedisResourcePromise;
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -45746,6 +46576,19 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      */
     withContainerNetworkAlias(alias: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withContainerNetworkAliasInternal(alias), this._client);
+    }
+
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -48277,6 +49120,7 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withDockerfileBuilder"]: () => TestRedisResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => TestRedisResourcePromiseImpl,
     ["withContainerNetworkAlias"]: () => TestRedisResourcePromiseImpl,
+    ["asContainer"]: null,
     ["withMcpServer"]: () => TestRedisResourcePromiseImpl,
     ["withOtlpExporter"]: () => TestRedisResourcePromiseImpl,
     ["publishAsConnectionString"]: () => TestRedisResourcePromiseImpl,
@@ -48622,6 +49466,11 @@ export interface TestVaultResource {
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestVaultResourcePromise;
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -49457,6 +50306,11 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestVaultResourcePromise;
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -50627,6 +51481,19 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      */
     withContainerNetworkAlias(alias: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withContainerNetworkAliasInternal(alias), this._client);
+    }
+
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -52862,6 +53729,7 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withDockerfileBuilder"]: () => TestVaultResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => TestVaultResourcePromiseImpl,
     ["withContainerNetworkAlias"]: () => TestVaultResourcePromiseImpl,
+    ["asContainer"]: null,
     ["withMcpServer"]: () => TestVaultResourcePromiseImpl,
     ["withOtlpExporter"]: () => TestVaultResourcePromiseImpl,
     ["publishAsConnectionString"]: () => TestVaultResourcePromiseImpl,
@@ -53278,6 +54146,11 @@ export interface Resource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise;
     /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
+    /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
      * The command is considered valid if either:
@@ -53458,6 +54331,19 @@ export interface Resource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ResourcePromise;
     /**
@@ -53610,6 +54496,11 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise;
     /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    asContainer(): Promise<ContainerResource | null>;
+    /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
      * The command is considered valid if either:
@@ -53790,6 +54681,19 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise;
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ResourcePromise;
     /**
@@ -53979,6 +54883,19 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         const buildImage = options?.buildImage;
         const runtimeImage = options?.runtimeImage;
         return new ResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
+    }
+
+    /**
+     * Gets a resource's effective container.
+     * @returns The resource itself when it is a `ContainerResource`, its selected container projection, or `null` when the resource has no projection or is classified as a container only through legacy annotations.
+     */
+    async asContainer(): Promise<ContainerResource | null> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        const handle = await this._client.invokeCapability<ContainerResourceHandle | null>(
+            'Aspire.Hosting/asContainer',
+            rpcArgs
+        );
+        return handle === null ? null : new ContainerResourceImpl(handle, this._client);
     }
 
     /** @internal */
@@ -54597,6 +55514,39 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
+    private async _runAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<Resource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
+            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
+            const obj = new ContainerResourceImpl(objHandle, this._client);
+            await configure(obj);
+        }) : undefined;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
+        if (configure !== undefined) rpcArgs.configure = configureId;
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/runAsContainerImage',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
+     *
+     * The image is required so a projection can never exist without a valid container source. Configuration
+     * written inside `configure` applies only to the run-mode container; configuration written
+     * on `builder` applies to the resource itself and is seen by every projection of it.
+     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
+     * when capturing its logical identity rather than its container-specific configuration.
+     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ResourcePromise {
+        const configure = options?.configure;
+        return new ResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
+    }
+
+    /** @internal */
     private async _withTerminalInternal(): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<IResourceHandle>(
@@ -55203,6 +56153,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
 const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ResourcePromiseImpl,
+    ["asContainer"]: null,
     ["withRequiredCommand"]: () => ResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ResourcePromiseImpl,
     ["withSessionLifetime"]: () => ResourcePromiseImpl,
@@ -55226,6 +56177,7 @@ const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePr
     ["excludeFromMcp"]: () => ResourcePromiseImpl,
     ["withHidden"]: () => ResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ResourcePromiseImpl,
+    ["runAsContainerImage"]: () => ResourcePromiseImpl,
     ["withTerminal"]: () => ResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ResourcePromiseImpl,
@@ -57294,6 +58246,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUr
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext', (handle, client) => new TestCallbackContextImpl(handle as TestCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext', (handle, client) => new TestCollectionContextImpl(handle as TestCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext', (handle, client) => new TestEnvironmentContextImpl(handle as TestEnvironmentContextHandle, client));
+registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestHandlePropertyContext', (handle, client) => new TestHandlePropertyContextImpl(handle as TestHandlePropertyContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext', (handle, client) => new TestMutableCollectionContextImpl(handle as TestMutableCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext', (handle, client) => new TestResourceContextImpl(handle as TestResourceContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext', (handle, client) => new UpdateCommandStateContextImpl(handle as UpdateCommandStateContextHandle, client));

@@ -185,6 +185,77 @@ public class DotnetProgramPublishingTests(ITestOutputHelper outputHelper)
         Assert.True(resource.Resource.RequiresImageBuild());
     }
 
+    [Theory]
+    [InlineData(false, "none")]
+    [InlineData(false, "prebuilt")]
+    [InlineData(false, "dockerfile")]
+    [InlineData(true, "none")]
+    [InlineData(true, "prebuilt")]
+    [InlineData(true, "dockerfile")]
+    public async Task ProjectedProgramUsesContainerConfigurationInsteadOfSdkPublishing(bool legacyProject, string imageSource)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var processRunner = new TestProcessRunner();
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        var runtime = new FakeContainerRuntime();
+        builder.Services.AddFakeContainerRuntime(runtime);
+        IDotnetProgramResource program = legacyProject
+            ? new ProjectResource("program")
+            : new TestDotnetProgramResource("program");
+        var resource = builder.AddResource(program)
+            .WithAnnotation(new TestProjectMetadata("program.csproj"))
+            .WithDotnetProgramPublishing()
+            .WithContainerProjection(DistributedApplicationOperation.Publish, container =>
+            {
+                container.WithHttpEndpoint();
+                if (imageSource is not "none")
+                {
+                    container.WithImage("projected-image", "v1");
+                }
+                if (imageSource is "dockerfile")
+                {
+                    container.WithDockerfile(".");
+                }
+            });
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        Assert.Same(program.AsContainer(), Assert.Single(model.Resources));
+        Assert.False(program.SupportsDotnetProgramPublishing());
+        Assert.Equal(imageSource is "dockerfile", program.RequiresImageBuild());
+        Assert.Equal(imageSource is "dockerfile", program.RequiresImageBuildAndPush());
+        Assert.Equal(8000, Assert.Single(program.ResolveEndpoints()).TargetPort.Value);
+
+        var pipelineContext = new PipelineContext(
+            model,
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        var steps = new List<PipelineStep>();
+        foreach (var annotation in program.Annotations.OfType<PipelineStepAnnotation>())
+        {
+            steps.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+            {
+                PipelineContext = pipelineContext,
+                Resource = program
+            }));
+        }
+
+        string[] expectedSteps = imageSource is "dockerfile" ? ["build-program", "push-program"] : [];
+        Assert.Equal(expectedSteps, steps.Select(step => step.Name).Order(StringComparer.Ordinal));
+        Assert.All(steps, step => Assert.Same(program, step.Resource));
+
+        if (imageSource is not "none")
+        {
+            await app.Services.GetRequiredService<IResourceContainerImageManager>()
+                .BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal(imageSource is "dockerfile" ? 1 : 0, runtime.BuildImageCalls.Count);
+        Assert.Empty(processRunner.ProcessSpecs);
+    }
+
     [Fact]
     public async Task PrebuiltProgramParticipatesInComputeWithoutBuildOrPushSteps()
     {

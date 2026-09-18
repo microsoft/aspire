@@ -1355,10 +1355,7 @@ public static partial class JavaScriptHostingExtensions
                .WithContainerFilesSource(GetContainerFilesSourcePath(options.OutputPath))
                .WithOtlpExporterIfMissing();
 
-        if (builder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
-        {
-            dockerfileBuildAnnotation.HasEntrypoint = true;
-        }
+        MarkDockerfileAsExecutable(builder);
 
         return builder;
     }
@@ -1419,10 +1416,7 @@ public static partial class JavaScriptHostingExtensions
                .WithEnvironment("HOST", "0.0.0.0")
                .WithEnvironment("HOSTNAME", "0.0.0.0");
 
-        if (builder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
-        {
-            dockerfileBuildAnnotation.HasEntrypoint = true;
-        }
+        MarkDockerfileAsExecutable(builder);
 
         return builder;
     }
@@ -1499,12 +1493,18 @@ public static partial class JavaScriptHostingExtensions
                .WithEnvironment("HOST", "0.0.0.0")
                .WithEnvironment("HOSTNAME", "0.0.0.0");
 
+        MarkDockerfileAsExecutable(builder);
+
+        return builder;
+    }
+
+    private static void MarkDockerfileAsExecutable<TResource>(IResourceBuilder<TResource> builder)
+        where TResource : JavaScriptAppResource
+    {
         if (builder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
         {
             dockerfileBuildAnnotation.HasEntrypoint = true;
         }
-
-        return builder;
     }
 
     private static bool CopyPackageFilesForInstall(this DockerfileStage builderStage, JavaScriptPackageManagerAnnotation packageManager)
@@ -1690,14 +1690,17 @@ public static partial class JavaScriptHostingExtensions
 
                 c.WithDockerfileBuilder(appDirectory, dockerfileContext =>
                 {
-                    dockerfileContext.Resource.TryGetLastAnnotation<JavaScriptPublishModeAnnotation>(out var publishMode);
+                    // Dockerfile generation runs after projection configuration. Use the callback resource instead
+                    // of retaining the non-model projection builder beyond its synchronous configuration callback.
+                    var dockerfileResource = dockerfileContext.Resource;
+                    dockerfileResource.TryGetLastAnnotation<JavaScriptPublishModeAnnotation>(out var publishMode);
 
-                    if (c.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
+                    if (dockerfileResource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
                     {
                         // Get custom base image from annotation, if present. A caller can configure only a runtime
                         // image, which leaves BuildImage null, so fall back to the package manager's own image
                         // before the Node.js default - bun and deno are absent from the Node.js images.
-                        dockerfileContext.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation);
+                        dockerfileResource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation);
                         var baseImage = baseImageAnnotation?.BuildImage
                             ?? packageManager.DefaultBuildImage
                             ?? GetDefaultBaseImage(appDirectory, "slim", dockerfileContext.Services);
@@ -1712,7 +1715,7 @@ public static partial class JavaScriptHostingExtensions
 
                         var copiedAllSource = dockerBuilder.CopyPackageFilesForInstall(packageManager);
 
-                        if (c.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand))
+                        if (dockerfileResource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand))
                         {
                             dockerBuilder.AddInstallCommand(packageManager, installCommand);
                         }
@@ -1723,7 +1726,7 @@ public static partial class JavaScriptHostingExtensions
                             dockerBuilder.Copy(".", ".");
                         }
 
-                        if (c.Resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
+                        if (dockerfileResource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
                         {
                             dockerBuilder.Run(BuildPackageScriptCommand(packageManager, buildCommand));
                         }
@@ -1832,7 +1835,7 @@ public static partial class JavaScriptHostingExtensions
                                 // Install production-only dependencies using the same base install
                                 // command as the build stage (e.g. 'ci' for npm, 'install --frozen-lockfile'
                                 // for pnpm) plus the production-only flag (e.g. '--omit=dev').
-                                var installAnnotation = c.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCmd) ? installCmd : null;
+                                var installAnnotation = dockerfileResource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCmd) ? installCmd : null;
                                 if (string.IsNullOrEmpty(installAnnotation?.ProductionInstallArgs))
                                 {
                                     throw new InvalidOperationException($"Package manager '{packageManager.ExecutableName}' does not have ProductionInstallArgs configured, which is required for PublishAsPackageScript.");
@@ -1900,28 +1903,31 @@ public static partial class JavaScriptHostingExtensions
             .WithBuildScript("build")
             .WithRunScript(runScriptName);
 
-        if (builder.ExecutionContext.IsPublishMode &&
-            builder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerBuilder))
+        if (builder.ExecutionContext.IsPublishMode)
         {
             var validationStepName = $"validate-javascript-dockerfile-run-script-{resource.Name}";
+            if (resource.AsContainer() is not { } containerResource)
+            {
+                throw new InvalidOperationException(
+                    $"The published JavaScript app '{resource.Name}' does not have a container projection.");
+            }
 
             Task WriteValidatedContainerAsync(ManifestPublishingContext context)
             {
-                ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
-                return context.WriteContainerAsync(containerBuilder.Resource);
+                ValidateExistingDockerfileRunScript(resource, containerResource);
+                return context.WriteContainerAsync(containerResource);
             }
 
             resourceBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
-            containerBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
-            containerBuilder.WithAnnotation(new PipelineStepAnnotation(_ => new PipelineStep
+            resourceBuilder.WithAnnotation(new PipelineStepAnnotation(_ => new PipelineStep
             {
                 Name = validationStepName,
                 Description = $"Validates that JavaScript app '{resource.Name}' does not publish an ignored run script with an existing Dockerfile.",
                 RequiredBySteps = [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
-                Resource = containerBuilder.Resource,
+                Resource = resource,
                 Action = _ =>
                 {
-                    ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
+                    ValidateExistingDockerfileRunScript(resource, containerResource);
                     return Task.CompletedTask;
                 }
             }));
@@ -2248,11 +2254,7 @@ public static partial class JavaScriptHostingExtensions
                 .WithAnnotation(new JavaScriptPublishModeAnnotation(JavaScriptPublishMode.NextStandalone))
                 .ClearContainerFilesSources()
                 .WithEnvironment("HOSTNAME", "0.0.0.0");
-
-            if (resourceBuilder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
-            {
-                dockerfileBuildAnnotation.HasEntrypoint = true;
-            }
+            MarkDockerfileAsExecutable(resourceBuilder);
         }
 
         // Add a publish prereq step that validates the Next.js config has standalone output enabled.

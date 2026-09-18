@@ -1336,6 +1336,234 @@ func (s *testEnvironmentContext) SetPriority(value float64) TestEnvironmentConte
 	return s
 }
 
+// TestHandlePropertyContext is the public interface for handle type TestHandlePropertyContext.
+type TestHandlePropertyContext interface {
+	handleReference
+	OptionalContext() TestEnvironmentContext
+	OptionalResource() TestResourceContext
+	ReadOnlyOptionalContext() TestEnvironmentContext
+	ReadOnlyOptionalResource() TestResourceContext
+	ReadOnlyRequiredContext() TestEnvironmentContext
+	ReadOnlyRequiredResource() TestResourceContext
+	RequiredContext() TestEnvironmentContext
+	RequiredResource() TestResourceContext
+	SetOptionalContext(value TestEnvironmentContext) TestHandlePropertyContext
+	SetOptionalResource(value TestResourceContext) TestHandlePropertyContext
+	SetRequiredContext(value TestEnvironmentContext) TestHandlePropertyContext
+	SetRequiredResource(value TestResourceContext) TestHandlePropertyContext
+	Err() error
+}
+
+// testHandlePropertyContext is the unexported impl of TestHandlePropertyContext.
+type testHandlePropertyContext struct {
+	*resourceBuilderBase
+}
+
+// newTestHandlePropertyContextFromHandle wraps an existing handle as TestHandlePropertyContext.
+func newTestHandlePropertyContextFromHandle(h *handle, c *client) TestHandlePropertyContext {
+	return &testHandlePropertyContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// OptionalContext gets the OptionalContext property
+func (s *testHandlePropertyContext) OptionalContext() TestEnvironmentContext {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalContext", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalContext returned unexpected type %T", result))
+		return nil
+	}
+	return &testEnvironmentContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// OptionalResource gets the OptionalResource property
+func (s *testHandlePropertyContext) OptionalResource() TestResourceContext {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalResource", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.optionalResource returned unexpected type %T", result))
+		return nil
+	}
+	return &testResourceContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// ReadOnlyOptionalContext gets the ReadOnlyOptionalContext property
+func (s *testHandlePropertyContext) ReadOnlyOptionalContext() TestEnvironmentContext {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalContext", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalContext returned unexpected type %T", result))
+		return nil
+	}
+	return &testEnvironmentContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// ReadOnlyOptionalResource gets the ReadOnlyOptionalResource property
+func (s *testHandlePropertyContext) ReadOnlyOptionalResource() TestResourceContext {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalResource", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	if result == nil { return nil }
+	href, ok := result.(handleReference)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyOptionalResource returned unexpected type %T", result))
+		return nil
+	}
+	return &testResourceContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// ReadOnlyRequiredContext gets the ReadOnlyRequiredContext property
+func (s *testHandlePropertyContext) ReadOnlyRequiredContext() TestEnvironmentContext {
+	if s.err != nil { return &testEnvironmentContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredContext", reqArgs)
+	if err != nil {
+		return &testEnvironmentContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredContext returned unexpected type %T", result)
+		return &testEnvironmentContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &testEnvironmentContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// ReadOnlyRequiredResource gets the ReadOnlyRequiredResource property
+func (s *testHandlePropertyContext) ReadOnlyRequiredResource() TestResourceContext {
+	if s.err != nil { return &testResourceContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredResource", reqArgs)
+	if err != nil {
+		return &testResourceContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.readOnlyRequiredResource returned unexpected type %T", result)
+		return &testResourceContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &testResourceContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// RequiredContext gets the RequiredContext property
+func (s *testHandlePropertyContext) RequiredContext() TestEnvironmentContext {
+	if s.err != nil { return &testEnvironmentContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredContext", reqArgs)
+	if err != nil {
+		return &testEnvironmentContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredContext returned unexpected type %T", result)
+		return &testEnvironmentContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &testEnvironmentContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// RequiredResource gets the RequiredResource property
+func (s *testHandlePropertyContext) RequiredResource() TestResourceContext {
+	if s.err != nil { return &testResourceContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredResource", reqArgs)
+	if err != nil {
+		return &testResourceContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.requiredResource returned unexpected type %T", result)
+		return &testResourceContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &testResourceContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// SetOptionalContext sets the OptionalContext property
+func (s *testHandlePropertyContext) SetOptionalContext(value TestEnvironmentContext) TestHandlePropertyContext {
+	if s.err != nil { return s }
+	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalContext", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetOptionalResource sets the OptionalResource property
+func (s *testHandlePropertyContext) SetOptionalResource(value TestResourceContext) TestHandlePropertyContext {
+	if s.err != nil { return s }
+	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setOptionalResource", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetRequiredContext sets the RequiredContext property
+func (s *testHandlePropertyContext) SetRequiredContext(value TestEnvironmentContext) TestHandlePropertyContext {
+	if s.err != nil { return s }
+	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredContext", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetRequiredResource sets the RequiredResource property
+func (s *testHandlePropertyContext) SetRequiredResource(value TestResourceContext) TestHandlePropertyContext {
+	if s.err != nil { return s }
+	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestHandlePropertyContext.setRequiredResource", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // TestMutableCollectionContext is the public interface for handle type TestMutableCollectionContext.
 type TestMutableCollectionContext interface {
 	handleReference
@@ -2400,6 +2628,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", func(h *handle, c *client) any {
 		return newTestEnvironmentContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestHandlePropertyContext", func(h *handle, c *client) any {
+		return newTestHandlePropertyContextFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", func(h *handle, c *client) any {
 		return newTestMutableCollectionContextFromHandle(h, c)

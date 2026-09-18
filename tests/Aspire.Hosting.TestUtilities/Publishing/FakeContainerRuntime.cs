@@ -24,7 +24,6 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
     public bool WasRemoveImageCalled { get; private set; }
     public bool WasPushImageCalled { get; private set; }
     public bool WasBuildImageCalled { get; private set; }
-    public bool WasInspectImageConfigCalled { get; private set; }
     public bool WasInspectImageManifestCalled { get; private set; }
     public bool WasLoginToRegistryCalled { get; private set; }
     public bool WasComposeDownCalled { get; private set; }
@@ -123,7 +122,6 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
 
     public Task<ContainerImageConfigInspectionResult> InspectImageConfigAsync(string imageName, CancellationToken cancellationToken)
     {
-        WasInspectImageConfigCalled = true;
         InspectImageConfigCalls.Add(imageName);
         if (shouldFail)
         {

@@ -121,9 +121,11 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 await WriteResourceObjectAsync(resource, () => manifestPublishingCallbackAnnotation.Callback(this)).ConfigureAwait(false);
             }
         }
-        else if (resource is ContainerResource container)
+        else if (resource.AsContainer() is { } container)
         {
-            await WriteResourceObjectAsync(container, () => WriteContainerAsync(container)).ConfigureAwait(false);
+            // The owner remains the manifest identity, while the selected projection supplies its effective
+            // container shape. Explicit manifest callbacks above remain authoritative for specialized publishers.
+            await WriteResourceObjectAsync(resource, () => WriteContainerAsync(container)).ConfigureAwait(false);
         }
         else if (resource.SupportsDotnetProgramPublishing())
         {
@@ -322,6 +324,8 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     /// <exception cref="DistributedApplicationException">Thrown if the container resource does not contain a <see cref="ContainerImageAnnotation"/>.</exception>
     public async Task WriteContainerAsync(ContainerResource container)
     {
+        ArgumentNullException.ThrowIfNull(container);
+
         var deploymentTarget = container.GetDeploymentTargetAnnotation();
 
         if (container.Annotations.OfType<DockerfileBuildAnnotation>().Any())
@@ -387,7 +391,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 var dockerfileContext = new DockerfileFactoryContext
                 {
                     Services = ExecutionContext.Services,
-                    Resource = container,
+                    Resource = ((IResource)container).GetOwnerOrSelf(),
                     CancellationToken = CancellationToken
                 };
                 await annotation.EmitDockerfileArtifactsAsync(dockerfileContext, resourceDockerfilePath).ConfigureAwait(false);
@@ -475,12 +479,12 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     }
 
     /// <summary>
-    /// Writes the "connectionString" field for the underlying resource.
+    /// Writes the "connectionString" field for the effective resource capability.
     /// </summary>
     /// <param name="resource">The <see cref="IResource"/>.</param>
     public void WriteConnectionString(IResource resource)
     {
-        if (resource is IResourceWithConnectionString resourceWithConnectionString &&
+        if (resource.GetEffectiveCapability<IResourceWithConnectionString>() is { } resourceWithConnectionString &&
             resourceWithConnectionString.ConnectionStringExpression is { } connectionString)
         {
             TryAddDependentResources(connectionString);
@@ -540,7 +544,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     /// <param name="resource">The <see cref="IResource"/> which contains <see cref="EnvironmentCallbackAnnotation"/> annotations.</param>
     public async Task WriteEnvironmentVariablesAsync(IResource resource)
     {
-        var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource)
+        var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource.GetOwnerOrSelf())
             .WithEnvironmentVariablesConfig()
             .BuildAsync(ExecutionContext, NullLogger.Instance, CancellationToken)
             .ConfigureAwait(false);
@@ -578,7 +582,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     /// <returns>The <see cref="Task"/> to await for completion.</returns>
     public async Task WriteCommandLineArgumentsAsync(IResource resource)
     {
-        var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource)
+        var executionConfiguration = await ExecutionConfigurationBuilder.Create(resource.GetOwnerOrSelf())
             .WithArgumentsConfig()
             .BuildAsync(ExecutionContext, NullLogger.Instance, CancellationToken)
             .ConfigureAwait(false);
