@@ -3,7 +3,10 @@
   "type": "flaky-test",
   "title": "Flaky: PRScriptShellTests tests fail with 'Text file busy' race condition on mock gh binary",
   "test_name": "Aspire.Acquisition.Tests.Scripts.PRScriptShellTests.BooleanFlags_AreAccepted",
+  "job_name": "Tests / No-package tests (regular, Aspire.Acquisition.Tests, Acquisition, Acquisition, tests/Aspire.Acqui...) / Acquisition (ubuntu-latest)",
   "error_pattern": "Aspire.Templates.Tests.ToolCommandException : Expected 0 exit code but got 1: bash get-aspire-cli-pr.sh ... Error: GitHub CLI (gh) command failed: /tmp/aspire-test-.../mock-bin/gh: /bin/bash: bad interpreter: Text file busy",
+  "analysis": "The test's mock 'gh' binary is invoked while it's still being written to disk, causing an OS-level 'Text file busy' error when bash tries to use it as the interpreter. This is a known race condition in the test's mock binary setup, unrelated to the PR's changes to Aspire.Cli StopCommand and Aspire.Hosting Dcp code.",
+  "failure_details": "**Error:**\nAspire.Templates.Tests.ToolCommandException :  Expected 0 exit code but got 1: bash \"/home/runner/work/aspire/aspire/eng/scripts/get-aspire-cli-pr.sh\" 12345 --dry-run --skip-path --verbose\nStandard Output:\n\u001b[0;31mError: GitHub CLI (gh) command failed: /home/runner/work/aspire/aspire/eng/scripts/get-aspire-cli-pr.sh: /tmp/aspire-test-5zRCqG/mock-bin/gh: /bin/bash: bad interpreter: Text file busy\u001b[0m\n\n**Stack Trace:**\nat Aspire.Templates.Tests.CommandResult.EnsureExitCode(Int32 expectedExitCode, String messagePrefix, Boolean suppressOutput) in /_/tests/Shared/TemplatesTesting/CommandResult.cs:line 36\n   at Aspire.Templates.Tests.CommandResult.EnsureSuccessful(String messagePrefix, Boolean suppressOutput) in /_/tests/Shared/TemplatesTesting/CommandResult.cs:line 20\n   at Aspire.Acquisition.Tests.Scripts.PRScriptShellTests.BooleanFlags_AreAccepted(String flag) in /_/tests/Aspire.Acquisition.Tests/Scripts/PRScriptShellTests.cs:line 344\n--- End of stack trace from previous location ---\n\n**Standard Output (redacted):**\nCreated mock gh script at: /tmp/aspire-test-5zRCqG/mock-bin/gh\n[get-aspire-cli-pr.sh] Executing - bash \"/home/runner/work/aspire/aspire/eng/scripts/get-aspire-cli-pr.sh\" 12345 --dry-run --skip-path --verbose \n[get-aspire-cli-pr.sh] \t[HOME] = /tmp/aspire-test-5zRCqG/home\n[get-aspire-cli-pr.sh] \t[USERPROFILE] = /tmp/aspire-test-5zRCqG/home\n[get-aspire-cli-pr.sh] \t[XDG_CONFIG_HOME] = /tmp/aspire-test-5zRCqG/home/.config\n[get-aspire-cli-pr.sh] \t[ASPIRE_TEST_MODE] = true\n[get-aspire-cli-pr.sh] \t[PATH] = [REDACTED]\n[get-aspire-cli-pr.sh] \u001b[0;31mError: GitHub CLI (gh) command failed: /home/runner/work/aspire/aspire/eng/scripts/get-aspire-cli-pr.sh: /tmp/aspire-test-5zRCqG/mock-bin/gh: /bin/bash: bad interpreter: Text file busy\u001b[0m\n[get-aspire-cli-pr.sh] Got the Exited event, and waiting on WaitForExitAsync now\n[get-aspire-cli-pr.sh] Process ran for 0.012037 secs",
   "occurrences": [
     {
       "run_id": 29122927133,
@@ -18,6 +21,13 @@
       "job": "Tests / Acquisition / Acquisition (ubuntu-latest)",
       "pr_number": 19559,
       "observed_at": "2026-08-21T22:10:08Z"
+    },
+    {
+      "run_id": 35366726944,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35366726944",
+      "job": "Tests / No-package tests (regular, Aspire.Acquisition.Tests, Acquisition, Acquisition, tests/Aspire.Acqui...) / Acquisition (ubuntu-latest)",
+      "pr_number": 20195,
+      "observed_at": "2026-09-18T17:06:30Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18732"
