@@ -9,7 +9,7 @@ using Xunit;
 namespace Infrastructure.Tests;
 
 /// <summary>
-/// Tests for .github/workflows/analyze-ci-failure.js.
+/// Tests for .github/workflows/analyze-ci-failure/analyze_ci_failure.py.
 /// </summary>
 public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
 {
@@ -25,13 +25,13 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         _output = output;
         _workspace = TemporaryWorkspace.Create(output);
         _repoRoot = RepoRoot.Path;
-        _scriptPath = Path.Combine(_repoRoot, ".github", "workflows", "analyze-ci-failure.js");
+        _scriptPath = Path.Combine(_repoRoot, ".github", "workflows", "analyze-ci-failure", "analyze_ci_failure.py");
     }
 
     public void Dispose() => _workspace.Dispose();
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task AddOccurrenceUsesTheCauseJobInAMultiJobRun()
     {
         var analysis = CreateAnalysis();
@@ -54,11 +54,11 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         Assert.Equal("Password: [REDACTED]", result.GetProperty("failure_details").GetString());
 
         var occurrenceRow = await InvokeScriptAsync("occurrence-row", analysis, cause);
-        Assert.Equal("| 2026-07-22 | [987654](https://github.com/microsoft/aspire/actions/runs/987654) | Tests / Linux | #18763 |", occurrenceRow);
+        Assert.Equal("| 2026-07-22 | [987654](https://github.com/microsoft/aspire/actions/runs/987654) | <code>Tests / Linux</code> | #18763 |", occurrenceRow);
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task BuildFlakyTestIssueBodyUsesMatchingJobAndEscapesHtml()
     {
         var analysis = CreateAnalysis(
@@ -105,7 +105,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             ## Build Information
 
             Build: https://github.com/microsoft/aspire/actions/runs/987654
-            Build error leg or test failing: Tests / Linux / ``Tests.SampleTheory(`value`) @maintainers``
+            Build error leg or test failing: `Tests / Linux` / ``Tests.SampleTheory(`value`) @maintainers``
             Pull request: #18763
 
             ## Classification Analysis
@@ -153,7 +153,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
 
             | Date | Build | Job | PR |
             |------|-------|-----|----|
-            | 2026-07-22 | [987654](https://github.com/microsoft/aspire/actions/runs/987654) | Tests / Linux | #18763 |
+            | 2026-07-22 | [987654](https://github.com/microsoft/aspire/actions/runs/987654) | <code>Tests / Linux</code> | #18763 |
             """.ReplaceLineEndings("\n");
 
         Assert.Equal(expected, body);
@@ -163,7 +163,37 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
+    public async Task IssueOccurrenceRendersModelAuthoredJobNameAsInertCode()
+    {
+        var analysis = CreateAnalysis();
+        var cause = new
+        {
+            id = "unsafe-job-name",
+            type = "infra-failure",
+            title = "Unsafe job name",
+            job_name = "Tests | [link](https://example.com) @maintainers\n</code>",
+            failure_details = "Failure details"
+        };
+
+        var occurrenceRow = await InvokeScriptAsync("occurrence-row", analysis, cause);
+        Assert.Equal(
+            "| 2026-07-22 | [987654](https://github.com/microsoft/aspire/actions/runs/987654) | <code>Tests &#124; &#91;link&#93;(https://example.com) &#64;maintainers &lt;/code&gt;</code> | #18763 |",
+            occurrenceRow);
+
+        var body = await InvokeScriptAsync(
+            "issue-body",
+            analysis,
+            cause,
+            "<!-- ci-failure-cause:unsafe-job-name -->");
+        Assert.Contains(
+            "Build error leg: `Tests | [link](https://example.com) @maintainers </code>`",
+            body);
+        Assert.Contains(occurrenceRow, body);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
     public async Task OccurrenceOperationsUseCurrentTimeWhenAnalysisTimestampIsMissingOrInvalid()
     {
         object[] analyses =
@@ -210,7 +240,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task BuildInfrastructureIssueBodyUsesTheMatchingJob()
     {
         var analysis = CreateAnalysis();
@@ -230,14 +260,14 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             cause,
             "<!-- ci-failure-cause:linux-network-failure -->");
 
-        Assert.Contains("Build error leg: Tests / Linux", body);
+        Assert.Contains("Build error leg: `Tests / Linux`", body);
         Assert.Contains("Linux runner lost &lt;network&gt; connectivity.", body);
         Assert.Contains("Request to &lt;feed&gt; failed &amp; timed out", body);
-        Assert.Contains("| Tests / Linux | #18763 |", body);
+        Assert.Contains("| <code>Tests / Linux</code> | #18763 |", body);
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task BuildInfrastructureIssueBodyUsesCauseAnalysisWhenJobDoesNotMatch()
     {
         var analysis = CreateAnalysis();
@@ -261,7 +291,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task FormatTestFailuresUsesSafeMarkdownFences()
     {
         var failures = new[]
@@ -306,7 +336,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task FormatTestFailuresIncludesSourceJob()
     {
         var failures = new[]
@@ -333,7 +363,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     [InlineData("postgresql://dbuser:dbpass@postgres.example/db", "postgresql://[REDACTED]:[REDACTED]@postgres.example/db")]
     [InlineData("mongodb+srv://mongo-user:mongo-pass@mongo.example/db", "mongodb+srv://[REDACTED]:[REDACTED]@mongo.example/db")]
     [InlineData("redis://:redis-pass@redis.example/0", "redis://[REDACTED]:[REDACTED]@redis.example/0")]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task RedactOperationRemovesSensitiveValuesAndPreservesDiagnostics(string credentialUri, string redactedUri)
     {
         var privateKeyAcrossTruncationBoundary = $"{new string('x', 3950)}-----BEGIN PRIVATE KEY-----\n{new string('k', 200)}\n-----END PRIVATE KEY-----\nExpected 42 but got 41";
@@ -379,7 +409,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     [InlineData("PGPASSWORD=database-secret", "PGPASSWORD=[REDACTED]")]
     [InlineData("{\"PGPASSWORD\":\"database-secret\"}", "{\"PGPASSWORD\":\"[REDACTED]\"}")]
     [InlineData("env.PGPASSWORD=\"database-secret\"", "env.PGPASSWORD=\"[REDACTED]\"")]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task RedactOperationRemovesTokenValues(string value, string expected)
     {
         var output = await InvokeScriptAsync("redact", new { diagnostic = value });
@@ -388,59 +418,234 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         Assert.Equal(expected, redacted.GetProperty("diagnostic").GetString());
     }
 
-    [Theory]
-    [InlineData("analyze-ci-failure.md")]
-    [InlineData("analyze-ci-failure.lock.yml")]
-    public void PublishStepRedactsModelGeneratedFilesBeforeUse(string workflowName)
+    [Fact]
+    [RequiresTools(["python3"])]
+    public async Task ValidatePublicationReturnsTrustedManifest()
     {
-        var workflow = File.ReadAllText(Path.Combine(_repoRoot, ".github", "workflows", workflowName));
-        var publishStepIndex = workflow.IndexOf("- name: Publish analysis data and comment on PR", StringComparison.Ordinal);
-        Assert.True(publishStepIndex >= 0, $"Could not find the publish step in {workflowName}.");
-        var publishStep = workflow[publishStepIndex..];
-        var analysisRedactionIndex = publishStep.IndexOf(
-            "node .github/workflows/analyze-ci-failure.js redact \"$ANALYSIS_FILE\"",
-            StringComparison.Ordinal);
-        var causeRedactionIndex = publishStep.IndexOf(
-            "node .github/workflows/analyze-ci-failure.js redact \"$CAUSE_FILE\"",
-            StringComparison.Ordinal);
-        var analysisReadIndex = publishStep.IndexOf(
-            "RUN_ID=$(jq -r '.run_id' \"$ANALYSIS_FILE\")",
-            StringComparison.Ordinal);
-        var persistenceReadIndex = publishStep.IndexOf(
-            "CAUSE_TYPE_CHECK=$(jq -r '.type' \"$CAUSE_FILE\"",
-            StringComparison.Ordinal);
-        var issueReadIndex = publishStep.IndexOf(
-            "CAUSE_ID=$(jq -r '.id' \"$CAUSE_FILE\")",
-            StringComparison.Ordinal);
-        var commentRenderIndex = publishStep.IndexOf(
-            "node .github/workflows/analyze-ci-failure.js pr-comment \"$ANALYSIS_FILE\"",
-            StringComparison.Ordinal);
+        var (analysis, context, evidence) = CreateValidationData();
 
-        Assert.True(analysisRedactionIndex >= 0, $"{workflowName} must redact the analysis file.");
-        Assert.True(causeRedactionIndex >= 0, $"{workflowName} must redact each cause file.");
-        Assert.True(analysisReadIndex > analysisRedactionIndex, $"{workflowName} must sanitize analysis before field reads.");
-        Assert.True(persistenceReadIndex > causeRedactionIndex, $"{workflowName} must sanitize causes before persistence reads.");
-        Assert.True(issueReadIndex > causeRedactionIndex, $"{workflowName} must sanitize causes before issue rendering reads.");
-        Assert.True(commentRenderIndex > analysisRedactionIndex, $"{workflowName} must render the PR comment from sanitized analysis.");
-        Assert.Contains("rm -f \"$CAUSE_FILE\"", publishStep);
+        var output = await InvokeValidationAsync("validate-publication", analysis, context, evidence);
+        var manifest = JsonSerializer.Deserialize<JsonElement>(output, s_jsonOptions);
+
+        Assert.Equal(987654, manifest.GetProperty("run_id").GetInt32());
+        Assert.Equal(2, manifest.GetProperty("run_attempt").GetInt32());
+        Assert.Equal("abc123", manifest.GetProperty("analyzed_commit_sha").GetString());
+        Assert.Equal("unknown", manifest.GetProperty("verdict").GetString());
+        Assert.True(manifest.GetProperty("rerun_eligible").GetBoolean());
     }
 
     [Theory]
-    [InlineData("analyze-ci-failure.md")]
-    [InlineData("analyze-ci-failure.lock.yml")]
-    public void CollectStepExtractsFailedExtensionE2eMochaResults(string workflowName)
+    [InlineData("commit")]
+    [InlineData("evidence")]
+    [InlineData("rerun")]
+    [RequiresTools(["python3"])]
+    public async Task ValidatePublicationRejectsUntrustedOrInconsistentAnalysis(string mismatch)
     {
-        var workflow = File.ReadAllText(Path.Combine(_repoRoot, ".github", "workflows", workflowName));
+        var (analysis, context, evidence) = CreateValidationData();
+        object invalidAnalysis = mismatch switch
+        {
+            "commit" => analysis with { analyzed_commit_sha = "different" },
+            "evidence" => analysis with { evidence = new { completeness = "complete", gaps = Array.Empty<string>() } },
+            "rerun" => analysis with { rerun = new { eligible = false, reason = "Do not retry" } },
+            _ => throw new InvalidOperationException()
+        };
 
-        Assert.Contains("extension-e2e-diagnostics-", workflow);
-        Assert.Contains("if ! gh api --paginate \"repos/${REPO}/actions/runs/${RUN_ID}/artifacts?per_page=100\"", workflow);
-        Assert.Contains("echo '[]' > ci-failure-data/artifacts.json", workflow);
-        Assert.Contains("if ! node .github/workflows/analyze-ci-failure.js extract-mocha-failures \"${MOCHA_FILE}\" \"${E2E_JOB_NAME}\"", workflow);
-        Assert.Contains("::warning::Failed to parse extension E2E results:", workflow);
+        var result = await InvokeValidationResultAsync("validate-publication", invalidAnalysis, context, evidence);
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Theory]
+    [InlineData("transient-infra", "pull_request", 1, "open", true)]
+    [InlineData("flaky-test", "pull_request", 3, "open", true)]
+    [InlineData("unknown", "pull_request", 3, "open", true)]
+    [InlineData("unknown", "pull_request", 4, "open", false)]
+    [InlineData("unknown", "pull_request", 1, "closed", false)]
+    [InlineData("unknown", "push", 1, "open", false)]
+    [InlineData("mixed", "pull_request", 1, "open", true)]
+    [InlineData("code-issue", "pull_request", 1, "open", false)]
+    [InlineData("pr-test-failure", "pull_request", 1, "open", false)]
+    [RequiresTools(["python3"])]
+    public async Task ValidatePublicationEnforcesRerunPolicy(
+        string verdict,
+        string runEvent,
+        int runAttempt,
+        string prState,
+        bool rerunEligible)
+    {
+        var (analysis, context, evidence) = CreateValidationData();
+        analysis = analysis with
+        {
+            run_attempt = runAttempt,
+            run_event = runEvent,
+            pr = new { number = 18763, state = prState },
+            verdict = verdict,
+            rerun = new { eligible = rerunEligible, reason = "Policy result" }
+        };
+        context = context with { run_attempt = runAttempt, run_event = runEvent, pr_state = prState };
+
+        var output = await InvokeValidationAsync("validate-publication", analysis, context, evidence);
+        var manifest = JsonSerializer.Deserialize<JsonElement>(output, s_jsonOptions);
+
+        Assert.Equal(rerunEligible, manifest.GetProperty("rerun_eligible").GetBoolean());
     }
 
     [Fact]
-    [RequiresTools(["node", "yq"])]
+    [RequiresTools(["python3"])]
+    public async Task ValidatePublicationPreservesRerunDecisionForManualDryRun()
+    {
+        var (analysis, context, evidence) = CreateValidationData();
+        context = context with { dry_run = true };
+
+        var output = await InvokeValidationAsync("validate-publication", analysis, context, evidence);
+        var manifest = JsonSerializer.Deserialize<JsonElement>(output, s_jsonOptions);
+
+        Assert.True(manifest.GetProperty("dry_run").GetBoolean());
+        Assert.True(manifest.GetProperty("rerun_eligible").GetBoolean());
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    public async Task SelectTestResultsArtifactReturnsNewestExactArtifactWithinSizeLimit()
+    {
+        var artifacts = new Dictionary<string, object>[]
+        {
+            new() { ["id"] = 1, ["name"] = "All-TestResults", ["size_in_bytes"] = 1000, ["expired"] = false, ["created_at"] = "2026-01-02T00:00:00Z" },
+            new() { ["id"] = 2, ["name"] = "All-TestResults", ["size_in_bytes"] = 2000, ["expired"] = false, ["created_at"] = "2026-01-02T00:00:00Z" },
+            new() { ["id"] = 3, ["name"] = "other-test-results", ["size_in_bytes"] = 500, ["expired"] = false, ["created_at"] = "2026-01-03T00:00:00Z" }
+        };
+
+        var output = await InvokeValidationAsync("select-test-results-artifact", (object)artifacts);
+        var artifact = JsonSerializer.Deserialize<JsonElement>(output, s_jsonOptions);
+
+        Assert.Equal(2, artifact.GetProperty("id").GetInt32());
+    }
+
+    [Theory]
+    [InlineData(true, 1000)]
+    [InlineData(false, 104857601)]
+    [RequiresTools(["python3"])]
+    public async Task SelectTestResultsArtifactRejectsExpiredOrOversizedArtifact(bool expired, int size)
+    {
+        var artifacts = new Dictionary<string, object>[]
+        {
+            new() { ["id"] = 1, ["name"] = "All-TestResults", ["size_in_bytes"] = size, ["expired"] = expired, ["created_at"] = "2026-01-01T00:00:00Z" }
+        };
+
+        var output = await InvokeValidationAsync("select-test-results-artifact", (object)artifacts);
+
+        Assert.Equal("null", output);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    public async Task ValidatePublicationRejectsInvalidVerdict()
+    {
+        var (analysis, context, evidence) = CreateValidationData();
+
+        var result = await InvokeValidationResultAsync(
+            "validate-publication",
+            analysis with { verdict = "sometimes-broken" },
+            context,
+            evidence);
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("mixed")]
+    [RequiresTools(["python3"])]
+    public async Task ValidateRerunRequestAcceptsRetryableVerdictWithMatchingReasonAndIdentity(string verdict)
+    {
+        var (analysis, context, evidence) = CreateValidationData();
+        analysis = analysis with { verdict = verdict };
+        var validRequest = new { run_id = 987654, pr_numbers = "18763", reason = "Evidence was inconclusive." };
+
+        var output = await InvokeValidationAsync("validate-rerun-request", analysis, context, evidence, validRequest);
+        var manifest = JsonSerializer.Deserialize<JsonElement>(output, s_jsonOptions);
+        Assert.Equal(18763, manifest.GetProperty("pr_number").GetInt32());
+    }
+
+    [Theory]
+    [InlineData("run")]
+    [InlineData("pr")]
+    [InlineData("reason")]
+    [RequiresTools(["python3"])]
+    public async Task ValidateRerunRequestRejectsMismatchedRequest(string mismatch)
+    {
+        var (analysis, context, evidence) = CreateValidationData();
+        var invalidRequest = mismatch switch
+        {
+            "run" => new { run_id = 123456, pr_numbers = "18763", reason = "Evidence was inconclusive." },
+            "pr" => new { run_id = 987654, pr_numbers = "12345", reason = "Evidence was inconclusive." },
+            "reason" => new { run_id = 987654, pr_numbers = "18763", reason = "Different reason" },
+            _ => throw new InvalidOperationException()
+        };
+
+        var invalidResult = await InvokeValidationResultAsync("validate-rerun-request", analysis, context, evidence, invalidRequest);
+        Assert.NotEqual(0, invalidResult.ExitCode);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    public async Task PrCommentReportsMixedFailuresAndRequestedRerun()
+    {
+        var analysis = new
+        {
+            verdict = "mixed",
+            rerun = new { eligible = true },
+            run_url = "https://github.com/microsoft/aspire/actions/runs/34795444609",
+            failed_jobs = new[]
+            {
+                new
+                {
+                    name = "Tests / Linux",
+                    classification = "flaky-test",
+                    reason = "One test timed out."
+                },
+                new
+                {
+                    name = "Build / Linux",
+                    classification = "code-issue",
+                    reason = "Compilation failed."
+                }
+            },
+            failed_tests = Array.Empty<object>(),
+            evidence = new { completeness = "complete", gaps = Array.Empty<string>() }
+        };
+
+        var comment = await InvokeScriptAsync("pr-comment", analysis);
+
+        Assert.Contains("**CI Failure Analysis: Mixed Failures**", comment);
+        Assert.Contains("The analysis requested an automatic rerun of the failed CI jobs.", comment);
+        Assert.DoesNotContain("The CI will not be automatically rerun.", comment);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    public async Task PrCommentReportsRerunSuppressedByManualDryRun()
+    {
+        var analysis = new
+        {
+            verdict = "unknown",
+            rerun = new { eligible = true, reason = "Evidence was inconclusive." },
+            run_url = "https://github.com/microsoft/aspire/actions/runs/987654",
+            failed_jobs = new[]
+            {
+                new { name = "Tests / Linux", classification = "unknown", reason = "Evidence was incomplete." }
+            },
+            evidence = new { completeness = "partial", gaps = new[] { "Missing test results" } }
+        };
+
+        var comment = await InvokeScriptAsync("pr-comment", analysis, new { dry_run = true });
+
+        Assert.Contains("this manual dry run suppressed the rerun request", comment);
+        Assert.DoesNotContain("automatic rerun of the failed CI jobs", comment);
+    }
+
+    [Fact]
+    [RequiresTools(["python3", "yq"])]
     public async Task ExtractTestFailuresReadsStandardOutputAndErrorFromTrx()
     {
         var trxPath = Path.Combine(_workspace.Path, "results.trx");
@@ -468,7 +673,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task ExtractMochaFailuresReadsTestAndHookFailures()
     {
         var report = new
@@ -523,12 +728,13 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
     public async Task PrCommentListsFlakyJobsWhenNoIndividualTestsWereExtracted()
     {
         var analysis = new
         {
             verdict = "flaky-test",
+            rerun = new { eligible = true },
             run_url = "https://github.com/microsoft/aspire/actions/runs/34795444609",
             failed_jobs = new[]
             {
@@ -548,16 +754,69 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         Assert.Contains("**Suspected flaky failure(s):**", comment);
         Assert.Contains("`VS Code extension E2E (Windows, tree-actions)`", comment);
         Assert.Contains("[job](https://github.com/microsoft/aspire/actions/runs/34795444609/job/103829216057)", comment);
-        Assert.Contains("**Why likely flaky**: The unrelated E2E shard timed out.", comment);
+        Assert.Contains("**Why likely flaky**: `The unrelated E2E shard timed out.`", comment);
+        Assert.Contains("The analysis requested an automatic rerun of the failed CI jobs.", comment);
     }
 
     [Fact]
-    [RequiresTools(["node"])]
+    [RequiresTools(["python3"])]
+    public Task PythonTestsPass() => RunPythonTests("python3");
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    public async Task PrCommentOmitsJobLinksOutsideTheAnalyzedRun()
+    {
+        var analysis = new
+        {
+            verdict = "flaky-test",
+            rerun = new { eligible = true },
+            run_url = "https://github.com/microsoft/aspire/actions/runs/34795444609",
+            failed_jobs = new[]
+            {
+                new
+                {
+                    name = "Tests / Linux",
+                    url = "https://example.com/phishing",
+                    classification = "flaky-test",
+                    reason = "The runner timed out."
+                }
+            },
+            failed_tests = Array.Empty<object>()
+        };
+
+        var comment = await InvokeScriptAsync("pr-comment", analysis);
+
+        var expected = string.Join('\n',
+        [
+            "<!-- analyze-ci-failure -->",
+            "⚠️ **CI Failure Analysis: Possible Flaky Test(s)**",
+            "",
+            "The CI build failed due to test failure(s) that appear unrelated to the PR changes. These may be flaky tests.",
+            "",
+            "**Suspected flaky failure(s):**",
+            "- `Tests / Linux`",
+            "  - **Why likely flaky**: `The runner timed out.`",
+            "",
+            "The analysis requested an automatic rerun of the failed CI jobs.",
+            "",
+            "**Suggested actions:**",
+            "- If the test continues to fail, consider [quarantining it](https://github.com/microsoft/aspire/blob/main/docs/quarantined-tests.md) using `/quarantine-test <test name> <issue URL>`",
+            "- Search [existing issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+label%3Atest-failure) to see if this test is already known to be flaky",
+            "",
+            "[View the workflow run](https://github.com/microsoft/aspire/actions/runs/34795444609).",
+        ]);
+
+        Assert.Equal(expected, comment);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
     public async Task PrCommentListsExtractedFlakyTests()
     {
         var analysis = new
         {
             verdict = "flaky-test",
+            rerun = new { eligible = true },
             run_url = "https://github.com/microsoft/aspire/actions/runs/34795444609",
             failed_jobs = Array.Empty<object>(),
             failed_tests = new[]
@@ -578,9 +837,143 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
 
         Assert.Contains("**Suspected flaky test(s):**", comment);
         Assert.Contains("`Aspire tree action E2E routes commands`", comment);
-        Assert.Contains("**Error**: Timed out waiting for E2E control revision", comment);
+        Assert.Contains("**Error**: `Timed out waiting for E2E control revision`", comment);
         Assert.Contains("at treeActions.e2e.test.js:42:1", comment);
-        Assert.Contains("**Why likely flaky**: The test is unrelated to the PR changes.", comment);
+        Assert.Contains("**Why likely flaky**: `The test is unrelated to the PR changes.`", comment);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    public async Task PrCommentRendersModelAuthoredMarkdownAsCode()
+    {
+        var analysis = new
+        {
+            verdict = "mixed",
+            rerun = new { eligible = false },
+            run_url = "https://github.com/microsoft/aspire/actions/runs/34795444609",
+            failed_jobs = new[]
+            {
+                new
+                {
+                    name = "Tests / Linux",
+                    classification = "code-issue](https://example.com)",
+                    reason = "@octocat\n# injected [`link`](https://example.com)"
+                },
+                new
+                {
+                    name = "Tests / Windows",
+                    classification = "flaky-test",
+                    reason = "@github/team `escape` [link](https://example.com)"
+                }
+            },
+            failed_tests = new[]
+            {
+                new
+                {
+                    name = "Tests.Type.Method",
+                    job = "Tests / Windows",
+                    error = "@octocat [error](https://example.com)",
+                    stack_trace = "",
+                    classification = "flaky",
+                    reason = "`escape` @github/team"
+                }
+            },
+            evidence = new { completeness = "complete", gaps = Array.Empty<string>() }
+        };
+
+        var mixedComment = await InvokeScriptAsync("pr-comment", analysis);
+
+        Assert.Contains("``@octocat # injected [`link`](https://example.com)``", mixedComment);
+        Assert.Contains("`code-issue](https://example.com)`", mixedComment);
+        Assert.Contains("``@github/team `escape` [link](https://example.com)``", mixedComment);
+
+        var flakyJobComment = await InvokeScriptAsync("pr-comment", new
+        {
+            analysis.verdict,
+            analysis.rerun,
+            analysis.run_url,
+            failed_jobs = analysis.failed_jobs.Skip(1),
+            failed_tests = Array.Empty<object>(),
+            analysis.evidence
+        } with { verdict = "flaky-test" });
+
+        Assert.Contains("``@github/team `escape` [link](https://example.com)``", flakyJobComment);
+
+        var flakyTestComment = await InvokeScriptAsync("pr-comment", new
+        {
+            analysis.verdict,
+            analysis.rerun,
+            analysis.run_url,
+            failed_jobs = Array.Empty<object>(),
+            analysis.failed_tests,
+            analysis.evidence
+        } with { verdict = "flaky-test" });
+
+        Assert.Contains("`@octocat [error](https://example.com)`", flakyTestComment);
+        Assert.Contains("`` `escape` @github/team ``", flakyTestComment);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    public async Task PrCommentDistinguishesTestFailuresCausedByThePullRequest()
+    {
+        var analysis = new
+        {
+            verdict = "pr-test-failure",
+            run_url = "https://github.com/microsoft/aspire/actions/runs/34795444609",
+            failed_jobs = new[]
+            {
+                new
+                {
+                    name = "Tests / Aspire.Hosting.Tests",
+                    classification = "pr-test-failure",
+                    reason = "The changed endpoint behavior violates an existing assertion."
+                }
+            },
+            failed_tests = Array.Empty<object>(),
+            evidence = new { completeness = "complete", gaps = Array.Empty<string>() }
+        };
+
+        var comment = await InvokeScriptAsync("pr-comment", analysis);
+
+        Assert.Contains("**CI Failure Analysis: Test Regression Detected**", comment);
+        Assert.Contains("caused by changes in this PR", comment);
+        Assert.Contains("The CI will not be automatically rerun.", comment);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    public async Task PrCommentReportsUnknownVerdictAndIncompleteEvidence()
+    {
+        var analysis = new
+        {
+            verdict = "unknown",
+            rerun = new { eligible = true },
+            run_url = "https://github.com/microsoft/aspire/actions/runs/34795444609",
+            failed_jobs = new[]
+            {
+                new
+                {
+                    name = "Tests / Linux",
+                    classification = "unknown",
+                    reason = "The test-results artifact could not be downloaded."
+                }
+            },
+            failed_tests = Array.Empty<object>(),
+            evidence = new
+            {
+                completeness = "partial",
+                gaps = new[] { "Test results artifact was unavailable" }
+            }
+        };
+
+        var comment = await InvokeScriptAsync("pr-comment", analysis);
+
+        Assert.Contains("**CI Failure Analysis: Unable to Classify**", comment);
+        Assert.Contains("**Evidence completeness:** Partial", comment);
+        Assert.Contains("`Test results artifact was unavailable`", comment);
+        Assert.Contains("The analysis requested an automatic rerun of the failed CI jobs.", comment);
+        Assert.Contains("if the next attempt fails", comment);
     }
 
     private static object CreateAnalysis(object[]? failedTests = null)
@@ -600,6 +993,73 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         };
     }
 
+    private static (ValidationAnalysis Analysis, ValidationContext Context, object Evidence) CreateValidationData()
+    {
+        var evidence = new { completeness = "partial", gaps = new[] { "Missing test results" } };
+        var analysis = new ValidationAnalysis(
+            run_id: 987654,
+            run_attempt: 2,
+            run_url: "https://github.com/microsoft/aspire/actions/runs/987654",
+            run_event: "pull_request",
+            analyzed_commit_sha: "abc123",
+            pr: new { number = 18763, state = "open" },
+            verdict: "unknown",
+            rerun: new { eligible = true, reason = "Evidence was inconclusive." },
+            evidence: evidence);
+        var context = new ValidationContext(
+            run_id: 987654,
+            run_attempt: 2,
+            run_url: "https://github.com/microsoft/aspire/actions/runs/987654",
+            run_event: "pull_request",
+            analyzed_commit_sha: "abc123",
+            pr_number: 18763,
+            pr_state: "open",
+            dry_run: false);
+
+        return (analysis, context, evidence);
+    }
+
+    private async Task<string> InvokeValidationAsync(string operation, params object[] inputs)
+    {
+        var result = await InvokeValidationResultAsync(operation, inputs);
+        Assert.Equal(0, result.ExitCode);
+        return result.Output.ReplaceLineEndings("\n");
+    }
+
+    private async Task<ScriptResult> InvokeValidationResultAsync(string operation, params object[] inputs)
+    {
+        var inputPaths = new List<string>();
+        foreach (var input in inputs)
+        {
+            var inputPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}-input.json");
+            await File.WriteAllTextAsync(inputPath, JsonSerializer.Serialize(input, s_jsonOptions));
+            inputPaths.Add(inputPath);
+        }
+
+        return await ExecuteScriptAsync(operation, [operation, .. inputPaths]);
+    }
+
+    private sealed record ValidationAnalysis(
+        int run_id,
+        int run_attempt,
+        string run_url,
+        string run_event,
+        string analyzed_commit_sha,
+        object pr,
+        string verdict,
+        object rerun,
+        object evidence);
+
+    private sealed record ValidationContext(
+        int run_id,
+        int run_attempt,
+        string run_url,
+        string run_event,
+        string analyzed_commit_sha,
+        int pr_number,
+        string pr_state,
+        bool dry_run);
+
     private async Task<string> InvokeScriptAsync(string operation, object analysis, object cause, string? marker = null)
     {
         var analysisPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}-analysis.json");
@@ -607,13 +1067,10 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         await File.WriteAllTextAsync(analysisPath, JsonSerializer.Serialize(analysis, s_jsonOptions));
         await File.WriteAllTextAsync(causePath, JsonSerializer.Serialize(cause, s_jsonOptions));
 
-        using var command = new NodeCommand(_output, "analyze-ci-failure");
-        command.WithWorkingDirectory(_repoRoot);
-
         var arguments = marker is null
             ? new[] { operation, analysisPath, causePath }
             : new[] { operation, analysisPath, causePath, marker };
-        var result = await command.ExecuteScriptAsync(_scriptPath, arguments);
+        var result = await ExecuteScriptAsync(operation, arguments);
         Assert.Equal(0, result.ExitCode);
 
         return result.Output.ReplaceLineEndings("\n");
@@ -624,14 +1081,96 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         var inputPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}-input.json");
         await File.WriteAllTextAsync(inputPath, JsonSerializer.Serialize(input, s_jsonOptions));
 
-        using var command = new NodeCommand(_output, $"analyze-ci-failure-{operation}");
-        command.WithWorkingDirectory(_repoRoot);
-
         var arguments = context is null ? new[] { operation, inputPath } : new[] { operation, inputPath, context };
-        var result = await command.ExecuteScriptAsync(_scriptPath, arguments);
+        var result = await ExecuteScriptAsync(operation, arguments);
         Assert.Equal(0, result.ExitCode);
 
         return result.Output.ReplaceLineEndings("\n");
+    }
+
+    private async Task<ScriptResult> ExecuteScriptAsync(string operation, string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo("python3")
+        {
+            WorkingDirectory = _repoRoot,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        startInfo.ArgumentList.Add(_scriptPath);
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException($"Failed to start analyze-ci-failure-{operation}.");
+
+        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw;
+        }
+
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+        _output.WriteLine(stdout);
+        _output.WriteLine(stderr);
+
+        return new ScriptResult(process.ExitCode, stdout.TrimEnd('\r', '\n'));
+    }
+
+    private async Task RunPythonTests(string python)
+    {
+        var startInfo = new ProcessStartInfo(python)
+        {
+            WorkingDirectory = _repoRoot,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        startInfo.ArgumentList.Add("-m");
+        startInfo.ArgumentList.Add("unittest");
+        startInfo.ArgumentList.Add("discover");
+        startInfo.ArgumentList.Add("-s");
+        startInfo.ArgumentList.Add(".github/workflows/analyze-ci-failure");
+        startInfo.ArgumentList.Add("-p");
+        startInfo.ArgumentList.Add("test_*.py");
+        startInfo.ArgumentList.Add("-v");
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException($"Failed to start {python}.");
+
+        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw;
+        }
+
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+        _output.WriteLine(stdout);
+        _output.WriteLine(stderr);
+
+        Assert.True(
+            process.ExitCode == 0,
+            $"{python} exited with code {process.ExitCode}.{Environment.NewLine}{stdout}{Environment.NewLine}{stderr}");
     }
 
     private static async Task<JsonElement> ConvertTrxToJsonAsync(string trxPath)
@@ -659,4 +1198,6 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
 
         return JsonSerializer.Deserialize<JsonElement>(stdout, s_jsonOptions);
     }
+
+    private sealed record ScriptResult(int ExitCode, string Output);
 }
