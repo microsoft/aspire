@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "http": {
+      "applicationUrl": "http://localhost:15200",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

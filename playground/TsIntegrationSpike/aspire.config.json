@@ -1,0 +1,26 @@
+{
+  "appHost": {
+    "path": "apphost.mts",
+    "language": "typescript/nodejs"
+  },
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://localhost:50085;http://localhost:29504",
+      "environmentVariables": {
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:44284",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:13501"
+      }
+    }
+  },
+  "packages": {
+    "Aspire.Hosting.Redis": "",
+    "@spike/aspire-kafka": {
+      "source": "npm",
+      "path": "./kafka-integration/host.ts"
+    },
+    "@spike/aspire-deno": {
+      "source": "npm",
+      "path": "./deno-integration/host.ts"
+    }
+  }
+}

@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Reflection;
+using System.Text.Json;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging;
@@ -17,6 +19,11 @@ internal sealed class LanguageService
     private const string ScaffoldAppHostMethodName = "scaffoldAppHost";
     private const string DetectAppHostTypeMethodName = "detectAppHostType";
     private const string GetRuntimeSpecMethodName = "getRuntimeSpec";
+
+    private static readonly JsonSerializerOptions s_integrationHostSpecJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     private readonly JsonRpcAuthenticationState _authenticationState;
     private readonly LanguageSupportResolver _resolver;
@@ -151,6 +158,34 @@ internal sealed class LanguageService
         }
     }
 
+    /// <summary>
+    /// Probes an optional provider hook without adding an integration-host contract to Aspire.TypeSystem.
+    /// </summary>
+    internal static IntegrationHostSpec? GetIntegrationHostSpec(ILanguageSupport languageSupport)
+    {
+        var method = languageSupport.GetType().GetMethod(
+            nameof(GetIntegrationHostSpec),
+            BindingFlags.Public | BindingFlags.Instance,
+            Type.EmptyTypes);
+        if (method is null)
+        {
+            return null;
+        }
+
+        // The provider returns framework JSON rather than a new shared-contract type.
+        // Older providers need no hook; newer providers still load in older CLI bundles.
+        if (method.ReturnType != typeof(JsonElement))
+        {
+            throw new InvalidOperationException(
+                $"Language '{languageSupport.Language}' must return JsonElement from {nameof(GetIntegrationHostSpec)}.");
+        }
+
+        var payload = (JsonElement)method.Invoke(languageSupport, null)!;
+        return payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+            ? null
+            : payload.Deserialize<IntegrationHostSpec>(s_integrationHostSpecJsonOptions);
+    }
+
     private string BuildNoLanguageSupportMessage(string language)
     {
         var available = _resolver.GetAllLanguages()
@@ -168,7 +203,6 @@ internal sealed class LanguageService
                    "This usually indicates a binary mismatch between the bundled apphost server and the integration assemblies on disk; " +
                    "check the apphost server log for 'LoaderExceptions' Warnings.";
         }
-
         return $"No language support found for: {language}. Available languages: {string.Join(", ", available)}.";
     }
 }
