@@ -26,7 +26,7 @@ internal static class TerminalAutomation
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
 
     public static Task SendTextAsync(Hex1bTerminalAutomator automator, string text, CancellationToken cancellationToken)
-        => automator.TypeAsync(text, cancellationToken);
+        => ObserveInputAsync(automator.TypeAsync(text, cancellationToken), cancellationToken);
 
     public static Task SendKeyAsync(
         Hex1bTerminal terminal,
@@ -45,7 +45,22 @@ internal static class TerminalAutomation
             return terminal.SendInputAsync([0x1b, letter], cancellationToken);
         }
 
-        return automator.KeyAsync(key.Key, key.Modifiers, cancellationToken);
+        return ObserveInputAsync(automator.KeyAsync(key.Key, key.Modifiers, cancellationToken), cancellationToken);
+    }
+
+    private static async Task ObserveInputAsync(Task operation, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await operation.ConfigureAwait(false);
+        }
+        catch (Hex1bAutomationException ex) when (cancellationToken.IsCancellationRequested &&
+            ex.InnerException is OperationCanceledException canceled && canceled.CancellationToken == cancellationToken)
+        {
+            // Hex1b wraps canceled input steps as automation failures. Preserve normal cancellation semantics,
+            // but do not hide unrelated failures just because the caller canceled at the same time.
+            throw new OperationCanceledException("Terminal input was canceled.", ex, cancellationToken);
+        }
     }
 
     public static async Task WaitForTextAsync(

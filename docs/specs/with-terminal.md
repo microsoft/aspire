@@ -115,6 +115,11 @@ Windows workloads receive input through ConPTY and may interpret it differently.
 Numeric-keypad keys, extended modifiers, key-down/up events, and Kitty keyboard
 protocol are not part of this API. Typing text is not bracketed paste.
 
+Key and text input report caller cancellation as `OperationCanceledException`
+with the caller's token, including when Hex1b wraps a canceled input step.
+Canceling an input operation does not dispose the terminal; later input remains
+usable. Unrelated automation failures are not converted to cancellation.
+
 Public C# lookup currently requires a terminal ID. A resource-name/replica lookup
 API that avoids constructing internal IDs is deferred to
 [#20219](https://github.com/microsoft/aspire/issues/20219).

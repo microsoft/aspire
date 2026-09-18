@@ -9,6 +9,7 @@ using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Hex1b;
+using Hex1b.Automation;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 
@@ -20,6 +21,108 @@ namespace Aspire.Hosting.Tests.Terminals;
 [Trait("Partition", "2")]
 public class Hex1bAspireTerminalTests
 {
+    [Theory]
+    [InlineData("key", true)]
+    [InlineData("key", false)]
+    [InlineData("modified-key", true)]
+    [InlineData("modified-key", false)]
+    [InlineData("alt-letter", true)]
+    [InlineData("alt-letter", false)]
+    [InlineData("text", true)]
+    [InlineData("text", false)]
+    public async Task SendInput_CallerCancellationPreservesTokenAndTerminal(string inputKind, bool preCanceled)
+    {
+        await using var service = TestTerminalService.Create();
+        var output = new Pipe();
+        var input = new Pipe();
+        await using var outputReader = output.Reader.AsStream();
+        await using var outputWriter = output.Writer.AsStream();
+        await using var inputReader = input.Reader.AsStream();
+        await using var inputWriter = input.Writer.AsStream();
+        using var gated = new GatedTerminalWriteStream(inputWriter);
+        await using var terminal = service.CreateTerminal("Cancellation", TerminalPlacement.None,
+            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(outputReader, gated)), 80, 24);
+        using var cts = new CancellationTokenSource();
+        if (preCanceled)
+        {
+            cts.Cancel();
+        }
+
+        var blockingInput = Task.CompletedTask;
+        try
+        {
+            if (!preCanceled)
+            {
+                // Hold Hex1b's input lock so cancellation happens while the next operation waits to write,
+                // not inside StreamWorkloadAdapter, which suppresses cancellation from its own stream.
+                blockingInput = terminal.SendKeyAsync(AspireTerminalKey.Alt(AspireTerminalKey.E));
+                await gated.WriteStarted.DefaultTimeout();
+            }
+
+            var operation = inputKind switch
+            {
+                "key" => terminal.SendKeyAsync(AspireTerminalKey.Enter, cts.Token),
+                "modified-key" => terminal.SendKeyAsync(AspireTerminalKey.Ctrl(AspireTerminalKey.R), cts.Token),
+                "alt-letter" => terminal.SendKeyAsync(AspireTerminalKey.Alt(AspireTerminalKey.E), cts.Token),
+                "text" => terminal.SendTextAsync("canceled", cts.Token),
+                _ => throw new InvalidOperationException($"Unknown input kind '{inputKind}'.")
+            };
+            if (!preCanceled)
+            {
+                Assert.False(operation.IsCompleted);
+                await cts.CancelAsync();
+            }
+
+            var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation).DefaultTimeout();
+            Assert.Equal(cts.Token, exception.CancellationToken);
+            Assert.True(operation.IsCanceled);
+        }
+        finally
+        {
+            gated.ReleaseWrite();
+            await blockingInput.DefaultTimeout();
+        }
+
+        await terminal.SendTextAsync("after").DefaultTimeout();
+        var expected = Encoding.UTF8.GetBytes(preCanceled ? "after" : "\x1b" + "eafter");
+        var bytes = new byte[expected.Length];
+        await inputReader.ReadExactlyAsync(bytes).AsTask().DefaultTimeout();
+        Assert.Equal(expected, bytes);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task SendKey_UnrelatedFailuresAreNotConvertedToCallerCancellation(bool cancelCaller, bool unrelatedCancellation)
+    {
+        await using var service = TestTerminalService.Create();
+        using var cts = new CancellationTokenSource();
+        Exception expected = unrelatedCancellation
+            ? new OperationCanceledException(new CancellationToken(canceled: true))
+            : new IOException("Input failed.");
+        var workload = new GatedTerminalWorkloadAdapter
+        {
+            OnWriteInput = (_, _) =>
+            {
+                if (cancelCaller)
+                {
+                    cts.Cancel();
+                }
+                return ValueTask.FromException(expected);
+            }
+        };
+        workload.ReleaseDispose();
+        await using var terminal = service.CreateTerminal("Failed input", TerminalPlacement.None,
+            Hex1bTerminal.CreateBuilder().WithWorkload(workload), 80, 24);
+
+        var exception = await Assert.ThrowsAsync<Hex1bAutomationException>(
+            () => terminal.SendKeyAsync(AspireTerminalKey.Enter, cts.Token)).DefaultTimeout();
+
+        Assert.Same(expected, exception.InnerException);
+    }
+
     [Theory]
     [InlineData(80, 24)]
     [InlineData(82, 28)]

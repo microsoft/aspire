@@ -72,6 +72,10 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     [InlineData("win-x64", null)]
     [InlineData("win-arm64", null)]
     [InlineData("linux-x64", null)]
+    [InlineData("linux-arm64", null)]
+    [InlineData("linux-musl-x64", null)]
+    [InlineData("osx-x64", null)]
+    [InlineData("osx-arm64", null)]
     [InlineData("win-x64", "arm64/OpenConsole.exe")]
     [InlineData("win-arm64", "hex1bpty.exe")]
     public async Task BundlePreservesPtyLayoutAndRejectsMissingSidecars(string rid, string? missingSidecar)
@@ -97,7 +101,12 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         {
             "win-x64" => "windows-amd64",
             "win-arm64" => "windows-arm64",
-            _ => "linux-amd64"
+            "linux-x64" => "linux-amd64",
+            "linux-arm64" => "linux-arm64",
+            "linux-musl-x64" => "linux-musl-amd64",
+            "osx-x64" => "darwin-amd64",
+            "osx-arm64" => "darwin-arm64",
+            _ => throw new InvalidOperationException($"Unknown runtime identifier '{rid}'.")
         };
         var packages = Path.Combine(_workspace.Path, "packages");
         WriteFile(Path.Combine(packages, $"microsoft.developercontrolplane.{packageRid}", "1.0.0", "tools", "dcp"), "dcp");
@@ -125,6 +134,39 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         {
             Assert.True(File.ReadAllBytes(Path.Combine(publish, file)).SequenceEqual(File.ReadAllBytes(Path.Combine(managed, file))), file);
         }
+    }
+
+    [Theory]
+    [InlineData("win-x86", false)]
+    [InlineData("win-x86", true)]
+    [InlineData("win-unknown", true)]
+    [InlineData("linux-x86", true)]
+    public async Task BundleRejectsUnsupportedRidBeforeChangingOutput(string rid, bool existingOutput)
+    {
+        var layout = Path.Combine(_workspace.Path, "layout");
+        var marker = Path.Combine(layout, "existing.txt");
+        if (existingOutput)
+        {
+            WriteFile(marker, "Keep the existing layout.");
+        }
+
+        var testAssembly = typeof(Hex1bNativePublishingTests).Assembly.Location;
+        var result = await RunDotNetAsync(
+            ["exec", "--runtimeconfig", Path.ChangeExtension(testAssembly, ".runtimeconfig.json"),
+             "--depsfile", Path.ChangeExtension(testAssembly, ".deps.json"),
+             typeof(Aspire.Tools.CreateLayout.Program).Assembly.Location,
+             "--output", layout, "--artifacts", Path.Combine(_workspace.Path, "missing-artifacts"), "--rid", rid]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Equal(existingOutput, Directory.Exists(layout));
+        if (existingOutput)
+        {
+            Assert.Equal([marker], Directory.GetFiles(layout, "*", SearchOption.AllDirectories));
+            Assert.Equal("Keep the existing layout.", File.ReadAllText(marker));
+        }
+        Assert.Contains($"'{rid}'", result.Output);
+        Assert.Contains("win-x64", result.Output);
+        Assert.Contains("win-arm64", result.Output);
     }
 
     [Fact]

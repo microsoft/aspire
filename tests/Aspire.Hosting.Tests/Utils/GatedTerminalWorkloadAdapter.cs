@@ -15,6 +15,7 @@ internal sealed class GatedTerminalWorkloadAdapter : IHex1bTerminalWorkloadAdapt
     public Task DisposeStarted => _disposeStarted.Task;
     public bool IsDisposed { get; private set; }
     public Exception? DisposalException { get; init; }
+    public Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask>? OnWriteInput { get; init; }
     public event Action? Disconnected;
 
     public void ReleaseDispose() => _releaseDispose.TrySetResult();
@@ -27,7 +28,7 @@ internal sealed class GatedTerminalWorkloadAdapter : IHex1bTerminalWorkloadAdapt
     }
 
     public ValueTask WriteInputAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default)
-        => ValueTask.CompletedTask;
+        => OnWriteInput?.Invoke(data, ct) ?? ValueTask.CompletedTask;
 
     public ValueTask ResizeAsync(int width, int height, CancellationToken ct = default)
         => ValueTask.CompletedTask;

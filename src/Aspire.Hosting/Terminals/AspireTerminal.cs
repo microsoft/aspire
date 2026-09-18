@@ -93,6 +93,7 @@ public sealed class AspireTerminal : IAsyncDisposable
     /// <returns>A task representing the input operation.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="text"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">The AppHost-owned terminal has already stopped.</exception>
+    /// <exception cref="OperationCanceledException">The input operation was canceled by <paramref name="cancellationToken"/>.</exception>
     public Task SendTextAsync(string text, CancellationToken cancellationToken = default)
         => Backend.SendTextAsync(text, cancellationToken);
 
@@ -112,6 +113,7 @@ public sealed class AspireTerminal : IAsyncDisposable
     /// <returns>A task representing the input operation.</returns>
     /// <exception cref="ArgumentException"><paramref name="key"/> is an uninitialized value.</exception>
     /// <exception cref="InvalidOperationException">The AppHost-owned terminal has already stopped.</exception>
+    /// <exception cref="OperationCanceledException">The input operation was canceled by <paramref name="cancellationToken"/>.</exception>
     public Task SendKeyAsync(AspireTerminalKey key, CancellationToken cancellationToken = default)
     {
         // Reject invalid keys before the backend can start a workload or connect to a resource terminal.
