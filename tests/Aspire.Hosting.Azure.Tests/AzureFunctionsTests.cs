@@ -225,7 +225,7 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.AddAzureFunctionsProject<TestProject>("funcapp");
 
-        var resource = Assert.Single(builder.Resources.OfType<AzureStorageEmulatorResource>());
+        var resource = Assert.Single(builder.Resources.OfType<AzureStorageResource>());
 
         Assert.NotEqual(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName, resource.Name);
         Assert.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName, resource.Name);
