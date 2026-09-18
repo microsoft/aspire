@@ -319,7 +319,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         Assert.Contains("-SkipPublish -CliPath $cli -SmokeSeconds 60", workflow);
         Assert.Contains("$cli = Join-Path $scratch 'cli/aspire.exe'", workflow);
         Assert.Contains("-PublishDirectory (Join-Path $scratch \"$rid/tray\")", workflow);
-        Assert.Contains("eng/scripts/tray-registration-control/run.ps1 -Architecture ($rid -replace '^win-', '')", workflow);
+        Assert.Contains("eng/scripts/tray-registration-control/run.ps1 -Architecture ($rid -replace '^win-', '') -CompareArchitectures:($rid -eq 'win-arm64')", workflow);
         Assert.Contains("artifacts/bundle/aspire-ci-bundlepayload-$rid.tar.gz", workflow);
         var publish = File.ReadAllText(Path.Combine(RepoRoot.Path, "src/Aspire.Tray/Windows/publish.ps1"));
         Assert.Contains("$startInfo.ArgumentList.Add($argument)", publish);
