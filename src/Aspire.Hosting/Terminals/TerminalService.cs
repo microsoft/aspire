@@ -85,6 +85,11 @@ public sealed class TerminalService : IAsyncDisposable
     /// terminal that is meant to outlive the call that created it should be left undisposed, and is torn down
     /// when the AppHost shuts down.
     /// </returns>
+    /// <remarks>
+    /// The options, including the argument and environment variable collections, are captured during this call.
+    /// Changing or reusing <paramref name="options"/> afterward does not affect the created terminal.
+    /// The process still inherits the AppHost's environment when it starts.
+    /// </remarks>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="options"/> or its <see cref="TerminalLaunchOptions.Title"/> is <see langword="null"/>.
     /// </exception>
@@ -115,16 +120,25 @@ public sealed class TerminalService : IAsyncDisposable
     /// </remarks>
     private static Hex1bTerminalBuilder CreateBuilder(TerminalLaunchOptions options)
     {
+        // Own the launch settings before configuring Hex1b. Its current callback runs immediately, but
+        // keeping caller-owned options out of the callback makes our snapshot boundary explicit.
+        var executable = options.Executable;
+        string[] arguments = [.. options.Arguments];
+        var workingDirectory = options.WorkingDirectory;
+        var environment = options.EnvironmentVariables.Count > 0
+            ? new Dictionary<string, string>(options.EnvironmentVariables, StringComparer.Ordinal)
+            : null;
+
         return Hex1bTerminal.CreateBuilder()
             .WithPtyProcess(process =>
             {
-                process.FileName = options.Executable;
-                process.Arguments = [.. options.Arguments];
-                process.WorkingDirectory = options.WorkingDirectory;
+                process.FileName = executable;
+                process.Arguments = arguments;
+                process.WorkingDirectory = workingDirectory;
 
-                if (options.EnvironmentVariables.Count > 0)
+                if (environment is not null)
                 {
-                    process.Environment = new Dictionary<string, string>(options.EnvironmentVariables, StringComparer.Ordinal);
+                    process.Environment = environment;
                 }
             });
     }

@@ -109,7 +109,6 @@ public class TerminalTapePlayCommandTests(ITestOutputHelper outputHelper)
     [InlineData("incompatible", CliExitCodes.AppHostIncompatible)]
     [InlineData("missing", CliExitCodes.InvalidCommand)]
     [InlineData("unavailable", CliExitCodes.InvalidCommand)]
-    [InlineData("exited", CliExitCodes.FailedToExecuteResourceCommand)]
     [InlineData("replicas", CliExitCodes.InvalidCommand)]
     [InlineData("wrong-replica", CliExitCodes.InvalidCommand)]
     public async Task InvalidResourceFailsBeforeConnecting(string scenario, int expectedExitCode)
@@ -129,13 +128,6 @@ public class TerminalTapePlayCommandTests(ITestOutputHelper outputHelper)
                 case "unavailable":
                     backchannel.TerminalInfoResponse = new() { IsAvailable = false };
                     break;
-                case "exited":
-                    backchannel.TerminalInfoResponse = new()
-                    {
-                        IsAvailable = true,
-                        Replicas = [new() { ReplicaIndex = 0, Label = "shell-0", ConsumerUdsPath = "unused", IsAlive = false }]
-                    };
-                    break;
                 case "replicas":
                     backchannel.TerminalInfoResponse = new()
                     {
@@ -154,6 +146,157 @@ public class TerminalTapePlayCommandTests(ITestOutputHelper outputHelper)
             ["terminal", "tape", "play", "shell", "--tape-file", "probe.tape", .. replicaArguments]);
 
         Assert.Equal(expectedExitCode, await result.InvokeAsync().DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task WaitsForProducerAndRefreshesSelectedReplicaBeforePlayback(int? exitCode)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await using var host = await TerminalTapeTestHost.StartAsync(101, 37);
+        await host.WriteAsync("Ready for input");
+        var time = new SignalingFakeTimeProvider(TimeSpan.FromMilliseconds(100));
+        var requests = 0;
+        var stdout = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateProvider(workspace, null, stdout, configure: backchannel =>
+        {
+            backchannel.GetTerminalInfoHandler = (resourceName, _) =>
+            {
+                Assert.Equal("shell", resourceName);
+                var producerConnected = Interlocked.Increment(ref requests) > 1;
+                return Task.FromResult(new GetTerminalInfoResponse
+                {
+                    IsAvailable = true,
+                    Replicas =
+                    [
+                        new() { ReplicaIndex = 0, Label = "shell-0", ConsumerUdsPath = "unused", IsAlive = true },
+                        new()
+                        {
+                            ReplicaIndex = 1,
+                            Label = "shell-1",
+                            ConsumerUdsPath = producerConnected ? host.SocketPath : "unused",
+                            IsAlive = producerConnected,
+                            ExitCode = exitCode
+                        }
+                    ]
+                });
+            };
+        }, configureOptions: options => options.TimeProvider = time);
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "probe.tape"),
+            "Set TypingSpeed 0\nType \"ready\"");
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "terminal tape play shell-0 --replica 1 --tape-file probe.tape");
+
+        var play = result.InvokeAsync();
+        await time.TimerCreated.Task.DefaultTimeout();
+        Assert.False(play.IsCompleted);
+        time.Advance(TimeSpan.FromMilliseconds(100));
+
+        Assert.Equal(CliExitCodes.Success, await play.DefaultTimeout());
+        Assert.Equal("ready", await host.ReadInputAsync(5));
+        Assert.Equal(2, Volatile.Read(ref requests));
+        Assert.Equal(host.GetScreenText().TrimEnd(), string.Join('\n', stdout.Logs).TrimEnd());
+        Assert.Equal((101, 37), host.GetDimensions());
+        Assert.True(host.IsRunning);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ProducerWaitHonorsTimeoutAndCancellation(bool callerCancels, bool duringRefresh)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var time = new SignalingFakeTimeProvider(TimeSpan.FromMilliseconds(100));
+        var refreshStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var requests = 0;
+        using var cancellation = new CancellationTokenSource();
+        using var errors = new StringWriter();
+        using var provider = CreateProvider(workspace, null, stderr: errors, configure: backchannel =>
+        {
+            backchannel.GetTerminalInfoHandler = async (_, cancellationToken) =>
+            {
+                if (Interlocked.Increment(ref requests) > 1 && duringRefresh)
+                {
+                    refreshStarted.TrySetResult();
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+                return new GetTerminalInfoResponse
+                {
+                    IsAvailable = true,
+                    Replicas = [new() { ReplicaIndex = 0, Label = "shell-0", ConsumerUdsPath = "unused", IsAlive = false }]
+                };
+            };
+        }, configureOptions: options => options.TimeProvider = time);
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "probe.tape"), "");
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "terminal tape play shell --tape-file probe.tape --timeout 5");
+
+        var play = result.InvokeAsync(cancellationToken: cancellation.Token);
+        await time.TimerCreated.Task.DefaultTimeout();
+        if (duringRefresh)
+        {
+            time.Advance(TimeSpan.FromMilliseconds(100));
+            await refreshStarted.Task.DefaultTimeout();
+        }
+        Assert.False(play.IsCompleted);
+
+        if (callerCancels)
+        {
+            await cancellation.CancelAsync();
+        }
+        else
+        {
+            time.Advance(TimeSpan.FromSeconds(5));
+        }
+
+        Assert.Equal(callerCancels ? CliExitCodes.Cancelled : CliExitCodes.WaitTimeout, await play.DefaultTimeout());
+        if (!callerCancels)
+        {
+            Assert.Contains("Terminal tape playback did not finish within 5 seconds.", errors.ToString());
+        }
+    }
+
+    [Fact]
+    public async Task ProducerWaitSharesPlaybackTimeoutBudget()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await using var host = await TerminalTapeTestHost.StartAsync();
+        var time = new SignalingFakeTimeProvider(TimeSpan.FromMilliseconds(100));
+        var requests = 0;
+        using var provider = CreateProvider(workspace, host.SocketPath, configure: backchannel =>
+        {
+            backchannel.GetTerminalInfoHandler = (_, _) => Task.FromResult(new GetTerminalInfoResponse
+            {
+                IsAvailable = true,
+                Replicas =
+                [
+                    new()
+                    {
+                        ReplicaIndex = 0,
+                        Label = "shell-0",
+                        ConsumerUdsPath = host.SocketPath,
+                        IsAlive = Interlocked.Increment(ref requests) > 1
+                    }
+                ]
+            });
+        }, configureOptions: options => options.TimeProvider = time);
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "wait.tape"),
+            "Set TypingSpeed 0\nType \"started\"\nSleep 60s");
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "terminal tape play shell --tape-file wait.tape --timeout 5");
+
+        var play = result.InvokeAsync();
+        await time.TimerCreated.Task.DefaultTimeout();
+        time.Advance(TimeSpan.FromSeconds(4));
+        Assert.Equal("started", await host.ReadInputAsync(7));
+        time.Advance(TimeSpan.FromSeconds(1));
+
+        Assert.Equal(CliExitCodes.WaitTimeout, await play.DefaultTimeout());
+        Assert.True(host.IsRunning);
     }
 
     [Theory]

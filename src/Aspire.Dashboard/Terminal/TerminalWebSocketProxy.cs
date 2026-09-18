@@ -17,8 +17,8 @@ namespace Aspire.Dashboard.Terminal;
 /// </summary>
 internal static class TerminalWebSocketProxy
 {
-    // Private Aspire wire contract, not an HWT protocol status: only the AppHost's
-    // authoritative gRPC Ended notification permits this close code.
+    // Private Aspire wire contract, not an HWT protocol status: the AppHost must
+    // confirm completion or permanently reject attachment to the terminal ID.
     private const WebSocketCloseStatus TerminalEndedCloseStatus = (WebSocketCloseStatus)4000;
     private static readonly TimeSpan s_handshakeTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan s_sendTimeout = TimeSpan.FromMinutes(2);
@@ -83,6 +83,12 @@ internal static class TerminalWebSocketProxy
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
+            return;
+        }
+        catch (Exception ex) when (IsMissingAppHostTerminal(ex))
+        {
+            logger.LogDebug(ex, "AppHost terminal {TerminalId} no longer exists.", terminalId);
+            await CloseEndedAsync(context, session, logger).ConfigureAwait(false);
             return;
         }
         catch (Exception ex) when (ex is RpcException or IOException or TimeoutException or InvalidOperationException or OperationCanceledException)
@@ -220,6 +226,22 @@ internal static class TerminalWebSocketProxy
         await context.Response.WriteAsync("Terminal is unavailable.").ConfigureAwait(false);
     }
 
+    private static bool IsMissingAppHostTerminal(Exception exception)
+    {
+        var rpc = exception as RpcException ?? exception.InnerException as RpcException;
+        return rpc?.StatusCode is StatusCode.NotFound or StatusCode.FailedPrecondition;
+    }
+
+    private static async Task CloseEndedAsync(HttpContext context, TerminalViewSession? session, ILogger logger)
+    {
+        session?.MarkEnded();
+        // Browsers do not expose HTTP rejection statuses to WebSocket clients.
+        // Upgrade only after the AppHost confirms completion/removal, then send
+        // the same permanent close signal used by an already-attached terminal.
+        using var socket = await context.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
+        await CloseAsync(socket, TerminalEndedCloseStatus, "Terminal ended", receive: null, logger).ConfigureAwait(false);
+    }
+
     private static async Task HandleConnectionAsync(HttpContext context, Stream upstream, TerminalViewSession? session, ILogger logger, string connectionId)
     {
         await using var upstreamLifetime = upstream.ConfigureAwait(false);
@@ -231,8 +253,8 @@ internal static class TerminalWebSocketProxy
         await using var workloadLifetime = workload.ConfigureAwait(false);
 
         // AttachTerminalAsync sends the selector but does not read the response.
-        // Complete the HMP handshake before upgrading so gRPC NotFound/Unavailable
-        // statuses can still be returned as HTTP errors.
+        // Complete the HMP handshake before upgrading so transient failures retain
+        // HTTP errors and permanent AppHost terminal removal uses the ended signal.
         try
         {
             using var handshake = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
@@ -243,14 +265,11 @@ internal static class TerminalWebSocketProxy
         {
             return;
         }
-        catch (Exception) when (upstream is GrpcTerminalClientStream { TerminalEnded: true })
+        catch (Exception ex) when (upstream is GrpcTerminalClientStream grpc &&
+            (grpc.TerminalEnded || IsMissingAppHostTerminal(ex)))
         {
-            session?.MarkEnded();
-            // A completed AppHost terminal cannot perform HMP's initial replay.
-            // Upgrade and close with the authoritative status without fabricating
-            // an initial HWT frame or keeping an empty server-side mirror alive.
-            using var endedSocket = await context.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
-            await CloseAsync(endedSocket, TerminalEndedCloseStatus, "Terminal ended", receive: null, logger).ConfigureAwait(false);
+            logger.LogDebug(ex, "AppHost terminal ended before the viewer handshake ({ConnectionId}).", connectionId);
+            await CloseEndedAsync(context, session, logger).ConfigureAwait(false);
             return;
         }
         catch (Exception ex) when (ex is IOException or RpcException or InvalidOperationException or

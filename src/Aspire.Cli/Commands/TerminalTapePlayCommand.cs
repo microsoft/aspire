@@ -125,17 +125,27 @@ internal sealed class TerminalTapePlayCommand : BaseCommand
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
-        if (!replica.IsAlive)
-        {
-            return CommandResult.Failure(CliExitCodes.FailedToExecuteResourceCommand,
-                string.Format(CultureInfo.CurrentCulture, TerminalCommandStrings.TapeReplicaExited, replica.ReplicaIndex, canonicalName));
-        }
 
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds), _timeProvider);
         using var playback = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         var disconnected = 0;
         try
         {
+            // A false IsAlive only means no producer is currently attached, not permanent exit.
+            // DCP can attach after startup or a recycle, even when ExitCode describes a previous cycle.
+            // Refresh the selected replica's endpoint without reprompting or resetting the playback budget.
+            while (!replica.IsAlive)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100), _timeProvider, playback.Token).ConfigureAwait(false);
+                var info = await connectionResult.Connection.GetTerminalInfoAsync(canonicalName, playback.Token).ConfigureAwait(false);
+                if (info.IsAvailable && info.Replicas is { } replicas &&
+                    Array.Find(replicas, r => r.ReplicaIndex == replica.ReplicaIndex) is { } refreshedReplica)
+                {
+                    replica = refreshedReplica;
+                }
+            }
+            playback.Token.ThrowIfCancellationRequested();
+
             await using var adapter = new Hmp1WorkloadAdapter(new Hmp1ClientOptions
             {
                 StreamFactory = async ct => await Hmp1Transports.ConnectUnixSocket(replica.ConsumerUdsPath, ct).ConfigureAwait(false),

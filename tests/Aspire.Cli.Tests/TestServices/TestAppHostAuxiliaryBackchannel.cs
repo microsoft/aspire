@@ -361,8 +361,15 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public GetTerminalInfoResponse TerminalInfoResponse { get; set; } = new GetTerminalInfoResponse { IsAvailable = false };
 
+    public Func<string, CancellationToken, Task<GetTerminalInfoResponse>>? GetTerminalInfoHandler { get; set; }
+
     public Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
     {
+        if (GetTerminalInfoHandler is not null)
+        {
+            return GetTerminalInfoHandler(resourceName, cancellationToken);
+        }
+
         return Task.FromResult(TerminalInfoResponse);
     }
 

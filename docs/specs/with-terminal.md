@@ -61,6 +61,10 @@ their available space when shown.
 Placement defaults to the dock;
 use `Dialog` for terminal interactions or `None` for automation-only terminals.
 
+`CreateTerminal` captures the executable, arguments, working directory, and
+environment overrides immediately. Mutating or reusing the launch options later
+does not change an existing terminal, even before its lazy workload starts.
+
 The creator owns the terminal. A dock terminal can outlive the command that
 created it: closing its tab or shutting down the AppHost disposes it. For a
 dialog-scoped terminal, use `await using` around creation and the interaction;
@@ -297,7 +301,8 @@ HMP byte stream from `AttachTerminal`, tunneled over the existing dashboard
 gRPC connection. Closing a viewer releases only that attachment; the creator
 continues to own the terminal.
 
-An authoritative gRPC `Ended` notification closes the viewer's WebSocket with
+An authoritative gRPC `Ended` notification, or a `NotFound`/`FailedPrecondition`
+rejection of an AppHost terminal ID, closes the viewer's WebSocket with
 Aspire's private application close code `4000`, including completion before the
 initial HMP handshake. This is an Aspire endpoint contract, not a Hex1b close
 code or an Aspire-specific HWT message. The browser observes it through native
@@ -305,7 +310,10 @@ code or an Aspire-specific HWT message. The browser observes it through native
 before the first frame can leave an empty view; an already mounted view keeps
 its last available projection, without guaranteeing a final frame. Normal
 closure (`1000`), abnormal transport loss (`1006`), close reason strings, and
-`wasClean` do not indicate producer completion and remain retryable.
+`wasClean` do not indicate producer completion and remain retryable. Transient
+gRPC attachment failures such as `Unavailable` retain HTTP 503 responses; a
+resource replica that is not yet available retains HTTP 404. Neither marks the
+producer as ended.
 
 Each component registers a separate input policy with the dashboard and passes
 its opaque `viewId` with the WebSocket URL. Changes to a view's read-only
@@ -496,8 +504,11 @@ The command prints the final plain-text screen to stdout; discovery messages,
 warnings, and source-located diagnostics go to stderr. A comment-only or empty
 tape reads the current screen after the initial producer snapshot has arrived.
 A failed tape command prints its failure screen and returns a nonzero exit code.
-`--timeout` defaults to 120 seconds and bounds the HMP connection and playback using
-cancellation; capture finalization and cleanup may continue after cancellation.
+`--timeout` defaults to 120 seconds and bounds waiting for the producer, the HMP
+connection, and playback using cancellation. A producer that is temporarily absent
+during startup or recycling can become available within that budget rather than
+being immediately classified as exited. Capture finalization and cleanup may
+continue after cancellation.
 An overall timeout returns exit code 17, and user cancellation returns 130.
 
 Playback connects as a secondary HMP peer. It does not request primary ownership,

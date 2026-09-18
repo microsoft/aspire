@@ -66,9 +66,6 @@
   <data name="TapeFileReadFailed" xml:space="preserve">
     <value>Could not read tape file '{0}': {1}</value>
   </data>
-  <data name="TapeReplicaExited" xml:space="preserve">
-    <value>Replica {0} of '{1}' has exited. A tape requires a live terminal.</value>
-  </data>
   <data name="TapePlaybackFailed" xml:space="preserve">
     <value>Tape playback failed: {0}</value>
   </data>

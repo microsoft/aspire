@@ -630,9 +630,10 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
+    [InlineData("src/Aspire.Dashboard/Components/Layout/TerminalDock.razor.js")]
     [InlineData("src/Aspire.Dashboard/wwwroot/js/app-terminalwindow.js")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalWindow.test.mjs")]
-    public void DashboardTerminalWindowInputsSelectInfrastructureTests(string path)
+    public void DashboardTerminalScriptInputsSelectInfrastructureTests(string path)
     {
         var result = SelectWithRealMap(path);
 

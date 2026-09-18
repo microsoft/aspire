@@ -6,6 +6,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Aspire.Dashboard.Tests.Shared;
+using Grpc.Core;
 using Hex1b.Input;
 using Xunit;
 
@@ -524,6 +525,63 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
         Assert.False(session.Ended.IsCompleted);
         await browser.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Received", timeout.Token);
         await host.WaitForAttachmentsReleasedAsync(timeout.Token);
+    }
+
+    [Theory]
+    [InlineData(StatusCode.NotFound, false)]
+    [InlineData(StatusCode.NotFound, true)]
+    [InlineData(StatusCode.FailedPrecondition, false)]
+    [InlineData(StatusCode.FailedPrecondition, true)]
+    public async Task BrowserView_MissingAppHostTerminalClosesWithoutHwtFrame(StatusCode status, bool duringHandshake)
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc: true)
+        {
+            AttachmentFailureStatus = status,
+            FailAttachmentDuringHandshake = duringHandshake
+        };
+        using var startup = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(startup.Token);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var session = host.CreateViewSession(readOnly: false);
+        using var browser = await host.ConnectBrowserAsync(session, timeout.Token);
+
+        var result = await browser.ReceiveAsync(new byte[64], timeout.Token);
+        Assert.Equal(WebSocketMessageType.Close, result.MessageType);
+        Assert.Equal((WebSocketCloseStatus)4000, result.CloseStatus);
+        Assert.Equal("Terminal ended", result.CloseStatusDescription);
+        await session.Ended.WaitAsync(timeout.Token);
+        Assert.True(session.ReadOnly);
+        await browser.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Received", timeout.Token);
+        await host.WaitForDisposedAttachmentsAsync(timeout.Token);
+        Assert.Equal(0, host.ConnectionCount);
+        Assert.Equal(duringHandshake ? 1 : 0, host.DisposedAttachments);
+    }
+
+    [Theory]
+    [InlineData(StatusCode.Unavailable, false)]
+    [InlineData(StatusCode.Unavailable, true)]
+    [InlineData(StatusCode.DeadlineExceeded, false)]
+    [InlineData(StatusCode.DeadlineExceeded, true)]
+    public async Task BrowserView_TransientAppHostAttachmentFailureRemainsRetryable(StatusCode status, bool duringHandshake)
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc: true)
+        {
+            AttachmentFailureStatus = status,
+            FailAttachmentDuringHandshake = duringHandshake
+        };
+        using var startup = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(startup.Token);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var session = host.CreateViewSession(readOnly: false);
+
+        var exception = await Assert.ThrowsAsync<WebSocketException>(() => host.ConnectBrowserAsync(session, timeout.Token));
+
+        Assert.Contains("503", exception.Message);
+        Assert.False(session.Ended.IsCompleted);
+        Assert.False(session.ReadOnly);
+        await host.WaitForDisposedAttachmentsAsync(timeout.Token);
+        Assert.Equal(0, host.ConnectionCount);
+        Assert.Equal(duringHandshake ? 1 : 0, host.DisposedAttachments);
     }
 
     [Fact]

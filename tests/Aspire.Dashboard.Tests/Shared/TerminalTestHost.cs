@@ -53,6 +53,8 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
     public Hmp1PresentationAdapter Presentation => _producer.Presentation;
     public int ConnectionCount => _producer.ConnectionCount;
     public int DisposedAttachments => Volatile.Read(ref _disposedAttachments);
+    public StatusCode? AttachmentFailureStatus { get; init; }
+    public bool FailAttachmentDuringHandshake { get; init; }
     private string Endpoint => _useGrpc ? "/api/apphost-terminal?terminalId=test" : "/api/terminal?resource=test&replica=0";
 
     public Task StartAsync(CancellationToken cancellationToken) => _app.StartAsync(cancellationToken);
@@ -119,9 +121,17 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
     private async Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken)
     {
         Assert.Equal("test", terminalId);
+        var failure = AttachmentFailureStatus is { } status
+            ? new RpcException(new Status(status, "Terminal attachment failed."))
+            : null;
+        if (failure is not null && !FailAttachmentDuringHandshake)
+        {
+            throw failure;
+        }
+
         // A completed terminal reports Ended without attaching to the disposed
         // producer or returning any HMP handshake bytes.
-        var connection = Volatile.Read(ref _terminalEnded) != 0
+        var connection = failure is not null || Volatile.Read(ref _terminalEnded) != 0
             ? Stream.Null
             : (await ConnectAsync(terminalId, 0, cancellationToken))!;
         var disposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -129,7 +139,7 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
         var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(
             new TerminalRequestWriter(connection),
             new TerminalResponseReader(connection, () => Volatile.Read(ref _terminalEnded) != 0,
-                () => Volatile.Read(ref _includeHmpExit) != 0, _endedObserved),
+                () => Volatile.Read(ref _includeHmpExit) != 0, _endedObserved, failure),
             Task.FromResult(new Metadata()),
             () => Status.DefaultSuccess,
             () => new Metadata(),
@@ -158,7 +168,7 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
     }
 
     private sealed class TerminalResponseReader(Stream stream, Func<bool> terminalEnded, Func<bool> includeHmpExit,
-        TaskCompletionSource endedObserved) : IAsyncStreamReader<TerminalServerFrame>
+        TaskCompletionSource endedObserved, RpcException? failure) : IAsyncStreamReader<TerminalServerFrame>
     {
         // Deliberately split HMP frames across small gRPC messages: transport boundaries
         // must not affect the HMP handshake, UTF-8 input, graphics, or terminal state.
@@ -170,6 +180,12 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
 
         public async Task<bool> MoveNext(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (failure is not null)
+            {
+                throw failure;
+            }
+
             var count = await stream.ReadAsync(_buffer, cancellationToken);
             if (count == 0)
             {

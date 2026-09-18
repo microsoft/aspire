@@ -213,6 +213,86 @@ public class TerminalServiceTests
         Assert.NotEqual(first.Id, second.Id);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateTerminal_SnapshotsLaunchOptionsBeforeLazyStartup(bool replaceArguments)
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(), "The workload uses a POSIX shell.");
+
+        var home = Environment.GetEnvironmentVariable("HOME");
+        Assert.NotNull(home);
+        var firstDirectory = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
+        var secondDirectory = Directory.GetParent(firstDirectory)!.FullName;
+
+        // Pass paths and values as positional arguments rather than interpolating shell syntax. Compare
+        // directory identity to allow macOS symlinks, and keep reading so the screen survives the assertions.
+        const string script = """
+            set -eu
+            printf '%s\n' "$1"
+            printf 'environment:[%s][%s][%s]\n' "$ASPIRE_TERMINAL_SNAPSHOT_SETTING" "${ASPIRE_TERMINAL_SNAPSHOT_REMOVED-}" "${ASPIRE_TERMINAL_SNAPSHOT_ADDED-}"
+            test "$HOME" = "$2"
+            printf 'inherited-environment\n'
+            test . -ef "$3"
+            printf 'working-directory\n'
+            printf 'ready\n'
+            read -r input
+            """;
+        List<string> arguments = ["-c", script, "terminal-snapshot", "first argument with spaces", home, firstDirectory];
+        var options = new TerminalLaunchOptions
+        {
+            Title = "First",
+            Placement = TerminalPlacement.None,
+            Executable = "/bin/sh",
+            Arguments = arguments,
+            WorkingDirectory = firstDirectory,
+            EnvironmentVariables =
+            {
+                ["ASPIRE_TERMINAL_SNAPSHOT_SETTING"] = "first value",
+                ["ASPIRE_TERMINAL_SNAPSHOT_REMOVED"] = "preserved",
+                ["ASPIRE_TERMINAL_SNAPSHOT_ADDED"] = string.Empty
+            }
+        };
+
+        await using var service = TestTerminalService.Create();
+        await using var first = service.CreateTerminal(options);
+        Assert.Empty(first.GetScreenText());
+
+        options.Title = "Second";
+        options.WorkingDirectory = secondDirectory;
+        if (replaceArguments)
+        {
+            options.Arguments = [.. arguments];
+        }
+        options.Arguments[3] = "second argument with spaces";
+        options.Arguments[5] = secondDirectory;
+        options.EnvironmentVariables.Clear();
+        options.EnvironmentVariables["ASPIRE_TERMINAL_SNAPSHOT_SETTING"] = "second value";
+        options.EnvironmentVariables["ASPIRE_TERMINAL_SNAPSHOT_ADDED"] = "added";
+        await using var second = service.CreateTerminal(options);
+        Assert.Empty(second.GetScreenText());
+
+        options.Executable = "must-not-be-started";
+        options.WorkingDirectory = Path.Combine(secondDirectory, "must-not-be-used");
+        options.Arguments.Clear();
+        arguments.Clear();
+        options.EnvironmentVariables.Clear();
+        options.EnvironmentVariables["ASPIRE_TERMINAL_SNAPSHOT_SETTING"] = "must-not-be-used";
+
+        first.Start();
+        second.Start();
+        await Task.WhenAll(first.WaitForTextAsync("ready"), second.WaitForTextAsync("ready")).DefaultTimeout();
+
+        Assert.Equal("First", first.Title);
+        Assert.Equal("Second", second.Title);
+        Assert.Equal(
+            ["first argument with spaces", "environment:[first value][preserved][]", "inherited-environment", "working-directory", "ready"],
+            first.GetScreenText().Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+        Assert.Equal(
+            ["second argument with spaces", "environment:[second value][][added]", "inherited-environment", "working-directory", "ready"],
+            second.GetScreenText().Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+    }
+
     [Fact]
     public void TryGetTerminal_UnknownId_ReturnsFalse()
     {

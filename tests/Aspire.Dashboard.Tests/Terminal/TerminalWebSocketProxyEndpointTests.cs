@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net.WebSockets;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Aspire.Dashboard.Configuration;
@@ -92,15 +93,22 @@ public class TerminalWebSocketProxyEndpointTests
             req.Headers["Origin"] = $"{DashboardScheme}://{DashboardHost}";
         };
 
-        // Allowed-origin path will still fail to upgrade because the fake
-        // resolver returns null (resource not found) — the proxy responds 404,
-        // which TestHost's WebSocketClient surfaces as InvalidOperationException
-        // from ConnectAsync. The important assertion is that the resolver was
-        // reached at all.
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        if (useGrpc)
         {
-            await client.ConnectAsync(BuildTerminalUri(useGrpc), CancellationToken.None);
-        });
+            using var socket = await client.ConnectAsync(BuildTerminalUri(useGrpc), timeout.Token);
+            var close = await socket.ReceiveAsync(new byte[64], timeout.Token);
+            Assert.Equal((WebSocketCloseStatus)4000, close.CloseStatus);
+            await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Received", timeout.Token);
+        }
+        else
+        {
+            // A resource replica may become available later, unlike an AppHost terminal
+            // ID that the server has permanently rejected.
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                client.ConnectAsync(BuildTerminalUri(useGrpc), timeout.Token));
+            Assert.Contains("404", exception.Message);
+        }
 
         Assert.True(resolver.ResolveCalled, "Same-origin requests must proceed past the Origin gate to resource resolution.");
     }

@@ -87,11 +87,6 @@
         <target state="new">Tape playback failed: {0}</target>
         <note />
       </trans-unit>
-      <trans-unit id="TapeReplicaExited">
-        <source>Replica {0} of '{1}' has exited. A tape requires a live terminal.</source>
-        <target state="new">Replica {0} of '{1}' has exited. A tape requires a live terminal.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TapeSelectAppHostAction">
         <source>play a terminal tape</source>
         <target state="new">play a terminal tape</target>

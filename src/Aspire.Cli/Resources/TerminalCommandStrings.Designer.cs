@@ -155,12 +155,6 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        public static string TapeReplicaExited {
-            get {
-                return ResourceManager.GetString("TapeReplicaExited", resourceCulture);
-            }
-        }
-
         public static string TapePlaybackFailed {
             get {
                 return ResourceManager.GetString("TapePlaybackFailed", resourceCulture);

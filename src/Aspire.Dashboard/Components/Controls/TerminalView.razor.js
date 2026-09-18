@@ -10,7 +10,7 @@ const DEFAULT_FONT_SIZE = 13;
 const RECONNECT_BACKOFF_MS = [500, 1000, 2000, 4000, 5000];
 const MAX_RECONNECT_ATTEMPTS = 30;
 // Aspire's WebSocket endpoint sends this private-use code only after authoritative
-// producer completion. It is not an HWT message or a Hex1b-defined close code.
+// producer completion or removal. It is not an HWT message or a Hex1b-defined close code.
 const TERMINAL_ENDED_CLOSE_CODE = 4000;
 const SIZE_PRESETS = [
     { value: "80x24", label: "80×24", cols: 80, rows: 24 },
