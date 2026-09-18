@@ -898,6 +898,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to App host.
+        /// </summary>
+        public static string ResourceGraphAppHostType {
+            get {
+                return ResourceManager.GetString("ResourceGraphAppHostType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Health checks.
         /// </summary>
         public static string ResourceHealthChecksHeader {

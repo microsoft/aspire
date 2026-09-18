@@ -20,6 +20,7 @@
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" PrivateAssets="all" NoWarn="NU3018;NU3027;NU3042" Condition="'$(MicrosoftFluentUIAspNetCoreComponentsIsPreview)' == 'true'" />
+    <PackageReference Include="Verify.XunitV3" />
     <!-- axe-core accessibility scanning for the Playwright integration tests (AccessibilityTests). -->
     <PackageReference Include="Deque.AxeCore.Playwright" />
   </ItemGroup>
@@ -52,10 +53,16 @@
     <Content Include="$(TestsSharedDir)TestCertificates\*.pfx" LinkBase="shared/TestCertificates" CopyToOutputDirectory="PreserveNewest" />
 
     <Content Include="..\..\src\Aspire.Dashboard\wwwroot\**\*.*" LinkBase="wwwroot" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="$(RepoRoot)playground\HealthModel\HealthModelScenario.cs" Link="shared\HealthModelScenario.cs" />
+    <Content Include="$(RepoRoot)playground\HealthModel\HealthModelSandbox.AppHost\aspire-healthmodel.json"
+             Link="TestData\healthmodel-playground.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
+    <!-- This project uses explicit imports; retain Verify's path metadata without its global usings. -->
+    <Using Remove="Xunit;VerifyXunit;VerifyXunit.Verifier" />
     <Using Include="Aspire.Dashboard.ServiceClient" />
+    <Using Include="Aspire.HealthModels" />
     <Using Include="Aspire.Tests.Utils" />
   </ItemGroup>
 

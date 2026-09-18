@@ -42,6 +42,7 @@
 
   <ItemGroup>
     <Using Include="Aspire.Dashboard.ServiceClient" />
+    <Using Include="Aspire.HealthModels" />
   </ItemGroup>
 
 </Project>

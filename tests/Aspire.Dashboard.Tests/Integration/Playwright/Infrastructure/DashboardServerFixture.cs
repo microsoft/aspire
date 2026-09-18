@@ -10,6 +10,7 @@ using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
@@ -61,8 +62,22 @@ public class DashboardServerFixture : IAsyncLifetime
             preConfigureBuilder: builder =>
             {
                 builder.Configuration.AddConfiguration(config);
-                builder.Services.AddSingleton<IDashboardClient>(new MockDashboardClient(Resources));
+                // The dashboard registers its selected-run client and repository factory after
+                // preConfigureBuilder. Override them when the container is built, not before that.
+                builder.Host.ConfigureContainer<IServiceCollection>((_, services) =>
+                {
+                    var client = new MockDashboardClient(Resources);
+                    services.Replace(ServiceDescriptor.Singleton<IDashboardClient>(client));
+                    services.Replace(ServiceDescriptor.Singleton<IRepositoryFactory>(provider =>
+                        new MockDashboardRepositoryFactory(provider, client)));
+                });
             });
+
+        using (var scope = DashboardApp.Services.CreateScope())
+        {
+            Assert.IsType<MockDashboardClient>(scope.ServiceProvider.GetRequiredService<IDashboardClient>());
+            Assert.IsType<MockDashboardRepositoryFactory>(scope.ServiceProvider.GetRequiredService<IRepositoryFactory>());
+        }
 
         await DashboardApp.StartAsync();
 

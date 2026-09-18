@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 1,
+  "name": "aspire-app-health",
+  "applicationName": "HealthModelSandbox.AppHost",
+  "entities": [
+    {
+      "name": "aspire-app-health",
+      "displayName": "AppHost",
+      "canvasPosition": { "x": 68, "y": 0 },
+      "impact": "Standard",
+      "dependencies": { "aggregationType": "WorstOf", "ignoreUnknown": true },
+      "localSignals": []
+    },
+    {
+      "name": "resource-catalog-api-2047be761f908cf3",
+      "displayName": "catalog-api",
+      "aspireResourceName": "catalog-api",
+      "replicaIndex": 1,
+      "canvasPosition": { "x": -408, "y": 360 },
+      "impact": "Standard",
+      "dependencies": { "aggregationType": "WorstOf", "ignoreUnknown": true },
+      "localSignals": [
+        { "name": "resource-state", "kind": "External" },
+        { "name": "catalog-api_check", "kind": "External" }
+      ]
+    },
+    {
+      "name": "resource-catalog-db-6ec20491e53f0925",
+      "displayName": "catalog-db",
+      "aspireResourceName": "catalog-db",
+      "replicaIndex": 1,
+      "canvasPosition": { "x": -544, "y": 720 },
+      "impact": "Standard",
+      "dependencies": { "aggregationType": "WorstOf", "ignoreUnknown": true },
+      "localSignals": [
+        { "name": "resource-state", "kind": "External" },
+        { "name": "catalog-db_check", "kind": "External" }
+      ]
+    },
+    {
+      "name": "resource-catalog-db-server-169a33d1a81f5e45",
+      "displayName": "catalog-db-server",
+      "aspireResourceName": "catalog-db-server",
+      "replicaIndex": 1,
+      "canvasPosition": { "x": -544, "y": 540 },
+      "impact": "Standard",
+      "dependencies": { "aggregationType": "WorstOf", "ignoreUnknown": true },
+      "localSignals": [
+        { "name": "resource-state", "kind": "External" },
+        { "name": "catalog-db-server_check", "kind": "External" }
+      ]
+    },
+    {
+      "name": "resource-checkout-api-bf814b2008e64f0a",
+      "displayName": "checkout-api",
+      "aspireResourceName": "checkout-api",
+      "replicaIndex": 1,
+      "canvasPosition": { "x": 136, "y": 360 },
+      "impact": "Standard",
+      "dependencies": { "aggregationType": "WorstOf", "ignoreUnknown": true },
+      "localSignals": [
+        { "name": "resource-state", "kind": "External" },
+        { "name": "checkout-api_check", "kind": "External" }
+      ]
+    },
+    {
+      "name": "resource-identity-api-4d9137704baac75b",
+      "displayName": "identity-api",
+      "aspireResourceName": "identity-api",
+      "replicaIndex": 1,
+      "canvasPosition": { "x": 544, "y": 360 },
+      "impact": "Standard",
+      "dependencies": { "aggregationType": "WorstOf", "ignoreUnknown": true },
+      "localSignals": [
+        { "name": "resource-state", "kind": "External" },
+        { "name": "identity-api_check", "kind": "External" }
+      ]
+    },
+    {
+      "name": "resource-identity-cache-b2e82ca0e70c363e",
+      "displayName": "identity-cache",
+      "aspireResourceName": "identity-cache",
+      "replicaIndex": 1,
+      "canvasPosition": { "x": 544, "y": 540 },
+      "impact": "Standard",
+      "dependencies": { "aggregationType": "WorstOf", "ignoreUnknown": true },
+      "localSignals": [
+        { "name": "resource-state", "kind": "External" },
+        { "name": "identity-cache_check", "kind": "External" }
+      ]
+    },
+    {
+      "name": "resource-orders-db-0ea5c392b3872c96",
+      "displayName": "orders-db",
+      "aspireResourceName": "orders-db",
+      "replicaIndex": 1,
+      "canvasPosition": { "x": 0, "y": 720 },
+      "impact": "Standard",
+      "dependencies": { "aggregationType": "WorstOf", "ignoreUnknown": true },
+      "localSignals": [
+        { "name": "resource-state", "kind": "External" },
+        { "name": "orders-db_check", "kind": "External" }
+      ]
+    },
+    {
+      "name": "resource-orders-db-server-4c88452aa34dadd8",
+      "displayName": "orders-db-server",
+      "aspireResourceName": "orders-db-server",
+      "replicaIndex": 1,
+      "canvasPosition": { "x": 0, "y": 540 },
+      "impact": "Standard",
+      "dependencies": { "aggregationType": "WorstOf", "ignoreUnknown": true },
+      "localSignals": [
+        { "name": "resource-state", "kind": "External" },
+        { "name": "orders-db-server_check", "kind": "External" }
+      ]
+    },
+    {
+      "name": "resource-payments-gateway-333165ebb58b302b",
+      "displayName": "payments-gateway",
+      "aspireResourceName": "payments-gateway",
+      "replicaIndex": 1,
+      "canvasPosition": { "x": 272, "y": 540 },
+      "impact": "Standard",
+      "dependencies": { "aggregationType": "WorstOf", "ignoreUnknown": true },
+      "localSignals": [
+        { "name": "resource-state", "kind": "External" },
+        { "name": "payments-gateway_check", "kind": "External" }
+      ]
+    },
+    {
+      "name": "resource-search-index-ebbf9cdc34d61672",
+      "displayName": "search-index",
+      "aspireResourceName": "search-index",
+      "replicaIndex": 1,
+      "canvasPosition": { "x": -272, "y": 540 },
+      "impact": "Standard",
+      "dependencies": { "aggregationType": "WorstOf", "ignoreUnknown": true },
+      "localSignals": [
+        { "name": "resource-state", "kind": "External" },
+        { "name": "search-index_check", "kind": "External" }
+      ]
+    },
+    {
+      "name": "resource-storefront-10139a6ad125cf88",
+      "displayName": "storefront",
+      "aspireResourceName": "storefront",
+      "replicaIndex": 1,
+      "canvasPosition": { "x": 68, "y": 180 },
+      "impact": "Standard",
+      "dependencies": { "aggregationType": "WorstOf", "ignoreUnknown": true },
+      "localSignals": [
+        { "name": "resource-state", "kind": "External" },
+        { "name": "storefront_check", "kind": "External" }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "parentEntityName": "aspire-app-health",
+      "childEntityName": "resource-storefront-10139a6ad125cf88"
+    },
+    {
+      "parentEntityName": "resource-storefront-10139a6ad125cf88",
+      "childEntityName": "resource-catalog-api-2047be761f908cf3"
+    },
+    {
+      "parentEntityName": "resource-storefront-10139a6ad125cf88",
+      "childEntityName": "resource-checkout-api-bf814b2008e64f0a"
+    },
+    {
+      "parentEntityName": "resource-storefront-10139a6ad125cf88",
+      "childEntityName": "resource-identity-api-4d9137704baac75b"
+    },
+    {
+      "parentEntityName": "resource-catalog-api-2047be761f908cf3",
+      "childEntityName": "resource-catalog-db-server-169a33d1a81f5e45"
+    },
+    {
+      "parentEntityName": "resource-catalog-api-2047be761f908cf3",
+      "childEntityName": "resource-search-index-ebbf9cdc34d61672"
+    },
+    {
+      "parentEntityName": "resource-catalog-db-server-169a33d1a81f5e45",
+      "childEntityName": "resource-catalog-db-6ec20491e53f0925"
+    },
+    {
+      "parentEntityName": "resource-checkout-api-bf814b2008e64f0a",
+      "childEntityName": "resource-orders-db-server-4c88452aa34dadd8"
+    },
+    {
+      "parentEntityName": "resource-checkout-api-bf814b2008e64f0a",
+      "childEntityName": "resource-payments-gateway-333165ebb58b302b"
+    },
+    {
+      "parentEntityName": "resource-orders-db-server-4c88452aa34dadd8",
+      "childEntityName": "resource-orders-db-0ea5c392b3872c96"
+    },
+    {
+      "parentEntityName": "resource-identity-api-4d9137704baac75b",
+      "childEntityName": "resource-identity-cache-b2e82ca0e70c363e"
+    }
+  ]
+}

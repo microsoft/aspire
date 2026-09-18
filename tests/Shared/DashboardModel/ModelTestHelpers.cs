@@ -27,7 +27,8 @@ public static class ModelTestHelpers
         string? iconName = null,
         IconVariant? iconVariant = null,
         ImmutableArray<VolumeViewModel>? volumes = null,
-        ImmutableArray<HealthReportViewModel>? healthReports = null)
+        ImmutableArray<HealthReportViewModel>? healthReports = null,
+        int replicaIndex = 0)
     {
         return new ResourceViewModel
         {
@@ -35,7 +36,7 @@ public static class ModelTestHelpers
             ResourceType = resourceType ?? KnownResourceTypes.Container,
             DisplayName = displayName ?? resourceName ?? "Display name!",
             Uid = Guid.NewGuid().ToString(),
-            ReplicaIndex = 0,
+            ReplicaIndex = replicaIndex,
             CreationTimeStamp = DateTime.UtcNow,
             StartTimeStamp = DateTime.UtcNow,
             StopTimeStamp = DateTime.UtcNow,

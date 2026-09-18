@@ -28,9 +28,17 @@ public class PlaywrightFixture : IAsyncLifetime
 
     public async Task GoToHomeAndWaitForDataGridLoad(IPage page)
     {
-        await page.GotoAsync("/");
+        await GoToResourcesAsync(page);
         await Assertions
             .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
             .ToBeVisibleAsync();
+    }
+
+    public async Task GoToResourcesAsync(IPage page)
+    {
+        // The HTTP root redirect uses the live AppHost client. Client-side navigation instead
+        // exercises the selected resource client supplied by the browser fixture.
+        await page.GotoAsync("/traces");
+        await page.Locator("a[href='/']").First.ClickAsync();
     }
 }

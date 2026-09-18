@@ -26,6 +26,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 {
     private const string ScrollContainerId = "resourcesScrollContainer";
     private const string GraphContainerId = "resourcesGraphContainer";
+    private const string ContextMenuAnchorId = "resources-context-menu-anchor";
     private const string TypeColumn = nameof(TypeColumn);
     private const string NameColumn = nameof(NameColumn);
     private const string StateColumn = nameof(StateColumn);
@@ -122,6 +123,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private DotNetObjectReference<ResourcesInterop>? _resourcesInteropReference;
     private IJSObjectReference? _jsModule;
     private bool _graphInitialized;
+    private readonly string _graphInstanceId = Guid.NewGuid().ToString("N");
+    private string? _pendingContextMenuFocusItemId;
     private AspirePageContentLayout? _contentLayout;
     private TotalItemsFooter _totalItemsFooter = default!;
     private int _totalItemsCount;
@@ -380,12 +383,28 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
         }
 
-        if (PageViewModel.SelectedViewKind == ResourceViewKind.Graph && !_graphInitialized)
+        if (!_isDisposing && _pendingContextMenuFocusItemId is { } itemId && _jsModule is not null)
+        {
+            _pendingContextMenuFocusItemId = null;
+            var focused = await _jsModule.InvokeAsync<bool>("focusResourceMenuItem", _graphInstanceId, itemId, ContextMenuAnchorId);
+            if (!focused && !_isDisposing && _contextMenuOpen)
+            {
+                Logger.LogWarning("Unable to focus the resource context menu item '{MenuItemId}'.", itemId);
+            }
+        }
+
+        if (!_isDisposing && PageViewModel.SelectedViewKind == ResourceViewKind.Graph && !_graphInitialized)
         {
             // Before any awaits, set a flag to indicate the graph is initialized. This prevents the graph being initialized multiple times.
             _graphInitialized = true;
 
             _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/app-resourcegraph.js");
+            if (_isDisposing)
+            {
+                await JSInteropHelpers.SafeDisposeAsync(_jsModule);
+                _jsModule = null;
+                return;
+            }
 
             _resourcesInteropReference = DotNetObjectReference.Create(new ResourcesInterop(this));
 
@@ -400,7 +419,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 }
             };
 
-            await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
+            await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons, _graphInstanceId);
             await UpdateResourceGraphResourcesAsync();
             await UpdateResourceGraphSelectedAsync();
         }
@@ -408,13 +427,13 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private async Task UpdateResourceGraphResourcesAsync()
     {
-        if (PageViewModel.SelectedViewKind != ResourceViewKind.Graph || _jsModule == null)
+        if (_isDisposing || PageViewModel.SelectedViewKind != ResourceViewKind.Graph || _jsModule is null)
         {
             return;
         }
 
         var activeResources = _resourceByName.Values.Where(Filter).OrderBy(e => e.ResourceType).ThenBy(e => e.Name).ToList();
-        var resources = activeResources.Select(r => ResourceGraphMapper.MapResource(r, activeResources, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources, IconResolver)).ToList();
+        var resources = ResourceGraphMapper.MapResources(activeResources, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources, IconResolver, DashboardClient.ApplicationName);
         await _jsModule.InvokeVoidAsync("updateResourcesGraph", resources);
     }
 
@@ -661,7 +680,16 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 showConsoleLogsItem: true,
                 showUrls: true);
 
+            if (focusElementId is not null)
+            {
+                // Cursor-positioned menus use a hidden anchor, so Fluent cannot transfer keyboard
+                // focus from the graph cog. Focus an actionable item after the menu has rendered.
+                _pendingContextMenuFocusItemId = _contextMenuItems
+                    .FirstOrDefault(item => !item.IsHeader && !item.IsDivider && !item.IsDisabled)?.Id;
+            }
+
             await contextMenu.OpenAsync(clientX, clientY);
+
             StateHasChanged();
         }
     }
@@ -913,7 +941,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private async Task UpdateResourceGraphSelectedAsync()
     {
-        if (_jsModule != null)
+        if (!_isDisposing && _jsModule is not null)
         {
             await _jsModule.InvokeVoidAsync("updateResourcesGraphSelected", PageViewModel.SelectedResource?.Name);
         }
@@ -1008,14 +1036,32 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     public async ValueTask DisposeAsync()
     {
         _isDisposing = true;
+        _pendingContextMenuFocusItemId = null;
 
-        _resourcesInteropReference?.Dispose();
         _cts.Cancel();
         _logsSubscription?.Dispose();
-        TelemetryContext.Dispose();
-        await JSInteropHelpers.SafeDisposeAsync(_jsModule);
-
-        await TaskHelpers.WaitIgnoreCancelAsync(_resourceSubscriptionTask);
+        try
+        {
+            await TaskHelpers.WaitIgnoreCancelAsync(_resourceSubscriptionTask);
+            if (_jsModule is not null)
+            {
+                try
+                {
+                    await _jsModule.InvokeVoidAsync("disposeResourcesGraph", _graphInstanceId);
+                }
+                catch (JSDisconnectedException)
+                {
+                    // There is no browser-side graph to release once the circuit has disconnected.
+                }
+            }
+        }
+        finally
+        {
+            _resourcesInteropReference?.Dispose();
+            TelemetryContext.Dispose();
+            _cts.Dispose();
+            await JSInteropHelpers.SafeDisposeAsync(_jsModule);
+        }
     }
 
     private async Task ContextMenuOpenChangedAsync(bool open)
@@ -1025,7 +1071,20 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         {
             await _jsModule.InvokeVoidAsync("updateResourcesGraphContextMenu", open);
         }
-        await InvokeAsync(StateHasChanged);
+
+        if (!open)
+        {
+            _pendingContextMenuFocusItemId = null;
+            var focusElementId = _contextMenuFocusElementId;
+            _contextMenuFocusElementId = null;
+
+            // Restore a keyboard-triggered menu to the graph cog before a selected menu item's
+            // callback can move focus to its destination (for example, the resource details view).
+            if (!string.IsNullOrEmpty(focusElementId))
+            {
+                await JS.InvokeVoidAsync("focusElement", focusElementId);
+            }
+        }
     }
 
     // IComponentWithTelemetry impl

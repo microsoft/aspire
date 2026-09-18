@@ -362,6 +362,7 @@ public partial class ResourcesTests : DashboardTestContext
 
         var resourceGraphModule = JSInterop.SetupModule("/js/app-resourcegraph.js");
         var initializeGraphInvocationHandler = resourceGraphModule.SetupVoid("initializeResourcesGraph", _ => true);
+        resourceGraphModule.SetupVoid("disposeResourcesGraph", _ => true).SetVoidResult();
 
         var navigationManager = Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(DashboardUrls.ResourcesUrl(view: "Graph"));
@@ -381,8 +382,10 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Equal(true, focusInvocation.Arguments[1]);
     }
 
-    [Fact]
-    public async Task ResourceGraphContextMenu_OpensWithoutWaitingForClose()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("resource-menu-trigger")]
+    public async Task ResourceGraphContextMenu_OpensWithoutWaitingForClose(string? focusElementId)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var resource = CreateResource(
@@ -402,6 +405,9 @@ public partial class ResourcesTests : DashboardTestContext
         resourceGraphModule.SetupVoid("selectResource", _ => true);
         var menuStateHandler = resourceGraphModule.SetupVoid("updateResourcesGraphContextMenu", _ => true);
         menuStateHandler.SetVoidResult();
+        var focusMenuItemHandler = resourceGraphModule.Setup<bool>("focusResourceMenuItem", _ => true);
+        focusMenuItemHandler.SetResult(true);
+        resourceGraphModule.SetupVoid("disposeResourcesGraph", _ => true).SetVoidResult();
 
         var navigationManager = Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(DashboardUrls.ResourcesUrl(view: "Graph"));
@@ -414,7 +420,7 @@ public partial class ResourcesTests : DashboardTestContext
         var showContextMenuAsync = typeof(Components.Pages.Resources)
             .GetMethod("ShowContextMenuAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
 
-        await cut.InvokeAsync(() => (Task)showContextMenuAsync.Invoke(cut.Instance, [resource, 20, 20, null])!);
+        await cut.InvokeAsync(() => (Task)showContextMenuAsync.Invoke(cut.Instance, [resource, 20, 20, focusElementId])!);
         cut.WaitForAssertion(() => Assert.True(cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored).Instance.Open));
 
         var contextMenu = cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored);
@@ -423,12 +429,27 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.True(headerItem.IsHeader);
         Assert.Equal("Resource1", headerItem.Text);
         Assert.NotNull(headerItem.Icon);
+        Assert.Collection(JSInterop.Invocations.Where(i => i.Identifier == "focusElement"),
+            invocation => Assert.Equal("resourcesGraphContainer", invocation.Arguments[0]));
+        if (focusElementId is not null)
+        {
+            cut.WaitForAssertion(() =>
+            {
+                var invocation = Assert.Single(focusMenuItemHandler.Invocations);
+                Assert.Equal(contextMenu.Instance.Anchor, invocation.Arguments[2]);
+                Assert.Equal(contextMenu.Instance.Items.First(item => !item.IsHeader && !item.IsDivider && !item.IsDisabled).Id, invocation.Arguments[1]);
+            });
+        }
 
         await cut.InvokeAsync(() => contextMenu.FindComponent<FluentMenu>().Instance.OnOpenedChangedAsync(false));
 
         Assert.False(contextMenu.Instance.Open);
         Assert.Equal(false, menuStateHandler.Invocations.Last().Arguments[0]);
         Assert.Empty(cut.FindComponents<FluentOverlay>());
+        if (focusElementId is not null)
+        {
+            Assert.Single(JSInterop.Invocations, i => i.Identifier == "focusElement" && Equals(i.Arguments[0], focusElementId));
+        }
     }
 
     [Fact]
@@ -903,6 +924,7 @@ public partial class ResourcesTests : DashboardTestContext
         resourceGraphModule.SetupVoid("initializeResourcesGraph", _ => true);
         resourceGraphModule.SetupVoid("updateResourcesGraph", _ => true);
         resourceGraphModule.SetupVoid("updateResourcesGraphSelected", _ => true);
+        resourceGraphModule.SetupVoid("disposeResourcesGraph", _ => true).SetVoidResult();
 
         var cut = RenderComponent<Components.Pages.Resources>(builder =>
         {
