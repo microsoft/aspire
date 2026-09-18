@@ -7,7 +7,7 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
     <!-- Set this to false when switching Microsoft.FluentUI.AspNetCore.Components to a release package. -->
-    <MicrosoftFluentUIAspNetCoreComponentsVersion>5.0.0-preview.26259.4</MicrosoftFluentUIAspNetCoreComponentsVersion>
+    <MicrosoftFluentUIAspNetCoreComponentsVersion>5.0.0-preview.26260.3</MicrosoftFluentUIAspNetCoreComponentsVersion>
     <MicrosoftFluentUIAspNetCoreComponentsIsPreview>true</MicrosoftFluentUIAspNetCoreComponentsIsPreview>
     <!-- The Npgsql versions used when using Npgsql EF Core on net8/net9. The major versions need to match between Npgsql and EF Core. -->
     <Npgsql8Version>8.0.9</Npgsql8Version>
