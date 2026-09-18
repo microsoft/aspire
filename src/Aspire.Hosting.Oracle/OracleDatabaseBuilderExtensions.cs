@@ -13,6 +13,7 @@ namespace Aspire.Hosting;
 public static class OracleDatabaseBuilderExtensions
 {
     private const string PasswordEnvVarName = "ORACLE_PWD";
+    private const string DefaultDatabaseName = "FREEPDB1";
 
     /// <summary>
     /// Adds a Oracle Server resource to the application model. A container is used for local development.
@@ -73,7 +74,7 @@ public static class OracleDatabaseBuilderExtensions
     /// </summary>
     /// <param name="builder">The Oracle Database server resource builder.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
-    /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
+    /// <param name="databaseName">The name of the database. If not provided, this defaults to the Oracle Free container's default pluggable database, <c>FREEPDB1</c>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
@@ -85,8 +86,7 @@ public static class OracleDatabaseBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        // Use the resource name as the database name if it's not provided
-        databaseName ??= name;
+        databaseName ??= DefaultDatabaseName;
 
         builder.Resource.AddDatabase(name, databaseName);
         var oracleDatabase = new OracleDatabaseResource(name, databaseName, builder.Resource);
