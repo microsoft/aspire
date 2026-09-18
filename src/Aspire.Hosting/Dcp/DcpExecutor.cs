@@ -257,16 +257,16 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 }
             }, ct);
 
+            // Container creation and executable configuration may both require endpoints expressed within the container network.
+            var cctx = new ContainerCreationContext(createContainerNetworks, createWorkloadEndpoints, ct);
+            _containerContextSource.SetResult(cctx);
+
             var createExecutables = Task.Run(async () =>
             {
                 await createWorkloadEndpoints.ConfigureAwait(false);
 
-                await CreateRenderedResourcesAsync(_executableCreator, executables, EmptyCreationContext.s_instance, ct).ConfigureAwait(false);
+                await CreateRenderedResourcesAsync(_executableCreator, executables, cctx, ct).ConfigureAwait(false);
             }, ct);
-
-            // Configuring containers that use the tunnel require these host network-side endpoints for Executables to be ready.
-            var cctx = new ContainerCreationContext(createContainerNetworks, createWorkloadEndpoints, ct);
-            _containerContextSource.SetResult(cctx);
 
             var createContainers = Task.Run(async () =>
             {
@@ -1317,8 +1317,8 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
-                    var cctx = await _containerContextSource.Task.ConfigureAwait(false);
-                    await _containerCreator.CreateObjectAsync(cr, cctx, resourceLogger, this, cancellationToken).ConfigureAwait(false);
+                    var containerCreationContext = await _containerContextSource.Task.ConfigureAwait(false);
+                    await _containerCreator.CreateObjectAsync(cr, containerCreationContext, resourceLogger, this, cancellationToken).ConfigureAwait(false);
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     break;
                 case RenderedModelResource<Executable> er:
@@ -1329,7 +1329,8 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
-                    await _executableCreator.CreateObjectAsync(er, EmptyCreationContext.s_instance, resourceLogger, this, cancellationToken).ConfigureAwait(false);
+                    var executableCreationContext = await _containerContextSource.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    await _executableCreator.CreateObjectAsync(er, executableCreationContext, resourceLogger, this, cancellationToken).ConfigureAwait(false);
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     break;
 
