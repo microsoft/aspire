@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Security hardening of the docs repo's og-preview GitHub Action extension; not documentation of a product feature",
+  "mergedAt": "2026-09-17T18:04:48Z",
+  "number": 1688,
+  "runDate": "2026-09-18T00:08:44Z",
+  "status": "excluded",
+  "title": "fix: address open code scanning alerts"
+}

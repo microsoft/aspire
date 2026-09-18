@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Internal dependency swap of Azure.ResourceManager.Resources package reference; no user-facing impact",
+  "mergedAt": "2026-09-17T21:19:10Z",
+  "number": 20203,
+  "runDate": "2026-09-18T00:08:34Z",
+  "status": "excluded",
+  "title": "Remove legacy Azure.ResourceManager.Resources reference"
+}

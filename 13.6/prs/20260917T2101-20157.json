@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "New polyglot launch profile options for addDotnetProject",
+  "mergedAt": "2026-09-17T21:01:21Z",
+  "number": 20157,
+  "runDate": "2026-09-18T00:08:34Z",
+  "status": "included",
+  "title": "Make Project v2 options polyglot-friendly"
+}

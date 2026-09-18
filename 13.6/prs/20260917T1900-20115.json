@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "New experimental Azure Container Apps Express deployment support",
+  "mergedAt": "2026-09-17T19:00:21Z",
+  "number": 20115,
+  "runDate": "2026-09-18T00:08:34Z",
+  "status": "included",
+  "title": "Add experimental Azure Container Apps Express support"
+}

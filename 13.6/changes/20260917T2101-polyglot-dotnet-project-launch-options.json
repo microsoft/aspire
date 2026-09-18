@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Polyglot AppHosts can now configure named or excluded .NET launch profiles when calling `addDotnetProject`, using a new flat `DotnetProjectOptions` object that supports `launchProfileName`, `excludeLaunchProfile`, and `excludeKestrelEndpoints` with the same semantics as the existing C# options.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧭",
+  "firstMergedAt": "2026-09-17T21:01:21Z",
+  "lastMergedAt": "2026-09-17T21:01:21Z",
+  "name": "Launch profile options for polyglot addDotnetProject",
+  "owner": "karolz-ms",
+  "prs": [
+    20157
+  ]
+}

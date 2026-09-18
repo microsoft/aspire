@@ -1,0 +1,9 @@
+{
+  "author": "fadamsen",
+  "comment": "Typo fix for the azure-appconfiguration integration name in docs; no matching changelog entry for this milestone",
+  "mergedAt": "2026-09-17T20:40:15Z",
+  "number": 1693,
+  "runDate": "2026-09-18T00:08:44Z",
+  "status": "excluded",
+  "title": "Fix typo in azure-appconfiguration integration name"
+}
