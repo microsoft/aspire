@@ -251,6 +251,27 @@ export class AppHostDataRepository {
         return this._errorMessage !== undefined;
     }
 
+    /**
+     * Returns the workspace folder whose `aspire ls` discovery reported `appHostPath` as a
+     * candidate, or `undefined` when no per-folder discovery recorded it (for example, a running
+     * AppHost found only via `aspire ps`, or a lookup performed before discovery completes).
+     *
+     * An AppHost's resolved path can legitimately live outside every open folder -- an
+     * `aspire.config.json` may point `appHost.path` at a sibling or parent directory -- so
+     * re-deriving a CLI target from that path alone (`getCliPathTargetForUri`) silently falls back
+     * to the window scope in a multi-root workspace, which can pick a different CLI than the one
+     * that actually discovered this AppHost. Callers that already know an AppHost came from
+     * workspace discovery should prefer this over re-deriving a target from the AppHost path alone.
+     */
+    getWorkspaceFolderForAppHostPath(appHostPath: string): vscode.WorkspaceFolder | undefined {
+        for (const [folderUriString, candidates] of this._workspaceFolderAppHostCandidates) {
+            if (candidates.some(candidate => isMatchingAppHostPath(candidate.path, appHostPath))) {
+                return vscode.workspace.workspaceFolders?.find(folder => folder.uri.toString() === folderUriString);
+            }
+        }
+        return undefined;
+    }
+
     // ── Mode / panel control ──
 
     setViewMode(mode: ViewMode): void {

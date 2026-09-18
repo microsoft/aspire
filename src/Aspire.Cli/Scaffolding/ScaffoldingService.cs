@@ -502,6 +502,15 @@ internal sealed class ScaffoldingService : IScaffoldingService
             await File.WriteAllTextAsync(filePath, content, cancellationToken);
         }
 
+        // Write the same CLI-version marker that GuestAppHostProject.GenerateCodeViaRpcAsync writes
+        // after every subsequent `aspire run` codegen pass. Without it here, the extension's
+        // version-marker-based auto-restore check sees no marker after a fresh `aspire init` and
+        // treats the project as always-stale, forcing one redundant restore on first open.
+        await File.WriteAllTextAsync(
+            Path.Combine(outputPath, GuestAppHostProject.CodeGenerationVersionFileName),
+            _executionContext.IdentityInformationalVersion,
+            cancellationToken);
+
         _logger.LogDebug("Generated {Count} code files in {Path}", generatedFiles.Count, outputPath);
     }
 

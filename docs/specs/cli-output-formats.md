@@ -538,6 +538,9 @@ The `devtools` category surfaces development-tooling recommendations. The `vscod
 
 The `isolated-launch.v1` capability indicates that `aspire run` accepts the `--isolated` option.
 
+The `codegen-version-marker.v1` capability indicates that guest AppHost code generation writes the
+CLI identity version to `.codegen-version` in the generated modules directory.
+
 ## MCP tooling
 
 ### `aspire mcp tools`

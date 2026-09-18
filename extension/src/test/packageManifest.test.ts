@@ -47,6 +47,9 @@ type ExtensionManifest = {
             'view/item/context'?: ManifestMenuItem[];
         };
         debuggers?: DebuggerContribution[];
+        configuration?: {
+            properties?: { [key: string]: { default?: unknown; description?: string } };
+        };
         walkthroughs?: Array<{ steps?: Array<{ id?: string; completionEvents?: string[] }> }>;
     };
 };
@@ -104,6 +107,14 @@ suite('extension/package.json', () => {
         assertContains(runAppHost?.when, 'viewItem =~ /^workspaceAppHost(:[A-Za-z]+)*$/');
         assertContains(debugAppHost?.when, "view == aspire-vscode.appHosts");
         assertContains(debugAppHost?.when, 'viewItem =~ /^workspaceAppHost(:[A-Za-z]+)*$/');
+    });
+
+    test('auto-restore defaults on with version-aware guest AppHost semantics', () => {
+        const manifest = readManifest();
+        const autoRestore = manifest.contributes.configuration?.properties?.['aspire.enableAutoRestore'];
+
+        assert.strictEqual(autoRestore?.default, true);
+        assert.strictEqual(autoRestore?.description, '%configuration.aspire.enableAutoRestore%');
     });
 
     test('resource command context action targets apphosts view', () => {
