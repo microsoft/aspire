@@ -25,7 +25,7 @@ public class ConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("JdbcConnectionString", property.Key);
-                Assert.Equal("jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};trustServerCertificate=true", property.Value.ValueExpression);
+                Assert.Equal("jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port}{cond-sql-bindings-tcp-tlsenabled-9a3d157c.connectionString}", property.Value.ValueExpression);
             },
             property =>
             {
@@ -73,7 +73,7 @@ public class ConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("JdbcConnectionString", property.Key);
-                Assert.Equal("jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};databaseName=Orders;trustServerCertificate=true", property.Value.ValueExpression);
+                Assert.Equal("jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};databaseName=Orders{cond-sql-bindings-tcp-tlsenabled-9a3d157c.connectionString}", property.Value.ValueExpression);
             },
             property =>
             {
@@ -95,5 +95,20 @@ public class ConnectionPropertiesTests
                 Assert.Equal("Username", property.Key);
                 Assert.Equal("sa", property.Value.ValueExpression);
             });
+    }
+
+    [Fact]
+    public void ConnectionStringRedirectsToAnotherResource()
+    {
+        var password = new ParameterResource("password", _ => "p@ssw0rd1", secret: true);
+        var resource = new SqlServerServerResource("sql", password);
+
+        var otherPassword = new ParameterResource("other-password", _ => "other-pass", secret: true);
+        var other = new SqlServerServerResource("other", otherPassword);
+
+        resource.Annotations.Add(new ConnectionStringRedirectAnnotation(other));
+
+        Assert.Equal(other.ConnectionStringExpression.ValueExpression, resource.ConnectionStringExpression.ValueExpression);
+        Assert.Contains("other-password", resource.ConnectionStringExpression.ValueExpression);
     }
 }
