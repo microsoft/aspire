@@ -342,7 +342,12 @@ the icon has been added; an unavailable notification area still fails explicitly
 
 Preferences are stored in `<Aspire home>\tray\apphosts.json`, normally
 `%USERPROFILE%\.aspire\tray\apphosts.json`.
-Timestamped diagnostics remain in `%LocalAppData%\Aspire\Tray\aspire-tray.log`. The current-user
+Timestamped diagnostics remain in `%LocalAppData%\Aspire\Tray\aspire-tray.log`.
+Windows opens and validates every directory component without following reparse
+points, blocking ancestor replacement and reparse-point changes until the log handle is open.
+The log is a single-link regular file opened for append-only writes, and that
+validated handle is retained rather than reopening the pathname.
+The current-user
 secured mutex and named pipe are shared across that user's desktop sessions.
 The icon stays in the session where the companion first started; another session
 restores or stops that instance. Stop and start again to move it to the launching
