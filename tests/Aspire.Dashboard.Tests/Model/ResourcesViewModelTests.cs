@@ -168,6 +168,23 @@ public sealed class ResourcesViewModelTests
     }
 
     [Fact]
+    public void HiddenParameter_IsIncludedInParametersViewWhenShowHiddenIsTrue()
+    {
+        var vm = new ResourcesViewModel
+        {
+            SelectedViewKind = ResourceViewKind.Parameters,
+            TextFilter = "",
+            ShowHiddenResources = true
+        };
+        vm.ResourceStatesToVisibility[KnownResourceState.Running.ToString()] = true;
+        vm.ResourceHealthStatusesToVisibility["Healthy"] = true;
+
+        var parameter = ModelTestHelpers.CreateResource(resourceType: KnownResourceTypes.Parameter, state: KnownResourceState.Running, hidden: true);
+
+        Assert.True(vm.Filter(parameter));
+    }
+
+    [Fact]
     public void AllFiltersPass_IncludesResource()
     {
         var vm = new ResourcesViewModel
