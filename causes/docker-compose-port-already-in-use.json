@@ -5,8 +5,8 @@
   "test_name": "Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints",
   "job_name": "Tests / No-package tests (regular, Aspire.Hosting.Docker.Tests, Hosting.Docker, Hosting.Docker, tests/Asp... / Hosting.Docker (ubuntu-latest)",
   "error_pattern": "'docker compose up' failed with exit code 1. Assert.Contains() Failure: Filter not matched in collection\nCollection: []",
-  "analysis": "The test invokes 'docker compose up' as part of publishing a Docker Compose environment, then asserts on printed dashboard/service endpoint output. When 'docker compose up' fails (e.g. due to port contention or container runtime issues on the shared CI runner), the output collection is empty and the Assert.Contains() call fails. This is a previously observed recurring failure pattern for this exact test and is unrelated to the PR's changes (NuGet config, build scripts, docs).",
-  "failure_details": "Temporary workspace created at: /tmp/Aspire.Hosting.TestUtilities/Workspace/g0xfcd42.kos\nUsing random host port: 54824\n[CreateStep] docker-compose-up-env\n    [Information:docker-compose-up-env] Container runtime auto-detected: Docker (docker).\n    [CreateTask:docker-compose-up-env] Running compose up for **env** using **Docker**\n      [CompleteTask:Running compose up for **env** using **Docker**] Compose deployment failed (Docker): 'docker compose up' failed with exit code 1. Ensure 'docker' is installed and available on PATH. The container runtime was auto-detected as 'docker'. Set ASPIRE_CONTAINER_RUNTIME to override (e.g., 'docker' or 'podman').\n\nAssert.Contains() Failure: Filter not matched in collection\nCollection: []\nat Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Docker.Tests/DockerComposeTests.cs:line 460",
+  "analysis": "The 'docker compose up' command fails intermittently in the CI container environment (likely due to image pull/registry contention or port conflicts), leaving the dashboard/service endpoint collection empty for the assertion. The PR only touched a dashboard Razor component and its unit test file, not Docker Compose deployment logic, so this is unrelated to the PR changes.",
+  "failure_details": "Assert.Contains() Failure: Filter not matched in collection\nCollection: []\n\nStack Trace:\nat Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Docker.Tests/DockerComposeTests.cs:line 460\n\nStandard Output (redacted):\nTemporary workspace created at: /tmp/Aspire.Hosting.TestUtilities/Workspace/mqs1lk44.rhk\nUsing random host port: 54642\n[CreateStep] validate-compute-environments\n...\n[CompleteTask:Running compose up for **env** using **Docker**] Compose deployment failed (Docker): 'docker compose up' failed with exit code 1. Ensure 'docker' is installed and available on PATH. The container runtime was auto-detected as 'docker'. Set ASPIRE_CONTAINER_RUNTIME to override (e.g., 'docker' or 'podman').\nCommand output truncated: showing last 50 of 84 lines (image layer pull/extract progress lines for multiple container images).",
   "occurrences": [
     {
       "run_id": 29060081150,
@@ -35,6 +35,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.Docker.Tests, Hosting.Docker, Hosting.Docker, tests/Asp... / Hosting.Docker (ubuntu-latest)",
       "pr_number": 20052,
       "observed_at": "2026-09-15T21:59:54Z"
+    },
+    {
+      "run_id": 35337231287,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35337231287",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Docker.Tests, Hosting.Docker, Hosting.Docker, tests/Asp... / Hosting.Docker (ubuntu-latest)",
+      "pr_number": 20230,
+      "observed_at": "2026-09-18T11:35:10Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18719"

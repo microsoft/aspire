@@ -1,9 +1,12 @@
 {
   "id": "aspire-hosting-pipelinetests-destroy-access-denied-windows",
   "type": "flaky-test",
-  "title": "Flaky: DistributedApplicationPipelineTests.WithPipelineStepFactory_MultipleStepsAsyncOverload_ExecutesAllSteps fails with UnauthorizedAccessException during 'destroy' step on Windows",
-  "test_name": "Aspire.Hosting.Tests.Pipelines.DistributedApplicationPipelineTests.WithPipelineStepFactory_MultipleStepsAsyncOverload_ExecutesAllSteps",
-  "error_pattern": "System.InvalidOperationException : Step 'destroy' failed: Access to the path is denied.\n---- System.UnauthorizedAccessException : Access to the path is denied.\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ExecuteStepAsync(PipelineStep step, PipelineStepContext stepContext) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 1152",
+  "title": "Flaky: DistributedApplicationPipelineTests pipeline tests fail with UnauthorizedAccessException during 'destroy' step on Windows",
+  "test_name": "Aspire.Hosting.Tests.Pipelines.DistributedApplicationPipelineTests.WithPipelineStepFactory_MultipleStepsSyncOverload_ExecutesAllSteps",
+  "job_name": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-4, Hosting-4, tests/Aspire.Hosting.Te... / Hosting-4 (windows-latest)",
+  "error_pattern": "System.InvalidOperationException : Step 'destroy' failed: Access to the path is denied.\n---- System.UnauthorizedAccessException : Access to the path is denied.\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ExecuteStepAsync(PipelineStep step, PipelineStepContext stepContext) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 1108",
+  "analysis": "Windows-only file-locking race when the pipeline 'destroy' step tries to delete a workspace directory that is still held open by another process/handle. The PR only changed a dashboard Razor component and its test file, unrelated to the pipeline execution code, so this failure is not connected to the PR's changes.",
+  "failure_details": "System.InvalidOperationException : Step 'destroy' failed: Access to the path is denied.\n---- System.UnauthorizedAccessException : Access to the path is denied.\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ExecuteStepAsync(PipelineStep step, PipelineStepContext stepContext) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 1108\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.<>c__DisplayClass24_0.<<ExecuteStepsAsTaskDag>g__ExecuteStepWithDependencies|0>d.MoveNext() in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 869\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.<>c__DisplayClass24_0.<<ExecuteStepsAsTaskDag>g__ExecuteStepWithDependencies|0>d.MoveNext() in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 877\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.<>c__DisplayClass24_0.<<ExecuteStepsAsTaskDag>g__ExecuteStepWithDependencies|0>d.MoveNext() in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 883\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ExecuteStepsAsTaskDag(List`1 steps, Dictionary`2 stepsByName, PipelineContext context) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 907\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ExecuteAsync(PipelineContext context) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 539\n   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in D:\\a\\aspire\\aspire\\tests\\Shared\\AsyncTestHelpers.cs:line 190\n   at Aspire.Hosting.Tests.Pipelines.DistributedApplicationPipelineTests.WithPipelineStepFactory_MultipleStepsSyncOverload_ExecutesAllSteps() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Tests\\Pipelines\\DistributedApplicationPipelineTests.cs:line 1111",
   "occurrences": [
     {
       "run_id": 34655355873,
@@ -11,6 +14,13 @@
       "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-4, Hosting-4, tests/Aspire.Hosting.Tests) / Hosting-4 (windows-latest)",
       "pr_number": 20072,
       "observed_at": "2026-09-11T23:41:00Z"
+    },
+    {
+      "run_id": 35337231287,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35337231287",
+      "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-4, Hosting-4, tests/Aspire.Hosting.Te... / Hosting-4 (windows-latest)",
+      "pr_number": 20230,
+      "observed_at": "2026-09-18T11:35:10Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20078"

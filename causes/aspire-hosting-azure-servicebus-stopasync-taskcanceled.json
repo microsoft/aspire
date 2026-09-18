@@ -5,8 +5,8 @@
   "test_name": "Aspire.Hosting.Azure.Tests.AzureServiceBusExtensionsTests.AzureServiceBusEmulatorResourceGeneratesConfigJsonOnlyChangedProperties",
   "job_name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
   "error_pattern": "System.Threading.Tasks.TaskCanceledException : A task was canceled.\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T]\n   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync\n   at Aspire.Hosting.DistributedApplication.StopAsync",
-  "analysis": "The test fails while the DistributedApplication host is shutting down (StopAsync/ForeachService), not in the test's own assertions or the code being tested. The PR under analysis does not modify Aspire.Hosting.Azure, the ServiceBus emulator resource code, or any files under tests/Aspire.Hosting.Azure.Tests, so this timeout during host teardown is unrelated to the PR changes and indicates an environment/timing-related shutdown race rather than a code defect introduced by the PR.",
-  "failure_details": "Error:\nSystem.Threading.Tasks.TaskCanceledException : A task was canceled.\nStack Trace:\nat Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StopAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 497\n   at Aspire.Hosting.Azure.Tests.AzureServiceBusExtensionsTests.AzureServiceBusEmulatorResourceGeneratesConfigJsonOnlyChangedProperties() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Azure.Tests/AzureServiceBusExtensionsTests.cs:line 499\n--- End of stack trace from previous location ---",
+  "analysis": "The test times out while stopping hosted services during DistributedApplication.StopAsync, which is an environmental/timing issue in test teardown rather than a functional defect in the Azure Service Bus emulator config generation logic under test. The PR only touched a dashboard Razor component and its unit test file, so it is unrelated to this failure.",
+  "failure_details": "System.Threading.Tasks.TaskCanceledException : A task was canceled.\n\nStack Trace:\nat Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StopAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 497\n   at Aspire.Hosting.Azure.Tests.AzureServiceBusExtensionsTests.AzureServiceBusEmulatorResourceGeneratesConfigJsonOnlyChangedProperties() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Azure.Tests/AzureServiceBusExtensionsTests.cs:line 499\n--- End of stack trace from previous location ---",
   "occurrences": [
     {
       "run_id": 35322237059,
@@ -14,6 +14,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
       "pr_number": 19887,
       "observed_at": "2026-09-18T08:42:00Z"
+    },
+    {
+      "run_id": 35337231287,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35337231287",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "pr_number": 20230,
+      "observed_at": "2026-09-18T11:35:10Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20227"
