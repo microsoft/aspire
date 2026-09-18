@@ -92,11 +92,34 @@ public class ChartFiltersTests : DashboardTestContext
         Assert.Contains("aria-label=\"All tags\"", cut.Markup);
         Assert.NotNull(cut.Find(".dimension-popup-container"));
         Assert.All(cut.FindAll(".dimension-popup fluent-field"), field => Assert.Contains("aspire-checkbox", field.ClassList));
+        Assert.Equal("0", cut.Find(".dimension-overflow").GetAttribute("threshold"));
         var overflowItems = cut.FindAll(".dimension-overflow > div:not(.fluent-overflow-more)");
         Assert.Equal("ellipsis", overflowItems[0].GetAttribute("behavior"));
         Assert.Contains("dimension-overflow-ellipsis", overflowItems[0].ClassList);
         Assert.All(overflowItems.Skip(1), item => Assert.Null(item.GetAttribute("behavior")));
         Assert.All(overflowItems.Skip(1), item => Assert.DoesNotContain("dimension-overflow-ellipsis", item.ClassList));
+    }
+
+    [Fact]
+    public void Render_MoreThanMaxTags_RendersBoundedPayloadAndHighlightsSelectedOverflow()
+    {
+        SetupChartFilters();
+        var dimensionFilter = new DimensionFilterViewModel { Name = "http.status_code" };
+        for (var i = 0; i < 30; i++)
+        {
+            dimensionFilter.Values.Add(new DimensionValueViewModel { Text = i.ToString(), Value = i.ToString() });
+        }
+        dimensionFilter.SetSelectedValues([dimensionFilter.Values[25]]);
+
+        var cut = RenderChartFilters(dimensionFilter);
+
+        var overflow = cut.Find(".dimension-overflow");
+        var overflowItems = cut.FindAll(".dimension-overflow > div:not(.fluent-overflow-more)");
+        var moreButton = cut.Find(".dimension-overflow .fluent-overflow-more .filter-value-tag");
+        Assert.Equal("10", overflow.GetAttribute("pre-overflow-count"));
+        Assert.Equal(20, overflowItems.Count);
+        Assert.Equal("+10", moreButton.TextContent.Trim());
+        Assert.Contains("included-in-filters", moreButton.ClassList);
     }
 
     [Fact]

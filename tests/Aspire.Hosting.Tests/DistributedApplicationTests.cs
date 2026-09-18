@@ -1613,6 +1613,10 @@ public class DistributedApplicationTests
         Assert.NotEmpty(redisContainer.Spec.VolumeMounts);
         Assert.Equal($"{testName}-volume", redisContainer.Spec.VolumeMounts[0].Source);
 
+        var containerVolume = Assert.Single(await s.ListAsync<ContainerVolume>().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout));
+        Assert.Equal($"{testName}-volume", containerVolume.Spec.Name);
+        Assert.Equal(ContainerVolumeState.Ready, containerVolume.Status?.State);
+
         await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
     }
 

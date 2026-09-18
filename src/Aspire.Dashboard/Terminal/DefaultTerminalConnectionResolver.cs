@@ -20,14 +20,8 @@ namespace Aspire.Dashboard.Terminal;
 /// anything in its temp directory), but the path never reaches the browser via
 /// the terminal WebSocket because the proxy takes only
 /// <c>resource</c>/<c>replica</c> identifiers.</para>
-/// <para>The resolver intentionally does <i>not</i> use Hex1b's
-/// <c>WithHmp1UdsClient</c> builder. That builder is for in-process Hex1b
-/// applications that want to <i>embed</i> the HMP1 stream into a Hex1b
-/// terminal (the CLI's <c>aspire terminal attach</c> path does exactly that).
-/// The dashboard never instantiates a Hex1b terminal — it is a byte-level
-/// proxy between the browser's HMP1 client and the remote terminal host —
-/// so the resolver only needs the raw stream and reaches for the lower-level
-/// <see cref="Hmp1Transports.ConnectUnixSocket"/> helper instead.</para>
+/// <para>The resolver opens only the transport. The WebSocket handler owns
+/// the HMP1 consumer and its per-browser HWT1 presentation lifetime.</para>
 /// </remarks>
 internal sealed class DefaultTerminalConnectionResolver : ITerminalConnectionResolver
 {

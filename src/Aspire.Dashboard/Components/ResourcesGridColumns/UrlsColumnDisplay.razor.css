@@ -2,6 +2,19 @@
     padding: 4px 0;
 }
 
+.single-url {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.single-url > a,
+.single-url > span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Fluent v5 hides vertical overflow, which makes visible horizontal overflow compute to auto. */
 ::deep .url-overflow {
     overflow-x: visible !important;

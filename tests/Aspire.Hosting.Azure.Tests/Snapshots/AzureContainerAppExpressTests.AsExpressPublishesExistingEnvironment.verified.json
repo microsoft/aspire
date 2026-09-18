@@ -1,0 +1,10 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "env.module.bicep",
+  "params": {
+    "existing_name": "{existing-name.value}",
+    "existing_resource_group": "{existing-resource-group.value}",
+    "env_acr_outputs_name": "{env-acr.outputs.name}",
+    "userPrincipalId": ""
+  }
+}

@@ -49,7 +49,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout analysis helpers
-        uses: actions/checkout@v4.3.1
+        uses: actions/checkout@v6.0.3
         with:
           sparse-checkout: |
             .github/workflows/analyze-ci-failure.js
@@ -446,7 +446,7 @@ jobs:
 
           echo "Analysis summary written to ci-failure-data/analysis-summary.md"
 
-      - uses: actions/upload-artifact@v4.6.2
+      - uses: actions/upload-artifact@v7.0.1
         if: steps.collect.outputs.has_work == 'true'
         with:
           name: ci-failure-data
@@ -508,12 +508,20 @@ safe-outputs:
       env:
         GH_TOKEN: ${{ github.token }}
       steps:
+        - name: Download CI analysis files
+          id: download-analysis
+          uses: actions/download-artifact@v8.0.1
+          with:
+            name: ci-analysis-output
+            path: ${{ runner.temp }}/ci-analysis-output
         - name: Checkout issue renderer
-          uses: actions/checkout@v4
+          uses: actions/checkout@v6.0.3
           with:
             sparse-checkout: .github/workflows/analyze-ci-failure.js
             sparse-checkout-cone-mode: false
         - name: Publish analysis data and comment on PR
+          env:
+            ANALYSIS_DIR: ${{ steps.download-analysis.outputs.download-path }}
           run: |
             set -euo pipefail
 
@@ -523,9 +531,8 @@ safe-outputs:
               exit 1
             fi
 
-            ARTIFACT_DIR=$(dirname "$OUTPUT_FILE")
-            ANALYSIS_FILE="$ARTIFACT_DIR/agent/analysis-result.json"
-            CAUSES_DIR="$ARTIFACT_DIR/agent/causes"
+            ANALYSIS_FILE="$ANALYSIS_DIR/analysis-result.json"
+            CAUSES_DIR="$ANALYSIS_DIR/causes"
 
             if [ ! -f "$ANALYSIS_FILE" ]; then
               echo "::error::Analysis result not found at $ANALYSIS_FILE"
@@ -913,10 +920,21 @@ safe-outputs:
               core.info(`Requested rerun of failed jobs for run ${runId}. Reason: ${reason}`);
 
 steps:
-  - uses: actions/download-artifact@v4.3.0
+  - uses: actions/download-artifact@v8.0.1
     with:
       name: ci-failure-data
       path: ci-failure-data/
+
+# Custom agent files are not included in gh-aw's diagnostic agent artifact.
+post-steps:
+  - name: Upload CI analysis files
+    uses: actions/upload-artifact@v7.0.1
+    with:
+      name: ci-analysis-output
+      path: |
+        /tmp/gh-aw/agent/analysis-result.json
+        /tmp/gh-aw/agent/causes/*.json
+      if-no-files-found: error
 ---
 
 # Analyze CI Failure

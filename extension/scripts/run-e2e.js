@@ -687,6 +687,9 @@ async function main() {
       ASPIRE_EXTENSION_E2E_EXTESTER_MODULE: extesterModule,
       ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS: enableAzureFunctionsE2E ? 'true' : 'false',
       ...(enableBrowserDebuggerE2E ? { ASPIRE_EXTENSION_E2E_BROWSER: e2eBrowser } : {}),
+      // Exercise Edge's compatibility-layer relaunch through the real VS Code process environment.
+      // https://github.com/microsoft/aspire/issues/20151
+      ...(enableBrowserDebuggerE2E && isWindows ? { __COMPAT_LAYER: 'DetectorsAppHealth' } : {}),
       ASPIRE_EXTENSION_E2E_ENABLE_WINUI: enableWinUiE2E ? 'true' : 'false',
       VSCODE_NLS_CONFIG: JSON.stringify({ locale: 'en', availableLanguages: {} }),
       LANG: 'C.UTF-8',
@@ -2129,9 +2132,16 @@ function writeNuGetConfigIfLocalPackageSourcesExist() {
   const sourceEntries = packageSources
     .map((source, index) => `    <add key="e2e-source-${index}" value="${escapeXml(source)}" />`)
     .join('\n');
-  const fallbackSourceEntries = getApprovedFallbackPackageSources()
+  const fallbackSources = getApprovedFallbackPackageSources();
+  const fallbackSourceEntries = fallbackSources
     .map(source => `    <add key="${escapeXml(source.key)}" value="${escapeXml(source.value)}" />`)
     .join('\n');
+  const sourceMappingEntries = [
+    ...packageSources.map((_, index) => `e2e-source-${index}`),
+    ...fallbackSources.map(source => source.key),
+  ].map(key => `    <packageSource key="${escapeXml(key)}">
+      <package pattern="*" />
+    </packageSource>`).join('\n');
   const nugetConfig = `<?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <packageSources>
@@ -2141,6 +2151,7 @@ ${fallbackSourceEntries}
   </packageSources>
   <packageSourceMapping>
     <clear />
+${sourceMappingEntries}
   </packageSourceMapping>
 </configuration>
 `;

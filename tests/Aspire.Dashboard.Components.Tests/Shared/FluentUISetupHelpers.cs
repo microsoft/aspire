@@ -91,8 +91,8 @@ internal static class FluentUISetupHelpers
 
     public static void SetupFluentKeyCode(TestContext context)
     {
-        var keycodeModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/KeyCode/FluentKeyCode.razor.js"));
-        keycodeModule.Setup<string>("RegisterKeyCode", _ => true);
+        context.JSInterop.Setup<string>("Microsoft.FluentUI.Blazor.Components.KeyCode.RegisterKeyCode", _ => true);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.KeyCode.UnregisterKeyCode", _ => true).SetVoidResult();
     }
 
     public static void SetupFluentToolbar(TestContext context)
@@ -286,8 +286,11 @@ internal static class FluentUISetupHelpers
 
         public DashboardRunDescriptor GetCurrentRun() => _runs.Single(run => run.IsCurrent);
 
-        public DashboardRunDescriptor? GetRunById(string runId) =>
-            _runs.SingleOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal));
+        public DashboardRunDescriptor? GetRunById(string runId, bool onlyCompatible) =>
+            _runs.SingleOrDefault(run =>
+                (!onlyCompatible || run.IsCompatible) &&
+                !run.IsPruned &&
+                string.Equals(run.RunId, runId, StringComparison.Ordinal));
 
         public void SetRunPinned(DashboardRunDescriptor run, bool isPinned)
         {
@@ -319,7 +322,7 @@ internal static class FluentUISetupHelpers
         public void SelectRun(string? runId)
         {
             OnSelectRun?.Invoke(runId);
-            SelectedRun = runId is not null ? runStore.GetRunById(runId) ?? runStore.GetCurrentRun() : runStore.GetCurrentRun();
+            SelectedRun = runId is not null ? runStore.GetRunById(runId, onlyCompatible: true) ?? runStore.GetCurrentRun() : runStore.GetCurrentRun();
             SelectedRunId = SelectedRun.IsCurrent ? null : SelectedRun.RunId;
         }
     }

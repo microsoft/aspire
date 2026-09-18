@@ -12,7 +12,7 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class UrlsColumnDisplayTests : DashboardTestContext
 {
     [Fact]
-    public void Render_MoreThanMaxRenderedItems_RendersAllSourceItemsWithBoundedPayload()
+    public void Render_MoreThanMaxRenderedItems_RendersBoundedPayload()
     {
         // Arrange
         const int totalUrls = 30;
@@ -35,11 +35,15 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         // Assert
         var overflow = cut.Find("fluent-overflow");
         var overflowItems = cut.FindAll("fluent-overflow > div:not(.fluent-overflow-more)");
-        Assert.Equal("20", overflow.GetAttribute("max-rendered-items"));
+        Assert.Equal("10", overflow.GetAttribute("pre-overflow-count"));
         Assert.Equal("0", overflow.GetAttribute("threshold"));
         Assert.Equal("ellipsis", overflowItems[0].GetAttribute("behavior"));
         Assert.All(overflowItems.Skip(1), item => Assert.Null(item.GetAttribute("behavior")));
-        Assert.Equal(totalUrls, overflowItems.Count);
+        Assert.Equal(20, overflowItems.Count);
+        Assert.Equal("+10", cut.Find(".fluent-overflow-more fluent-button").TextContent.Trim());
+
+        var popupItems = cut.FindAll(".url-overflow-popover .url-link");
+        Assert.Equal(displayedUrls.Skip(20).Select(url => url.Text), popupItems.Select(item => item.TextContent.Trim()));
     }
 
     [Fact]

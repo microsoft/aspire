@@ -1,3 +1,7 @@
+fluent-overflow::part(items) {
+    flex-grow: 0;
+}
+
 fluent-button {
     --aspire-button-background: var(--colorNeutralBackground1);
     --aspire-button-foreground: var(--colorNeutralForeground1);
@@ -338,7 +342,16 @@ fluent-field.aspire-checkbox {
 }
 
 fluent-field.aspire-checkbox:has(> fluent-checkbox[disabled]) {
-    opacity: 0.3;
+    color: var(--colorNeutralForegroundDisabled);
+}
+
+fluent-field.aspire-checkbox > fluent-checkbox[disabled] {
+    --colorNeutralStrokeDisabled: var(--colorNeutralForegroundDisabled);
+    cursor: not-allowed;
+}
+
+fluent-field.aspire-checkbox:has(> fluent-checkbox[disabled]) > label {
+    cursor: not-allowed;
 }
 
 fluent-field.aspire-checkbox:not(:has(> fluent-checkbox[disabled])) > label {
@@ -474,8 +487,12 @@ fluent-dropdown fluent-option::part(content) {
     transform: translateX(-20px);
 }
 
+/* Fluent's selected checkmark is inside shadow DOM and uses currentColor. Make the host
+   transparent to hide it globally, then restore the option text through its exposed part. */
 fluent-dropdown fluent-option[selected],
-fluent-dropdown fluent-option[selected]:not(:state(disabled)):hover {
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):hover,
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):state(active),
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):focus-visible {
     position: relative;
     color: transparent;
 }
@@ -486,7 +503,7 @@ fluent-dropdown fluent-option[selected]::part(content) {
 
 fluent-dropdown fluent-option[selected]::before {
     position: absolute;
-    top: 5px;
+    top: 7px;
     left: 1px;
     width: 3px;
     height: 14px;
@@ -499,7 +516,8 @@ fluent-dropdown fluent-option:focus-visible {
     outline: none;
 }
 
-fluent-text-input[appearance="outline"]:focus-within::part(root) {
+fluent-text-input[appearance="outline"]:focus-within::part(root),
+.terminal-container:focus-within::after {
     border-color: var(--colorStrokeFocus1);
     outline: var(--strokeWidthThick) solid var(--colorStrokeFocus1);
     outline-offset: calc(-1 * var(--strokeWidthThick));
@@ -811,6 +829,12 @@ body .fluent-multi-splitter > .fluent-multi-splitter-bar {
     z-index: 99;
 }
 
+.fluent-multi-splitter > .fluent-multi-splitter-bar:focus-visible {
+    outline: none;
+    background-color: var(--fluent-multi-splitter-background-color-active);
+    opacity: var(--fluent-multi-splitter-hover-opacity);
+}
+
 .fluent-multi-splitter > .fluent-multi-splitter-bar > span[part="resize"] {
     display: none;
 }
@@ -881,12 +905,15 @@ fluent-text-input[type="search"] [slot="start"] svg {
     margin-block: 0;
 }
 
-.fluent-tabs {
+/* Custom tab hosts share the Fluent tab appearance without taking over their selection lifecycle. */
+.fluent-tabs,
+.aspire-tab-list {
     max-width: 100%;
     min-width: 0;
 }
 
-.fluent-tabs:not(.aspire-content-tabs) {
+.fluent-tabs:not(.aspire-content-tabs),
+.aspire-tab-list {
     width: fit-content !important;
     display: flex;
     align-items: center;
@@ -895,7 +922,8 @@ fluent-text-input[type="search"] [slot="start"] svg {
 }
 
 .fluent-tabs:not(.aspire-content-tabs),
-.fluent-tabs.aspire-content-tabs > fluent-tablist {
+.fluent-tabs.aspire-content-tabs > fluent-tablist,
+.aspire-tab-list {
     min-height: 40px;
     gap: 4px;
     padding: 3px;
@@ -922,7 +950,8 @@ fluent-text-input[type="search"] [slot="start"] svg {
     display: none;
 }
 
-fluent-tab {
+fluent-tab,
+.aspire-tab {
     height: 32px;
     padding: 0 12px;
     gap: 4px;
@@ -954,7 +983,8 @@ fluent-tab.tab-label fluent-badge {
     font-weight: var(--fontWeightRegular);
 }
 
-fluent-tab[aria-selected="true"] {
+fluent-tab[aria-selected="true"],
+.aspire-tab.active {
     color: var(--colorNeutralForeground1);
     background-color: var(--colorNeutralBackground3);
     border-color: var(--colorNeutralStroke1);
@@ -970,11 +1000,13 @@ fluent-tablist::after {
     display: none;
 }
 
-fluent-tab[aria-selected="false"] {
+fluent-tab[aria-selected="false"],
+.aspire-tab:not(.active) {
     color: var(--colorNeutralForeground3);
 }
 
-fluent-tab[aria-selected="false"]:hover {
+fluent-tab[aria-selected="false"]:hover,
+.aspire-tab:not(.active):hover {
     color: var(--colorNeutralForeground1);
 }
 

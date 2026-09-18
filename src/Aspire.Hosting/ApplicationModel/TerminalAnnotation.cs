@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Hosting.Terminals;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -93,14 +94,14 @@ internal sealed class TerminalAnnotation : IResourceAnnotation
 /// <summary>
 /// Options for configuring a terminal session.
 /// </summary>
-[Experimental("ASPIRETERMINAL001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
 public sealed class TerminalOptions
 {
-    private int _columns = 120;
-    private int _rows = 30;
+    private int _columns = 132;
+    private int _rows = 50;
 
     /// <summary>
-    /// Gets or sets the initial number of columns for the terminal. The value must be greater than zero. Defaults to 120.
+    /// Gets or sets the initial number of columns for the terminal. The value must be greater than zero. Defaults to 132.
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when set to zero or a negative value.</exception>
     public int Columns
@@ -114,7 +115,7 @@ public sealed class TerminalOptions
     }
 
     /// <summary>
-    /// Gets or sets the initial number of rows for the terminal. The value must be greater than zero. Defaults to 30.
+    /// Gets or sets the initial number of rows for the terminal. The value must be greater than zero. Defaults to 50.
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when set to zero or a negative value.</exception>
     public int Rows

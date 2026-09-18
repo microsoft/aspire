@@ -225,7 +225,7 @@ radius.WithSecretStore("db-creds", RadiusSecretStoreType.BasicAuthentication, s 
 ### Supported resources
 
 * `AddContainer(...)` — published as a Radius container workload (`Radius.Compute/containers`).
-* `AddProject<T>(...)` — published as a Radius container workload only when the project has a pre-built image attached with `WithContainerImage("<registry>/<image>:<tag>")`. Without one, `aspire publish` fails with a remediation message to build and push an image the cluster can pull.
+* `AddProject<T>(...)` — published as a Radius container workload only when the project has a pre-built image attached with `WithContainerImage("<registry>/<image>:<tag>")`. Without one, `aspire publish` fails with a remediation message to build and push an image the cluster can pull. The attached image is treated as final, so files requested through `PublishWithContainerFiles` must be included when the image is built externally.
 * Selected resources with a Radius mapping emit a Radius resource type via the resource type mapper. Redis, PostgreSQL, and RabbitMQ emit the current `Radius.*` user-defined types; MongoDB, SQL Server, and the Dapr building blocks still emit the older `Applications.*` portable types, because their UDT equivalents have no published Kubernetes recipe. Child database resources (for example `AddSqlServer("sql").AddDatabase("appdb")`) are collapsed onto the parent today.
 
 Other Aspire resource types are not emitted; only the resources listed above appear in the generated Bicep.

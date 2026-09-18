@@ -161,6 +161,10 @@
                       "type": "integer",
                       "description": "Specifies the time in milliseconds that the system should allow for synchronous operations (defaults to 5 seconds)."
                     },
+                    "TcpKeepAlive": {
+                      "type": "boolean",
+                      "description": "Gets or sets whether to enable TCP keep-alive when appropriate (endpoint- and platform-dependent)."
+                    },
                     "TieBreaker": {
                       "type": "string",
                       "description": "Tie-breaker used to choose between primaries (must match the endpoint exactly)."

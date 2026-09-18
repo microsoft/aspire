@@ -826,12 +826,10 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         }
 
         // Collect enum type names
+        _enumTypeNames.Clear();
         foreach (var enumType in enumTypes)
         {
-            if (!_enumTypeNames.ContainsKey(enumType.TypeId))
-            {
-                _enumTypeNames[enumType.TypeId] = ExtractSimpleTypeName(enumType.TypeId);
-            }
+            _enumTypeNames[enumType.TypeId] = enumType.Name;
         }
 
         // Separate builders into categories:

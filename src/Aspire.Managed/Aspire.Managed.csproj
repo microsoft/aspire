@@ -19,7 +19,7 @@
     <!-- Don't generate web.config or include IIS hosting -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
 
-    <!-- CreateLayout copies only the managed executable, so native dependencies must be embedded in the single file. -->
+    <!-- Native libraries are embedded except for Hex1b's Windows PTY sidecars, which CreateLayout copies together. -->
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 
@@ -85,7 +85,7 @@
 
   <Target Name="ValidateSingleFilePublishConfiguration" BeforeTargets="PrepareForPublish">
     <Error Condition="'$(PublishSingleFile)' == 'true' and '$(IncludeNativeLibrariesForSelfExtract)' != 'true'"
-           Text="Aspire.Managed single-file publishing must embed native libraries because CreateLayout copies only the managed executable." />
+           Text="Aspire.Managed single-file publishing must embed native libraries other than the explicitly copied Windows PTY sidecars." />
   </Target>
 
 </Project>

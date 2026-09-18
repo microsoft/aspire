@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
+#pragma warning disable ASPIREPROJECTS001
 
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
@@ -862,14 +863,14 @@ public static class ResourceExtensions
 
                 // Check whether the project views this endpoint as Default (for its scheme).
                 // If so, we don't specify the target port, as it will get one from the deployment tool.
-                (ProjectResource, string uriScheme, null, _) when IsHttpScheme(uriScheme) && !httpSchemesEncountered.Contains(uriScheme) => ResolvedPort.None(),
+                (IDotnetProgramResource, string uriScheme, null, _) when IsHttpScheme(uriScheme) && !httpSchemesEncountered.Contains(uriScheme) => ResolvedPort.None(),
 
                 // Allocate a dynamic port
                 _ => ResolvedPort.Allocated(portAllocator.AllocatePort())
             };
 
-            // Track HTTP schemes encountered for ProjectResources
-            if (resource is ProjectResource && IsHttpScheme(endpoint.UriScheme))
+            // Track HTTP schemes encountered for .NET program resources.
+            if (resource is IDotnetProgramResource && IsHttpScheme(endpoint.UriScheme))
             {
                 httpSchemesEncountered.Add(endpoint.UriScheme);
             }
@@ -995,18 +996,20 @@ public static class ResourceExtensions
     /// <remarks>
     /// Resources require an image build if they provide their own Dockerfile or are a project.
     /// Resources that are excluded from publishing are not considered to require image building.
+    /// Resources with a prebuilt container image and no Dockerfile build annotation do not require a build.
     /// </remarks>
     /// <param name="resource">The resource to evaluate for image build requirements.</param>
     /// <returns>True if the resource requires image building; otherwise, false.</returns>
     [AspireExportIgnore(Reason = "Publishing inspection helper — not part of the ATS surface.")]
     public static bool RequiresImageBuild(this IResource resource)
     {
-        if (resource.IsExcludedFromPublish())
+        if (resource.IsExcludedFromPublish() || resource.HasPrebuiltContainerImage())
         {
             return false;
         }
 
-        return resource is ProjectResource || resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
+        return resource.SupportsDotnetProgramPublishing() ||
+            resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
     }
 
     /// <summary>
@@ -1029,6 +1032,12 @@ public static class ResourceExtensions
     {
         return resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuild) &&
             !dockerfileBuild.HasEntrypoint;
+    }
+
+    internal static bool HasPrebuiltContainerImage(this IResource resource)
+    {
+        return resource.TryGetLastAnnotation<ContainerImageAnnotation>(out _) &&
+            !resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
     }
 
     /// <summary>

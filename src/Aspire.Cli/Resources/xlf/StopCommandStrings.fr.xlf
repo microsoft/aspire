@@ -52,6 +52,11 @@
         <target state="new">This AppHost uses Aspire.Hosting {0}, which might not support persistent resource cleanup. Persistent resource cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent resource cleanup will still be attempted.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DcpVolumeCleanupUnsupportedAppHostVersion">
+        <source>This AppHost uses Aspire.Hosting {0}, which might not support persistent volume cleanup. Persistent volume cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent volume cleanup will still be attempted.</source>
+        <target state="new">This AppHost uses Aspire.Hosting {0}, which might not support persistent volume cleanup. Persistent volume cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent volume cleanup will still be attempted.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Description">
         <source>Stop a running AppHost</source>
         <target state="needs-review-translation">Arrêtez un AppHost Aspire en cours d’exécution.</target>
@@ -63,8 +68,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ForceOptionDescription">
-        <source>Stop the AppHost and clean up its persistent resources</source>
-        <target state="new">Stop the AppHost and clean up its persistent resources</target>
+        <source>Stop the AppHost and clean up its persistent resources, preserving volumes by default</source>
+        <target state="new">Stop the AppHost and clean up its persistent resources, preserving volumes by default</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundRunningAppHost">
@@ -115,6 +120,16 @@
       <trans-unit id="UnknownAspireHostingVersion">
         <source>an unknown version</source>
         <target state="new">an unknown version</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VolumesOptionDescription">
+        <source>Also remove persistent volumes created by Aspire (requires --force)</source>
+        <target state="new">Also remove persistent volumes created by Aspire (requires --force)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VolumesRequiresForce">
+        <source>The {0} option requires the {1} option.</source>
+        <target state="new">The {0} option requires the {1} option.</target>
         <note />
       </trans-unit>
     </body>
