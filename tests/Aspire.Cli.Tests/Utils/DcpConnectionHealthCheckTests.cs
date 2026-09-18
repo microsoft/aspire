@@ -2,11 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Layout;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Shared;
@@ -97,6 +99,39 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         Assert.False(execution.Started);
         Assert.Equal(0, execution.KillCount);
         Assert.Equal(1, execution.DisposeCount);
+    }
+
+    [Fact]
+    public async Task TestConnectionAsync_ProbeMonitorsCurrentProcessIdentity()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dcpDirectory = CreateDcpDirectoryWithExecutable(workspace);
+        var processExecutionFactory = new TestProcessExecutionFactory();
+        var checker = new DcpConnectionChecker(
+            CertificateManager.Create(NullLogger.Instance, new HostEnvironment()),
+            processExecutionFactory,
+            CreateExecutionContext(workspace),
+            new HostEnvironment(),
+            NullLogger<DcpConnectionChecker>.Instance);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => checker.TestConnectionAsync(dcpDirectory.FullName, useDeveloperCertificate: false, new CancellationToken(canceled: true)));
+
+        var execution = Assert.IsType<TestProcessExecution>(Assert.Single(processExecutionFactory.CreatedExecutions));
+        var sessionDirectory = execution.EnvironmentVariables["DCP_SESSION_FOLDER"];
+        Assert.NotNull(sessionDirectory);
+        Assert.Equal(
+            [
+                "start-apiserver",
+                "--monitor",
+                Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
+                "--monitor-identity-time",
+                ProcessTreeGracefulShutdownService.FormatDcpProcessStartTime(IsolatedProcess.GetCurrentProcessDcpMonitorStartTime()),
+                "--kubeconfig",
+                Path.Combine(sessionDirectory, "kubeconfig")
+            ],
+            execution.Arguments);
+        Assert.False(Directory.Exists(sessionDirectory));
     }
 
     [Fact]
