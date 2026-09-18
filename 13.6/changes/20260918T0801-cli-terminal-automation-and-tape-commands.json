@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The CLI adds feature-gated terminal commands (`terminal attach`, `terminal ps`, `terminal tape`, `terminal tape play`) for inspecting and driving AppHost-owned or resource terminals, including a VHS-style tape subset for scripted input/wait sequences and recording final screen output for automation and testing scenarios.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🎬",
+  "firstMergedAt": "2026-09-18T08:01:01Z",
+  "lastMergedAt": "2026-09-18T08:01:01Z",
+  "name": "CLI terminal automation and tape commands",
+  "owner": "mitchdenny",
+  "prs": [
+    19887
+  ]
+}

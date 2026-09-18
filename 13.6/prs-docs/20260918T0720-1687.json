@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Release-branch sync/repair engineering safeguards; not documentation of a milestone changelog entry",
+  "mergedAt": "2026-09-18T07:20:47Z",
+  "number": 1687,
+  "runDate": "2026-09-18T12:08:39Z",
+  "status": "excluded",
+  "title": "Harden release sync ancestry checks and conflict recovery"
+}

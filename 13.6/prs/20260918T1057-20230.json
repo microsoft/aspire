@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Trivial doc-link fix for a feature introduced in the same batch (PR #19887); not independently notable",
+  "mergedAt": "2026-09-18T10:57:16Z",
+  "number": 20230,
+  "runDate": "2026-09-18T12:08:39Z",
+  "status": "excluded",
+  "title": "Fix dashboard terminal documentation link"
+}

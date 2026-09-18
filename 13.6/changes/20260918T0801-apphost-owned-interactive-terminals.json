@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The AppHost can now create and own interactive terminal processes independent of resources orchestrated by DCP, via new experimental `TerminalService`, `AspireTerminal`, and `TerminalLaunchOptions` APIs. Terminals can be placed in the dashboard dock, shown in a dialog via `IInteractionService.PromptTerminalAsync`, or run headlessly for automation, enabling scenarios like authenticating an external tool or running interactive setup from AppHost code.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🖥️",
+  "firstMergedAt": "2026-09-18T08:01:01Z",
+  "lastMergedAt": "2026-09-18T08:01:01Z",
+  "name": "AppHost-owned interactive terminals",
+  "owner": "mitchdenny",
+  "prs": [
+    19887
+  ]
+}

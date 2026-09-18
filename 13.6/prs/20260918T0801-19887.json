@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Major feature: AppHost-owned terminals, dashboard terminal dock/detached windows, new rendering engine, CLI terminal automation",
+  "mergedAt": "2026-09-18T08:01:01Z",
+  "number": 19887,
+  "runDate": "2026-09-18T12:08:39Z",
+  "status": "included",
+  "title": "Add AppHost terminals, dashboard docking, and terminal automation"
+}

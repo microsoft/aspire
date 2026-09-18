@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "One-time release branch ancestry repair merge commit; not documentation of a milestone changelog entry",
+  "mergedAt": "2026-09-18T08:12:41Z",
+  "number": 1697,
+  "runDate": "2026-09-18T12:08:39Z",
+  "status": "excluded",
+  "title": "MERGE COMMIT REQUIRED: repair release/13.6 ancestry (DO NOT SQUASH OR REBASE)"
+}

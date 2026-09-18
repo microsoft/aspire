@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The dashboard adds a persistent, resizable, tabbed terminal dock and detached terminal windows for interacting with AppHost-owned or resource terminals, alongside a new state-based rendering engine (`@hex1b/web-terminal`) that replaces xterm.js with Kitty Graphics Protocol and Sixel support, improved copy/paste, a WebGPU renderer with WebGL2 fallback, and font-size/sizing controls that persist across dock and detached windows.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧩",
+  "firstMergedAt": "2026-09-18T08:01:01Z",
+  "lastMergedAt": "2026-09-18T08:01:01Z",
+  "name": "Terminal dock, detached windows, and new rendering engine",
+  "owner": "mitchdenny",
+  "prs": [
+    19887
+  ]
+}

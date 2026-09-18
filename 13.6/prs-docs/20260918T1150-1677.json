@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Documents dashboard log/trace retention limit increases from product PR #20169, which is not part of this milestone; no matching changelog entry found",
+  "mergedAt": "2026-09-18T11:50:01Z",
+  "number": 1677,
+  "runDate": "2026-09-18T12:08:39Z",
+  "status": "excluded",
+  "title": "Update dashboard data retention limits"
+}

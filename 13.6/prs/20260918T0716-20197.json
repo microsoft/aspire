@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: Fluent UI update fixes tall dashboard submenu overflow",
+  "mergedAt": "2026-09-18T07:16:57Z",
+  "number": 20197,
+  "runDate": "2026-09-18T12:08:39Z",
+  "status": "included",
+  "title": "Update Fluent UI to fix tall dashboard submenu overflow"
+}
