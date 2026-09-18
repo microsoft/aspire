@@ -1,0 +1,8 @@
+﻿{
+  Agent: {
+    A2A_AGENT_BASE_URL: {weather-agent.bindings.http.url}
+  },
+  Consumer: {
+    WEATHER_AGENT_AGENTCARD_URL: {weather-agent.bindings.http.url}/.well-known/agent-card.json
+  }
+}
