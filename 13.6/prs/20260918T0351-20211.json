@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Test-only change disabling seven flaky AzureSqlPrincipalReconciliationTests methods due to a shared Docker fixture port-binding issue; no product code or behavior affected.",
+  "mergedAt": "2026-09-18T03:51:47Z",
+  "number": 20211,
+  "runDate": "2026-09-18T06:06:24Z",
+  "status": "excluded",
+  "title": "Disable Azure SQL principal reconciliation tests"
+}

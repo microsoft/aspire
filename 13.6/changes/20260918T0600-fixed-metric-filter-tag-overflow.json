@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Metric dimension filter tags no longer truncate unnecessarily when multiple values are displayed side by side. Each tag now keeps its natural width, overflowing values move into the overflow count, and a tag is only ellipsized when it is the sole displayed value and still too wide to fit.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🏷️",
+  "firstMergedAt": "2026-09-18T06:00:32Z",
+  "lastMergedAt": "2026-09-18T06:00:32Z",
+  "name": "Fixed metric filter tag overflow",
+  "owner": "JamesNK",
+  "prs": [
+    20220
+  ]
+}
