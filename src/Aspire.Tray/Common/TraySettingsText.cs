@@ -15,16 +15,22 @@ internal static class TraySettingsText
     internal const string General = "General";
     internal const string About = "About";
     internal const string StartupOption = "Launch Aspire Tray when I sign in";
+    internal const string StartupDescription = "Keep Aspire available in the notification area.";
     internal const string StableNativeInstallationRequired = "Launch at sign-in requires a stable native CLI installation.";
 
     internal static string GetAboutText(bool preview)
+        => string.Join(Environment.NewLine, "Aspire Tray", GetVersionText(), GetAboutDescription(preview));
+
+    internal static string GetAboutDescription(bool preview)
+        => preview ? "Preview: fake AppHosts and startup settings only." : "An experimental companion for Aspire.";
+
+    internal static string GetVersionText()
     {
         var assembly = typeof(TraySettingsText).Assembly;
         var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "Development";
         var build = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version
             ?? assembly.GetName().Version?.ToString() ?? "Development";
-        return string.Join(Environment.NewLine, "Aspire Tray", $"Version: {version}", $"Build: {build}",
-            preview ? "Preview: fake AppHosts and startup settings only." : "An experimental companion for Aspire.");
+        return string.Join(Environment.NewLine, $"Version: {version}", $"Build: {build}");
     }
 
     internal static string GetStartupStatus(TrayStartupState state, string? error)

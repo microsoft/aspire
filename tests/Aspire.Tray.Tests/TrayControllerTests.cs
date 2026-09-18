@@ -105,6 +105,9 @@ public class TrayControllerTests
         controller.Start();
         await WaitForStateAsync(controller, state => state.AppHosts.Count == 2);
         Assert.True(controller.State.AppHosts[1].CanOpenDashboard);
+        Assert.True(controller.State.AppHosts[1].IsRunning);
+        Assert.Equal("1 AppHost needs attention", controller.State.Status);
+        Assert.Equal(unknown.DashboardUri, controller.GetDashboardUri(unknown.Id));
         Assert.False(controller.State.AppHosts[1].CanStop);
         Assert.Throws<InvalidOperationException>(() => controller.RequestStop(unknown.Id));
 
@@ -136,6 +139,9 @@ public class TrayControllerTests
         client.CompleteStop(first.Id, new(StopOutcome.TimedOut, null));
         await WaitForStateAsync(controller, state => state.AppHosts[0].Error is not null);
         Assert.Equal("Stop timed out. The shutdown may still complete.", controller.State.AppHosts[0].Error);
+        Assert.True(controller.State.AppHosts[0].IsRunning);
+        Assert.True(controller.State.AppHosts[0].CanOpenDashboard);
+        Assert.Equal(first.DashboardUri, controller.GetDashboardUri(first.Id));
         Assert.Null(controller.State.AppHosts[1].Error);
         Assert.True(controller.State.AppHosts[1].CanStop);
 

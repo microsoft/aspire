@@ -142,7 +142,7 @@ internal sealed unsafe partial class TrayApplication
         var row = _menu!.Rows.Single(row => row.Id == id);
         var last = (uint)(NativeMethods.GetMenuItemCount(row.Submenu) - 1);
         NativeSmokeHarness.Require(row.DetailsText == expected
-            && ReadText(row.Submenu, last, true) == Literal(AppHostPresentation.GetMenuDetailsLabel(expected)),
+            && ReadText(row.Submenu, last, true) == Literal(AppHostPresentation.GetPathLabel(row.Id.AppHostPath)),
             "The final AppHost menu entry has incorrect path/status text.");
     }
 
@@ -219,9 +219,12 @@ internal sealed unsafe partial class TrayApplication
             "The native tray icon does not represent discovery and active AppHosts.");
         NativeSmokeHarness.Require(Enum.GetValues<IconState>().Select(_artwork!.TrayIcon).Distinct().Count() == 4,
             "Idle, connecting, active, and unavailable need distinct notification icons.");
-        NativeSmokeHarness.Require(Enum.GetValues<AppHostHealth>().Select(_artwork.Status).Distinct().Count() == 4,
-            "Status circles must have distinct native bitmaps.");
-        VerifyStatusSemanticsForSmoke();
+        NativeSmokeHarness.Require(_artwork.DocumentationBitmap != 0 && _artwork.SettingsBitmap != 0
+            && _artwork.DocumentationBitmap != _artwork.SettingsBitmap,
+            "Documentation and Settings must own distinct native menu bitmaps.");
+        NativeSmokeHarness.Require(Enum.GetValues<MenuStatus>().Select(_artwork.Status).Distinct().Count() == 5,
+            "AppHost health and stopped states must have distinct native status bitmaps.");
+        VerifyStatusTextForSmoke();
         if (!retained)
         {
             NativeSmokeHarness.Require(menu.Rows.Select(row => row.Id).SequenceEqual(state.AppHosts.Concat(state.RecentAppHosts).Select(row => row.Id)),
@@ -240,8 +243,13 @@ internal sealed unsafe partial class TrayApplication
             NativeSmokeHarness.Require(item.Submenu == row.Submenu && item.Submenu != 0, "A host row is not an action submenu.");
             NativeSmokeHarness.Require(((item.State & 3) == 0) == (host is not null), "Stale row enabled state is incorrect.");
             NativeSmokeHarness.Require(item.Bitmap != 0
-                && item.Bitmap == _artwork.Status(GetMenuStatusHealth(host, state.Discovery == DiscoveryState.Live)),
-                "The native status circle does not represent the current AppHost.");
+                && item.Bitmap == _artwork.Status(GetMenuStatus(host, state.Discovery == DiscoveryState.Live)),
+                "AppHost rows must retain their current color-coded health icons.");
+            if (!retained && host is not null)
+            {
+                NativeSmokeHarness.Require((row.Dashboard != 0) == host.IsRunning,
+                    "Every running AppHost must expose Open dashboard, including when it needs attention.");
+            }
             VerifyAction(row.Submenu, row.Dashboard, host?.CanOpenDashboard == true);
             VerifyAction(row.Submenu, row.Stop, host?.CanStop == true);
             VerifyAction(row.Submenu, row.Start, host?.CanStart == true);
@@ -249,16 +257,27 @@ internal sealed unsafe partial class TrayApplication
             VerifyAction(row.Submenu, row.CopyPath, host is not null);
             var titles = ReadMenuTitles(row.Submenu);
             string[] firstActions = row.Dashboard != 0
-                ? ["Open Dashboard", host?.IsStopping == true ? "Stopping..." : StopMenuLabel]
-                : [host?.IsStarting == true ? "Starting..." : "Start"];
-            NativeSmokeHarness.Require(titles[..^1].SequenceEqual(firstActions.Concat([
-                host?.IsPinned == true ? "Unpin" : "Pin", "", "Show in Explorer", "Copy Path", "Open In", ""])),
+                ? ["Open dashboard", host?.IsStopping == true ? "Stopping..." : StopMenuLabel]
+                : [host?.IsStarting == true ? "Starting..." : "Start AppHost"];
+            NativeSmokeHarness.Require(titles[..^2].SequenceEqual(firstActions.Concat([
+                host?.IsPinned == true ? "Unpin AppHost" : "Pin AppHost", "", "Show in File Explorer", "Copy path", "Open in", ""])),
                 "AppHost submenu actions must precede the divider and final details entry.");
+            if (row.Dashboard != 0)
+            {
+                NativeSmokeHarness.Require((ReadItem(row.Submenu, row.Dashboard, false).State & 0x1000) != 0,
+                    "Open dashboard must retain its default-action emphasis.");
+            }
             NativeSmokeHarness.Require((ReadItem(row.Submenu, (uint)(firstActions.Length + 1), true).Type & NativeMethods.MfSeparator) != 0,
                 "Pin/Unpin must be separated from the file actions by a divider.");
             NativeSmokeHarness.Require(row.DetailsPosition == (uint)(titles.Length - 1)
-                && (ReadItem(row.Submenu, row.DetailsPosition - 1, true).Type & NativeMethods.MfSeparator) != 0,
-                "AppHost details must be the last entry under a divider.");
+                && row.StatusPosition == row.DetailsPosition - 1
+                && (ReadItem(row.Submenu, row.StatusPosition - 1, true).Type & NativeMethods.MfSeparator) != 0,
+                "AppHost status and path must be the final entries under a divider.");
+            var status = ReadItem(row.Submenu, row.StatusPosition, true);
+            NativeSmokeHarness.Require((status.State & 3) != 0 && status.Id == 0 && status.Submenu == 0
+                && titles[^2] == Literal(AppHostPresentation.GetMenuDetailsLabel(
+                    GetMenuStatusText(host, state.Discovery == DiscoveryState.Live))),
+                "The AppHost status must remain current and non-actionable.");
             var details = ReadItem(row.Submenu, row.DetailsPosition, true);
             NativeSmokeHarness.Require((details.State & 3) != 0 && details.Id == 0 && details.Submenu == 0,
                 "The AppHost details entry must be non-actionable.");
@@ -267,47 +286,76 @@ internal sealed unsafe partial class TrayApplication
                 "Native AppHost labels must retain their name without a status suffix.");
             NativeSmokeHarness.Require(row.DetailsText == AppHostPresentation.GetMenuDetailsText(row.Id.AppHostPath,
                 host?.Subtitle ?? "AppHost no longer available")
-                && titles[^1] == Literal(AppHostPresentation.GetMenuDetailsLabel(row.DetailsText)),
+                && titles[^1] == Literal(AppHostPresentation.GetPathLabel(row.Id.AppHostPath)),
                 "The AppHost details entry is not up to date.");
-            NativeSmokeHarness.Require(StringInfo.ParseCombiningCharacters(titles[^1].Replace("&&", "&", StringComparison.Ordinal)).Length <= 45,
-                "The entire displayed path/status entry must fit within 45 characters.");
+            NativeSmokeHarness.Require(StringInfo.ParseCombiningCharacters(titles[^1].Replace("&&", "&", StringComparison.Ordinal)).Length <= 44,
+                "The displayed path must fit within 44 text elements.");
         }
-        VerifyMenuStatusIcons(menu.Handle, menu.Rows.Select(row => (row.Parent, row.Position)).ToHashSet());
+        VerifyMenuIcons(menu, menu.Handle);
     }
 
-    private static void VerifyStatusSemanticsForSmoke()
+    private static void VerifyStatusTextForSmoke()
     {
         var host = new AppHostMenuItem(default, "Smoke", "", "Smoke", false, false, false, null)
         {
             IsRunning = true, Health = AppHostHealth.Healthy
         };
-        foreach (var health in Enum.GetValues<AppHostHealth>())
+        NativeSmokeHarness.Require(GetMenuStatusText(host, true) == "Running - all resources healthy"
+            && GetMenuStatusText(host with { Health = AppHostHealth.Warning }, true) == "Running - resources need attention"
+            && GetMenuStatusText(host with { Health = AppHostHealth.Unhealthy }, true) == "Running - unhealthy resources"
+            && GetMenuStatusText(host with { Health = AppHostHealth.Unknown }, true) == "Running - resource health unknown",
+            "AppHost menus must expose resource health in text as well as color.");
+        NativeSmokeHarness.Require(GetMenuStatusText(host with { IsStarting = true }, true) == "Starting AppHost..."
+            && GetMenuStatusText(host with { IsStopping = true }, true) == "Stopping AppHost..."
+            && GetMenuStatusText(host, false) == "Discovery unavailable"
+            && GetMenuStatusText(host with { IsRunning = false }, true) == "Stopped"
+            && GetMenuStatusText(host with { Error = "Stop failed." }, true) == "Stop failed."
+            && GetMenuStatusText(null, true) == "AppHost no longer available",
+            "AppHost status text must distinguish transitions, errors, stopped hosts, and stale discovery.");
+        foreach (var (health, status) in new[]
         {
-            NativeSmokeHarness.Require(GetMenuStatusHealth(host with { Health = health }, true) == health,
-                "Running AppHosts must show their reported health.");
+            (AppHostHealth.Healthy, MenuStatus.Healthy),
+            (AppHostHealth.Warning, MenuStatus.Warning),
+            (AppHostHealth.Unhealthy, MenuStatus.Unhealthy),
+            (AppHostHealth.Unknown, MenuStatus.Unknown)
+        })
+        {
+            NativeSmokeHarness.Require(GetMenuStatus(host with { Health = health }, true) == status,
+                "Running AppHosts must retain their reported health color.");
         }
-        NativeSmokeHarness.Require(GetMenuStatusHealth(host with { IsStarting = true }, true) == AppHostHealth.Warning
-            && GetMenuStatusHealth(host with { IsStopping = true }, true) == AppHostHealth.Warning
-            && GetMenuStatusHealth(host, false) == AppHostHealth.Warning,
-            "Transitional or stale discovery state must not keep a healthy green circle.");
-        NativeSmokeHarness.Require(GetMenuStatusHealth(host with { Error = "Stop failed." }, true) == AppHostHealth.Unhealthy
-            && GetMenuStatusHealth(host with { IsRunning = false }, true) == AppHostHealth.Unknown
-            && GetMenuStatusHealth(null, true) == AppHostHealth.Unknown,
-            "Errors need a red circle; stopped or removed AppHosts must be neutral.");
+        NativeSmokeHarness.Require(GetMenuStatus(host with { IsStarting = true }, true) == MenuStatus.Warning
+            && GetMenuStatus(host with { IsStopping = true }, true) == MenuStatus.Warning
+            && GetMenuStatus(host, false) == MenuStatus.Warning
+            && GetMenuStatus(host with { Error = "Stop failed." }, true) == MenuStatus.Unhealthy
+            && GetMenuStatus(host with { IsRunning = false }, true) == MenuStatus.Stopped
+            && GetMenuStatus(null, true) == MenuStatus.Unknown,
+            "Transitions, errors, stopped hosts, and stale discovery must update the AppHost status icon.");
     }
 
-    private static void VerifyMenuStatusIcons(nint menu, IReadOnlySet<(nint Parent, uint Position)> hostPositions)
+    private void VerifyMenuIcons(NativeMenu root, nint menu)
     {
         var count = NativeMethods.GetMenuItemCount(menu);
         NativeCallException.Require(count >= 0, "GetMenuItemCount(smoke icons)");
         for (var position = 0; position < count; position++)
         {
             var item = ReadItem(menu, (uint)position, true);
-            NativeSmokeHarness.Require((item.Bitmap != 0) == hostPositions.Contains((menu, (uint)position)),
-                "Only AppHost rows may have status circles; action items must remain text-only.");
+            var row = root.Rows.SingleOrDefault(row => row.Parent == menu && row.Position == (uint)position);
+            var state = controller.State;
+            var host = row is null ? null
+                : (row.Recent ? state.RecentAppHosts : state.AppHosts).SingleOrDefault(host => host.Id == row.Id);
+            var expectedBitmap = row is not null
+                ? _artwork!.Status(GetMenuStatus(host, state.Discovery == DiscoveryState.Live))
+                : item.Submenu == 0 && root.Commands.TryGetValue(item.Id, out var command) ? command.Kind switch
+            {
+                ActionKind.Documentation => _artwork!.DocumentationBitmap,
+                ActionKind.Settings => _artwork!.SettingsBitmap,
+                _ => 0
+            } : 0;
+            NativeSmokeHarness.Require(item.Bitmap == expectedBitmap,
+                "Only AppHost health indicators, Documentation, and Settings may have menu icons.");
             if (item.Submenu != 0)
             {
-                VerifyMenuStatusIcons(item.Submenu, hostPositions);
+                VerifyMenuIcons(root, item.Submenu);
             }
         }
     }
@@ -396,9 +444,8 @@ internal sealed unsafe partial class TrayApplication
         RequireSmoke();
         NativeMethods.SendMessage(_settingsWindow, NativeMethods.WmClose, 0, 0);
         NativeSmokeHarness.Require(_settingsWindow == 0 && _settingsIcon == 0
-            && _settingsHeadingFont == 0 && _settingsTitleFont == 0 && _settingsBackgroundBrush == 0
-            && _settingsCardBrush == 0 && _settingsBorderPen == 0 && _settingsControlBounds.Count == 0,
-            "Closing Settings did not release its native window, icon, fonts, and card artwork.");
+            && _settingsHeadingFont == 0 && _settingsControlBounds.Count == 0,
+            "Closing Settings did not release its native window, logo, and font.");
     }
 
     internal void VerifySettingsForSmoke(uint checkState, bool enabled, string status)
@@ -409,7 +456,6 @@ internal sealed unsafe partial class TrayApplication
         NativeSmokeHarness.Require(NativeMethods.IsThemeActive() == 0 || NativeMethods.IsAppThemed() != 0,
             "The native executable did not activate Common Controls v6 visual styles.");
         NativeSmokeHarness.Require(ReadControlText(_settingsWindow) == "Aspire Tray Settings"
-            && ReadControlText(NativeMethods.GetDlgItem(_settingsWindow, SettingsTitleId)) == "Settings"
             && ReadControlText(NativeMethods.GetDlgItem(_settingsWindow, SettingsGeneralId)) == "General"
             && ReadControlText(NativeMethods.GetDlgItem(_settingsWindow, SettingsAboutId)) == "About",
             "Settings sections are missing.");
@@ -420,12 +466,12 @@ internal sealed unsafe partial class TrayApplication
         NativeSmokeHarness.Require((NativeMethods.IsWindowVisible(_settingsStatus) != 0) == showDetails
             && (NativeMethods.IsWindowVisible(_settingsRefresh) != 0) == showDetails,
             "Startup details and Refresh must appear only when startup is unavailable or failed.");
-        var expectedControls = new List<string> { "Settings", "General", "&Launch Aspire Tray when I sign in" };
+        var expectedControls = new List<string> { "General", "", "&Launch Aspire Tray when I sign in", TraySettingsText.StartupDescription };
         if (showDetails)
         {
             expectedControls.AddRange([status, "&Refresh startup status"]);
         }
-        expectedControls.AddRange(["About", AboutVersionText, "&Close"]);
+        expectedControls.AddRange(["About", "", "Aspire logo", "Aspire Tray", AboutDescriptionText, AboutVersionText, "", "&Close"]);
         var visibleControls = new List<string>();
         for (var control = NativeMethods.GetWindow(_settingsWindow, 5); control != 0; control = NativeMethods.GetWindow(control, 2))
         {
@@ -438,7 +484,7 @@ internal sealed unsafe partial class TrayApplication
         NativeSmokeHarness.Require(visibleControls.SequenceEqual(expectedControls),
             "Settings does not expose the expected compact controls in reading and tab order.");
         char* className = stackalloc char[32];
-        foreach (var label in new[] { _settingsStatus, _settingsVersion })
+        foreach (var label in new[] { _settingsStartupDescription, _settingsStatus, _settingsProductName, _settingsAboutDescription, _settingsVersion })
         {
             var length = NativeMethods.GetClassName(label, className, 32);
             NativeCallException.Require(length != 0, "GetClassNameW(Settings label)");
@@ -457,6 +503,11 @@ internal sealed unsafe partial class TrayApplication
             && _settingsGeneralBounds.Bottom < _settingsAboutBounds.Top,
             "Settings actions extend outside their section or the sections overlap.");
         NativeSmokeHarness.Require(ReadControlText(_settingsVersion) == AboutVersionText, "Settings About information is incomplete.");
+        NativeSmokeHarness.Require(NativeMethods.SendMessage(_settingsLogo, 0x171, 0, 0) == _settingsIcon
+            && _settingsControlBounds[_settingsLogo].Right < _settingsControlBounds[_settingsProductName].Left
+            && _settingsControlBounds[_settingsLogo].Top > _settingsAboutBounds.Top
+            && _settingsControlBounds[_settingsLogo].Bottom < _settingsAboutBounds.Bottom,
+            "The DPI-scaled Aspire logo must appear beside the About information.");
         NativeSmokeHarness.Require(ReadControlText(_settingsCheckbox) == "&Launch Aspire Tray when I sign in",
             "The native checkbox is not clearly labeled.");
         NativeSmokeHarness.Require(NativeMethods.IsChild(_settingsWindow, NativeMethods.GetFocus()) != 0,

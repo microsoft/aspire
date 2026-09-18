@@ -339,7 +339,7 @@ internal sealed class NativeSmokeHarness
                 _restore.GetAwaiter().GetResult();
                 _client.CompleteStart();
                 // A successful start remains pending until discovery sees its instance.
-                Publish([new(_pinned, 42001, null) { ProcessStartTimeUnixMilliseconds = 1_700_000_000_100 }]);
+                Publish([new(_pinned, 42001, "http://localhost:19001/") { ProcessStartTimeUnixMilliseconds = 1_700_000_000_100 }]);
                 _phase = 10;
                 break;
             case 10:
@@ -347,6 +347,9 @@ internal sealed class NativeSmokeHarness
                 {
                     return;
                 }
+                _application.VerifyNativeStateForSmoke();
+                Invoke("Dashboard", state.AppHosts.Single(host => host.IsRunning).Id);
+                Require(_dashboardCalls == 2, "A started AppHost did not gain an actionable dashboard menu entry.");
                 // Disconnection preserves the last live rows. Observe an empty live
                 // snapshot before checking the disconnected, inactive presentation.
                 Publish([]);
@@ -369,7 +372,7 @@ internal sealed class NativeSmokeHarness
                 Require(state.AppHosts.All(host => !host.CanStop && !host.CanStart), "Disconnected rows allow lifecycle actions.");
                 _finished = true;
                 _phase = 13;
-                Program.Log("Windows native smoke passed: status circles, divided actions, 45-character final details, full-value details tooltips, live/stale refresh, tooltip focus/dismissal, compact names without status suffixes, menu tracking, immutable actions, native stop checkbox/opt-out, original-case Copy Path, pins/history, discovery icons, artwork invalidation, Explorer recovery, activation, terminal arguments, modeless Settings and isolated startup preferences.");
+                Program.Log("Windows native smoke passed: AppHost health icons, Documentation/Settings command icons, running AppHost dashboard actions, divided actions, separate status/path details, full-value details tooltips, live/stale refresh, tooltip focus/dismissal, compact names without status suffixes, menu tracking, immutable actions, native stop checkbox/opt-out, original-case Copy path, pins/history, discovery icons, artwork invalidation, Explorer recovery, activation, terminal arguments, compact modeless Settings with About logo and isolated startup preferences.");
                 Program.Log("Not covered by synthetic smoke: real per-monitor DPI transitions; verify these on the Windows desktop.");
                 if (_interactiveSmoke)
                 {

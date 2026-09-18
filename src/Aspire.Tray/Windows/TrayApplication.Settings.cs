@@ -14,27 +14,33 @@ internal sealed unsafe partial class TrayApplication
     private const int SettingsGeneralId = 2004;
     private const int SettingsAboutId = 2005;
     private const int SettingsPreviewMenuId = 2007;
-    private const int SettingsTitleId = 2008;
     private const int SettingsCloseId = 2; // IDCANCEL also handles the dialog's Escape key.
     private const string SettingsMenuLabel = "Settings...\tCtrl+,";
     private nint _settingsWindow;
     private nint _settingsCheckbox;
+    private nint _settingsStartupDescription;
     private nint _settingsStatus;
     private nint _settingsVersion;
     private nint _settingsRefresh;
     private nint _settingsIcon;
     private nint _settingsMenuFilter;
     private nint _settingsGeneral;
+    private nint _settingsGeneralSeparator;
     private nint _settingsAbout;
+    private nint _settingsAboutSeparator;
+    private nint _settingsLogo;
+    private nint _settingsProductName;
+    private nint _settingsAboutDescription;
+    private nint _settingsFooterSeparator;
     private nint _settingsClose;
     private nint _settingsPreview;
-    private nint _settingsTitle;
     private string _settingsStatusText = "";
     private TrayStartupState? _startupState;
     private bool _settingsInitializing;
     private bool _settingsShortcutPending;
 
-    private string AboutVersionText => TraySettingsText.GetAboutText(_interactiveSmoke);
+    private static string AboutVersionText => TraySettingsText.GetVersionText();
+    private string AboutDescriptionText => TraySettingsText.GetAboutDescription(_interactiveSmoke);
 
     private void ShowSettings()
     {
@@ -48,34 +54,35 @@ internal sealed unsafe partial class TrayApplication
         _settingsInitializing = true;
         try
         {
-            var template = CreateDialogTemplate(_interactiveSmoke ? TraySettingsText.PreviewTitle : TraySettingsText.Title, 380, 292, 10);
+            var template = CreateDialogTemplate(_interactiveSmoke ? TraySettingsText.PreviewTitle : TraySettingsText.Title, 304, 200, 9);
             fixed (byte* pointer = template)
             {
                 var window = NativeMethods.CreateDialogIndirectParam(_module, pointer, _window, &SettingsDialogProcedure, 0);
                 NativeCallException.Require(window != 0, "CreateDialogIndirectParamW(Settings)");
                 _settingsWindow = window;
             }
-            _settingsIcon = NativeMethods.CopyIcon(_artwork!.Original);
-            NativeCallException.Require(_settingsIcon != 0, "CopyIcon(Settings)");
-            NativeMethods.SendMessage(_settingsWindow, 0x80, 0, _settingsIcon); // WM_SETICON, ICON_SMALL.
-            NativeMethods.SendMessage(_settingsWindow, 0x80, 1, _settingsIcon);
-
-            _settingsTitle = AddSettingsControl("STATIC", "Settings", 0x80, SettingsTitleId, 20, 16, 340, 30);
-            _settingsGeneral = AddSettingsControl("STATIC", TraySettingsText.General, 0x80, SettingsGeneralId, 32, 56, 316, 14);
+            _settingsGeneral = AddSettingsControl("STATIC", TraySettingsText.General, 0x80, SettingsGeneralId);
+            _settingsGeneralSeparator = AddSettingsControl("STATIC", "", 0x10, 0); // SS_ETCHEDHORZ.
             // BS_3STATE (not AUTO3STATE) exposes an accessible checkbox, but only confirmed
             // backend state changes its check mark. A failed write never looks successful.
             _settingsCheckbox = AddSettingsControl("BUTTON", "&" + TraySettingsText.StartupOption,
-                0x10000 | 0x5, StartupCheckboxId, 20, 50, 340, 18);
-            _settingsStatus = AddSettingsControl("STATIC", "", 0x80, 0, 20, 105, 340, 60);
+                0x10000 | 0x5, StartupCheckboxId);
+            _settingsStartupDescription = AddSettingsControl("STATIC", TraySettingsText.StartupDescription, 0x80, 0);
+            _settingsStatus = AddSettingsControl("STATIC", "", 0x80, 0);
             _settingsRefresh = AddSettingsControl("BUTTON", "&Refresh startup status", 0x10000,
-                StartupRefreshId, 20, 175, 120, 24);
-            _settingsAbout = AddSettingsControl("STATIC", TraySettingsText.About, 0x80, SettingsAboutId, 20, 218, 340, 24);
-            _settingsVersion = AddSettingsControl("STATIC", AboutVersionText, 0x80, 0, 20, 244, 340, 48);
+                StartupRefreshId);
+            _settingsAbout = AddSettingsControl("STATIC", TraySettingsText.About, 0x80, SettingsAboutId);
+            _settingsAboutSeparator = AddSettingsControl("STATIC", "", 0x10, 0);
+            _settingsLogo = AddSettingsControl("STATIC", "Aspire logo", 0x3 | 0x40, 0); // SS_ICON | SS_REALSIZECONTROL.
+            _settingsProductName = AddSettingsControl("STATIC", "Aspire Tray", 0x80, 0);
+            _settingsAboutDescription = AddSettingsControl("STATIC", AboutDescriptionText, 0x80, 0);
+            _settingsVersion = AddSettingsControl("STATIC", AboutVersionText, 0x80, 0);
             if (_interactiveSmoke)
             {
-                _settingsPreview = AddSettingsControl("BUTTON", "Preview tray &menu", 0x10000, SettingsPreviewMenuId, 20, 340, 120, 24);
+                _settingsPreview = AddSettingsControl("BUTTON", "Preview tray &menu", 0x10000, SettingsPreviewMenuId);
             }
-            _settingsClose = AddSettingsControl("BUTTON", "&Close", 0x10000 | 0x1, SettingsCloseId, 288, 305, 72, 24);
+            _settingsFooterSeparator = AddSettingsControl("STATIC", "", 0x10, 0);
+            _settingsClose = AddSettingsControl("BUTTON", "&Close", 0x10000 | 0x1, SettingsCloseId);
             NativeMethods.SendMessage(_settingsWindow, 0x401, SettingsCloseId, 0); // DM_SETDEFID.
             UpdateSettingsAppearance();
             ReadStartupSettings();
@@ -116,10 +123,11 @@ internal sealed unsafe partial class TrayApplication
         return stream.ToArray();
     }
 
-    private nint AddSettingsControl(string className, string text, uint style, int id, int x, int y, int width, int height)
+    private nint AddSettingsControl(string className, string text, uint style, int id)
         // BS_NOTIFY lets keyboard focus scroll native buttons into view on small displays.
+        // LayoutSettings assigns the final DPI-scaled bounds after fonts and artwork exist.
         => AddDialogControl(_settingsWindow, className, text, style | (className == "BUTTON" ? 0x4000u : 0),
-            id, x, y, width, height);
+            id, 0, 0, 1, 1);
 
     private nint AddDialogControl(nint dialog, string className, string text, uint style, int id, int x, int y, int width, int height)
     {
@@ -288,37 +296,22 @@ internal sealed unsafe partial class TrayApplication
                 _settingsWindow = window;
                 return 0;
             case NativeMethods.WmCtlColorDialog:
-                return _settingsBackgroundBrush != 0 ? _settingsBackgroundBrush : NativeMethods.GetSysColorBrush(5);
+                return NativeMethods.GetSysColorBrush(15); // COLOR_BTNFACE.
             case NativeMethods.WmCtlColorStatic:
             case NativeMethods.WmCtlColorButton:
                 NativeMethods.SetTextColor((nint)wParam, NativeMethods.IsWindowEnabled(lParam) == 0
-                    ? NativeMethods.GetSysColor(17) : _settingsTextColor); // COLOR_GRAYTEXT for disabled controls.
+                    || lParam == _settingsStartupDescription
+                    ? NativeMethods.GetSysColor(17) : NativeMethods.GetSysColor(18)); // COLOR_GRAYTEXT / COLOR_BTNTEXT.
                 NativeMethods.SetBkMode((nint)wParam, 1); // TRANSPARENT.
-                return lParam == _settingsTitle || lParam == _settingsClose ? _settingsBackgroundBrush : _settingsCardBrush;
-            case NativeMethods.WmPaint when _settingsBackgroundBrush != 0:
-                var dc = NativeMethods.BeginPaint(window, out var paint);
-                NativeCallException.Require(dc != 0, "BeginPaint(Settings)");
-                try
-                {
-                    PaintSettingsBackground(dc);
-                }
-                finally
-                {
-                    Cleanup(NativeMethods.EndPaint(window, in paint) != 0, "EndPaint(Settings)");
-                }
-                return 1;
-            case NativeMethods.WmEraseBackground when _settingsBackgroundBrush != 0:
-            case NativeMethods.WmPrintClient when _settingsBackgroundBrush != 0:
-                // Themed checkboxes ask their parent to paint behind transparent parts.
-                PaintSettingsBackground((nint)wParam);
-                return 1;
+                return NativeMethods.GetSysColorBrush(15);
             case NativeMethods.WmVerticalScroll:
             case NativeMethods.WmMouseWheel:
                 ScrollSettings(message, wParam);
                 return 1;
             case NativeMethods.WmDpiChanged:
             case NativeMethods.WmSettingChange:
-            case 0x31A: // WM_THEMECHANGED.
+            case NativeMethods.WmSysColorChange:
+            case NativeMethods.WmThemeChanged:
                 // Let the PerMonitorV2 dialog manager scale its font first. Reflow on the
                 // next dispatch so our measured labels and owned heading font use that DPI.
                 NativeCallException.Require(NativeMethods.PostMessage(window, NativeMethods.SettingsLayoutMessage, 0, 0) != 0,
@@ -368,14 +361,20 @@ internal sealed unsafe partial class TrayApplication
             case NativeMethods.WmNcDestroy:
                 _settingsWindow = 0;
                 _settingsCheckbox = 0;
+                _settingsStartupDescription = 0;
                 _settingsStatus = 0;
                 _settingsVersion = 0;
                 _settingsRefresh = 0;
                 _settingsGeneral = 0;
+                _settingsGeneralSeparator = 0;
                 _settingsAbout = 0;
+                _settingsAboutSeparator = 0;
+                _settingsLogo = 0;
+                _settingsProductName = 0;
+                _settingsAboutDescription = 0;
+                _settingsFooterSeparator = 0;
                 _settingsClose = 0;
                 _settingsPreview = 0;
-                _settingsTitle = 0;
                 _settingsStatusText = "";
                 _startupState = null;
                 DisposeSettingsAppearance();

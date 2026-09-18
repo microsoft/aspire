@@ -302,36 +302,40 @@ artwork. Its notification icon has no badge when discovery is connected but idle
 a purple badge for active AppHosts, a gray dash while connecting, and an amber
 exclamation mark when discovery is unavailable. A stale AppHost list no longer
 looks like a working connection. The AppHost menus use the same shared health, history, pinning,
-explicit Start, and exact-instance Stop behavior described above. AppHost rows have small
-status circles: green for healthy resources, orange for waiting/degraded or transitional
-states and unavailable discovery, and red for unhealthy resources or action errors.
-Stopped AppHosts and unknown health use a neutral gray circle. Other menu items,
-including Documentation and Open Dashboard, remain text-only.
+explicit Start, and exact-instance Stop behavior described above. AppHost rows retain
+color-coded status indicators: green circles for healthy resources, orange for waiting/degraded,
+transitional, or unavailable discovery states, red for unhealthy resources or action
+errors, gray squares for stopped AppHosts, and gray circles for unknown health. Among commands, only
+**Documentation** and **Settings...** have small monochrome icons.
+**Open dashboard** uses the system's bold default-action style and remains available
+for running AppHosts with a known dashboard URL even when they need attention.
 AppHost names are limited to 44 text elements with a middle ellipsis and no appended
-status text. Each AppHost submenu ends with a divider followed by a disabled entry
-containing its path and status or directory/PID details together on one line.
-This entire entry is limited to 45 text elements with a middle ellipsis. Hovering
-over this final entry shows its full, untruncated value in a native tooltip, which
+status text. Each AppHost submenu ends with a divider followed by separate disabled
+status and path entries. Status text describes resource health, startup/shutdown,
+errors, and unavailable discovery without relying on color. Status is limited to
+45 text elements and paths to 44, with a middle ellipsis. Hovering
+over the path shows the full path and status or directory/PID details in a native tooltip, which
 can wrap long text. The tooltip's final native window bounds are constrained to
 the monitor work area without moving keyboard focus out of the menu.
 Parent AppHost rows and action items have no tooltips.
 Displayed and copied paths retain their original casing;
 Windows identity matching remains case-insensitive and still requires the exact PID
-and process start time. **Copy Path** copies the complete original containing folder path. The final
+and process start time. **Copy path** copies the complete original containing folder path. The final
 details entry and its tooltip refresh when status changes, including while the menu is open.
-Only the notification-area icon and window icons use artwork.
 
 The Windows adapter uses native popup menus and confirmation dialogs.
 Its embedded Common Controls v6 manifest enables Windows visual styles in both
-managed and NativeAOT builds. Settings uses a large heading, rounded General and About
-cards, a soft light background, and native buttons and checkboxes. High-contrast mode
-uses the system palette. Informational labels wrap instead of using editable-looking
+managed and NativeAOT builds. Settings uses a compact classic dialog with 9-point
+Segoe UI text, same-size bold General and About headings, native section separators,
+and native buttons and checkboxes. The original Aspire logo appears beside the About
+information. Dialog and menu colors follow the system palette, including high-contrast
+mode. Informational labels wrap instead of using editable-looking
 scroll panes. The layout expands for startup details and errors, reflows after DPI changes,
 and scrolls when needed to keep all actions reachable on shorter displays. This appearance
 uses Win32 and GDI only, without a Windows App SDK runtime dependency.
-**Show in Explorer** (the Windows equivalent of **Show in Finder**), **Copy Path**,
-and **Open In** act on the AppHost's source location without starting it.
-A divider separates these file actions from **Pin**/**Unpin**.
+**Show in File Explorer** (the Windows equivalent of **Show in Finder**), **Copy path**,
+and **Open in** act on the AppHost's source location without starting it.
+A divider separates these file actions from **Pin AppHost**/**Unpin AppHost**.
 Missing pinned projects are pruned, while missing recent projects
 offer removal and clearing history requires confirmation. The adapter retains
 native menu resources while a popup is being tracked, restores the notification
@@ -373,12 +377,13 @@ The publishing helper also validates the original icon and native PE architectur
 ```
 
 Smoke requires an interactive Windows desktop with Explorer. It exercises real
-menus, the final divided path/status entry (45-character limit, ordering, and disabled state),
+menus, the final divided status/path entries (text limits, ordering, and disabled state),
 full-value details tooltips (native hover selection, live/stale refresh, focus, and dismissal),
 safe-default dialogs including the native Stop suppression checkbox,
 Cancel/stale-instance suppression safeguards, subsequent prompt skipping,
 exact path copying (including missing files and Unicode), immutable actions,
-pin/history operations, status circles, text-only actions, bounded original-case paths and compact names,
+pin/history operations, color-coded AppHost rows, Documentation/Settings-only command icons,
+bounded original-case paths and compact names, the compact Settings layout and About logo,
 distinct notification-area connection artwork, delayed initial icon creation, Explorer recovery, activation,
 single-button message dismissal, and artwork invalidation.
 Synthetic invalidation is not a real monitor-DPI transition; verify display-scale
@@ -506,8 +511,9 @@ reference an existing absolute executable; all discovery/action data is fake.
 For a manual inspection, use `--smoke-seconds 120 --smoke-interactive`
 (or set `ASPIRE_TRAY_SMOKE_INTERACTIVE=1` with `--smoke-seconds 120`).
 After the automated checks pass, the harness leaves
-fake running AppHosts with healthy/waiting/failed icons and a stopped, pinned
-example with a neutral icon. It enables real native
+fake running AppHosts with healthy/waiting/failed states and a stopped, pinned
+example. Windows also describes these states as text in each AppHost submenu.
+The preview enables real native
 confirmation dialogs until **Quit Aspire**. The watchdog still bounds the automated
 checks but is removed when the interactive preview is ready. A Settings window
 identifies the preview so it is easy to find. History remains isolated from

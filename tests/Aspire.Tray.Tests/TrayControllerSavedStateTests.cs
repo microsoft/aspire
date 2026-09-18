@@ -188,6 +188,37 @@ public class TrayControllerSavedStateTests
     }
 
     [Fact]
+    public async Task TimedOutStartGainsDashboardWhenTheRunningAppHostIsDiscovered()
+    {
+        using var directory = new TestTrayStateDirectory();
+        var path = directory.CreateAppHost("apphost.cs");
+        var client = new TestAppHostClient();
+        var controller = new TrayController(client);
+        await using var lifetime = controller.ConfigureAwait(true);
+        controller.Start();
+        await client.PublishAndWaitAsync(controller, new([], DiscoveryState.Live));
+
+        controller.RequestStart(path);
+        Assert.Equal(path, await client.NextStartAsync());
+        client.CompleteStart(path, new(StartOutcome.TimedOut, null));
+        await WaitForStateAsync(controller, state => state.RecentAppHosts.Single().Error is not null);
+        var timedOut = Assert.Single(controller.State.RecentAppHosts);
+        Assert.False(timedOut.IsRunning);
+        Assert.False(timedOut.CanOpenDashboard);
+        Assert.Equal("1 AppHost needs attention", controller.State.Status);
+
+        var running = Host(42) with { AppHostPath = path, Health = AppHostHealth.Unhealthy };
+        await client.PublishAndWaitAsync(controller, new([running], DiscoveryState.Live));
+
+        var row = Assert.Single(controller.State.AppHosts);
+        Assert.True(row.IsRunning);
+        Assert.True(row.CanOpenDashboard);
+        Assert.Equal(AppHostHealth.Unhealthy, row.Health);
+        Assert.Equal(running.DashboardUri, controller.GetDashboardUri(running.Id));
+        Assert.Empty(controller.State.RecentAppHosts);
+    }
+
+    [Fact]
     public async Task StartsAreExplicitConcurrentByPathAndWaitForDiscoveryBeforeRetry()
     {
         using var directory = new TestTrayStateDirectory();

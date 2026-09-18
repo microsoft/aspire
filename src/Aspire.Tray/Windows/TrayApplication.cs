@@ -359,6 +359,8 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
                 return 0;
             case NativeMethods.WmDpiChanged:
             case NativeMethods.WmSettingChange:
+            case NativeMethods.WmSysColorChange:
+            case NativeMethods.WmThemeChanged:
                 _dpiDirty = true;
                 RequestRefresh();
                 return 0;

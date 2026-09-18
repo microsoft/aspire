@@ -9,9 +9,6 @@ internal static unsafe partial class NativeMethods
 {
     internal const uint WmNull = 0;
     internal const uint WmDestroy = 2;
-    internal const uint WmPaint = 0xF;
-    internal const uint WmEraseBackground = 0x14;
-    internal const uint WmPrintClient = 0x318;
     internal const uint WmVerticalScroll = 0x115;
     internal const uint WmMouseWheel = 0x20A;
     internal const uint WmClose = 0x10;
@@ -41,6 +38,8 @@ internal static unsafe partial class NativeMethods
     internal const uint BmClick = 0xF5;
     internal const uint WmDpiChanged = 0x02E0;
     internal const uint WmSettingChange = 0x001A;
+    internal const uint WmSysColorChange = 0x0015;
+    internal const uint WmThemeChanged = 0x031A;
     internal const uint WmMenuRightButtonUp = 0x0122;
     internal const uint WmMenuSelect = 0x011F;
     internal const uint TtmTrackActivate = 0x411;
@@ -189,14 +188,6 @@ internal static unsafe partial class NativeMethods
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct HighContrast
-    {
-        public uint Size;
-        public uint Flags;
-        public nint DefaultScheme;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
     internal struct ScrollInfo
     {
         public uint Size;
@@ -206,17 +197,6 @@ internal static unsafe partial class NativeMethods
         public uint Page;
         public int Position;
         public int TrackPosition;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct PaintStruct
-    {
-        public nint Dc;
-        public int Erase;
-        public Rect Paint;
-        public int Restore;
-        public int IncrementalUpdate;
-        public fixed byte Reserved[32];
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -505,7 +485,7 @@ internal static unsafe partial class NativeMethods
     internal static partial nint CallNextHookEx(nint hook, int code, nuint wParam, nint lParam);
 
     [LibraryImport("user32.dll", SetLastError = true)]
-    internal static partial nint CopyIcon(nint icon);
+    internal static partial int SetMenuDefaultItem(nint menu, uint item, uint byPosition);
 
     [LibraryImport("user32.dll")]
     internal static partial nint GetDlgItem(nint dialog, int id);
@@ -561,9 +541,6 @@ internal static unsafe partial class NativeMethods
     internal static partial int SetBkMode(nint dc, int mode);
 
     [LibraryImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
-    internal static partial int GetHighContrast(uint action, uint parameter, ref HighContrast contrast, uint flags);
-
-    [LibraryImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
     internal static partial int GetWheelScrollLines(uint action, uint parameter, ref uint lines, uint flags);
 
     [LibraryImport("user32.dll")]
@@ -571,30 +548,6 @@ internal static unsafe partial class NativeMethods
 
     [LibraryImport("user32.dll", SetLastError = true)]
     internal static partial int GetScrollInfo(nint window, int bar, ref ScrollInfo info);
-
-    [LibraryImport("user32.dll", SetLastError = true)]
-    internal static partial nint BeginPaint(nint window, out PaintStruct paint);
-
-    [LibraryImport("user32.dll")]
-    internal static partial int EndPaint(nint window, in PaintStruct paint);
-
-    [LibraryImport("user32.dll")]
-    internal static partial int FillRect(nint dc, in Rect rect, nint brush);
-
-    [LibraryImport("gdi32.dll", SetLastError = true)]
-    internal static partial nint CreateSolidBrush(uint color);
-
-    [LibraryImport("gdi32.dll", SetLastError = true)]
-    internal static partial nint CreatePen(int style, int width, uint color);
-
-    [LibraryImport("gdi32.dll", SetLastError = true)]
-    internal static partial int SaveDC(nint dc);
-
-    [LibraryImport("gdi32.dll", SetLastError = true)]
-    internal static partial int RestoreDC(nint dc, int saved);
-
-    [LibraryImport("gdi32.dll", SetLastError = true)]
-    internal static partial int RoundRect(nint dc, int left, int top, int right, int bottom, int ellipseWidth, int ellipseHeight);
 }
 
 internal sealed class NativeCallException(string operation, int? error = null)

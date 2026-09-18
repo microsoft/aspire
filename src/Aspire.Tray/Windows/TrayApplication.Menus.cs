@@ -64,7 +64,7 @@ internal sealed unsafe partial class TrayApplication
                 AddHost(root, root.Handle, host, recent: false, state.Discovery == DiscoveryState.Live);
             }
             Append(root.Handle, NativeMethods.MfSeparator, 0, null);
-            var recent = AddSubmenu(root.Handle, "Recently Opened");
+            var recent = AddSubmenu(root.Handle, "Recently opened");
             root.RecentHandle = recent;
             foreach (var host in state.RecentAppHosts)
             {
@@ -75,11 +75,13 @@ internal sealed unsafe partial class TrayApplication
                 Append(recent, NativeMethods.MfGrayed, 0, "No recently opened AppHosts");
             }
             Append(recent, NativeMethods.MfSeparator, 0, null);
-            root.ClearCommand = AddAction(root, recent, "Clear Recently Opened", new(ActionKind.ClearRecent), state.CanClearRecent);
+            root.ClearCommand = AddAction(root, recent, "Clear recently opened...", new(ActionKind.ClearRecent), state.CanClearRecent);
             Append(root.Handle, NativeMethods.MfSeparator, 0, null);
-            AddAction(root, root.Handle, "Documentation", new(ActionKind.Documentation), true);
+            var documentation = AddAction(root, root.Handle, "Documentation", new(ActionKind.Documentation), true);
+            SetMenuBitmap(root.Handle, documentation, _artwork!.DocumentationBitmap, byPosition: false);
             var settings = AddAction(root, root.Handle, "Settings...", new(ActionKind.Settings), true);
             SetSettingsMenuLabel(root.Handle, settings);
+            SetMenuBitmap(root.Handle, settings, _artwork.SettingsBitmap, byPosition: false);
             Append(root.Handle, NativeMethods.MfSeparator, 0, null);
             AddAction(root, root.Handle, "Quit Aspire", new(ActionKind.Quit), true);
             return root;
@@ -96,7 +98,7 @@ internal sealed unsafe partial class TrayApplication
         var position = (uint)NativeMethods.GetMenuItemCount(parent);
         var title = AppHostPresentation.GetCompactMenuLabel(host);
         var submenu = AddSubmenu(parent, title);
-        SetStatusBitmap(parent, position, _artwork!.Status(GetMenuStatusHealth(host, discoveryAvailable)));
+        SetMenuBitmap(parent, position, _artwork!.Status(GetMenuStatus(host, discoveryAvailable)), byPosition: true);
         var row = new HostRow(parent, position, submenu, host.Id, recent, title)
         {
             DetailsText = AppHostPresentation.GetMenuDetailsText(host.Id.AppHostPath, host.Subtitle)
@@ -104,21 +106,22 @@ internal sealed unsafe partial class TrayApplication
         root.Rows.Add(row);
         if (host.IsRunning)
         {
-            row.Dashboard = AddAction(root, submenu, "Open Dashboard",
+            row.Dashboard = AddAction(root, submenu, "Open dashboard",
                 new(ActionKind.Dashboard, host.Id), host.CanOpenDashboard);
+            SetDefaultMenuItem(submenu, row.Dashboard);
             row.Stop = AddAction(root, submenu, host.IsStopping ? "Stopping..." : StopMenuLabel,
                 new(ActionKind.Stop, host.Id), host.CanStop);
         }
         else
         {
-            row.Start = AddAction(root, submenu, host.IsStarting ? "Starting..." : "Start",
+            row.Start = AddAction(root, submenu, host.IsStarting ? "Starting..." : "Start AppHost",
                 new(ActionKind.Start, host.Id), host.CanStart);
         }
-        row.Pin = AddAction(root, submenu, host.IsPinned ? "Unpin" : "Pin", new(ActionKind.TogglePin, host.Id), true);
+        row.Pin = AddAction(root, submenu, host.IsPinned ? "Unpin AppHost" : "Pin AppHost", new(ActionKind.TogglePin, host.Id), true);
         Append(submenu, NativeMethods.MfSeparator, 0, null);
-        row.Explorer = AddAction(root, submenu, "Show in Explorer", new(ActionKind.Explorer, host.Id), true);
-        row.CopyPath = AddAction(root, submenu, "Copy Path", new(ActionKind.CopyPath, host.Id), true);
-        row.OpenIn = AddSubmenu(submenu, "Open In");
+        row.Explorer = AddAction(root, submenu, "Show in File Explorer", new(ActionKind.Explorer, host.Id), true);
+        row.CopyPath = AddAction(root, submenu, "Copy path", new(ActionKind.CopyPath, host.Id), true);
+        row.OpenIn = AddSubmenu(submenu, "Open in");
         foreach (var application in _installedApplications)
         {
             var id = AddAction(root, row.OpenIn, application.Title, new(ActionKind.OpenIn, host.Id, application), true);
@@ -129,8 +132,10 @@ internal sealed unsafe partial class TrayApplication
             Append(row.OpenIn, NativeMethods.MfGrayed, 0, "No supported applications installed");
         }
         Append(submenu, NativeMethods.MfSeparator, 0, null);
+        row.StatusPosition = (uint)NativeMethods.GetMenuItemCount(submenu);
+        Append(submenu, NativeMethods.MfGrayed, 0, AppHostPresentation.GetMenuDetailsLabel(GetMenuStatusText(host, discoveryAvailable)));
         row.DetailsPosition = (uint)NativeMethods.GetMenuItemCount(submenu);
-        Append(submenu, NativeMethods.MfGrayed, 0, AppHostPresentation.GetMenuDetailsLabel(row.DetailsText));
+        Append(submenu, NativeMethods.MfGrayed, 0, AppHostPresentation.GetPathLabel(host.Id.AppHostPath));
     }
 
     private void UpdateRetainedMenu(NativeMenu menu, TrayViewState state)
@@ -147,21 +152,24 @@ internal sealed unsafe partial class TrayApplication
             UpdateItem(row.Parent, row.Position, true,
                 host is null ? row.Title : AppHostPresentation.GetCompactMenuLabel(host),
                 host is not null);
-            SetStatusBitmap(row.Parent, row.Position, _artwork!.Status(GetMenuStatusHealth(host, state.Discovery == DiscoveryState.Live)));
+            SetMenuBitmap(row.Parent, row.Position,
+                _artwork!.Status(GetMenuStatus(host, state.Discovery == DiscoveryState.Live)), byPosition: true);
             row.DetailsText = AppHostPresentation.GetMenuDetailsText(row.Id.AppHostPath, host?.Subtitle ?? "AppHost no longer available");
-            UpdateItem(row.Submenu, row.DetailsPosition, true, AppHostPresentation.GetMenuDetailsLabel(row.DetailsText), false);
-            UpdateAction(row.Submenu, row.Dashboard, "Open Dashboard", host?.CanOpenDashboard == true);
+            UpdateItem(row.Submenu, row.StatusPosition, true,
+                AppHostPresentation.GetMenuDetailsLabel(GetMenuStatusText(host, state.Discovery == DiscoveryState.Live)), false);
+            UpdateItem(row.Submenu, row.DetailsPosition, true, AppHostPresentation.GetPathLabel(row.Id.AppHostPath), false);
+            UpdateAction(row.Submenu, row.Dashboard, "Open dashboard", host?.CanOpenDashboard == true);
             UpdateAction(row.Submenu, row.Stop, host?.IsStopping == true ? "Stopping..." : StopMenuLabel, host?.CanStop == true);
-            UpdateAction(row.Submenu, row.Start, host?.IsStarting == true ? "Starting..." : "Start", host?.CanStart == true);
-            UpdateAction(row.Submenu, row.Pin, host?.IsPinned == true ? "Unpin" : "Pin", host is not null);
-            UpdateAction(row.Submenu, row.Explorer, "Show in Explorer", host is not null);
-            UpdateAction(row.Submenu, row.CopyPath, "Copy Path", host is not null);
+            UpdateAction(row.Submenu, row.Start, host?.IsStarting == true ? "Starting..." : "Start AppHost", host?.CanStart == true);
+            UpdateAction(row.Submenu, row.Pin, host?.IsPinned == true ? "Unpin AppHost" : "Pin AppHost", host is not null);
+            UpdateAction(row.Submenu, row.Explorer, "Show in File Explorer", host is not null);
+            UpdateAction(row.Submenu, row.CopyPath, "Copy path", host is not null);
             foreach (var id in row.OpenCommands)
             {
                 UpdateAction(row.OpenIn, id, menu.Commands[id].Application!.Title, host is not null);
             }
         }
-        UpdateAction(menu.RecentHandle, menu.ClearCommand, "Clear Recently Opened", state.CanClearRecent);
+        UpdateAction(menu.RecentHandle, menu.ClearCommand, "Clear recently opened...", state.CanClearRecent);
         if (_menuOpen)
         {
             UpdateMenuTooltip();
@@ -198,6 +206,20 @@ internal sealed unsafe partial class TrayApplication
     }
 
     private string StopMenuLabel => controller.ConfirmStop ? "Stop AppHost..." : "Stop AppHost";
+
+    private static string GetMenuStatusText(AppHostMenuItem? host, bool discoveryAvailable) => host switch
+    {
+        null => "AppHost no longer available",
+        _ when !discoveryAvailable => "Discovery unavailable",
+        { Error: not null } => host.Error,
+        { IsStarting: true } => "Starting AppHost...",
+        { IsStopping: true } => "Stopping AppHost...",
+        { IsRunning: false } => "Stopped",
+        { Health: AppHostHealth.Healthy } => "Running - all resources healthy",
+        { Health: AppHostHealth.Warning } => "Running - resources need attention",
+        { Health: AppHostHealth.Unhealthy } => "Running - unhealthy resources",
+        _ => "Running - resource health unknown"
+    };
 
     private static nint AddSubmenu(nint parent, string title)
     {
@@ -243,13 +265,18 @@ internal sealed unsafe partial class TrayApplication
         }
     }
 
-    private static void SetStatusBitmap(nint menu, uint position, nint bitmap)
+    private static void SetMenuBitmap(nint menu, uint item, nint bitmap, bool byPosition)
     {
         var info = new NativeMethods.MenuItemInfo
         {
             Size = (uint)sizeof(NativeMethods.MenuItemInfo), Mask = NativeMethods.MiimBitmap, Bitmap = bitmap
         };
-        NativeCallException.Require(NativeMethods.SetMenuItemInfo(menu, position, 1, ref info) != 0, "SetMenuItemInfoW(status bitmap)");
+        NativeCallException.Require(NativeMethods.SetMenuItemInfo(menu, item, byPosition ? 1 : 0, ref info) != 0, "SetMenuItemInfoW(menu bitmap)");
+    }
+
+    private static void SetDefaultMenuItem(nint menu, uint command)
+    {
+        NativeCallException.Require(NativeMethods.SetMenuDefaultItem(menu, command, 0) != 0, "SetMenuDefaultItem");
     }
 
     private static void UpdateItem(nint menu, uint id, bool byPosition, string title, bool enabled)
@@ -259,15 +286,28 @@ internal sealed unsafe partial class TrayApplication
             Size = (uint)sizeof(NativeMethods.MenuItemInfo), Mask = NativeMethods.MiimState
         };
         NativeCallException.Require(NativeMethods.GetMenuItemInfo(menu, id, byPosition ? 1 : 0, ref previous) != 0, "GetMenuItemInfoW(update)");
+        var wasDefault = (previous.State & 0x1000) != 0;
+        if (wasDefault)
+        {
+            // Default-item ownership is menu-level state. Clear and restore it through
+            // the dedicated API instead of resubmitting MFS_DEFAULT with a label update.
+            // https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-setmenudefaultitem
+            NativeCallException.Require(NativeMethods.SetMenuDefaultItem(menu, uint.MaxValue, 0) != 0, "SetMenuDefaultItem(clear)");
+        }
         fixed (char* text = Literal(title))
         {
             var info = new NativeMethods.MenuItemInfo
             {
                 Size = (uint)sizeof(NativeMethods.MenuItemInfo),
                 Mask = NativeMethods.MiimString | NativeMethods.MiimState,
-                Text = text, State = (previous.State & ~3u) | (enabled ? 0u : NativeMethods.MfGrayed)
+                Text = text, State = (previous.State & ~(3u | 0x1000u)) | (enabled ? 0u : NativeMethods.MfGrayed)
             };
             NativeCallException.Require(NativeMethods.SetMenuItemInfo(menu, id, byPosition ? 1 : 0, ref info) != 0, "SetMenuItemInfoW");
+            if (wasDefault)
+            {
+                NativeCallException.Require(NativeMethods.SetMenuDefaultItem(menu, id, byPosition ? 1u : 0u) != 0,
+                    "SetMenuDefaultItem(restore)");
+            }
         }
     }
 
@@ -346,7 +386,7 @@ internal sealed unsafe partial class TrayApplication
         }
         HideMenuTooltip();
         using var context = new NativeMenu(this);
-        var command = AddAction(context, context.Handle, host.IsPinned ? "Unpin" : "Pin", new(ActionKind.TogglePin, host.Id), true);
+        var command = AddAction(context, context.Handle, host.IsPinned ? "Unpin AppHost" : "Pin AppHost", new(ActionKind.TogglePin, host.Id), true);
         NativeCallException.Require(NativeMethods.GetCursorPos(out var point) != 0, "GetCursorPos");
         Marshal.SetLastPInvokeError(0);
         var selected = NativeMethods.TrackPopupMenuEx(context.Handle,
@@ -375,6 +415,7 @@ internal sealed unsafe partial class TrayApplication
         internal AppHostId Id { get; } = id;
         internal bool Recent { get; } = recent;
         internal string Title { get; } = title;
+        internal uint StatusPosition { get; set; }
         internal uint DetailsPosition { get; set; }
         internal required string DetailsText { get; set; }
         internal uint Dashboard { get; set; }
