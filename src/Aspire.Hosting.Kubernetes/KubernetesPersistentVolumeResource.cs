@@ -80,6 +80,11 @@ public sealed class KubernetesPersistentVolumeResource(
     public KubernetesEnvironmentResource Parent { get; } = environment ?? throw new ArgumentNullException(nameof(environment));
 
     /// <summary>
+    /// Gets or sets whether or not the generated PVC should request a storage class.
+    /// </summary>
+    internal bool ShouldRequestStorageClassName { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the storage class name for the generated PVC. When unset, the
     /// cluster's default storage class is used.
     /// </summary>
@@ -91,6 +96,11 @@ public sealed class KubernetesPersistentVolumeResource(
     /// <see cref="KubernetesEnvironmentResource.DefaultStorageSize"/>.
     /// </summary>
     internal ReferenceExpression? Capacity { get; set; }
+
+    /// <summary>
+    /// Gets or sets the name of the existing PersistentVolume to bind to.
+    /// </summary>
+    internal ReferenceExpression? PersistentVolumeName { get; set; }
 
     /// <summary>
     /// Gets the access modes configured for the volume. When empty, falls back to
