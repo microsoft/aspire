@@ -357,14 +357,19 @@ Sixel and Kitty Graphics Protocol are rendered
 from server-authoritative state. Historical rendering is text-only. The
 dashboard's independent console-log view remains available.
 
-Text selections use a translucent Aspire accent highlight. A Fluent copy button
-appears below and to the right of the last visible selected line, clamping to the
-canvas edges and moving above the line when there is not enough room below.
+Text selections use a translucent Aspire accent highlight. A compact Fluent copy
+button appears only when more than one terminal cell is selected, so clicking to
+focus does not show it. It appears below and to the right of the last visible
+selected line, clamping to the canvas edges and moving above the line when there
+is not enough room below.
 The dashboard uses Hex1b's public selection overlay and copy action; Hex1b retains
 ownership of authoritative selection text, history and clipboard handling.
 After a successful copy, the selection and copy overlay are cleared and focus
 returns to the terminal, ready for Cmd+V or Ctrl+V. A failed copy leaves the
 selection available for retry.
+Selections invalidated by resizing, reflow or changed/evicted output are cleared
+through Hex1b's public selection callback without showing its selection-expired
+message.
 
 HMP checkpoints retain uploaded Kitty image data even when an animation
 temporarily removes its placements. They also preserve partially received ANSI
@@ -448,18 +453,34 @@ changing the grid. The bottom-left footer hint advertises <kbd>F6</kbd>, which m
 keyboard focus from terminal input to the footer controls; <kbd>Shift+F6</kbd>
 moves focus to the preceding dashboard control.
 
+Dock tabs share the Resources/Parameters tab styling. The dock resize handle
+uses the dashboard's Fluent splitter styling, including neutral gray hover,
+drag and keyboard-focus feedback.
+
 Press the backtick key (<kbd>`</kbd>), without Shift, to show or hide the terminal
-dock. The shortcut is suppressed while a terminal or text input has focus so it
+dock. The help dialog lists this shortcut under **Site-wide navigation** only
+when the resource service is enabled and the selected run is not read-only.
+The shortcut is suppressed while a terminal or text input has focus so it
 does not consume typed input. Press <kbd>F6</kbd> first to move from terminal input
 to its footer controls before toggling the dock.
 
 The desktop header also has a terminal toggle button. On mobile, open the
-navigation menu and select **Toggle terminal** to open, collapse, or reopen the
+navigation menu and select **Terminal** to open, collapse, or reopen the
 dock without a keyboard. Both controls are available only for writable live runs
 with the resource service enabled, and are hidden while switching runs.
 
 When the dock is empty, it lists links to terminal-enabled resources on their
 resource pages. Resource terminals remain separate from AppHost-owned dock tabs.
+As the empty panel shrinks, supplementary text and its icon are hidden first,
+then the documentation link, then the backtick hint. The heading has highest
+priority, and overflowing content remains scrollable from its beginning.
+The documentation link uses the same text size as the surrounding copy.
+
+Focused terminal input uses the same inset focus highlight as dashboard
+textboxes, around the terminal's mount area rather than its title or footer.
+The highlight is layered above the canvas so rendering cannot obscure it.
+Moving focus to the footer or another control removes the highlight without
+changing terminal dimensions.
 
 Before the first opening, the dock watches only AppHost terminal metadata so
 `Show()` can reveal it remotely. Resource-link tracking and browser controls start

@@ -95,6 +95,87 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task EmptyDock_ResizingPreservesContentInPriorityOrder()
+    {
+        await RunTestAsync(async page =>
+        {
+            await fixture.StartSessionAsync();
+            await page.SetViewportSizeAsync(1280, 900);
+            await page.GotoAsync("/").DefaultTimeout();
+            await page.GetByRole(AriaRole.Button, new() { Name = "Toggle terminal (`)", Exact = true }).ClickAsync();
+            var panel = page.Locator(".terminal-dock-panel");
+            var heading = panel.GetByRole(AriaRole.Heading, new() { Name = "No docked terminals", Exact = true });
+            var hint = panel.Locator(".terminal-dock-panel-hint");
+            var moreInformation = panel.GetByRole(AriaRole.Link, new() { Name = "More information", Exact = true, IncludeHidden = true });
+            var body = panel.Locator(".terminal-dock-panel-body");
+            var handle = page.GetByRole(AriaRole.Separator, new() { Name = "Terminals", Exact = true });
+            await Assertions.Expect(panel).ToBeVisibleAsync();
+
+            foreach (var width in new[] { 1280, 360 })
+            {
+                await page.SetViewportSizeAsync(width, 900);
+                await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuemax", "900");
+                foreach (var height in new[] { 420, 320, 160, 120, 160, 420 })
+                {
+                    await handle.FocusAsync();
+                    await page.Keyboard.PressAsync("Home");
+                    var remaining = height - 120;
+                    while (remaining >= 50)
+                    {
+                        await page.Keyboard.PressAsync("Shift+ArrowUp");
+                        remaining -= 50;
+                    }
+                    while (remaining > 0)
+                    {
+                        await page.Keyboard.PressAsync("ArrowUp");
+                        remaining -= 10;
+                    }
+                    await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuenow", height.ToString());
+
+                    var panelBox = await panel.BoundingBoxAsync();
+                    Assert.NotNull(panelBox);
+                    foreach (var (element, visible) in new[]
+                    {
+                        (heading, true),
+                        (hint, true),
+                        (moreInformation, height > 120),
+                        (body, height == 420 || (width == 1280 && height == 320))
+                    })
+                    {
+                        if (visible)
+                        {
+                            await Assertions.Expect(element).ToBeVisibleAsync();
+                            var box = await element.BoundingBoxAsync();
+                            Assert.NotNull(box);
+                            Assert.InRange(box.Y, panelBox.Y - 1, panelBox.Y + panelBox.Height - box.Height + 1);
+                        }
+                        else
+                        {
+                            await Assertions.Expect(element).ToBeHiddenAsync();
+                        }
+                    }
+                }
+
+                await page.SetViewportSizeAsync(width, 80);
+                await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuemax", "80");
+                await handle.FocusAsync();
+                await page.Keyboard.PressAsync("End");
+                await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuenow", "80");
+                await Assertions.Expect(heading).ToBeVisibleAsync();
+                await Assertions.Expect(hint).ToBeHiddenAsync();
+                await Assertions.Expect(moreInformation).ToBeHiddenAsync();
+                await Assertions.Expect(body).ToBeHiddenAsync();
+                var tinyPanelBox = await panel.BoundingBoxAsync();
+                var headingBox = await heading.BoundingBoxAsync();
+                Assert.NotNull(tinyPanelBox);
+                Assert.NotNull(headingBox);
+                Assert.InRange(headingBox.Y, tinyPanelBox.Y, tinyPanelBox.Y + tinyPanelBox.Height - headingBox.Height);
+            }
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ResizeHandle_KeyboardAndPointerResizingRespectFocusAndBounds()
     {
         await RunTestAsync(async page =>

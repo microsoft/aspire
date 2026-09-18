@@ -6,14 +6,17 @@
    rather than unmounting it so the terminal keeps its renderer, measured cell metrics, and WebSocket. *@
 @if (_hasBeenOpened)
 {
-    <div class="terminal-dock @(_isVisible ? "visible" : "collapsed")"
+    <div class="terminal-dock fluent-multi-splitter @(_isVisible ? "visible" : "collapsed")"
          id="@_elementIdPrefix"
+         orientation="vertical"
          data-theme="dark"
          style="height: @(_heightPx)px;"
          inert="@(!_isVisible)"
          aria-hidden="@(_isVisible ? "false" : "true")"
          @ref="_dockElement">
-        <div class="terminal-dock-resize-handle"
+        @* Reuse Fluent's splitter visuals while retaining the dock's viewport-anchored resizing. *@
+        <div class="terminal-dock-resize-handle fluent-multi-splitter-bar"
+             status="resizable"
              role="separator"
              tabindex="0"
              aria-orientation="horizontal"
@@ -31,10 +34,10 @@
                Keep selection and removal driven by AppHost updates, with separate tab/close buttons and mounted panes. *@
             @if (_terminals.Count > 0)
             {
-                <div class="terminal-dock-tablist" role="tablist" aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockTabs)]">
+                <div class="terminal-dock-tablist aspire-tab-list" role="tablist" aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockTabs)]">
                     @foreach (var terminal in _terminals)
                     {
-                        <div class="terminal-dock-tab @(IsPaneActive(terminal.TerminalId) ? "active" : string.Empty)"
+                        <div class="terminal-dock-tab aspire-tab @(IsPaneActive(terminal.TerminalId) ? "active" : string.Empty)"
                              @key="terminal.TerminalId">
                             <button type="button"
                                     role="tab"
@@ -140,7 +143,7 @@
             {
                 <div class="terminal-dock-panel">
                     <div class="terminal-dock-panel-card">
-                        <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="24px" Color="Color.Default" />
+                        <FluentIcon Class="terminal-dock-panel-icon" Value="@(new Icons.Regular.Size20.WindowConsole())" Width="24px" Color="Color.Default" />
                         <h3 class="terminal-dock-panel-heading">@Loc[nameof(Resources.TerminalStrings.TerminalDockPanelHeading)]</h3>
                         <p class="terminal-dock-panel-body">@Loc[nameof(Resources.TerminalStrings.TerminalDockPanelBody)]</p>
                         @if (_resourceTerminalLinks.Length > 0)
@@ -158,7 +161,7 @@
                                 }
                             </p>
                         }
-                        <a class="aspire-link-button" href="https://aka.ms/aspire/dashboard-terminals" target="_blank" rel="noopener noreferrer">@Loc[nameof(Resources.TerminalStrings.TerminalDockMoreInformation)]</a>
+                        <a class="aspire-link-button terminal-dock-panel-more-info" href="https://aka.ms/aspire/dashboard-terminals" target="_blank" rel="noopener noreferrer">@Loc[nameof(Resources.TerminalStrings.TerminalDockMoreInformation)]</a>
                         <p class="terminal-dock-panel-hint">@Loc[nameof(Resources.TerminalStrings.TerminalDockPanelHint)]</p>
                     </div>
                 </div>

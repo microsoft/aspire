@@ -174,6 +174,15 @@ function inputFailed(state, error) {
     });
 }
 
+function clearInvalidatedSelection(state) {
+    const client = state.client;
+    if (client?.connected && client.selection.status === "invalidated") {
+        // Resize, reflow and output changes can expire the producer's selection.
+        // Clear through the public API before the package's expiry message is painted.
+        client.clearSelection();
+    }
+}
+
 function focusAfterMouseControl(state, event) {
     // Keyboard/assistive activation has detail 0; keep focus for repeated keyboard adjustments.
     // https://developer.mozilla.org/en-US/docs/Web/API/Element/click_event#usage_notes
@@ -286,7 +295,11 @@ function createSelectionUI(state, current) {
             event.detail.overlay.append(actions);
         }
         detail = event.detail;
-        const selectable = detail.connected && ["valid", "pending"].includes(detail.selection.status);
+        // Ranges have exclusive end columns; text length differs for wide and combining characters.
+        const selectedCells = detail.selection.ranges.reduce(
+            (count, range) => count + range.endColumn - range.startColumn, 0);
+        const selectable = detail.connected && ["valid", "pending"].includes(detail.selection.status) &&
+            selectedCells > 1;
         const hadFocus = actions.contains(document.activeElement);
         actions.hidden = !selectable;
         const position = selectable
@@ -381,6 +394,11 @@ async function mountClient(state, generation, controller) {
                 }
             },
             onSelectionUI: createSelectionUI(state, current),
+            onSelectionChange() {
+                if (current()) {
+                    clearInvalidatedSelection(state);
+                }
+            },
             // The package chooses WebGL2 on ordinary HTTP/unavailable WebGPU;
             // unexpected initialization and runtime rendering errors still surface.
             // https://github.com/mitchdenny/hex1b/pull/491
@@ -429,6 +447,8 @@ async function mountClient(state, generation, controller) {
             return;
         }
         state.client = client;
+        // Selection notifications can precede mount completion, before the handle is available.
+        clearInvalidatedSelection(state);
         // Policy can change while mount is waiting for its first frame.
         client.setReadOnly(state.readOnly || state.ended);
         if (state.ended) {

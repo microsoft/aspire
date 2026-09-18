@@ -77,6 +77,7 @@ beforeEach(() => {
             sizingCalls: [],
             primaryRequests: 0,
             focusCalls: 0,
+            selection: { status: "none" },
             selectionClears: 0,
             selectionRefreshes: 0,
             disposed: false,
@@ -93,7 +94,11 @@ beforeEach(() => {
                 this.readOnlyCalls.push(readOnly);
             },
             focus() { this.focusCalls++; document.activeElement = this.element; },
-            clearSelection() { this.selectionClears++; },
+            clearSelection() {
+                this.selectionClears++;
+                this.selection = { status: "pending", ranges: [], canExtend: false };
+                options.onSelectionChange(this.selection);
+            },
             refreshSelectionUI() { this.selectionRefreshes++; },
         };
         const attempt = {
@@ -165,6 +170,7 @@ function selectionEvent(attempt, overrides = {}) {
         runAction: () => Promise.resolve("authoritative selection"),
         ...overrides,
         selection: { status: "valid", requestId: 1, text: "authoritative selection", copying: false,
+            ranges: [{ row: 0, startColumn: 0, endColumn: 6 }],
             ...overrides.selection },
     } });
     assert.equal(attempt.options.onSelectionUI(event), undefined, "UI ownership must be synchronous");
@@ -249,6 +255,91 @@ for (const [name, rects, position] of [
         assert.deepEqual(attempts[0].selectionChildren, [actions]);
     });
 }
+
+for (const [name, ranges, text, visible] of [
+    ["no cells", [], "", false],
+    ["one cell", [{ row: 0, startColumn: 3, endColumn: 4 }], "a", false],
+    ["one cell with combining characters", [{ row: 0, startColumn: 3, endColumn: 4 }], "e\u0301", false],
+    ["two cells", [{ row: 0, startColumn: 3, endColumn: 5 }], "ab", true],
+    ["a wide character", [{ row: 0, startColumn: 3, endColumn: 5 }], "\u754c", true],
+    ["one cell on each of two lines", [
+        { row: 0, startColumn: 99, endColumn: 100 }, { row: 1, startColumn: 0, endColumn: 1 },
+    ], "a\nb", true],
+]) {
+    test(`selection copy control visibility counts ${name}`, () => {
+        const { controls } = mount();
+        selectionEvent(attempts[0], { selection: { ranges, text } });
+        assert.equal(controls[0].actions.hidden, !visible);
+        assert.equal(attempts[0].client.selectionClears, 0);
+    });
+}
+
+test("selection copy control follows the single-cell threshold in both directions", () => {
+    const { controls } = mount();
+    for (const cells of [1, 2, 1, 0, 3]) {
+        selectionEvent(attempts[0], { selection: {
+            status: "pending", text: null,
+            ranges: [{ row: 0, startColumn: 0, endColumn: cells }],
+        } });
+        assert.equal(controls[0].actions.hidden, cells <= 1);
+        assert.equal(controls[0].button.disabled, true);
+    }
+    assert.equal(controls.length, 1);
+});
+
+test("invalidated selections are cleared without taking focus or reconnecting", async () => {
+    const { id } = mount();
+    const { client, options } = attempts[0];
+    attempts[0].resolve();
+    await settle();
+    const focusCalls = client.focusCalls;
+    for (const status of ["none", "pending", "valid", "unavailable"]) {
+        client.selection = { status };
+        options.onSelectionChange(client.selection);
+        assert.equal(client.selectionClears, 0);
+    }
+    client.selection = { status: "invalidated" };
+    options.onSelectionChange(client.selection);
+    assert.equal(client.selectionClears, 1);
+    assert.equal(client.selection.status, "pending");
+    assert.equal(client.focusCalls, focusCalls);
+    assert.equal(terminal.getToolbarState(id).error, null);
+    assert.equal(attempts.length, 1);
+    assert.equal(timers.size, 0);
+});
+
+test("selections invalidated before mount completion are cleared when the handle is available", async () => {
+    mount();
+    const { client, options } = attempts[0];
+    client.selection = { status: "invalidated" };
+    options.onSelectionChange(client.selection);
+    assert.equal(client.selectionClears, 0);
+    attempts[0].resolve();
+    await settle();
+    assert.equal(client.selectionClears, 1);
+});
+
+test("disconnected, stale and disposed selection notifications cannot clear a selection", async () => {
+    const { id } = mount();
+    const first = attempts[0];
+    first.resolve();
+    await settle();
+    first.client.connected = false;
+    first.client.selection = { status: "invalidated" };
+    first.options.onSelectionChange(first.client.selection);
+    assert.equal(first.client.selectionClears, 0);
+
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=next");
+    const next = attempts[1];
+    next.resolve();
+    await settle();
+    next.client.selection = { status: "invalidated" };
+    first.options.onSelectionChange(first.client.selection);
+    assert.equal(next.client.selectionClears, 0);
+    terminal.disposeTerminal(id);
+    next.options.onSelectionChange(next.client.selection);
+    assert.equal(next.client.selectionClears, 0);
+});
 
 test("selection controls update in place and hide when no selected text is visible", async () => {
     const { controls } = mount();
@@ -685,7 +776,7 @@ test("input diagnostics distinguish browser policy and focus without reading the
     attempts[0].options.onInputError(new DOMException("Read permission denied.", "NotAllowedError"));
     assert.equal(terminal.getToolbarState(id).error, null);
     assert.deepEqual(console.log.mock.calls.at(-1).arguments[2], {
-        selectionStatus: null,
+        selectionStatus: "none",
         viewportPending: null,
         secureContext: true,
         documentFocused: false,

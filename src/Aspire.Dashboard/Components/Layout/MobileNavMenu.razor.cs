@@ -217,7 +217,7 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
         if (IsTerminalDockEnabled)
         {
             yield return new MobileNavMenuEntry(
-                TerminalLoc[nameof(Resources.TerminalStrings.MainLayoutToggleTerminalDock)],
+                TerminalLoc[nameof(Resources.TerminalStrings.TerminalTitle)],
                 ToggleTerminalDockAsync,
                 new Icons.Regular.Size20.WindowConsole()
             );
