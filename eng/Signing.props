@@ -32,6 +32,9 @@
     <FileSignInfo Include="Dapper.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Fractions.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Hex1b.dll" CertificateName="3PartySHA2" />
+    <!-- Hex1b's Windows PTY host. Third-party native binary, so it signs like Hex1b.dll rather than
+         like our own executables. Only Windows RIDs carry it. -->
+    <FileSignInfo Include="hex1bpty.exe" CertificateName="3PartySHA2" />
     <FileSignInfo Include="IdentityModel.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="IdentityModel.OidcClient.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="KubernetesClient.Basic.dll" CertificateName="3PartySHA2" />
@@ -114,6 +117,9 @@
     <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Managed\**\publish\aspire-managed.exe" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsLinux())" Include="$(ArtifactsBinDir)Aspire.Managed/**/publish/aspire-managed" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsMacOS())" Include="$(ArtifactsBinDir)Aspire.Managed/**/publish/aspire-managed" />
+    <!-- Hex1b's PTY host sits next to aspire-managed in the same publish output and gets signed in the
+         same pass, before CreateLayout copies it into the bundle as managed/hex1bpty.exe. -->
+    <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Managed\**\publish\hex1bpty.exe" />
     <!--
       Note: VS Code extension (.vsix) is NOT included here.
       Signing the VSIX changes its hash, breaking manifest integrity verification.
