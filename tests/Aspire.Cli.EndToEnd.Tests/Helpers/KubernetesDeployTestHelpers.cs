@@ -182,23 +182,23 @@ internal static class KubernetesDeployTestHelpers
     /// <c>aspire deploy</c>) resolves against. No Azure is involved.
     /// </summary>
     /// <remarks>
-    /// Two non-obvious behaviors this sequence works around, both confirmed against
-    /// rad 0.60.0:
+    /// Two non-obvious behaviors this sequence works around:
     /// <list type="bullet">
     ///   <item><description>
-    ///     <c>rad</c> ignores <c>KUBECONFIG</c> and targets the current-context of
+    ///     In rad 0.60.0, <c>rad</c> ignores <c>KUBECONFIG</c> and targets the current-context of
     ///     <c>~/.kube/config</c>. In this container <c>kind export kubeconfig
     ///     --internal</c> has already set that to <c>kind-&lt;cluster&gt;</c>, but we
     ///     still pass <c>--kubecontext</c>/<c>--context</c> explicitly so the
     ///     control-plane install and workspace are pinned to the intended cluster.
     ///   </description></item>
     ///   <item><description>
-    ///     <c>rad install kubernetes</c> provisions the <c>default</c> resource group
-    ///     and environment, but does NOT persist a workspace, so <c>rad deploy</c>
-    ///     would otherwise fail to resolve a workspace scope. We create the workspace
-    ///     explicitly; the <c>rad group create</c>/<c>rad env create</c> calls below are
-    ///     defensive (idempotent) so the sequence still succeeds even if a future
-    ///     <c>rad</c> stops creating the group/environment during install.
+    ///     Default scope creation during <c>rad install kubernetes</c> varies by version:
+    ///     rad 0.60.0 provisioned the <c>default</c> resource group and environment,
+    ///     while 0.60.2 can finish installing without them. The explicit
+    ///     <c>rad group create</c>/<c>rad env create</c> calls ensure both exist before
+    ///     workspace creation; they are idempotent when installation already created them.
+    ///     Installation does not persist a workspace, so we also create it explicitly
+    ///     for <c>rad deploy</c> to resolve its scope.
     ///   </description></item>
     /// </list>
     /// </remarks>

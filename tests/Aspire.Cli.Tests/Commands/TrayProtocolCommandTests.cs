@@ -218,6 +218,8 @@ public class TrayProtocolCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--protocol-version 1 --format json --pid 1 --started-at 0", true)]
     [InlineData("--protocol-version 1 --format json --pid 1 --started-at 1000 --all", true)]
     [InlineData("--protocol-version 1 --format json --pid 1 --started-at 1000 --force", true)]
+    [InlineData("--protocol-version 1 --format json --pid 1 --started-at 1000 --volumes", true)]
+    [InlineData("--protocol-version 1 --format json --pid 1 --started-at 1000 --volumes false", true)]
     [InlineData("--protocol-version 1 --format json --pid 1 --started-at 1000 --all false", true)]
     [InlineData("--protocol-version 1 --format json --pid 1 --started-at 1000 --force false", true)]
     [InlineData("--protocol-version 1 --format json --pid 1 --started-at 1000", false)]
