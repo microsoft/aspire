@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
@@ -20,19 +21,32 @@ namespace Aspire.Hosting.Azure;
 /// <param name="ownerResource">The Aspire resource that owns this set of role assignments, or <see langword="null"/> for global role assignments granted to the deployment principal.</param>
 /// <param name="identityResource">The user-assigned managed identity whose principal receives the role assignments, or <see langword="null"/> for global role assignments granted to the deployment principal.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure role assignment resources.</param>
+/// <param name="roles">The role definitions granted by this resource, or <see langword="null"/> when not tracked.</param>
 [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzureRoleAssignmentResource(
     string name,
     AzureProvisioningResource targetAzureResource,
     IResource? ownerResource,
     AzureUserAssignedIdentityResource? identityResource,
-    Action<AzureResourceInfrastructure> configureInfrastructure)
+    Action<AzureResourceInfrastructure> configureInfrastructure,
+    IReadOnlySet<RoleDefinition>? roles = null)
     : AzureProvisioningResource(name, configureInfrastructure)
 {
     /// <summary>
     /// Gets the Azure resource that the roles are assigned on.
     /// </summary>
     public AzureProvisioningResource TargetAzureResource { get; } = targetAzureResource ?? throw new ArgumentNullException(nameof(targetAzureResource));
+
+    /// <summary>
+    /// Gets the role definitions granted to the principal by this resource.
+    /// </summary>
+    /// <remarks>
+    /// Used after ARM deployment to confirm the assignment has actually propagated through Azure
+    /// RBAC (not just that the ARM record was created) before dependent resources that rely on the
+    /// grant — such as a Container App pulling its image via <c>AcrPull</c> — are allowed to deploy.
+    /// See <see href="https://github.com/microsoft/aspire/issues/19658"/>.
+    /// </remarks>
+    public IReadOnlySet<RoleDefinition> Roles { get; } = roles ?? ImmutableHashSet<RoleDefinition>.Empty;
 
     /// <summary>
     /// Gets the Aspire resource that owns this set of role assignments,

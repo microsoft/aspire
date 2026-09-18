@@ -18,4 +18,9 @@ internal sealed class DefaultRoleAssignmentCollection(RoleAssignmentCollection r
     {
         return roleAssignmentCollection.CreateOrUpdateAsync(waitUntil, roleAssignmentName, content, cancellationToken);
     }
+
+    public IAsyncEnumerable<RoleAssignmentResource> GetAllAsync(string? filter = null, CancellationToken cancellationToken = default)
+    {
+        return roleAssignmentCollection.GetAllAsync(filter: filter, cancellationToken: cancellationToken);
+    }
 }

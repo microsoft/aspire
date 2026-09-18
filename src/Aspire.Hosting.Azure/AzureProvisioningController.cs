@@ -3880,6 +3880,112 @@ internal sealed class AzureProvisioningController(
         return rolesFailed;
     }
 
+    /// <summary>
+    /// Maximum number of attempts to confirm a freshly created role assignment is visible to Azure
+    /// RBAC before giving up and letting the dependent resource's own deployment proceed anyway.
+    /// </summary>
+    internal int RoleAssignmentPropagationMaxAttempts { get; set; } = 6;
+
+    /// <summary>
+    /// Delay between role assignment readiness poll attempts.
+    /// </summary>
+    internal TimeSpan RoleAssignmentPropagationPollInterval { get; set; } = TimeSpan.FromSeconds(10);
+
+    // A role assignment's own ARM deployment completing only means the roleAssignments record was
+    // written; Azure RBAC evaluation (used by, e.g., ACR's managed-identity image pull) can lag
+    // behind that write by anywhere from a few seconds up to a couple of minutes. Downstream
+    // resources already wait on this resource's ProvisioningTaskCompletionSource (see
+    // WaitForProvisioningDependenciesAsync), so gating completion here on an actual readiness check
+    // protects every consumer of a role assignment generically, not just Container Apps/AcrPull.
+    // See https://github.com/microsoft/aspire/issues/19658.
+    // Internal (rather than private) so tests can exercise this readiness gate directly against a
+    // hand-built AzureRoleAssignmentResource/ProvisioningContext, without needing to drive an entire
+    // ARM deployment through the controller.
+    internal async Task WaitForRoleAssignmentPropagationAsync(
+        AzureRoleAssignmentResource roleAssignmentResource,
+        ProvisioningContext provisioningContext,
+        ILogger resourceLogger,
+        CancellationToken cancellationToken)
+    {
+        // Role assignments granted to the deployment principal itself (IdentityResource is null)
+        // are not affected: the credential running this process already has whatever access it has:
+        // there is no freshly created principal whose grant needs to propagate.
+        if (roleAssignmentResource.IdentityResource is not { } identityResource || roleAssignmentResource.Roles.Count == 0)
+        {
+            return;
+        }
+
+        if (!identityResource.Outputs.TryGetValue("principalId", out var principalIdObj) ||
+            principalIdObj is not string principalIdString ||
+            !Guid.TryParse(principalIdString, out var principalId))
+        {
+            // Can't resolve who the grant was made to (e.g. an existing identity resolved outside
+            // this deployment). Nothing to poll for, so do not block deployment on a check we can't
+            // actually perform.
+            return;
+        }
+
+        if (!roleAssignmentResource.TargetAzureResource.Outputs.TryGetValue("id", out var scopeObj) ||
+            scopeObj is not string scopeString ||
+            !ResourceIdentifier.TryParse(scopeString, out var scope))
+        {
+            return;
+        }
+
+        var expectedRoleDefinitionIds = roleAssignmentResource.Roles
+            .Select(role => role.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var roleAssignments = provisioningContext.ArmClient.GetRoleAssignments(scope);
+
+        for (var attempt = 1; attempt <= RoleAssignmentPropagationMaxAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                // List rather than a point read: the assignment name Aspire generates is
+                // deterministic, but confirming it is enumerable at this scope for this principal is
+                // the same signal ARM-backed tooling (e.g. `az role assignment list`) uses to confirm
+                // a grant is visible, and avoids assuming the exact GUID naming scheme.
+                await foreach (var assignment in roleAssignments.GetAllAsync(
+                    filter: $"principalId eq '{principalId:D}'",
+                    cancellationToken: cancellationToken).ConfigureAwait(false))
+                {
+                    var roleDefinitionId = assignment.Data.RoleDefinitionId?.Name;
+                    if (roleDefinitionId is not null && expectedRoleDefinitionIds.Contains(roleDefinitionId))
+                    {
+                        return;
+                    }
+                }
+            }
+            catch (RequestFailedException ex)
+            {
+                resourceLogger.LogDebug(
+                    ex,
+                    "Role assignment readiness check failed on attempt {Attempt}/{MaxAttempts} for {ResourceName}.",
+                    attempt,
+                    RoleAssignmentPropagationMaxAttempts,
+                    roleAssignmentResource.Name);
+            }
+
+            if (attempt == RoleAssignmentPropagationMaxAttempts)
+            {
+                // Do not fail the deployment on our own readiness check timing out: proceed and let
+                // the dependent resource's own ARM deployment be the source of truth. This keeps a
+                // slow-but-real propagation from becoming a hard failure while still giving the common
+                // case (propagation within the poll window) a real fix instead of a blind sleep.
+                resourceLogger.LogWarning(
+                    "Timed out waiting for role assignment {ResourceName} to become visible to Azure RBAC after {Attempts} attempts. Proceeding anyway; dependent resources may transiently fail to authenticate until the assignment finishes propagating.",
+                    roleAssignmentResource.Name,
+                    RoleAssignmentPropagationMaxAttempts);
+                return;
+            }
+
+            await Task.Delay(RoleAssignmentPropagationPollInterval, _timeProvider, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     private async Task ProvisionAzureResourcesAsync(
         IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> azureResources,
         ILookup<IResource, IResourceWithParent> parentChildLookup,
@@ -3976,7 +4082,8 @@ internal sealed class AzureProvisioningController(
 
                     var provisioningContext = await provisioningContextLazy.Value.ConfigureAwait(false);
 
-                    if (!await bicepProvisioner.ReconcileDeploymentStateAsync(bicepResource, provisioningContext, cancellationToken).ConfigureAwait(false))
+                    var wasAlreadyDeployed = await bicepProvisioner.ReconcileDeploymentStateAsync(bicepResource, provisioningContext, cancellationToken).ConfigureAwait(false);
+                    if (!wasAlreadyDeployed)
                     {
                         // The provisioner owns Bicep compilation, state persistence, and ARM operations.
                         // The controller is responsible for sequencing, cancellation, and publishing the
@@ -3985,6 +4092,18 @@ internal sealed class AzureProvisioningController(
                             bicepResource,
                             provisioningContext,
                             cancellationToken).ConfigureAwait(false);
+                    }
+
+                    if (bicepResource is AzureRoleAssignmentResource roleAssignmentResource)
+                    {
+                        // Reaching here means the role assignment either just finished deploying via
+                        // GetOrCreateResourceAsync, or was adopted mid-flight and completed via
+                        // ReconcileDeploymentStateAsync (e.g. the AppHost restarted right as the ARM
+                        // deployment finished). Either way, the ARM write may be very recent, so check
+                        // RBAC readiness in both cases. A resource whose outputs were already fully
+                        // settled from a prior run instead short-circuits earlier via
+                        // bicepProvisioner.ConfigureResourceAsync and never reaches this branch.
+                        await WaitForRoleAssignmentPropagationAsync(roleAssignmentResource, provisioningContext, resourceLogger, cancellationToken).ConfigureAwait(false);
                     }
 
                     CompleteProvisioning(resource.AzureResource);
