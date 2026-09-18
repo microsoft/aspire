@@ -33,13 +33,12 @@ internal sealed class DoCommand : PipelineCommandBase
         Validators.Add(result =>
         {
             var step = result.GetValue(_stepArgument);
-            var listSteps = result.GetValue(s_listStepsOption);
             if (!string.IsNullOrEmpty(step))
             {
                 return;
             }
 
-            if (listSteps)
+            if (IsListOperation(result))
             {
                 return;
             }
@@ -69,7 +68,7 @@ internal sealed class DoCommand : PipelineCommandBase
         var baseArgs = new List<string> { "--operation", operation };
 
         if (string.IsNullOrEmpty(targetStep)
-            && !parseResult.GetValue(s_listStepsOption)
+            && !IsListOperation(parseResult)
             && ExtensionHelper.IsExtensionHost(InteractionService, out _, out _))
         {
             targetStep = await InteractionService.PromptForStringAsync(
@@ -118,12 +117,7 @@ internal sealed class DoCommand : PipelineCommandBase
 
     protected override string GetProgressMessage(ParseResult parseResult)
     {
-        if (parseResult.GetValue(s_listStepsOption))
-        {
-            return "Listing pipeline steps";
-        }
-
         var step = parseResult.GetValue(_stepArgument);
-        return $"Executing step {step}";
+        return GetListProgressMessage(parseResult) ?? $"Executing step {step}";
     }
 }

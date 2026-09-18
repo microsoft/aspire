@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREPIPELINES002
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Pipelines;
@@ -24,6 +25,7 @@ internal sealed class PipelineExecutor(
     IPipelineActivityReporter activityReporter,
     IDistributedApplicationEventing eventing,
     BackchannelService backchannelService,
+    BackchannelPipelineExecutionBarrier pipelineExecutionBarrier,
     IPipelineActivityReporter pipelineActivityReporter,
     IConfiguration configuration) : BackgroundService
 {
@@ -40,6 +42,9 @@ internal sealed class PipelineExecutor(
             {
                 logger.LogDebug("Waiting for backchannel connection before publishing.");
                 await backchannelService.BackchannelConnected.ConfigureAwait(false);
+
+                logger.LogDebug("Waiting for CLI activity stream before executing the pipeline.");
+                await pipelineExecutionBarrier.WaitForExecutionAllowedAsync(stoppingToken).ConfigureAwait(false);
             }
 
             // Step inspection is driven over the backchannel. Return before publishing events and

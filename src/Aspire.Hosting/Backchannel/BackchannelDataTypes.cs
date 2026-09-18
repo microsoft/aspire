@@ -1057,6 +1057,157 @@ internal sealed class GetPipelineStepsResponse
 }
 
 /// <summary>
+/// Request for getting publish-mode resource metadata.
+/// </summary>
+internal sealed class GetPipelineResourcesRequest
+{
+    /// <summary>
+    /// Gets a value indicating whether hidden resources should be included.
+    /// </summary>
+    public bool IncludeHidden { get; init; }
+}
+
+/// <summary>
+/// Response containing publish-mode resource metadata.
+/// </summary>
+internal sealed class GetPipelineResourcesResponse
+{
+    /// <summary>
+    /// Gets the resource snapshots.
+    /// </summary>
+    public required ResourceSnapshot[] Resources { get; init; }
+}
+
+/// <summary>
+/// Represents a deployment input that can be supplied by the CLI before a pipeline runs.
+/// </summary>
+internal sealed class PipelineInput
+{
+    /// <summary>
+    /// Gets the input name.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the input kind.
+    /// </summary>
+    public string Kind { get; init; } = "parameter";
+
+    /// <summary>
+    /// Gets the input group.
+    /// </summary>
+    public string? Group { get; init; }
+
+    /// <summary>
+    /// Gets input names this input depends on.
+    /// </summary>
+    public string[] DependsOn { get; init; } = [];
+
+    /// <summary>
+    /// Gets the configuration key used to supply the parameter value.
+    /// </summary>
+    public string? ConfigurationKey { get; init; }
+
+    /// <summary>
+    /// Gets the display label.
+    /// </summary>
+    public string? Label { get; init; }
+
+    /// <summary>
+    /// Gets the parameter description.
+    /// </summary>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the description should be rendered as Markdown.
+    /// </summary>
+    public bool EnableDescriptionMarkdown { get; init; }
+
+    /// <summary>
+    /// Gets the input type.
+    /// </summary>
+    public required string InputType { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the parameter must be supplied before non-interactive pipeline execution.
+    /// </summary>
+    public bool Required { get; init; }
+
+    /// <summary>
+    /// Gets the default or configured value, when it is safe to expose to the CLI.
+    /// </summary>
+    public string? Value { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the input already has a value from configuration or a default.
+    /// </summary>
+    public bool HasValue { get; init; }
+
+    /// <summary>
+    /// Gets where the current value came from. Current values are <c>configuration</c> or <c>default</c>.
+    /// </summary>
+    public string? ValueSource { get; init; }
+
+    /// <summary>
+    /// Gets choice options keyed by submitted value.
+    /// </summary>
+    public Dictionary<string, string?>? Options { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether custom choices are allowed.
+    /// </summary>
+    public bool AllowCustomChoice { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether options or validation metadata can be loaded dynamically.
+    /// </summary>
+    public bool DynamicallyLoaded { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the input is disabled.
+    /// </summary>
+    public bool Disabled { get; init; }
+
+    /// <summary>
+    /// Gets the maximum length for text inputs.
+    /// </summary>
+    public int? MaxLength { get; init; }
+}
+
+/// <summary>
+/// Request for getting pipeline input metadata.
+/// </summary>
+internal sealed class GetPipelineInputsRequest
+{
+    /// <summary>
+    /// Gets the target step name to inspect.
+    /// </summary>
+    public string? Step { get; init; }
+}
+
+/// <summary>
+/// Response containing pipeline input metadata.
+/// </summary>
+internal sealed class GetPipelineInputsResponse
+{
+    /// <summary>
+    /// Gets the inputs that can be supplied by the CLI.
+    /// </summary>
+    public required PipelineInput[] Inputs { get; init; }
+}
+
+/// <summary>
+/// Request for applying pipeline input values before the pipeline runs.
+/// </summary>
+internal sealed class ApplyPipelineInputValuesRequest
+{
+    /// <summary>
+    /// Gets the input values keyed by input name.
+    /// </summary>
+    public required Dictionary<string, string?> Values { get; init; }
+}
+
+/// <summary>
 /// Represents the connection information for the Dashboard MCP server.
 /// </summary>
 internal sealed class DashboardMcpConnectionInfo

@@ -278,202 +278,21 @@ internal sealed class ResourceCommand : BaseCommand
 
     private static (JsonObject Arguments, string? ErrorMessage) CreateCommandArguments(ResourceSnapshotCommandArgument[] argumentInputs, string[] capturedArguments, CommandArgumentParseMode parseMode)
     {
-        var arguments = new JsonObject();
-        var options = new Dictionary<ResourceSnapshotCommandArgument, Option>();
-        var parserCommand = new Command("resource-command")
-        {
-            TreatUnmatchedTokensAsErrors = true
-        };
-
-        foreach (var argument in argumentInputs)
-        {
-            var option = CreateCommandArgumentOption(argument, parseMode);
-            options.Add(argument, option);
-            parserCommand.Options.Add(option);
-        }
-
-        parserCommand.Validators.Add(result =>
-        {
-            var missingRequiredOptions = argumentInputs
-                .Where(argument => ShouldValidateRequiredOption(argument, parseMode) && result.GetResult(options[argument]) is not { Implicit: false })
-                .Select(argument => $"--{ToKebabCase(argument.Name)}")
-                .ToArray();
-
-            if (missingRequiredOptions.Length == 1)
-            {
-                result.AddError($"Required option '{missingRequiredOptions[0]}' was not provided.");
-            }
-            else if (missingRequiredOptions.Length > 1)
-            {
-                result.AddError($"Required options were not provided: {string.Join(", ", missingRequiredOptions.Select(static optionName => $"'{optionName}'"))}.");
-            }
-        });
-
         // Parse the resource command tail with System.CommandLine as a second pass. The first pass parses Aspire CLI
         // options and leaves resource command tokens in ParseResult.UnmatchedTokens; this pass parses those remaining
         // tokens against options generated from ResourceSnapshotCommand.ArgumentInputs.
-        var parseResult = parserCommand.Parse(capturedArguments);
-        if (parseResult.Errors.Count > 0)
-        {
-            var unrecognizedCommandOptions = GroupUnrecognizedCommandOptions(parseResult.UnmatchedTokens);
-            if (unrecognizedCommandOptions.Length > 0)
-            {
-                return (arguments, FormatUnrecognizedCommandOptions(unrecognizedCommandOptions));
-            }
-
-            return (arguments, string.Join(Environment.NewLine, parseResult.Errors.Select(static error => error.Message)));
-        }
-
-        foreach (var argument in argumentInputs)
-        {
-            var option = options[argument];
-            if (parseResult.GetResult(option) is not { Implicit: false })
-            {
-                continue;
-            }
-
-            if (option is Option<bool> boolOption)
-            {
-                arguments[argument.Name] = parseResult.GetValue(boolOption).ToString().ToLowerInvariant();
-            }
-            else if (option is Option<double?> numberOption)
-            {
-                var value = parseResult.GetValue(numberOption);
-                arguments[argument.Name] = value?.ToString(CultureInfo.InvariantCulture);
-            }
-            else if (option is Option<string?> stringOption)
-            {
-                arguments[argument.Name] = parseResult.GetValue(stringOption);
-            }
-        }
-
-        foreach (var unmatchedToken in parseResult.UnmatchedTokens)
-        {
-            // Metadata-backed command inputs are options only. Any leftover token is forwarded as an unknown argument
-            // name so hosting-side validation reports it instead of binding it positionally.
-            // Example: `#name` becomes `{ "#name": null }`, which is not a declared command input.
-            arguments[unmatchedToken] = null;
-        }
-
-        return (arguments, null);
+        var result = CommandInputParser.Parse(argumentInputs, capturedArguments, loadArguments: parseMode == CommandArgumentParseMode.LoadArguments);
+        return (result.Arguments, result.ErrorMessage);
     }
 
     private static string[] RemoveDelimiter(string[] capturedArguments)
     {
-        if (capturedArguments.Length == 0 || capturedArguments[0] is not "--")
-        {
-            return capturedArguments;
-        }
-
-        return capturedArguments[1..];
+        return CommandInputParser.RemoveDelimiter(capturedArguments);
     }
 
     private static JsonObject CreateUnknownArguments(string[] capturedArguments)
     {
-        var arguments = new JsonObject();
-        foreach (var token in GroupOptionLikeArguments(capturedArguments))
-        {
-            arguments[token] = null;
-        }
-
-        return arguments;
-    }
-
-    private static Option CreateCommandArgumentOption(ResourceSnapshotCommandArgument argument, CommandArgumentParseMode parseMode)
-    {
-        // Resource command input names are exposed as both exact-name and kebab-case System.CommandLine options:
-        // - "timeoutMilliseconds" accepts "--timeoutMilliseconds" and "--timeout-milliseconds"
-        // - "LogLevel" accepts "--LogLevel" and "--log-level"
-        // - "url" accepts "--url"
-        var optionName = ToKebabCase(argument.Name);
-        // Dynamic inputs are loaded and validated by the AppHost using the current prompt state.
-        // Keep their values as strings so stale snapshot metadata cannot reject a value before
-        // the AppHost has a chance to enable the input or refresh its choice list.
-        var parseAsString = parseMode == CommandArgumentParseMode.LoadArguments || argument.DynamicLoading is not null;
-        Option option = (IsBooleanInput(argument), IsNumberInput(argument), parseAsString) switch
-        {
-            (true, _, false) => new Option<bool>($"--{optionName}")
-            {
-                DefaultValueFactory = _ => bool.TryParse(argument.Value, out var value) && value
-            },
-            (_, true, false) => new Option<double?>($"--{optionName}")
-            {
-                Arity = ArgumentArity.ExactlyOne,
-                AllowMultipleArgumentsPerToken = false,
-                DefaultValueFactory = _ => double.TryParse(argument.Value, CultureInfo.InvariantCulture, out var value) ? value : null
-            },
-            _ => new Option<string?>($"--{optionName}")
-            {
-                Arity = ArgumentArity.ExactlyOne,
-                AllowMultipleArgumentsPerToken = false,
-                DefaultValueFactory = _ => argument.Value
-            }
-        };
-
-        if (option is Option<bool> boolOption)
-        {
-            boolOption.Arity = ArgumentArity.ZeroOrOne;
-            boolOption.AllowMultipleArgumentsPerToken = false;
-        }
-
-        option.Description = argument.Description ?? argument.Label;
-        option.Required = ShouldValidateRequiredOption(argument, parseMode);
-
-        if (ShouldValidateChoiceOptions(argument, parseMode) && argument.Options is { Count: > 0 } options)
-        {
-            option.Validators.Add(result =>
-            {
-                var value = result.GetValueOrDefault<string?>();
-                if (value is not null && !options.ContainsKey(value))
-                {
-                    result.AddError($"Option '--{optionName}' only accepts the following values: {string.Join(", ", options.Keys)}.");
-                }
-            });
-        }
-
-        if (ShouldValidateDisabledOption(argument, parseMode))
-        {
-            option.Validators.Add(result =>
-            {
-                if (result is { Implicit: false })
-                {
-                    result.AddError($"Option '--{optionName}' is disabled.");
-                }
-            });
-        }
-
-        var exactName = $"--{argument.Name}";
-        if (!string.Equals(exactName, $"--{optionName}", StringComparison.Ordinal))
-        {
-            option.Aliases.Add(exactName);
-        }
-
-        return option;
-    }
-
-    // Static CLI validation only runs for non-dynamic inputs during real execution. In --load-arguments
-    // mode the caller sends partial prompt state such as `--category=fruit`, and dynamic inputs can
-    // change their required/disabled state or choice set after the AppHost runs their load callback.
-    private static bool ShouldValidateRequiredOption(ResourceSnapshotCommandArgument argument, CommandArgumentParseMode parseMode)
-    {
-        return parseMode == CommandArgumentParseMode.Execute &&
-            argument.DynamicLoading is null &&
-            argument.Required &&
-            string.IsNullOrEmpty(argument.Value);
-    }
-
-    private static bool ShouldValidateChoiceOptions(ResourceSnapshotCommandArgument argument, CommandArgumentParseMode parseMode)
-    {
-        return parseMode == CommandArgumentParseMode.Execute &&
-            argument.DynamicLoading is null &&
-            !argument.AllowCustomChoice;
-    }
-
-    private static bool ShouldValidateDisabledOption(ResourceSnapshotCommandArgument argument, CommandArgumentParseMode parseMode)
-    {
-        return parseMode == CommandArgumentParseMode.Execute &&
-            argument.DynamicLoading is null &&
-            argument.Disabled;
+        return CommandInputParser.CreateUnknownArguments(capturedArguments);
     }
 
     private static bool IsBooleanInput(ResourceSnapshotCommandArgument argument)
@@ -481,71 +300,9 @@ internal sealed class ResourceCommand : BaseCommand
         return string.Equals(argument.InputType, "Boolean", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsNumberInput(ResourceSnapshotCommandArgument argument)
-    {
-        return string.Equals(argument.InputType, "Number", StringComparison.OrdinalIgnoreCase);
-    }
-
     private static bool IsOptionLikeToken(string value)
     {
         return value is not "--" && value.StartsWith("-", StringComparison.Ordinal);
-    }
-
-    private static string[] GroupOptionLikeArguments(IReadOnlyList<string> arguments)
-    {
-        var groupedArguments = new List<string>();
-        for (var i = 0; i < arguments.Count; i++)
-        {
-            var argument = arguments[i];
-            if (IsOptionLikeToken(argument) &&
-                !argument.Contains('=') &&
-                i + 1 < arguments.Count &&
-                !IsOptionLikeToken(arguments[i + 1]))
-            {
-                groupedArguments.Add($"{argument} {arguments[i + 1]}");
-                i++;
-            }
-            else
-            {
-                groupedArguments.Add(argument);
-            }
-        }
-
-        return [.. groupedArguments];
-    }
-
-    private static string[] GroupUnrecognizedCommandOptions(IReadOnlyList<string> arguments)
-    {
-        var groupedArguments = new List<string>();
-        for (var i = 0; i < arguments.Count; i++)
-        {
-            var argument = arguments[i];
-            if (!IsOptionLikeToken(argument))
-            {
-                continue;
-            }
-
-            if (!argument.Contains('=') &&
-                i + 1 < arguments.Count &&
-                !IsOptionLikeToken(arguments[i + 1]))
-            {
-                groupedArguments.Add($"{argument} {arguments[i + 1]}");
-                i++;
-            }
-            else
-            {
-                groupedArguments.Add(argument);
-            }
-        }
-
-        return [.. groupedArguments];
-    }
-
-    private static string FormatUnrecognizedCommandOptions(string[] optionNames)
-    {
-        return optionNames.Length == 1
-            ? $"Unrecognized command option '{optionNames[0]}'."
-            : $"Unrecognized command options: {string.Join(", ", optionNames.Select(static optionName => $"'{optionName}'"))}.";
     }
 
     private static string ToKebabCase(string value)

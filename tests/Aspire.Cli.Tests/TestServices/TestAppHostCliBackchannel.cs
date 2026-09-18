@@ -34,6 +34,16 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
     public TaskCompletionSource? GetPipelineStepsAsyncCalled { get; set; }
     public Func<string?, CancellationToken, Task<GetPipelineStepsResponse>>? GetPipelineStepsAsyncCallback { get; set; }
 
+    public TaskCompletionSource? GetPipelineResourcesAsyncCalled { get; set; }
+    public Func<bool, CancellationToken, Task<GetPipelineResourcesResponse>>? GetPipelineResourcesAsyncCallback { get; set; }
+
+    public TaskCompletionSource? GetPipelineInputsAsyncCalled { get; set; }
+    public Func<string?, CancellationToken, Task<GetPipelineInputsResponse>>? GetPipelineInputsAsyncCallback { get; set; }
+
+    public TaskCompletionSource? ApplyPipelineInputValuesAsyncCalled { get; set; }
+    public IReadOnlyDictionary<string, string?>? AppliedPipelineParameterValues { get; private set; }
+    public Func<IReadOnlyDictionary<string, string?>, CancellationToken, Task>? ApplyPipelineInputValuesAsyncCallback { get; set; }
+
     public Task RequestStopAsync(CancellationToken cancellationToken)
     {
         RequestStopAsyncCalled?.SetResult();
@@ -235,7 +245,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         }
         else
         {
-            return ["baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2"];
+            return ["baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2", "pipeline-resources.v1", "pipeline-inputs.v1"];
         }
     }
 
@@ -289,5 +299,37 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         }
 
         return new UploadFileResponse { FileId = Guid.NewGuid().ToString("N") };
+    }
+
+    public async Task<GetPipelineResourcesResponse> GetPipelineResourcesAsync(bool includeHidden, CancellationToken cancellationToken)
+    {
+        GetPipelineResourcesAsyncCalled?.SetResult();
+        if (GetPipelineResourcesAsyncCallback is not null)
+        {
+            return await GetPipelineResourcesAsyncCallback(includeHidden, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new GetPipelineResourcesResponse { Resources = [] };
+    }
+
+    public async Task<GetPipelineInputsResponse> GetPipelineInputsAsync(string? step, CancellationToken cancellationToken)
+    {
+        GetPipelineInputsAsyncCalled?.SetResult();
+        if (GetPipelineInputsAsyncCallback is not null)
+        {
+            return await GetPipelineInputsAsyncCallback(step, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new GetPipelineInputsResponse { Inputs = [] };
+    }
+
+    public async Task ApplyPipelineInputValuesAsync(IReadOnlyDictionary<string, string?> values, CancellationToken cancellationToken)
+    {
+        ApplyPipelineInputValuesAsyncCalled?.SetResult();
+        AppliedPipelineParameterValues = new Dictionary<string, string?>(values, StringComparer.OrdinalIgnoreCase);
+        if (ApplyPipelineInputValuesAsyncCallback is not null)
+        {
+            await ApplyPipelineInputValuesAsyncCallback(values, cancellationToken).ConfigureAwait(false);
+        }
     }
 }

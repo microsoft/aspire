@@ -2,12 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using StreamJsonRpc;
 
 namespace Aspire.Hosting.Cli;
@@ -74,7 +77,11 @@ internal sealed class BackchannelService(
             activity.AddBackchannelClientAccepted();
 
             var stream = new NetworkStream(clientSocket, true);
-            var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream), appHostRpcTarget)
+            var formatter = new JsonMessageFormatter();
+            // Keep the primary backchannel's existing wire format, but serialize the JsonNode
+            // properties in resource discovery as JSON rather than reflecting their Parent/Root.
+            formatter.JsonSerializer.Converters.Add(new JsonNodeConverter());
+            var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, formatter), appHostRpcTarget)
             {
                 ActivityTracingStrategy = new ActivityTracingStrategy()
             };
@@ -140,5 +147,18 @@ internal sealed class BackchannelService(
         }
 
         base.Dispose();
+    }
+
+    private sealed class JsonNodeConverter : JsonConverter<JsonNode>
+    {
+        public override void WriteJson(JsonWriter writer, JsonNode? value, JsonSerializer serializer)
+        {
+            writer.WriteRawValue(value?.ToJsonString() ?? "null");
+        }
+
+        public override JsonNode? ReadJson(JsonReader reader, Type objectType, JsonNode? existingValue, bool hasExistingValue, JsonSerializer serializer)
+        {
+            return JsonNode.Parse(JToken.Load(reader).ToString(Formatting.None));
+        }
     }
 }

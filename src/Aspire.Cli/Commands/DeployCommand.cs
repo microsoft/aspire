@@ -80,6 +80,6 @@ internal sealed class DeployCommand : PipelineCommandBase
 
     protected override string GetProgressMessage(ParseResult parseResult)
     {
-        return "Executing step deploy";
+        return GetListProgressMessage(parseResult) ?? "Executing step deploy";
     }
 }

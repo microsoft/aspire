@@ -318,6 +318,325 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DeployCommandAppliesPipelineParameterArguments()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        TestAppHostBackchannel? capturedBackchannel = null;
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        var completed = new TaskCompletionSource();
+                        capturedBackchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = completed,
+                            GetCapabilitiesAsyncCallback = cancellationToken => Task.FromResult(new[] { "baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2", "pipeline-inputs.v1" }),
+                            GetPipelineInputsAsyncCallback = (step, cancellationToken) =>
+                            {
+                                Assert.Equal("deploy", step);
+                                return Task.FromResult(new GetPipelineInputsResponse
+                                {
+                                    Inputs =
+                                    [
+                                        new PipelineInput { Name = "databasePassword", InputType = "SecretText", Required = true },
+                                        new PipelineInput { Name = "replicas", InputType = "Number" },
+                                        new PipelineInput { Name = "enableFeature", InputType = "Boolean" }
+                                    ]
+                                });
+                            }
+                        };
+                        backchannelCompletionSource?.SetResult(capturedBackchannel);
+                        await completed.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("deploy --database-password s3cr3t --replicas 3 --enable-feature");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedBackchannel?.AppliedPipelineParameterValues);
+        Assert.Equal("s3cr3t", capturedBackchannel.AppliedPipelineParameterValues["databasePassword"]);
+        Assert.Equal("3", capturedBackchannel.AppliedPipelineParameterValues["replicas"]);
+        Assert.Equal("true", capturedBackchannel.AppliedPipelineParameterValues["enableFeature"]);
+    }
+
+    [Fact]
+    public async Task DeployCommandFailsForUnknownPipelineParameterArgument()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        TestAppHostBackchannel? capturedBackchannel = null;
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        var completed = new TaskCompletionSource();
+                        capturedBackchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = completed,
+                            GetCapabilitiesAsyncCallback = cancellationToken => Task.FromResult(new[] { "baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2", "pipeline-inputs.v1" }),
+                            GetPipelineInputsAsyncCallback = (step, cancellationToken) => Task.FromResult(new GetPipelineInputsResponse
+                            {
+                                Inputs = [new PipelineInput { Name = "databasePassword", InputType = "SecretText" }]
+                            })
+                        };
+                        backchannelCompletionSource?.SetResult(capturedBackchannel);
+                        await completed.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("deploy --unknown value");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Null(capturedBackchannel?.AppliedPipelineParameterValues);
+    }
+
+    [Fact]
+    public async Task DeployCommandFailsForMissingRequiredPipelineParameterInNonInteractiveMode()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        var completed = new TaskCompletionSource();
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = completed,
+                            GetCapabilitiesAsyncCallback = cancellationToken => Task.FromResult(new[] { "baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2", "pipeline-inputs.v1" }),
+                            GetPipelineInputsAsyncCallback = (step, cancellationToken) => Task.FromResult(new GetPipelineInputsResponse
+                            {
+                                Inputs = [new PipelineInput { Name = "databasePassword", InputType = "SecretText", Required = true }]
+                            })
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await completed.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("deploy --non-interactive");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+    }
+
+    [Fact]
+    public async Task DeployCommandListsPipelineInputsAsJson()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        TestAppHostBackchannel? capturedBackchannel = null;
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.InteractionServiceFactory = (sp) => interactionService;
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        var completed = new TaskCompletionSource();
+                        capturedBackchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = completed,
+                            GetCapabilitiesAsyncCallback = cancellationToken => Task.FromResult(new[] { "baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2", "pipeline-inputs.v1" }),
+                            GetPipelineInputsAsyncCallback = (step, cancellationToken) =>
+                            {
+                                Assert.Equal("deploy", step);
+                                return Task.FromResult(new GetPipelineInputsResponse
+                                {
+                                    Inputs =
+                                    [
+                                        new PipelineInput
+                                        {
+                                            Name = "databasePassword",
+                                            ConfigurationKey = "Parameters:databasePassword",
+                                            InputType = "SecretText",
+                                            Required = true,
+                                            Description = "Database password.",
+                                            HasValue = false
+                                        },
+                                        new PipelineInput
+                                        {
+                                            Name = "region",
+                                            ConfigurationKey = "Parameters:region",
+                                            InputType = "Choice",
+                                            Required = false,
+                                            Value = "westus2",
+                                            HasValue = true,
+                                            ValueSource = "configuration",
+                                            Options = new Dictionary<string, string?> { ["westus2"] = "West US 2", ["eastus"] = "East US" }
+                                        }
+                                    ]
+                                });
+                            }
+                        };
+                        backchannelCompletionSource?.SetResult(capturedBackchannel);
+                        await completed.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("deploy --list-inputs --format json");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Null(capturedBackchannel?.AppliedPipelineParameterValues);
+
+        var output = Assert.Single(interactionService.DisplayedRawText).Text;
+        Assert.Contains("\"operation\": \"deploy\"", output);
+        Assert.Contains("\"step\": \"deploy\"", output);
+        Assert.Contains("\"name\": \"databasePassword\"", output);
+        Assert.Contains("\"configurationKey\": \"Parameters:databasePassword\"", output);
+        Assert.Contains("\"environment\":", output);
+        Assert.Contains("\"preferred\": \"PARAMETERS__DATABASEPASSWORD\"", output);
+        Assert.Contains("\"Parameters__databasePassword\"", output);
+        Assert.Contains("\"flag\": \"--database-password <value>\"", output);
+        Assert.Contains("\"aliases\":", output);
+        Assert.Contains("\"--Parameters:databasePassword\"", output);
+        Assert.Contains("\"allowedValues\":", output);
+        Assert.Contains("\"westus2\"", output);
+        Assert.Contains("\"source\": \"configuration\"", output);
+    }
+
+    [Fact]
+    public async Task DeployCommandListsPipelineResourcesAsJson()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var publishingActivitiesRequested = false;
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.InteractionServiceFactory = (sp) => interactionService;
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        var completed = new TaskCompletionSource();
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = completed,
+                            GetCapabilitiesAsyncCallback = cancellationToken => Task.FromResult(new[] { "baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2", "pipeline-resources.v1" }),
+                            GetPipelineResourcesAsyncCallback = (includeHidden, cancellationToken) =>
+                            {
+                                Assert.False(includeHidden);
+                                return Task.FromResult(new GetPipelineResourcesResponse
+                                {
+                                    Resources =
+                                    [
+                                        new ResourceSnapshot
+                                        {
+                                            Name = "api",
+                                            DisplayName = "api",
+                                            ResourceType = "Project",
+                                            Relationships = [new ResourceSnapshotRelationship { ResourceName = "cache", Type = "Reference" }],
+                                            Properties = new Dictionary<string, System.Text.Json.Nodes.JsonNode?> { ["projectPath"] = System.Text.Json.Nodes.JsonValue.Create("Api/Api.csproj") }
+                                        },
+                                        new ResourceSnapshot
+                                        {
+                                            Name = "cache",
+                                            DisplayName = "cache",
+                                            ResourceType = "Container"
+                                        }
+                                    ]
+                                });
+                            },
+                            GetPublishingActivitiesAsyncCallback = cancellationToken =>
+                            {
+                                publishingActivitiesRequested = true;
+                                return AsyncEnumerable.Empty<PublishingActivity>();
+                            }
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await completed.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("deploy --list-resources --format json");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(publishingActivitiesRequested);
+
+        var output = Assert.Single(interactionService.DisplayedRawText).Text;
+        Assert.Contains("\"resources\":", output);
+        Assert.Contains("\"name\": \"api\"", output);
+        Assert.Contains("\"resourceType\": \"Project\"", output);
+        Assert.Contains("\"relationships\":", output);
+        Assert.Contains("\"resourceName\": \"cache\"", output);
+        Assert.Contains("\"properties\":", output);
+        Assert.Contains("\"projectPath\": \"Api/Api.csproj\"", output);
+    }
+
+    [Fact]
     public async Task DeployCommandSucceedsEndToEnd()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

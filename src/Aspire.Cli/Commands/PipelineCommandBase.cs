@@ -2,10 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.CommandLine.Help;
+using System.CommandLine.Invocation;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -21,9 +25,58 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Semver;
 using Spectre.Console;
+using SystemCommandResult = System.CommandLine.Parsing.CommandResult;
 using StreamJsonRpc;
 
 namespace Aspire.Cli.Commands;
+
+[JsonSerializable(typeof(PipelineInputsOutput))]
+[JsonSerializable(typeof(PipelineInputOutput))]
+[JsonSerializable(typeof(PipelineInputCliOutput))]
+[JsonSerializable(typeof(PipelineInputEnvironmentOutput))]
+[JsonSerializable(typeof(PipelineInputCurrentValueOutput))]
+[JsonSerializable(typeof(PipelineInputValidationOutput))]
+[JsonSerializable(typeof(PipelineInputOutput[]))]
+[JsonSourceGenerationOptions(
+    WriteIndented = true,
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+internal sealed partial class PipelineCommandJsonContext : JsonSerializerContext
+{
+    private static PipelineCommandJsonContext? s_relaxedEscaping;
+
+    public static PipelineCommandJsonContext RelaxedEscaping => s_relaxedEscaping ??= new(new JsonSerializerOptions
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    });
+}
+
+internal sealed record PipelineInputsOutput(string Operation, string? Step, PipelineInputOutput[] Inputs);
+
+internal sealed record PipelineInputOutput(
+    string Name,
+    string Kind,
+    string? Group,
+    string[] DependsOn,
+    string Type,
+    bool Required,
+    string? Description,
+    string? ConfigurationKey,
+    PipelineInputEnvironmentOutput Environment,
+    PipelineInputCliOutput Cli,
+    PipelineInputCurrentValueOutput Current,
+    PipelineInputValidationOutput? Validation);
+
+internal sealed record PipelineInputCliOutput(string? Flag, string[] Aliases);
+
+internal sealed record PipelineInputEnvironmentOutput(string Preferred, string[] Aliases);
+
+internal sealed record PipelineInputCurrentValueOutput(bool HasValue, string? Value, string? Source);
+
+internal sealed record PipelineInputValidationOutput(string[]? AllowedValues, bool AllowCustomChoice, int? MaxLength, bool DynamicallyLoaded);
 
 internal abstract class PipelineCommandBase : BaseCommand
 {
@@ -38,6 +91,8 @@ internal abstract class PipelineCommandBase : BaseCommand
     private const int MinimumHostingMinorVersionForListSteps = 6;
 
     private bool _terminalProgressBarStarted;
+    private const string PipelineInputsCapability = "pipeline-inputs.v1";
+    private const string PipelineResourcesCapability = "pipeline-resources.v1";
 
     protected readonly IDotNetCliRunner _runner;
     protected readonly IProjectLocator _projectLocator;
@@ -48,6 +103,7 @@ internal abstract class PipelineCommandBase : BaseCommand
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly ILogger _logger;
     private readonly IAnsiConsole _ansiConsole;
+    private bool _suppressTerminalProgressBar;
 
     protected static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", PublishCommandStrings.ProjectArgumentDescription);
 
@@ -76,6 +132,21 @@ internal abstract class PipelineCommandBase : BaseCommand
     protected static readonly Option<bool> s_listStepsOption = new("--list-steps")
     {
         Description = SharedCommandStrings.PipelineListStepsOptionDescription
+    };
+
+    protected static readonly Option<bool> s_listInputsOption = new("--list-inputs")
+    {
+        Description = "List parameter-backed deployment inputs relevant to the target step, without running the pipeline. Runtime execution can still prompt for provider or custom step inputs that are not parameter-backed."
+    };
+
+    protected static readonly Option<bool> s_listResourcesOption = new("--list-resources")
+    {
+        Description = "List publish-mode resources known before pipeline execution, without running the pipeline."
+    };
+
+    protected static readonly Option<OutputFormat> s_formatOption = new("--format")
+    {
+        Description = SharedCommandStrings.LsFormatOptionDescription
     };
 
     protected abstract string OperationCompletedPrefix { get; }
@@ -114,6 +185,17 @@ internal abstract class PipelineCommandBase : BaseCommand
         Options.Add(s_includeExceptionDetailsOption);
         Options.Add(s_noBuildOption);
         Options.Add(s_listStepsOption);
+        Options.Add(s_listInputsOption);
+        Options.Add(s_listResourcesOption);
+        Options.Add(new HelpOption { Action = new PipelineCommandHelpAction(this) });
+
+        Validators.Add(result =>
+        {
+            if (GetListOptionCount(result) > 1)
+            {
+                result.AddError("The '--list-steps', '--list-inputs', and '--list-resources' options cannot be used together.");
+            }
+        });
 
         // In the publish and deploy commands we forward all unrecognized tokens
         // through to the underlying tooling when we launch the app host.
@@ -141,9 +223,145 @@ internal abstract class PipelineCommandBase : BaseCommand
     protected override bool IsJsonFormatRequested(ParseResult parseResult)
     {
         return base.IsJsonFormatRequested(parseResult) ||
-            (parseResult.GetValue(s_listStepsOption) &&
+            (IsListOperation(parseResult) &&
              TryResolveListStepsInvocation(parseResult, out var outputFormat, out _, out _) &&
              outputFormat is OutputFormat.Json);
+    }
+
+    private string GetUsageSyntax()
+    {
+        var argumentSyntax = GetArgumentSyntax();
+        var commandAndArguments = string.IsNullOrEmpty(argumentSyntax)
+            ? Name
+            : $"{Name} {argumentSyntax}";
+
+        return $"aspire {commandAndArguments} [options] [[--] <pipeline-input-arguments>...]";
+    }
+
+    private string GetArgumentSyntax()
+    {
+        if (Arguments.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var parts = new List<string>();
+        foreach (var argument in Arguments)
+        {
+            if (argument.Hidden)
+            {
+                continue;
+            }
+
+            var name = $"<{argument.Name}>";
+            if (argument.Arity.MinimumNumberOfValues == 0)
+            {
+                name = $"[{name}]";
+            }
+
+            parts.Add(name);
+        }
+
+        return string.Join(" ", parts);
+    }
+
+    private sealed class PipelineCommandHelpAction(PipelineCommandBase command) : SynchronousCommandLineAction
+    {
+        public override int Invoke(ParseResult parseResult)
+        {
+            WritePipelineCommandHelp(parseResult.InvocationConfiguration.Output, parseResult.CommandResult);
+            return CliExitCodes.Success;
+        }
+
+        private void WritePipelineCommandHelp(TextWriter writer, SystemCommandResult commandResult)
+        {
+            if (!string.IsNullOrEmpty(command.Description))
+            {
+                writer.WriteLine("Description:");
+                writer.WriteLine($"  {command.Description}");
+                writer.WriteLine();
+            }
+
+            GroupedHelpWriter.WriteUsage(writer, command.GetUsageSyntax());
+
+            if (command.Arguments.Count > 0)
+            {
+                GroupedHelpWriter.WriteTwoColumnSection(
+                    writer,
+                    "Arguments:",
+                    command.Arguments
+                        .Where(static argument => !argument.Hidden)
+                        .Select(static argument => (GetArgumentLabel(argument), argument.Description ?? string.Empty)),
+                    maxWidth: command._ansiConsole.Profile.Width);
+            }
+
+            GroupedHelpWriter.WriteTwoColumnSection(
+                writer,
+                HelpGroupStrings.Options,
+                GetVisibleOptionRows(commandResult),
+                maxWidth: command._ansiConsole.Profile.Width);
+
+            GroupedHelpWriter.WriteTwoColumnSection(
+                writer,
+                "Pipeline input arguments:",
+                [("--<input-name> <value>", "Supplies parameter-backed pipeline inputs discovered with --list-inputs. Use -- before input arguments when an input flag conflicts with an Aspire CLI option.")],
+                maxWidth: command._ansiConsole.Profile.Width,
+                trailingBlankLine: false);
+        }
+
+        private static IEnumerable<(string Label, string Description)> GetVisibleOptionRows(SystemCommandResult commandResult)
+        {
+            yield return (GetOptionLabel(s_formatOption), "Output format for --list-steps, --list-inputs, or --list-resources.");
+            var seenLabels = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var option in commandResult.Command.Options)
+            {
+                if (!option.Hidden && TryGetOptionRow(option, seenLabels, out var row))
+                {
+                    yield return row;
+                }
+            }
+
+            var current = commandResult.Parent;
+            while (current is SystemCommandResult parentCommandResult)
+            {
+                foreach (var option in parentCommandResult.Command.Options)
+                {
+                    if (option.Recursive && !option.Hidden && TryGetOptionRow(option, seenLabels, out var row))
+                    {
+                        yield return row;
+                    }
+                }
+
+                current = parentCommandResult.Parent;
+            }
+        }
+
+        private static bool TryGetOptionRow(Option option, HashSet<string> seenLabels, out (string Label, string Description) row)
+        {
+            var label = GetOptionLabel(option);
+            row = (label, option.Description ?? string.Empty);
+            return seenLabels.Add(label);
+        }
+
+        private static string GetOptionLabel(Option option)
+        {
+            var label = GroupedHelpWriter.FormatOptionLabel(option);
+            return option switch
+            {
+                Option<OutputFormat> => $"{label} <{GetEnumValueLabel<OutputFormat>()}>",
+                Option<LogLevel?> => $"{label} <{GetEnumValueLabel<LogLevel>()}>",
+                _ => GroupedHelpWriter.FormatOptionLabel(option, includeValueName: true)
+            };
+        }
+
+        private static string GetEnumValueLabel<TEnum>() where TEnum : struct, Enum =>
+            string.Join('|', Enum.GetNames<TEnum>().Order(StringComparer.Ordinal));
+
+        private static string GetArgumentLabel(Argument argument)
+        {
+            var label = $"<{argument.Name}>";
+            return argument.Arity.MinimumNumberOfValues == 0 ? $"[{label}]" : label;
+        }
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -153,17 +371,20 @@ internal abstract class PipelineCommandBase : BaseCommand
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var explicitAppHost = passedAppHostProjectFile is not null;
         var listSteps = parseResult.GetValue(s_listStepsOption);
+        var listOperation = IsListOperation(parseResult);
         var unmatchedTokens = parseResult.UnmatchedTokens.ToArray();
         var targetStep = GetTargetStepName(parseResult);
         var outputFormat = OutputFormat.Table;
-        if (listSteps && !TryResolveListStepsInvocation(parseResult, out outputFormat, out targetStep, out unmatchedTokens))
+        if (listOperation && !TryResolveListStepsInvocation(parseResult, out outputFormat, out targetStep, out unmatchedTokens))
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand, InvalidListStepsFormatMessage);
         }
 
+        _suppressTerminalProgressBar = listOperation && outputFormat is OutputFormat.Json;
+
         if (ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId])
-            && !listSteps)
+            && !listOperation)
         {
             // Resolve the apphost project interactively before starting the debug session,
             // so the user is prompted if needed and we can pass it along.
@@ -209,7 +430,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         PublishContext? publishContext = null;
 
         // Machine-readable output must not contain terminal control sequences.
-        if (!listSteps || outputFormat is not OutputFormat.Json)
+        if (!_suppressTerminalProgressBar)
         {
             StartTerminalProgressBar();
         }
@@ -229,7 +450,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             }
 
             var project = _projectFactory.GetProject(effectiveAppHostFile);
-            if (listSteps)
+            if (listOperation)
             {
                 var aspireHostingVersion = await project.GetAspireHostingVersionAsync(effectiveAppHostFile, cancellationToken);
                 if (IsKnownIncompatibleWithListSteps(aspireHostingVersion))
@@ -264,7 +485,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             var runArguments = await GetRunArgumentsAsync(fullyQualifiedOutputPath, unmatchedTokens, targetStep, parseResult, cancellationToken);
 
-            if (listSteps)
+            if (listOperation)
             {
                 runArguments = [.. runArguments, "--operation", "inspect", "--list-steps", "true"];
             }
@@ -322,8 +543,8 @@ internal abstract class PipelineCommandBase : BaseCommand
                 throw new InvalidOperationException("Run completed without returning a backchannel.", innerException);
             }), emoji: KnownEmojis.HammerAndWrench);
 
-            // If --list-steps was specified, get pipeline steps and print them instead of executing
-            if (listSteps)
+            // Inspection must stop the AppHost even when metadata resolution fails.
+            if (listOperation)
             {
                 StopTerminalProgressBar();
                 int inspectionExitCode;
@@ -339,15 +560,22 @@ internal abstract class PipelineCommandBase : BaseCommand
                             ListStepsCapability);
                     }
 
-                    var response = await backchannel.GetPipelineStepsAsync(targetStep, cancellationToken);
-                    if (outputFormat is OutputFormat.Json)
+                    if (listSteps)
                     {
-                        var json = JsonSerializer.Serialize(response.Steps, JsonSourceGenerationContext.RelaxedEscaping.PipelineStepInfoArray);
-                        InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
+                        var response = await backchannel.GetPipelineStepsAsync(targetStep, cancellationToken);
+                        PrintPipelineSteps(response.Steps, outputFormat);
+                    }
+                    else if (parseResult.GetValue(s_listInputsOption))
+                    {
+                        await EnsureCapabilityAsync(backchannel, PipelineInputsCapability, "--list-inputs", cancellationToken).ConfigureAwait(false);
+                        var response = await backchannel.GetPipelineInputsAsync(targetStep, cancellationToken).ConfigureAwait(false);
+                        PrintPipelineInputs(response.Inputs, outputFormat, targetStep);
                     }
                     else
                     {
-                        PrintPipelineSteps(response.Steps);
+                        await EnsureCapabilityAsync(backchannel, PipelineResourcesCapability, "--list-resources", cancellationToken).ConfigureAwait(false);
+                        var response = await backchannel.GetPipelineResourcesAsync(includeHidden: false, cancellationToken).ConfigureAwait(false);
+                        PrintPipelineResources(response.Resources, outputFormat);
                     }
                 }
                 finally
@@ -365,6 +593,27 @@ internal abstract class PipelineCommandBase : BaseCommand
                 return CommandResult.FromExitCode(inspectionExitCode);
             }
 
+            var pipelineParameterArguments = PipelineParameterArguments.Empty;
+            var pipelineCapabilities = await backchannel.GetCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
+            if (pipelineCapabilities.Contains(PipelineInputsCapability, StringComparer.Ordinal))
+            {
+                var inputsResponse = await backchannel.GetPipelineInputsAsync(targetStep, cancellationToken).ConfigureAwait(false);
+                var parsedArguments = CreatePipelineParameterArguments(inputsResponse.Inputs, unmatchedTokens, requireMissingInputs: parseResult.GetValue(RootCommand.NonInteractiveOption) || !_hostEnvironment.SupportsInteractiveInput);
+                if (parsedArguments.ErrorMessage is { } errorMessage)
+                {
+                    StopTerminalProgressBar();
+                    await backchannel.RequestStopAsync(cancellationToken).ConfigureAwait(false);
+                    await pendingRun;
+                    return CommandResult.Failure(CliExitCodes.InvalidCommand, errorMessage);
+                }
+
+                pipelineParameterArguments = parsedArguments.Arguments;
+                if (pipelineParameterArguments.Values.Count > 0)
+                {
+                    await backchannel.ApplyPipelineInputValuesAsync(pipelineParameterArguments.Values, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
             var publishingActivities = backchannel.GetPublishingActivitiesAsync(cancellationToken);
 
             // Check if debug or trace logging is enabled
@@ -374,8 +623,8 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             var noFailuresReported = debugMode switch
             {
-                true => await ProcessPublishingActivitiesDebugAsync(publishingActivities, backchannel, cancellationToken),
-                false => await ProcessAndDisplayPublishingActivitiesAsync(publishingActivities, backchannel, isDebugOrTraceLoggingEnabled, cancellationToken),
+                true => await ProcessPublishingActivitiesDebugAsync(publishingActivities, backchannel, pipelineParameterArguments, cancellationToken),
+                false => await ProcessAndDisplayPublishingActivitiesAsync(publishingActivities, backchannel, pipelineParameterArguments, isDebugOrTraceLoggingEnabled, cancellationToken),
             };
 
             // Send terminal progress bar stop sequence
@@ -439,7 +688,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             Telemetry.RecordError($"AppHost is incompatible. Required capability: {ex.RequiredCapability}", ex);
             return CommandResult.Failure(CliExitCodes.AppHostIncompatible, ex.Message);
         }
-        catch (Exception ex) when (listSteps && HasLegacyInspectOperationError(publishContext?.OutputCollector))
+        catch (Exception ex) when (listOperation && HasLegacyInspectOperationError(publishContext?.OutputCollector))
         {
             StopTerminalProgressBar();
             Telemetry.RecordError($"AppHost is incompatible. Required capability: {ListStepsCapability}", ex);
@@ -605,11 +854,66 @@ internal abstract class PipelineCommandBase : BaseCommand
         outputCollector?.GetLines().Any(line =>
             line.Line.Contains(LegacyInspectOperationError, StringComparison.Ordinal)) == true;
 
+    protected static bool IsListOperation(SystemCommandResult commandResult) => GetListOptionCount(commandResult) > 0;
+
+    protected static bool IsListOperation(ParseResult parseResult) =>
+        parseResult.GetValue(s_listStepsOption) ||
+        parseResult.GetValue(s_listInputsOption) ||
+        parseResult.GetValue(s_listResourcesOption);
+
+    protected static string? GetListProgressMessage(ParseResult parseResult)
+    {
+        if (parseResult.GetValue(s_listStepsOption))
+        {
+            return "Listing pipeline steps";
+        }
+
+        if (parseResult.GetValue(s_listInputsOption))
+        {
+            return "Listing pipeline inputs";
+        }
+
+        if (parseResult.GetValue(s_listResourcesOption))
+        {
+            return "Listing pipeline resources";
+        }
+
+        return null;
+    }
+
+    private static int GetListOptionCount(SystemCommandResult commandResult)
+    {
+        var listOptions = 0;
+        listOptions += commandResult.GetValue(s_listStepsOption) ? 1 : 0;
+        listOptions += commandResult.GetValue(s_listInputsOption) ? 1 : 0;
+        listOptions += commandResult.GetValue(s_listResourcesOption) ? 1 : 0;
+
+        return listOptions;
+    }
+
+    private static async Task EnsureCapabilityAsync(IAppHostCliBackchannel backchannel, string capability, string optionName, CancellationToken cancellationToken)
+    {
+        var capabilities = await backchannel.GetCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
+        if (!capabilities.Contains(capability, StringComparer.Ordinal))
+        {
+            throw new AppHostIncompatibleException(
+                $"The AppHost does not support {optionName}. Update the AppHost to a newer version of Aspire.",
+                capability);
+        }
+    }
+
     /// <summary>
     /// Prints pipeline steps in a numbered tree format showing dependencies and tags.
     /// </summary>
-    internal void PrintPipelineSteps(PipelineStepInfo[] steps)
+    internal void PrintPipelineSteps(PipelineStepInfo[] steps, OutputFormat format = default)
     {
+        if (format == OutputFormat.Json)
+        {
+            var json = JsonSerializer.Serialize(steps, JsonSourceGenerationContext.RelaxedEscaping.PipelineStepInfoArray);
+            InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
+            return;
+        }
+
         if (steps.Length == 0)
         {
             _ansiConsole.MarkupLine("[dim]No pipeline steps found.[/]");
@@ -658,6 +962,174 @@ internal abstract class PipelineCommandBase : BaseCommand
         }
     }
 
+    internal void PrintPipelineResources(ResourceSnapshot[] resources, OutputFormat format)
+    {
+        if (format == OutputFormat.Json)
+        {
+            var output = new ResourcesOutput { Resources = ResourceSnapshotMapper.MapToResourceJsonList(resources).ToArray() };
+            var json = JsonSerializer.Serialize(output, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
+            InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
+            return;
+        }
+
+        if (resources.Length == 0)
+        {
+            _ansiConsole.MarkupLine("[dim]No publish-mode resources found.[/]");
+            return;
+        }
+
+        var orderedItems = resources
+            .Select(resource => (Snapshot: resource, DisplayName: ResourceSnapshotMapper.GetResourceName(resource, resources)))
+            .OrderBy(static item => item.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var table = new Table();
+        table.AddBoldColumn(DescribeCommandStrings.HeaderName);
+        table.AddBoldColumn(DescribeCommandStrings.HeaderType);
+        table.AddBoldColumn(DescribeCommandStrings.HeaderState);
+        table.AddBoldColumn(DescribeCommandStrings.HeaderHealth);
+        table.AddBoldColumn(DescribeCommandStrings.HeaderURLs);
+
+        foreach (var (snapshot, displayName) in orderedItems)
+        {
+            var endpoints = snapshot.Urls.Length > 0
+                ? string.Join(", ", snapshot.Urls.Where(static url => !url.IsInternal).Select(static url => url.DisplayProperties?.DisplayName ?? url.Url))
+                : "-";
+
+            table.AddRow(
+                displayName,
+                snapshot.ResourceType ?? "-",
+                snapshot.State ?? "-",
+                snapshot.HealthStatus ?? "-",
+                endpoints);
+        }
+
+        _ansiConsole.Write(table);
+    }
+
+    internal void PrintPipelineInputs(PipelineInput[] inputs, OutputFormat format, string? step)
+    {
+        var output = new PipelineInputsOutput(Name, step, [.. inputs.Select(CreatePipelineInputOutput)]);
+
+        if (format == OutputFormat.Json)
+        {
+            var json = JsonSerializer.Serialize(output, PipelineCommandJsonContext.RelaxedEscaping.PipelineInputsOutput);
+            InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
+            return;
+        }
+
+        if (inputs.Length == 0)
+        {
+            _ansiConsole.MarkupLine("[dim]No deployment inputs found.[/]");
+            return;
+        }
+
+        var table = new Table()
+            .AddColumn("Name")
+            .AddColumn("Type")
+            .AddColumn("Required")
+            .AddColumn("Has value")
+            .AddColumn("Flag")
+            .AddColumn("Environment");
+
+        foreach (var input in output.Inputs)
+        {
+            table.AddRow(
+                input.Name,
+                input.Type,
+                input.Required ? "Yes" : "No",
+                input.Current.HasValue ? "Yes" : "No",
+                input.Cli.Flag ?? string.Empty,
+                input.Environment.Preferred);
+        }
+
+        _ansiConsole.Write(table);
+
+        var inputsWithEnvironmentAliases = output.Inputs
+            .Where(static input => input.Environment.Aliases.Length > 0)
+            .ToArray();
+
+        if (inputsWithEnvironmentAliases.Length > 0)
+        {
+            _ansiConsole.WriteLine();
+
+            var aliasesTable = new Table()
+                .AddColumn("Name")
+                .AddColumn("Accepted environment aliases");
+
+            foreach (var input in inputsWithEnvironmentAliases)
+            {
+                aliasesTable.AddRow(input.Name, string.Join(Environment.NewLine, input.Environment.Aliases));
+            }
+
+            _ansiConsole.Write(aliasesTable);
+        }
+    }
+
+    private static PipelineInputOutput CreatePipelineInputOutput(PipelineInput input)
+    {
+        var optionName = CommandInputParser.ToKebabCase(input.Name);
+        var flag = $"--{optionName}";
+        var configurationKey = input.ConfigurationKey ?? $"Parameters:{input.Name}";
+        var aliases = new List<string> { flag };
+
+        AddAliasIfDifferent(aliases, $"--{input.Name}", flag);
+        AddAliasIfDifferent(aliases, $"--Parameters:{input.Name}", flag);
+        AddAliasIfDifferent(aliases, $"--ConnectionStrings:{input.Name}", flag);
+
+        var validation = input.Options is { Count: > 0 } || input.MaxLength is not null || input.DynamicallyLoaded
+            ? new PipelineInputValidationOutput(
+                input.Options is { Count: > 0 } ? [.. input.Options.Keys] : null,
+                input.AllowCustomChoice,
+                input.MaxLength,
+                input.DynamicallyLoaded)
+            : null;
+
+        return new PipelineInputOutput(
+            input.Name,
+            input.Kind,
+            input.Group,
+            input.DependsOn,
+            input.InputType,
+            input.Required,
+            input.Description ?? input.Label,
+            configurationKey,
+            CreateEnvironmentOutput(configurationKey),
+            new PipelineInputCliOutput(CommandInputParser.IsBooleanInput(input.InputType) ? flag : $"{flag} <value>", [.. aliases]),
+            new PipelineInputCurrentValueOutput(input.HasValue || input.Value is not null, input.Value, input.ValueSource),
+            validation);
+    }
+
+    private static void AddAliasIfDifferent(List<string> aliases, string alias, string flag)
+    {
+        if (!string.Equals(alias, flag, StringComparison.Ordinal))
+        {
+            aliases.Add(alias);
+        }
+    }
+
+    private static PipelineInputEnvironmentOutput CreateEnvironmentOutput(string configurationKey)
+    {
+        var exactEnvironmentVariable = configurationKey.Replace(":", "__", StringComparison.Ordinal);
+        var normalizedEnvironmentVariable = exactEnvironmentVariable.Replace("-", "_", StringComparison.Ordinal);
+        var preferredEnvironmentVariable = normalizedEnvironmentVariable.ToUpperInvariant();
+
+        var aliases = new List<string>();
+        AddEnvironmentAliasIfDifferent(aliases, normalizedEnvironmentVariable, preferredEnvironmentVariable);
+        AddEnvironmentAliasIfDifferent(aliases, exactEnvironmentVariable, preferredEnvironmentVariable);
+
+        return new PipelineInputEnvironmentOutput(preferredEnvironmentVariable, [.. aliases]);
+    }
+
+    private static void AddEnvironmentAliasIfDifferent(List<string> aliases, string alias, string preferred)
+    {
+        if (!string.Equals(alias, preferred, StringComparison.Ordinal) &&
+            !aliases.Contains(alias, StringComparer.Ordinal))
+        {
+            aliases.Add(alias);
+        }
+    }
+
     /// <summary>
     /// Formats a list of items with a prefix on the first line and hanging indent on continuation lines.
     /// Items are comma-separated and wrapped so each line stays readable.
@@ -702,6 +1174,47 @@ internal abstract class PipelineCommandBase : BaseCommand
         return System.Text.RegularExpressions.Regex.Replace(text, @"\[/?[^\]]*\]", "");
     }
 
+    private static (PipelineParameterArguments Arguments, string? ErrorMessage) CreatePipelineParameterArguments(PipelineInput[] inputs, string[] capturedArguments, bool requireMissingInputs)
+    {
+        capturedArguments = CommandInputParser.RemoveDelimiter(capturedArguments);
+
+        if (capturedArguments.Length == 0)
+        {
+            var requiredInputs = requireMissingInputs
+                ? inputs.Where(static input => input.Required && string.IsNullOrEmpty(input.Value)).ToArray()
+                : [];
+
+            if (requiredInputs.Length == 0)
+            {
+                return (PipelineParameterArguments.Empty, null);
+            }
+        }
+
+        if (inputs.Length == 0)
+        {
+            return (PipelineParameterArguments.Empty, null);
+        }
+
+        var parseResult = CommandInputParser.Parse(inputs, capturedArguments, requireMissingInputs);
+        if (parseResult.ErrorMessage is { } errorMessage)
+        {
+            return (PipelineParameterArguments.Empty, errorMessage);
+        }
+
+        var values = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (argumentName, value) in parseResult.Arguments)
+        {
+            if (value is null)
+            {
+                continue;
+            }
+
+            values[argumentName] = value.GetValue<string?>();
+        }
+
+        return (values.Count > 0 ? new PipelineParameterArguments(values) : PipelineParameterArguments.Empty, null);
+    }
+
     /// <summary>
     /// Conditionally converts markdown to Spectre markup based on the EnableMarkdown flag in the activity data.
     /// </summary>
@@ -713,7 +1226,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         return activityData.EnableMarkdown ? MarkdownToSpectreConverter.ConvertToSpectre(text) : text.EscapeMarkup();
     }
 
-    public async Task<bool> ProcessPublishingActivitiesDebugAsync(IAsyncEnumerable<PublishingActivity> publishingActivities, IAppHostCliBackchannel backchannel, CancellationToken cancellationToken)
+    public async Task<bool> ProcessPublishingActivitiesDebugAsync(IAsyncEnumerable<PublishingActivity> publishingActivities, IAppHostCliBackchannel backchannel, PipelineParameterArguments pipelineParameterArguments, CancellationToken cancellationToken)
     {
         var stepCounter = 1;
         var steps = new Dictionary<string, string>();
@@ -748,7 +1261,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             }
             else if (activity.Type == PublishingActivityTypes.Prompt)
             {
-                await HandlePromptActivityAsync(activity, backchannel, cancellationToken);
+                await HandlePromptActivityAsync(activity, backchannel, pipelineParameterArguments, cancellationToken);
             }
             else if (activity.Type == PublishingActivityTypes.Log)
             {
@@ -807,7 +1320,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         return !hasErrors;
     }
 
-    public async Task<bool> ProcessAndDisplayPublishingActivitiesAsync(IAsyncEnumerable<PublishingActivity> publishingActivities, IAppHostCliBackchannel backchannel, bool isDebugOrTraceLoggingEnabled, CancellationToken cancellationToken)
+    public async Task<bool> ProcessAndDisplayPublishingActivitiesAsync(IAsyncEnumerable<PublishingActivity> publishingActivities, IAppHostCliBackchannel backchannel, PipelineParameterArguments pipelineParameterArguments, bool isDebugOrTraceLoggingEnabled, CancellationToken cancellationToken)
     {
         var stepCounter = 1;
         var steps = new Dictionary<string, StepInfo>();
@@ -869,7 +1382,7 @@ internal abstract class PipelineCommandBase : BaseCommand
                 else if (activity.Type == PublishingActivityTypes.Prompt)
                 {
                     await logger.StopSpinnerAsync();
-                    await HandlePromptActivityAsync(activity, backchannel, cancellationToken);
+                    await HandlePromptActivityAsync(activity, backchannel, pipelineParameterArguments, cancellationToken);
                     logger.StartSpinner();
                 }
                 else if (activity.Type == PublishingActivityTypes.Log)
@@ -1061,7 +1574,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         return $"[bold]{convertedHeader}[/]\n{convertedLabel}: ";
     }
 
-    private async Task HandlePromptActivityAsync(PublishingActivity activity, IAppHostCliBackchannel backchannel, CancellationToken cancellationToken)
+    private async Task HandlePromptActivityAsync(PublishingActivity activity, IAppHostCliBackchannel backchannel, PipelineParameterArguments pipelineParameterArguments, CancellationToken cancellationToken)
     {
         if (activity.Data.IsComplete)
         {
@@ -1096,7 +1609,13 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             // Get prompt for input if there are no validation errors (first time we've asked)
             // or there are validation errors and this input has an error.
-            if (!hasValidationErrors || input.ValidationErrors is { Count: > 0 })
+            if (!hasValidationErrors &&
+                input.Name is { } inputName &&
+                pipelineParameterArguments.Values.TryGetValue(inputName, out var suppliedValue))
+            {
+                result = suppliedValue;
+            }
+            else if (!hasValidationErrors || input.ValidationErrors is { Count: > 0 })
             {
                 // Build the prompt text based on number of inputs
                 var promptText = BuildPromptText(input, inputs.Count, activity.Data.StatusText, activity.Data);
@@ -1360,6 +1879,11 @@ internal abstract class PipelineCommandBase : BaseCommand
         null or _ => (LogLevel.Information, "INF")
     };
 
+    public sealed record PipelineParameterArguments(IReadOnlyDictionary<string, string?> Values)
+    {
+        public static PipelineParameterArguments Empty { get; } = new(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase));
+    }
+
     private class StepInfo
     {
         public string Id { get; set; } = string.Empty;
@@ -1391,6 +1915,11 @@ internal abstract class PipelineCommandBase : BaseCommand
     /// </summary>
     private void StartTerminalProgressBar()
     {
+        if (_suppressTerminalProgressBar)
+        {
+            return;
+        }
+
         // Skip terminal progress bar in non-interactive environments
         if (!_hostEnvironment.SupportsInteractiveOutput)
         {
