@@ -11,6 +11,7 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Xunit;
 
@@ -35,6 +36,7 @@ public partial class TerminalDockTests
             // JS reports failed durable revocation after unconditionally releasing its live popup handle.
             module.SetupVoid("closeTerminalWindow", _ => true).SetException(new JSException("Storage denied"));
         }
+        var toasts = RenderComponent<FluentToastProvider>();
         var cut = RenderComponent<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("terminal"));
@@ -55,6 +57,13 @@ public partial class TerminalDockTests
                 cut.Find(".terminal-dock-detached > span").TextContent);
             Assert.Empty(cut.FindComponents<TerminalView>());
         });
+        if (storageFailure)
+        {
+            // The placeholder renders before the error notification. Observe the toast too so the test
+            // cannot finish while the adoption failure handler is still running.
+            toasts.WaitForAssertion(() => Assert.Equal(Resources.TerminalStrings.TerminalWindowTrackingFailed,
+                Assert.Single(toasts.FindComponents<FluentToast>()).Instance.Title));
+        }
         cut.Render();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await cut.InvokeAsync(cut.Instance.ToggleAsync);

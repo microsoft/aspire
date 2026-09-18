@@ -28,9 +28,14 @@ public partial class MainLayoutTests
     public async Task TerminalDock_RequiresResourceService(bool isEnabled, bool isDesktop)
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var subscriptionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var client = new TestDashboardClient(
             isEnabled: isEnabled,
-            terminalChannelProvider: () => updates,
+            terminalChannelProvider: () =>
+            {
+                subscriptionStarted.TrySetResult();
+                return updates;
+            },
             resourceChannelProvider: () => Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>());
         TerminalSetupHelpers.SetupTerminalView(this);
         TerminalSetupHelpers.SetupTerminalDock(this);
@@ -52,7 +57,9 @@ public partial class MainLayoutTests
 
         if (isEnabled)
         {
-            cut.WaitForAssertion(() => Assert.Equal(1, client.ActiveTerminalSubscriptionCount));
+            // Subscription starts on a worker without triggering a render; a render-driven wait can miss it.
+            await subscriptionStarted.Task.DefaultTimeout();
+            Assert.Equal(1, client.ActiveTerminalSubscriptionCount);
             Assert.Single(cut.FindAll(".terminal-dock"));
             var dock = cut.FindComponent<TerminalDock>().Instance;
             await cut.InvokeAsync(() => client.SetConnectionState(DashboardConnectionState.Disconnected));
@@ -64,6 +71,7 @@ public partial class MainLayoutTests
         else
         {
             Assert.Empty(cut.FindAll(".terminal-dock"));
+            Assert.False(subscriptionStarted.Task.IsCompleted);
             Assert.Equal(0, client.TerminalSubscriptionCount);
         }
     }
