@@ -28,7 +28,7 @@ jobs:
       pull-requests: write
     steps:
     - name: Checkout workflow helpers
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         sparse-checkout: .github/workflows/workflow-command-helpers.js
         sparse-checkout-cone-mode: false
@@ -384,7 +384,7 @@ jobs:
     - name: Generate GitHub App Token
       if: success()
       id: app-token
-      uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
       with:
         app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
         private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -392,7 +392,7 @@ jobs:
     # Credentials must persist for git push operations later in workflow
     - name: Checkout repo
       if: success()
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2 # zizmor: ignore[artipacked]
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6.0.2 # zizmor: ignore[artipacked]
       with:
         ref: ${{ steps.determine-target.outputs.checkout_ref }}
         fetch-depth: 0
@@ -400,7 +400,7 @@ jobs:
 
     - name: Setup .NET
       if: success()
-      uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+      uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
       with:
         global-json-file: global.json
 
