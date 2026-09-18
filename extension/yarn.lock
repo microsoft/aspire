@@ -281,18 +281,26 @@
   dependencies:
     is-negated-glob "^1.0.0"
 
-"@humanfs/core@^0.19.1":
-  version "0.19.1"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/@humanfs/core/-/core-0.19.1.tgz"
-  integrity sha1-F8Vcp9Qmcz/jxWGQa4Fzwza0Cnc=
+"@humanfs/core@^0.19.2":
+  version "0.19.2"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/@humanfs/core/-/core-0.19.2.tgz#a8272ca03b2acf492670222b2320b6c421bfde60"
+  integrity sha1-qCcsoDsqz0kmcCIrIyC2xCG/3mA=
+  dependencies:
+    "@humanfs/types" "^0.15.0"
 
 "@humanfs/node@^0.16.6":
-  version "0.16.7"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/@humanfs/node/-/node-0.16.7.tgz"
-  integrity sha1-giy3s6EsWiQKJPYhtaJBPiekXyY=
+  version "0.16.8"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/@humanfs/node/-/node-0.16.8.tgz#8f800cccc13f4f8cd3116e2d9c0a94939da3e3ed"
+  integrity sha1-j4AMzME/T4zTEW4tnAqUk52j4+0=
   dependencies:
-    "@humanfs/core" "^0.19.1"
+    "@humanfs/core" "^0.19.2"
+    "@humanfs/types" "^0.15.0"
     "@humanwhocodes/retry" "^0.4.0"
+
+"@humanfs/types@^0.15.0":
+  version "0.15.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/@humanfs/types/-/types-0.15.0.tgz#f2a09f62012390b2bff3fc6fb248ddec8c09a090"
+  integrity sha1-8qCfYgEjkLK/8/xvskjd7IwJoJA=
 
 "@humanwhocodes/module-importer@^1.0.1":
   version "1.0.1"
