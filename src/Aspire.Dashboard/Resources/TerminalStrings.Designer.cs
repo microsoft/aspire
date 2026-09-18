@@ -196,6 +196,24 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to This terminal may still be open in a separate window. Focus it or return it to the panel to continue..
+        /// </summary>
+        public static string TerminalDockRecoveringWindow {
+            get {
+                return ResourceManager.GetString("TerminalDockRecoveringWindow", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel..
+        /// </summary>
+        public static string TerminalWindowTrackingFailed {
+            get {
+                return ResourceManager.GetString("TerminalWindowTrackingFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The browser blocked the terminal window. Allow pop-ups for the dashboard and try again..
         /// </summary>
         public static string TerminalDockDetachBlocked {

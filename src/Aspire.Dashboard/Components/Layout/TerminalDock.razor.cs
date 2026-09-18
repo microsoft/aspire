@@ -66,6 +66,8 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     /// two attached viewers would fight over the HMP1 primary role and therefore over the PTY's grid size.
     /// </summary>
     private readonly HashSet<string> _detachedTerminalIds = [];
+    private readonly HashSet<string> _windowTrackingReadyIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _recoveringWindowIds = new(StringComparer.Ordinal);
 
     private TerminalWindowButton? _windowButton;
     private bool _popupBlocked;
@@ -275,6 +277,28 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
     private void OnTerminalToolbarStateChanged(TerminalToolbarState state) => StateHasChanged();
 
+    private void OnWindowsAdopted(string[] keys)
+    {
+        if (!_disposed)
+        {
+            _windowTrackingReadyIds.UnionWith(keys);
+            StateHasChanged();
+        }
+    }
+
+    private void OnWindowTrackingFailed(string[] keys)
+    {
+        if (!_disposed)
+        {
+            foreach (var key in keys.Where(key => _terminals.Any(terminal => terminal.TerminalId == key)))
+            {
+                _detachedTerminalIds.Add(key);
+                _recoveringWindowIds.Add(key);
+            }
+            StateHasChanged();
+        }
+    }
+
     private async Task OnDetachedWindowOpenedAsync((string Key, TerminalWindowOpenResult Result) launch)
     {
         if (_disposed)
@@ -292,30 +316,21 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         }
 
         _popupBlocked = result == TerminalWindowOpenResult.Blocked;
-        if (result is TerminalWindowOpenResult.Opened or TerminalWindowOpenResult.Focused)
+        if (result is TerminalWindowOpenResult.Opened or TerminalWindowOpenResult.Focused or TerminalWindowOpenResult.Adopted or TerminalWindowOpenResult.Recovering)
         {
             _detachedTerminalIds.Add(terminalId);
             _terminalViews.Remove(terminalId);
+            if (result is TerminalWindowOpenResult.Recovering)
+            {
+                _recoveringWindowIds.Add(terminalId);
+            }
+            else
+            {
+                _recoveringWindowIds.Remove(terminalId);
+            }
         }
 
         StateHasChanged();
-    }
-
-    private async Task FocusDetachedWindowAsync(string terminalId)
-    {
-        try
-        {
-            // A window the browser closed without us noticing yet would otherwise leave the pane stuck on the
-            // placeholder, so a failed focus reattaches instead.
-            if (_windowButton is null || !await _windowButton.FocusAsync(terminalId).ConfigureAwait(true))
-            {
-                await OnDetachedWindowClosedAsync(terminalId).ConfigureAwait(true);
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            Logger.LogWarning(ex, "Failed to focus the window for terminal {TerminalId}.", terminalId);
-        }
     }
 
     private async Task ReturnToDockAsync(string terminalId)
@@ -335,6 +350,9 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         }
 
         _detachedTerminalIds.Remove(terminalId);
+        _recoveringWindowIds.Remove(terminalId);
+        // Explicit return is also the escape hatch when unavailable/corrupt storage prevented passive recovery.
+        _windowTrackingReadyIds.Add(terminalId);
         StateHasChanged();
     }
 
@@ -346,6 +364,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     {
         if (!_disposed && _detachedTerminalIds.Remove(terminalId))
         {
+            _recoveringWindowIds.Remove(terminalId);
             StateHasChanged();
         }
     });
@@ -425,6 +444,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                         // Recovery snapshots replace all prior state, including terminals removed while offline.
                         endedTerminalIds.AddRange(_detachedTerminalIds.Where(id => !_terminals.Any(t => t.TerminalId == id)));
                         _detachedTerminalIds.ExceptWith(endedTerminalIds);
+                        _recoveringWindowIds.IntersectWith(_detachedTerminalIds);
                         foreach (var id in _terminalViews.Keys.Where(id => !_terminals.Any(t => t.TerminalId == id)).ToArray())
                         {
                             _terminalViews.Remove(id);
@@ -565,6 +585,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
             case TerminalChangeType.Removed:
                 _terminalViews.Remove(descriptor.TerminalId);
+                _recoveringWindowIds.Remove(descriptor.TerminalId);
                 if (index >= 0)
                 {
                     _terminals.RemoveAt(index);

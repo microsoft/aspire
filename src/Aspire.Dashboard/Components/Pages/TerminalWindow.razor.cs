@@ -4,6 +4,7 @@
 using Aspire.DashboardService.Proto.V1;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
+using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Pages;
 
@@ -27,11 +28,17 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
     private string _title = string.Empty;
     private bool _ended;
     private bool _disposed;
-    private (string? TerminalId, string? ResourceName, int ReplicaIndex)? _routeIdentity;
+    private (string? TerminalId, string? ResourceName, int ReplicaIndex, string? WindowOwner, string? WindowGeneration)? _routeIdentity;
     private int _watchGeneration;
     private CancellationTokenSource? _watchCts;
     // Also tracks in-flight cancellation so overlapping route changes and disposal join the same cleanup.
     private Task _watchTask = Task.CompletedTask;
+    private IJSObjectReference? _windowModule;
+    private DotNetObjectReference<TerminalWindow>? _windowReference;
+    private Task? _windowRegistrationTask;
+    private string? _windowRegistrationId;
+    private bool _windowReady = true;
+    private bool _windowTrackingFailed;
 
     /// <summary>
     /// Gets or sets the id of an AppHost-owned dock terminal to attach to.
@@ -55,6 +62,20 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
     [SupplyParameterFromQuery(Name = "fontSize")]
     public int? FontSize { get; set; }
 
+    /// <summary>Gets or sets the opener identity carried by a coordinated dock window.</summary>
+    [SupplyParameterFromQuery(Name = "windowOwner")]
+    public string? WindowOwner { get; set; }
+
+    /// <summary>Gets or sets the detachment generation carried by a coordinated dock window.</summary>
+    [SupplyParameterFromQuery(Name = "windowGeneration")]
+    public string? WindowGeneration { get; set; }
+
+    [Inject]
+    public required IJSRuntime JS { get; init; }
+
+    [Inject]
+    public required NavigationManager NavigationManager { get; init; }
+
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
@@ -69,7 +90,7 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
         var terminalId = TerminalId is { Length: > 0 } ? TerminalId : null;
         var resourceName = terminalId is null && ResourceName is { Length: > 0 } ? ResourceName : null;
         var replicaIndex = resourceName is not null ? ReplicaIndex : 0;
-        var routeIdentity = (terminalId, resourceName, replicaIndex);
+        var routeIdentity = (terminalId, resourceName, replicaIndex, WindowOwner, WindowGeneration);
         if (_disposed || _routeIdentity == routeIdentity)
         {
             return;
@@ -78,11 +99,19 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
         _routeIdentity = routeIdentity;
         var generation = ++_watchGeneration;
         _ended = false;
+        _windowTrackingFailed = false;
+        _windowReady = terminalId is null || (WindowOwner is null && WindowGeneration is null);
         _endpoint = terminalId is not null ? $"api/apphost-terminal?terminalId={Uri.EscapeDataString(terminalId)}" : null;
         _title = terminalId ?? (resourceName is not null
             ? replicaIndex > 0 ? $"{resourceName} #{replicaIndex}" : resourceName
             : string.Empty);
 
+        await StopWindowTrackingAsync(release: true);
+        if (_disposed || generation != _watchGeneration)
+        {
+            return;
+        }
+        _windowRegistrationTask = null;
         await StopWatchingAsync();
         if (_disposed || generation != _watchGeneration || terminalId is null)
         {
@@ -94,6 +123,113 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
         _watchCts = new CancellationTokenSource();
         var cancellationToken = _watchCts.Token;
         _watchTask = Task.Run(() => WatchTerminalsAsync(terminalId, generation, cancellationToken), cancellationToken);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+        if (_ended)
+        {
+            await StopWindowTrackingAsync(release: true);
+        }
+        else if (!_windowReady && !_windowTrackingFailed && _windowRegistrationTask is null && TerminalId is { } terminalId)
+        {
+            _windowRegistrationTask = RegisterWindowAsync(terminalId, _watchGeneration);
+            await _windowRegistrationTask;
+        }
+    }
+
+    private async Task RegisterWindowAsync(string terminalId, int generation)
+    {
+        try
+        {
+            var moduleUri = new Uri(new Uri(NavigationManager.BaseUri), "js/app-terminalwindow.js");
+            _windowModule ??= await JS.InvokeAsync<IJSObjectReference>("import", moduleUri.PathAndQuery);
+            if (_disposed || generation != _watchGeneration)
+            {
+                return;
+            }
+            _windowReference ??= DotNetObjectReference.Create(this);
+            var id = _windowRegistrationId = Guid.NewGuid().ToString("N");
+            var ready = await _windowModule.InvokeAsync<bool>("registerDetachedTerminalWindow",
+                id, terminalId, NavigationManager.BaseUri, _windowReference);
+            if (!_disposed && generation == _watchGeneration && !_windowTrackingFailed)
+            {
+                // A reload must check durable revocation before mounting an auto-fit viewer. Returning a window
+                // while this document was loading must not let it take sizing control again.
+                _windowReady = ready && !_ended;
+                _ended |= !ready;
+                StateHasChanged();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // A new document will independently validate its generation.
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to coordinate the detached terminal window.");
+            if (!_disposed && generation == _watchGeneration)
+            {
+                _windowTrackingFailed = true;
+                StateHasChanged();
+            }
+        }
+    }
+
+    /// <summary>Stops rendering a detached viewer after its generation was explicitly returned or replaced.</summary>
+    /// <param name="id">The browser registration to revoke.</param>
+    /// <returns>A task that completes after the viewer is removed.</returns>
+    [JSInvokable]
+    public Task OnDetachedTerminalWindowRevokedAsync(string id) => InvokeAsync(() =>
+    {
+        if (!_disposed && _windowRegistrationId == id)
+        {
+            _ended = true;
+            _windowReady = false;
+            StateHasChanged();
+        }
+    });
+
+    /// <summary>Reports a browser coordination failure without treating it as a successfully recovered window.</summary>
+    /// <param name="id">The affected browser registration.</param>
+    /// <returns>A task that completes after the failure is displayed.</returns>
+    [JSInvokable]
+    public Task OnDetachedTerminalWindowTrackingFailedAsync(string id) => InvokeAsync(() =>
+    {
+        if (!_disposed && _windowRegistrationId == id)
+        {
+            _windowTrackingFailed = true;
+            _windowReady = false;
+            StateHasChanged();
+        }
+    });
+
+    private async Task StopWindowTrackingAsync(bool release)
+    {
+        if (_windowRegistrationTask is { } registration)
+        {
+            await registration;
+        }
+        if (_windowModule is { } module && _windowRegistrationId is { } id)
+        {
+            _windowRegistrationId = null;
+            try
+            {
+                await module.InvokeVoidAsync(release ? "releaseDetachedTerminalWindow" : "unregisterDetachedTerminalWindow", id);
+            }
+            catch (JSDisconnectedException)
+            {
+                // Disposal on document reload must not revoke the durable detachment.
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to release detached terminal window tracking.");
+            }
+        }
     }
 
     private async Task WatchTerminalsAsync(string terminalId, int generation, CancellationToken cancellationToken)
@@ -220,5 +356,11 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
 
         _disposed = true;
         await StopWatchingAsync().ConfigureAwait(false);
+        await StopWindowTrackingAsync(release: false).ConfigureAwait(false);
+        if (_windowModule is { } module)
+        {
+            await Utils.JSInteropHelpers.SafeDisposeAsync(module).ConfigureAwait(false);
+        }
+        _windowReference?.Dispose();
     }
 }

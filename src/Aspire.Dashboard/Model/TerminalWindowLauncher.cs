@@ -30,7 +30,17 @@ public enum TerminalWindowOpenResult
     /// <summary>
     /// The browser could not open or focus the window.
     /// </summary>
-    Failed
+    Failed,
+
+    /// <summary>
+    /// A surviving window was adopted without opening, focusing, or navigating it.
+    /// </summary>
+    Adopted,
+
+    /// <summary>
+    /// A durable detachment record exists, but its window has not yet responded after a document reload.
+    /// </summary>
+    Recovering
 }
 
 /// <summary>
@@ -66,7 +76,7 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
     /// </summary>
     /// <param name="js">The JS runtime for the owning component's circuit.</param>
     /// <param name="navigationManager">The navigation manager providing the dashboard's base URI.</param>
-    /// <param name="onWindowOpened">Invoked after a native click opens or focuses a window, with its captured key and outcome.</param>
+    /// <param name="onWindowOpened">Invoked after opening, focusing, or adopting a window, with its captured key and outcome.</param>
     /// <param name="onWindowClosed">
     /// Invoked with the terminal key when the user closes a detached window. Not raised for windows closed through
     /// <see cref="CloseAsync"/>, because the caller already knows about those.
@@ -103,11 +113,24 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
         _module = await _js.InvokeAsync<IJSObjectReference>("import", moduleUri.PathAndQuery).ConfigureAwait(false);
         if (!_disposed)
         {
-            await _module.InvokeVoidAsync("registerTerminalWindowButton", buttonId, _id, _selfRef).ConfigureAwait(false);
+            await _module.InvokeVoidAsync("registerTerminalWindowButton", buttonId, _id, _selfRef, _navigationManager.BaseUri).ConfigureAwait(false);
         }
     }
 
-    /// <summary>Receives the captured terminal key and browser result after the synchronous native launch.</summary>
+    /// <summary>
+    /// Adopts surviving windows or durable detachment records for the supplied terminal keys.
+    /// </summary>
+    /// <param name="keys">The current terminal identities belonging to the component.</param>
+    /// <returns>A task that completes after the component has reconciled the surviving windows.</returns>
+    public async Task AdoptAsync(string[] keys)
+    {
+        if (!_disposed && _module is { } module)
+        {
+            await module.InvokeVoidAsync("adoptTerminalWindows", _id, keys).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Receives the captured terminal key and browser result after a native launch or window adoption.</summary>
     /// <param name="key">The terminal key at the time of the click, not the current selection.</param>
     /// <param name="result">The browser's launch outcome.</param>
     /// <returns>A task that completes when the owning component has reconciled the outcome.</returns>
@@ -117,6 +140,8 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
         {
             "opened" => TerminalWindowOpenResult.Opened,
             "focused" => TerminalWindowOpenResult.Focused,
+            "adopted" => TerminalWindowOpenResult.Adopted,
+            "recovering" => TerminalWindowOpenResult.Recovering,
             "blocked" => TerminalWindowOpenResult.Blocked,
             _ => TerminalWindowOpenResult.Failed
         });
@@ -174,8 +199,8 @@ public sealed class TerminalWindowLauncher : IAsyncDisposable
         {
             try
             {
-                // Stop watching, but leave the windows open. They are independent viewers of an AppHost-owned
-                // terminal, so closing them because the opener navigated away would throw away live work.
+                // Release this callback, but retain the browser's handles for replacement components. The windows
+                // are independent viewers, so closing them because the opener navigated away would lose live work.
                 await module.InvokeVoidAsync("unregisterTerminalWindowButton", _id).ConfigureAwait(false);
                 await module.DisposeAsync().ConfigureAwait(false);
             }

@@ -82,6 +82,11 @@
         <target state="new">Press the backtick key (`) to hide this panel.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalDockRecoveringWindow">
+        <source>This terminal may still be open in a separate window. Focus it or return it to the panel to continue.</source>
+        <target state="new">This terminal may still be open in a separate window. Focus it or return it to the panel to continue.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalDockResizeHelp">
         <source>Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</source>
         <target state="new">Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</target>
@@ -175,6 +180,11 @@
       <trans-unit id="TerminalWindowEnded">
         <source>This terminal has ended.</source>
         <target state="new">This terminal has ended.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalWindowTrackingFailed">
+        <source>Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</source>
+        <target state="new">Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</target>
         <note />
       </trans-unit>
     </body>

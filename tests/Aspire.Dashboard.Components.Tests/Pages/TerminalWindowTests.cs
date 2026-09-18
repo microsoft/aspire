@@ -12,12 +12,79 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.JSInterop;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
 
 public class TerminalWindowTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CoordinatedWindow_ChecksGenerationBeforeMountingAndDoesNotRevokeOnDisposal(bool stillDetached)
+    {
+        TerminalSetupHelpers.SetupTerminalComponents(this, new TestDashboardClient());
+        var module = TerminalSetupHelpers.SetupTerminalWindows(this);
+        var registration = module.Setup<bool>("registerDetachedTerminalWindow", _ => true);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(
+            "terminal-window/apphost/terminal?fontSize=23&windowOwner=owner&windowGeneration=generation");
+        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
+        Assert.Empty(cut.FindComponents<TerminalView>());
+        Assert.Equal([], JSInterop.Invocations.Where(i => i.Identifier == "initTerminal"));
+        Assert.Single(registration.Invocations);
+
+        registration.SetResult(stillDetached);
+        cut.WaitForAssertion(() =>
+        {
+            if (stillDetached)
+            {
+                Assert.Equal(23, cut.FindComponent<TerminalView>().Instance.InitialFontSize);
+            }
+            else
+            {
+                Assert.Empty(cut.FindComponents<TerminalView>());
+                Assert.Single(cut.FindAll(".terminal-window-ended"));
+            }
+        });
+        await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask()).DefaultTimeout();
+        Assert.Single(module.Invocations, i => i.Identifier ==
+            (stillDetached ? "unregisterDetachedTerminalWindow" : "releaseDetachedTerminalWindow"));
+        Assert.Equal([], JSInterop.Invocations.Where(i => i.Identifier == "closeTerminalWindow"));
+    }
+
+    [Fact]
+    public async Task CoordinatedWindow_RevocationRejectsStaleRegistrationAndRemovesCurrentViewer()
+    {
+        TerminalSetupHelpers.SetupTerminalComponents(this, new TestDashboardClient());
+        Services.GetRequiredService<NavigationManager>().NavigateTo(
+            "terminal-window/apphost/terminal?windowOwner=owner&windowGeneration=generation");
+        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
+        var registration = Assert.Single(JSInterop.Invocations, i => i.Identifier == "registerDetachedTerminalWindow");
+        var id = Assert.IsType<string>(registration.Arguments[0]);
+        await cut.InvokeAsync(() => cut.Instance.OnDetachedTerminalWindowRevokedAsync("obsolete-registration"));
+        Assert.Single(cut.FindComponents<TerminalView>());
+        await cut.InvokeAsync(() => cut.Instance.OnDetachedTerminalWindowRevokedAsync(id));
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindComponents<TerminalView>()));
+        Assert.Single(JSInterop.Invocations, i => i.Identifier == "releaseDetachedTerminalWindow");
+    }
+
+    [Fact]
+    public void CoordinatedWindow_StorageFailureDoesNotMountViewer()
+    {
+        TerminalSetupHelpers.SetupTerminalComponents(this, new TestDashboardClient());
+        var module = TerminalSetupHelpers.SetupTerminalWindows(this);
+        module.Setup<bool>("registerDetachedTerminalWindow", _ => true).SetException(new JSException("Storage denied"));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(
+            "terminal-window/apphost/terminal?windowOwner=owner&windowGeneration=generation");
+        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
+        cut.WaitForAssertion(() => Assert.Equal(Resources.TerminalStrings.TerminalWindowTrackingFailed,
+            cut.Find(".terminal-window-ended").TextContent));
+        Assert.Empty(cut.FindComponents<TerminalView>());
+        Assert.Equal([], JSInterop.Invocations.Where(i => i.Identifier == "initTerminal"));
+    }
+
     [Theory]
     [InlineData("", "terminal", "terminal")]
     [InlineData("/aspire/nested", "terminal", "terminal")]

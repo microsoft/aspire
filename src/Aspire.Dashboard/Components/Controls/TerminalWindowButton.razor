@@ -8,6 +8,7 @@
               aria-label="@Label"
               Disabled="@(!_ready || Disabled || string.IsNullOrEmpty(TerminalKey) || LaunchUrl is null)"
               data-terminal-window-key="@TerminalKey"
+              data-terminal-window-focus-group="@FocusGroup"
               data-terminal-window-url="@LaunchUrl">
     <FluentIcon Value="@(new Icons.Regular.Size16.WindowNew())" Color="Color.Default" />
 </FluentButton>

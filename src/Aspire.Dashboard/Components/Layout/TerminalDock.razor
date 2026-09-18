@@ -70,7 +70,11 @@
                                   TerminalKey="@_activeTerminalId"
                                   Url="@ActiveTerminalWindowUrl"
                                   FontSize="@ActiveTerminalFontSize"
+                                  FocusGroup="@_elementIdPrefix"
                                   Disabled="@(!_isVisible || IsPanelVisible || _activeTerminalId is null || _detachedTerminalIds.Contains(_activeTerminalId))"
+                                  WindowKeysToAdopt="@(_terminals.Select(t => t.TerminalId).ToArray())"
+                                  OnWindowsAdopted="@OnWindowsAdopted"
+                                  OnWindowTrackingFailed="@OnWindowTrackingFailed"
                                   OnWindowOpened="@OnDetachedWindowOpenedAsync"
                                   OnWindowClosed="@OnDetachedWindowClosedAsync" />
             <FluentButton Appearance="ButtonAppearance.Transparent"
@@ -100,11 +104,14 @@
                            second attached viewer would contend for the HMP1 primary role and resize the PTY behind
                            the window the user is actually typing into. *@
                         <div class="terminal-dock-detached">
-                            <span>@Loc[nameof(Resources.TerminalStrings.TerminalDockDetached)]</span>
+                            <span>@Loc[_recoveringWindowIds.Contains(terminal.TerminalId)
+                                ? nameof(Resources.TerminalStrings.TerminalDockRecoveringWindow)
+                                : nameof(Resources.TerminalStrings.TerminalDockDetached)]</span>
                             <div class="terminal-dock-detached-actions">
                                 <FluentButton Appearance="ButtonAppearance.Primary"
                                               Class="aspire-button"
-                                              OnClick="@(() => FocusDetachedWindowAsync(terminal.TerminalId))">
+                                              data-terminal-window-focus-group="@_elementIdPrefix"
+                                              data-terminal-window-focus-key="@terminal.TerminalId">
                                     @Loc[nameof(Resources.TerminalStrings.TerminalDockFocusWindow)]
                                 </FluentButton>
                                 <FluentButton Appearance="ButtonAppearance.Default"
@@ -115,8 +122,10 @@
                             </div>
                         </div>
                     }
-                    else
+                    else if (_windowTrackingReadyIds.Contains(terminal.TerminalId))
                     {
+                        @* Check browser-owned handles before mounting, including after component replacement:
+                           even a briefly mounted auto-fit viewer could resize a still-detached terminal. *@
                         <TerminalView @ref="_terminalViews[terminal.TerminalId]"
                                       EndpointPathAndQuery="@BuildEndpoint(terminal.TerminalId)"
                                       Chromeless="true"

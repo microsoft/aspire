@@ -350,7 +350,11 @@ public partial class TerminalDockTests : DashboardTestContext
         var cut = RenderComponent<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second", "third"));
-        cut.WaitForAssertion(() => Assert.Equal(3, cut.FindAll("[role=tab]").Count));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(3, cut.FindAll("[role=tab]").Count);
+            Assert.Equal(3, cut.FindComponents<TerminalView>().Count);
+        });
         var terminals = cut.FindComponents<TerminalView>().Select(view => view.Instance).ToArray();
         Assert.Equal("Terminals", cut.Find("[role=tablist]").GetAttribute("aria-label"));
 
@@ -402,9 +406,11 @@ public partial class TerminalDockTests : DashboardTestContext
         string[] ids = ["first", "second", "third"];
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot(ids));
         cut.WaitForAssertion(() => Assert.Equal(3, cut.FindAll("[role=tab]").Count));
-        await cut.FindAll("[role=tab]")[selected].ClickAsync(new());
+        // Window adoption can still rerender the dock after its tabs appear. Find and dispatch together so
+        // the click never captures an event handler from the preceding render.
+        await cut.InvokeAsync(() => cut.FindAll("[role=tab]")[selected].ClickAsync(new()));
 
-        var close = cut.FindAll(".terminal-dock-tab-close")[selected].ClickAsync(new());
+        var close = cut.InvokeAsync(() => cut.FindAll(".terminal-dock-tab-close")[selected].ClickAsync(new()));
         cut.WaitForAssertion(() => Assert.Equal([ids[selected]], client.ClosedTerminals.ToArray()));
         Assert.Equal(3, cut.FindAll("[role=tab]").Count);
         Assert.Equal(ids[selected], cut.Find("[role=tab][aria-selected=true]").TextContent.Trim());
@@ -531,7 +537,11 @@ public partial class TerminalDockTests : DashboardTestContext
         var cut = RenderComponent<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
-        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".terminal-dock-tab").Count));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(2, cut.FindAll(".terminal-dock-tab").Count);
+            Assert.Equal(2, cut.FindComponents<TerminalView>().Count);
+        });
         var terminals = cut.FindComponents<TerminalView>().Select(view => view.Instance).ToArray();
         var height = cut.Find(".terminal-dock").GetAttribute("style");
         Assert.False(cut.Find(".terminal-dock").HasAttribute("inert"));

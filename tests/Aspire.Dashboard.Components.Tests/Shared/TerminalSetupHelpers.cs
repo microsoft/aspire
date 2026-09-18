@@ -97,9 +97,13 @@ internal static class TerminalSetupHelpers
     {
         var windows = context.JSInterop.SetupModule($"{pathBase}/js/app-terminalwindow.js");
         windows.SetupVoid("registerTerminalWindowButton", _ => true).SetVoidResult();
+        windows.SetupVoid("adoptTerminalWindows", _ => true).SetVoidResult();
         windows.Setup<bool>("focusTerminalWindow", _ => true).SetResult(true);
         windows.SetupVoid("closeTerminalWindow", _ => true).SetVoidResult();
         windows.SetupVoid("unregisterTerminalWindowButton", _ => true).SetVoidResult();
+        windows.Setup<bool>("registerDetachedTerminalWindow", _ => true).SetResult(true);
+        windows.SetupVoid("unregisterDetachedTerminalWindow", _ => true).SetVoidResult();
+        windows.SetupVoid("releaseDetachedTerminalWindow", _ => true).SetVoidResult();
         return windows;
     }
 

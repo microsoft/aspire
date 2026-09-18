@@ -187,6 +187,12 @@
   <data name="TerminalDockDetached" xml:space="preserve">
     <value>This terminal is running in a separate window.</value>
   </data>
+  <data name="TerminalDockRecoveringWindow" xml:space="preserve">
+    <value>This terminal may still be open in a separate window. Focus it or return it to the panel to continue.</value>
+  </data>
+  <data name="TerminalWindowTrackingFailed" xml:space="preserve">
+    <value>Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</value>
+  </data>
   <data name="TerminalDockDetachBlocked" xml:space="preserve">
     <value>The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</value>
   </data>

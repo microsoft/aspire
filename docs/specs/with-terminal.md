@@ -412,6 +412,16 @@ Dock terminals show a detached placeholder until the window closes or the user
 chooses **Return to dock**. Disposing the opener leaves independent windows and
 their AppHost-owned producers running.
 
+Detached tracking survives launcher/circuit replacement and full same-origin
+opener reload. Before mounting any dock viewer, the dashboard reconciles durable
+records scoped to the browsing context, dashboard base, terminal, and window
+generation. Detached windows announce their presence so the opener can recover
+live handles without opening another window or changing terminal dimensions.
+An unanswered discovery request does not prove closure: a window closed before
+handle recovery leaves an unconfirmed placeholder until **Focus window** or
+**Return to dock** is used. Focus reuses the named window through user activation;
+Return revokes its generation so delayed discovery cannot restore the old window.
+
 The terminal frame keeps font decrease/increase buttons, the current font
 size, and the live columns-by-rows selector together in its bottom-right
 footer. A separate Fit button switches to container-sized rows and columns
@@ -442,8 +452,10 @@ resource pages. Resource terminals remain separate from AppHost-owned dock tabs.
 Before the first opening, the dock watches only AppHost terminal metadata so
 `Show()` can reveal it remotely. Resource-link tracking and browser controls start
 on first opening; ordinary metadata updates do not render the unopened dock.
-Window-launch listeners are registered only once the launch button has a usable
-terminal target and font size, before the button is enabled.
+Window-launch buttons are enabled only once their native click listener, usable
+terminal target, and font size are ready. Detached-window
+tracking is initialized earlier, before dock viewers mount, so recovering a
+detached tab does not briefly create a competing auto-fit viewer.
 
 Dock panes, interaction dialogs and detached windows automatically fit when
 opened. A detached window takes primary once, carrying the originating view's
