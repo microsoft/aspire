@@ -32,6 +32,57 @@ public class DurableTaskResourceExtensionsTests
         Assert.Equal(expectedConnectionString, connectionString);
     }
 
+    [Theory]
+    [InlineData(null, false, "taskhub")]
+    [InlineData("ZeusOrchestrationHub", false, "ZeusOrchestrationHub")]
+    [InlineData("ParameterHub", true, "ParameterHub")]
+    public async Task AddTaskHub_RunAsEmulator_DashboardUrlUsesEmulatorRoute(string? taskHubName, bool useParameter, string expectedTaskHubName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var scheduler = builder.AddDurableTaskScheduler("scheduler")
+            .RunAsEmulator(emulator => emulator.WithEndpoint("dashboard", endpoint =>
+                endpoint.AllocatedEndpoint = new(endpoint, "localhost", 18082)));
+        var taskHub = scheduler.AddTaskHub("taskhub");
+
+        if (taskHubName is not null)
+        {
+            if (useParameter)
+            {
+                taskHub.WithTaskHubName(builder.AddParameter("hub-name", taskHubName));
+            }
+            else
+            {
+                taskHub.WithTaskHubName(taskHubName);
+            }
+        }
+
+        using var app = builder.Build();
+
+        await builder.Eventing.PublishAsync(new ResourceReadyEvent(taskHub.Resource, app.Services));
+
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(taskHub.Resource.Name, out var resourceEvent));
+        var url = Assert.Single(resourceEvent.Snapshot.Urls);
+        Assert.Equal($"http://localhost:18082/subscriptions/local/schedulers/emulator/taskhubs/{expectedTaskHubName}/orchestrations", url.Url);
+        Assert.Equal("Task Hub Dashboard", url.DisplayProperties?.DisplayName);
+    }
+
+    [Fact]
+    public async Task AddTaskHub_RunAsExisting_DoesNotPublishEmulatorDashboardUrl()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var scheduler = builder.AddDurableTaskScheduler("scheduler")
+            .RunAsExisting("Endpoint=https://existing-scheduler.durabletask.io;Authentication=DefaultAzure");
+        var taskHub = scheduler.AddTaskHub("taskhub");
+        using var app = builder.Build();
+
+        await builder.Eventing.PublishAsync(new ResourceReadyEvent(taskHub.Resource, app.Services));
+
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(taskHub.Resource.Name, out var resourceEvent));
+        Assert.Empty(resourceEvent.Snapshot.Urls);
+    }
+
     [Fact]
     public async Task AddDurableTaskScheduler_RunAsExisting_ResolvedConnectionString()
     {

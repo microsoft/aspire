@@ -230,7 +230,7 @@ public static class DurableTaskResourceExtensions
                 var notifications = e.Services.GetRequiredService<ResourceNotificationService>();
 
                 var url = builder.Resource.IsEmulator
-                    ? await ReferenceExpression.Create($"{r.Parent.EmulatorDashboardEndpoint}/subscriptions/default/schedulers/default/taskhubs/{r.TaskHubName}").GetValueAsync(ct).ConfigureAwait(false)
+                    ? await ReferenceExpression.Create($"{r.Parent.EmulatorDashboardEndpoint}/subscriptions/local/schedulers/emulator/taskhubs/{r.TaskHubName}/orchestrations").GetValueAsync(ct).ConfigureAwait(false)
                     : null;
 
                 await notifications.PublishUpdateAsync(r, snapshot => snapshot with
