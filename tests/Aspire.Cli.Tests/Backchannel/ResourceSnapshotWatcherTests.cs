@@ -15,6 +15,95 @@ namespace Aspire.Cli.Tests.Backchannel;
 
 public class ResourceSnapshotWatcherTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ResourceSnapshotWatcher_DisposeDoesNotWaitForUncooperativePeerAndObservesLateFault(bool versioned, bool duringInitialLoad)
+    {
+        var getGate = new TaskCompletionSource<List<ResourceSnapshot>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watchGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watchStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var faultObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var logger = new FakeLogger<ResourceSnapshotWatcher>(_ => faultObserved.TrySetResult());
+        var failure = new IOException("Peer failed after local disposal.");
+        var watchCalls = 0;
+        CancellationToken getToken = default;
+        CancellationToken watchToken = default;
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            SupportsResourceSnapshotVersionsV1 = versioned,
+            GetResourceSnapshotsHandler = token =>
+            {
+                getToken = token;
+                return duringInitialLoad ? getGate.Task : Task.FromResult(new List<ResourceSnapshot>());
+            },
+            WatchResourceSnapshotsHandler = (_, token) => Watch(token)
+        };
+        var watcher = new ResourceSnapshotWatcher(connection, logger, bufferUpdates: true);
+
+        try
+        {
+            if (!duringInitialLoad)
+            {
+                await watcher.WaitForInitialLoadAsync().DefaultTimeout();
+            }
+
+            await watcher.DisposeAsync().DefaultTimeout();
+
+            Assert.True(getToken.IsCancellationRequested);
+            Assert.Equal(versioned || !duringInitialLoad ? 1 : 0, Volatile.Read(ref watchCalls));
+            Assert.Equal(0, connection.DisposeCallCount);
+            if (versioned || !duringInitialLoad)
+            {
+                Assert.True(watchToken.IsCancellationRequested);
+                Assert.False(watchStopped.Task.IsCompleted);
+            }
+            if (duringInitialLoad)
+            {
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => watcher.WaitForInitialLoadAsync()).DefaultTimeout();
+                getGate.SetException(failure);
+                watchGate.SetResult();
+            }
+            else
+            {
+                await using var updates = watcher.WatchResourceSnapshotBatchesAsync(0).GetAsyncEnumerator();
+                Assert.False(await updates.MoveNextAsync().DefaultTimeout());
+                watchGate.SetException(failure);
+            }
+
+            await faultObserved.Task.DefaultTimeout();
+            var log = Assert.Single(logger.Collector.GetSnapshot());
+            Assert.Equal("Resource snapshot watch failed after cancellation.", log.Message);
+            Assert.Same(failure, Assert.IsType<AggregateException>(log.Exception).InnerException);
+            Assert.Equal(1, connection.GetResourceSnapshotsCallCount);
+            Assert.Equal(versioned || !duringInitialLoad ? 1 : 0, Volatile.Read(ref watchCalls));
+            Assert.Equal(0, connection.DisposeCallCount);
+        }
+        finally
+        {
+            getGate.TrySetResult([]);
+            watchGate.TrySetResult();
+        }
+
+        async IAsyncEnumerable<ResourceSnapshot> Watch([EnumeratorCancellation] CancellationToken token)
+        {
+            watchToken = token;
+            Interlocked.Increment(ref watchCalls);
+            try
+            {
+                // Deliberately ignore the RPC cancellation token until the test releases the peer.
+                await watchGate.Task;
+                yield break;
+            }
+            finally
+            {
+                watchStopped.TrySetResult();
+            }
+        }
+    }
+
     [Fact]
     public async Task ResourceSnapshotWatcher_DisposeDuringInitialLoadCancelsGetAndWatch()
     {

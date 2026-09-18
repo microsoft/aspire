@@ -65,74 +65,12 @@ internal sealed class ResourceSnapshotWatcher : IDisposable, IAsyncDisposable
 
     private async Task WatchAsync(CancellationToken cancellationToken)
     {
+        var watchTask = WatchCoreAsync(cancellationToken);
         try
         {
-            if (!_connection.SupportsResourceSnapshotVersionsV1)
-            {
-                // Legacy peers always report version 0, so concurrent GET/watch results cannot be reconciled.
-                // Preserve their original ordering by seeding the GET snapshot before starting the watch.
-                var snapshots = await _connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
-                lock (_resourcesLock)
-                {
-                    foreach (var snapshot in snapshots)
-                    {
-                        _resources[snapshot.Name] = snapshot;
-                    }
-                }
-
-                _initialLoadTcs.TrySetResult();
-                await WatchChangesAsync(cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                // Start the watch before fetching the initial snapshot. The AppHost subscribes before replaying
-                // its current snapshots, so the watch establishes a replay point even though the two JSON-RPC
-                // calls are not ordered. Version reconciliation retains the newest observed snapshot.
-                using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                var watchTask = WatchChangesAsync(watchCts.Token);
-                List<ResourceSnapshot> snapshots;
-                try
-                {
-                    snapshots = await _connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
-                }
-                catch
-                {
-                    // Cleanup failures must not replace the initial GET failure.
-                    try
-                    {
-                        watchCts.Cancel();
-                    }
-                    catch (Exception)
-                    {
-                    }
-
-                    try
-                    {
-                        await watchTask.ConfigureAwait(false);
-                    }
-                    catch (Exception)
-                    {
-                    }
-
-                    throw;
-                }
-
-                lock (_resourcesLock)
-                {
-                    foreach (var snapshot in snapshots)
-                    {
-                        if (!_resources.TryGetValue(snapshot.Name, out var currentSnapshot) ||
-                            snapshot.Version > currentSnapshot.Version)
-                        {
-                            _resources[snapshot.Name] = snapshot;
-                        }
-                    }
-                }
-
-                _initialLoadTcs.TrySetResult();
-                await watchTask.ConfigureAwait(false);
-            }
-
+            // Cancellation sent over RPC is cooperative. End the local subscription without
+            // waiting for the peer, but leave the borrowed monitor-owned connection open.
+            await watchTask.WaitAsync(cancellationToken).ConfigureAwait(false);
             _updateSignal?.Writer.TryComplete();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -145,12 +83,101 @@ internal sealed class ResourceSnapshotWatcher : IDisposable, IAsyncDisposable
             _initialLoadTcs.TrySetException(ex);
             _updateSignal?.Writer.TryComplete(ex);
         }
+        finally
+        {
+            // Keep one observer on the existing pump, not a replacement watch or a task per
+            // retry. The pump owns its enumerator and disposes it only after MoveNext ends.
+            _ = watchTask.ContinueWith(
+                task =>
+                {
+                    var exception = task.Exception;
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        _logger.LogDebug(exception, "Resource snapshot watch failed after cancellation.");
+                    }
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+    }
+
+    private async Task WatchCoreAsync(CancellationToken cancellationToken)
+    {
+        if (!_connection.SupportsResourceSnapshotVersionsV1)
+        {
+            // Legacy peers always report version 0, so concurrent GET/watch results cannot be reconciled.
+            // Preserve their original ordering by seeding the GET snapshot before starting the watch.
+            var snapshots = await _connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_resourcesLock)
+            {
+                foreach (var snapshot in snapshots)
+                {
+                    _resources[snapshot.Name] = snapshot;
+                }
+            }
+
+            _initialLoadTcs.TrySetResult();
+            await WatchChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            // Start the watch before fetching the initial snapshot. The AppHost subscribes before replaying
+            // its current snapshots, so the watch establishes a replay point even though the two JSON-RPC
+            // calls are not ordered. Version reconciliation retains the newest observed snapshot.
+            using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var watchTask = WatchChangesAsync(watchCts.Token);
+            List<ResourceSnapshot> snapshots;
+            try
+            {
+                snapshots = await _connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            catch
+            {
+                // Cleanup failures must not replace the initial GET failure.
+                try
+                {
+                    watchCts.Cancel();
+                }
+                catch (Exception)
+                {
+                }
+
+                try
+                {
+                    await watchTask.ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                }
+
+                throw;
+            }
+
+            lock (_resourcesLock)
+            {
+                foreach (var snapshot in snapshots)
+                {
+                    if (!_resources.TryGetValue(snapshot.Name, out var currentSnapshot) ||
+                        snapshot.Version > currentSnapshot.Version)
+                    {
+                        _resources[snapshot.Name] = snapshot;
+                    }
+                }
+            }
+
+            _initialLoadTcs.TrySetResult();
+            await watchTask.ConfigureAwait(false);
+        }
     }
 
     private async Task WatchChangesAsync(CancellationToken cancellationToken)
     {
         await foreach (var snapshot in _connection.WatchResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             long? retainedVersion = null;
             lock (_resourcesLock)
             {

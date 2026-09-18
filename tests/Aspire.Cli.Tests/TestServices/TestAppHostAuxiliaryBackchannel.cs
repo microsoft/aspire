@@ -17,6 +17,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 {
     private int _getResourceSnapshotsCallCount;
     private int _lastGetResourceSnapshotsIncludeHidden = -1;
+    private int _disposeCallCount;
 
     private IAppHostSocket _socket = new TestAppHostSocket("/tmp/test.sock");
 
@@ -86,6 +87,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// Gets the number of snapshot requests made through this backchannel.
     /// </summary>
     public int GetResourceSnapshotsCallCount => Volatile.Read(ref _getResourceSnapshotsCallCount);
+    public int DisposeCallCount => Volatile.Read(ref _disposeCallCount);
 
     /// <summary>
     /// Gets the include-hidden value from the latest snapshot request.
@@ -392,6 +394,6 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public void Dispose()
     {
-        // Nothing to dispose in the test implementation
+        Interlocked.Increment(ref _disposeCallCount);
     }
 }

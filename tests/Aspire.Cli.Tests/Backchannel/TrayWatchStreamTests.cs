@@ -801,6 +801,114 @@ public class TrayWatchStreamTests
         }
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task StalledResourceWatchDoesNotBlockReconciliationOrQuit(bool removeFirst, bool brokenPipe)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var time = new FakeTimeProvider();
+        var snapshots = Channel.CreateUnbounded<IReadOnlyList<IAppHostAuxiliaryBackchannel>>();
+        var messages = Channel.CreateUnbounded<TrayWatchMessage>();
+        var peerGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watchesStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var repeatedDiscovery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watchCalls = 0;
+        var stoppedCalls = 0;
+        var initial = Connection("/project/a.cs", 10);
+        initial.ResourceSnapshots = [new() { Name = "api", State = "Running", HealthStatus = "Healthy" }];
+        initial.WatchResourceSnapshotsHandler = (_, token) => Watch(token);
+        var replacement = Connection("/project/a.cs", 20);
+        replacement.ResourceSnapshots = [new() { Name = "api", State = "Waiting" }];
+        replacement.WatchResourceSnapshotsHandler = (_, token) => Watch(token);
+        var dashboardCalls = 0;
+        replacement.GetDashboardUrlsHandler = _ =>
+        {
+            if (Interlocked.Increment(ref dashboardCalls) == 4)
+            {
+                repeatedDiscovery.TrySetResult();
+            }
+            return Task.FromResult<DashboardUrlsState?>(null);
+        };
+        var closeOutput = 0;
+        var monitor = new TestAuxiliaryBackchannelMonitor { WatchConnectionsHandler = token => snapshots.Reader.ReadAllAsync(token) };
+        snapshots.Writer.TryWrite([initial]);
+        var run = CreateStream(monitor, time).RunAsync((json, _) =>
+        {
+            if (Volatile.Read(ref closeOutput) != 0)
+            {
+                throw new IOException("Tray quit.");
+            }
+            messages.Writer.TryWrite(Deserialize(json));
+            return Task.CompletedTask;
+        }, cancellation.Token);
+
+        try
+        {
+            Assert.Equal("healthy", Assert.Single((await messages.Reader.ReadAsync().DefaultTimeout()).AppHosts!).Health);
+            if (removeFirst)
+            {
+                snapshots.Writer.TryWrite([]);
+                Assert.Empty((await messages.Reader.ReadAsync().DefaultTimeout()).AppHosts!);
+            }
+            snapshots.Writer.TryWrite([replacement]);
+            var host = Assert.Single((await messages.Reader.ReadAsync().DefaultTimeout()).AppHosts!);
+            Assert.Equal(20, host.AppHostPid);
+            Assert.Equal("warning", host.Health);
+
+            for (var i = 0; i < 3; i++)
+            {
+                snapshots.Writer.TryWrite([replacement]);
+            }
+            await repeatedDiscovery.Task.DefaultTimeout();
+            if (brokenPipe)
+            {
+                Volatile.Write(ref closeOutput, 1);
+                time.Advance(TrayCliProtocol.HeartbeatInterval);
+            }
+            else
+            {
+                cancellation.Cancel();
+            }
+
+            Assert.Equal(CliExitCodes.Success, await run.DefaultTimeout());
+            Assert.False(peerGate.Task.IsCompleted);
+            Assert.Equal(2, Volatile.Read(ref watchCalls));
+            Assert.Equal(0, Volatile.Read(ref stoppedCalls));
+            Assert.Equal(1, initial.GetResourceSnapshotsCallCount);
+            Assert.Equal(1, replacement.GetResourceSnapshotsCallCount);
+            Assert.Equal(0, initial.DisposeCallCount);
+            Assert.Equal(0, replacement.DisposeCallCount);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            peerGate.TrySetResult();
+            await run.DefaultTimeout();
+        }
+        await watchesStopped.Task.DefaultTimeout();
+
+        async IAsyncEnumerable<ResourceSnapshot> Watch([EnumeratorCancellation] CancellationToken token)
+        {
+            Interlocked.Increment(ref watchCalls);
+            try
+            {
+                await peerGate.Task;
+                yield break;
+            }
+            finally
+            {
+                Assert.True(token.IsCancellationRequested);
+                if (Interlocked.Increment(ref stoppedCalls) == 2)
+                {
+                    watchesStopped.TrySetResult();
+                }
+            }
+        }
+    }
+
     [Fact]
     public async Task SharedMessagesUseCompactVersionedSchema()
     {
