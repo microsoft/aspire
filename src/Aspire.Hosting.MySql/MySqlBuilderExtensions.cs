@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 #pragma warning disable ASPIRETERMINAL001
 
+using System.Globalization;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.MySql;
@@ -95,6 +96,7 @@ public static class MySqlBuilderExtensions
 
     internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(MySqlServerResource resource, CancellationToken cancellationToken)
     {
+        var port = resource.PrimaryEndpoint.TargetPort ?? throw new DistributedApplicationException("The MySQL REPL port is not available.");
         var password = await resource.PasswordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrEmpty(password))
         {
@@ -105,7 +107,7 @@ public static class MySqlBuilderExtensions
         {
             Title = $"mysql ({resource.Name})",
             Executable = "mysql",
-            Arguments = ["--no-defaults", "--no-login-paths", "--user=root", "--host=127.0.0.1", "--port=3306"],
+            Arguments = ["--no-defaults", "--no-login-paths", "--user=root", "--host=127.0.0.1", $"--port={port.ToString(CultureInfo.InvariantCulture)}"],
             EnvironmentVariables =
             {
                 // The bundled MySQL 9.7 client still supports MYSQL_PWD. Forward it by name

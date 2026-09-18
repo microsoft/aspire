@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREMCP001
 #pragma warning disable ASPIRETERMINAL001
 
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Diagnostics.CodeAnalysis;
@@ -128,6 +129,7 @@ public static class PostgresBuilderExtensions
 
     internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(PostgresServerResource resource, CancellationToken cancellationToken)
     {
+        var port = resource.PrimaryEndpoint.TargetPort ?? throw new DistributedApplicationException("The PostgreSQL REPL port is not available.");
         var username = await resource.UserNameReference.GetValueAsync(cancellationToken).ConfigureAwait(false);
         var password = await resource.PasswordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
@@ -139,7 +141,7 @@ public static class PostgresBuilderExtensions
         {
             Title = $"psql ({resource.Name})",
             Executable = "psql",
-            Arguments = ["--username", username, "--dbname", "postgres", "--no-password"],
+            Arguments = ["--username", username, "--dbname", "postgres", "--no-password", "--port", port.ToString(CultureInfo.InvariantCulture)],
             EnvironmentVariables = { ["PGPASSWORD"] = password }
         };
     }
