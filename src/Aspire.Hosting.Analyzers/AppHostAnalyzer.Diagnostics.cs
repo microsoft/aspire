@@ -32,9 +32,20 @@ public partial class AppHostAnalyzer
             isEnabledByDefault: true,
             helpLinkUri: $"https://aka.ms/aspire/diagnostics/{ContainerResourceCannotBeProjectedId}");
 
+        private const string ConnectionStringExpressionMustBeResolvedId = "ASPIRE013";
+        internal static readonly DiagnosticDescriptor s_connectionStringExpressionMustBeResolved = new(
+            id: ConnectionStringExpressionMustBeResolvedId,
+            title: "Resolve connection-string expressions through the effective resource",
+            messageFormat: "Direct access to 'ConnectionStringExpression' may ignore a selected resource projection. Use 'GetConnectionStringExpression()' to prefer the projection, or pass 'preferOwner: true' when owner precedence is intentional.",
+            category: "Usage",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true,
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{ConnectionStringExpressionMustBeResolvedId}");
+
         public static readonly ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics = ImmutableArray.Create(
             s_modelNameMustBeValid,
-            s_containerResourceCannotBeProjected
+            s_containerResourceCannotBeProjected,
+            s_connectionStringExpressionMustBeResolved
         );
     }
 }

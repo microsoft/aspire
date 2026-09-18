@@ -1185,7 +1185,7 @@ public class ResourceProjectionTests
     }
 
     [Fact]
-    public async Task ProjectionContractsResolveToTheOwnerWhenBothDeclareThem()
+    public async Task ConnectionStringManifestCurrentlyResolvesToTheOwnerWhenBothDeclareTheContract()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -1220,6 +1220,57 @@ public class ResourceProjectionTests
         var manifest = await ManifestUtils.GetManifest(resource.Resource.AsContainer()!);
 
         Assert.Equal("Host=projection", manifest["connectionString"]?.ToString());
+    }
+
+    [Fact]
+    public void EffectiveCapabilitiesPreferTheProjectionAndCanPreferTheOwner()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var resource = builder.AddResource(new ConnectionStringOwnerResource("db"));
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => ConnectionStringProjection.CreateProjection(resource.Resource),
+            container => container.WithImage("contoso/db", "1.0"));
+
+        var projection = Assert.IsType<ConnectionStringProjection>(resource.Resource.AsContainer());
+
+        Assert.Same(
+            projection,
+            resource.Resource.GetEffectiveCapability<IResourceWithConnectionString>());
+        Assert.Same(
+            resource.Resource,
+            resource.Resource.GetEffectiveCapability<IResourceWithConnectionString>(preferOwner: true));
+        Assert.Equal("Host=projection", resource.Resource.GetConnectionStringExpression().ValueExpression);
+        Assert.Equal("Host=owner", resource.Resource.GetConnectionStringExpression(preferOwner: true).ValueExpression);
+    }
+
+    [Fact]
+    public void EffectiveCapabilitiesFallBackAndReturnNullWhenUnavailable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var ownerOnly = builder.AddResource(new ConnectionStringOwnerResource("owner"));
+        ownerOnly.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            container => container.WithImage("contoso/db", "1.0"));
+        var projectionOnly = builder.AddResource(new PlainOwnerResource("projection"));
+        projectionOnly.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => ConnectionStringOnlyProjection.CreateProjection(projectionOnly.Resource),
+            container => container.WithImage("contoso/db", "1.0"));
+        var neither = builder.AddResource(new PlainOwnerResource("neither"));
+        neither.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            container => container.WithImage("contoso/db", "1.0"));
+
+        Assert.Same(
+            ownerOnly.Resource,
+            ownerOnly.Resource.GetEffectiveCapability<IResourceWithConnectionString>());
+        Assert.Same(
+            projectionOnly.Resource.AsContainer(),
+            projectionOnly.Resource.GetEffectiveCapability<IResourceWithConnectionString>(preferOwner: true));
+        Assert.Null(neither.Resource.GetEffectiveCapability<IResourceWithConnectionString>());
     }
 
     private sealed class PlainOwnerResource(string name) : Resource(name);

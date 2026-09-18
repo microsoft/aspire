@@ -40,6 +40,75 @@ public static class ResourceExtensions
     }
 
     /// <summary>
+    /// Gets the resource view that provides the specified capability.
+    /// </summary>
+    /// <typeparam name="TCapability">The resource capability to resolve.</typeparam>
+    /// <param name="resource">The resource whose capability is resolved.</param>
+    /// <param name="preferOwner">
+    /// <see langword="true"/> to prefer the canonical owner and fall back to its effective projection;
+    /// otherwise, prefer the effective projection and fall back to the owner.
+    /// </param>
+    /// <returns>
+    /// The first resource view in the requested order that implements <typeparamref name="TCapability"/>,
+    /// or <see langword="null"/> when neither view implements it.
+    /// </returns>
+    /// <remarks>
+    /// Resource projections can provide behavior that differs from their canonical owner. Use this method when
+    /// consuming a capability so that a selected projection can supply the effective behavior. Use
+    /// <paramref name="preferOwner"/> only when the owner's implementation should take precedence.
+    /// </remarks>
+    /// <example>
+    /// Resolve a connection-string provider while allowing a selected projection to override the owner:
+    /// <code lang="csharp">
+    /// var connectionStringResource =
+    ///     resource.GetEffectiveCapability&lt;IResourceWithConnectionString&gt;();
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="resource"/> is <see langword="null"/>.</exception>
+    [AspireExportIgnore(Reason = "Generic .NET resource capability resolution is not part of the ATS surface.")]
+    public static TCapability? GetEffectiveCapability<TCapability>(this IResource resource, bool preferOwner = false)
+        where TCapability : class, IResource
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        var owner = resource.GetOwnerOrSelf();
+        var effective = owner.GetEffectiveResource();
+
+        return preferOwner
+            ? owner as TCapability ?? effective as TCapability
+            : effective as TCapability ?? owner as TCapability;
+    }
+
+    /// <summary>
+    /// Gets the connection-string expression supplied by a resource or its selected projection.
+    /// </summary>
+    /// <param name="resource">The resource whose connection-string expression is resolved.</param>
+    /// <param name="preferOwner">
+    /// <see langword="true"/> to prefer the canonical owner's connection-string implementation;
+    /// otherwise, prefer the effective projection.
+    /// </param>
+    /// <returns>The resolved connection-string expression.</returns>
+    /// <remarks>
+    /// The non-preferred resource view remains a fallback. Directly accessing
+    /// <see cref="IResourceWithConnectionString.ConnectionStringExpression"/> can bypass a selected projection.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="resource"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when neither the resource owner nor its effective projection implements
+    /// <see cref="IResourceWithConnectionString"/>.
+    /// </exception>
+    [AspireExportIgnore(Reason = "Projection-aware .NET resource capability resolution is not part of the ATS surface.")]
+    public static ReferenceExpression GetConnectionStringExpression(this IResource resource, bool preferOwner = false)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        var provider = resource.GetEffectiveCapability<IResourceWithConnectionString>(preferOwner)
+            ?? throw new InvalidOperationException($"Resource '{resource.Name}' does not provide a connection string.");
+
+        return provider.ConnectionStringExpression;
+    }
+
+    /// <summary>
     /// Gets the canonical model resource represented by the specified resource.
     /// </summary>
     /// <param name="resource">The resource to canonicalize.</param>
@@ -55,9 +124,9 @@ public static class ResourceExtensions
     /// <para>
     /// Keep using the projection for container-specific configuration. The owner need not have the same CLR type
     /// or implement the same interfaces, so the result is deliberately returned as <see cref="IResource"/>.
-    /// When resolving a contract such as <see cref="IResourceWithConnectionString"/>, prefer the owner when it
-    /// implements that contract and otherwise fall back to the projection. An owner can vary a contract's value
-    /// by inspecting its selected shape or shared annotations, such as <see cref="ConnectionStringRedirectAnnotation"/>.
+    /// When resolving a behavioral contract such as <see cref="IResourceWithConnectionString"/>, use
+    /// <see cref="GetEffectiveCapability{TCapability}(IResource, bool)"/> so a selected projection takes precedence
+    /// unless owner precedence is explicitly requested.
     /// </para>
     /// <para>
     /// Integration-authored projections are associated with their owner before the projection configuration
