@@ -5,8 +5,8 @@
   "test_name": "Aspire.Hosting.Azure.Tests.AzureServiceBusExtensionsTests.AzureServiceBusEmulatorResourceGeneratesConfigJsonOnlyChangedProperties",
   "job_name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
   "error_pattern": "System.Threading.Tasks.TaskCanceledException : A task was canceled.\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T]\n   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync\n   at Aspire.Hosting.DistributedApplication.StopAsync",
-  "analysis": "PR only updates PackageValidationBaselineVersion and removes CompatibilitySuppressions.xml entries, unrelated to ServiceBus emulator config generation or DistributedApplication shutdown logic. This is a previously identified recurring shutdown timing issue with 4+ prior occurrences.",
-  "failure_details": "System.Threading.Tasks.TaskCanceledException : A task was canceled.\nat Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StopAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 497\n   at Aspire.Hosting.Azure.Tests.AzureServiceBusExtensionsTests.AzureServiceBusEmulatorResourceGeneratesConfigJsonOnlyChangedProperties() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Azure.Tests/AzureServiceBusExtensionsTests.cs:line 499\n--- End of stack trace from previous location ---",
+  "analysis": "Test fails with a TaskCanceledException while stopping the DistributedApplication host during test teardown. The PR does not modify any Aspire.Hosting.Azure code or the DistributedApplication host shutdown path, so this is unrelated to the PR's changes (skills bundle/telemetry hooks) and matches a previously identified recurring flaky pattern.",
+  "failure_details": "Error:\nSystem.Threading.Tasks.TaskCanceledException : A task was canceled.\nStack Trace:\nat Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StopAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 497\n   at Aspire.Hosting.Azure.Tests.AzureServiceBusExtensionsTests.AzureServiceBusEmulatorResourceGeneratesConfigJsonOnlyChangedProperties() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Azure.Tests/AzureServiceBusExtensionsTests.cs:line 499\n--- End of stack trace from previous location ---",
   "occurrences": [
     {
       "run_id": 35322237059,
@@ -42,6 +42,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
       "pr_number": 20156,
       "observed_at": "2026-09-18T18:56:39Z"
+    },
+    {
+      "run_id": 35383851199,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35383851199",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "pr_number": 19393,
+      "observed_at": "2026-09-18T20:03:34Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20227"

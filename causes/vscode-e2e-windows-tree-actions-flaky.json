@@ -5,8 +5,8 @@
   "test_name": "VS Code extension E2E (Windows, tree-actions)",
   "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
   "error_pattern": "Process completed with exit code 1. Timed out after 10000ms waiting for E2E control revision <timestamp>. Occurs both in the main test ('routes view, copy, endpoint, log, and resource commands through tree handlers') and its teardown 'after each' hook.",
-  "analysis": "Both the test and its teardown failed with a 10-second timeout waiting for the extension-host's E2E control state to reach an expected revision, indicating an extension state-sync/timing issue in the test harness rather than a functional defect. The PR only modifies Aspire.Cli SDK dump restore logic, unrelated to VS Code extension tree action functionality or the dashboard resource state sync mechanism exercised by this test.",
-  "failure_details": "Timed out after 10000ms waiting for E2E control revision 1789349543811.\nLast error: <none>\nLast state: {\"extensionHostSessionId\": \"3ef0325a-1238-4224-94a2-a83f3cec22cc\", \"updatedAt\": \"2026-09-14T01:34:30.521Z\", \"runId\": \"7880-1789349509494\", \"state\": {\"viewMode\": \"workspace\", \"isRepositoryLoading\": false, \"isWorkspaceAppHostDiscoveryComplete\": true, \"hasError\": false, \"workspaceAppHost\": {\"appHostPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-bmkpaJ\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\", \"appHostPid\": 8152, \"dashboardUrl\": \"https://localhost:62750/login?t=<redacted>\", \"resources\": [...] } } }\n\nTeardown: Tree action E2E teardown failed.\n1. Error: Timed out after 10000ms waiting for E2E control revision 1789349543812.\nLast error: <none>\nLast state: <redacted>\n    at runE2eTeardown (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:217:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Context.<anonymous> (out\\test-e2e\\test-e2e\\treeActions.e2e.test.js:46:9)",
+  "analysis": "The 'Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers' test timed out waiting for an E2E control state revision after 10000ms during a Windows CI run. The PR only modifies the Aspire skills bundle and telemetry hook scripts, not the VS Code extension's tree action or E2E control infrastructure, so this is a timing-related flake unrelated to the PR.",
+  "failure_details": "Error: Timed out after 10000ms waiting for E2E control revision 1789759268484.\nLast error: <none>\nLast state (excerpt): {\"extensionHostSessionId\": \"98bf92ad-5fc4-415f-a6bf-0d1f4b5085ba\", \"updatedAt\": \"2026-09-18T19:23:09.322Z\", \"runId\": \"2344-1789759238053\", \"state\": {\"viewMode\": \"workspace\", \"isRepositoryLoading\": false, \"isWorkspaceAppHostDiscoveryComplete\": true, \"hasError\": false, \"workspaceAppHost\": {\"appHostPath\": \"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-EQ32gE\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\", \"appHostPid\": 936, \"dashboardUrl\": \"https://localhost:49759/login?t=<redacted>\", \"resources\": [{\"name\": \"e2e-no-commands\", \"displayName\": \"e2e-no-commands\", \"resourceType\": \"NoCommandsResource\"}, {\"name\": \"e2e-terminal-kmvvtups\", \"displayName\": \"e2e-terminal\", \"resourceType\": \"Project\", \"state\": \"Running\"}]}}}",
   "occurrences": [
     {
       "run_id": 34795444609,
@@ -14,6 +14,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
       "pr_number": 20062,
       "observed_at": "2026-09-14T01:48:41Z"
+    },
+    {
+      "run_id": 35383851199,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35383851199",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "pr_number": 19393,
+      "observed_at": "2026-09-18T20:03:34Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20103"

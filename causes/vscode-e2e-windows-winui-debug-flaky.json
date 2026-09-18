@@ -5,8 +5,8 @@
   "test_name": "VS Code extension E2E (Windows, winui-debug)",
   "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)",
   "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted.",
-  "analysis": "The job fails with a bare 'Process completed with exit code 1' annotation and no fetchable job logs or extracted TRX test failures, making it impossible to attribute this failure to PR changes. This matches a previously tracked recurring pattern (issue #19935) with 5 prior occurrences of the identical unattributable exit-code-1 failure on this shard, and the PR only changes Radius installation pins/tests, unrelated to VS Code extension E2E infrastructure.",
-  "failure_details": "**Job:** Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)\n**Annotation:** failure: Process completed with exit code 1.\n**Job log:** (Failed to fetch logs for job 105699710566)\nNo TRX test failure entries were extracted for this shard.",
+  "analysis": "The 'Run extension E2E tests' step failed with a bare exit code 1 and no retrievable job logs or TRX failures. The PR does not touch VS Code extension winui-debug functionality (only skills bundle/telemetry hooks), so this is unrelated to the PR and matches a recurring flaky shard pattern.",
+  "failure_details": "Annotations: failure: Process completed with exit code 1. Failed Steps: Run extension E2E tests. Job logs unavailable ('Failed to fetch logs for job 105729976207'). No TRX test failure data was extracted for this job.",
   "occurrences": [
     {
       "run_id": 33887016795,
@@ -49,6 +49,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)",
       "pr_number": 20148,
       "observed_at": "2026-09-18T18:23:45Z"
+    },
+    {
+      "run_id": 35383851199,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35383851199",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)",
+      "pr_number": 19393,
+      "observed_at": "2026-09-18T20:03:34Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19935"

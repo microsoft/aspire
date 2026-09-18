@@ -2,10 +2,10 @@
   "id": "setup-dotnet-core-econnreset",
   "type": "infra-failure",
   "title": "Set up .NET Core step fails with 'read ECONNRESET' network error",
-  "job_name": "Tests / Package tests - Linux (class, Aspire.Templates.Tests, Templates-BuildAndRunTemplateTests, Templat... / Templates-BuildAndRunTemplateTests (ubuntu-latest)",
+  "job_name": "Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-TestRunOutputTests, Templates-T... / Templates-TestRunOutputTests (windows-latest)",
   "error_pattern": "read ECONNRESET (occurs during 'Set up .NET Core' step, likely while downloading the SDK/runtime; transient network reset unrelated to PR content)",
-  "analysis": "The 'Set up .NET Core' step failed with an ECONNRESET network error, which is a transient network connection reset unrelated to any code change. The PR only modifies a test file to disable Azure SQL principal reconciliation tests, which has no bearing on the .NET SDK setup/download process. This matches the known transient network connection reset pattern (ECONNRESET) and a prior recorded cause with 4 prior occurrences.",
-  "failure_details": "Job Annotations:\n- warning: No files were found with the provided path: **/*.binlog\ntestresults/**\nartifacts/bin/Aspire.Templates.Tests/Debug/net8.0/logs/**\nartifacts/log/test-logs/**. No artifacts will be uploaded.\n- failure: read ECONNRESET\n- notice: \"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026...\"\nFailed Steps: Set up .NET Core\nJob logs unavailable: 'Failed to fetch logs for job'",
+  "analysis": "The 'Set up .NET Core' step failed with a raw ECONNRESET network error while downloading SDK/runtime assets, before any test code executes. This is a classic transient network infrastructure failure unrelated to PR content and matches a recurring prior cause.",
+  "failure_details": "Annotations: warning: No files were found with the provided path: **/*.binlog, testresults/**, artifacts/bin/Aspire.Templates.Tests/Debug/net8.0/logs/**, artifacts/log/test-logs/**. No artifacts will be uploaded.\nfailure: read ECONNRESET\nFailed Steps: Set up .NET Core",
   "occurrences": [
     {
       "run_id": 34432786645,
@@ -41,6 +41,13 @@
       "job": "Tests / Package tests - Linux (class, Aspire.Templates.Tests, Templates-BuildAndRunTemplateTests, Templat... / Templates-BuildAndRunTemplateTests (ubuntu-latest)",
       "pr_number": 20211,
       "observed_at": "2026-09-18T04:31:11Z"
+    },
+    {
+      "run_id": 35383851199,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35383851199",
+      "job": "Tests / Package tests - Windows (class, Aspire.Templates.Tests, Templates-TestRunOutputTests, Templates-T... / Templates-TestRunOutputTests (windows-latest)",
+      "pr_number": 19393,
+      "observed_at": "2026-09-18T20:03:34Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20028"

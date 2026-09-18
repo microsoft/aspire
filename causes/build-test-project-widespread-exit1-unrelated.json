@@ -2,10 +2,10 @@
   "id": "build-test-project-widespread-exit1-unrelated",
   "type": "infra-failure",
   "title": "Multiple unrelated 'Build test project' jobs (Hosting.RemoteHost, Hosting.Azure, Hosting.Azure.Kubernetes, Playground, Dashboard) fail with generic exit code 1",
-  "job_name": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHost, tests/Aspire.Hosting.RemoteHost...) / Hosting.RemoteHost (windows-latest)",
+  "job_name": "Tests / No-package tests (regular, Aspire.Hosting.Rust.Tests, Hosting.Rust, Hosting.Rust, tests/Aspire.Ho... / Hosting.Rust (windows-latest)",
   "error_pattern": "Process completed with exit code 1. (Build test project step failed across multiple unrelated jobs simultaneously; job logs unavailable: 'Failed to fetch logs for job').",
-  "analysis": "The 'Build test project' step failed with a generic exit code 1 and job logs were unavailable. The PR does not touch anything related to Aspire.Hosting.RemoteHost.Tests or its dependencies, and this matches a previously identified recurring infrastructure issue seen across many unrelated jobs and PRs.",
-  "failure_details": "- **failure**: Process completed with exit code 1.\nLogs: (Failed to fetch logs for job 105671636583)\nFailed Steps: Build test project",
+  "analysis": "The 'Build test project' step fails with a bare exit code 1 and no retrievable job logs, on a project (Hosting.Rust) entirely unrelated to the PR's changes (Aspire skills bundle and telemetry hooks). This matches a widespread, recurring pattern seen across many unrelated job/project combinations.",
+  "failure_details": "Annotations: failure: Process completed with exit code 1. Failed Steps: Build test project. Job logs unavailable ('Failed to fetch logs for job 105726793832'). PR changed files are limited to .github/workflows/update-aspire-skills-bundle.yml, src/Aspire.Cli/Agents/**, tests/Aspire.Cli.Tests/Agents/** — none touch Aspire.Hosting.Rust.",
   "occurrences": [
     {
       "run_id": 33494022725,
@@ -104,6 +104,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHost, tests/Aspire.Hosting.RemoteHost...) / Hosting.RemoteHost (windows-latest)",
       "pr_number": 20195,
       "observed_at": "2026-09-18T17:06:30Z"
+    },
+    {
+      "run_id": 35383851199,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35383851199",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Rust.Tests, Hosting.Rust, Hosting.Rust, tests/Aspire.Ho... / Hosting.Rust (windows-latest)",
+      "pr_number": 19393,
+      "observed_at": "2026-09-18T20:03:34Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19838"
