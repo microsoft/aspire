@@ -749,14 +749,19 @@ public static class EFResourceBuilderExtensions
 
         migrationResource.ConfigureToolResource?.Invoke(toolBuilder);
 
-        // Copy environment annotations from project resource to tool resource
-        if (migrationResource.StartupProjectResource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var envCallbacks))
+        // Forward the startup project's environment without sharing callback annotation instances.
+        // EnvironmentCallbackAnnotation caches its first evaluation, so attaching the same instance
+        // to both resources lets the tool and project consume each other's cached callback result.
+        toolBuilder.WithEnvironment(async context =>
         {
-            foreach (var callback in envCallbacks)
+            if (migrationResource.StartupProjectResource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var projectEnvCallbacks))
             {
-                toolBuilder.WithAnnotation(callback);
+                foreach (var callback in projectEnvCallbacks)
+                {
+                    await callback.Callback(context).ConfigureAwait(false);
+                }
             }
-        }
+        });
 
         // Forward the migration resource's own environment to the tool resource at start time.
         // The connection string the user declares via `.WithReference(<db>)` lands on the migration

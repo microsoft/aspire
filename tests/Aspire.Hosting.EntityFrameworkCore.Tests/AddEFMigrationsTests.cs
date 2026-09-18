@@ -306,6 +306,28 @@ public class AddEFMigrationsTests
         Assert.Equal("{db1.connectionString}", Assert.Contains("ConnectionStrings__db1", env));
     }
 
+    [Fact]
+    public async Task ToolResourceDoesNotShareEnvironmentCallbackCacheWithStartupProject()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddProject<Projects.ServiceA>("myproject")
+            .WithEnvironment(context => context.EnvironmentVariables["RESOURCE_NAME"] = context.Resource.Name);
+
+        project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!);
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var toolResource = Assert.Single(appModel.Resources.OfType<DotnetToolResource>(), r => r.Name == "ef-tool-mymigrations");
+
+#pragma warning disable CS0618 // Type or member is obsolete
+        var toolEnvironment = await toolResource.GetEnvironmentVariableValuesAsync(DistributedApplicationOperation.Publish);
+        var projectEnvironment = await project.Resource.GetEnvironmentVariableValuesAsync(DistributedApplicationOperation.Publish);
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        Assert.Equal(toolResource.Name, Assert.Contains("RESOURCE_NAME", toolEnvironment));
+        Assert.Equal(project.Resource.Name, Assert.Contains("RESOURCE_NAME", projectEnvironment));
+    }
+
     // Test classes for DbContext types
     private sealed class TestDbContext { }
     private sealed class AnotherDbContext { }
