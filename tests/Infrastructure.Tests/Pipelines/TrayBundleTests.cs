@@ -315,7 +315,16 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         Assert.Contains("available=$($available.ToString().ToLowerInvariant())", workflow);
         Assert.Contains("Write-Output \"::warning::$notice\"", workflow);
         Assert.Contains(">> $env:GITHUB_STEP_SUMMARY", workflow);
-        Assert.Contains("- name: Smoke Windows native tray\n        if: runner.os == 'Windows' && steps.windows_tray_desktop.outputs.available == 'true'", workflow);
+        Assert.Contains("""
+                  - name: Report skipped Windows ARM64 tray smoke
+                    if: runner.os == 'Windows' && matrix.targets.rids == 'win-arm64'
+                    shell: pwsh
+                    run: |
+                      $notice = 'Windows ARM64 native tray UI smoke is temporarily disabled on GitHub-hosted runners: notification icon registration fails in native ARM64 and emulated x64 SDK controls despite a responsive Explorer. The root cause remains unresolved. Native publishing and payload verification remain enabled; native UI behavior is not validated by this job.'
+                      Write-Output "::warning::$notice"
+                      "### Windows ARM64 tray UI validation`n`n$notice" >> $env:GITHUB_STEP_SUMMARY
+            """, workflow);
+        Assert.Contains("- name: Smoke Windows native tray\n        if: runner.os == 'Windows' && matrix.targets.rids != 'win-arm64' && steps.windows_tray_desktop.outputs.available == 'true'", workflow);
         Assert.Contains("-SkipPublish -CliPath $cli -SmokeSeconds 60", workflow);
         Assert.Contains("$cli = Join-Path $scratch 'cli/aspire.exe'", workflow);
         Assert.Contains("-PublishDirectory (Join-Path $scratch \"$rid/tray\")", workflow);
