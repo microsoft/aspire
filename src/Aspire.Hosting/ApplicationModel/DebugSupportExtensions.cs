@@ -34,10 +34,10 @@ public static class DebugSupportExtensions
     /// persistent lifetime, and the IDE advertised support for the annotation's launch configuration type.
     /// </para>
     /// <para>
-    /// Exception: when the active debug session did not advertise any launch configuration types at all
-    /// (for example Visual Studio, which does not send a capability list), a resource whose launch
-    /// configuration type is <see cref="KnownLaunchConfigurationTypes.Project"/> is treated as implicitly
-    /// supported rather than falling back to plain process execution.
+    /// Exception: when the active debug session did not provide a usable launch configuration capability list
+    /// (for example Visual Studio, which does not send one), a non-file-based resource whose launch configuration
+    /// type is <see cref="KnownLaunchConfigurationTypes.Project"/> is treated as implicitly supported. File-based
+    /// C# apps require explicit IDE support because Visual Studio can only launch projects loaded in the solution.
     /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Debug support inspection is a local .NET helper and is not part of the ATS surface.")]
@@ -56,12 +56,13 @@ public static class DebugSupportExtensions
             return false;
         }
 
-        // When the IDE did not send DEBUG_SESSION_INFO (e.g. Visual Studio), fall back to the
-        // legacy rule that "project" launch configuration support is implicit. VS launches all
-        // project resources natively without advertising a capability list.
+        // Visual Studio does not send DEBUG_SESSION_INFO, so preserve implicit support for loaded project files.
+        // A bare .cs file is not a loaded project and must stay on the process path unless the IDE explicitly
+        // advertises project support, as the VS Code extension does for its file-based app launcher.
         if (supportedLaunchConfigurations is null)
         {
-            return supportsDebuggingAnnotation.LaunchConfigurationType == KnownLaunchConfigurationTypes.Project;
+            return supportsDebuggingAnnotation.LaunchConfigurationType == KnownLaunchConfigurationTypes.Project &&
+                (!resource.TryGetProjectMetadata(out var projectMetadata) || !projectMetadata.IsFileBasedApp);
         }
 
         // The IDE advertised an explicit capability list — honor it for every type, including
