@@ -86,7 +86,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             $"  {string.Format(
                 CultureInfo.CurrentCulture,
                 AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills,
-                $"{CommonAgentApplicators.AspireSkillName}, {CommonAgentApplicators.AspireDeploymentSkillName}, {FakeAspireSkillsInstaller.AspireInitSkillName}, {FakeAspireSkillsInstaller.AspireMonitoringSkillName}, {FakeAspireSkillsInstaller.AspireOrchestrationSkillName}, {CommonAgentApplicators.AspireifySkillName}")}",
+                $"{CommonAgentApplicators.AspireSkillName}, {CommonAgentApplicators.AspireDeploymentSkillName}, {FakeAspireSkillsInstaller.AspireInitSkillName}, {FakeAspireSkillsInstaller.AspireMonitoringSkillName}, {FakeAspireSkillsInstaller.AspireOrchestrationSkillName}, {FakeAspireSkillsInstaller.AspireProjectV2MigrationSkillName}, {CommonAgentApplicators.AspireifySkillName}")}",
             $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations, ".agents/skills, ~/.agents/skills")}");
         var message = Assert.Single(interactionService.DisplayedMessages, displayedMessage => displayedMessage.Emoji.Equals(KnownEmojis.Robot));
         Assert.Equal(expectedSummary, message.Message);
@@ -155,7 +155,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             CommonAgentApplicators.AspireDeploymentSkillName,
             FakeAspireSkillsInstaller.AspireInitSkillName,
             FakeAspireSkillsInstaller.AspireMonitoringSkillName,
-            FakeAspireSkillsInstaller.AspireOrchestrationSkillName
+            FakeAspireSkillsInstaller.AspireOrchestrationSkillName,
+            FakeAspireSkillsInstaller.AspireProjectV2MigrationSkillName
         };
         var expectedSkillDirectories = new[]
         {
@@ -211,6 +212,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(FakeAspireSkillsInstaller.AspireInitSkillName, promptedSkillNames);
         Assert.Contains(FakeAspireSkillsInstaller.AspireMonitoringSkillName, promptedSkillNames);
         Assert.Contains(FakeAspireSkillsInstaller.AspireOrchestrationSkillName, promptedSkillNames);
+        Assert.Contains(FakeAspireSkillsInstaller.AspireProjectV2MigrationSkillName, promptedSkillNames);
     }
 
     [Fact]
@@ -387,6 +389,63 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".opencode", "skill"), FakeAspireSkillsInstaller.AspireMonitoringSkillName);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AgentInitCommand_NonInteractive_InstallsProjectV2MigrationSkillWithReferences(bool selectByName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        // Exercise an incoming bundle without replacing the production embedded archive before its attested release.
+        var installer = provider.GetRequiredService<IAspireSkillsInstaller>();
+        var installation = await installer.InstallAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+        Assert.NotNull(installation.Bundle);
+        var skill = Assert.Single(
+            installation.Bundle.GetSkillDefinitions(),
+            skill => skill.HasName(FakeAspireSkillsInstaller.AspireProjectV2MigrationSkillName));
+        Assert.True(skill.IsDefault);
+        Assert.Empty(skill.ApplicableLanguages);
+        var expectedFiles = await installation.Bundle.GetSkillFilesAsync(skill, TestContext.Current.CancellationToken).DefaultTimeout();
+        Assert.Equal(
+            [
+                "SKILL.md",
+                Path.Combine("references", "compatibility-and-validation.md"),
+                Path.Combine("references", "migration-patterns.md")
+            ],
+            expectedFiles.Select(file => file.RelativePath));
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var selection = selectByName ? $" --skills {skill.Name}" : string.Empty;
+        var result = command.Parse($"agent init --workspace-root \"{workspace.WorkspaceRoot.FullName}\" --skill-locations all{selection}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var skillDirectories = SkillLocation.All
+            .Select(location => Path.Combine(workspace.WorkspaceRoot.FullName, location.RelativeSkillDirectory, skill.Name))
+            .Append(Path.Combine(homeDirectory.FullName, SkillLocation.Standard.RelativeSkillDirectory, skill.Name));
+        foreach (var skillDirectory in skillDirectories)
+        {
+            Assert.Equal(
+                expectedFiles.Select(file => file.RelativePath),
+                Directory.EnumerateFiles(skillDirectory, "*", SearchOption.AllDirectories)
+                    .Select(path => Path.GetRelativePath(skillDirectory, path))
+                    .Order(StringComparer.Ordinal));
+            foreach (var file in expectedFiles)
+            {
+                Assert.Equal(
+                    file.Content,
+                    await File.ReadAllTextAsync(Path.Combine(skillDirectory, file.RelativePath), TestContext.Current.CancellationToken).DefaultTimeout());
+            }
+        }
+    }
+
     [Fact]
     public async Task AgentInitCommand_NonInteractive_WithCliDefinedSkillDifferentCasing_DoesNotResolveBundle()
     {
@@ -514,6 +573,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireInitSkillName);
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireMonitoringSkillName);
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireOrchestrationSkillName);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireProjectV2MigrationSkillName);
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireifySkillName);
     }
 
@@ -616,6 +676,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireInitSkillName);
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireMonitoringSkillName);
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireOrchestrationSkillName);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireProjectV2MigrationSkillName);
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireifySkillName);
     }
 
@@ -710,7 +771,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Contains(result.SelectedSkills, static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName));
+        Assert.Contains(result.SelectedSkills, static skill => skill.HasName(FakeAspireSkillsInstaller.AspireProjectV2MigrationSkillName));
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireifySkillName);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireProjectV2MigrationSkillName);
     }
 
     [Fact]
