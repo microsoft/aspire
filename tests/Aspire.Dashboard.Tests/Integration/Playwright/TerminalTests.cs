@@ -133,18 +133,25 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             var input = page.GetByRole(AriaRole.Textbox, new() { Name = "Interactive terminal input", Exact = true });
             var decreaseFontButton = page.GetByRole(AriaRole.Button, new() { Name = "Decrease font size", Exact = true });
             var precedingControl = page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true });
+            var focusHint = page.Locator(".terminal-focus-hint");
 
             await Assertions.Expect(decreaseFontButton).ToBeEnabledAsync();
             await input.FocusAsync();
+            await Assertions.Expect(focusHint).ToBeVisibleAsync();
             await page.Keyboard.PressAsync("F6");
             await Assertions.Expect(decreaseFontButton).ToBeFocusedAsync();
+            await Assertions.Expect(focusHint).ToBeHiddenAsync();
 
-            await input.FocusAsync();
+            await page.Keyboard.PressAsync("F6");
+            await Assertions.Expect(input).ToBeFocusedAsync();
+            await Assertions.Expect(focusHint).ToBeVisibleAsync();
             await page.Keyboard.PressAsync("Shift+F6");
             await Assertions.Expect(precedingControl).ToBeFocusedAsync();
+            await Assertions.Expect(focusHint).ToBeHiddenAsync();
 
-            // The producer's first key must be this character, not either intercepted F6.
+            // The producer's first key must be this character, not an intercepted F6 key.
             await input.FocusAsync();
+            await Assertions.Expect(focusHint).ToBeVisibleAsync();
             await page.Keyboard.TypeAsync("x");
             Assert.Equal("x", await connection.ReadInputTextAsync(1, CancellationToken.None).DefaultTimeout());
         });

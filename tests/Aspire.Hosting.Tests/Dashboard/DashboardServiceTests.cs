@@ -692,8 +692,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var clientFrame = TerminalClientFrame.Descriptor.ToProto();
         Assert.Empty(clientFrame.ReservedName);
         Assert.Empty(clientFrame.ReservedRange);
-        Assert.Equal(3, TerminalClientFrame.Descriptor.FindFieldByName("data").FieldNumber);
-        Assert.Equal(4, TerminalClientFrame.Descriptor.FindFieldByName("terminal_id").FieldNumber);
+        Assert.Equal(1, TerminalClientFrame.Descriptor.FindFieldByName("data").FieldNumber);
+        Assert.Equal(2, TerminalClientFrame.Descriptor.FindFieldByName("terminal_id").FieldNumber);
     }
 
     [Fact]
@@ -1589,6 +1589,39 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         Assert.False(backend.IsDisposed);
         Assert.True(terminalService.TryGetTerminal(terminal.Id, out var registered));
         Assert.Same(terminal, registered);
+    }
+
+    [Theory]
+    [InlineData(TerminalPlacement.Dialog, false)]
+    [InlineData(TerminalPlacement.Dialog, true)]
+    [InlineData(TerminalPlacement.None, false)]
+    [InlineData(TerminalPlacement.None, true)]
+    public async Task CloseTerminal_NonDockAppHostTerminal_RejectsWithoutDisposingCallerOwnedHandle(TerminalPlacement placement, bool started)
+    {
+        using var serviceData = CreateDashboardServiceData();
+        await using var terminalService = TestTerminalService.Create();
+        var service = CreateDashboardService(serviceData, terminalService: terminalService);
+        var output = new Pipe();
+        await using var reader = output.Reader.AsStream();
+        await using var writer = output.Writer.AsStream();
+        await using var terminal = terminalService.CreateTerminal("Caller-owned", placement,
+            Hex1bTerminal.CreateBuilder().WithWorkload(new StreamWorkloadAdapter(reader, Stream.Null)), 80, 24);
+        if (started)
+        {
+            terminal.Start();
+        }
+
+        var exception = await Assert.ThrowsAsync<RpcException>(() => service.CloseTerminal(
+            new CloseTerminalRequest { TerminalId = terminal.Id }, TestServerCallContext.Create())).DefaultTimeout();
+
+        Assert.Equal(StatusCode.InvalidArgument, exception.StatusCode);
+        Assert.Equal("Only AppHost-owned dock terminals can be closed from the dashboard.", exception.Status.Detail);
+        Assert.True(terminalService.TryGetTerminal(terminal.Id, out var registered));
+        Assert.Same(terminal, registered);
+
+        terminal.Start();
+        await writer.WriteAsync("still usable"u8.ToArray());
+        await terminal.WaitForTextAsync("still usable").DefaultTimeout();
     }
 
     [Theory]

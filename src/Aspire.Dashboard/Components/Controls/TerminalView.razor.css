@@ -76,10 +76,15 @@
 }
 
 .terminal-focus-hint {
+    visibility: hidden;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.terminal-view:has(.terminal-container:focus-within) .terminal-focus-hint {
+    visibility: visible;
 }
 
 .terminal-titlebar {

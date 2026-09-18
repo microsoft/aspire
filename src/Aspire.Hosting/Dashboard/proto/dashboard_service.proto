@@ -494,10 +494,10 @@ message UploadFileResponse {
 message TerminalClientFrame {
     // A chunk of the HMP1 byte stream flowing from the browser to the AppHost.
     // Empty on the first frame, which only carries the session selector.
-    bytes data = 3;
+    bytes data = 1;
 
     // The terminal to attach to (sent in the first frame).
-    string terminal_id = 4;
+    string terminal_id = 2;
 }
 
 // A message sent by the AppHost to the dashboard for a terminal session.

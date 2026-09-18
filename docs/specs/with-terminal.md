@@ -76,8 +76,9 @@ it from discovery immediately, but the service retains teardown ownership until
 cleanup finishes. Dashboard close waits at most 10 seconds; a timeout or disconnect
 ends only that wait, not cleanup. Host-stop cancellation likewise bounds the wait,
 and subsequent AppHost disposal joins the same cleanup operation.
-The dashboard's `CloseTerminal` RPC rejects resource-owned handles with
-`InvalidArgument`; it must not disconnect their shared automation peer.
+The dashboard's `CloseTerminal` RPC accepts only AppHost-owned dock terminals.
+It rejects `Dialog`, `None`, and resource-owned handles with `InvalidArgument`,
+preserving caller-owned lifetimes and shared resource automation peers.
 
 ### Sending keys from AppHost code
 
@@ -181,13 +182,6 @@ var result = await interactions.PromptTerminalAsync(
 - The dialog contains a chromeless terminal with its existing font/footer
   controls, no duplicate title bar or launch button, and a wider viewport than
   ordinary input dialogs. It uses the PathBase-aware AppHost terminal endpoint.
-
-Migration: replace `InputType.Terminal` / `InteractionInput.Terminal` passed to
-`PromptInputsAsync` with `PromptTerminalAsync`. The old protobuf input field and
-enum identifiers are reserved; the dedicated `prompt_terminal` payload carries
-the terminal ID and optional boolean result. There is no terminal input value,
-required-field validation, or command-argument cloning. This change does not
-introduce an ATS/polyglot terminal API.
 
 ## Process topology
 
@@ -449,9 +443,11 @@ keeping both sizing operations available without opening the page options
 menu. A terminal starts at 132×50. A viewer adopts the producer's current
 dimensions. Ordinary keyboard and paste input do not take resize control;
 explicit footer sizing actions request primary and wait for confirmation before
-changing the grid. The bottom-left footer hint advertises <kbd>F6</kbd>, which moves
-keyboard focus from terminal input to the footer controls; <kbd>Shift+F6</kbd>
-moves focus to the preceding dashboard control.
+changing the grid. The bottom-left footer hint is shown only while the terminal
+has focus. It advertises <kbd>F6</kbd>, which moves keyboard focus from terminal
+input to the footer controls; <kbd>Shift+F6</kbd> moves focus to the preceding
+dashboard control. Hiding the hint preserves its space so focus changes do not
+resize the terminal or move the footer controls.
 
 Dock tabs share the Resources/Parameters tab styling. The dock resize handle
 uses the dashboard's Fluent splitter styling, including neutral gray hover,
