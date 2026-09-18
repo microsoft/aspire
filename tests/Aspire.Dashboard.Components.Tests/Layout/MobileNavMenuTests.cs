@@ -52,8 +52,8 @@ public class MobileNavMenuTests : DashboardTestContext
         Assert.Equal(MobileNavMenu.MobileNavMenuId, menu.Id);
         Assert.Equal(cut.FindAll("fluent-menu-item").Count, menu.QuerySelectorAll(":scope > fluent-menu-item").Length);
         Assert.Equal(cut.FindAll("fluent-menu-item").Count - 1, cut.FindAll("fluent-divider").Count);
-        Assert.Equal("fluent-menu-item", menu.Children.First().LocalName);
-        Assert.Equal("fluent-menu-item", menu.Children.Last().LocalName);
+        Assert.Equal("fluent-menu-item", menu.Children[0].LocalName);
+        Assert.Equal("fluent-menu-item", menu.Children[^1].LocalName);
 
         Assert.Contains("max-height: calc(100dvh - var(--mobile-header-height) - var(--mobile-nav-menu-offset))", style);
         Assert.DoesNotContain("height: 100vh", style);
@@ -116,7 +116,7 @@ public class MobileNavMenuTests : DashboardTestContext
         var navigationManager = Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(currentUrl);
 
-        return RenderComponent<MobileNavMenu>(builder =>
+        return Render<MobileNavMenu>(builder =>
         {
             builder.Add(p => p.IsNavMenuOpen, isNavMenuOpen);
             builder.Add(p => p.CloseNavMenu, closeNavMenu ?? (() => { }));

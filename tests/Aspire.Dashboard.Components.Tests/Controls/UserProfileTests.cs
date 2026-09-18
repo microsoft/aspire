@@ -6,7 +6,6 @@ using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Bunit;
-using Bunit.TestDoubles;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
@@ -30,13 +29,13 @@ public class UserProfileTests : DashboardTestContext
         });
         FluentUISetupHelpers.SetupFluentButton(this);
 
-        var authorizationContext = this.AddTestAuthorization();
+        var authorizationContext = AddAuthorization();
         authorizationContext.SetAuthorized("Ada Lovelace");
         authorizationContext.SetClaims(
             new Claim("name", "Ada Lovelace"),
             new Claim("preferred_username", "ada@example.com"));
 
-        var cut = RenderComponent<UserProfile>();
+        var cut = Render<UserProfile>();
 
         var button = cut.Find(".profile-menu-button");
         var popover = cut.Find("fluent-popover-b");

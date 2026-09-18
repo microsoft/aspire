@@ -124,7 +124,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
             Assert.Single(cut.FindAll(".text-visualizer-unformatted"));
         });
 
-        cut.FindComponent<TextVisualizerDialog>().SetParametersAndRender(parameters => parameters.Add(p => p.Content, content));
+        cut.FindComponent<TextVisualizerDialog>().Render(parameters => parameters.Add(p => p.Content, content));
 
         cut.WaitForAssertion(() =>
         {
@@ -140,7 +140,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
     {
         SetUpDialog(out _);
 
-        var cut = RenderComponent<TextVisualizer>(parameters => parameters
+        var cut = Render<TextVisualizer>(parameters => parameters
             .Add(p => p.ViewModel, new TextVisualizerViewModel("""{"value":1}""", indentText: false))
             .Add(p => p.DisplayUnformatted, true)
             .Add(p => p.Virtualize, false));
@@ -343,7 +343,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         Assert.True(instance.HasFixedFormat);
     }
 
-    private Func<IRenderedFragment> SetUpDialog(out DashboardDialogService dialogService, ThemeManager? themeManager = null, TestLocalStorage? localStorage = null)
+    private Func<IRenderedComponent<IComponent>> SetUpDialog(out DashboardDialogService dialogService, ThemeManager? themeManager = null, TestLocalStorage? localStorage = null)
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this, themeManager: themeManager, localStorage: localStorage);
 
@@ -355,11 +355,11 @@ public class TextVisualizerDialogTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentList(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
 
-        IRenderedFragment? cut = null;
+        IRenderedComponent<IComponent>? cut = null;
         TestDialogService? testDialogService = null;
         testDialogService = new TestDialogService((content, _) =>
         {
-            cut = RenderComponent<CascadingValue<IDialogInstance>>(builder =>
+            cut = Render<CascadingValue<IDialogInstance>>(builder =>
             {
                 builder.Add(p => p.Value, testDialogService!.LastInstance!);
                 builder.AddChildContent<TextVisualizerDialog>(childBuilder =>
