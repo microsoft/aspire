@@ -76,6 +76,8 @@ internal sealed class UpdateCommand : BaseCommand
         CommonCommandServices services)
         : base("update", UpdateCommandStrings.Description, services)
     {
+        Aliases.Add("upgrade");
+
         _projectLocator = projectLocator;
         _packagingService = packagingService;
         _projectFactory = projectFactory;
