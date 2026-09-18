@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The `aspire stop --force` command now supports an opt-in `--volumes` flag to also remove persistent volumes created by the AppHost, while preserving them by default.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-09-18T16:08:56Z",
+  "lastMergedAt": "2026-09-18T16:08:56Z",
+  "name": "Opt-in volume cleanup for aspire stop",
+  "owner": "danegsta",
+  "prs": [
+    20195
+  ]
+}

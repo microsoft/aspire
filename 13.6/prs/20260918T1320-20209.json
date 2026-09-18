@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Engineering/CI automation upgrade (gh-aw compiler, action pins); no user-visible product change",
+  "mergedAt": "2026-09-18T13:20:23Z",
+  "number": 20209,
+  "runDate": "2026-09-18T18:05:28Z",
+  "status": "excluded",
+  "title": "Modernize agentic workflows with gh-aw v0.88.7"
+}

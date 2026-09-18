@@ -1,0 +1,9 @@
+{
+  "author": "Webmekanic",
+  "comment": "Docs-only content update recommending OpenAI SDK over retired Azure AI Inference SDK; no matching changelog entry for a specific milestone PR",
+  "mergedAt": "2026-09-18T12:23:27Z",
+  "number": 1678,
+  "runDate": "2026-09-18T18:05:28Z",
+  "status": "excluded",
+  "title": "Lead Azure AI Foundry docs with OpenAI SDK"
+}

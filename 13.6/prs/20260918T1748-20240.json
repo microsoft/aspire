@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Branch ancestry merge PR with no file changes; release engineering only",
+  "mergedAt": "2026-09-18T17:48:49Z",
+  "number": 20240,
+  "runDate": "2026-09-18T18:05:28Z",
+  "status": "excluded",
+  "title": "Merge release/13.5 to main after v13.5.4 (supersedes #20154)"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "New opt-in --volumes flag for aspire stop --force",
+  "mergedAt": "2026-09-18T16:08:56Z",
+  "number": 20195,
+  "runDate": "2026-09-18T18:05:28Z",
+  "status": "included",
+  "title": "Add opt-in volume cleanup to aspire stop"
+}

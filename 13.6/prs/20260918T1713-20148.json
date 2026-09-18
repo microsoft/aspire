@@ -1,0 +1,9 @@
+{
+  "author": "nellshamrell",
+  "comment": "Routine dependency pin bump for Radius E2E tests and README version reference; no product behavior change",
+  "mergedAt": "2026-09-18T17:13:05Z",
+  "number": 20148,
+  "runDate": "2026-09-18T18:05:28Z",
+  "status": "excluded",
+  "title": "Bump Radius installation pins to v0.60.2"
+}
