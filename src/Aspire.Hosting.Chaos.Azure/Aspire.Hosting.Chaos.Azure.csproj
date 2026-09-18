@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <!-- No published baseline exists for this package yet; skip the repo's package validation. -->
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <MinCodeCoverage>0</MinCodeCoverage>
+    <!-- This pilot has no [AspireExport] annotations yet (see the M2 TODO below), so it is
+         not a polyglot integration. Acknowledged explicitly per ASPIREEXPORT017. -->
+    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
+    <!-- Reference drop: these files keep the Chaos repo's copyright headers, house style
+         (this.field rather than _field) and doc-comment coverage, so the branch stays
+         faithful to the source it mirrors. Aspire's conventions and [AspireExport]
+         annotations belong to the contribution path, not this read-only branch. -->
+    <NoWarn>$(NoWarn);CS1591;IDE0073;IDE1006;ASPIREEXPORT008</NoWarn>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Aspire.Hosting.Chaos.Azure</RootNamespace>
+    <AssemblyName>Aspire.Hosting.Chaos.Azure</AssemblyName>
+    <Description>Companion package to Aspire.Hosting.Chaos adding Azure-SDK-shaped fault transforms. These transforms emit the exact response shape (status code + headers + body) that each Azure SDK retry policy expects, so the SDK takes the matching retry branch rather than falling through to a generic error path. Separated from the core per D9 to keep Aspire.Hosting.Chaos dep-light for non-Azure Aspire users.</Description>
+    <PackageTags>aspire integration hosting chaos fault-injection proxy azure cosmosdb storage keyvault testing</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- TODO(M2/13.4 upgrade): [AspireExport] attributes per D5 once Aspire 13.4 lands -->
+    <!-- TODO(M4 public release): package icon, source link / SBOM -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Companion package depends on the core for ChaosProxyResource + WithError. In-house
+         incubation pattern uses project reference; upstream contribution at M4 switches
+         to a NuGet PackageReference. -->
+    <ProjectReference Include="..\Aspire.Hosting.Chaos\Aspire.Hosting.Chaos.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>
