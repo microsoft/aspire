@@ -175,8 +175,21 @@ jobs:
             "### Windows tray UI validation`n`n$notice" >> $env:GITHUB_STEP_SUMMARY
           }
 
+      - name: Report skipped Windows ARM64 tray smoke
+        if: runner.os == 'Windows' && matrix.targets.rids == 'win-arm64'
+        shell: pwsh
+        run: |
+          $notice = 'Windows ARM64 native tray UI smoke is temporarily disabled on GitHub-hosted runners: notification icon registration fails in native ARM64 and emulated x64 SDK controls despite a responsive Explorer. The root cause remains unresolved. Native publishing and payload verification remain enabled; native UI behavior is not validated by this job.'
+          Write-Output "::warning::$notice"
+          "### Windows ARM64 tray UI validation`n`n$notice" >> $env:GITHUB_STEP_SUMMARY
+
+      # Temporarily disabled on Windows ARM64 GitHub-hosted runners: notification icon
+      # registration fails for both native ARM64 and emulated x64 SDK controls even
+      # with a responsive Explorer. Root cause remains unresolved.
+      # Native publishing and payload verification still run.
+      # https://github.com/microsoft/aspire/actions/runs/35373950404/job/105696457894
       - name: Smoke Windows native tray
-        if: runner.os == 'Windows' && steps.windows_tray_desktop.outputs.available == 'true'
+        if: runner.os == 'Windows' && matrix.targets.rids != 'win-arm64' && steps.windows_tray_desktop.outputs.available == 'true'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
