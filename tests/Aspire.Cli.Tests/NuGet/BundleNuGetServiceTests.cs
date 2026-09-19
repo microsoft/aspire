@@ -27,7 +27,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
                 capturedOutputPath = outputPath;
                 capturedConfigPath = configPath;
                 capturedSources = sources;
-                return Task.FromResult<IReadOnlyList<RestoredNuGetPackage>>([]);
+                return Task.CompletedTask;
             }
         };
         var service = CreateService(nuGetClient);
@@ -185,7 +185,6 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             {
                 firstRestoreStarted.TrySetResult();
                 await allowFirstRestoreToComplete.Task.WaitAsync(cancellationToken);
-                return [];
             }
         };
         var service = CreateService(nuGetClient);

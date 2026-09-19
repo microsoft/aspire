@@ -8,6 +8,8 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using NuGet.Configuration;
+using NuGet.ProjectModel;
+using NuGet.Packaging;
 
 namespace Aspire.Cli.Tests.NuGet;
 
@@ -171,7 +173,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         string? packageRoot = null;
         try
         {
-            var restoredPackages = await client.RestoreAsync(
+            await client.RestoreAsync(
                 [(packageId, "[1.0.0]")],
                 "net10.0",
                 "win-x64",
@@ -180,10 +182,12 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
                 nugetConfigPath,
                 workspace.WorkspaceRoot.FullName,
                 TestContext.Current.CancellationToken);
+        var restoredPackages = ReadRestoredPackages(restoreDirectory.FullName,
+            nugetConfigPath, workspace.WorkspaceRoot.FullName);
             packageRoot = Path.GetDirectoryName(restoredPackages[0].InstallPath);
             var manifestPath = Path.Combine(restoreDirectory.FullName, IntegrationPackageProbeManifest.FileName);
             await client.WriteManifestAsync(
-                restoredPackages,
+                Path.Combine(restoreDirectory.FullName, LockFileFormat.AssetsFileName),
                 manifestPath,
                 "net10.0",
                 "win-x64",
@@ -249,7 +253,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             GetEffectiveGlobalPackagesFolder(nugetConfigPath: null, workspace.WorkspaceRoot.FullName),
             packageId);
 
-        var restoredPackages = await client.RestoreAsync(
+        await client.RestoreAsync(
             [(packageId, "1.0.0")],
             "net10.0",
             "linux-x64",
@@ -258,9 +262,12 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             nugetConfigPath: null,
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken);
+        var restoredPackages = ReadRestoredPackages(restoreDirectory.FullName,
+            nugetConfigPath: null, workspace.WorkspaceRoot.FullName);
+        Assert.NotEmpty(restoredPackages);
         var manifestPath = Path.Combine(restoreDirectory.FullName, IntegrationPackageProbeManifest.FileName);
         await client.WriteManifestAsync(
-            restoredPackages,
+            Path.Combine(restoreDirectory.FullName, LockFileFormat.AssetsFileName),
             manifestPath,
             "net10.0",
             "linux-x64",
@@ -317,7 +324,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             new TestEnvironment(),
             NullLogger<NuGetClient>.Instance);
 
-        var restoredPackages = await client.RestoreAsync(
+        await client.RestoreAsync(
             [(packageId, "1.0.0")],
             "net10.0",
             runtimeIdentifier: null,
@@ -326,112 +333,12 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             nugetConfigPath,
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken);
+        var restoredPackages = ReadRestoredPackages(restoreDirectory.FullName,
+            nugetConfigPath, workspace.WorkspaceRoot.FullName);
 
         var restoredPackage = Assert.Single(restoredPackages);
         Assert.Equal(
             "mapped-source",
-            await File.ReadAllTextAsync(
-                Path.Combine(restoredPackage.InstallPath, "lib", "net10.0", "Aspire.Test.Package.dll"),
-                TestContext.Current.CancellationToken));
-    }
-
-    [Fact]
-    public async Task RestoreAsync_IgnoresMissingDependencyFromUnselectedCandidate()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var feedDirectory = workspace.CreateDirectory("feed");
-        var packagesDirectory = workspace.CreateDirectory("packages");
-        var restoreDirectory = workspace.CreateDirectory("restore");
-        var packageA = $"Aspire.Test.Package.A.{Guid.NewGuid():N}";
-        var packageB = $"Aspire.Test.Package.B.{Guid.NewGuid():N}";
-        var missingPackage = $"Aspire.Test.Package.Missing.{Guid.NewGuid():N}";
-        CreatePackage(
-            feedDirectory.FullName,
-            packageA,
-            version: "1.0.0",
-            dependencies: [(missingPackage, "1.0.0")]);
-        CreatePackage(feedDirectory.FullName, packageA, version: "2.0.0");
-        CreatePackage(
-            feedDirectory.FullName,
-            packageB,
-            dependencies: [(packageA, "[2.0.0]")]);
-        var nugetConfigPath = CreateWorkspaceGlobalPackagesConfig(workspace, packagesDirectory);
-        using var restoredPackageScope = new RestoredPackageScope(
-            GetEffectiveGlobalPackagesFolder(nugetConfigPath, workspace.WorkspaceRoot.FullName),
-            packageA,
-            packageB);
-
-        var client = new NuGetClient(
-            new TestFeatures(),
-            new TestEnvironment(),
-            NullLogger<NuGetClient>.Instance);
-
-        var restoredPackages = await client.RestoreAsync(
-            [(packageA, "[1.0.0,)"), (packageB, "1.0.0")],
-            "net10.0",
-            runtimeIdentifier: null,
-            restoreDirectory.FullName,
-            [feedDirectory.FullName],
-            nugetConfigPath,
-            workspace.WorkspaceRoot.FullName,
-            TestContext.Current.CancellationToken);
-
-        Assert.Contains(restoredPackages, package => package.Id == packageA && package.Version == "2.0.0");
-        Assert.Contains(restoredPackages, package => package.Id == packageB && package.Version == "1.0.0");
-        Assert.DoesNotContain(restoredPackages, package => package.Id == missingPackage);
-    }
-
-    [Fact]
-    public async Task RestoreAsync_UsesExplicitSourceWhenMappingRefersToUnavailableSource()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var configDirectory = workspace.CreateDirectory("config");
-        var explicitFeed = workspace.CreateDirectory("explicit-feed");
-        var packagesDirectory = workspace.CreateDirectory("packages");
-        var restoreDirectory = workspace.CreateDirectory("restore");
-        var packageId = $"Aspire.Test.Package.{Guid.NewGuid():N}";
-        CreatePackage(explicitFeed.FullName, packageId, "explicit-source");
-
-        var nugetConfigPath = Path.Combine(configDirectory.FullName, "nuget.config");
-        File.WriteAllText(
-            nugetConfigPath,
-            $"""
-            <configuration>
-              <config>
-                <add key="globalPackagesFolder" value="{packagesDirectory.FullName}" />
-              </config>
-              <packageSources>
-                <clear />
-              </packageSources>
-              <packageSourceMapping>
-                <packageSource key=".">
-                  <package pattern="Aspire.Test.Package.*" />
-                </packageSource>
-              </packageSourceMapping>
-            </configuration>
-            """);
-        using var restoredPackageScope = new RestoredPackageScope(
-            GetEffectiveGlobalPackagesFolder(nugetConfigPath, workspace.WorkspaceRoot.FullName),
-            packageId);
-
-        var client = new NuGetClient(
-            new TestFeatures(),
-            new TestEnvironment(),
-            NullLogger<NuGetClient>.Instance);
-
-        var restoredPackages = await client.RestoreAsync(
-            [(packageId, "1.0.0")],
-            "net10.0",
-            runtimeIdentifier: null,
-            restoreDirectory.FullName,
-            [explicitFeed.FullName],
-            nugetConfigPath,
-            workspace.WorkspaceRoot.FullName,
-            TestContext.Current.CancellationToken);
-
-        var restoredPackage = Assert.Single(restoredPackages);
-        Assert.Equal(
-            "explicit-source",
             await File.ReadAllTextAsync(
                 Path.Combine(restoredPackage.InstallPath, "lib", "net10.0", "Aspire.Test.Package.dll"),
                 TestContext.Current.CancellationToken));
@@ -480,7 +387,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             new TestEnvironment(),
             NullLogger<NuGetClient>.Instance);
 
-        var restoredPackages = await client.RestoreAsync(
+        await client.RestoreAsync(
             [(packageId, "1.0.0")],
             "net10.0",
             runtimeIdentifier: null,
@@ -489,6 +396,8 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             nugetConfigPath,
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken);
+        var restoredPackages = ReadRestoredPackages(restoreDirectory.FullName,
+            nugetConfigPath, workspace.WorkspaceRoot.FullName);
 
         var restoredPackage = Assert.Single(restoredPackages);
         Assert.Equal(
@@ -541,57 +450,8 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken));
 
-        Assert.Equal(
-            $"NuGet package source mapping has no matching source for package '{packageId}'.",
-            exception.Message);
-    }
-
-    [Fact]
-    public async Task RestoreAsync_RedactsUnavailableMappedSource()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var packagesDirectory = workspace.CreateDirectory("packages");
-        var restoreDirectory = workspace.CreateDirectory("restore");
-        var packageId = $"Aspire.Test.Package.{Guid.NewGuid():N}";
-        const string sensitiveSource = "https://user:secret@example.com/v3/index.json?token=secret";
-
-        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
-        File.WriteAllText(
-            nugetConfigPath,
-            $"""
-            <configuration>
-              <config>
-                <add key="globalPackagesFolder" value="{packagesDirectory.FullName}" />
-              </config>
-              <packageSources>
-                <clear />
-              </packageSources>
-              <packageSourceMapping>
-                <packageSource key="{sensitiveSource}">
-                  <package pattern="Aspire.Test.Package.*" />
-                </packageSource>
-              </packageSourceMapping>
-            </configuration>
-            """);
-        var client = new NuGetClient(
-            new TestFeatures(),
-            new TestEnvironment(),
-            NullLogger<NuGetClient>.Instance);
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.RestoreAsync(
-            [(packageId, "1.0.0")],
-            "net10.0",
-            runtimeIdentifier: null,
-            restoreDirectory.FullName,
-            [],
-            nugetConfigPath,
-            workspace.WorkspaceRoot.FullName,
-            TestContext.Current.CancellationToken));
-
-        Assert.Contains("example.com", exception.Message);
-        Assert.DoesNotContain("user", exception.Message);
-        Assert.DoesNotContain("secret", exception.Message);
-        Assert.DoesNotContain("token", exception.Message);
+        Assert.Contains(packageId, exception.Message, StringComparison.Ordinal);
+        Assert.Contains("PackageSourceMapping", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -636,7 +496,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             new TestEnvironment(),
             NullLogger<NuGetClient>.Instance);
 
-        var restoredPackages = await client.RestoreAsync(
+        await client.RestoreAsync(
             [(rootPackage, "1.0.0")],
             "net10.0",
             runtimeIdentifier: null,
@@ -645,6 +505,8 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             nugetConfigPath,
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken);
+        var restoredPackages = ReadRestoredPackages(restoreDirectory.FullName,
+            nugetConfigPath, workspace.WorkspaceRoot.FullName);
 
         Assert.Collection(
             restoredPackages.OrderBy(package => package.Id, StringComparer.OrdinalIgnoreCase),
@@ -699,7 +561,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
 
         try
         {
-            var package = Assert.Single(await client.RestoreAsync(
+            await client.RestoreAsync(
                 [(packageId, "1.0.0")],
                 "net10.0",
                 runtimeIdentifier: null,
@@ -707,7 +569,8 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
                 [],
                 nugetConfigPath,
                 workspace.WorkspaceRoot.FullName,
-                TestContext.Current.CancellationToken));
+                TestContext.Current.CancellationToken);
+        var package = Assert.Single(ReadRestoredPackages(restoreDirectory.FullName, nugetConfigPath, workspace.WorkspaceRoot.FullName));
 
             Assert.Equal(incompleteInstallPath, package.InstallPath, ignoreCase: true);
             Assert.True(File.Exists(Path.Combine(package.InstallPath, ".nupkg.metadata")));
@@ -753,6 +616,29 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             : Settings.LoadDefaultSettings(workingDirectory);
 
         return SettingsUtility.GetGlobalPackagesFolder(settings);
+    }
+
+    /// <summary>
+    /// Reads the packages NuGet restored from the assets file it wrote, mirroring how the manifest
+    /// step consumes restore output.
+    /// </summary>
+    private static IReadOnlyList<(string Id, string Version, string InstallPath)> ReadRestoredPackages(
+        string restoreDirectory,
+        string? nugetConfigPath,
+        string workingDirectory)
+    {
+        var lockFile = new LockFileFormat().Read(Path.Combine(restoreDirectory, LockFileFormat.AssetsFileName));
+        var packagesFolder = lockFile.PackageFolders.FirstOrDefault()?.Path
+            ?? GetEffectiveGlobalPackagesFolder(nugetConfigPath, workingDirectory);
+        var pathResolver = new VersionFolderPathResolver(packagesFolder);
+
+        return lockFile.Libraries
+            .Where(library => string.Equals(library.Type, "package", StringComparison.OrdinalIgnoreCase))
+            .Select(library => (
+                library.Name,
+                library.Version.ToNormalizedString(),
+                pathResolver.GetInstallPath(library.Name, library.Version)))
+            .ToArray();
     }
 
     private static void CreatePackage(

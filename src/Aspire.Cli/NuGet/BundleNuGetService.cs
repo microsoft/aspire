@@ -10,6 +10,7 @@ using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using NuGet.Configuration;
+using NuGet.ProjectModel;
 
 namespace Aspire.Cli.NuGet;
 
@@ -102,7 +103,7 @@ internal sealed class BundleNuGetService : INuGetService
         Directory.CreateDirectory(objectDirectory);
         _logger.LogDebug("Restoring {Count} integration packages in-process", packageList.Count);
 
-        var restoredPackages = await _nuGetClient.RestoreAsync(
+        await _nuGetClient.RestoreAsync(
             packageList,
             targetFramework,
             runtimeIdentifier,
@@ -112,8 +113,10 @@ internal sealed class BundleNuGetService : INuGetService
             workingDirectory,
             ct).ConfigureAwait(false);
 
+        // The manifest is built from the assets file the restore just wrote, so asset selection
+        // comes from NuGet rather than from a second walk over the package folders.
         await _nuGetClient.WriteManifestAsync(
-            restoredPackages,
+            Path.Combine(objectDirectory, LockFileFormat.AssetsFileName),
             manifestPath,
             targetFramework,
             runtimeIdentifier,

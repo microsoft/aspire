@@ -1452,7 +1452,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         nuGetClient.RestoreCallback = (_, _, _, _, _, _, _, cancellationToken) =>
         {
             cancellation.Cancel();
-            return Task.FromCanceled<IReadOnlyList<RestoredNuGetPackage>>(cancellationToken);
+            return Task.FromCanceled(cancellationToken);
         };
         var workingDirectory = GetWorkingDirectory(server);
 
@@ -1867,7 +1867,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             // Read the temp NuGet.config while it still exists; PrepareAsync deletes it
             // after the in-process restore call returns.
             tempConfigDoc = XDocument.Load(configPath!);
-            return Task.FromResult<IReadOnlyList<RestoredNuGetPackage>>([]);
+            return Task.CompletedTask;
         };
 
         var workingDirectory = GetWorkingDirectory(server);
@@ -1914,7 +1914,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         var (server, nuGetClient) = CreatePackageReferenceServer(workspace);
         nuGetClient.RestoreCallback = (_, _, _, _, _, _, _, _) =>
-            Task.FromException<IReadOnlyList<RestoredNuGetPackage>>(new InvalidOperationException("simulated restore failure"));
+            Task.FromException(new InvalidOperationException("simulated restore failure"));
 
         var workingDirectory = GetWorkingDirectory(server);
 
@@ -1950,7 +1950,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         var (server, nuGetClient) = CreatePackageReferenceServer(workspace);
         nuGetClient.RestoreCallback = (_, _, _, _, _, _, _, _) =>
-            Task.FromException<IReadOnlyList<RestoredNuGetPackage>>(new InvalidOperationException("simulated restore failure"));
+            Task.FromException(new InvalidOperationException("simulated restore failure"));
 
         var packages = Enumerable.Range(0, 8)
             .Select(i => IntegrationReference.FromPackage($"Aspire.Hosting.Pkg{i}", "1.0.0"))
@@ -2096,7 +2096,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         var (server, nuGetClient) = CreatePackageReferenceServer(workspace, packagingService);
         nuGetClient.RestoreCallback = (_, _, _, _, _, _, _, _) =>
-            Task.FromException<IReadOnlyList<RestoredNuGetPackage>>(new InvalidOperationException("simulated restore failure"));
+            Task.FromException(new InvalidOperationException("simulated restore failure"));
 
         var workingDirectory = GetWorkingDirectory(server);
 
@@ -2218,7 +2218,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 restoreSources = sources;
                 restoreWorkingDirectory = workingDirectory;
                 temporaryNuGetConfigContent = File.ReadAllText(configPath!);
-                return Task.FromResult<IReadOnlyList<RestoredNuGetPackage>>([]);
+                return Task.CompletedTask;
             }
         };
 

@@ -24,9 +24,9 @@ internal sealed class FakeNuGetClient : INuGetClient
         string?,
         string,
         CancellationToken,
-        Task<IReadOnlyList<RestoredNuGetPackage>>>? RestoreCallback { get; set; }
+        Task>? RestoreCallback { get; set; }
 
-    public Func<IReadOnlyList<RestoredNuGetPackage>, string, string, string?, CancellationToken, Task>? WriteManifestCallback { get; init; }
+    public Func<string, string, string, string?, CancellationToken, Task>? WriteManifestCallback { get; init; }
 
     public Func<
         string,
@@ -40,7 +40,7 @@ internal sealed class FakeNuGetClient : INuGetClient
         CancellationToken,
         Task<IReadOnlyList<NuGetSearchResult>>>? SearchCallback { get; init; }
 
-    public Task<IReadOnlyList<RestoredNuGetPackage>> RestoreAsync(
+    public Task RestoreAsync(
         IReadOnlyList<(string Id, string Version)> packages,
         string framework,
         string? runtimeIdentifier,
@@ -63,11 +63,11 @@ internal sealed class FakeNuGetClient : INuGetClient
             sources,
             nugetConfigPath,
             workingDirectory,
-            cancellationToken) ?? Task.FromResult<IReadOnlyList<RestoredNuGetPackage>>([]);
+            cancellationToken) ?? Task.CompletedTask;
     }
 
     public Task WriteManifestAsync(
-        IReadOnlyList<RestoredNuGetPackage> packages,
+        string assetsFilePath,
         string outputPath,
         string framework,
         string? runtimeIdentifier,
@@ -76,7 +76,7 @@ internal sealed class FakeNuGetClient : INuGetClient
         WriteManifestCallCount++;
         if (WriteManifestCallback is not null)
         {
-            return WriteManifestCallback(packages, outputPath, framework, runtimeIdentifier, cancellationToken);
+            return WriteManifestCallback(assetsFilePath, outputPath, framework, runtimeIdentifier, cancellationToken);
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
