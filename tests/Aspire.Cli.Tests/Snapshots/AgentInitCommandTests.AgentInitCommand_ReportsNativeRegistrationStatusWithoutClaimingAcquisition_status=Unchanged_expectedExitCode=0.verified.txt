@@ -1,0 +1,11 @@
+﻿{
+  Messages: [],
+  Success: [
+    Agent environment configuration complete.
+  ],
+  SubtleMessages: [
+    Already configured Aspire source for GitHub Copilot CLI, GitHub Copilot App (project): project-settings.json,
+    Native client owns acquisition.,
+    The selected clients acquire and load the registered Aspire content. Client trust or activation may still be required; registration does not mean the content is installed or loaded.
+  ]
+}

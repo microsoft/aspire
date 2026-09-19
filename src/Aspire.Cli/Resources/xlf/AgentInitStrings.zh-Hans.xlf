@@ -1,0 +1,152 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="zh-Hans" original="../AgentInitStrings.resx">
+    <body>
+      <trans-unit id="AspireSkillsAsset">
+        <source>Aspire source</source>
+        <target state="new">Aspire source</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsOptionDescription">
+        <source>Register native Aspire skills and supported canvases for the selected clients (y/n or true/false; default: yes)</source>
+        <target state="new">Register native Aspire skills and supported canvases for the selected clients (y/n or true/false; default: yes)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireifyHandoff">
+        <source>Aspire AppHost created! Open this project in {0}. After the client acquires the Aspire content, ask it to run the aspireify skill to complete setup.</source>
+        <target state="new">Aspire AppHost created! Open this project in {0}. After the client acquires the Aspire content, ask it to run the aspireify skill to complete setup.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="BlockedTarget">
+        <source>Blocked {0} for {1} ({2}): {3}</source>
+        <target state="new">Blocked {0} for {1} ({2}): {3}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ClientAcquisitionNotice">
+        <source>The selected clients acquire and load the registered Aspire content. Client trust or activation may still be required; registration does not mean the content is installed or loaded.</source>
+        <target state="new">The selected clients acquire and load the registered Aspire content. Client trust or activation may still be required; registration does not mean the content is installed or loaded.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ClientsOptionDescription">
+        <source>Comma-separated clients ({0}), '{1}', or '{2}'. Defaults to detected clients</source>
+        <target state="new">Comma-separated clients ({0}), '{1}', or '{2}'. Defaults to detected clients</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigurationCompletedWithWarnings">
+        <source>Agent configuration completed with warnings. Review the skipped or unavailable targets above.</source>
+        <target state="new">Agent configuration completed with warnings. Review the skipped or unavailable targets above.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureAspireSkillsPrompt">
+        <source>Register Aspire skills and supported canvases?</source>
+        <target state="new">Register Aspire skills and supported canvases?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigureDotnetInspectPrompt">
+        <source>Install the dotnet-inspect bootstrap skill?</source>
+        <target state="new">Install the dotnet-inspect bootstrap skill?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfigurePlaywrightPrompt">
+        <source>Install Playwright CLI and its browser automation skill?</source>
+        <target state="new">Install Playwright CLI and its browser automation skill?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConfiguredTarget">
+        <source>Configured {0} for {1} ({2}): {3}</source>
+        <target state="new">Configured {0} for {1} ({2}): {3}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DotnetInspectAsset">
+        <source>dotnet-inspect skill</source>
+        <target state="new">dotnet-inspect skill</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DotnetInspectOptionDescription">
+        <source>Install the dotnet-inspect bootstrap skill for the selected clients (y/n or true/false; default: no)</source>
+        <target state="new">Install the dotnet-inspect bootstrap skill for the selected clients (y/n or true/false; default: no)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailedTarget">
+        <source>Failed to configure {0} for {1} ({2}): {3}</source>
+        <target state="new">Failed to configure {0} for {1} ({2}): {3}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InstalledTarget">
+        <source>Installed {0} for {1} ({2}): {3}</source>
+        <target state="new">Installed {0} for {1} ({2}): {3}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InvalidAssetValue">
+        <source>Invalid value '{1}' for '{0}'. Use y/n or true/false.</source>
+        <target state="new">Invalid value '{1}' for '{0}'. Use y/n or true/false.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InvalidClients">
+        <source>Invalid client selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
+        <target state="new">Invalid client selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="McpAsset">
+        <source>Aspire MCP server</source>
+        <target state="new">Aspire MCP server</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoAssetsSelected">
+        <source>No agent assets selected. Existing configuration was left unchanged.</source>
+        <target state="new">No agent assets selected. Existing configuration was left unchanged.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoClientsSelected">
+        <source>No clients selected. Existing configuration was left unchanged.</source>
+        <target state="new">No clients selected. Existing configuration was left unchanged.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightAsset">
+        <source>Playwright CLI skill</source>
+        <target state="new">Playwright CLI skill</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightOptionDescription">
+        <source>Install Playwright CLI and its skills for the selected clients (y/n or true/false; default: no)</source>
+        <target state="new">Install Playwright CLI and its skills for the selected clients (y/n or true/false; default: no)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectScope">
+        <source>project</source>
+        <target state="new">project</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RegisteredTarget">
+        <source>Registered {0} for {1} ({2}): {3}</source>
+        <target state="new">Registered {0} for {1} ({2}): {3}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectClients">
+        <source>Select clients to configure at project and user level:</source>
+        <target state="new">Select clients to configure at project and user level:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkippedTarget">
+        <source>Skipped {0} for {1} ({2}): {3}</source>
+        <target state="new">Skipped {0} for {1} ({2}): {3}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHooksAsset">
+        <source>Aspire usage telemetry hooks</source>
+        <target state="new">Aspire usage telemetry hooks</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UnchangedTarget">
+        <source>Already configured {0} for {1} ({2}): {3}</source>
+        <target state="new">Already configured {0} for {1} ({2}): {3}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UserScope">
+        <source>user</source>
+        <target state="new">user</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

@@ -2,11 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.AspireSkills;
-using Aspire.Cli.Agents.Playwright;
-using Aspire.Cli.Git;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Commands;
@@ -20,24 +15,12 @@ internal sealed class McpInitCommand : BaseCommand
     private readonly AgentInitCommand _agentInitCommand;
 
     public McpInitCommand(
-        IAgentEnvironmentDetector agentEnvironmentDetector,
-        IAspireSkillsInstaller aspireSkillsInstaller,
-        PlaywrightCliInstaller playwrightCliInstaller,
-        IGitRepository gitRepository,
-        ILanguageDiscovery languageDiscovery,
-        Aspire.Cli.Agents.Hooks.ITelemetryHookConfigurator telemetryHookConfigurator,
+        AgentInitCommand agentInitCommand,
         CommonCommandServices services)
         : base("init", McpCommandStrings.InitCommand_Description, services)
     {
-        // Create the AgentInitCommand to delegate execution to
-        _agentInitCommand = new AgentInitCommand(
-            agentEnvironmentDetector,
-            aspireSkillsInstaller,
-            playwrightCliInstaller,
-            gitRepository,
-            languageDiscovery,
-            telemetryHookConfigurator,
-            services);
+        _agentInitCommand = agentInitCommand;
+        AgentInitCommand.AddOptions(this, includeMcp: true, includeWorkspaceRoot: true);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)

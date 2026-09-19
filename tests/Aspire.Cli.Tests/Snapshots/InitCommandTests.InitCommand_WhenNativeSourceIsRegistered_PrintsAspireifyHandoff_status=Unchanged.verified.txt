@@ -1,0 +1,4 @@
+﻿{
+  Handoff: Aspire AppHost created! Open this project in GitHub Copilot CLI, Claude Code. After the client acquires the Aspire content, ask it to run the aspireify skill to complete setup.,
+  AcquisitionNotice: The selected clients acquire and load the registered Aspire content. Client trust or activation may still be required; registration does not mean the content is installed or loaded.
+}

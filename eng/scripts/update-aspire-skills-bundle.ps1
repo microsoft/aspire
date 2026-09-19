@@ -14,7 +14,6 @@ $scriptDir = $PSScriptRoot
 $repoRoot = (Resolve-Path (Join-Path $scriptDir '..\..')).Path
 $embeddedDir = Join-Path $repoRoot 'src\Aspire.Cli\Agents\AspireSkills\Embedded'
 $metadataPath = Join-Path $embeddedDir 'aspire-skills.metadata.json'
-$installerPath = Join-Path $repoRoot 'src\Aspire.Cli\Agents\AspireSkills\AspireSkillsInstaller.cs'
 $cliProjectPath = Join-Path $repoRoot 'src\Aspire.Cli\Aspire.Cli.csproj'
 $hooksDir = Join-Path $repoRoot 'src\Aspire.Cli\Agents\Hooks'
 
@@ -191,13 +190,6 @@ try {
         $metadata['hooks'] = $hookMetadata
     }
     Set-TextFile -Path $metadataPath -Content ($metadata | ConvertTo-Json -Depth 10)
-
-    $installerContent = Get-Content -Raw -Path $installerPath
-    $installerContent = [regex]::Replace(
-        $installerContent,
-        'internal const string Version = "[^"]+";',
-        "internal const string Version = ""$normalizedVersion"";")
-    Set-TextFile -Path $installerPath -Content $installerContent
 
     $cliProjectContent = Get-Content -Raw -Path $cliProjectPath
     $cliProjectContent = [regex]::Replace(

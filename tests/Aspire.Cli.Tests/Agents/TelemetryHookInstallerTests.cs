@@ -2,10 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
-using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -35,12 +33,7 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
-        var bundleDirectory = workspace.CreateDirectory("bundle");
-        var bundleProvider = new EmbeddedAspireSkillsBundleProvider(
-            new AspireSkillsBundleProvider(),
-            NullLogger<EmbeddedAspireSkillsBundleProvider>.Instance);
-        var bundle = await bundleProvider.CreateBundleAsync(bundleDirectory, CancellationToken.None).DefaultTimeout();
-        Assert.NotNull(bundle);
+        var archive = await TelemetryHookArchiveReader.ReadEmbeddedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
         var scripts = await CreateInstaller(workspace, home).EnsureInstalledAsync(CancellationToken.None).DefaultTimeout();
         var installedPaths = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -49,32 +42,17 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
             ["track-telemetry.ps1"] = scripts.PowerShellScriptPath
         };
 
-        await using var manifestStream = File.OpenRead(Path.Combine(bundleDirectory.FullName, "skill-manifest.json"));
-        using var manifest = await JsonDocument.ParseAsync(manifestStream).DefaultTimeout();
-        await using var metadataStream = typeof(TelemetryHookInstaller).Assembly.GetManifestResourceStream("aspire-skills.metadata.json");
-        Assert.NotNull(metadataStream);
-        using var metadata = await JsonDocument.ParseAsync(metadataStream).DefaultTimeout();
+        Assert.Equal(installedPaths.Keys.Order(StringComparer.Ordinal), archive.Hooks.Select(hook => hook.Name).Order(StringComparer.Ordinal));
 
-        var bundledHooks = manifest.RootElement.GetProperty("hooks");
-        var recordedHooks = metadata.RootElement.GetProperty("hooks");
-        Assert.Equal(bundledHooks.GetProperty("commitSha").GetString(), recordedHooks.GetProperty("commitSha").GetString());
-
-        var bundledFiles = bundledHooks.GetProperty("files").EnumerateObject().ToArray();
-        var recordedFiles = recordedHooks.GetProperty("files");
-        var expectedNames = bundledFiles.Select(file => file.Name).Order(StringComparer.Ordinal).ToArray();
-        Assert.Equal(expectedNames, installedPaths.Keys.Order(StringComparer.Ordinal));
-        Assert.Equal(expectedNames, recordedFiles.EnumerateObject().Select(file => file.Name).Order(StringComparer.Ordinal));
-
-        foreach (var file in bundledFiles)
+        foreach (var hook in archive.Hooks)
         {
-            var bundledPath = Path.Combine(bundleDirectory.FullName, "hooks", "scripts", file.Name);
-            var bundledContent = await ReadLfNormalizedAsync(bundledPath).DefaultTimeout();
-            var installedContent = await ReadLfNormalizedAsync(installedPaths[file.Name]).DefaultTimeout();
-            Assert.Equal(bundledContent, installedContent);
+            var installedBytes = await File.ReadAllBytesAsync(installedPaths[hook.Name]).DefaultTimeout();
+            var installedContent = TelemetryHookArchiveReader.NormalizeHookBytes(installedBytes);
+            Assert.Equal(hook.Content, installedContent);
 
-            var installedHash = Convert.ToHexStringLower(SHA512.HashData(Encoding.UTF8.GetBytes(installedContent)));
-            Assert.Equal(file.Value.GetString(), installedHash);
-            Assert.Equal(file.Value.GetString(), recordedFiles.GetProperty(file.Name).GetString());
+            var installedHash = Convert.ToHexStringLower(SHA512.HashData(installedContent));
+            Assert.Equal(hook.ManifestSha512, installedHash);
+            Assert.Equal(hook.MetadataSha512, installedHash);
         }
     }
 
@@ -105,12 +83,18 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
 
         var first = await installer.EnsureInstalledAsync(CancellationToken.None).DefaultTimeout();
         var firstShellContent = await File.ReadAllTextAsync(first.ShellScriptPath).DefaultTimeout();
+        File.SetLastWriteTimeUtc(first.ShellScriptPath, new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        File.SetLastWriteTimeUtc(first.PowerShellScriptPath, new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        var shellTimestamp = File.GetLastWriteTimeUtc(first.ShellScriptPath);
+        var powerShellTimestamp = File.GetLastWriteTimeUtc(first.PowerShellScriptPath);
 
         var second = await installer.EnsureInstalledAsync(CancellationToken.None).DefaultTimeout();
         var secondShellContent = await File.ReadAllTextAsync(second.ShellScriptPath).DefaultTimeout();
 
         Assert.Equal(first.ShellScriptPath, second.ShellScriptPath);
         Assert.Equal(firstShellContent, secondShellContent);
+        Assert.Equal(shellTimestamp, File.GetLastWriteTimeUtc(second.ShellScriptPath));
+        Assert.Equal(powerShellTimestamp, File.GetLastWriteTimeUtc(second.PowerShellScriptPath));
     }
 
     [Fact]
@@ -150,16 +134,74 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
         Assert.True(mode.HasFlag(UnixFileMode.UserExecute));
     }
 
+    [Fact]
+    public async Task EnsureInstalledAsync_CancellationDoesNotCreateHookFiles()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            CreateInstaller(workspace, home).EnsureInstalledAsync(cancellation.Token)).DefaultTimeout();
+
+        Assert.False(Directory.Exists(Path.Combine(home.FullName, ".aspire", "hooks")));
+    }
+
+    [Fact]
+    public async Task EnsureInstalledAsync_LockedExistingScriptIsNotBlindlyOverwritten()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows file sharing is required.");
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var directory = Directory.CreateDirectory(Path.Combine(home.FullName, ".aspire", "hooks"));
+        var path = Path.Combine(directory.FullName, "track-telemetry.sh");
+        await File.WriteAllTextAsync(path, "existing").DefaultTimeout();
+        using (var locked = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            await Assert.ThrowsAnyAsync<IOException>(() =>
+                CreateInstaller(workspace, home).EnsureInstalledAsync(CancellationToken.None)).DefaultTimeout();
+        }
+
+        Assert.Equal("existing", await File.ReadAllTextAsync(path).DefaultTimeout());
+        Assert.Equal([path], Directory.EnumerateFiles(directory.FullName));
+    }
+
+    [Fact]
+    public async Task EnsureInstalledAsync_FailedReplacementCleansItsStagingFile()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows read-only replacement behavior is required.");
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var directory = Directory.CreateDirectory(Path.Combine(home.FullName, ".aspire", "hooks"));
+        var path = Path.Combine(directory.FullName, "track-telemetry.sh");
+        await File.WriteAllTextAsync(path, "existing").DefaultTimeout();
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+        try
+        {
+            var error = await Record.ExceptionAsync(() =>
+                CreateInstaller(workspace, home).EnsureInstalledAsync(CancellationToken.None)).DefaultTimeout();
+            Assert.True(error is IOException or UnauthorizedAccessException);
+            Assert.Equal("existing", await File.ReadAllTextAsync(path).DefaultTimeout());
+            Assert.Equal([path], Directory.EnumerateFiles(directory.FullName));
+        }
+        finally
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+        }
+    }
+
     private static TelemetryHookInstaller CreateInstaller(TemporaryWorkspace workspace, DirectoryInfo home)
     {
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: home);
         return new TelemetryHookInstaller(executionContext, NullLogger<TelemetryHookInstaller>.Instance);
-    }
-
-    private static async Task<string> ReadLfNormalizedAsync(string path)
-    {
-        // Git can check the PowerShell resource out with CRLF; release hook hashes use LF UTF-8 without a BOM.
-        var content = await File.ReadAllTextAsync(path);
-        return content.Replace("\r\n", "\n").Replace('\r', '\n');
     }
 }

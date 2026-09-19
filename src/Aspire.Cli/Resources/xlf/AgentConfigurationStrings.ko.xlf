@@ -1,0 +1,112 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="ko" original="../AgentConfigurationStrings.resx">
+    <body>
+      <trans-unit id="ConcurrentChange">
+        <source>The configuration or one of its overrides changed during setup. Retry after the other writer has finished.</source>
+        <target state="new">The configuration or one of its overrides changed during setup. Retry after the other writer has finished.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Conflict">
+        <source>An existing Aspire entry has a different source or command; it was not replaced.</source>
+        <target state="new">An existing Aspire entry has a different source or command; it was not replaced.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Disabled">
+        <source>An existing disabled choice was preserved; this entry was not enabled.</source>
+        <target state="new">An existing disabled choice was preserved; this entry was not enabled.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExistingMcpCustomization">
+        <source>Existing Aspire MCP settings in another applicable scope were preserved. No default entry was added that could override or broaden those customizations.</source>
+        <target state="new">Existing Aspire MCP settings in another applicable scope were preserved. No default entry was added that could override or broaden those customizations.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExistingProjectHook">
+        <source>An existing project-level Aspire usage hook was preserved. No additional user hook was added, to avoid duplicate events.</source>
+        <target state="new">An existing project-level Aspire usage hook was preserved. No additional user hook was added, to avoid duplicate events.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HookConfigured">
+        <source>The user-level Aspire usage hook is configured. Telemetry opt-out settings still apply.</source>
+        <target state="new">The user-level Aspire usage hook is configured. Telemetry opt-out settings still apply.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HookInstallationFailed">
+        <source>Could not prepare the embedded usage hook scripts: {0}</source>
+        <target state="new">Could not prepare the embedded usage hook scripts: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HookNotApplicable">
+        <source>No selected supported client has a successfully configured Aspire skills or MCP target; no usage hook was added.</source>
+        <target state="new">No selected supported client has a successfully configured Aspire skills or MCP target; no usage hook was added.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MalformedJson">
+        <source>The configuration is not valid JSON/JSONC; the file was left unchanged.</source>
+        <target state="new">The configuration is not valid JSON/JSONC; the file was left unchanged.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="McpConfigured">
+        <source>Aspire MCP configuration is present. The client controls trust, policy, and server startup.</source>
+        <target state="new">Aspire MCP configuration is present. The client controls trust, policy, and server startup.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ObjectRequired">
+        <source>The configuration must contain a JSON object; the file was left unchanged.</source>
+        <target state="new">The configuration must contain a JSON object; the file was left unchanged.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OpenCodeCatalogVersionUnsupported">
+        <source>The detected OpenCode version ({0}) does not support skills.urls catalogs. Upgrade to OpenCode {1} or later; the catalog configuration was left unchanged.</source>
+        <target state="new">The detected OpenCode version ({0}) does not support skills.urls catalogs. Upgrade to OpenCode {1} or later; the catalog configuration was left unchanged.</target>
+        <note>{0} is the detected client version; {1} is the minimum supported client version.</note>
+      </trans-unit>
+      <trans-unit id="OpenCodeMultipleFiles">
+        <source>Multiple OpenCode configuration files apply at this scope. Consolidate them before configuring Aspire.</source>
+        <target state="new">Multiple OpenCode configuration files apply at this scope. Consolidate them before configuring Aspire.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OpenCodeSchemaConflict">
+        <source>OpenCode version and configuration evidence do not establish one compatible V1 or V2 schema. Existing files were not converted.</source>
+        <target state="new">OpenCode version and configuration evidence do not establish one compatible V1 or V2 schema. Existing files were not converted.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PolicyBlocked">
+        <source>An existing policy or higher-precedence override controls this entry. It was preserved; review it in the client before enabling Aspire.</source>
+        <target state="new">An existing policy or higher-precedence override controls this entry. It was preserved; review it in the client before enabling Aspire.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProfileLimitations">
+        <source>Aspire MCP configuration is present for this VS Code profile. Session-only --user-data-dir overrides and remote profiles must be configured in VS Code.</source>
+        <target state="new">Aspire MCP configuration is present for this VS Code profile. Session-only --user-data-dir overrides and remote profiles must be configured in VS Code.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ReadWriteFailed">
+        <source>Could not read or write the configuration: {0}</source>
+        <target state="new">Could not read or write the configuration: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Registered">
+        <source>Native source registered. The client owns acquisition, trust, and loading; managed policy and runtime overrides are not fully verifiable offline.</source>
+        <target state="new">Native source registered. The client owns acquisition, trust, and loading; managed policy and runtime overrides are not fully verifiable offline.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UnexpectedShape">
+        <source>The configuration has an unsupported JSON shape at '{0}'; this entry was left unchanged.</source>
+        <target state="new">The configuration has an unsupported JSON shape at '{0}'; this entry was left unchanged.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UnsafeLink">
+        <source>The configuration link '{0}' could not be resolved safely; it was left unchanged.</source>
+        <target state="new">The configuration link '{0}' could not be resolved safely; it was left unchanged.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UnsupportedOverride">
+        <source>This client configuration override cannot be resolved safely offline. Configure this target in the client; no guessed path was written.</source>
+        <target state="new">This client configuration override cannot be resolved safely offline. Configure this target in the client; no guessed path was written.</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

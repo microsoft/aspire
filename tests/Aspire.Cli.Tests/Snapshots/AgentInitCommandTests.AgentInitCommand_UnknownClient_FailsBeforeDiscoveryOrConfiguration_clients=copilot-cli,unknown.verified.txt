@@ -1,0 +1,3 @@
+﻿[
+  Invalid client selection 'copilot-cli,unknown'. Use copilot-cli,copilot-app,vscode,claude-code,opencode, 'all', or 'none'.
+]

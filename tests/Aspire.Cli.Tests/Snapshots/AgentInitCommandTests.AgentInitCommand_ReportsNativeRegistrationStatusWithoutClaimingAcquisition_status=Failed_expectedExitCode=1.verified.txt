@@ -1,0 +1,12 @@
+﻿{
+  Messages: [
+    Configuration completed with errors. Please fix the reported issues and re-run the command.,
+    See logs at <log-file>
+  ],
+  Errors: [
+    Failed to configure Aspire source for GitHub Copilot CLI, GitHub Copilot App (project): project-settings.json
+  ],
+  SubtleMessages: [
+    Native client owns acquisition.
+  ]
+}

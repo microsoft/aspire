@@ -104,6 +104,50 @@ var sequence = CreateSequence()
 await sequence.ApplyAsync(Terminal);
 ```
 
+## Agent setup coverage
+
+`AgentCommandTests` uses the existing Docker terminal, `Hex1bTerminalAutomator`,
+`SequenceCounter`, and `StartRun` cleanup flow. Its current-CLI cases cover:
+
+- Independent asset prompts followed by detected-client defaults.
+- Native Aspire source registration in project and user settings, including
+  shared Copilot CLI/App destinations and unchanged second-run timestamps.
+- Explicit `--mcp y --clients claude-code` migration of deprecated MCP arguments.
+- No-write behavior for disabled assets, `--clients none`, and invalid client IDs.
+- `aspire new`/`aspire init` handoffs that register native sources without offering
+  MCP or expecting copied Aspire skill files.
+
+Unattended tests pass `--clients` explicitly instead of depending on clients
+installed in the container. Native user configuration overrides point at the
+isolated test workspace so both scopes can be inspected. Generated settings are
+covered with Verify snapshots; source registration must not be mistaken for
+client-owned acquisition, trust, or loading. No test fetches an Aspire skills
+bundle or assumes an unpublished OpenCode catalog is available.
+
+`AspireNewAcceptingAgentInitAsync` accepts the initial setup confirmation and
+leaves the caller at the first omitted asset/client prompt. Pass `--clients`
+and the asset flags in `extraArguments` to skip those prompts. Chained flows have
+no MCP option or prompt.
+
+`NewWithAgentInitTests` separately requests
+`--clients claude-code --playwright y --dotnet-inspect n --aspire-skills n`,
+verifies the real npm provenance/install flow, and checks generated skills in
+both scopes. It remains **outerloop-only** because it requires external npm
+access; do not move it into the regular PR lane.
+
+On a Linux test host, build a current archive rather than testing a released CLI:
+
+```bash
+./localhive.sh -o ./artifacts/agent-init-e2e -r linux-x64 --archive
+ASPIRE_E2E_ARCHIVE="$PWD/artifacts/agent-init-e2e.tar.gz" \
+  dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+  --no-launch-profile -- --filter-class "*.AgentCommandTests" \
+  --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+```
+
+Use `linux-arm64` on a Linux arm64 test host. Review generated `.received.` settings
+snapshots before accepting them with `dotnet verify accept -y`.
+
 ## Running Tests Locally
 
 ### npm test dependencies

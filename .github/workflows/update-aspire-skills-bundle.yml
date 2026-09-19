@@ -49,8 +49,7 @@ jobs:
           dotnet test --project tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj
           --no-launch-profile
           --
-          --filter-class "*.AspireSkillsInstallerTests"
-          --filter-class "*.AspireSkillsBundleTests"
+          --filter-class "*.TelemetryHookArchiveIntegrityTests"
           --filter-class "*.AgentInitCommandTests"
           --filter-class "*.TelemetryHookInstallerTests"
           --filter-class "*.TelemetryHookScriptTests"
@@ -76,4 +75,4 @@ jobs:
             area-cli
             area-engineering-systems
           title: "[Automated] Update Aspire skills bundle"
-          body: "Auto-generated update to refresh the embedded Aspire skills bundle fallback used by the Aspire CLI."
+          body: "Auto-generated update to refresh the retained Aspire skills archive verification inputs and canonical telemetry hook scripts."

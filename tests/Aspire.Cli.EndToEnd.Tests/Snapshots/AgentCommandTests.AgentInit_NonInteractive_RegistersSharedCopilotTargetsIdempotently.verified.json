@@ -1,0 +1,28 @@
+{
+  "project": {
+    "extraKnownMarketplaces": {
+      "aspire-skills": {
+        "source": {
+          "source": "github",
+          "repo": "microsoft/aspire-skills"
+        }
+      }
+    },
+    "enabledPlugins": {
+      "aspire@aspire-skills": true
+    }
+  },
+  "user": {
+    "extraKnownMarketplaces": {
+      "aspire-skills": {
+        "source": {
+          "source": "github",
+          "repo": "microsoft/aspire-skills"
+        }
+      }
+    },
+    "enabledPlugins": {
+      "aspire@aspire-skills": true
+    }
+  }
+}
