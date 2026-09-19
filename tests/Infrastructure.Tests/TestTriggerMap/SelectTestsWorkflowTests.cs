@@ -98,7 +98,6 @@ public sealed class SelectTestsWorkflowTests
         Assert.Contains(expectedTarget, nativeArchivesYml);
         Assert.DoesNotContain("\"runner\": \"windows-11-arm\", \"rids\": \"win-arm64\"", testsYml);
         Assert.DoesNotContain("\"runner\": \"windows-11-arm\", \"rids\": \"win-arm64\"", nativeArchivesYml);
-        Assert.Contains("if: ${{ matrix.targets.rids != 'osx-x64' }}", nativeArchivesYml);
     }
 
     [Fact]
@@ -126,19 +125,20 @@ public sealed class SelectTestsWorkflowTests
     public void NativeDashboardInteractivityOptsIntoOuterloopTests()
     {
         var yaml = new YamlStream();
-        using var reader = new StringReader(File.ReadAllText(BuildCliNativeArchivesWorkflowPath));
+        using var reader = new StringReader(File.ReadAllText(NativeDashboardValidationWorkflowPath));
         yaml.Load(reader);
 
         var root = (YamlMappingNode)yaml.Documents[0].RootNode;
         var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
-        var archiveJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("build_cli_archives")];
-        var steps = (YamlSequenceNode)archiveJob.Children[new YamlScalarNode("steps")];
+        var validationJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("validate")];
+        var steps = (YamlSequenceNode)validationJob.Children[new YamlScalarNode("steps")];
         var interactiveTest = Assert.Single(
             steps.Cast<YamlMappingNode>(),
             step => step.Children.TryGetValue(new YamlScalarNode("name"), out var name) &&
                     name.ToString() == "Test Native AOT Dashboard interactivity");
         var command = interactiveTest.Children[new YamlScalarNode("run")].ToString();
 
+        Assert.Equal("${{ inputs.rid == 'win-x64' }}", interactiveTest.Children[new YamlScalarNode("if")].ToString());
         Assert.Contains("/p:RunOuterloopTests=true --", command);
         Assert.EndsWith(
             "--filter-method \"*.NativeDashboard_LoadsInteractivePageWithoutBrowserErrors\" --filter-not-trait \"quarantined=true\"",
@@ -260,6 +260,9 @@ public sealed class SelectTestsWorkflowTests
 
     private static string BuildCliNativeArchivesWorkflowPath
         => Path.Combine(RepoRoot.Path, ".github", "workflows", "build-cli-native-archives.yml");
+
+    private static string NativeDashboardValidationWorkflowPath
+        => Path.Combine(RepoRoot.Path, ".github", "workflows", "native-dashboard-validation.yml");
 
     private static string ExtractCommentSelectionJob()
     {

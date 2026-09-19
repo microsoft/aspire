@@ -53,7 +53,9 @@ public sealed class NuGetConfigTests
             });
 
         var sources = root.Element("packageSources")!.Elements("add").ToArray();
-        Assert.All(sources, source => AssertApprovedSource(source.Attribute("value")!.Value));
+        var localDapperSource = Assert.Single(sources, source => (string?)source.Attribute("key") == "local-dapper");
+        Assert.Equal("eng/local-packages", (string?)localDapperSource.Attribute("value"));
+        Assert.All(sources.Where(source => source != localDapperSource), source => AssertApprovedSource(source.Attribute("value")!.Value));
         Assert.Equal(
             sources.Select(source => source.Attribute("key")!.Value).Order(StringComparer.Ordinal),
             root.Element("packageSourceMapping")!.Elements("packageSource")
