@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Bot dependency bump (uv/anyio) in playground apps, not app/copilot-swe-agent or a backport",
+  "mergedAt": "2026-09-18T23:48:20Z",
+  "number": 20244,
+  "runDate": "2026-09-19T00:07:40Z",
+  "status": "excluded",
+  "title": "Bump the uv group across 4 directories with 1 update"
+}

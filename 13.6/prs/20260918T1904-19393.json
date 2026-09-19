@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot-authored automated update (skills bundle refresh), not app/copilot-swe-agent or a backport",
+  "mergedAt": "2026-09-18T19:04:15Z",
+  "number": 19393,
+  "runDate": "2026-09-19T00:07:40Z",
+  "status": "excluded",
+  "title": "[Automated] Update Aspire skills bundle"
+}
