@@ -16,7 +16,6 @@ Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxOptions # Config
   AutoSuspendInterval?: timespan # Gets or sets the idle interval before auto-suspend runs.
   AutoSuspendMode?: enum:Aspire.Hosting.Azure.AzureSandboxAutoSuspendMode # Gets or sets the sandbox suspend mode.
   Endpoints: Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxEndpointOptions[] # Gets or sets endpoint-specific sandbox option overrides.
-  PublicEndpointReadyTimeout?: timespan # Gets or sets how long to wait for an exposed HTTP endpoint to become ready.
   Tier: enum:Aspire.Hosting.Azure.AzureSandboxTier # Gets or sets the resource tier.
 
 # Enum Types
@@ -26,7 +25,8 @@ enum:Aspire.Hosting.Azure.AzureSandboxTier = ExtraSmall | Small | Medium | Large
 
 # Capabilities
 Aspire.Hosting.Azure.Sandboxes/addAzureSandboxGroup(name: string) -> Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxGroupResource
-Aspire.Hosting.Azure.Sandboxes/publishComputeResourceAsAzureSandbox(sandboxGroup: Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxGroupResource, options?: Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
+Aspire.Hosting.Azure.Sandboxes/publishComputeResourceAsAzureSandbox(options?: Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
+Aspire.Hosting.Azure.Sandboxes/withAcrPullIdentity(identity: Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureUserAssignedIdentityResource) -> Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxGroupResource
 Aspire.Hosting.Azure.Sandboxes/withNoManagedIdentity() -> Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxGroupResource
 Aspire.Hosting.Azure.Sandboxes/withSystemAssignedIdentity() -> Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxGroupResource
 Aspire.Hosting.Azure.Sandboxes/withUserAssignedIdentity(identity: Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureUserAssignedIdentityResource) -> Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.AzureSandboxGroupResource
