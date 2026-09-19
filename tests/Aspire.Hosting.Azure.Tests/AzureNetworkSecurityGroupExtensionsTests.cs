@@ -10,12 +10,12 @@ using Azure.Provisioning.Network;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureNetworkSecurityGroupExtensionsTests
+public class AzureNetworkSecurityGroupExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddNetworkSecurityGroup_CreatesResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var nsg = builder.AddNetworkSecurityGroup("web-nsg");
 
@@ -27,7 +27,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
     [Fact]
     public void AddNetworkSecurityGroup_InRunMode_DoesNotAddToBuilder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var nsg = builder.AddNetworkSecurityGroup("web-nsg");
 
@@ -37,7 +37,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
     [Fact]
     public async Task AddNetworkSecurityGroup_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var nsg = builder.AddNetworkSecurityGroup("web-nsg");
@@ -52,7 +52,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
     [Fact]
     public async Task AddNetworkSecurityGroup_WithSecurityRules_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var nsg = builder.AddNetworkSecurityGroup("web-nsg")
@@ -85,7 +85,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
     [Fact]
     public async Task AddNetworkSecurityGroup_WithSecurityRules_GeneratesCorrectNsgModuleBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var nsg = builder.AddNetworkSecurityGroup("web-nsg")
             .WithSecurityRule(new AzureSecurityRule
@@ -115,7 +115,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
     [Fact]
     public async Task AddSubnet_WithNetworkSecurityGroup_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var nsg = builder.AddNetworkSecurityGroup("web-nsg")
@@ -141,7 +141,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
     [Fact]
     public async Task AddNetworkSecurityGroup_SharedAcrossSubnets_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var nsg = builder.AddNetworkSecurityGroup("shared-nsg")
@@ -169,7 +169,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
     [Fact]
     public void WithNetworkSecurityGroup_SetsSubnetNetworkSecurityGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var nsg = builder.AddNetworkSecurityGroup("web-nsg");
@@ -182,7 +182,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
     [Fact]
     public void WithSecurityRule_DuplicateName_Throws()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var nsg = builder.AddNetworkSecurityGroup("web-nsg")
             .WithSecurityRule(new AzureSecurityRule
@@ -217,7 +217,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
     [Fact]
     public async Task MultipleNSGs_WithSameRuleName_GeneratesDistinctBicepIdentifiers()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
 
@@ -260,7 +260,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
     [Fact]
     public void WithNetworkSecurityGroup_AfterShorthand_Throws()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var nsg = builder.AddNetworkSecurityGroup("web-nsg");
@@ -275,7 +275,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
     [Fact]
     public async Task AddNetworkSecurityGroup_ExistingWithSecurityRules_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingName = builder.AddParameter("existingNsgName");
         var nsg = builder.AddNetworkSecurityGroup("web-nsg")
@@ -298,7 +298,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
     [Fact]
     public async Task AddNetworkSecurityGroup_WithSourceAddressPrefixReference_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var pip = builder.AddPublicIPAddress("mypip");
 
@@ -320,7 +320,7 @@ public class AzureNetworkSecurityGroupExtensionsTests
     [Fact]
     public async Task AddNetworkSecurityGroup_WithDestinationAddressPrefixReference_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var pip = builder.AddPublicIPAddress("mypip");
 

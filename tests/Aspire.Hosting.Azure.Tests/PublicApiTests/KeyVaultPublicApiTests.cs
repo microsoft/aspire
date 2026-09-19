@@ -5,7 +5,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
-public class KeyVaultPublicApiTests
+public class KeyVaultPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
     [InlineData(false)]
@@ -52,7 +52,7 @@ public class KeyVaultPublicApiTests
     [InlineData(true)]
     public void AddAzureKeyVaultShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddAzureKeyVault(name);

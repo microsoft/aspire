@@ -11,13 +11,88 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright;
 
-// Browser coverage for grid auto-fit and the <aspire-scroll-to-bottom> custom element.
+// Browser coverage for terminal keyboard shortcuts, grid auto-fit, and the <aspire-scroll-to-bottom> custom element.
 [RequiresFeature(TestFeature.Playwright)]
 public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteractionsTests.InteractionsDashboardServerFixture>
 {
     public DashboardInteractionsTests(InteractionsDashboardServerFixture dashboardServerFixture)
         : base(dashboardServerFixture)
     {
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task TerminalDockShortcut_UsesUnmodifiedPhysicalKeyAndPreservesInputGuard()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetContentAsync("""
+                <button id="control">Control</button>
+                <input id="input">
+                <textarea id="textarea"></textarea>
+                <div id="terminal"></div>
+                <fluent-text-field id="fluent"></fluent-text-field>
+                """);
+            await page.AddScriptTagAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, "wwwroot", "js", "app.js") });
+            await page.EvaluateAsync("""
+                () => {
+                    const host = document.getElementById('fluent');
+                    host.attachShadow({ mode: 'open' }).appendChild(document.createElement('input'));
+                    const terminal = document.getElementById('terminal');
+                    const view = terminal.attachShadow({ mode: 'open' }).appendChild(document.createElement('div'));
+                    view.attachShadow({ mode: 'open' }).appendChild(document.createElement('textarea'));
+                }
+                """);
+
+            var cases = new (string Key, string Code, bool Shift, bool Alt, bool Ctrl, bool Meta, string Target, int? Expected)[]
+            {
+                ("`", "Backquote", false, false, false, false, "control", 400),
+                ("^", "Backquote", false, false, false, false, "control", 400),
+                ("Dead", "Backquote", false, false, false, false, "control", 400),
+                ("`", "BracketRight", false, false, false, false, "control", null),
+                ("~", "Backquote", true, false, false, false, "control", null),
+                ("`", "Backquote", false, true, false, false, "control", null),
+                ("`", "Backquote", false, false, true, false, "control", null),
+                ("`", "Backquote", false, false, false, true, "control", null),
+                ("`", "Backquote", false, false, false, false, "input", null),
+                ("^", "Backquote", false, false, false, false, "textarea", null),
+                ("`", "Backquote", false, false, false, false, "terminal", null),
+                ("^", "Backquote", false, false, false, false, "fluent", null),
+                ("S", "KeyS", true, false, false, false, "control", 110),
+                ("r", "KeyR", false, false, false, false, "control", 200)
+            };
+
+            foreach (var (key, code, shiftKey, altKey, ctrlKey, metaKey, target, expected) in cases)
+            {
+                var shortcuts = await page.EvaluateAsync<int[]>("""
+                    ({ key, code, shiftKey, altKey, ctrlKey, metaKey, target }) => {
+                        const calls = [];
+                        const registration = window.registerGlobalKeydownListener({
+                            invokeMethodAsync: (_, shortcut) => {
+                                calls.push(shortcut);
+                                return Promise.resolve();
+                            }
+                        });
+                        try {
+                            const host = document.getElementById(target);
+                            let input = host;
+                            while (input.shadowRoot?.firstElementChild) {
+                                input = input.shadowRoot.firstElementChild;
+                            }
+                            input.focus();
+                            input.dispatchEvent(new KeyboardEvent('keydown', {
+                                key, code, shiftKey, altKey, ctrlKey, metaKey,
+                                bubbles: true, composed: true
+                            }));
+                            return calls;
+                        } finally {
+                            window.unregisterGlobalKeydownListener(registration);
+                        }
+                    }
+                    """, new { key, code, shiftKey, altKey, ctrlKey, metaKey, target });
+                Assert.Equal(expected is { } shortcut ? [shortcut] : Array.Empty<int>(), shortcuts);
+            }
+        });
     }
 
     [Fact]

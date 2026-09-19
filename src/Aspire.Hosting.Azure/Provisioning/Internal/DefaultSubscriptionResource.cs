@@ -20,7 +20,7 @@ internal sealed class DefaultSubscriptionResource(SubscriptionResource subscript
 
     public IArmDeploymentCollection GetArmDeployments()
     {
-        return new DefaultArmDeploymentCollection(ResourcesDeploymentsExtensions.GetArmDeployments(subscriptionResource));
+        return new DefaultArmDeploymentCollection(subscriptionResource.GetArmDeployments());
     }
 
     public IResourceGroupCollection GetResourceGroups()

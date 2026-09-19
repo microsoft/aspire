@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureTableStorageConnectionPropertiesTests
+public class AzureTableStorageConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureTableStorageResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var storage = builder.AddAzureStorage("storage");
         var tables = storage.AddTables("tables");
 

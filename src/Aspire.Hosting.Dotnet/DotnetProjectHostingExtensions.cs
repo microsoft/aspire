@@ -264,7 +264,7 @@ public static class DotnetProjectHostingExtensions
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
         string path,
-        ProjectResourceOptions? options = null)
+        DotnetProjectOptions? options = null)
     {
         return options is null
             ? builder.AddDotnetProject(name, path, _ => { })
@@ -485,7 +485,7 @@ public static class DotnetProjectHostingExtensions
     }
 #pragma warning restore ASPIREDOTNETPROJECT001
 
-    private static void ApplyProjectResourceOptions(ProjectResourceOptions target, ProjectResourceOptions source)
+    private static void ApplyProjectResourceOptions(ProjectResourceOptions target, DotnetProjectOptions source)
     {
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(source);

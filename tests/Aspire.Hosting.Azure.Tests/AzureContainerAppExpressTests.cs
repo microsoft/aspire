@@ -13,7 +13,7 @@ using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureContainerAppExpressTests
+public class AzureContainerAppExpressTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AsExpressValidatesBuilder()
@@ -28,7 +28,7 @@ public class AzureContainerAppExpressTests
     [Fact]
     public async Task AsExpressIsIdempotentAndDoesNotChangeRunResources()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var environment = builder.AddAzureContainerAppEnvironment("env").WithHttpsUpgrade(false);
         var resources = builder.Resources.ToArray();
 
@@ -48,7 +48,7 @@ public class AzureContainerAppExpressTests
     [InlineData(true, true)]
     public async Task AsExpressRejectsDisabledHttpsUpgradeWhenGeneratingBicep(bool expressFirst, bool existing)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         var environment = builder.AddAzureContainerAppEnvironment("env");
         if (expressFirst)
         {
@@ -87,7 +87,7 @@ public class AzureContainerAppExpressTests
     [Fact]
     public async Task AsExpressDefaultsAreEnvironmentLocal()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         var express = builder.AddAzureContainerAppEnvironment("express").AsExpress();
         var standard = builder.AddAzureContainerAppEnvironment("standard");
 
@@ -100,7 +100,7 @@ public class AzureContainerAppExpressTests
     [Fact]
     public async Task AsExpressPublishesExistingEnvironment()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         // The new-environment module is covered by AsExpressDefaultsAreEnvironmentLocal; this
         // covers only the thin existing-environment module, which has a different shape.
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress()
@@ -116,11 +116,11 @@ public class AzureContainerAppExpressTests
     [Fact]
     public async Task AsExpressPreservesExplicitDashboardRegardlessOfCallOrder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         var expressFirst = builder.AddAzureContainerAppEnvironment("env");
         expressFirst.AsExpress().WithDashboard();
 
-        using var reversedBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var reversedBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         var dashboardFirst = reversedBuilder.AddAzureContainerAppEnvironment("env");
         dashboardFirst.WithDashboard().AsExpress();
 
@@ -136,7 +136,7 @@ public class AzureContainerAppExpressTests
     [Fact]
     public async Task AsExpressSupportsResourcesWithoutEndpoints()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var worker = builder.AddContainer("worker", "myimage");
 
@@ -150,7 +150,7 @@ public class AzureContainerAppExpressTests
     [Fact]
     public async Task AsExpressPreservesEnvironmentCustomization()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress()
             .ConfigureInfrastructure(infrastructure =>
             {
@@ -171,7 +171,7 @@ public class AzureContainerAppExpressTests
     [InlineData(3, 2)]
     public async Task AsExpressProjectPreservesExplicitReplicaSettings(int? replicas, int? customMinimum)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var project = builder.AddProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
             .WithHttpEndpoint(targetPort: 8080)
@@ -197,7 +197,7 @@ public class AzureContainerAppExpressTests
     [Fact]
     public async Task AsExpressPreservesManualSecretsIdentityAndSupportedCustomization()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var secret = builder.AddParameter("api-key", secret: true);
         var storage = builder.AddAzureStorage("storage");
@@ -236,7 +236,7 @@ public class AzureContainerAppExpressTests
     [Fact]
     public async Task AsExpressPreservesParameterizedSettingsAndDisabledFeatures()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env").WithDashboard(false).AsExpress();
         var container = builder.AddContainer("api", "myimage")
             .WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints()
@@ -272,7 +272,7 @@ public class AzureContainerAppExpressTests
     [Fact]
     public async Task AsExpressPreservesKeyVaultSecretReferences()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var container = builder.AddContainer("api", "myimage")
             .WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints()

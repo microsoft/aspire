@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureBlobStorageConnectionPropertiesTests
+public class AzureBlobStorageConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureBlobStorageResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var storage = builder.AddAzureStorage("storage");
         var blobs = storage.AddBlobs("blobs");
 

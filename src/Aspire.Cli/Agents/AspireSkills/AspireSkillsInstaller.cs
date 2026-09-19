@@ -30,7 +30,7 @@ internal sealed class AspireSkillsInstaller(
     AspireCliTelemetry telemetry,
     ILogger<AspireSkillsInstaller> logger) : IAspireSkillsInstaller
 {
-    internal const string Version = "0.0.1";
+    internal const string Version = "0.0.2";
     internal const string GitHubRepository = "microsoft/aspire-skills";
     internal const string ExpectedSourceRepository = $"https://github.com/{GitHubRepository}";
     internal const string ExpectedWorkflowPath = ".github/workflows/publish.yml";

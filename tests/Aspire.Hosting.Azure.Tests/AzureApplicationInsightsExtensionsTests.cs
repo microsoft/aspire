@@ -7,12 +7,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureApplicationInsightsExtensionsTests
+public class AzureApplicationInsightsExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task AddApplicationInsightsWithoutExplicitLawGetsGeneratedLaw()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var appInsights = builder.AddAzureApplicationInsights("appInsights");
 
@@ -33,7 +33,7 @@ public class AzureApplicationInsightsExtensionsTests
     [Fact]
     public async Task AddApplicationInsightsWithoutExplicitLawGetsDefaultLawParameterInRunMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var appInsights = builder.AddAzureApplicationInsights("appInsights");
 
@@ -61,7 +61,7 @@ public class AzureApplicationInsightsExtensionsTests
     [Fact]
     public async Task AddApplicationInsightsWithExplicitLawArgumentDoesntGetDefaultParameter()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var law = builder.AddAzureLogAnalyticsWorkspace("mylaw");
         var appInsights = builder.AddAzureApplicationInsights("appInsights", law);
@@ -83,7 +83,7 @@ public class AzureApplicationInsightsExtensionsTests
     [Fact]
     public async Task WithReferenceAppInsightsSetsEnvironmentVariable()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var appInsights = builder.AddAzureApplicationInsights("ai");
 
@@ -101,7 +101,7 @@ public class AzureApplicationInsightsExtensionsTests
     [Fact]
     public async Task WithLogAnalyticsWorkspaceId_UsesProvidedWorkspaceId_VerifyBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         // Doesn't need to be ACA but this is a more real scenario
         var env = builder.AddAzureContainerAppEnvironment("aca");
@@ -118,12 +118,11 @@ public class AzureApplicationInsightsExtensionsTests
     [Fact]
     public async Task WithLogAnalyticsWorkspace_UsesWorkspaceResourceId_VerifyBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var law = builder.AddAzureLogAnalyticsWorkspace("law");
         var appInsights = builder.AddAzureApplicationInsights("appInsights");
         appInsights.WithLogAnalyticsWorkspace(law);
-
         var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(appInsights.Resource);
 
         await Verify(bicep, extension: "bicep")

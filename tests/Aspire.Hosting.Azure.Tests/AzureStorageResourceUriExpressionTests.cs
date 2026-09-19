@@ -5,14 +5,14 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureStorageResourceUriExpressionTests
+public class AzureStorageResourceUriExpressionTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void BlobUriExpressionReturnsExpectedValue(bool isEmulator)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
         var storage = builder.AddAzureStorage("storage");
         if (isEmulator)
         {
@@ -31,7 +31,7 @@ public class AzureStorageResourceUriExpressionTests
     [InlineData(false)]
     public void DataLakeUriExpressionReturnsExpectedValueOrThrowUnderEmulator(bool isEmulator)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
         var storage = builder.AddAzureStorage("storage");
         if (isEmulator)
         {
@@ -54,7 +54,7 @@ public class AzureStorageResourceUriExpressionTests
     [InlineData(false)]
     public void QueueUriExpressionReturnsExpectedValue(bool isEmulator)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
         var storage = builder.AddAzureStorage("storage");
         if (isEmulator)
         {
@@ -73,7 +73,7 @@ public class AzureStorageResourceUriExpressionTests
     [InlineData(false)]
     public void TableUriExpressionReturnsExpectedValue(bool isEmulator)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
         var storage = builder.AddAzureStorage("storage");
         if (isEmulator)
         {

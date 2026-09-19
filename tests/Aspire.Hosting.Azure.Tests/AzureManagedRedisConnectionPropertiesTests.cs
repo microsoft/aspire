@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureManagedRedisConnectionPropertiesTests
+public class AzureManagedRedisConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureManagedRedisResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var redis = builder.AddAzureManagedRedis("redis");
 
         var properties = ((IResourceWithConnectionString)redis.Resource).GetConnectionProperties().ToArray();
@@ -38,7 +38,7 @@ public class AzureManagedRedisConnectionPropertiesTests
     [Fact]
     public void AzureManagedRedisResourceWithAccessKeyAuthenticationGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var redis = builder.AddAzureManagedRedis("redis").WithAccessKeyAuthentication();
 
         var properties = ((IResourceWithConnectionString)redis.Resource).GetConnectionProperties().ToArray();
@@ -70,7 +70,7 @@ public class AzureManagedRedisConnectionPropertiesTests
     [Fact]
     public void AzureRedisCacheResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 #pragma warning disable CS0618 // Type or member is obsolete
         var redis = builder.AddAzureRedis("redis");
 #pragma warning restore CS0618
@@ -84,7 +84,7 @@ public class AzureManagedRedisConnectionPropertiesTests
     [Fact]
     public void AzureRedisCacheResourceWithAccessKeyAuthenticationGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 #pragma warning disable CS0618 // Type or member is obsolete
         var redis = builder.AddAzureRedis("redis").WithAccessKeyAuthentication();
 #pragma warning restore CS0618

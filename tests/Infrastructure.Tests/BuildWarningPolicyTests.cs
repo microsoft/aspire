@@ -21,7 +21,7 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
         var script = Path.Combine(workspace.Path, "evaluate.ps1");
         await File.WriteAllTextAsync(script, """
             & $env:TEST_DOTNET msbuild (Join-Path $env:TEST_REPO 'eng/WarningPolicy.proj') -nologo `
-              -getProperty:WarningsNotAsErrors,NuGetAuditMode,NuGetAudit,TreatWarningsAsErrors `
+              -getProperty:WarningsNotAsErrors,NoWarn,NuGetAuditMode,NuGetAudit,TreatWarningsAsErrors `
               "/p:TreatNuGetAuditWarningsAsErrors=$env:TEST_STRICT" "/p:OfficialBuild=$env:TEST_OFFICIAL"
             exit $LASTEXITCODE
             """);
@@ -40,6 +40,8 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
             SplitWarnings(properties.GetProperty("WarningsNotAsErrors").GetString()!));
         Assert.Equal("all", properties.GetProperty("NuGetAuditMode").GetString());
         Assert.Equal("true", properties.GetProperty("TreatWarningsAsErrors").GetString());
+        Assert.Equal([], SplitWarnings(properties.GetProperty("NoWarn").GetString()!)
+            .Where(warning => warning is "NU1901" or "NU1902" or "NU1903" or "NU1904"));
         if (official)
         {
             Assert.Equal("false", properties.GetProperty("NuGetAudit").GetString());

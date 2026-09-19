@@ -13,7 +13,7 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureConnectorNamespaceTests
+public class AzureConnectorNamespaceTests(ITestOutputHelper testOutputHelper)
 {
     private static readonly MethodInfo s_polyglotWithReferenceMethod = typeof(ResourceBuilderExtensions)
         .GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
@@ -25,7 +25,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public void AddAzureConnectorNamespaceDoesNotEnableTargetedRoleAssignments()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         builder.AddAzureConnectorNamespace("gateway");
 
@@ -38,7 +38,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public async Task WithReferenceAddsConnectorSdkConfiguration()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var connection = builder.AddAzureConnectorNamespace("gateway")
             .AddConnection(
@@ -61,7 +61,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public async Task PolyglotWithReferenceUsesConfigurationOverrideAndPhysicalExistingConnectionName()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var connection = builder.AddAzureConnectorNamespace("gateway")
             .AddConnection(
@@ -91,7 +91,7 @@ public class AzureConnectorNamespaceTests
         string? name,
         string expectedMessage)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var connection = builder.AddAzureConnectorNamespace("gateway")
             .AddConnection("outlook", "office365");
@@ -108,7 +108,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public void WithReferenceRejectsEmptyConfigurationOverride()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var connection = builder.AddAzureConnectorNamespace("gateway")
             .AddConnection("outlook", "office365");
@@ -123,7 +123,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public async Task AddAzureConnectorNamespaceResourcesGeneratesBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var gateway = builder.AddAzureConnectorNamespace("location");
         var connection = gateway.AddConnection(
@@ -197,7 +197,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public async Task ExistingConnectorNamespaceChildrenGenerateExistingBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var gateway = builder.AddAzureConnectorNamespace("gateway")
             .PublishAsExisting("existing-gateway", "existing-rg");
@@ -229,7 +229,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public void ManagedMcpServerRequiresExplicitOperationAllowList()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var gateway = builder.AddAzureConnectorNamespace("gateway");
         var connection = gateway.AddConnection("office365", "office365");
@@ -246,7 +246,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public async Task ManagedMcpServerRequiresConnectorBeforeGeneratingBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var gateway = builder.AddAzureConnectorNamespace("gateway");
         gateway.AddMcpServerConfig("outlook-mcp");
@@ -265,7 +265,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public async Task ManagedMcpServerRequiresAccessPolicyBeforeGeneratingBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var gateway = builder.AddAzureConnectorNamespace("gateway");
         var connection = gateway.AddConnection("office365", "office365");
@@ -292,7 +292,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public void ConnectorConnectionsRejectDuplicateAzureNames()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var gateway = builder.AddAzureConnectorNamespace("gateway");
         gateway.AddConnection(
@@ -314,7 +314,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public void ConnectorMcpServerConfigsRejectDuplicateAzureNames()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var gateway = builder.AddAzureConnectorNamespace("gateway");
         gateway.AddMcpServerConfig(
@@ -334,7 +334,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public async Task ConnectorBicepIdentifiersAreCollisionResistant()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var gateway = builder.AddAzureConnectorNamespace("location");
         var firstConnection = gateway.AddConnection("abcdefghijklmnop-a", "office365");
@@ -379,7 +379,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public async Task ConnectorNamespaceResourceNamesRemainUniqueAfterNormalizationAndTruncation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var firstGateway = builder.AddAzureConnectorNamespace("abcdefghijklmnopqrstuvwx-1");
         var secondGateway = builder.AddAzureConnectorNamespace("abcdefghijklmnopqrstuvwx1");
@@ -402,7 +402,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public void ManagedMcpServerSupportsOnlyOneConnector()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var gateway = builder.AddAzureConnectorNamespace("gateway");
         var office365 = gateway.AddConnection("office365", "office365");
@@ -428,7 +428,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public void ExistingMcpServerConfigRejectsAccessPolicy()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var mcp = builder.AddAzureConnectorNamespace("gateway")
             .AddMcpServerConfig("mcp")
@@ -452,7 +452,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public void McpServerConfigCannotBecomeExistingAfterAccessPolicyRegistered()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var mcp = builder.AddAzureConnectorNamespace("gateway")
             .AddMcpServerConfig("mcp")
@@ -495,7 +495,7 @@ public class AzureConnectorNamespaceTests
         AzureConnectorNamespaceMcpAccessPolicyPrincipalType principalType,
         string expectedMessage)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var mcp = builder.AddAzureConnectorNamespace("gateway")
             .AddMcpServerConfig("mcp");
@@ -516,7 +516,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public void McpAccessPoliciesRejectDuplicateResourceNamesAndPrincipals()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var mcp = builder.AddAzureConnectorNamespace("gateway")
             .AddMcpServerConfig("mcp")
@@ -558,7 +558,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public void ConnectorConnectionCannotBecomeExistingAfterAccessPolicyRegistered()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var connection = builder.AddAzureConnectorNamespace("gateway")
             .AddConnection("office365", "office365")
@@ -592,7 +592,7 @@ public class AzureConnectorNamespaceTests
         string tenantId,
         string expectedMessage)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var connection = builder.AddAzureConnectorNamespace("gateway")
             .AddConnection("office365", "office365");
@@ -612,7 +612,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public void AccessPoliciesIdentifyEmptyPrincipalIdOptions()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var gateway = builder.AddAzureConnectorNamespace("gateway");
         var connection = gateway.AddConnection("office365", "office365");
@@ -643,7 +643,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public void ExistingConnectorConnectionRejectsExplicitAccessPolicy()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var connection = builder.AddAzureConnectorNamespace("gateway")
             .AddConnection("office365", "office365")
@@ -666,7 +666,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public void ConnectorAccessPolicyResourceNamesIncludeParentConnection()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var gateway = builder.AddAzureConnectorNamespace("gateway");
         var office365 = gateway.AddConnection("office365", "office365")
@@ -720,7 +720,7 @@ public class AzureConnectorNamespaceTests
     [InlineData(true)]
     public void ConnectorAccessPolicyRequiresUniqueBicepIdentifier(bool useIdentityPolicy)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var connection = builder.AddAzureConnectorNamespace("gateway")
             .AddConnection("office365", "office365")
@@ -764,7 +764,7 @@ public class AzureConnectorNamespaceTests
     [InlineData(true)]
     public void ConnectorAccessPolicyResourceNamesAreCollisionResistant(bool useIdentityPolicy)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var connection = builder.AddAzureConnectorNamespace("gateway")
             .AddConnection("office365", "office365")
@@ -808,7 +808,7 @@ public class AzureConnectorNamespaceTests
     [Fact]
     public void ConnectorNamespaceBicepIdentifiersAreDistinctAcrossDeclarationKinds()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var gateway = builder.AddAzureConnectorNamespace("gateway");
         var connection = gateway.AddConnection("mail-connection", "office365")

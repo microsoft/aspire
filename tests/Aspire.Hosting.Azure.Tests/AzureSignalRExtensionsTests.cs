@@ -8,12 +8,12 @@ using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureSignalRExtensionsTests
+public class AzureSignalRExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task AddAzureSignalR()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var signalr = builder.AddAzureSignalR("signalr");
 
@@ -35,7 +35,7 @@ public class AzureSignalRExtensionsTests
     [Fact]
     public async Task AddServerlessAzureSignalR()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var signalr = builder.AddAzureSignalR("signalr", AzureSignalRServiceMode.Serverless);
 
@@ -57,7 +57,7 @@ public class AzureSignalRExtensionsTests
     [Fact]
     public void RunAsEmulatorAppliesEmulatorResourceAnnotation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var signalR = builder.AddAzureSignalR("signalr")
                             .RunAsEmulator();
 
@@ -84,7 +84,7 @@ public class AzureSignalRExtensionsTests
     [Fact]
     public async Task AddAsExistingResource_RespectsExistingAzureResourceAnnotation_ForAzureSignalRResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var existingName = builder.AddParameter("existing-signalr-name");
         var existingResourceGroup = builder.AddParameter("existing-signalr-rg");
 
