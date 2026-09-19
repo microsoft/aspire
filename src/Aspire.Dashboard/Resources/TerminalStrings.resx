@@ -124,6 +124,10 @@
     <value>Copy working directory: {0}</value>
     <comment>{0} is the working directory path.</comment>
   </data>
+  <data name="TerminalCopyTitle" xml:space="preserve">
+    <value>Copy terminal title: {0}</value>
+    <comment>{0} is the terminal title.</comment>
+  </data>
   <data name="TerminalProgressError" xml:space="preserve">
     <value>Error</value>
   </data>

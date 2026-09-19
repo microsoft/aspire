@@ -7,6 +7,11 @@
         <target state="new">Toggle terminal (`)</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalCopyTitle">
+        <source>Copy terminal title: {0}</source>
+        <target state="new">Copy terminal title: {0}</target>
+        <note>{0} is the terminal title.</note>
+      </trans-unit>
       <trans-unit id="TerminalCopyWorkingDirectory">
         <source>Copy working directory: {0}</source>
         <target state="new">Copy working directory: {0}</target>

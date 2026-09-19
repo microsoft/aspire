@@ -8,16 +8,17 @@
     font-size: var(--fontSizeBase200);
 }
 
-.terminal-title {
+.terminal-title-container {
     flex: 1;
+    /* Keep the copy target usable even when a long directory competes for space. */
+    min-width: clamp(3rem, 25%, 6rem);
+}
+
+.terminal-title {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.terminal-title:empty {
-    display: none;
 }
 
 .terminal-directory-container {
@@ -26,17 +27,31 @@
     min-width: 0;
 }
 
+.terminal-title-container ::deep .terminal-title-button,
 .terminal-directory-container ::deep .terminal-directory {
     max-width: 100%;
     min-width: 0;
-    font-family: var(--fontFamilyMonospace);
+    padding-inline: 4px;
+    font-family: inherit;
     font-size: inherit;
 }
 
+.terminal-directory-container ::deep .terminal-directory {
+    font-family: var(--fontFamilyMonospace);
+}
+
+.terminal-title-container ::deep .terminal-title-button:focus-visible,
+.terminal-directory-container ::deep .terminal-directory:focus-visible {
+    /* The compact detached header has no room for an external focus outline. */
+    outline-offset: -2px;
+}
+
+.terminal-title-container ::deep .terminal-title-button::part(content),
 .terminal-directory-container ::deep .terminal-directory::part(content) {
     min-width: 0;
 }
 
+.terminal-title-content,
 .terminal-directory-content {
     display: flex;
     align-items: center;
@@ -62,6 +77,7 @@
     inset: 0;
 }
 
+.terminal-title-copy-icons,
 .terminal-directory-copy-icons {
     flex: 0 0 16px;
     width: 16px;
@@ -69,6 +85,8 @@
     opacity: 0;
 }
 
+.terminal-title-container:has(.terminal-title-button:hover) .terminal-title-copy-icons,
+.terminal-title-container:has(:focus-visible) .terminal-title-copy-icons,
 .terminal-directory-container:hover .terminal-directory-copy-icons,
 .terminal-directory-container:has(:focus-visible) .terminal-directory-copy-icons {
     opacity: 1;

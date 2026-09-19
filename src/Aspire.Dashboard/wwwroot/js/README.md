@@ -106,6 +106,8 @@ is displayed at the right of the title bar as a copy button. Clicking anywhere
 on the path copies the full value using the Dashboard's shared client-side
 clipboard handler; the copy icon appears on hover or keyboard focus without
 changing the layout.
+Titles use the same borderless, hover-icon copy interaction, including the fallback
+resource name when no workload title is present. Both buttons copy the full text.
 Long paths omit whole middle segments to retain leading and trailing context, while
 the clipboard retains the full decoded path. Cleared titles fall
 back to the surface's original name. Progress supports determinate,

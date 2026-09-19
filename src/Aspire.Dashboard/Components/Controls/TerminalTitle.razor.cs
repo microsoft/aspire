@@ -12,6 +12,7 @@ namespace Aspire.Dashboard.Components.Controls;
 /// <summary>Displays the workload title, directory and progress without changing terminal state.</summary>
 public partial class TerminalTitle : IAsyncDisposable
 {
+    private readonly string _titleButtonId = $"terminal-title-{Guid.NewGuid():N}";
     private readonly string _directoryButtonId = $"terminal-directory-{Guid.NewGuid():N}";
     private ElementReference _metadataElement;
     private IJSObjectReference? _jsModule;
@@ -86,11 +87,17 @@ public partial class TerminalTitle : IAsyncDisposable
         }
     }
 
-    private Dictionary<string, object> DirectoryCopyAttributes => FluentUIExtensions.GetClipboardCopyAdditionalAttributes(
-        State?.WorkingDirectory,
+    private Dictionary<string, object> TitleCopyAttributes =>
+        GetCopyAttributes(DisplayTitle, nameof(Resources.TerminalStrings.TerminalCopyTitle));
+
+    private Dictionary<string, object> DirectoryCopyAttributes =>
+        GetCopyAttributes(State?.WorkingDirectory ?? string.Empty, nameof(Resources.TerminalStrings.TerminalCopyWorkingDirectory));
+
+    private Dictionary<string, object> GetCopyAttributes(string value, string labelResourceName) => FluentUIExtensions.GetClipboardCopyAdditionalAttributes(
+        value,
         ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)],
         ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopied)],
-        ("aria-label", Loc[nameof(Resources.TerminalStrings.TerminalCopyWorkingDirectory), State?.WorkingDirectory ?? string.Empty].Value));
+        ("aria-label", Loc[labelResourceName, value].Value));
 
     private string DisplayTitle => State is { Title.Length: > 0 } ? State.Title : FallbackTitle;
 

@@ -11,7 +11,23 @@
             }
         </div>
     }
-    <span class="terminal-title" title="@DisplayTitle">@DisplayTitle</span>
+    @if (!string.IsNullOrEmpty(DisplayTitle))
+    {
+        <div class="terminal-title-container">
+            <FluentButton Id="@_titleButtonId"
+                          Class="terminal-title-button aspire-button"
+                          Appearance="ButtonAppearance.Transparent"
+                          AdditionalAttributes="@TitleCopyAttributes">
+                <span class="terminal-title-content">
+                    <span class="terminal-title">@DisplayTitle</span>
+                    <span class="terminal-title-copy-icons" aria-hidden="true">
+                        <FluentIcon Class="copy-icon" Icon="Icons.Regular.Size16.Copy" Color="Color.Default" />
+                        <FluentIcon Class="checkmark-icon" Icon="Icons.Regular.Size16.Checkmark" Color="Color.Default" Style="display:none" />
+                    </span>
+                </span>
+            </FluentButton>
+        </div>
+    }
     @if (!string.IsNullOrEmpty(State?.WorkingDirectory))
     {
         <div class="terminal-directory-container">
