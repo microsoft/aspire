@@ -12,8 +12,24 @@ namespace Aspire.Hosting.SqlServer.Tests;
 
 public class SqlServerReplCommandTests(ITestOutputHelper outputHelper) : ContainerReplCommandTestBase
 {
-    protected override IResourceBuilder<ContainerResource> AddContainer(IDistributedApplicationBuilder builder) =>
-        builder.AddSqlServer("sqlserver");
+    protected override IResourceBuilder<ContainerResource> AddContainer(IDistributedApplicationBuilder builder, bool enableRepl)
+    {
+        var resource = builder.AddSqlServer("sqlserver");
+        if (enableRepl)
+        {
+            Assert.Same(resource, resource.WithRepl());
+        }
+
+        return resource;
+    }
+
+    [Fact]
+    public void WithReplRejectsNullBuilder()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() => SqlServerBuilderExtensions.WithRepl(null!));
+
+        Assert.Equal("builder", exception.ParamName);
+    }
 
     [Theory]
     [InlineData(false, 1433)]
@@ -58,7 +74,7 @@ public class SqlServerReplCommandTests(ITestOutputHelper outputHelper) : Contain
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
         var password = builder.AddParameter("password", "Repl-p@ss$word1", secret: true);
-        var sqlServer = builder.AddSqlServer("sqlserver", password: password);
+        var sqlServer = builder.AddSqlServer("sqlserver", password: password).WithRepl();
         await using var app = builder.Build();
 
         await VerifyReplAsync(app, sqlServer.Resource, "sqlcmd (sqlserver)",

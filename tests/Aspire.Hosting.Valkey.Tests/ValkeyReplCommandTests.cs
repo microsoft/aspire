@@ -13,8 +13,24 @@ namespace Aspire.Hosting.Valkey.Tests;
 
 public class ValkeyReplCommandTests(ITestOutputHelper outputHelper) : ContainerReplCommandTestBase
 {
-    protected override IResourceBuilder<ContainerResource> AddContainer(IDistributedApplicationBuilder builder) =>
-        builder.AddValkey("valkey");
+    protected override IResourceBuilder<ContainerResource> AddContainer(IDistributedApplicationBuilder builder, bool enableRepl)
+    {
+        var resource = builder.AddValkey("valkey");
+        if (enableRepl)
+        {
+            Assert.Same(resource, resource.WithRepl());
+        }
+
+        return resource;
+    }
+
+    [Fact]
+    public void WithReplRejectsNullBuilder()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() => ValkeyBuilderExtensions.WithRepl(null!));
+
+        Assert.Equal("builder", exception.ParamName);
+    }
 
     [Theory]
     [InlineData(6379)]
@@ -59,7 +75,7 @@ public class ValkeyReplCommandTests(ITestOutputHelper outputHelper) : ContainerR
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
         var password = builder.AddParameter("password", "repl-password", secret: true);
-        var valkey = builder.AddValkey("valkey", password: password);
+        var valkey = builder.AddValkey("valkey", password: password).WithRepl();
         await using var app = builder.Build();
 
         await VerifyReplAsync(app, valkey.Resource, "valkey-cli (valkey)", "127.0.0.1:", "PING\r", "PONG");

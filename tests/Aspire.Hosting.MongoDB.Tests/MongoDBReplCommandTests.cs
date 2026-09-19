@@ -14,8 +14,24 @@ namespace Aspire.Hosting.MongoDB.Tests;
 
 public class MongoDBReplCommandTests(ITestOutputHelper outputHelper) : ContainerReplCommandTestBase
 {
-    protected override IResourceBuilder<ContainerResource> AddContainer(IDistributedApplicationBuilder builder) =>
-        builder.AddMongoDB("mongo");
+    protected override IResourceBuilder<ContainerResource> AddContainer(IDistributedApplicationBuilder builder, bool enableRepl)
+    {
+        var resource = builder.AddMongoDB("mongo");
+        if (enableRepl)
+        {
+            Assert.Same(resource, resource.WithRepl());
+        }
+
+        return resource;
+    }
+
+    [Fact]
+    public void WithReplRejectsNullBuilder()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() => MongoDBBuilderExtensions.WithRepl(null!));
+
+        Assert.Equal("builder", exception.ParamName);
+    }
 
     [Theory]
     [InlineData(null, "admin", false, false)]
@@ -142,7 +158,7 @@ public class MongoDBReplCommandTests(ITestOutputHelper outputHelper) : Container
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
         var username = builder.AddParameter("username", "repl-user");
         var password = builder.AddParameter("password", "repl-p@ss$word", secret: true);
-        var mongo = builder.AddMongoDB("mongo", userName: username, password: password).WithoutHttpsCertificate();
+        var mongo = builder.AddMongoDB("mongo", userName: username, password: password).WithRepl().WithoutHttpsCertificate();
         if (replicaSet)
         {
             mongo.WithReplicaSet();
@@ -163,7 +179,7 @@ public class MongoDBReplCommandTests(ITestOutputHelper outputHelper) : Container
     public async Task ReplExecutesAuthenticatedQueryWithTls(string? certificateDirectory)
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
-        var mongo = builder.AddMongoDB("mongo").WithHttpsDeveloperCertificate();
+        var mongo = builder.AddMongoDB("mongo").WithRepl().WithHttpsDeveloperCertificate();
         if (certificateDirectory is not null)
         {
             mongo.WithContainerCertificatePaths(customCertificatesDestination: certificateDirectory);

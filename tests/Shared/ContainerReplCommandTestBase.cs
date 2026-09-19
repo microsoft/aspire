@@ -15,15 +15,17 @@ namespace Aspire.Hosting.Tests;
 
 public abstract class ContainerReplCommandTestBase
 {
-    protected abstract IResourceBuilder<ContainerResource> AddContainer(IDistributedApplicationBuilder builder);
+    protected abstract IResourceBuilder<ContainerResource> AddContainer(IDistributedApplicationBuilder builder, bool enableRepl);
 
     [Theory]
-    [InlineData(DistributedApplicationOperation.Run, 1)]
-    [InlineData(DistributedApplicationOperation.Publish, 0)]
-    public void ReplCommandIsOnlyAddedInRunMode(DistributedApplicationOperation operation, int expectedCount)
+    [InlineData(DistributedApplicationOperation.Run, false, 0)]
+    [InlineData(DistributedApplicationOperation.Run, true, 1)]
+    [InlineData(DistributedApplicationOperation.Publish, false, 0)]
+    [InlineData(DistributedApplicationOperation.Publish, true, 0)]
+    public void ReplCommandRequiresOptInAndRunMode(DistributedApplicationOperation operation, bool enableRepl, int expectedCount)
     {
         using var builder = TestDistributedApplicationBuilder.Create(operation);
-        var resource = AddContainer(builder);
+        var resource = AddContainer(builder, enableRepl);
 
         var commands = resource.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
         Assert.Equal(expectedCount, commands.Length);
@@ -45,7 +47,7 @@ public abstract class ContainerReplCommandTestBase
     public void ReplCommandRequiresRunningContainer(string? state, string? containerId, ResourceCommandState expected)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var resource = AddContainer(builder);
+        var resource = AddContainer(builder, enableRepl: true);
         using var app = builder.Build();
         var command = Assert.Single(resource.Resource.Annotations.OfType<ResourceCommandAnnotation>());
 
@@ -69,7 +71,7 @@ public abstract class ContainerReplCommandTestBase
     public async Task ReplCommandRechecksStateWhenExecuted(string state, string? containerId, string message)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var resource = AddContainer(builder);
+        var resource = AddContainer(builder, enableRepl: true);
         using var app = builder.Build();
         var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
         await notifications.PublishUpdateAsync(resource.Resource, snapshot => snapshot with
@@ -96,7 +98,7 @@ public abstract class ContainerReplCommandTestBase
     public async Task ReplCommandHonorsCancellation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var resource = AddContainer(builder);
+        var resource = AddContainer(builder, enableRepl: true);
         using var app = builder.Build();
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
@@ -159,8 +161,12 @@ public abstract class ContainerReplCommandTestBase
             await app.StartAsync(startup.Token);
         }
 
+        using (var readiness = new CancellationTokenSource(TimeSpan.FromMinutes(1)))
+        {
+            await app.ResourceNotifications.WaitForResourceHealthyAsync(resource.Name, readiness.Token);
+        }
+
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-        await app.ResourceNotifications.WaitForResourceHealthyAsync(resource.Name, cancellation.Token);
         await using var terminal = await TerminalCommandTestHelpers.ExecuteTerminalCommandAsync(app, resource, "repl", cancellation.Token);
         Assert.Equal(title, terminal.Title);
         Assert.Equal(TerminalPlacement.Dock, terminal.Placement);
@@ -174,6 +180,10 @@ public abstract class ContainerReplCommandTestBase
             await terminal.WaitForTextAsync(expectedOutput, TimeSpan.FromSeconds(30), cancellation.Token);
         }
         catch (TimeoutException exception)
+        {
+            throw new TimeoutException($"REPL did not produce the expected output. Terminal screen:{Environment.NewLine}{terminal.GetScreenText()}", exception);
+        }
+        catch (OperationCanceledException exception) when (cancellation.IsCancellationRequested)
         {
             throw new TimeoutException($"REPL did not produce the expected output. Terminal screen:{Environment.NewLine}{terminal.GetScreenText()}", exception);
         }

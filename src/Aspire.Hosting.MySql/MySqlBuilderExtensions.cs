@@ -90,8 +90,31 @@ public static class MySqlBuilderExtensions
                       {
                           context.EnvironmentVariables[PasswordEnvVarName] = resource.PasswordParameter;
                       })
-                      .WithHealthCheck(healthCheckKey)
-                      .WithReplCommand(ct => CreateReplOptionsAsync(resource, ct));
+                      .WithHealthCheck(healthCheckKey);
+    }
+
+    /// <summary>
+    /// Adds a REPL command that opens an authenticated MySQL shell in the dashboard terminal dock.
+    /// </summary>
+    /// <param name="builder">The MySQL server resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// This command is opt-in and available only in run mode. Dashboard users who can execute resource commands
+    /// can run commands with the resource's configured credentials. Enable it only for trusted dashboard users,
+    /// especially when sharing the dashboard through a tunnel or remote development environment.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddMySql("mysql").WithRepl();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<MySqlServerResource> WithRepl(this IResourceBuilder<MySqlServerResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
     }
 
     internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(MySqlServerResource resource, CancellationToken cancellationToken)

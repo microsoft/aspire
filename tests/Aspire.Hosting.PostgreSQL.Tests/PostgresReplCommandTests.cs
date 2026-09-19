@@ -13,8 +13,24 @@ namespace Aspire.Hosting.PostgreSQL.Tests;
 
 public class PostgresReplCommandTests(ITestOutputHelper outputHelper) : ContainerReplCommandTestBase
 {
-    protected override IResourceBuilder<ContainerResource> AddContainer(IDistributedApplicationBuilder builder) =>
-        builder.AddPostgres("postgres");
+    protected override IResourceBuilder<ContainerResource> AddContainer(IDistributedApplicationBuilder builder, bool enableRepl)
+    {
+        var resource = builder.AddPostgres("postgres");
+        if (enableRepl)
+        {
+            Assert.Same(resource, resource.WithRepl());
+        }
+
+        return resource;
+    }
+
+    [Fact]
+    public void WithReplRejectsNullBuilder()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() => PostgresBuilderExtensions.WithRepl(null!));
+
+        Assert.Equal("builder", exception.ParamName);
+    }
 
     [Theory]
     [InlineData(null, "postgres", 5432)]
@@ -65,7 +81,7 @@ public class PostgresReplCommandTests(ITestOutputHelper outputHelper) : Containe
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
         var username = builder.AddParameter("username", "repl-user");
         var password = builder.AddParameter("password", "repl-p@ss$word", secret: true);
-        var postgres = builder.AddPostgres("postgres", userName: username, password: password);
+        var postgres = builder.AddPostgres("postgres", userName: username, password: password).WithRepl();
         if (targetPort is { } port)
         {
             postgres.WithArgs("-p", port.ToString(CultureInfo.InvariantCulture))

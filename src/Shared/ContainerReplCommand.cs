@@ -47,6 +47,8 @@ internal static class ContainerReplCommand
 
             var terminals = context.Services.GetRequiredService<TerminalService>();
             // Dock terminals outlive the command and are disposed when closed or when the AppHost shuts down.
+            // Docker may leave the remote client running after local terminal disposal; users should quit
+            // the REPL before closing the tab. See https://github.com/moby/moby/issues/9098.
             var terminal = terminals.CreateTerminal(execOptions);
             terminal.Start();
             terminal.Show();

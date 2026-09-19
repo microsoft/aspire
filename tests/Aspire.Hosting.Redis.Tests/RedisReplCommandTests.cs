@@ -12,8 +12,24 @@ namespace Aspire.Hosting.Redis.Tests;
 
 public class RedisReplCommandTests(ITestOutputHelper outputHelper) : ContainerReplCommandTestBase
 {
-    protected override IResourceBuilder<ContainerResource> AddContainer(IDistributedApplicationBuilder builder) =>
-        builder.AddRedis("redis");
+    protected override IResourceBuilder<ContainerResource> AddContainer(IDistributedApplicationBuilder builder, bool enableRepl)
+    {
+        var resource = builder.AddRedis("redis");
+        if (enableRepl)
+        {
+            Assert.Same(resource, resource.WithRepl());
+        }
+
+        return resource;
+    }
+
+    [Fact]
+    public void WithReplRejectsNullBuilder()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() => RedisBuilderExtensions.WithRepl(null!));
+
+        Assert.Equal("builder", exception.ParamName);
+    }
 
     [Theory]
     [InlineData(false, 6379)]
@@ -61,7 +77,7 @@ public class RedisReplCommandTests(ITestOutputHelper outputHelper) : ContainerRe
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
         var password = builder.AddParameter("password", "repl-password", secret: true);
-        var redis = builder.AddRedis("redis", password: password);
+        var redis = builder.AddRedis("redis", password: password).WithRepl();
         await using var app = builder.Build();
 
         await VerifyReplAsync(app, redis.Resource, "redis-cli (redis)",
