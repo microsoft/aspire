@@ -1,0 +1,79 @@
+name: Native AOT Dashboard Validation
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        required: true
+        type: string
+      rid:
+        required: true
+        type: string
+      configuration:
+        required: false
+        type: string
+        default: Debug
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Download Native AOT Dashboard archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: native-dashboard-${{ inputs.rid }}
+          path: ${{ github.workspace }}/artifacts/native-dashboard
+
+      - name: Extract and smoke test Native AOT Dashboard
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = @(Get-ChildItem -Path '${{ github.workspace }}/artifacts/native-dashboard' -Filter 'aspire-dashboard-${{ inputs.rid }}.zip' -File -Recurse)
+          if ($archive.Count -ne 1) {
+            throw "Expected one Native AOT Dashboard archive for ${{ inputs.rid }}, found $($archive.Count): $($archive.FullName -join ', ')"
+          }
+
+          $extractDirectory = '${{ github.workspace }}/artifacts/native-dashboard/extracted'
+          New-Item -ItemType Directory -Path $extractDirectory | Out-Null
+          if ('${{ runner.os }}' -eq 'Windows') {
+            Expand-Archive -LiteralPath $archive[0].FullName -DestinationPath $extractDirectory
+            $dashboardPath = Join-Path $extractDirectory 'Aspire.Dashboard.exe'
+          }
+          else {
+            & unzip -q $archive[0].FullName -d $extractDirectory
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to extract Native AOT Dashboard archive '$($archive[0].FullName)'."
+            }
+            $dashboardPath = Join-Path $extractDirectory 'Aspire.Dashboard'
+          }
+
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "ASPIRE_NATIVE_DASHBOARD_PATH=$dashboardPath"
+          ./eng/scripts/test-native-dashboard.ps1 -DashboardPath $dashboardPath
+
+      - name: Test Native AOT Dashboard interactivity
+        if: ${{ inputs.rid == 'win-x64' }}
+        shell: pwsh
+        env:
+          NUGET_PACKAGES: ${{ github.workspace }}/.packages
+        run: >
+          ./dotnet.cmd test
+          --project tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj
+          -c ${{ inputs.configuration }}
+          --no-launch-profile
+          /p:ContinuousIntegrationBuild=true
+          /p:InstallBrowsersForPlaywright=true
+          /p:RunOuterloopTests=true
+          --
+          --filter-method "*.NativeDashboard_LoadsInteractivePageWithoutBrowserErrors"
+          --filter-not-trait "quarantined=true"

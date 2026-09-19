@@ -398,6 +398,7 @@ extends:
       displayName: Template Tests
       dependsOn:
         - build
+        - build_sign_native
       jobs:
       - template: /eng/common/templates-official/jobs/jobs.yml@self
         parameters:
@@ -439,6 +440,22 @@ extends:
                 inputs:
                   artifact: managed_packages_shipping
                   targetPath: '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping'
+
+              - task: DownloadPipelineArtifact@2
+                displayName: 🟣Download Native AOT Dashboard package
+                inputs:
+                  artifact: native_archives_win_x64
+                  itemPattern: '**/Aspire.Dashboard.Sdk.win-x64.*.nupkg'
+                  targetPath: '$(Pipeline.Workspace)/native-dashboard-package'
+
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $packages = @(Get-ChildItem -Path '$(Pipeline.Workspace)/native-dashboard-package' -Filter 'Aspire.Dashboard.Sdk.win-x64.*.nupkg' -File -Recurse)
+                  if ($packages.Count -ne 1) {
+                    throw "Expected one Aspire.Dashboard.Sdk.win-x64 package, found $($packages.Count): $($packages.FullName -join ', ')"
+                  }
+                  Copy-Item -LiteralPath $packages[0].FullName -Destination '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping' -Force
+                displayName: 🟣Stage Native AOT Dashboard package
 
               - script: $(Build.SourcesDirectory)/dotnet.cmd
                         build

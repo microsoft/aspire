@@ -37,6 +37,16 @@ public sealed class TestTriggerMapTests
         "cli_starter_validation_macos_arm64",
     ];
 
+    private static readonly string[] s_nativeDashboardValidationJobIds =
+    [
+        "native_dashboard_validation_linux_x64",
+        "native_dashboard_validation_linux_arm64",
+        "native_dashboard_validation_windows_x64",
+        "native_dashboard_validation_windows_arm64",
+        "native_dashboard_validation_macos_x64",
+        "native_dashboard_validation_macos_arm64",
+    ];
+
     [Fact]
     public void MapLoadsWithExpectedVersion()
     {
@@ -374,6 +384,8 @@ public sealed class TestTriggerMapTests
             ["job:nix-package"] = () => JobExists("nix_package"),
             ["job:cli-starter-validation"] = () => WorkflowExists("cli-starter-validation.yml")
                 && s_cliStarterValidationJobIds.All(JobExists),
+            ["job:native-dashboard-validation"] = () => WorkflowExists("native-dashboard-validation.yml")
+                && s_nativeDashboardValidationJobIds.All(JobExists),
             ["job:deployment-e2e"] = () => WorkflowExists("deployment-tests.yml"),
         };
 
@@ -470,6 +482,7 @@ public sealed class TestTriggerMapTests
                 "job:cli-starter-validation",
                 "job:extension-e2e",
                 "job:homebrew-installer",
+                "job:native-dashboard-validation",
                 "job:winget-installer"
             ]
         },
@@ -482,6 +495,7 @@ public sealed class TestTriggerMapTests
                 "job:cli-starter-validation",
                 "job:extension-e2e",
                 "job:homebrew-installer",
+                "job:native-dashboard-validation",
                 "job:winget-installer"
             ]
         },
@@ -494,6 +508,7 @@ public sealed class TestTriggerMapTests
                 "job:cli-starter-validation",
                 "job:extension-e2e",
                 "job:homebrew-installer",
+                "job:native-dashboard-validation",
                 "job:winget-installer"
             ]
         },
@@ -568,6 +583,18 @@ public sealed class TestTriggerMapTests
         {
             "eng/scripts/cli-starter-validation.ps1",
             ["job:cli-starter-validation"]
+        },
+        {
+            "eng/scripts/test-native-dashboard.ps1",
+            ["job:native-dashboard-validation"]
+        },
+        {
+            ".github/workflows/native-dashboard-validation.yml",
+            ["test:Infrastructure.Tests", "job:native-dashboard-validation"]
+        },
+        {
+            "tests/Aspire.Dashboard.Tests/Integration/Playwright/NativeAotDashboardTests.cs",
+            ["test:Aspire.Dashboard.Tests", "job:native-dashboard-validation"]
         },
         {
             "eng/scripts/get-aspire-cli-pr.ps1",
@@ -691,7 +718,6 @@ public sealed class TestTriggerMapTests
     [Theory]
     [InlineData("eng/scripts/verify-cli-npm-package.ps1")]
     [InlineData("eng/scripts/verify-cli-tool-nupkg.ps1")]
-    [InlineData("eng/scripts/test-native-dashboard.ps1")]
     [InlineData("eng/scripts/stabilization-smoke-init-restore.sh")]
     [InlineData("eng/generate-catalog.ps1")]
     [InlineData("eng/scripts/update-aspire-skills-bundle.ps1")]
@@ -799,6 +825,7 @@ public sealed class TestTriggerMapTests
 
         Assert.False(result.SelectsAll);
         Assert.Contains("Aspire.Templates.Tests", result.TestProjects);
+        Assert.Contains("job:native-dashboard-validation", result.Jobs);
     }
 
     [Fact]
@@ -968,6 +995,7 @@ public sealed class TestTriggerMapTests
             ("nix_package", "run_nix_package"),
         }
         .Concat(s_cliStarterValidationJobIds.Select(jobId => (jobId, "run_cli_starter_validation")))
+        .Concat(s_nativeDashboardValidationJobIds.Select(jobId => (jobId, "run_native_dashboard_validation")))
         .ToArray();
 
         var wrong = new List<string>();
@@ -1034,6 +1062,41 @@ public sealed class TestTriggerMapTests
                 .Order(StringComparer.Ordinal));
     }
 
+    [Fact]
+    public void NativeDashboardValidationJobsMatchArchiveDependencies()
+    {
+        var workflow = new YamlStream();
+        using (var reader = new StringReader(File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"))))
+        {
+            workflow.Load(reader);
+        }
+
+        var root = Assert.IsType<YamlMappingNode>(workflow.Documents[0].RootNode);
+        var jobs = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("jobs")]);
+        var expected = new Dictionary<string, (string ArchiveJob, string Rid)>(StringComparer.Ordinal)
+        {
+            ["native_dashboard_validation_linux_x64"] = ("build_cli_archive_linux", "linux-x64"),
+            ["native_dashboard_validation_linux_arm64"] = ("build_cli_archive_linux_arm64", "linux-arm64"),
+            ["native_dashboard_validation_windows_x64"] = ("build_cli_archive_windows", "win-x64"),
+            ["native_dashboard_validation_windows_arm64"] = ("build_cli_archive_windows_arm64", "win-arm64"),
+            ["native_dashboard_validation_macos_x64"] = ("build_cli_archive_macos_x64", "osx-x64"),
+            ["native_dashboard_validation_macos_arm64"] = ("build_cli_archive_macos", "osx-arm64"),
+        };
+
+        Assert.Equal(s_nativeDashboardValidationJobIds.Order(StringComparer.Ordinal), expected.Keys.Order(StringComparer.Ordinal));
+        foreach (var (jobId, expectedValues) in expected)
+        {
+            var job = Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode(jobId)]);
+            Assert.Equal("./.github/workflows/native-dashboard-validation.yml", job.Children[new YamlScalarNode("uses")].ToString());
+            Assert.Equal(
+                ["setup_for_tests", expectedValues.ArchiveJob],
+                Assert.IsType<YamlSequenceNode>(job.Children[new YamlScalarNode("needs")]).Children.Select(node => node.ToString()));
+            Assert.Equal(
+                expectedValues.Rid,
+                Assert.IsType<YamlMappingNode>(job.Children[new YamlScalarNode("with")]).Children[new YamlScalarNode("rid")].ToString());
+        }
+    }
+
     [Theory]
     [InlineData("tests_requires_cli_archive", "test:Aspire.Cli.EndToEnd.Tests")]
     [InlineData("extension_e2e_tests", "job:extension-e2e")]
@@ -1092,6 +1155,23 @@ public sealed class TestTriggerMapTests
             $"({selectionGuard} && ({string.Join(
                 " || ",
                 s_cliStarterValidationJobIds.Select(jobId => $"needs.{jobId}.result == 'skipped'"))}))";
+
+        Assert.Contains(groupedSkipCheck, normalizedResultsBlock, StringComparison.Ordinal);
+        Assert.Equal(1, normalizedResultsBlock.Split(selectionGuard, StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
+    public void NativeDashboardValidationSkipChecksAreRequiredOnlyWhenSelected()
+    {
+        var testsYml = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"));
+        var resultsBlock = JobBlock(testsYml, "results");
+        Assert.NotNull(resultsBlock);
+        var normalizedResultsBlock = System.Text.RegularExpressions.Regex.Replace(resultsBlock, @"\s+", " ");
+        const string selectionGuard = "needs.setup_for_tests.outputs.run_native_dashboard_validation == 'true'";
+        var groupedSkipCheck =
+            $"({selectionGuard} && ({string.Join(
+                " || ",
+                s_nativeDashboardValidationJobIds.Select(jobId => $"needs.{jobId}.result == 'skipped'"))}))";
 
         Assert.Contains(groupedSkipCheck, normalizedResultsBlock, StringComparison.Ordinal);
         Assert.Equal(1, normalizedResultsBlock.Split(selectionGuard, StringSplitOptions.None).Length - 1);

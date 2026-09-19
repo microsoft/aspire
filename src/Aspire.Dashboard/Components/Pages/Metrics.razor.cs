@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
@@ -18,6 +19,7 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSessionAndUrlState<Metrics.MetricsViewModel, Metrics.MetricsPageState>
 {
+    private static readonly EnumerableGridSort<OtlpInstrumentSummary> s_instrumentDescriptionSort = EnumerableGridSort<OtlpInstrumentSummary>.ByAscending(item => item.Description);
     private SelectViewModel<ResourceTypeDetails> _selectResource = null!;
     private List<SelectViewModel<TimeSpan>> _durations = null!;
     private static readonly TimeSpan s_defaultDuration = TimeSpan.FromMinutes(5);
