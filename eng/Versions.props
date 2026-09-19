@@ -40,15 +40,15 @@
     <MicrosoftDotNetXUnitV3ExtensionsVersion>10.0.0-beta.26423.1</MicrosoftDotNetXUnitV3ExtensionsVersion>
     <MicrosoftDotNetBuildTasksArchivesVersion>10.0.0-beta.26423.1</MicrosoftDotNetBuildTasksArchivesVersion>
     <!-- dotnet/extensions -->
-    <MicrosoftExtensionsAIVersion>10.9.0</MicrosoftExtensionsAIVersion>
-    <MicrosoftExtensionsAIOpenAIVersion>10.9.0</MicrosoftExtensionsAIOpenAIVersion>
+    <MicrosoftExtensionsAIVersion>10.10.0</MicrosoftExtensionsAIVersion>
+    <MicrosoftExtensionsAIOpenAIVersion>10.10.0</MicrosoftExtensionsAIOpenAIVersion>
     <MicrosoftExtensionsAIAzureAIInferenceVersion>10.0.0-preview.1.25559.3</MicrosoftExtensionsAIAzureAIInferenceVersion>
-    <MicrosoftExtensionsHttpResilienceVersion>10.9.0</MicrosoftExtensionsHttpResilienceVersion>
-    <MicrosoftExtensionsDependencyInjectionAutoActivationVersion>10.9.0</MicrosoftExtensionsDependencyInjectionAutoActivationVersion>
-    <MicrosoftExtensionsDiagnosticsTestingVersion>10.9.0</MicrosoftExtensionsDiagnosticsTestingVersion>
-    <MicrosoftExtensionsTimeProviderTestingVersion>10.9.0</MicrosoftExtensionsTimeProviderTestingVersion>
-    <MicrosoftExtensionsServiceDiscoveryVersion>10.9.0</MicrosoftExtensionsServiceDiscoveryVersion>
-    <MicrosoftExtensionsServiceDiscoveryYarpVersion>10.9.0</MicrosoftExtensionsServiceDiscoveryYarpVersion>
+    <MicrosoftExtensionsHttpResilienceVersion>10.10.0</MicrosoftExtensionsHttpResilienceVersion>
+    <MicrosoftExtensionsDependencyInjectionAutoActivationVersion>10.10.0</MicrosoftExtensionsDependencyInjectionAutoActivationVersion>
+    <MicrosoftExtensionsDiagnosticsTestingVersion>10.10.0</MicrosoftExtensionsDiagnosticsTestingVersion>
+    <MicrosoftExtensionsTimeProviderTestingVersion>10.10.0</MicrosoftExtensionsTimeProviderTestingVersion>
+    <MicrosoftExtensionsServiceDiscoveryVersion>10.10.0</MicrosoftExtensionsServiceDiscoveryVersion>
+    <MicrosoftExtensionsServiceDiscoveryYarpVersion>10.10.0</MicrosoftExtensionsServiceDiscoveryYarpVersion>
     <!-- OpenTelemetry (OTel) -->
     <OpenTelemetryInstrumentationAspNetCoreVersion>1.17.0</OpenTelemetryInstrumentationAspNetCoreVersion>
     <OpenTelemetryInstrumentationHttpVersion>1.17.0</OpenTelemetryInstrumentationHttpVersion>
