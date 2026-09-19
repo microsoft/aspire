@@ -1,0 +1,45 @@
+name: Verify Telemetry Hook Changes
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Telemetry hook update branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          # Compare the PR merge result with its base parent, including renamed/deleted scripts.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Verify telemetry scripts use the synchronization branch
+        shell: pwsh
+        env:
+          PR_HEAD_REF: ${{ github.head_ref }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $allowedHeadRef = 'update-aspire-skills-bundle'
+          $protectedPaths = @(
+              'src/Aspire.Cli/Agents/Hooks/track-telemetry.sh',
+              'src/Aspire.Cli/Agents/Hooks/track-telemetry.ps1'
+          )
+
+          # Disable rename detection so both the removed and added paths are checked.
+          $changedPaths = @(& git --no-pager diff --no-ext-diff --no-textconv --no-renames --name-only 'HEAD^1' HEAD -- @protectedPaths)
+          if ($LASTEXITCODE -ne 0) {
+              throw 'Could not compare the PR merge result with its base parent.'
+          }
+
+          if ($changedPaths.Count -gt 0 -and $env:PR_HEAD_REF -cne $allowedHeadRef) {
+              throw "Telemetry hook scripts can only change in PRs whose head branch is '$allowedHeadRef'. Make changes in microsoft/aspire-skills and use the synchronization workflow instead of editing these copies manually."
+          }
+
+          Write-Host 'Telemetry hook branch policy satisfied. Canonical content is checked separately.'

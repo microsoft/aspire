@@ -9,12 +9,12 @@ using Azure.Provisioning.Network;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureVirtualNetworkExtensionsTests
+public class AzureVirtualNetworkExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddAzureVirtualNetwork_CreatesResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
 
@@ -26,7 +26,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void AddAzureVirtualNetwork_WithCustomAddressPrefix()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet", "10.1.0.0/16");
 
@@ -39,7 +39,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void AddAzureVirtualNetwork_WithParameterResource_CreatesResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnetPrefixParam = builder.AddParameter("vnetPrefix");
         var vnet = builder.AddAzureVirtualNetwork("myvnet", vnetPrefixParam);
@@ -53,7 +53,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public async Task AddAzureVirtualNetwork_WithParameterResource_GeneratesBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnetPrefixParam = builder.AddParameter("vnetPrefix");
         var vnet = builder.AddAzureVirtualNetwork("myvnet", vnetPrefixParam);
@@ -67,7 +67,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void AddSubnet_CreatesSubnetResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("mysubnet", "10.0.1.0/24");
@@ -82,7 +82,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void AddSubnet_WithCustomSubnetName()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("mysubnet", "10.0.1.0/24", subnetName: "custom-subnet-name");
@@ -95,7 +95,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void AddSubnet_MultipleSubnets_HaveDifferentParentReferences()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet1 = vnet.AddSubnet("subnet1", "10.0.1.0/24");
@@ -111,7 +111,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public async Task AddAzureVirtualNetwork_WithSubnets_GeneratesBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         vnet.AddSubnet("subnet1", "10.0.1.0/24")
@@ -126,7 +126,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void AddAzureVirtualNetwork_InRunMode_DoesNotAddToBuilder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("mysubnet", "10.0.1.0/24");
@@ -140,7 +140,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void WithDelegatedSubnet_AddsAnnotationsToSubnetAndTarget()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23");
@@ -162,7 +162,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void WithServiceDelegation_AddsAnnotationWithServiceNameAsName()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
@@ -177,7 +177,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void WithServiceDelegation_WithExplicitName_SetsNameAndServiceName()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
@@ -192,7 +192,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void WithServiceDelegation_ContainerInstancesConstant_DelegatesToContainerGroups()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
@@ -216,7 +216,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void WithServiceDelegation_CalledMultipleTimes_KeepsOnlyLastDelegation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
@@ -231,7 +231,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void WithServiceDelegation_CollapsesPreexistingDelegations()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
@@ -250,7 +250,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void WithServiceDelegation_WithEmptyName_Throws()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23");
@@ -261,7 +261,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void WithServiceDelegation_WithEmptyServiceName_Throws()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23");
@@ -272,7 +272,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void WithDelegatedSubnet_AddsAnnotationsToAppServiceEnvironment()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23");
@@ -292,7 +292,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void WithDelegatedSubnet_SameSubnetCanBeConfiguredMoreThanOnce()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24");
@@ -311,7 +311,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void WithDelegatedSubnet_CaseInsensitiveServiceDelegationIsAllowed()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24")
@@ -328,7 +328,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void WithDelegatedSubnet_LastMatchingServiceDelegationCollapsesOlderConflicts()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24")
@@ -347,7 +347,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void WithDelegatedSubnet_DifferentSubnetThrows()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var firstSubnet = vnet.AddSubnet("first-subnet", "10.0.0.0/24");
@@ -369,7 +369,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void WithDelegatedSubnet_DifferentServiceDelegationThrows()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("shared-subnet", "10.0.0.0/24");
@@ -392,7 +392,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void AddSubnet_WithParameterResource_CreatesSubnetResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var addressPrefixParam = builder.AddParameter("subnetPrefix");
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -409,7 +409,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void AddSubnet_WithParameterResource_AndCustomSubnetName()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var addressPrefixParam = builder.AddParameter("subnetPrefix");
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -424,7 +424,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public async Task AddSubnet_WithParameterResource_GeneratesBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var addressPrefixParam = builder.AddParameter("subnetPrefix");
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -438,7 +438,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public async Task AddSubnet_WithNatGateway_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var natGw = builder.AddNatGateway("mynat");
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -453,7 +453,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void AllowInbound_AutoCreatesNsg()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("web", "10.0.1.0/24")
@@ -467,7 +467,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void AllowInbound_UsesExistingNsg()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var nsg = builder.AddNetworkSecurityGroup("my-nsg");
@@ -482,7 +482,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void Shorthand_AutoIncrementsPriority()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("web", "10.0.1.0/24")
@@ -500,7 +500,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void Shorthand_ExplicitPriorityOverridesAutoIncrement()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("web", "10.0.1.0/24")
@@ -515,7 +515,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void Shorthand_AutoGeneratesRuleNames()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("web", "10.0.1.0/24")
@@ -534,7 +534,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void Shorthand_ExplicitNameOverridesAutoGeneration()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("web", "10.0.1.0/24")
@@ -547,7 +547,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void Shorthand_IncludesToInGeneratedName()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("aci-subnet", "10.0.3.0/28")
@@ -563,7 +563,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void Shorthand_IncludesFromAndToInGeneratedName()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("web", "10.0.1.0/24")
@@ -576,7 +576,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void Shorthand_DeduplicatesConflictingNames()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("web", "10.0.1.0/24")
@@ -594,7 +594,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void Shorthand_DefaultsProtocolToAsterisk()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("web", "10.0.1.0/24")
@@ -607,7 +607,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void Shorthand_DefaultsPortsAndAddressesToWildcard()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("web", "10.0.1.0/24")
@@ -623,7 +623,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public async Task Shorthand_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("web", "10.0.1.0/24")
@@ -641,7 +641,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void ServiceTags_CanBeUsedAsFromAndToParameters()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("web", "10.0.1.0/24")
@@ -701,7 +701,7 @@ public class AzureVirtualNetworkExtensionsTests
     [Fact]
     public void AllFourDirectionAccessCombos_SetCorrectly()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("web", "10.0.1.0/24")

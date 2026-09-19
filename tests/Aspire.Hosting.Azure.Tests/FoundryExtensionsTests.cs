@@ -14,12 +14,12 @@ using Microsoft.DotNet.RemoteExecutor;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class FoundryExtensionsTests
+public class FoundryExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddFoundry_ShouldAddResourceToBuilder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var resourceBuilder = builder.AddFoundry("myAIFoundry");
         Assert.NotNull(resourceBuilder);
         var resource = Assert.Single(builder.Resources.OfType<FoundryResource>());
@@ -29,7 +29,7 @@ public class FoundryExtensionsTests
     [Fact]
     public void AddDeployment_ShouldAddDeploymentToResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var resourceBuilder = builder.AddFoundry("myAIFoundry");
         var deploymentBuilder = resourceBuilder.AddDeployment("deployment1", "gpt-4", "1.0", "OpenAI");
         Assert.NotNull(deploymentBuilder);
@@ -45,7 +45,7 @@ public class FoundryExtensionsTests
     [Fact]
     public void WithProperties_ShouldApplyConfiguration()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var resourceBuilder = builder.AddFoundry("myAIFoundry");
         var deploymentBuilder = resourceBuilder.AddDeployment("deployment1", "gpt-4", "1.0", "OpenAI");
         bool configured = false;
@@ -63,7 +63,7 @@ public class FoundryExtensionsTests
     [Fact]
     public void AddFoundry_ConnectionString_IsCorrect()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var resourceBuilder = builder.AddFoundry("myAIFoundry");
         var resource = Assert.Single(builder.Resources.OfType<FoundryResource>());
         // The connection string should reference the aiFoundryApiEndpoint output
@@ -77,7 +77,7 @@ public class FoundryExtensionsTests
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
 
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var resourceBuilder = builder.AddFoundry("myAIFoundry");
         var resource = Assert.Single(builder.Resources.OfType<FoundryResource>());
         Assert.False(resource.IsEmulator);
@@ -293,7 +293,11 @@ public class FoundryExtensionsTests
     [SkipOnPlatform(TestPlatforms.Windows, "The synthetic Foundry CLI uses a POSIX shell script.")]
     public void RunAsFoundryLocal_PreparesCachedAndUncachedModelsInOrder(bool cached)
     {
-        RemoteExecutor.Invoke(RunModelPreparationScenario, cached.ToString()).Dispose();
+        using var handle = RemoteExecutor.Invoke(
+            RunModelPreparationScenario,
+            cached.ToString(),
+            RemoteTestOutputHelper.CreateRemoteInvokeOptions());
+        RemoteTestOutputHelper.StartAndWait(handle, testOutputHelper);
 
         static void RunModelPreparationScenario(string cachedValue)
         {
@@ -340,7 +344,7 @@ public class FoundryExtensionsTests
                 Environment.SetEnvironmentVariable("FOUNDRY_FAKE_LOG", commandLogPath);
                 Environment.SetEnvironmentVariable("FOUNDRY_FAKE_CACHED", cached.ToString().ToLowerInvariant());
 
-                using var builder = TestDistributedApplicationBuilder.Create();
+                using var builder = TestDistributedApplicationBuilder.Create(new RemoteTestOutputHelper());
                 var foundry = builder.AddFoundry("foundry");
                 var deployment = foundry.AddDeployment("deployment", "gpt-4", "1.0", "OpenAI");
                 foundry.RunAsFoundryLocal();
@@ -549,7 +553,7 @@ public class FoundryExtensionsTests
     [Fact]
     public void RunAsFoundryLocal_WithExistingEndpoint_DoesNotManageService()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var foundry = builder.AddFoundry("myAIFoundry")
             .RunAsFoundryLocal("http://windows-host:5273");
 
@@ -562,7 +566,7 @@ public class FoundryExtensionsTests
     [Fact]
     public void RunAsFoundryLocal_ConfiguresBoundedHealthCheckHttpClients()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.AddFoundry("foundry").RunAsFoundryLocal();
         using var app = builder.Build();
         var httpClientFactory = app.Services.GetRequiredService<IHttpClientFactory>();
@@ -579,7 +583,7 @@ public class FoundryExtensionsTests
     [InlineData("ftp://windows-host:5273")]
     public void RunAsFoundryLocal_WithInvalidExistingEndpoint_Throws(string endpoint)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var foundry = builder.AddFoundry("myAIFoundry");
 
         var exception = Assert.Throws<ArgumentException>(() =>
@@ -592,7 +596,7 @@ public class FoundryExtensionsTests
     [Fact]
     public void RunAsFoundryLocal_DeploymentIsMarkedLocal()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var resourceBuilder = builder.AddFoundry("myAIFoundry");
         resourceBuilder.AddDeployment("deployment1", "gpt-4", "1.0", "OpenAI");
         var localBuilder = resourceBuilder.RunAsFoundryLocal();
@@ -608,7 +612,7 @@ public class FoundryExtensionsTests
     [Fact]
     public void RunAsFoundryLocal_DeploymentConnectionString_HasModelProperty()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var foundry = builder.AddFoundry("myAIFoundry");
         var deployment = foundry.AddDeployment("deployment1", "gpt-4", "1.0", "OpenAI");
 
@@ -627,7 +631,7 @@ public class FoundryExtensionsTests
     [Fact]
     public void RunAsFoundryLocal_DeploymentConnectionString_UsesModelId()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var foundry = builder.AddFoundry("myAIFoundry");
         var deployment = foundry.AddDeployment("deployment1", "gpt-4", "1.0", "OpenAI");
         foundry.RunAsFoundryLocal();
@@ -640,7 +644,7 @@ public class FoundryExtensionsTests
     [Fact]
     public void AIFoundry_DeploymentConnectionString_HasDeploymentProperty()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var foundry = builder.AddFoundry("myAIFoundry");
         var deployment = foundry.AddDeployment("deployment1", "gpt-4", "1.0", "OpenAI");
 
@@ -653,7 +657,7 @@ public class FoundryExtensionsTests
     [Fact]
     public async Task AddFoundry_GeneratesValidBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var foundry = builder.AddFoundry("foundry");
         var deployment1 = foundry.AddDeployment("deployment1", "gpt-4", "1.0", "OpenAI");
@@ -675,7 +679,7 @@ public class FoundryExtensionsTests
     [Fact]
     public void AddProject_SetsParentFoundryForProvisioningOrdering()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var foundry = builder.AddFoundry("myAIFoundry");
         var project = foundry
@@ -687,7 +691,7 @@ public class FoundryExtensionsTests
     [Fact]
     public void AddProject_DoesNotAddDefaultContainerRegistryInRunMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var project = builder.AddFoundry("myAIFoundry")
             .AddProject("my-project");
@@ -700,7 +704,7 @@ public class FoundryExtensionsTests
     [Fact]
     public async Task AddProject_WithPublishAsExistingFoundry_GeneratesBicepThatReferencesExistingParent()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var project = builder.AddFoundry("foundry")
             .PublishAsExisting("existing-foundry", "existing-rg")
@@ -721,7 +725,7 @@ public class FoundryExtensionsTests
     [Fact]
     public async Task AddProject_GeneratesEndpointFromParentFoundryApiEndpoint()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var project = builder.AddFoundry("foundry")
             .AddProject("project");
@@ -737,7 +741,7 @@ public class FoundryExtensionsTests
     [Fact]
     public async Task AddFoundry_WithPublishAsExisting_UsesStableDefaultCapabilityHostName()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var foundry = builder.AddFoundry("logical-foundry")
             .PublishAsExisting("existing-foundry", "existing-rg");
@@ -771,7 +775,7 @@ public class FoundryExtensionsTests
     [Fact]
     public async Task WithComputeEnvironment_ResolvesExternalContainerAppReference()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("env");
         var project = builder.AddFoundry("account")
@@ -810,7 +814,7 @@ public class FoundryExtensionsTests
     [Fact]
     public async Task WithComputeEnvironment_DoesNotSetReservedFoundryProjectEndpointEnvironmentVariable()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
@@ -839,7 +843,7 @@ public class FoundryExtensionsTests
     [Fact]
     public async Task WithComputeEnvironment_ResolvesReferenceExpressionEnvironmentVariable()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("env");
         var project = builder.AddFoundry("account")
@@ -880,7 +884,7 @@ public class FoundryExtensionsTests
     [Fact]
     public async Task WithComputeEnvironment_ResolvesEndpointReferenceExpressionEnvironmentVariable()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("env");
         var project = builder.AddFoundry("account")
@@ -921,7 +925,7 @@ public class FoundryExtensionsTests
     [Fact]
     public async Task WithComputeEnvironment_ThrowsForInternalContainerAppReference()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("env");
         var project = builder.AddFoundry("account")

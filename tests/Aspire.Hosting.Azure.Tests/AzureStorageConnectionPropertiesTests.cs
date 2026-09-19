@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureStorageConnectionPropertiesTests
+public class AzureStorageConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureBlobStorageResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var storage = builder.AddAzureStorage("storage");
         var blobs = storage.AddBlobs("blobs");
 
@@ -29,7 +29,7 @@ public class AzureStorageConnectionPropertiesTests
     [Fact]
     public void AzureQueueStorageResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var storage = builder.AddAzureStorage("storage");
         var queues = storage.AddQueues("queues");
 
@@ -47,7 +47,7 @@ public class AzureStorageConnectionPropertiesTests
     [Fact]
     public void AzureTableStorageResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var storage = builder.AddAzureStorage("storage");
         var tables = storage.AddTables("tables");
 

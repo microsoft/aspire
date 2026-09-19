@@ -41,5 +41,5 @@ internal static class KubernetesE2EVersions
     /// Unlike the other versions, this default omits the leading <c>v</c> because
     /// the Radius <c>install.sh</c> <c>--version</c> flag expects a bare number.
     /// </summary>
-    public static string RadiusVersion => Environment.GetEnvironmentVariable("RADIUS_VERSION") ?? "0.60.0";
+    public static string RadiusVersion => Environment.GetEnvironmentVariable("RADIUS_VERSION") ?? "0.60.2";
 }
