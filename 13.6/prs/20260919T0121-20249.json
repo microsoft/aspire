@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only stability fix for Azure hosting emulator tests (logging/CI reliability); no user-facing product change.",
+  "mergedAt": "2026-09-19T01:21:56Z",
+  "number": 20249,
+  "runDate": "2026-09-19T06:05:00Z",
+  "status": "excluded",
+  "title": "Improve Azure hosting test logging and stability"
+}
