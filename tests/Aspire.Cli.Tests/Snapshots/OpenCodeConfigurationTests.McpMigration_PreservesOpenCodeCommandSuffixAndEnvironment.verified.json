@@ -1,0 +1,17 @@
+﻿{
+  "mcp": {
+    "aspire": {
+      "type": "local",
+      "command": [
+        "aspire",
+        "agent",
+        "mcp",
+        "--debug"
+      ],
+      "environment": {
+        "PRESERVED": "yes"
+      },
+      "enabled": true
+    }
+  }
+}

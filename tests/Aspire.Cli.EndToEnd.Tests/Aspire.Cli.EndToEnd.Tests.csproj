@@ -48,6 +48,8 @@
 
   <ItemGroup>
     <Using Include="Aspire.Tests.Utils" />
+    <!-- Verify adds this global import; retain the existing explicit imports instead. -->
+    <Using Remove="Xunit" />
   </ItemGroup>
 
   <ItemGroup>
@@ -59,10 +61,12 @@
     <PackageReference Include="Hex1b" />
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
     <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
   <ItemGroup>
       <Compile Include="$(SharedDir)CliExitCodes.cs" Link="shared\CliExitCodes.cs" />
       <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared\TemporaryWorkspace.cs" />
+      <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" Link="shared\TestModuleInitializer.cs" />
       <Compile Include="$(TestsSharedDir)CliInstallStrategy.cs" Link="shared\CliInstallStrategy.cs" />
       <Compile Include="$(TestsSharedDir)CliPackageDiscovery.cs" Link="shared\CliPackageDiscovery.cs" />
       <Compile Include="$(TestsSharedDir)Hex1bTestHelpers.cs" Link="shared\Hex1bTestHelpers.cs" />

@@ -1,0 +1,25 @@
+﻿{
+  "mcpServers": {
+    "other": {
+      "command": "other-server",
+      "args": []
+    },
+    "aspire": {
+      "type": "local",
+      "command": "aspire",
+      "args": [
+        "agent",
+        "mcp",
+        "--project",
+        "AppHost.cs"
+      ],
+      "env": {
+        "DOTNET_ROOT": "pinned-sdk",
+        "OTHER": "preserved"
+      },
+      "tools": [
+        "list_resources"
+      ]
+    }
+  }
+}

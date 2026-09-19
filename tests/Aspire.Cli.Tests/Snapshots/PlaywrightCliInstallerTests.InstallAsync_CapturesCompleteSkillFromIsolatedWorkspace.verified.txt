@@ -1,0 +1,12 @@
+﻿SKILL.md
+---
+name: playwright-cli
+description: Browser automation with Playwright CLI.
+---
+
+# Playwright CLI
+
+See [commands](references/commands.md).
+
+references/commands.md
+# Playwright CLI commands

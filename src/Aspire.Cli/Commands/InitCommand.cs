@@ -111,8 +111,7 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(_languageOption);
         Options.Add(_fileBasedOption);
         Options.Add(NewCommand.s_suppressAgentInitOption);
-        Options.Add(AgentInitCommand.s_skillLocationsOption);
-        Options.Add(AgentInitCommand.s_skillsOption);
+        AgentInitCommand.AddOptions(this, includeMcp: false, includeWorkspaceRoot: false);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -168,45 +167,24 @@ internal sealed class InitCommand : BaseCommand
             _ = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
         }
 
-        // Step 4: Chain to aspire agent init for skill configuration.
-        // MCP remains an explicit opt-in through standalone `aspire agent init`.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
-        var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
-        var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
-        // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
-        // (which includes aspireify as the natural follow-up wiring skill). This chained flow
-        // never registers `--mcp`, so MCP configuration is unavailable here by construction —
-        // it remains reachable only through standalone `aspire agent init`.
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
             InteractionService,
             CliExitCodes.Success,
             workspaceRoot,
             agentInitBinding,
-            skillLocationsBinding,
-            skillsBinding,
+            AgentInitCommand.CreateBindings(parseResult, includeMcp: false),
             cancellationToken);
 
-        // Step 5: Print follow-up commands only when the user selected the one-time init skill.
         if (agentInitResult.ExitCode == CliExitCodes.Success &&
-            agentInitResult.SelectedSkills.Any(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName)))
+            agentInitResult.RegisteredClients.Count > 0)
         {
-            var commands = GetAspireifyCommands(agentInitResult.SelectedLocations);
-            if (commands.Count > 0)
-            {
-                InteractionService.DisplayEmptyLine();
-                InteractionService.DisplayMessage(
-                    KnownEmojis.Dizzy,
-                    commands.Count == 1
-                        ? InitCommandStrings.AppHostCreatedRunOne
-                        : InitCommandStrings.AppHostCreatedRunOneOf);
-                InteractionService.DisplayEmptyLine();
-
-                foreach (var command in commands)
-                {
-                    InteractionService.DisplaySubtleMessage($"  {command}");
-                }
-            }
+            var catalog = new AgentClientCatalog();
+            var clients = string.Join(", ", agentInitResult.RegisteredClients.Select(client => catalog.Get(client).DisplayName));
+            InteractionService.DisplayEmptyLine();
+            InteractionService.DisplayMessage(KnownEmojis.Dizzy,
+                string.Format(CultureInfo.CurrentCulture, AgentInitStrings.AspireifyHandoff, clients));
         }
 
         return CommandResult.FromExitCode(agentInitResult.ExitCode);
@@ -227,23 +205,6 @@ internal sealed class InitCommand : BaseCommand
                 KnownEmojis.Warning,
                 string.Format(CultureInfo.CurrentCulture, InitCommandStrings.DeprecatedOptionWarning, optionName));
         }
-    }
-
-    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<SkillLocation> selectedLocations)
-    {
-        var commands = new List<string>();
-
-        if (selectedLocations.Contains(SkillLocation.ClaudeCode))
-        {
-            commands.Add("claude \"run the aspireify skill\"");
-        }
-
-        if (selectedLocations.Contains(SkillLocation.OpenCode))
-        {
-            commands.Add("opencode --prompt \"run the aspireify skill\"");
-        }
-
-        return commands;
     }
 
     private async Task<int> DropCSharpSkeletonAsync(DirectoryInfo workingDirectory, FileInfo? solutionFile, CancellationToken cancellationToken)

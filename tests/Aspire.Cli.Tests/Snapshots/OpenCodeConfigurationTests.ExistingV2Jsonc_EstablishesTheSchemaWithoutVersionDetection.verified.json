@@ -1,0 +1,19 @@
+﻿{
+  "model": "preserved",
+  "skills": [
+    "./team-skills",
+    "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/"
+  ],
+  "mcp": {
+    "servers": {
+      "aspire": {
+        "type": "local",
+        "command": [
+          "aspire",
+          "agent",
+          "mcp"
+        ]
+      }
+    }
+  }
+}

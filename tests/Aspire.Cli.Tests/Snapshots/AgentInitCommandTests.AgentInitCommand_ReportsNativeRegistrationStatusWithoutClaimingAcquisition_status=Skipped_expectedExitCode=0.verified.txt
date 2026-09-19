@@ -1,0 +1,9 @@
+﻿{
+  Messages: [
+    Skipped Aspire source for GitHub Copilot CLI, GitHub Copilot App (project): project-settings.json,
+    Agent configuration completed with warnings. Review the skipped or unavailable targets above.
+  ],
+  SubtleMessages: [
+    Native client owns acquisition.
+  ]
+}

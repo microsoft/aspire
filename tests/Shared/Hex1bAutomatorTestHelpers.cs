@@ -489,8 +489,8 @@ internal static class Hex1bAutomatorTestHelpers
 
     /// <summary>
     /// Runs <c>aspire new</c> interactively up to and including accepting the chained agent init
-    /// confirmation prompt, landing on whatever prompt comes next (skill location or skill selection,
-    /// depending on whether <paramref name="extraArguments"/> includes <c>--skill-locations</c>).
+    /// confirmation prompt, landing on the first omitted asset or client selection prompt.
+    /// Explicit asset and <c>--clients</c> flags in <paramref name="extraArguments"/> skip their prompts.
     /// Used by tests that need to drive the chained agent-init flow instead of declining it via
     /// <see cref="AspireNewAsync"/>. <paramref name="beforeAcceptingAgentInit"/> runs after the
     /// project has been scaffolded but before the prompt is accepted, so callers can seed a
@@ -509,7 +509,7 @@ internal static class Hex1bAutomatorTestHelpers
         await auto.RunAspireNewPromptsAsync(projectName, template, useRedisCache, useDevLocalhost, extraArguments);
 
         // Agent init prompt: wait for it, then optionally let the caller seed a detectable agent
-        // environment before ACCEPTING it (type 'y') to reach the chained skill selection prompt.
+        // environment before accepting it to reach the independent asset prompts.
         await auto.WaitUntilAsync(
             s => s.ContainsText("configure AI agent environments"),
             timeout: TimeSpan.FromSeconds(120),

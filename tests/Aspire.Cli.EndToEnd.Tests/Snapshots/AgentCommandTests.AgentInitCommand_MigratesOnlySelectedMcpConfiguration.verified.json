@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "aspire": {
+      "command": "aspire",
+      "args": [
+        "agent",
+        "mcp",
+        "--verbose"
+      ],
+      "env": {
+        "CUSTOM": "preserved"
+      }
+    },
+    "other": {
+      "command": "other",
+      "args": []
+    }
+  }
+}

@@ -67,43 +67,19 @@
     <value>Start the MCP (Model Context Protocol) server</value>
   </data>
   <data name="InitCommand_Description" xml:space="preserve">
-    <value>Initialize agent environment configuration for detected agents</value>
-  </data>
-  <data name="DeprecatedConfigUpdate_Description" xml:space="preserve">
-    <value>Update {0} config to use new 'agent mcp' command</value>
+    <value>Configure independent assets for selected agent clients at project and user level</value>
   </data>
   <data name="DeprecatedConfigWarning" xml:space="preserve">
     <value>{0} config uses deprecated 'mcp start' command</value>
   </data>
   <data name="DeprecatedConfigFix" xml:space="preserve">
-    <value>Run 'aspire agent init' to update configuration</value>
-  </data>
-  <data name="ConfigUpdatesSelectPrompt" xml:space="preserve">
-    <value>The following agent configurations use the deprecated 'mcp start' command. Update them?</value>
-  </data>
-  <data name="MalformedConfigFileError" xml:space="preserve">
-    <value>The configuration file '{0}' contains malformed JSON. Please fix the file manually and re-run the command.</value>
-  </data>
-  <data name="SkippedMalformedConfigFile" xml:space="preserve">
-    <value>Skipping update of '{0}'.</value>
+    <value>Run 'aspire agent init --mcp' and select the affected clients to update configuration</value>
   </data>
   <data name="ConfigurationCompletedWithErrors" xml:space="preserve">
     <value>Configuration completed with errors. Please fix the reported issues and re-run the command.</value>
   </data>
-  <data name="SkipNoneDescription" xml:space="preserve">
-    <value>None — skip</value>
-  </data>
-  <data name="InitCommand_ConfigureMcpServer" xml:space="preserve">
-    <value>Install Aspire MCP server</value>
-  </data>
-  <data name="InitCommand_SelectSkillLocations" xml:space="preserve">
-    <value>Where should skill files be installed?</value>
-  </data>
-  <data name="InitCommand_SelectSkills" xml:space="preserve">
-    <value>Which skills should be installed?</value>
-  </data>
   <data name="InitCommand_ConfigureMcpServerPrompt" xml:space="preserve">
-    <value>Configure the Aspire MCP server for detected agent environments?</value>
+    <value>Configure the Aspire MCP server for the selected clients?</value>
   </data>
   <data name="InitCommand_InstalledPlaywrightCli" xml:space="preserve">
     <value>Installed Playwright CLI.</value>
@@ -111,98 +87,11 @@
   <data name="InitCommand_PlaywrightCliSkipped" xml:space="preserve">
     <value>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</value>
   </data>
-  <data name="InitCommand_InstalledSkillsSummary" xml:space="preserve">
-    <value>Installed Aspire agent skills:</value>
-  </data>
-  <data name="InitCommand_InstalledSkillsSummarySkills" xml:space="preserve">
-    <value>Skills: {0}</value>
-  </data>
-  <data name="InitCommand_InstalledSkillsSummaryLocations" xml:space="preserve">
-    <value>Locations: {0}</value>
-  </data>
   <data name="InitCommand_FailedToInstallSkill" xml:space="preserve">
     <value>Failed to install {0} skill at {1}: {2}</value>
   </data>
-  <data name="InitCommand_TelemetryHooksInstalled" xml:space="preserve">
-    <value>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</value>
-  </data>
-  <data name="InitCommand_TelemetryHookSkippedMalformedConfig" xml:space="preserve">
-    <value>Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</value>
-  </data>
-  <data name="InitCommand_TelemetryHookSkippedUnexpectedShape" xml:space="preserve">
-    <value>Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</value>
-  </data>
-  <data name="InitCommand_TelemetryHookWriteFailed" xml:space="preserve">
-    <value>Skipped the telemetry hook for {0} because its configuration could not be written.</value>
-  </data>
-  <data name="SkillDescription_Aspire" xml:space="preserve">
-    <value>Aspire CLI commands and workflows for distributed apps</value>
-  </data>
-  <data name="SkillDescription_AspireDeployment" xml:space="preserve">
-    <value>Aspire deployment target selection, preflight, publish, and deploy workflows</value>
-  </data>
   <data name="SkillDescription_PlaywrightCli" xml:space="preserve">
     <value>Browser automation and functional testing</value>
-  </data>
-  <data name="SkillDescription_DotnetInspect" xml:space="preserve">
-    <value>Query .NET API surfaces across NuGet packages and platform libraries</value>
-  </data>
-  <data name="SkillDescription_Aspireify" xml:space="preserve">
-    <value>One-time setup: wire up AppHost with discovered projects</value>
-  </data>
-  <data name="SkillLocation_StandardName" xml:space="preserve">
-    <value>Standard (.agents/skills/)</value>
-  </data>
-  <data name="SkillLocation_StandardDescription" xml:space="preserve">
-    <value>Supported by VS Code, GitHub Copilot, and OpenCode (also installs at ~/)</value>
-  </data>
-  <data name="SkillLocation_ClaudeCodeName" xml:space="preserve">
-    <value>Claude Code (.claude/skills/)</value>
-  </data>
-  <data name="SkillLocation_ClaudeCodeDescription" xml:space="preserve">
-    <value>Required for Claude Code</value>
-  </data>
-  <data name="SkillLocation_GitHubSkillsName" xml:space="preserve">
-    <value>VS Code / GitHub Copilot (.github/skills/)</value>
-  </data>
-  <data name="SkillLocation_GitHubSkillsDescription" xml:space="preserve">
-    <value>Legacy location for GitHub Copilot skills</value>
-  </data>
-  <data name="SkillLocation_OpenCodeName" xml:space="preserve">
-    <value>OpenCode (.opencode/skill/)</value>
-  </data>
-  <data name="SkillLocation_OpenCodeDescription" xml:space="preserve">
-    <value>Legacy location for OpenCode skills</value>
-  </data>
-  <data name="AspireSkillsInstaller_InstallingStatus" xml:space="preserve">
-    <value>Installing Aspire skills...</value>
-  </data>
-  <data name="AspireSkillsInstaller_GitHubUnavailable" xml:space="preserve">
-    <value>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</value>
-  </data>
-  <data name="AspireSkillsInstaller_InvalidBundle" xml:space="preserve">
-    <value>The Aspire skills bundle is invalid: {0}</value>
-  </data>
-  <data name="AspireSkillsInstaller_InvalidMetadata" xml:space="preserve">
-    <value>Embedded Aspire skills bundle metadata is invalid: {0}</value>
-  </data>
-  <data name="AspireSkillsInstaller_MissingMetadataVersion" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify a version.</value>
-  </data>
-  <data name="AspireSkillsInstaller_MetadataRepositoryMismatch" xml:space="preserve">
-    <value>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</value>
-  </data>
-  <data name="AspireSkillsInstaller_MissingMetadataTag" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify a GitHub release tag.</value>
-  </data>
-  <data name="AspireSkillsInstaller_MissingMetadataAssetName" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify a release asset name.</value>
-  </data>
-  <data name="AspireSkillsInstaller_MissingMetadataSha512" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</value>
-  </data>
-  <data name="AspireSkillsInstaller_ArchiveHashVerificationFailed" xml:space="preserve">
-    <value>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</value>
   </data>
   <data name="PlaywrightCliInstaller_InstallingStatus" xml:space="preserve">
     <value>Installing Playwright CLI...</value>
@@ -234,14 +123,8 @@
   <data name="InitCommand_WorkspaceRootOptionDescription" xml:space="preserve">
     <value>Path to the workspace root directory</value>
   </data>
-  <data name="InitCommand_SkillLocationsOptionDescription" xml:space="preserve">
-    <value>Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'</value>
-  </data>
-  <data name="InitCommand_SkillsOptionDescription" xml:space="preserve">
-    <value>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</value>
-  </data>
   <data name="InitCommand_McpOptionDescription" xml:space="preserve">
-    <value>Configure the Aspire MCP server for detected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</value>
+    <value>Configure the Aspire MCP server for selected clients (y/n or true/false; default: no)</value>
   </data>
   <data name="AgentTelemetryCommand_Description" xml:space="preserve">
     <value>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</value>

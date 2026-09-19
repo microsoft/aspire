@@ -1,0 +1,6 @@
+﻿[
+  Created apphost.cs,
+  Created aspire.config.json,
+  Created apphost.run.json,
+  Installed dotnet-inspect skill for GitHub Copilot CLI (project): settings.json
+]

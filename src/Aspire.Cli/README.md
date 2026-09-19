@@ -71,6 +71,82 @@ aspire <command> [options]
 | `docs` | Browse and search Aspire documentation and API reference from aspire.dev. |
 | `agent` | Manage AI agent specific setup. |
 
+## AI agent setup
+
+Run `aspire agent init` to choose assets first, then the clients that should use
+them. An AppHost is not required, including when selecting dotnet-inspect.
+
+| Option | What Aspire configures | Default |
+|--------|------------------------|---------|
+| `--mcp` | The Aspire MCP server in the selected clients' native configuration | No |
+| `--playwright` | Verified Playwright CLI installation and its generated skill | No |
+| `--dotnet-inspect` | The bootstrap skill that invokes dotnet-inspect on demand | No |
+| `--aspire-skills` | Native Aspire plugin/catalog source registration and supported enablement | Yes |
+| `--clients` | `copilot-cli`, `copilot-app`, `vscode`, `claude-code`, or `opencode` | Detected clients |
+
+The asset flags accept `y`/`n` or `true`/`false`, case-insensitively. A bare flag
+means yes. Omitted assets prompt interactively and use the defaults above in
+non-interactive mode. The client picker includes all five clients, with detected
+clients preselected; explicitly selecting an undetected client is supported.
+`--clients` accepts comma-separated IDs, `all`, or `none`, case-insensitively.
+Unattended setup with requested assets and no detected clients requires an explicit
+`--clients` value.
+
+```bash
+# Register the native Aspire source for both Copilot frontends, without installing either client
+aspire agent init --non-interactive --clients copilot-cli,copilot-app
+
+# Configure only MCP for Claude Code; Aspire source registration is independently optional
+aspire agent init --non-interactive --clients claude-code --mcp y --aspire-skills n
+
+# Install only the dotnet-inspect bootstrap skill, even before creating an AppHost
+aspire agent init --non-interactive --clients vscode --dotnet-inspect --aspire-skills false
+
+# Keep existing agent configuration untouched
+aspire agent init --mcp n --playwright n --dotnet-inspect n --aspire-skills n
+```
+
+Project and user scopes are automatic: there is no skill-location or scope picker.
+Project targets use `--workspace-root`, defaulting to the Git root or the current
+directory outside Git. User targets use the clients' native configuration
+locations and supported overrides. Shared Copilot targets are written once even
+when multiple supported frontends are selected.
+
+`--aspire-skills` registers the official `microsoft/aspire-skills` source; it does
+not download a skills archive, install a native plugin, or populate a client cache.
+The selected client acquires, trusts, and loads the content. Canvases are available
+only in clients that support them. “Registered” and “already configured” therefore
+do not mean “installed” or “loaded.” Playwright and dotnet-inspect are the only
+skill payloads managed by Aspire itself.
+
+An explicit no leaves existing assets in place; it does not uninstall or disable
+them. Disabling all assets skips client discovery and configuration.
+`--clients none` skips configuration, including hooks and deprecated MCP-command migration.
+Migration runs only for selected MCP targets when MCP is requested.
+
+Settings merges preserve unrelated values, compatible source pins, and explicit
+disabled choices. JSONC is accepted, but a changed document may be rewritten
+without its comments or original formatting. Semantically unchanged settings
+are not rewritten. Conflicting or malformed core targets are reported separately
+and cause a nonzero exit code; independent targets may still succeed. Usage-hook
+failures are advisory warnings, not unconditional setup success. Existing hooks
+are not removed by an opt-out.
+
+`aspire new` and `aspire init` offer the same non-MCP assets and client choices
+after creating the project, unless `--suppress-agent-init` is specified. They
+never expose or prompt for `--mcp`; use standalone `aspire agent init --mcp`
+instead. Disabling agent setup does not suppress normal project creation.
+After a successful native source registration, `aspire init` explains how to
+request Aspireify once the selected client has acquired the content.
+
+The old `--skills` and `--skill-locations` options are no longer accepted.
+The hidden legacy `aspire mcp init` command delegates to the same setup flow and
+shows a deprecation warning.
+
+See [agent setup implementation and delivery gates](Agents/README.md) for native
+target details and the outstanding hook-provenance and OpenCode publication
+prerequisites.
+
 ## Examples
 
 To initialize an empty C# AppHost without discovering incidental `.sln` or `.slnx` files, run this from the repository root:

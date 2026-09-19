@@ -1,0 +1,19 @@
+﻿Description:
+  Configure independent assets for selected agent clients at project and user level
+
+Usage:
+  Aspire.Cli.Tests agent init [options]
+
+Options:
+  --workspace-root <workspace-root>                                      Path to the workspace root directory
+  --mcp <false|n|true|y>                                                 Configure the Aspire MCP server for selected clients (y/n or true/false; default: no)
+  --playwright <false|n|true|y>                                          Install Playwright CLI and its skills for the selected clients (y/n or true/false; default: no)
+  --dotnet-inspect <false|n|true|y>                                      Install the dotnet-inspect bootstrap skill for the selected clients (y/n or true/false; default: no)
+  --aspire-skills <false|n|true|y>                                       Register native Aspire skills and supported canvases for the selected clients (y/n or true/false; default: yes)
+  --clients <clients>                                                    Comma-separated clients (copilot-cli,copilot-app,vscode,claude-code,opencode), 'all', or 'none'. Defaults to detected clients
+  -?, -h, --help                                                         Show help and usage information
+  -l, --log-level <Critical|Debug|Error|Information|None|Trace|Warning>  Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)
+  --non-interactive                                                      Run the command in non-interactive mode, disabling all interactive prompts and spinners
+  --nologo                                                               Suppress the startup banner and telemetry notice
+  --banner                                                               Display the animated Aspire CLI welcome banner
+  --wait-for-debugger                                                    Wait for a debugger to attach before executing the command

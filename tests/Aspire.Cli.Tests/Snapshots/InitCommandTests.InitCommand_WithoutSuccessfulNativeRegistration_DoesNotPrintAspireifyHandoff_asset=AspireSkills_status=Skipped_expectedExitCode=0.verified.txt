@@ -1,0 +1,7 @@
+﻿[
+  Created apphost.cs,
+  Created aspire.config.json,
+  Created apphost.run.json,
+  Skipped Aspire source for GitHub Copilot CLI (project): settings.json,
+  Agent configuration completed with warnings. Review the skipped or unavailable targets above.
+]

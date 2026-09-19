@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="PlaywrightOptionDescription" xml:space="preserve">
+    <value>Install Playwright CLI and its skills for the selected clients (y/n or true/false; default: no)</value>
+  </data>
+  <data name="DotnetInspectOptionDescription" xml:space="preserve">
+    <value>Install the dotnet-inspect bootstrap skill for the selected clients (y/n or true/false; default: no)</value>
+  </data>
+  <data name="AspireSkillsOptionDescription" xml:space="preserve">
+    <value>Register native Aspire skills and supported canvases for the selected clients (y/n or true/false; default: yes)</value>
+  </data>
+  <data name="ClientsOptionDescription" xml:space="preserve">
+    <value>Comma-separated clients ({0}), '{1}', or '{2}'. Defaults to detected clients</value>
+  </data>
+  <data name="InvalidAssetValue" xml:space="preserve">
+    <value>Invalid value '{1}' for '{0}'. Use y/n or true/false.</value>
+  </data>
+  <data name="InvalidClients" xml:space="preserve">
+    <value>Invalid client selection '{0}'. Use {1}, '{2}', or '{3}'.</value>
+  </data>
+  <data name="ConfigurePlaywrightPrompt" xml:space="preserve">
+    <value>Install Playwright CLI and its browser automation skill?</value>
+  </data>
+  <data name="ConfigureDotnetInspectPrompt" xml:space="preserve">
+    <value>Install the dotnet-inspect bootstrap skill?</value>
+  </data>
+  <data name="ConfigureAspireSkillsPrompt" xml:space="preserve">
+    <value>Register Aspire skills and supported canvases?</value>
+  </data>
+  <data name="SelectClients" xml:space="preserve">
+    <value>Select clients to configure at project and user level:</value>
+  </data>
+  <data name="NoAssetsSelected" xml:space="preserve">
+    <value>No agent assets selected. Existing configuration was left unchanged.</value>
+  </data>
+  <data name="NoClientsSelected" xml:space="preserve">
+    <value>No clients selected. Existing configuration was left unchanged.</value>
+  </data>
+  <data name="ProjectScope" xml:space="preserve">
+    <value>project</value>
+  </data>
+  <data name="UserScope" xml:space="preserve">
+    <value>user</value>
+  </data>
+  <data name="McpAsset" xml:space="preserve">
+    <value>Aspire MCP server</value>
+  </data>
+  <data name="PlaywrightAsset" xml:space="preserve">
+    <value>Playwright CLI skill</value>
+  </data>
+  <data name="DotnetInspectAsset" xml:space="preserve">
+    <value>dotnet-inspect skill</value>
+  </data>
+  <data name="AspireSkillsAsset" xml:space="preserve">
+    <value>Aspire source</value>
+  </data>
+  <data name="TelemetryHooksAsset" xml:space="preserve">
+    <value>Aspire usage telemetry hooks</value>
+  </data>
+  <data name="RegisteredTarget" xml:space="preserve">
+    <value>Registered {0} for {1} ({2}): {3}</value>
+  </data>
+  <data name="InstalledTarget" xml:space="preserve">
+    <value>Installed {0} for {1} ({2}): {3}</value>
+  </data>
+  <data name="ConfiguredTarget" xml:space="preserve">
+    <value>Configured {0} for {1} ({2}): {3}</value>
+  </data>
+  <data name="UnchangedTarget" xml:space="preserve">
+    <value>Already configured {0} for {1} ({2}): {3}</value>
+  </data>
+  <data name="SkippedTarget" xml:space="preserve">
+    <value>Skipped {0} for {1} ({2}): {3}</value>
+  </data>
+  <data name="BlockedTarget" xml:space="preserve">
+    <value>Blocked {0} for {1} ({2}): {3}</value>
+  </data>
+  <data name="FailedTarget" xml:space="preserve">
+    <value>Failed to configure {0} for {1} ({2}): {3}</value>
+  </data>
+  <data name="ClientAcquisitionNotice" xml:space="preserve">
+    <value>The selected clients acquire and load the registered Aspire content. Client trust or activation may still be required; registration does not mean the content is installed or loaded.</value>
+  </data>
+  <data name="ConfigurationCompletedWithWarnings" xml:space="preserve">
+    <value>Agent configuration completed with warnings. Review the skipped or unavailable targets above.</value>
+  </data>
+  <data name="AspireifyHandoff" xml:space="preserve">
+    <value>Aspire AppHost created! Open this project in {0}. After the client acquires the Aspire content, ask it to run the aspireify skill to complete setup.</value>
+  </data>
+</root>

@@ -1,64 +1,17 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Agents.Playwright;
-
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Provides factory methods for creating common agent applicators that are shared across different agent environments.
+/// Contains the CLI-managed dotnet-inspect bootstrap.
 /// </summary>
 internal static class CommonAgentApplicators
 {
     /// <summary>
-    /// The name of the Aspire skill.
-    /// </summary>
-    internal const string AspireSkillName = "aspire";
-
-    /// <summary>
-    /// The name of the Aspire deployment skill.
-    /// </summary>
-    internal const string AspireDeploymentSkillName = "aspire-deployment";
-
-    /// <summary>
-    /// The name of the Aspireify skill.
-    /// </summary>
-    internal const string AspireifySkillName = "aspireify";
-
-    /// <summary>
     /// The name of the dotnet-inspect skill.
     /// </summary>
     internal const string DotnetInspectSkillName = "dotnet-inspect";
-
-    /// <summary>
-    /// Adds a single Playwright CLI installation applicator if not already added.
-    /// Called by scanners that detect an environment supporting Playwright.
-    /// The applicator uses <see cref="PlaywrightCliInstaller"/> to securely install the CLI and generate skill files.
-    /// </summary>
-    /// <param name="context">The scan context.</param>
-    /// <param name="installer">The Playwright CLI installer that handles secure installation.</param>
-    /// <param name="skillBaseDirectory">The relative path to the skill base directory for this agent environment (e.g., ".claude/skills", ".github/skills").</param>
-    public static void AddPlaywrightCliApplicator(
-        AgentEnvironmentScanContext context,
-        PlaywrightCliInstaller installer,
-        string skillBaseDirectory)
-    {
-        // Register the skill base directory so skill files can be mirrored to all environments
-        context.AddSkillBaseDirectory(skillBaseDirectory);
-
-        // Only add the Playwright applicator prompt once across all environments
-        if (context.PlaywrightApplicatorAdded)
-        {
-            return;
-        }
-
-        context.PlaywrightApplicatorAdded = true;
-        context.AddApplicator(new AgentEnvironmentApplicator(
-            "Install Playwright CLI (Recommended for browser automation)",
-            ct => installer.InstallAsync(context.RepositoryRoot.FullName, context.SkillBaseDirectories.ToHashSet(StringComparer.OrdinalIgnoreCase), ct),
-            promptGroup: McpInitPromptGroup.Tools,
-            priority: 1));
-    }
 
     /// <summary>
     /// Gets the content for the dotnet-inspect skill file.

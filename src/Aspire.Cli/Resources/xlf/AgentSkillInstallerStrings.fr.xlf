@@ -1,0 +1,37 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="fr" original="../AgentSkillInstallerStrings.resx">
+    <body>
+      <trans-unit id="PlaywrightInstallationFailed">
+        <source>Failed to install Playwright CLI or generate its skill files: {0}</source>
+        <target state="new">Failed to install Playwright CLI or generate its skill files: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightLinkedSkillEntry">
+        <source>The generated Playwright CLI skill contains a symbolic link: {0}</source>
+        <target state="new">The generated Playwright CLI skill contains a symbolic link: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightMissingSkill">
+        <source>Playwright CLI reported success, but did not generate a non-empty SKILL.md.</source>
+        <target state="new">Playwright CLI reported success, but did not generate a non-empty SKILL.md.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaywrightNpmRequired">
+        <source>Playwright CLI requires npm, which was not found on PATH. Install npm and run agent init again.</source>
+        <target state="new">Playwright CLI requires npm, which was not found on PATH. Install npm and run agent init again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillFileOutsideTarget">
+        <source>The skill file resolves outside the selected skill directory: {0}</source>
+        <target state="new">The skill file resolves outside the selected skill directory: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SkillTargetUnresolved">
+        <source>The skill directory could not be resolved. Check for inaccessible paths or broken symbolic links.</source>
+        <target state="new">The skill directory could not be resolved. Check for inaccessible paths or broken symbolic links.</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

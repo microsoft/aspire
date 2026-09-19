@@ -1,218 +1,78 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using Aspire.Cli.Agents.Playwright;
-using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Agents.OpenCode;
 
 /// <summary>
-/// Scans for OpenCode environments and provides an applicator to configure the Aspire MCP server.
+/// Discovers OpenCode from project configuration or its installed CLI.
 /// </summary>
 internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
 {
-    private const string OpenCodeConfigFileName = "opencode.jsonc";
-    private const string AspireServerName = "aspire";
-    private static readonly string s_skillBaseDirectory = Path.Combine(".opencode", "skill");
-
     private readonly IOpenCodeCliRunner _openCodeCliRunner;
-    private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly ILogger<OpenCodeAgentEnvironmentScanner> _logger;
 
-    /// <summary>
-    /// Initializes a new instance of <see cref="OpenCodeAgentEnvironmentScanner"/>.
-    /// </summary>
-    /// <param name="openCodeCliRunner">The OpenCode CLI runner for checking if OpenCode is installed.</param>
-    /// <param name="playwrightCliInstaller">The Playwright CLI installer for secure installation.</param>
-    /// <param name="logger">The logger for diagnostic output.</param>
-    public OpenCodeAgentEnvironmentScanner(IOpenCodeCliRunner openCodeCliRunner, PlaywrightCliInstaller playwrightCliInstaller, ILogger<OpenCodeAgentEnvironmentScanner> logger)
+    public OpenCodeAgentEnvironmentScanner(IOpenCodeCliRunner openCodeCliRunner, ILogger<OpenCodeAgentEnvironmentScanner> logger)
     {
         ArgumentNullException.ThrowIfNull(openCodeCliRunner);
-        ArgumentNullException.ThrowIfNull(playwrightCliInstaller);
         ArgumentNullException.ThrowIfNull(logger);
         _openCodeCliRunner = openCodeCliRunner;
-        _playwrightCliInstaller = playwrightCliInstaller;
         _logger = logger;
     }
 
     /// <inheritdoc />
-    public async Task ScanAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<AgentClientDetection>> ScanAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         _logger.LogDebug("Starting OpenCode environment scan in directory: {WorkingDirectory}", context.WorkingDirectory.FullName);
-        _logger.LogDebug("Workspace root: {RepositoryRoot}", context.RepositoryRoot.FullName);
 
-        // Look for existing opencode.jsonc file at workspace root
-        var configDirectory = context.RepositoryRoot;
-        var configFilePath = Path.Combine(configDirectory.FullName, OpenCodeConfigFileName);
-        var configFileExists = File.Exists(configFilePath);
+        var hasProjectConfiguration = HasProjectConfiguration(context.WorkingDirectory, context.RepositoryRoot);
+        // Probe even when configuration exists so application can compare the installed version
+        // with the file's schema. A missing executable does not invalidate project evidence.
+        var version = await _openCodeCliRunner.GetVersionAsync(cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        if (configFileExists)
+        if (hasProjectConfiguration || version is not null)
         {
-            _logger.LogDebug("Found existing opencode.jsonc at: {ConfigFilePath}", configFilePath);
-
-            context.AddDetectedClient(AgentClientKind.OpenCode);
-
-            // Check if aspire is already configured
-            _logger.LogDebug("Checking if Aspire MCP server is already configured in opencode.jsonc...");
-            if (!HasAspireServerConfigured(configFilePath))
-            {
-                // Config file exists but aspire is not configured - offer to add it
-                _logger.LogDebug("Adding OpenCode applicator to update existing opencode.jsonc");
-                context.AddApplicator(CreateApplicator(configDirectory));
-            }
-            else
-            {
-                _logger.LogDebug("Aspire MCP server is already configured");
-            }
-
-            // Register Playwright CLI installation applicator
-            CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
+            _logger.LogDebug("Detected OpenCode with version: {Version}", version);
+            return Array.AsReadOnly<AgentClientDetection>(
+            [
+                new(AgentClientKind.OpenCode, version?.ToString(), IsInsiders: false)
+            ]);
         }
-        else
-        {
-            // No config file - check if OpenCode CLI is installed
-            _logger.LogDebug("No opencode.jsonc found, checking for OpenCode CLI installation...");
-            var openCodeVersion = await _openCodeCliRunner.GetVersionAsync(cancellationToken).ConfigureAwait(false);
 
-            if (openCodeVersion is not null)
-            {
-                _logger.LogDebug("Found OpenCode CLI version: {Version}", openCodeVersion);
-
-                context.AddDetectedClient(AgentClientKind.OpenCode);
-
-                // OpenCode is installed - offer to create config
-                _logger.LogDebug("Adding OpenCode applicator to create new opencode.jsonc at: {ConfigDirectory}", configDirectory.FullName);
-                context.AddApplicator(CreateApplicator(configDirectory));
-
-                // Register Playwright CLI installation applicator
-                CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
-            }
-            else
-            {
-                _logger.LogDebug("OpenCode CLI not found - skipping");
-            }
-        }
+        return Array.AsReadOnly<AgentClientDetection>([]);
     }
 
-    /// <summary>
-    /// Checks if the opencode.jsonc file has an "aspire" server configured.
-    /// </summary>
-    /// <param name="configFilePath">The path to the opencode.jsonc file.</param>
-    /// <returns>True if the aspire server is already configured, false otherwise.</returns>
-    private static bool HasAspireServerConfigured(string configFilePath)
+    private static bool HasProjectConfiguration(DirectoryInfo startDirectory, DirectoryInfo repositoryRoot)
     {
-        try
+        var relativePath = Path.GetRelativePath(repositoryRoot.FullName, startDirectory.FullName);
+        if (Path.IsPathRooted(relativePath) || relativePath == ".." ||
+            relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
         {
-            var content = File.ReadAllText(configFilePath);
+            // An explicit --workspace-root can be outside the current working directory.
+            startDirectory = repositoryRoot;
+        }
 
-            // Remove single-line comments for parsing (JSONC support)
-            content = RemoveJsonComments(content);
-
-            var config = JsonNode.Parse(content)?.AsObject();
-
-            if (config is null)
+        for (var currentDirectory = startDirectory; currentDirectory is not null; currentDirectory = currentDirectory.Parent)
+        {
+            // V2 also loads config files inside .opencode. A skills-only directory is not enough
+            // evidence of project configuration: https://opencode.ai/v2/docs/config#locations.
+            if (File.Exists(Path.Combine(currentDirectory.FullName, "opencode.json")) ||
+                File.Exists(Path.Combine(currentDirectory.FullName, "opencode.jsonc")) ||
+                File.Exists(Path.Combine(currentDirectory.FullName, ".opencode", "opencode.json")) ||
+                File.Exists(Path.Combine(currentDirectory.FullName, ".opencode", "opencode.jsonc")))
             {
-                return false;
+                return true;
             }
 
-            if (config.TryGetPropertyValue("mcp", out var mcpNode) && mcpNode is JsonObject mcp)
+            if (Path.GetRelativePath(repositoryRoot.FullName, currentDirectory.FullName) == ".")
             {
-                return mcp.ContainsKey(AspireServerName);
+                break;
             }
+        }
 
-            return false;
-        }
-        catch (JsonException)
-        {
-            // If the JSON is malformed, assume aspire is not configured
-            return false;
-        }
+        return false;
     }
-
-    /// <summary>
-    /// Removes single-line comments from JSONC content.
-    /// </summary>
-    private static string RemoveJsonComments(string jsonc)
-    {
-        var result = new System.Text.StringBuilder();
-        var lines = jsonc.Split('\n');
-
-        foreach (var line in lines)
-        {
-            var trimmedLine = line;
-            var commentIndex = line.IndexOf("//", StringComparison.Ordinal);
-
-            // Simple heuristic: if // appears and it's not inside a string, remove it
-            // This is a simplified approach - a full JSONC parser would be more robust
-            if (commentIndex >= 0)
-            {
-                // Count quotes before the comment to check if we're in a string
-                var beforeComment = line[..commentIndex];
-                var quoteCount = beforeComment.Count(c => c == '"');
-
-                // If even number of quotes, we're not in a string
-                if (quoteCount % 2 == 0)
-                {
-                    trimmedLine = beforeComment;
-                }
-            }
-
-            result.AppendLine(trimmedLine);
-        }
-
-        return result.ToString();
-    }
-
-    /// <summary>
-    /// Creates an applicator for configuring the MCP server in the opencode.jsonc file.
-    /// </summary>
-    private static AgentEnvironmentApplicator CreateApplicator(DirectoryInfo configDirectory)
-    {
-        return new AgentEnvironmentApplicator(
-            OpenCodeAgentEnvironmentScannerStrings.ApplicatorDescription,
-            async cancellationToken => await ApplyMcpConfigurationAsync(
-                configDirectory,
-                cancellationToken));
-    }
-
-    /// <summary>
-    /// Creates or updates the opencode.jsonc file with the Aspire MCP server configuration.
-    /// </summary>
-    private static async Task ApplyMcpConfigurationAsync(
-        DirectoryInfo configDirectory,
-        CancellationToken cancellationToken)
-    {
-        var configFilePath = Path.Combine(configDirectory.FullName, OpenCodeConfigFileName);
-        var config = await McpConfigFileHelper.ReadConfigAsync(configFilePath, RemoveJsonComments, cancellationToken);
-
-        // Ensure schema is set for new configs
-        if (!config.ContainsKey("$schema"))
-        {
-            config["$schema"] = "https://opencode.ai/config.json";
-        }
-
-        // Ensure "mcp" object exists
-        if (!config.ContainsKey("mcp") || config["mcp"] is not JsonObject)
-        {
-            config["mcp"] = new JsonObject();
-        }
-
-        var mcp = config["mcp"]!.AsObject();
-
-        // Add the "aspire" server configuration
-        mcp[AspireServerName] = new JsonObject
-        {
-            ["type"] = "local",
-            ["command"] = new JsonArray("aspire", "agent", "mcp"),
-            ["enabled"] = true
-        };
-
-        // Write the updated config using AOT-compatible serialization
-        var jsonOutput = JsonSerializer.Serialize(config, JsonSourceGenerationContext.Default.JsonObject);
-        await File.WriteAllTextAsync(configFilePath, jsonOutput, cancellationToken);
-    }
-
 }

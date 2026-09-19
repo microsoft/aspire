@@ -92,11 +92,13 @@ Our verification chain relies on these trust anchors:
 
 **Trust basis:** All preceding verification steps have passed. The Sigstore attestation verifies the local archive digest and confirms the correct source repository, workflow, and build system.
 
-### Step 6: Generate and mirror skill files
+### Step 6: Generate and publish skill files
 
-**Action:** Run `playwright-cli install --skills` to generate agent skill files in the primary skill directory (`.claude/skills/playwright-cli/`), then mirror the skill directory to all other detected agent environment skill directories (e.g., `.github/skills/playwright-cli/`, `.opencode/skill/playwright-cli/`). The mirror is a full sync — files are created, updated, and stale files are removed so all environments have identical skill content.
+**Action:** Run `playwright-cli install --skills` once in an owned temporary workspace, where it generates `.claude/skills/playwright-cli/`. Capture the complete payload, including supporting files, and publish it to the selected clients' deduplicated project and user skill directories. Copilot CLI/App, VS Code, and OpenCode share `.agents/skills/playwright-cli/`; Claude uses `.claude/skills/playwright-cli/` and honors its user configuration-directory override.
 
-**What this establishes:** The Playwright CLI skill files are available for all configured agent environments.
+Each changed file is staged beside its destination, checked for concurrent changes, and replaced atomically. Unchanged files retain their timestamps, and user-owned extra files are not pruned. Generation cannot create unselected-client directories in the user's workspace. Acquisition, generation, and destination failures are reported separately from successful installation.
+
+**What this establishes:** The complete Playwright CLI skill is available at the successfully configured targets. Selecting both Copilot frontends does not duplicate installation or writes.
 
 ## Verification Chain Summary
 

@@ -1,0 +1,8 @@
+﻿[
+  Created apphost.cs,
+  Created aspire.config.json,
+  Created apphost.run.json,
+  Registered Aspire source for GitHub Copilot CLI (project): copilot-settings.json,
+  Configuration completed with errors. Please fix the reported issues and re-run the command.,
+  See logs at <log-file>
+]

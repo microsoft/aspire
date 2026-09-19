@@ -1,0 +1,12 @@
+﻿home/.agents/skills/dotnet-inspect/SKILL.md
+home/.agents/skills/playwright-cli/SKILL.md
+home/.agents/skills/playwright-cli/references/commands.md
+home/.claude/skills/dotnet-inspect/SKILL.md
+home/.claude/skills/playwright-cli/SKILL.md
+home/.claude/skills/playwright-cli/references/commands.md
+project/.agents/skills/dotnet-inspect/SKILL.md
+project/.agents/skills/playwright-cli/SKILL.md
+project/.agents/skills/playwright-cli/references/commands.md
+project/.claude/skills/dotnet-inspect/SKILL.md
+project/.claude/skills/playwright-cli/SKILL.md
+project/.claude/skills/playwright-cli/references/commands.md

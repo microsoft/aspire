@@ -1,226 +1,80 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using Aspire.Cli.Agents.Playwright;
-using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Agents.ClaudeCode;
 
 /// <summary>
-/// Scans for Claude Code environments and provides an applicator to configure the Aspire MCP server.
+/// Discovers Claude Code from project configuration or its installed CLI.
 /// </summary>
 internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
 {
-    private const string ClaudeCodeFolderName = ".claude";
-    private const string McpConfigFileName = ".mcp.json";
-    private const string AspireServerName = "aspire";
-    private static readonly string s_skillBaseDirectory = Path.Combine(".claude", "skills");
-
     private readonly IClaudeCodeCliRunner _claudeCodeCliRunner;
-    private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly CliExecutionContext _executionContext;
     private readonly ILogger<ClaudeCodeAgentEnvironmentScanner> _logger;
 
-    /// <summary>
-    /// Initializes a new instance of <see cref="ClaudeCodeAgentEnvironmentScanner"/>.
-    /// </summary>
-    /// <param name="claudeCodeCliRunner">The Claude Code CLI runner for checking if Claude Code is installed.</param>
-    /// <param name="playwrightCliInstaller">The Playwright CLI installer for secure installation.</param>
-    /// <param name="executionContext">The CLI execution context for accessing environment variables and settings.</param>
-    /// <param name="logger">The logger for diagnostic output.</param>
-    public ClaudeCodeAgentEnvironmentScanner(IClaudeCodeCliRunner claudeCodeCliRunner, PlaywrightCliInstaller playwrightCliInstaller, CliExecutionContext executionContext, ILogger<ClaudeCodeAgentEnvironmentScanner> logger)
+    public ClaudeCodeAgentEnvironmentScanner(
+        IClaudeCodeCliRunner claudeCodeCliRunner,
+        CliExecutionContext executionContext,
+        ILogger<ClaudeCodeAgentEnvironmentScanner> logger)
     {
         ArgumentNullException.ThrowIfNull(claudeCodeCliRunner);
-        ArgumentNullException.ThrowIfNull(playwrightCliInstaller);
         ArgumentNullException.ThrowIfNull(executionContext);
         ArgumentNullException.ThrowIfNull(logger);
         _claudeCodeCliRunner = claudeCodeCliRunner;
-        _playwrightCliInstaller = playwrightCliInstaller;
         _executionContext = executionContext;
         _logger = logger;
     }
 
     /// <inheritdoc />
-    public async Task ScanAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<AgentClientDetection>> ScanAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         _logger.LogDebug("Starting Claude Code environment scan in directory: {WorkingDirectory}", context.WorkingDirectory.FullName);
-        _logger.LogDebug("Workspace root: {RepositoryRoot}", context.RepositoryRoot.FullName);
 
-        // Find the .claude folder to determine if Claude Code is being used in this project
-        _logger.LogDebug("Searching for .claude folder...");
-        var claudeCodeFolder = FindClaudeCodeFolder(context.WorkingDirectory, context.RepositoryRoot);
+        var hasProjectConfiguration = HasProjectConfiguration(context.WorkingDirectory, context.RepositoryRoot);
+        var version = await _claudeCodeCliRunner.GetVersionAsync(cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        if (claudeCodeFolder is not null)
+        if (hasProjectConfiguration || version is not null)
         {
-            context.AddDetectedClient(AgentClientKind.ClaudeCode);
-
-            // If .claude folder is found, override the workspace root with its parent directory
-            var workspaceRoot = claudeCodeFolder.Parent ?? context.RepositoryRoot;
-            _logger.LogDebug("Inferred workspace root from .claude folder parent: {WorkspaceRoot}", workspaceRoot.FullName);
-
-            // Check if the aspire server is already configured in .mcp.json
-            _logger.LogDebug("Checking if Aspire MCP server is already configured in .mcp.json...");
-            if (!HasAspireServerConfigured(workspaceRoot))
-            {
-                // Found a .claude folder - add an applicator to configure MCP
-                _logger.LogDebug("Adding Claude Code applicator for .mcp.json at: {WorkspaceRoot}", workspaceRoot.FullName);
-                context.AddApplicator(CreateAspireApplicator(workspaceRoot));
-            }
-            else
-            {
-                _logger.LogDebug("Aspire MCP server is already configured");
-            }
-
-            // Register Playwright CLI installation applicator
-            CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
+            _logger.LogDebug("Detected Claude Code with version: {Version}", version);
+            return Array.AsReadOnly<AgentClientDetection>(
+            [
+                new(AgentClientKind.ClaudeCode, version?.ToString(), IsInsiders: false)
+            ]);
         }
-        else
-        {
-            // No .claude folder found - check if Claude Code CLI is installed
-            _logger.LogDebug("No .claude folder found, checking for Claude Code CLI installation...");
-            var claudeCodeVersion = await _claudeCodeCliRunner.GetVersionAsync(cancellationToken).ConfigureAwait(false);
 
-            if (claudeCodeVersion is not null)
-            {
-                _logger.LogDebug("Found Claude Code CLI version: {Version}", claudeCodeVersion);
-
-                context.AddDetectedClient(AgentClientKind.ClaudeCode);
-
-                // Claude Code is installed - offer to create config at workspace root
-                if (!HasAspireServerConfigured(context.RepositoryRoot))
-                {
-                    _logger.LogDebug("Adding Claude Code applicator for .mcp.json at workspace root: {WorkspaceRoot}", context.RepositoryRoot.FullName);
-                    context.AddApplicator(CreateAspireApplicator(context.RepositoryRoot));
-                }
-                else
-                {
-                    _logger.LogDebug("Aspire MCP server is already configured");
-                }
-
-                // Register Playwright CLI installation applicator
-                CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
-            }
-            else
-            {
-                _logger.LogDebug("Claude Code CLI not found - skipping");
-            }
-        }
+        return Array.AsReadOnly<AgentClientDetection>([]);
     }
 
-    /// <summary>
-    /// Walks up the directory tree to find a .claude folder.
-    /// Stops if we go above the workspace root.
-    /// Ignores the .claude folder in the user's home directory.
-    /// </summary>
-    /// <param name="startDirectory">The directory to start searching from.</param>
-    /// <param name="repositoryRoot">The workspace root to use as the boundary for searches.</param>
-    private DirectoryInfo? FindClaudeCodeFolder(DirectoryInfo startDirectory, DirectoryInfo repositoryRoot)
+    private bool HasProjectConfiguration(DirectoryInfo startDirectory, DirectoryInfo repositoryRoot)
     {
-        var currentDirectory = startDirectory;
-        var homeDirectory = _executionContext.HomeDirectory;
-
-        while (currentDirectory is not null)
+        var relativePath = Path.GetRelativePath(repositoryRoot.FullName, startDirectory.FullName);
+        if (Path.IsPathRooted(relativePath) || relativePath == ".." ||
+            relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
         {
-            // Check for .claude folder at current level, but ignore it if it's in the home directory
-            // (the home directory's .claude folder is for user settings, not project config)
-            var claudeCodePath = Path.Combine(currentDirectory.FullName, ClaudeCodeFolderName);
-            if (Directory.Exists(claudeCodePath) && !string.Equals(currentDirectory.FullName, homeDirectory.FullName, StringComparison.OrdinalIgnoreCase))
+            // An explicit --workspace-root can be outside the current working directory.
+            startDirectory = repositoryRoot;
+        }
+
+        for (var currentDirectory = startDirectory; currentDirectory is not null; currentDirectory = currentDirectory.Parent)
+        {
+            // The home .claude directory contains user settings, not evidence of project usage.
+            if (Path.GetRelativePath(_executionContext.HomeDirectory.FullName, currentDirectory.FullName) != "." &&
+                (Directory.Exists(Path.Combine(currentDirectory.FullName, ".claude")) ||
+                 File.Exists(Path.Combine(currentDirectory.FullName, ".mcp.json"))))
             {
-                return new DirectoryInfo(claudeCodePath);
+                return true;
             }
 
-            // Stop if we've reached the workspace root without finding .claude
-            // (don't search above the workspace boundary)
-            if (string.Equals(currentDirectory.FullName, repositoryRoot.FullName, StringComparison.OrdinalIgnoreCase))
+            if (Path.GetRelativePath(repositoryRoot.FullName, currentDirectory.FullName) == ".")
             {
-                return null;
+                break;
             }
-
-            currentDirectory = currentDirectory.Parent;
         }
 
-        return null;
+        return false;
     }
-
-    /// <summary>
-    /// Checks if the repo root contains an .mcp.json file with an "aspire" MCP server configured.
-    /// </summary>
-    /// <param name="repoRoot">The repository root directory to check.</param>
-    /// <returns>True if the aspire server is already configured, false otherwise.</returns>
-    private static bool HasAspireServerConfigured(DirectoryInfo repoRoot)
-    {
-        var configFilePath = Path.Combine(repoRoot.FullName, McpConfigFileName);
-
-        if (!File.Exists(configFilePath))
-        {
-            return false;
-        }
-
-        try
-        {
-            var content = File.ReadAllText(configFilePath);
-            var config = JsonNode.Parse(content)?.AsObject();
-
-            if (config is null)
-            {
-                return false;
-            }
-
-            if (config.TryGetPropertyValue("mcpServers", out var serversNode) && serversNode is JsonObject servers)
-            {
-                return servers.ContainsKey(AspireServerName);
-            }
-
-            return false;
-        }
-        catch (JsonException)
-        {
-            // If the JSON is malformed, assume aspire is not configured
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Creates an applicator for configuring the Aspire MCP server in the .mcp.json file at the repo root.
-    /// </summary>
-    private static AgentEnvironmentApplicator CreateAspireApplicator(DirectoryInfo repoRoot)
-    {
-        return new AgentEnvironmentApplicator(
-            ClaudeCodeAgentEnvironmentScannerStrings.ApplicatorDescription,
-            async cancellationToken => await ApplyAspireMcpConfigurationAsync(repoRoot, cancellationToken));
-    }
-
-    /// <summary>
-    /// Creates or updates the .mcp.json file at the repo root with Aspire MCP configuration.
-    /// </summary>
-    private static async Task ApplyAspireMcpConfigurationAsync(
-        DirectoryInfo repoRoot,
-        CancellationToken cancellationToken)
-    {
-        var configFilePath = Path.Combine(repoRoot.FullName, McpConfigFileName);
-        var config = await McpConfigFileHelper.ReadConfigAsync(configFilePath, null, cancellationToken);
-
-        // Ensure "mcpServers" object exists
-        if (!config.ContainsKey("mcpServers") || config["mcpServers"] is not JsonObject)
-        {
-            config["mcpServers"] = new JsonObject();
-        }
-
-        var servers = config["mcpServers"]!.AsObject();
-
-        // Add or update the "aspire" server configuration
-        servers[AspireServerName] = new JsonObject
-        {
-            ["command"] = "aspire",
-            ["args"] = new JsonArray("agent", "mcp")
-        };
-
-        // Write the updated config using AOT-compatible serialization
-        var jsonContent = JsonSerializer.Serialize(config, JsonSourceGenerationContext.Default.JsonObject);
-        await File.WriteAllTextAsync(configFilePath, jsonContent, cancellationToken);
-    }
-
 }

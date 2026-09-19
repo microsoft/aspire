@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Registered" xml:space="preserve">
+    <value>Native source registered. The client owns acquisition, trust, and loading; managed policy and runtime overrides are not fully verifiable offline.</value>
+  </data>
+  <data name="McpConfigured" xml:space="preserve">
+    <value>Aspire MCP configuration is present. The client controls trust, policy, and server startup.</value>
+  </data>
+  <data name="Disabled" xml:space="preserve">
+    <value>An existing disabled choice was preserved; this entry was not enabled.</value>
+  </data>
+  <data name="Conflict" xml:space="preserve">
+    <value>An existing Aspire entry has a different source or command; it was not replaced.</value>
+  </data>
+  <data name="ExistingMcpCustomization" xml:space="preserve">
+    <value>Existing Aspire MCP settings in another applicable scope were preserved. No default entry was added that could override or broaden those customizations.</value>
+  </data>
+  <data name="UnexpectedShape" xml:space="preserve">
+    <value>The configuration has an unsupported JSON shape at '{0}'; this entry was left unchanged.</value>
+  </data>
+  <data name="ObjectRequired" xml:space="preserve">
+    <value>The configuration must contain a JSON object; the file was left unchanged.</value>
+  </data>
+  <data name="MalformedJson" xml:space="preserve">
+    <value>The configuration is not valid JSON/JSONC; the file was left unchanged.</value>
+  </data>
+  <data name="ReadWriteFailed" xml:space="preserve">
+    <value>Could not read or write the configuration: {0}</value>
+  </data>
+  <data name="ConcurrentChange" xml:space="preserve">
+    <value>The configuration or one of its overrides changed during setup. Retry after the other writer has finished.</value>
+  </data>
+  <data name="UnsafeLink" xml:space="preserve">
+    <value>The configuration link '{0}' could not be resolved safely; it was left unchanged.</value>
+  </data>
+  <data name="PolicyBlocked" xml:space="preserve">
+    <value>An existing policy or higher-precedence override controls this entry. It was preserved; review it in the client before enabling Aspire.</value>
+  </data>
+  <data name="OpenCodeSchemaConflict" xml:space="preserve">
+    <value>OpenCode version and configuration evidence do not establish one compatible V1 or V2 schema. Existing files were not converted.</value>
+  </data>
+  <data name="OpenCodeCatalogVersionUnsupported" xml:space="preserve">
+    <value>The detected OpenCode version ({0}) does not support skills.urls catalogs. Upgrade to OpenCode {1} or later; the catalog configuration was left unchanged.</value>
+    <comment>{0} is the detected client version; {1} is the minimum supported client version.</comment>
+  </data>
+  <data name="OpenCodeMultipleFiles" xml:space="preserve">
+    <value>Multiple OpenCode configuration files apply at this scope. Consolidate them before configuring Aspire.</value>
+  </data>
+  <data name="UnsupportedOverride" xml:space="preserve">
+    <value>This client configuration override cannot be resolved safely offline. Configure this target in the client; no guessed path was written.</value>
+  </data>
+  <data name="HookConfigured" xml:space="preserve">
+    <value>The user-level Aspire usage hook is configured. Telemetry opt-out settings still apply.</value>
+  </data>
+  <data name="HookNotApplicable" xml:space="preserve">
+    <value>No selected supported client has a successfully configured Aspire skills or MCP target; no usage hook was added.</value>
+  </data>
+  <data name="HookInstallationFailed" xml:space="preserve">
+    <value>Could not prepare the embedded usage hook scripts: {0}</value>
+  </data>
+  <data name="ExistingProjectHook" xml:space="preserve">
+    <value>An existing project-level Aspire usage hook was preserved. No additional user hook was added, to avoid duplicate events.</value>
+  </data>
+  <data name="ProfileLimitations" xml:space="preserve">
+    <value>Aspire MCP configuration is present for this VS Code profile. Session-only --user-data-dir overrides and remote profiles must be configured in VS Code.</value>
+  </data>
+</root>

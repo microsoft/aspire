@@ -23,7 +23,7 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
     /// The test:
     /// 1. Runs <c>aspire new</c> to create a Starter project
     /// 2. Accepts the agent init prompt (instead of declining)
-    /// 3. Selects Playwright CLI during skill selection
+    /// 3. Requests only Playwright CLI for an explicitly selected Claude Code client
     /// 4. Verifies no errors appear (especially no "Provenance verification failed")
     /// 5. Verifies <c>playwright-cli</c> is installed and skill files are generated
     /// </summary>
@@ -33,6 +33,10 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        Assert.SkipWhen(
+            strategy.Mode == CliInstallMode.InstallScript ||
+            (strategy.Mode == CliInstallMode.DotnetTool && strategy.NupkgSourcePath is null),
+            "This test requires the current CLI's independent agent asset options. Use a local or PR CLI build.");
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -43,75 +47,13 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        // Create .claude folder so agent init detects a Claude Code environment.
-        // This needs to exist in the workspace root before aspire new creates the project
-        // because agent init chains after project creation and looks for environment markers.
-        await auto.TypeAsync("mkdir -p .claude");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        // Run aspire new with the Starter template, going through all prompts manually
-        // so we can ACCEPT the agent init prompt instead of declining it.
-        // Pass --skill-locations and --skills as CLI flags so the test does not depend on
-        // the position or count of entries in the interactive skill-selection menus, which
-        // change whenever the bundle ships a new skill.
-        await auto.TypeAsync("aspire new --skill-locations claudecode --skills playwright-cli");
-        await auto.EnterAsync();
-
-        // Template selection: accept default Starter App
-        await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("> Starter App").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(60),
-            description: "template selection list (> Starter App)");
-        await auto.EnterAsync();
-
-        // Project name
-        await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("Enter the project name").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
-            description: "project name prompt");
-        await auto.TypeAsync("StarterApp");
-        await auto.EnterAsync();
-
-        // Output path: accept default
-        await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("Enter the output path").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
-            description: "output path prompt");
-        await auto.EnterAsync();
-
-        // URLs prompt: accept default No
-        await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("Use *.dev.localhost URLs").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
-            description: "URLs prompt");
-        await auto.EnterAsync();
-
-        // Redis cache: accept default Yes
-        await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("Use Redis Cache").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
-            description: "Redis cache prompt");
-        await auto.EnterAsync();
-
-        // Test project: accept default No
-        await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("Do you want to create a test project?").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
-            description: "test project prompt");
-        await auto.EnterAsync();
-
-        // Agent init prompt: ACCEPT it (type 'y')
-        await auto.WaitUntilAsync(
-            s => s.ContainsText("configure AI agent environments"),
-            timeout: TimeSpan.FromSeconds(120),
-            description: "agent init prompt after aspire new");
-        await auto.WaitAsync(500);
-        await auto.TypeAsync("y");
+        await auto.RunCommandAsync("export CLAUDE_CONFIG_DIR=\"$PWD/.client-config/claude\"", counter);
+        await auto.AspireNewAcceptingAgentInitAsync(
+            "StarterApp",
+            extraArguments: "--clients claude-code --playwright y --dotnet-inspect n --aspire-skills n");
 
         // Wait for agent init to complete (downloads @playwright/cli from npm).
-        // Skill location and skill selection are provided via --skill-locations/--skills flags
-        // on the aspire new invocation above, so no interactive navigation is needed here.
+        // Explicit asset/client flags avoid native client detection or Aspire source acquisition.
         // Fail the test immediately if a provenance verification error appears.
         await auto.WaitUntilAsync(s =>
         {
@@ -130,8 +72,8 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Verify skill file was generated in the Claude Code location.
-        await auto.TypeAsync("ls StarterApp/.claude/skills/playwright-cli/SKILL.md");
+        // The one verified generation is distributed to both selected native scopes.
+        await auto.TypeAsync("ls StarterApp/.claude/skills/playwright-cli/SKILL.md .client-config/claude/skills/playwright-cli/SKILL.md");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SKILL.md", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);

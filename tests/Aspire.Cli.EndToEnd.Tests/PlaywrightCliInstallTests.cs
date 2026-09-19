@@ -19,15 +19,19 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
     /// Verifies the full Playwright CLI installation lifecycle:
     /// 1. Playwright CLI is not initially installed
     /// 2. An Aspire project is created
-    /// 3. <c>aspire agent init</c> is run with Claude Code environment selected
+    /// 3. <c>aspire agent init</c> is run with Claude Code explicitly selected
     /// 4. Playwright CLI is installed and available on PATH
-    /// 5. The <c>.claude/skills/playwright-cli/SKILL.md</c> skill file is generated
+    /// 5. The generated skill is installed at both native project and user locations
     /// </summary>
     [Fact]
     public async Task AgentInit_InstallsPlaywrightCli_AndGeneratesSkillFiles()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        Assert.SkipWhen(
+            strategy.Mode == CliInstallMode.InstallScript ||
+            (strategy.Mode == CliInstallMode.DotnetTool && strategy.NupkgSourcePath is null),
+            "This test requires the current CLI's independent agent asset options. Use a local or PR CLI build.");
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -38,6 +42,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
         await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.RunCommandAsync("export CLAUDE_CONFIG_DIR=\"$PWD/.client-config/claude\"", counter);
 
         // Step 1: Verify playwright-cli is not installed.
         await auto.TypeAsync("playwright-cli --version 2>&1 || true");
@@ -47,14 +52,14 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         // Step 2: Create an Aspire project (accept all defaults).
         await auto.AspireNewAsync("TestProject", counter);
 
-        // Step 3: Navigate into the project and create .claude folder to trigger Claude Code detection.
-        await auto.TypeAsync("cd TestProject && mkdir -p .claude");
+        // Explicit client selection does not require a native client or configuration to exist.
+        await auto.TypeAsync("cd TestProject");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 4: Run aspire agent init for Playwright only. This test is about
-        // @playwright/cli acquisition, not the Aspire skills bundle.
-        await auto.TypeAsync("aspire agent init --workspace-root . --skill-locations claudecode --skills playwright-cli --mcp=false");
+        // @playwright/cli acquisition, not native Aspire source registration.
+        await auto.TypeAsync("aspire agent init --workspace-root . --clients claude-code --playwright y --dotnet-inspect n --aspire-skills n --mcp n --non-interactive");
         await auto.EnterAsync();
 
         // Wait for installation to complete (this downloads from npm, can take a while)
@@ -66,17 +71,19 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Step 6: Verify the skill file was generated.
-        await auto.TypeAsync("ls .claude/skills/playwright-cli/SKILL.md");
+        // Both scopes receive the same complete payload, including supporting files.
+        await auto.TypeAsync("ls .claude/skills/playwright-cli/SKILL.md \"$CLAUDE_CONFIG_DIR/skills/playwright-cli/SKILL.md\"");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SKILL.md", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);
+        await auto.RunCommandAsync("diff -r .claude/skills/playwright-cli \"$CLAUDE_CONFIG_DIR/skills/playwright-cli\"", counter);
+        await auto.RunCommandAsync("test ! -e .agents/skills/playwright-cli && test ! -e .github/skills/playwright-cli", counter);
     }
 
     /// <summary>
     /// Verifies that when <c>aspire agent init</c> is run from a different directory than the
-    /// workspace root, <c>playwright-cli install --skills</c> generates skill files in the
-    /// workspace root, not the current working directory.
+    /// workspace root, the isolated Playwright generation is installed in the workspace
+    /// root and selected user directory, not the current working directory.
     ///
     /// This is a regression test for https://github.com/microsoft/aspire/issues/15140 where
     /// the missing <c>WorkingDirectory</c> on <c>ProcessStartInfo</c> caused skill files
@@ -87,6 +94,10 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        Assert.SkipWhen(
+            strategy.Mode == CliInstallMode.InstallScript ||
+            (strategy.Mode == CliInstallMode.DotnetTool && strategy.NupkgSourcePath is null),
+            "This test requires the current CLI's independent agent asset options. Use a local or PR CLI build.");
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -97,35 +108,26 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
         await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.RunCommandAsync("export CLAUDE_CONFIG_DIR=\"$PWD/.client-config/claude\"", counter);
 
         // Step 1: Create an Aspire project.
         await auto.AspireNewAsync("TestProject", counter);
 
-        // Step 2: Create .claude folder inside the project to trigger Claude Code detection.
-        // Crucially, do NOT cd into the project — stay in the parent directory.
-        await auto.TypeAsync("mkdir -p TestProject/.claude");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        // Step 3: Run aspire agent init from the PARENT directory for Playwright
-        // only. When provided as options, the workspace root and skill selection
-        // are deterministic and do not depend on Aspire default skills.
-        await auto.TypeAsync("aspire agent init --workspace-root TestProject --skill-locations claudecode --skills playwright-cli --mcp=false");
+        // Stay in the parent directory. The explicit workspace root and client selection
+        // must control project destinations independently of generation's working directory.
+        await auto.TypeAsync("aspire agent init --workspace-root TestProject --clients claude-code --playwright y --dotnet-inspect n --aspire-skills n --mcp n --non-interactive");
         await auto.EnterAsync();
 
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Step 4: Verify skill file exists in the workspace root (project subdirectory).
-        await auto.TypeAsync("ls TestProject/.claude/skills/playwright-cli/SKILL.md");
+        // Verify the project and user targets both contain the complete skill.
+        await auto.TypeAsync("ls TestProject/.claude/skills/playwright-cli/SKILL.md \"$CLAUDE_CONFIG_DIR/skills/playwright-cli/SKILL.md\"");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SKILL.md", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);
+        await auto.RunCommandAsync("diff -r TestProject/.claude/skills/playwright-cli \"$CLAUDE_CONFIG_DIR/skills/playwright-cli\"", counter);
 
-        // Step 5: Verify no stray skill files were created in the CWD (parent directory).
-        await auto.TypeAsync("test -d .claude/skills/playwright-cli && echo 'STRAY_FILES_FOUND' || echo 'NO_STRAY_FILES'");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("NO_STRAY_FILES", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.RunCommandAsync("test ! -e .claude/skills/playwright-cli && test ! -e .agents/skills/playwright-cli", counter);
     }
 }

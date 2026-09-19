@@ -1,0 +1,11 @@
+﻿{
+  Messages: [
+    Registered Aspire source for GitHub Copilot CLI (project): project-settings.json,
+    Failed to configure Aspire usage telemetry hooks for GitHub Copilot CLI (user): user-hooks.json,
+    Agent configuration completed with warnings. Review the skipped or unavailable targets above.
+  ],
+  SubtleMessages: [
+    The hook could not be written.,
+    The selected clients acquire and load the registered Aspire content. Client trust or activation may still be required; registration does not mean the content is installed or loaded.
+  ]
+}
