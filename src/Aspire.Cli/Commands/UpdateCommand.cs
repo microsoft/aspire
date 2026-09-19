@@ -409,7 +409,7 @@ internal sealed class UpdateCommand : BaseCommand
         }
         catch (ProjectUpdaterException ex)
         {
-            var message = Markup.Escape(ex.Message);
+            var message = ex.Message;
             Telemetry.RecordError(message, ex);
             return CommandResult.Failure(CliExitCodes.FailedToUpgradeProject, message);
         }
