@@ -315,14 +315,32 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         var propertiesKey = string.Join(",", properties.OrderBy(x => x));
         var cacheKey = $"{ItemsAndPropertiesCacheKeyPrefix}_{projectFile.FullName}_{itemsKey}_{propertiesKey}";
 
-        var (exitCode, document) = await cache.GetOrCreateAsync(cacheKey, async entry =>
+        var (exitCode, document, diagnosticOutput) = await cache.GetOrCreateAsync(cacheKey, async entry =>
         {
-            return await runner.GetProjectItemsAndPropertiesAsync(projectFile, items, properties, targets: [], new(), cancellationToken);
+            // SDK resolution errors use stderr, while MSBuild errors can use stdout.
+            // Keep both with the cached result so failed evaluations retain their diagnostics.
+            var output = new OutputCollector();
+            var options = new ProcessInvocationOptions
+            {
+                StandardOutputCallback = output.AppendOutput,
+                StandardErrorCallback = output.AppendError
+            };
+            var (exitCode, document) = await runner.GetProjectItemsAndPropertiesAsync(projectFile, items, properties, targets: [], options, cancellationToken);
+            var diagnosticOutput = exitCode != 0 || document is null
+                ? string.Join(Environment.NewLine, output.GetLines().Select(line => line.Line)).Trim()
+                : string.Empty;
+            return (exitCode, document, diagnosticOutput);
         });
 
         if (exitCode != 0 || document is null)
         {
-            throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedFetchItemsAndPropertiesFormat, projectFile.FullName));
+            var message = string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedFetchItemsAndPropertiesFormat, projectFile.FullName);
+            if (!string.IsNullOrWhiteSpace(diagnosticOutput))
+            {
+                message += Environment.NewLine + diagnosticOutput;
+            }
+
+            throw new ProjectUpdaterException(message);
         }
 
         return document;
