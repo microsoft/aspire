@@ -75,6 +75,7 @@
 .terminal-directory-display {
     position: absolute;
     inset: 0;
+    text-align: right;
 }
 
 .terminal-title-copy-icons,
