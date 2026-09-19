@@ -83,18 +83,33 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var artifacts = Path.Combine(_workspace.Path, "artifacts");
         var publish = Path.Combine(artifacts, "bin", "Aspire.Managed", "Release", "net10.0", rid, "publish");
         var executable = rid.StartsWith("win-", StringComparison.Ordinal) ? "aspire-managed.exe" : "aspire-managed";
-        var files = new List<string> { executable, "wwwroot/index.html" };
+        var files = new List<string> { executable };
         if (rid.StartsWith("win-", StringComparison.Ordinal))
         {
             files.AddRange(GetNativePaths(rid));
         }
 
-        foreach (var file in files.Append("Aspire.Dashboard.exe").Append("Aspire.TerminalHost.exe"))
+        foreach (var file in files.Append("Aspire.TerminalHost.exe"))
         {
             if (file != missingSidecar)
             {
                 WriteFile(Path.Combine(publish, file), file);
             }
+        }
+
+        var dashboardPublish = Path.Combine(artifacts, "bin", "Aspire.Dashboard", rid, "Release", "net11.0", rid, "publish");
+        var dashboardFiles = new[]
+        {
+            rid.StartsWith("win-", StringComparison.Ordinal) ? "Aspire.Dashboard.exe" : "Aspire.Dashboard",
+            "wwwroot/index.html",
+            "wwwroot/_framework/blazor.web.js",
+            rid.StartsWith("win-", StringComparison.Ordinal)
+                ? "e_sqlite3.dll"
+                : rid.StartsWith("osx-", StringComparison.Ordinal) ? "libe_sqlite3.dylib" : "libe_sqlite3.so"
+        };
+        foreach (var file in dashboardFiles)
+        {
+            WriteFile(Path.Combine(dashboardPublish, file), file);
         }
 
         var packageRid = rid switch
@@ -116,7 +131,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
             ["exec", "--runtimeconfig", Path.ChangeExtension(testAssembly, ".runtimeconfig.json"),
              "--depsfile", Path.ChangeExtension(testAssembly, ".deps.json"),
              typeof(Aspire.Tools.CreateLayout.Program).Assembly.Location,
-             "--output", layout, "--artifacts", artifacts, "--rid", rid],
+             "--output", layout, "--artifacts", artifacts, "--rid", rid, "--configuration", "Release"],
             packages);
         if (missingSidecar is not null)
         {
@@ -133,6 +148,14 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         foreach (var file in files)
         {
             Assert.True(File.ReadAllBytes(Path.Combine(publish, file)).SequenceEqual(File.ReadAllBytes(Path.Combine(managed, file))), file);
+        }
+
+        var dashboard = Path.Combine(layout, "dashboard");
+        Assert.Equal(dashboardFiles.Order(StringComparer.Ordinal), Directory.GetFiles(dashboard, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(dashboard, path).Replace('\\', '/')).Order(StringComparer.Ordinal));
+        foreach (var file in dashboardFiles)
+        {
+            Assert.True(File.ReadAllBytes(Path.Combine(dashboardPublish, file)).SequenceEqual(File.ReadAllBytes(Path.Combine(dashboard, file))), file);
         }
     }
 
@@ -155,7 +178,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
             ["exec", "--runtimeconfig", Path.ChangeExtension(testAssembly, ".runtimeconfig.json"),
              "--depsfile", Path.ChangeExtension(testAssembly, ".deps.json"),
              typeof(Aspire.Tools.CreateLayout.Program).Assembly.Location,
-             "--output", layout, "--artifacts", Path.Combine(_workspace.Path, "missing-artifacts"), "--rid", rid]);
+             "--output", layout, "--artifacts", Path.Combine(_workspace.Path, "missing-artifacts"), "--rid", rid, "--configuration", "Release"]);
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Equal(existingOutput, Directory.Exists(layout));
@@ -204,6 +227,26 @@ public sealed class Hex1bNativePublishingTests : IDisposable
                 @"$(ArtifactsBinDir)Aspire.Managed\**\publish\hex1bpty.exe"
             ],
             windowsManagedFiles);
+    }
+
+    [Fact]
+    public async Task MacOSDashboardDebugSymbolsAreRemovedBeforeSigning()
+    {
+        var pipeline = await File.ReadAllTextAsync(Path.Combine(
+            RepoRoot.Path, "eng", "pipelines", "templates", "build_sign_native.yml"));
+
+        var prepareDashboardIndex = pipeline.IndexOf("displayName: 🟣Prepare Native AOT Dashboard", StringComparison.Ordinal);
+        var removeSymbolsIndex = pipeline.IndexOf("displayName: 🟣Remove Native AOT Dashboard debug symbols", StringComparison.Ordinal);
+        var signManagedIndex = pipeline.IndexOf("displayName: 🟣Sign managed executables", StringComparison.Ordinal);
+        var buildNativeIndex = pipeline.IndexOf("displayName: 🟣Build native packages", StringComparison.Ordinal);
+
+        Assert.True(prepareDashboardIndex >= 0);
+        Assert.True(prepareDashboardIndex < removeSymbolsIndex);
+        Assert.True(removeSymbolsIndex < signManagedIndex);
+        Assert.True(signManagedIndex < buildNativeIndex);
+        Assert.Contains("Aspire.Dashboard.dSYM", pipeline[(removeSymbolsIndex - 500)..removeSymbolsIndex]);
+        Assert.Contains("Remove-Item", pipeline[(removeSymbolsIndex - 500)..removeSymbolsIndex]);
+        Assert.Contains("eq(parameters.agentOs, 'macos')", pipeline[(removeSymbolsIndex - 500)..removeSymbolsIndex]);
     }
 
     private string CreatePublishProject(string rid, bool singleFile, bool duplicateUnrelatedAsset)

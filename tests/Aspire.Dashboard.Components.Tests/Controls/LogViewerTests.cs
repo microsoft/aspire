@@ -5,6 +5,7 @@ using System.Globalization;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Shared.ConsoleLogs;
 using Bunit;
+using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Xunit;
@@ -13,6 +14,59 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 
 public class LogViewerTests : DashboardTestContext
 {
+    [Fact]
+    public async Task LogViewer_EndAnchorLimitsInitialResultThenReturnsAllEntries()
+    {
+        SetupLogViewerServices();
+
+        var logEntries = CreateLogEntries();
+        var cut = RenderComponent<LogViewer>(builder => builder.Add(p => p.LogEntries, logEntries));
+        var virtualize = cut.FindComponent<Virtualize<LogEntry>>().Instance;
+
+        foreach (var message in new[] { "one", "two", "three", "four", "five", "six" })
+        {
+            logEntries.InsertSorted(LogEntry.Create(timestamp: DateTime.UtcNow, logMessage: message, isErrorMessage: false));
+        }
+
+        var initialResult = await cut.InvokeAsync(() => virtualize.ItemsProvider!(new ItemsProviderRequest(0, 100, CancellationToken.None)).AsTask());
+        var refreshedResult = await cut.InvokeAsync(() => virtualize.ItemsProvider!(new ItemsProviderRequest(0, 100, CancellationToken.None)).AsTask());
+
+        Assert.Equal(5, initialResult.TotalItemCount);
+        Assert.Equal(5, initialResult.Items.Count());
+        Assert.Equal(6, refreshedResult.TotalItemCount);
+        Assert.Equal(6, refreshedResult.Items.Count());
+    }
+
+    [Fact]
+    public void LogViewer_VirtualizeUsesIdentityComparerAndEndAnchor()
+    {
+        SetupLogViewerServices();
+
+        var timestamp = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var entry = LogEntry.Create(timestamp, logMessage: "Repeated message", isErrorMessage: false);
+        var repeatedEntry = LogEntry.Create(timestamp, logMessage: "Repeated message", isErrorMessage: false);
+        var logEntries = new LogEntries(maximumEntryCount: int.MaxValue) { BaseLineNumber = 1 };
+        logEntries.InsertSorted(entry);
+        logEntries.InsertSorted(repeatedEntry);
+        var rematerializedEntry = LogEntry.Create(timestamp, logMessage: "Repeated message", isErrorMessage: false);
+        rematerializedEntry.LineNumber = entry.LineNumber;
+
+        var cut = RenderComponent<LogViewer>(builder => builder.Add(p => p.LogEntries, logEntries));
+        var virtualize = cut.FindComponent<Virtualize<LogEntry>>().Instance;
+        var comparer = virtualize.ItemComparer;
+
+        Assert.NotNull(comparer);
+        Assert.Equal(VirtualizeAnchorMode.End, virtualize.AnchorMode);
+        Assert.True(comparer.Equals(entry, logEntries.GetEntries()[0]));
+        Assert.NotSame(entry, rematerializedEntry);
+        Assert.True(comparer.Equals(entry, rematerializedEntry));
+        Assert.Equal(comparer.GetHashCode(entry), comparer.GetHashCode(rematerializedEntry));
+        Assert.False(comparer.Equals(entry, repeatedEntry));
+        cut.WaitForAssertion(() => Assert.Equal(
+            ["Repeated message", "Repeated message"],
+            cut.FindAll(".log-content").Select(element => element.TextContent.Trim())));
+    }
+
     [Fact]
     public void ResourcePrefixStyle_UsesGeneratedAccentAndThemeAwareTextColor()
     {
@@ -473,8 +527,6 @@ public class LogViewerTests : DashboardTestContext
         FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: new TestTimeProvider());
         Services.AddLogging();
 
-        JSInterop.SetupVoid("initializeContinuousScroll").SetVoidResult();
-        JSInterop.SetupVoid("resetContinuousScrollPosition").SetVoidResult();
         JSInterop.SetupVoid("focusElement", _ => true);
     }
 }
