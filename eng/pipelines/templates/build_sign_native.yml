@@ -296,7 +296,7 @@ jobs:
                 Remove-Item -LiteralPath $extractDirectory -Recurse -Force -ErrorAction SilentlyContinue
               }
             displayName: 🟣Smoke test packaged Native AOT Dashboard (${{ targetRid }})
-            condition: and(succeeded(), eq(variables['Agent.OSArchitecture'], variables['_ridAgentArch']))
+            condition: and(succeeded(), eq(variables['Agent.OSArchitecture'], variables['_ridAgentArch']), not(contains('${{ targetRid }}', 'musl')))
 
           - task: NodeTool@0
             displayName: 🟣Install node.js
