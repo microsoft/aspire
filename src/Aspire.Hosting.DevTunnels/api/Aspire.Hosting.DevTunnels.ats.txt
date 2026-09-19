@@ -8,6 +8,7 @@ Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource
 Aspire.Hosting.DevTunnels/addDevTunnel(name: string, tunnelId?: string, allowAnonymous?: boolean, description?: string, labels?: string[]) -> Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource
 Aspire.Hosting.DevTunnels/getEndpointByEndpointReference(targetEndpointReference: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
 Aspire.Hosting.DevTunnels/withAnonymousAccess() -> Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource
+Aspire.Hosting.DevTunnels/withExpiration(expirationHours: number) -> Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource
 Aspire.Hosting.DevTunnels/withReferenceEndpoint(targetEndpoint: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource
 Aspire.Hosting.DevTunnels/withReferenceEndpointAnonymous(targetEndpoint: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference, allowAnonymous: boolean) -> Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource
 Aspire.Hosting.DevTunnels/withReferenceResourceAnonymous(resourceBuilder: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints, allowAnonymous: boolean) -> Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource
