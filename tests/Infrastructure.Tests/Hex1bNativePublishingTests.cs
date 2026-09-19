@@ -229,6 +229,18 @@ public sealed class Hex1bNativePublishingTests : IDisposable
             windowsManagedFiles);
     }
 
+    [Fact]
+    public void NonWindowsDashboardSigningExcludesDebugSymbols()
+    {
+        var signingProps = XDocument.Load(Path.Combine(RepoRoot.Path, "eng", "Signing.props"));
+        var dashboardExecutable = Assert.Single(
+            signingProps.Descendants("ItemsToSign"),
+            item => (string?)item.Attribute("Include") == "$(ArtifactsBinDir)Aspire.Dashboard/**/publish/Aspire.Dashboard");
+
+        Assert.Equal("!$([System.OperatingSystem]::IsWindows())", (string?)dashboardExecutable.Attribute("Condition"));
+        Assert.Equal("$(ArtifactsBinDir)Aspire.Dashboard/**/*.dSYM/**", (string?)dashboardExecutable.Attribute("Exclude"));
+    }
+
     private string CreatePublishProject(string rid, bool singleFile, bool duplicateUnrelatedAsset)
     {
         var nativeItems = new XElement("ItemGroup");
