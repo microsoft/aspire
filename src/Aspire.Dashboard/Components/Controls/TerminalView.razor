@@ -51,14 +51,14 @@
                               Title="@(DecreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)])"
                               aria-label="@(DecreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)])"
                               OnClick="@(() => SetFontSizeAsync(_state.FontPx - 1))">
-                    <FluentIcon Icon="Icons.Regular.Size20.FontDecrease" Color="Color.Primary" />
+                    <FluentIcon Icon="Icons.Regular.Size20.FontDecrease" Width="16px" Color="Color.Primary" />
                 </FluentButton>
                 <span class="terminal-font-size">@(_state.FontPx > 0 ? $"{_state.FontPx}px" : null)</span>
                 <FluentButton Class="terminal-font-plus toolbar-button" Appearance="ButtonAppearance.Default" IconOnly="true" Disabled="@(!_state.CanIncreaseFontSize || ReadOnly)"
                               Title="@(IncreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)])"
                               aria-label="@(IncreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)])"
                               OnClick="@(() => SetFontSizeAsync(_state.FontPx + 1))">
-                    <FluentIcon Icon="Icons.Regular.Size20.FontIncrease" Color="Color.Primary" />
+                    <FluentIcon Icon="Icons.Regular.Size20.FontIncrease" Width="16px" Color="Color.Primary" />
                 </FluentButton>
                 @if (ShowDimensionsPicker)
                 {
@@ -66,7 +66,7 @@
                                   Title="@(FitLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)])"
                                   aria-label="@(FitLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)])"
                                   OnClick="FitToContainerAsync">
-                        <FluentIcon Icon="Icons.Regular.Size20.ArrowExpand" Color="Color.Primary" />
+                        <FluentIcon Icon="Icons.Regular.Size20.ArrowExpand" Width="16px" Color="Color.Primary" />
                     </FluentButton>
                     <FluentSelect TOption="TerminalSizePreset" TValue="string" Class="terminal-size-select aspire-input" Items="@DisplayedSizePresets"
                                   OptionValue="@(p => p.Value)"

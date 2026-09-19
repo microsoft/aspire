@@ -64,10 +64,25 @@
     margin-inline-start: auto;
 }
 
-.terminal-size-select {
-    width: auto;
+.terminal-controls ::deep .toolbar-button {
+    width: var(--aspire-control-height);
+    min-width: var(--aspire-control-height);
+    padding: 0;
+}
+
+.terminal-controls ::deep .toolbar-button svg {
+    height: 16px;
+}
+
+/* The select's field wrapper has an empty grid row that otherwise offsets its visible border. */
+.terminal-controls ::deep .toolbar-button,
+.terminal-controls ::deep .terminal-size-select {
     height: var(--aspire-control-height);
     min-height: var(--aspire-control-height);
+}
+
+.terminal-controls ::deep .terminal-size-select {
+    width: auto;
 }
 
 .terminal-font-size {
