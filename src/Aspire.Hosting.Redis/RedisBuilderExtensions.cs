@@ -6,11 +6,13 @@ using System.Text;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Redis;
+using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
+#pragma warning disable ASPIRETERMINAL001
 
 namespace Aspire.Hosting;
 
@@ -209,6 +211,57 @@ public static class RedisBuilderExtensions
         }
 
         return redisBuilder;
+    }
+
+    /// <summary>
+    /// Adds a REPL command that opens an authenticated Redis shell in the dashboard terminal dock.
+    /// </summary>
+    /// <param name="builder">The Redis resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// This command is opt-in and available only in run mode. Dashboard users who can execute resource commands
+    /// can run commands with the resource's configured credentials. Enable it only for trusted dashboard users,
+    /// especially when sharing the dashboard through a tunnel or remote development environment.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddRedis("redis").WithRepl();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<RedisResource> WithRepl(this IResourceBuilder<RedisResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
+    }
+
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(RedisResource resource, CancellationToken cancellationToken)
+    {
+        // TLS-enabled Redis also exposes a non-TLS port. The REPL runs inside the container,
+        // so use that port over loopback rather than bypassing TLS certificate validation.
+        var endpoint = resource.GetEndpoint(resource.TlsEnabled ? RedisResource.SecondaryEndpointName : RedisResource.PrimaryEndpointName);
+        var port = endpoint.TargetPort ?? throw new DistributedApplicationException("The Redis REPL port is not available.");
+        var options = new TerminalLaunchOptions
+        {
+            Title = $"redis-cli ({resource.Name})",
+            Executable = "redis-cli",
+            Arguments = ["-h", "127.0.0.1", "-p", port.ToString(CultureInfo.InvariantCulture)]
+        };
+
+        if (resource.PasswordParameter is { } passwordParameter)
+        {
+            var password = await passwordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrEmpty(password))
+            {
+                throw new DistributedApplicationException("The Redis REPL password is not available.");
+            }
+
+            options.EnvironmentVariables["REDISCLI_AUTH"] = password;
+        }
+
+        return options;
     }
 
     /// <summary>
