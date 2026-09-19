@@ -96,6 +96,8 @@
 
 .terminal-dock-filler {
     flex: 1 1 auto;
+    min-width: 0;
+    padding-inline: 8px;
 }
 
 .terminal-dock-body {

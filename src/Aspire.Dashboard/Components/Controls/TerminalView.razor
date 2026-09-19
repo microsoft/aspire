@@ -16,7 +16,7 @@
         @if (!Chromeless)
         {
             <div class="terminal-titlebar">
-                <span class="terminal-title">@(ResourceName ?? Loc[nameof(Resources.TerminalStrings.TerminalTitle)].Value)</span>
+                <TerminalTitle State="@_state" FallbackTitle="@(ResourceName ?? Loc[nameof(Resources.TerminalStrings.TerminalTitle)].Value)" />
                 @if (ShowOpenInWindow && !string.IsNullOrEmpty(ResourceName))
                 {
                     <TerminalWindowButton Class="terminal-open-window"

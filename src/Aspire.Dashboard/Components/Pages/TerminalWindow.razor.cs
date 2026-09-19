@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Controls;
 using Aspire.DashboardService.Proto.V1;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
@@ -26,6 +27,7 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
 {
     private string? _endpoint;
     private string _title = string.Empty;
+    private TerminalToolbarState _terminalState = new();
     private bool _ended;
     private bool _disposed;
     private (string? TerminalId, string? ResourceName, int ReplicaIndex, string? WindowOwner, string? WindowGeneration)? _routeIdentity;
@@ -97,6 +99,7 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
         }
 
         _routeIdentity = routeIdentity;
+        _terminalState = new();
         var generation = ++_watchGeneration;
         _ended = false;
         _windowTrackingFailed = false;
@@ -124,6 +127,8 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
         var cancellationToken = _watchCts.Token;
         _watchTask = Task.Run(() => WatchTerminalsAsync(terminalId, generation, cancellationToken), cancellationToken);
     }
+
+    private void OnTerminalToolbarStateChanged(TerminalToolbarState state) => _terminalState = state;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

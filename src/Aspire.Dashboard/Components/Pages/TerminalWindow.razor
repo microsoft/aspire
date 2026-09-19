@@ -6,7 +6,7 @@
 @using Aspire.Dashboard.Components.Controls
 @using Aspire.Dashboard.Components.Layout
 
-<PageTitle>@_title</PageTitle>
+<PageTitle>@(string.IsNullOrEmpty(_terminalState.Title) ? _title : _terminalState.Title)</PageTitle>
 
 @* Without dashboard navigation or a page toolbar, the terminal fills the window and fits its available space. *@
 <div class="terminal-window">
@@ -20,11 +20,17 @@
     }
     else if (_windowReady)
     {
-        <TerminalView ResourceName="@ResourceName"
-                      ReplicaIndex="@ReplicaIndex"
-                      EndpointPathAndQuery="@_endpoint"
-                      InitialFontSize="@FontSize"
-                      AutoFit="true"
-                      Chromeless="true" />
+        <div class="terminal-window-titlebar" data-theme="dark">
+            <TerminalTitle State="@_terminalState" FallbackTitle="@_title" />
+        </div>
+        <div class="terminal-window-body">
+            <TerminalView ResourceName="@ResourceName"
+                          ReplicaIndex="@ReplicaIndex"
+                          EndpointPathAndQuery="@_endpoint"
+                          InitialFontSize="@FontSize"
+                          AutoFit="true"
+                          Chromeless="true"
+                          OnToolbarStateChanged="@OnTerminalToolbarStateChanged" />
+        </div>
     }
 </div>

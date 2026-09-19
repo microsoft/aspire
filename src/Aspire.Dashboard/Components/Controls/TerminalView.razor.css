@@ -13,6 +13,7 @@
 }
 
 .terminal-frame {
+    --terminal-background: #0d1117;
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -20,7 +21,7 @@
     min-width: 0;
     min-height: 0;
     box-sizing: border-box;
-    background: #0d1117;
+    background: var(--terminal-background);
     border: 2px solid #3a4250;
     border-radius: 6px;
     overflow: hidden;
@@ -88,6 +89,7 @@
 }
 
 .terminal-titlebar {
+    --terminal-titlebar-border-color: #30363d;
     display: flex;
     align-items: center;
     flex: 0 0 30px;
@@ -96,17 +98,9 @@
     padding-inline-end: 8px;
     box-sizing: border-box;
     background: linear-gradient(180deg, #1a2029 0%, #161b22 100%);
-    border-bottom: 1px solid #30363d;
+    border-bottom: 1px solid var(--terminal-titlebar-border-color);
     color: #8b949e;
     font: 12px ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-}
-
-.terminal-title {
-    flex: 1;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .terminal-titlebar ::deep .terminal-open-window {

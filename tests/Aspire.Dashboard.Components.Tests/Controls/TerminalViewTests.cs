@@ -101,6 +101,29 @@ public class TerminalViewTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Titlebar_UsesWorkloadMetadataAndHidesDisconnectedProgress()
+    {
+        var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
+        module.Setup<int>("initTerminal", _ => true).SetResult(1);
+        var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
+        var state = new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 2, Connected = true,
+            Title = "building", WorkingDirectory = "/work/app",
+            WorkingDirectoryUri = "file:///work/app", ProgressState = "normal", ProgressPercentage = 42
+        };
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(state));
+        Assert.Equal("building", cut.Find(".terminal-titlebar .terminal-title").TextContent);
+        Assert.Equal("/work/app", cut.Find(".terminal-titlebar .terminal-directory").GetAttribute("data-text"));
+        Assert.Equal("42", cut.Find(".terminal-titlebar [role=progressbar]").GetAttribute("aria-valuenow"));
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(state with { Generation = 1, Title = "stale" }));
+        Assert.Equal("building", cut.Find(".terminal-title").TextContent);
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(state with { Connected = false }));
+        Assert.Empty(cut.FindAll("[role=progressbar]"));
+        Assert.Equal("building", cut.Find(".terminal-title").TextContent);
+    }
+
+    [Fact]
     public async Task InitialFontSize_SeedsMountWithoutResettingCurrentFont()
     {
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");

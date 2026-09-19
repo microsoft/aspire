@@ -3,16 +3,18 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const dashboard = new URL("../../../src/Aspire.Dashboard/", import.meta.url);
 const assets = new URL("wwwroot/js/hex1b-web-terminal/", dashboard);
-const { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE } = await import(new URL("dist/index.js", assets));
+const { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE } = await import(new URL("dist/index.min.js", assets));
 const source = await readFile(new URL("Components/Controls/TerminalView.razor.js", dashboard), "utf8");
 // Remap the public browser asset import to its checked-in location for Node,
 // without changing the adapter implementation under test.
 const terminal = await import(`data:text/javascript;base64,${Buffer.from(source.replace(
-    '"../../js/hex1b-web-terminal/dist/index.js"', JSON.stringify(new URL("dist/index.js", assets).href)
+    '"../../js/hex1b-web-terminal/dist/index.min.js"', JSON.stringify(new URL("dist/index.min.js", assets).href)
 )).toString("base64")}`);
 
 let attempts;
@@ -24,6 +26,8 @@ let snapshots;
 let serial;
 const globals = new Map();
 let originalMount;
+let themeObservers;
+let mediaQueries;
 
 function setGlobal(name, value) {
     globals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
@@ -40,10 +44,41 @@ beforeEach(() => {
     ids = [];
     snapshots = [];
     serial = 0;
-    setGlobal("window", { isSecureContext: true });
+    themeObservers = [];
+    mediaQueries = new Map();
+    setGlobal("window", { isSecureContext: true, matchMedia(query) {
+        if (!mediaQueries.has(query)) {
+            mediaQueries.set(query, Object.assign(new EventTarget(), { matches: false }));
+        }
+        return mediaQueries.get(query);
+    } });
     setGlobal("navigator", { gpu: {} });
-    setGlobal("document", { activeElement: null, body: {}, hasFocus: () => true, visibilityState: "visible" });
-    setGlobal("getComputedStyle", element => ({ visibility: element.visibility ?? "visible" }));
+    setGlobal("document", {
+        activeElement: null,
+        body: { append() {} },
+        documentElement: {},
+        createElement: tag => tag === "canvas"
+            ? { getContext: () => ({ fillStyle: "" }) }
+            : { style: {}, remove() {} },
+        hasFocus: () => true,
+        visibilityState: "visible",
+    });
+    setGlobal("getComputedStyle", element => ({
+        visibility: element.visibility ?? "visible", color: "rgb(100, 100, 100)",
+        getPropertyValue: name => ({
+            "--terminal-background": "#0d1117",
+            "--colorNeutralForeground1": "#ffffff",
+        })[name] ?? "none",
+    }));
+    setGlobal("MutationObserver", class {
+        constructor(callback) {
+            this.callback = callback;
+            this.disconnected = false;
+            themeObservers.push(this);
+        }
+        observe(element, options) { this.element = element; this.options = options; }
+        disconnect() { this.disconnected = true; }
+    });
     setGlobal("requestAnimationFrame", callback => {
         frames.set(++serial, callback);
         return serial;
@@ -66,14 +101,28 @@ beforeEach(() => {
     originalMount = WebTerminal.mount;
     WebTerminal.mount = (element, options) => {
         const ready = Promise.withResolvers();
+        const status = {
+            textContent: "", dataset: { level: "info" }, attributes: new Set(),
+            toggleAttribute(name, enabled) {
+                if (enabled) this.attributes.add(name);
+                else this.attributes.delete(name);
+            },
+        };
+        const shadow = {
+            styles: [],
+            querySelector: selector => selector === ".inspection-message" ? status : {},
+            append(style) { this.styles.push(style.textContent); },
+        };
         const client = {
-            element: { parentElement: element, contains: value => value === client.element },
+            element: { parentElement: element, shadowRoot: shadow, dataset: {}, contains: value => value === client.element },
             connected: true,
             peer: { id: "browser-1", primaryId: "cli-1", isPrimary: false },
             geometry: { columns: 100, rows: 30 },
             sizing: { ...options.sizing },
             readOnly: options.readOnly,
             readOnlyCalls: [],
+            scrollbar: options.scrollbar,
+            scrollbarCalls: [],
             sizingCalls: [],
             primaryRequests: 0,
             focusCalls: 0,
@@ -92,6 +141,10 @@ beforeEach(() => {
             setReadOnly(readOnly) {
                 this.readOnly = readOnly;
                 this.readOnlyCalls.push(readOnly);
+            },
+            setScrollbar(scrollbar) {
+                this.scrollbar = scrollbar;
+                this.scrollbarCalls.push(scrollbar);
             },
             focus() { this.focusCalls++; document.activeElement = this.element; },
             clearSelection() {
@@ -179,12 +232,12 @@ function selectionEvent(attempt, overrides = {}) {
 }
 
 function mount({ visible = true, dotNetRef, options = {} } = {}) {
-    const element = {
+    const element = Object.assign(new EventTarget(), {
         clientWidth: visible ? 800 : 0,
         clientHeight: visible ? 600 : 0,
         contains: value => value === element || value?.parentElement === element,
         closest: () => null,
-    };
+    });
     const controls = [];
     const template = { firstElementChild: { cloneNode() {
         const control = selectionControl();
@@ -231,6 +284,42 @@ function retry() {
     return delay;
 }
 
+test("pointer focus styling ends on keyboard input without changing terminal focus", async () => {
+    const { element } = mount();
+    const { client } = attempts[0];
+    attempts[0].resolve();
+    await settle();
+    const focusCalls = client.focusCalls;
+    const pointer = new Event("pointerdown", { cancelable: true });
+    element.dispatchEvent(pointer);
+    assert.equal(client.element.dataset.aspirePointerInput, "true");
+    assert.equal(pointer.defaultPrevented, false);
+
+    const keyboard = new Event("keydown", { cancelable: true });
+    element.dispatchEvent(keyboard);
+    assert.equal(client.element.dataset.aspirePointerInput, undefined);
+    assert.equal(keyboard.defaultPrevented, false);
+    assert.equal(client.focusCalls, focusCalls);
+});
+
+test("pointer focus listeners follow replacement clients and are removed on disposal", async () => {
+    const { id, element } = mount();
+    attempts[0].resolve();
+    await settle();
+    const original = attempts[0].client;
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=other&replica=1");
+    attempts[1].resolve();
+    await settle();
+    const replacement = attempts[1].client;
+    element.dispatchEvent(new Event("pointerdown"));
+    assert.equal(original.element.dataset.aspirePointerInput, undefined);
+    assert.equal(replacement.element.dataset.aspirePointerInput, "true");
+
+    terminal.disposeTerminal(id);
+    element.dispatchEvent(new Event("keydown"));
+    assert.equal(replacement.element.dataset.aspirePointerInput, "true");
+});
+
 for (const [name, rects, position] of [
     ["single line", [{ left: 20, top: 10, width: 60, height: 20 }], { left: "86px", top: "36px" }],
     ["last line rather than bounding box", [
@@ -273,6 +362,53 @@ for (const [name, ranges, text, visible] of [
         assert.equal(attempts[0].client.selectionClears, 0);
     });
 }
+
+test("theme and contrast changes replace the complete overlay configuration without reconnecting", async () => {
+    const { id } = mount();
+    const attempt = attempts[0];
+    const initial = attempt.options.scrollbar;
+    assert.equal(initial.placement, "overlay");
+    assert.equal(initial.markers, true);
+    assert.equal(typeof initial.render, "function");
+    assert.equal(themeObservers[0].element, document.documentElement);
+    assert.deepEqual(themeObservers[0].options, { attributes: true, attributeFilter: ["data-theme"] });
+
+    // Include a theme change before the asynchronous mount has returned its handle.
+    themeObservers[0].callback();
+    attempt.resolve();
+    await settle();
+    assert.notEqual(attempt.client.scrollbar.render, initial.render);
+    for (const query of ["(forced-colors: active)", "(prefers-contrast: more)"]) {
+        const previous = attempt.client.scrollbar;
+        const media = mediaQueries.get(query);
+        media.matches = true;
+        media.dispatchEvent(new Event("change"));
+        assert.notEqual(attempt.client.scrollbar.render, previous.render);
+        assert.equal(attempt.client.scrollbar.placement, "overlay");
+        assert.equal(attempt.client.scrollbar.markers, true);
+    }
+    assert.equal(attempts.length, 1);
+    assert.deepEqual(attempt.client.sizingCalls, []);
+    assert.equal(attempt.client.selectionClears, 0);
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=app&replica=1");
+    assert.equal(attempts[1].options.scrollbar, attempt.client.scrollbar);
+});
+
+test("theme observers and accessibility listeners are released on disposal", async () => {
+    const { id } = mount();
+    const attempt = attempts[0];
+    attempt.resolve();
+    await settle();
+    terminal.disposeTerminal(id);
+    const calls = attempt.client.scrollbarCalls.length;
+    assert.equal(themeObservers[0].disconnected, true);
+    themeObservers[0].callback();
+    for (const media of mediaQueries.values()) {
+        media.dispatchEvent(new Event("change"));
+    }
+    assert.equal(attempt.client.scrollbarCalls.length, calls);
+    assert.equal(attempt.client.disposed, true);
+});
 
 test("selection copy control follows the single-cell threshold in both directions", () => {
     const { controls } = mount();
@@ -486,12 +622,103 @@ test("reconnect removes selection controls, listeners and stale clipboard callba
     assert.equal(controls[1].actions.removed, true);
 });
 
+test("metadata before mount completion is coalesced and updates read-only views", async () => {
+    const { id } = mount({ options: { readOnly: true } });
+    const { options } = attempts[0];
+    options.onTitleChange("build <app>");
+    options.onWorkingDirectoryChange({ uri: "file://host/work/my%20app", host: "host", path: "/work/my app" });
+    options.onProgressChange({ state: "normal", percentage: 42 });
+    attempts[0].resolve();
+    await settle();
+    assert.equal(snapshots.length, 1);
+    assert.equal(snapshots[0].title, "build <app>");
+    assert.equal(snapshots[0].workingDirectory, "/work/my app");
+    assert.equal(snapshots[0].workingDirectoryUri, "file://host/work/my%20app");
+    assert.equal(snapshots[0].progressState, "normal");
+    assert.equal(snapshots[0].progressPercentage, 42);
+    for (const progress of [
+        { state: "indeterminate", percentage: null },
+        { state: "error", percentage: 30 },
+        { state: "warning", percentage: 50 },
+        { state: "none", percentage: null },
+    ]) {
+        options.onProgressChange(progress);
+        await settle();
+        assert.equal(snapshots.at(-1).progressState, progress.state);
+        assert.equal(snapshots.at(-1).progressPercentage, progress.percentage);
+    }
+    options.onTitleChange("");
+    options.onWorkingDirectoryChange({ uri: null, host: null, path: null });
+    await settle();
+    assert.equal(terminal.getToolbarState(id).title, "");
+    assert.equal(terminal.getToolbarState(id).workingDirectory, null);
+    assert.equal(attempts[0].client.primaryRequests, 0);
+});
+
+test("metadata survives transport loss but not endpoint replacement or stale callbacks", async () => {
+    const { id } = mount();
+    const old = attempts[0];
+    old.options.onTitleChange("old title");
+    old.options.onWorkingDirectoryChange({ uri: "file:///old", host: "", path: "/old" });
+    old.options.onProgressChange({ state: "normal", percentage: 20 });
+    old.resolve();
+    await settle();
+    old.close(1006);
+    await settle();
+    assert.equal(terminal.getToolbarState(id).title, "old title");
+    assert.equal(terminal.getToolbarState(id).connected, false);
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=new");
+    const expected = terminal.getToolbarState(id);
+    assert.equal(expected.title, "");
+    assert.equal(expected.workingDirectory, null);
+    assert.equal(expected.progressState, "none");
+    old.options.onTitleChange("stale title");
+    old.options.onWorkingDirectoryChange({ uri: "file:///stale", host: "", path: "/stale" });
+    old.options.onProgressChange({ state: "error", percentage: 99 });
+    assert.deepEqual(terminal.getToolbarState(id), expected);
+    terminal.disposeTerminal(id);
+    attempts[1].options.onTitleChange("disposed");
+    assert.equal(terminal.getToolbarState(id), null);
+});
+
+test("history chrome suppression preserves errors and selection feedback and disconnects on release", async () => {
+    const { id } = mount();
+    attempts[0].resolve();
+    await settle();
+    const shadow = attempts[0].client.element.shadowRoot;
+    const status = shadow.querySelector(".inspection-message");
+    const observer = themeObservers.find(observer => observer.element === status);
+    assert.ok(observer);
+    assert.match(shadow.styles[0], /\.return-live \{ display: none !important; \}/);
+    for (const [text, level, hidden] of [
+        ["42 rows above live", "info", true],
+        ["0 rows above live", "info", true],
+        ["Selection copied", "info", false],
+        ["Navigation rejected", "error", false],
+        ["42 rows above live", "error", false],
+        ["", "info", false],
+    ]) {
+        status.textContent = text;
+        status.dataset.level = level;
+        observer.callback();
+        assert.equal(status.attributes.has("data-aspire-history-position"), hidden);
+    }
+    terminal.reconnectTerminal(id, attempts[0].options.url);
+    assert.equal(observer.disconnected, true);
+    attempts[1].resolve();
+    await settle();
+    const replacement = themeObservers.at(-1);
+    terminal.disposeTerminal(id);
+    assert.equal(replacement.disconnected, true);
+});
+
 test("init returns an id while mount waits for its first connected frame", async () => {
     const { id } = mount();
     assert.equal(terminal.getToolbarState(id).connected, false);
     assert.equal(attempts[0].options.label, "Localized terminal input");
     assert.equal(attempts[0].options.url, "wss://dashboard/api/terminal?resource=app&replica=1");
     assert.equal(attempts[0].options.renderer, "auto");
+    assert.equal(attempts[0].options.padding, 3);
     attempts[0].options.onStatus("Socket open", "ready");
     attempts[0].role(false);
     await settle();
@@ -500,6 +727,8 @@ test("init returns an id while mount waits for its first connected frame", async
     await settle();
     assert.deepEqual(snapshots.at(-1), {
         terminalId: id, generation: 1, status: "viewer", connected: true,
+        title: "", workingDirectory: null, workingDirectoryUri: null,
+        progressState: "none", progressPercentage: null,
         isPrimary: false, canTakeControl: true, sizeMode: "font", sizeKey: "100x30",
         fontPx: 13, fontControlsEnabled: true, sizeSelectEnabled: true,
         fitEnabled: true,
@@ -1458,18 +1687,18 @@ test("disposing a view ignores later native close callbacks", async () => {
     assert.equal(attempts.length, 1);
 });
 
-test("frontend manifest, lockfile, vendored package and backend use the exact paired version", async () => {
+test("frontend manifest, lockfile, minified bundle and backend use the exact paired version", async () => {
     const manifest = JSON.parse(await readFile(new URL("package.json", dashboard), "utf8"));
     const lockfile = JSON.parse(await readFile(new URL("package-lock.json", dashboard), "utf8"));
-    const vendored = JSON.parse(await readFile(new URL("package.json", assets), "utf8"));
+    const bundle = await readFile(new URL("dist/index.min.js", assets), "utf8");
     const version = manifest.dependencies["@hex1b/web-terminal"];
-    assert.equal(version, "0.168.0");
-    assert.equal(vendored.version, version);
+    assert.equal(version, "0.169.0-alpha.1608.1.d6a20d4");
+    assert.ok(bundle.startsWith(`// @hex1b/web-terminal ${version}; minified with Terser. See ../LICENSE.\n`));
     assert.equal(lockfile.packages[""].dependencies["@hex1b/web-terminal"], version);
     assert.equal(lockfile.packages["node_modules/@hex1b/web-terminal"].version, version);
 
     // Central package rows have the form:
-    //   <PackageVersion Include="Hex1b" Version="0.168.0" />
+    //   <PackageVersion Include="Hex1b" Version="0.169.0-alpha.1608.1.d6a20d4" />
     // Match the exact Include value, not Hex1b.Tool or Hex1b.McpServer;
     // whitespace, attribute order and either XML quote style are allowed.
     const packages = await readFile(new URL("../../Directory.Packages.props", dashboard), "utf8");
@@ -1482,39 +1711,45 @@ test("frontend manifest, lockfile, vendored package and backend use the exact pa
     assert.equal(backendVersion[1], version);
 });
 
-test("checked-in deployment includes the worker and licensed font without npm installation", async () => {
-    for (const name of [
-        "dist/index.js",
-        "dist/terminal-worker.js",
-        "dist/webgpu-backend.js",
-        "dist/webgl2-backend.js",
-        "dist/hyperlinks.js",
+test("checked-in deployment contains only the minified bundle, font and required licenses without npm installation", async () => {
+    const entries = await readdir(assets, { recursive: true, withFileTypes: true });
+    const files = entries.filter(entry => entry.isFile())
+        .map(entry => relative(fileURLToPath(assets), join(entry.parentPath, entry.name)).split(sep).join("/"))
+        .sort();
+    assert.deepEqual(files, [
+        "LICENSE",
         "dist/fonts/cascadia-mono-nf/CascadiaMonoNF.woff2",
         "dist/fonts/cascadia-mono-nf/LICENSE.txt",
-        "dist/fonts/cascadia-mono-nf/README.md",
-        "LICENSE",
-        "README.md",
-    ]) {
+        "dist/index.min.js",
+    ]);
+    for (const name of files) {
         assert.ok((await readFile(new URL(name, assets))).length > 0, `Missing or empty vendored asset: ${name}`);
     }
 });
 
-test("entry, module worker and bundled font URLs preserve PathBase and same origin", async () => {
+test("entry, both bundled module workers and font URLs preserve PathBase and same origin", async () => {
     // Inspect the emitted forms:
-    //   import { WebTerminal, ... } from "../../js/.../dist/index.js";
-    //   new Worker(new URL("./terminal-worker.js", import.meta.url), ...);
-    //   new URL("./fonts/.../CascadiaMonoNF.woff2", import.meta.url).href;
+    //   import { WebTerminal, ... } from "../../js/.../dist/index.min.js";
+    //   new URL(import.meta.url); t.hash=`hex1b-${e}-worker`;
+    //   new URL("./fonts/.../CascadiaMonoNF.woff2",import.meta.url).href;
+    // Minification renames local functions and parameters, not these URL shapes.
     // Keeping these module-relative URLs avoids both PathBase escapes and
     // blob/cross-origin worker URLs that require relaxing the dashboard CSP.
     const entryReference = source.match(/from "([^"]+)"/)[1];
     const entryUrl = new URL(entryReference, "https://dashboard.example/nested/aspire/Components/Controls/TerminalView.razor.js");
-    assert.equal(entryUrl.href, "https://dashboard.example/nested/aspire/js/hex1b-web-terminal/dist/index.js");
-    const clientSource = await readFile(new URL("dist/web-terminal.js", assets), "utf8");
-    const workerReference = clientSource.match(/new Worker\(new URL\("([^"]+)", import\.meta\.url\)/)[1];
-    assert.equal(new URL(workerReference, entryUrl).href,
-        "https://dashboard.example/nested/aspire/js/hex1b-web-terminal/dist/terminal-worker.js");
-    const fontSource = await readFile(new URL("dist/terminal-font.js", assets), "utf8");
-    const fontReference = fontSource.match(/new URL\("([^"]+)", import\.meta\.url\)/)[1];
+    assert.equal(entryUrl.href, "https://dashboard.example/nested/aspire/js/hex1b-web-terminal/dist/index.min.js");
+    const clientSource = await readFile(new URL("dist/index.min.js", assets), "utf8");
+    assert.match(clientSource, /new URL\(import\.meta\.url\)/);
+    assert.match(clientSource, /\.hash=`hex1b-\$\{[\w$]+\}-worker`/);
+    assert.match(clientSource, /globalThis instanceof DedicatedWorkerGlobalScope/);
+    for (const kind of ["terminal", "link-detection"]) {
+        assert.match(clientSource, new RegExp(`case\\s*"#hex1b-${kind}-worker":`));
+        const workerUrl = new URL(`${entryUrl.href}?v=alpha`);
+        workerUrl.hash = `hex1b-${kind}-worker`;
+        assert.equal(workerUrl.href,
+            `https://dashboard.example/nested/aspire/js/hex1b-web-terminal/dist/index.min.js?v=alpha#hex1b-${kind}-worker`);
+    }
+    const fontReference = clientSource.match(/new URL\("([^"]+\.woff2)",import\.meta\.url\)/)[1];
     assert.equal(new URL(fontReference, entryUrl).href,
         "https://dashboard.example/nested/aspire/js/hex1b-web-terminal/dist/fonts/cascadia-mono-nf/CascadiaMonoNF.woff2");
 });

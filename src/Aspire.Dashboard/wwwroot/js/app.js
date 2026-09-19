@@ -261,9 +261,11 @@ window.copyTextToClipboard = function (id, text, precopy, postcopy) {
                 checkmarkIcon.style.display = '';
             }
         })
-        .catch(() => {
+        .catch(error => {
             if (tooltipDiv) {
                 tooltipDiv.innerText = 'Could not access clipboard';
+            } else {
+                console.warn("Dashboard clipboard copy failed.", error);
             }
         });
 

@@ -1,0 +1,35 @@
+@namespace Aspire.Dashboard.Components.Controls
+
+<div class="terminal-metadata" data-directory="@State?.WorkingDirectory" @ref="_metadataElement">
+    @if (State is { Connected: true, ProgressState: "normal" or "indeterminate" or "error" or "warning" })
+    {
+        <div class="terminal-progress" data-state="@State.ProgressState" title="@ProgressLabel">
+            <AspireProgressRing Width="16px" Value="@ProgressValue" AriaLabel="@ProgressLabel" />
+            @if (ProgressValue is { } percentage)
+            {
+                <span class="terminal-progress-percentage">@((percentage / 100).ToString("P0"))</span>
+            }
+        </div>
+    }
+    <span class="terminal-title" title="@DisplayTitle">@DisplayTitle</span>
+    @if (!string.IsNullOrEmpty(State?.WorkingDirectory))
+    {
+        <div class="terminal-directory-container">
+            <FluentButton Id="@_directoryButtonId"
+                          Class="terminal-directory aspire-button"
+                          Appearance="ButtonAppearance.Transparent"
+                          AdditionalAttributes="@DirectoryCopyAttributes">
+                <span class="terminal-directory-content">
+                    <span class="terminal-directory-text">
+                        <span class="terminal-directory-measure" aria-hidden="true">@State.WorkingDirectory</span>
+                        <span class="terminal-directory-display" aria-hidden="true"></span>
+                    </span>
+                    <span class="terminal-directory-copy-icons" aria-hidden="true">
+                        <FluentIcon Class="copy-icon" Icon="Icons.Regular.Size16.Copy" Color="Color.Default" />
+                        <FluentIcon Class="checkmark-icon" Icon="Icons.Regular.Size16.Checkmark" Color="Color.Default" Style="display:none" />
+                    </span>
+                </span>
+            </FluentButton>
+        </div>
+    }
+</div>

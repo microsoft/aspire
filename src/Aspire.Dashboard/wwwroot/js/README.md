@@ -18,8 +18,10 @@ If we ever want to show more chart types than those, we'll need to change the bu
 
 ## Hex1b web terminal
 
-`hex1b-web-terminal/` vendors `@hex1b/web-terminal` **0.168.0**,
-paired with the Hex1b NuGet package **0.168.0**. The client and server use the evolving
+`hex1b-web-terminal/` vendors `@hex1b/web-terminal` **0.169.0-alpha.1608.1.d6a20d4**,
+paired with the Hex1b, Hex1b.McpServer, and Hex1b.Tool NuGet packages at the same version,
+published by [run 35429880293](https://github.com/mitchdenny/hex1b/actions/runs/35429880293)
+from commit `d6a20d4f0674cbeb5b9d153a93ddabad0717bdf6`. The client and server use the evolving
 HWT1 presentation transport and must be updated together. Do not substitute a
 different client based only on a similar version number.
 
@@ -31,9 +33,12 @@ npm run update-terminal-assets
 npm test
 ```
 
-`update-terminal-assets` copies the package and then verifies that every emitted
-file matches the installed package byte-for-byte, including metadata/licenses,
-and that no stale files remain in `dist/`. To rerun that acquisition-only check
+`update-terminal-assets` first requires the installed distribution to contain
+exactly one JavaScript file, `dist/index.js`, before replacing checked-in assets.
+It minifies the bundle and copies the runtime assets, then verifies that every emitted
+font/license file matches the installed package byte-for-byte, that the minified
+bundle matches reproducible Terser output, and that no stale files remain.
+To rerun that acquisition-only check
 without copying, use `npm run verify-terminal-assets` after `npm ci`. This check
 intentionally requires `node_modules`; ordinary regression tests do not.
 
@@ -41,13 +46,24 @@ Review and commit the manifest, lockfile, and generated asset changes together.
 This is a manual acquisition step: ordinary .NET builds use the checked-in files
 and do not run npm or download frontend packages.
 
-The update script copies the **complete `dist/` tree**, preserving relative ES
-module, module-worker, source-map, declaration, and font paths. It also retains
-the package metadata, README, and MIT license. The bundled Cascadia Mono NF font
-has its own SIL Open Font License and provenance under
-`dist/fonts/cascadia-mono-nf/`. Do not flatten, selectively bundle, or edit these
-vendored files. `TerminalView.razor.js` imports only the public `dist/index.js`
-entry point, not the package's internal protocol/renderer modules.
+The published package contains one unminified runtime bundle. The acquisition
+script minifies it with the pinned Terser dependency in module mode, producing
+`dist/index.min.js` with the public API and both workers. It does not rebuild
+upstream source or split the workers. Only **four files** are vendored: this
+minified bundle, the package's MIT license, the unmodified Cascadia Mono NF
+WOFF2 font and its SIL Open Font License (including copyright notice).
+Declarations, maps, package metadata and package/font READMEs are not deployed.
+Version provenance remains in the bundle header and the Dashboard's manifest
+and lockfile.
+
+The font comes from Microsoft's [Cascadia Code v2407.24 release](https://github.com/microsoft/cascadia-code/releases/tag/v2407.24),
+path `woff2/CascadiaMonoNF.woff2`. Its relative path under
+`dist/fonts/cascadia-mono-nf/` is preserved. Do not hand-edit generated assets.
+`TerminalView.razor.js` imports only the minified public entry point.
+
+The temporary `nuget-hex1b` source in the repository's `NuGet.config` maps only
+`Hex1b`, `Hex1b.McpServer`, and `Hex1b.Tool` to nuget.org while this alpha awaits
+mirroring. Other packages continue to use the existing feeds.
 
 The terminal uses `renderer: "auto"`: WebGPU is preferred, with the package's
 WebGL2 compatibility backend used when WebGPU's secure context, API, adapter,
@@ -70,12 +86,82 @@ and `/api/terminal` and `/api/apphost-terminal` WebSockets in the deployment CSP
 localized error if mounting fails.
 
 The component import and socket endpoint resolve beneath `NavigationManager.BaseUri`.
-The package import, worker entry, and bundled font resolve relative to their
-modules, so deployments under a PathBase retain the prefix throughout the
-asset tree. No blob worker, eval, CDN, or cross-origin font permission is
+Both module workers load that same `dist/index.min.js` URL using the fragments
+`#hex1b-terminal-worker` and `#hex1b-link-detection-worker`; the path and query
+string are preserved. The bundled font resolves relative to the module, so
+deployments under a PathBase retain the prefix throughout the asset tree.
+No blob worker, eval, CDN, or cross-origin font permission is
 needed. The dashboard's existing `script-src 'self'` also allows same-origin
 workers through the CSP worker-source fallback; its production
 `default-src 'self'` covers the font and same-origin connections.
+
+### Terminal metadata
+
+Workload-reported titles (OSC 0/2), working directories (OSC 7) and progress
+(OSC 9;4) flow through the public client callbacks to the Dashboard title bar.
+The resource view, active dock pane, detached window and interaction dialog
+share the same title/directory/progress presentation. Titles and directory URIs
+are treated as untrusted text, not HTML or navigable links. The decoded directory
+is displayed at the right of the title bar as a copy button. Clicking anywhere
+on the path copies the full value using the Dashboard's shared client-side
+clipboard handler; the copy icon appears on hover or keyboard focus without
+changing the layout.
+Long paths omit whole middle segments to retain leading and trailing context, while
+the clipboard retains the full decoded path. Cleared titles fall
+back to the surface's original name. Progress supports determinate,
+indeterminate, error and warning states, and is hidden when disconnected.
+It appears before the title, reserving a stable percentage width only for
+determinate states. Error and warning labels appear in the progress tooltip
+and accessible name rather than as inline text.
+These values require the application or shell to emit the corresponding OSC
+sequences; the Dashboard does not infer them from output.
+
+### Scrollbar and retained command marks
+
+The pinned client has no public option for suppressing its legacy "rows above
+live" status and "Return to live" button. The adapter installs a small
+shadow-DOM style/observer shim for those two elements only, leaving errors and
+selection feedback intact. The observer is disconnected on reconnect/disposal.
+Remove the shim when the upstream client offers a history-chrome option.
+The overlay scrollbar and keyboard navigation still provide history navigation.
+
+The terminal uses Hex1b's default Canvas2D **overlay** scrollbar, not a native
+HTML scrollbar or a reserved gutter. The mount requests 3 CSS pixels of internal
+padding on every side. `createDefaultScrollbarRenderer` keeps the
+upstream capsule thumb, marker drawing, gestures, hit testing and auto-hide.
+The painter adapter suppresses its additional canvas focus ring after pointer
+release. A scoped shadow-DOM override also hides the track's DOM focus outline
+after pointer input, restoring the upstream `:focus-visible` outline on keyboard
+input without changing actual focus. The modality listeners are removed on disposal.
+The track uses the terminal frame's background at 35% opacity. The thumb uses
+the light foreground token from the terminal's dark theme scope, rather than
+the Dashboard page's foreground, so it remains contrasting in either page theme.
+Markers use the Dashboard's brand foreground and error tokens at 65% opacity,
+restoring full opacity for increased contrast and forced colors. The track remains
+translucent and dark in the light Dashboard theme; terminal cell colors are not changed.
+
+Marker and tooltip colors are resolved outside the terminal's dark theme scope. Dashboard theme
+changes and the `forced-colors` and `prefers-contrast` media queries recreate the
+snapshotted painter and replace the complete overlay configuration. Forced
+colors use resolved system colors, and increased contrast makes the track
+opaque. Hex1b owns reduced-motion behavior. Theme observers and media listeners
+are removed when the view is disposed.
+
+Marker hover previews decorate `renderDefaultScrollbarTooltip` with Aspire's
+popup background, border, radius, shadow and UI typography. Their colors are
+resolved in the same outer Dashboard theme scope as the markers, with system
+colors in forced-color mode. Hex1b still owns safe text rendering, detail loading,
+positioning and tooltip lifetime.
+
+The existing HMP-to-HWT mirror has its own 10,000-row scrollback capacity.
+Hex1b now negotiates retained text and OSC 133 command-mark checkpoints by
+default, restoring producer-backed history and marks on late attachment and
+reconnect when both peers support them. The built-in scrollbar exposes mark
+navigation without a Dashboard mode chooser or custom tooltip UI. Marks follow
+retained content and disappear on eviction; unavailable marker rows are not row
+zero. Browser-owned bookmarks remain per-view and do not survive reconnect.
+
+### View lifecycle
 
 Each reconnect aborts the previous mount and creates a new client. Mounting is
 deferred while initially hidden; once connected, changing the Console/Terminal
@@ -158,7 +244,7 @@ run in CI through `Infrastructure.Tests` using the existing `NodeCommand`
 helper. They verify focused shadow-DOM input isolation from dashboard shortcuts,
 cancellation, reconnect generations, visibility, role-gated sizing, failure
 state, PathBase asset URLs, deployment asset presence, and exact version parity
-between `Directory.Packages.props`, the npm manifest/lockfile, and the vendored
-package. Complete installed-package byte comparison belongs to the separate
+between `Directory.Packages.props`, the npm manifest/lockfile, and the minified
+bundle header. Reproducible minification and installed font/license byte comparison belong to the separate
 acquisition verification command above. Neither suite substitutes for a browser
 WebGPU/WebGL2 rendering test or multi-peer server/CLI integration tests.

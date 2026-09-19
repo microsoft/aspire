@@ -1,0 +1,110 @@
+.terminal-metadata {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex: 1;
+    color: var(--colorNeutralForeground1);
+    font-size: var(--fontSizeBase200);
+}
+
+.terminal-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.terminal-title:empty {
+    display: none;
+}
+
+.terminal-directory-container {
+    margin-inline-start: auto;
+    max-width: min(32rem, 60%);
+    min-width: 0;
+}
+
+.terminal-directory-container ::deep .terminal-directory {
+    max-width: 100%;
+    min-width: 0;
+    font-family: var(--fontFamilyMonospace);
+    font-size: inherit;
+}
+
+.terminal-directory-container ::deep .terminal-directory::part(content) {
+    min-width: 0;
+}
+
+.terminal-directory-content {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    /* Let the shared clipboard handler receive the button as the click target. */
+    pointer-events: none;
+}
+
+.terminal-directory-text {
+    position: relative;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.terminal-directory-measure {
+    visibility: hidden;
+}
+
+.terminal-directory-display {
+    position: absolute;
+    inset: 0;
+}
+
+.terminal-directory-copy-icons {
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+    opacity: 0;
+}
+
+.terminal-directory-container:hover .terminal-directory-copy-icons,
+.terminal-directory-container:has(:focus-visible) .terminal-directory-copy-icons {
+    opacity: 1;
+}
+
+.terminal-progress[data-state] {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding-inline-end: 12px;
+    border-inline-end: 1px solid var(--terminal-titlebar-border-color, var(--colorNeutralStroke1));
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.terminal-progress[data-state="error"] {
+    color: var(--error);
+    --colorBrandStroke1: var(--error);
+}
+
+.terminal-progress-percentage {
+    /* Reserve three digits, the percent sign and any localized separating space. */
+    inline-size: 5ch;
+    text-align: end;
+}
+
+.terminal-progress[data-state="warning"] {
+    color: var(--warning);
+    --colorBrandStroke1: var(--warning);
+}
+
+@media (forced-colors: active) {
+    .terminal-progress[data-state] {
+        color: CanvasText;
+        --colorBrandStroke1: CanvasText;
+        --colorNeutralStroke2: Canvas;
+    }
+}

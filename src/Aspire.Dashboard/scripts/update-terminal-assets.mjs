@@ -1,23 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-import { cp, mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { prepareTerminalAssets } from "./terminal-assets.mjs";
 
 const dashboard = new URL("../", import.meta.url);
-const source = new URL("node_modules/@hex1b/web-terminal/", dashboard);
 const destination = new URL("wwwroot/js/hex1b-web-terminal/", dashboard);
-const manifest = JSON.parse(await readFile(new URL("package.json", dashboard), "utf8"));
-const installed = JSON.parse(await readFile(new URL("package.json", source), "utf8"));
-if (installed.version !== manifest.dependencies["@hex1b/web-terminal"]) {
-    throw new Error("Run npm ci before updating terminal assets; the installed package must match the exact manifest version.");
-}
+// Validate and prepare every output before deleting the previous acquisition.
+const { version, assets } = await prepareTerminalAssets();
 
 await rm(destination, { recursive: true, force: true });
-await mkdir(destination, { recursive: true });
-// The module worker and font URLs are relative to the emitted modules. Keep
-// the complete tree, including maps, declarations, font provenance and licenses.
-await cp(new URL("dist/", source), new URL("dist/", destination), { recursive: true });
-for (const name of ["LICENSE", "README.md", "package.json"]) {
-    await cp(new URL(name, source), new URL(name, destination));
+for (const [name, content] of assets) {
+    const file = new URL(name, destination);
+    await mkdir(new URL(".", file), { recursive: true });
+    await writeFile(file, content);
 }
-console.log(`Vendored @hex1b/web-terminal ${installed.version}.`);
+console.log(`Vendored ${assets.size} runtime/license files for @hex1b/web-terminal ${version}.`);

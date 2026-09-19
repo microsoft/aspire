@@ -19,6 +19,30 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 
 public class TerminalWindowTests : DashboardTestContext
 {
+    [Fact]
+    public async Task WorkloadMetadata_UpdatesWindowTitleAndTitlebar()
+    {
+        TerminalSetupHelpers.SetupTerminalComponents(this, new TestDashboardClient());
+        var head = RenderComponent<HeadOutlet>();
+        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.ResourceName, "shell"));
+        var terminal = cut.FindComponent<TerminalView>().Instance;
+        var state = new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Connected = true,
+            Title = "build", WorkingDirectory = "/work/app", ProgressState = "indeterminate"
+        };
+        await cut.InvokeAsync(() => terminal.OnTerminalStateChanged(state));
+        Assert.Equal("build", head.Find("title").TextContent);
+        Assert.Equal("build", cut.Find(".terminal-window-titlebar .terminal-title").TextContent);
+        Assert.Equal("/work/app", cut.Find(".terminal-window-titlebar .terminal-directory").GetAttribute("data-text"));
+        Assert.Single(cut.FindAll(".terminal-window-titlebar [role=progressbar]"));
+
+        await cut.InvokeAsync(() => terminal.OnTerminalStateChanged(state with { Title = "", ProgressState = "none" }));
+        Assert.Equal("shell", head.Find("title").TextContent);
+        Assert.Equal("shell", cut.Find(".terminal-title").TextContent);
+        Assert.Empty(cut.FindAll("[role=progressbar]"));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

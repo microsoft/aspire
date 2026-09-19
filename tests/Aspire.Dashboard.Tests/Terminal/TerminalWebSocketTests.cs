@@ -17,6 +17,79 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task BrowserView_RestoresHistoryProducedBeforeAttachment(bool useGrpc)
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        var lines = Enumerable.Range(0, 100).Select(i => $"Retained output {i:D3}").ToArray();
+        host.Workload.Write(string.Join("\r\n", lines) + "\r\nready");
+        await host.WaitForProducerTextAsync("ready", timeout.Token);
+
+        for (var attachment = 0; attachment < 2; attachment++)
+        {
+            using var browser = await host.ConnectBrowserAsync(timeout.Token);
+            var initial = await ReadUntilAsync(browser, _ => true, timeout.Token);
+            Assert.Equal(101, initial.GetProperty("history").GetProperty("totalRows").GetInt32());
+            Assert.Equal(lines[0], await ReadFirstLogicalLineAsync(browser, 1, timeout.Token));
+            await browser.CloseAsync(WebSocketCloseStatus.NormalClosure, "Detach", timeout.Token);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BrowserView_RestoresCommandMarksAndNavigationAfterReattachment(bool useGrpc)
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        // OSC 133 uses A/B/C/D for prompt, command line, execution and completion.
+        // Retain the executing mark on row zero, well outside the live screen.
+        // https://github.com/mitchdenny/hex1b/blob/d6a20d4/docs/web-terminal.md
+        host.Workload.Write("\u001b]133;A\u0007$ \u001b]133;B\u0007echo retained\u001b]133;C;cmdline_url=echo%20retained\u0007\r\n");
+        host.Workload.Write(string.Join("\r\n", Enumerable.Range(0, 100).Select(i => $"Output {i:D3}")));
+        host.Workload.Write("\r\n\u001b]133;D;0\u0007ready");
+        await host.WaitForProducerTextAsync("ready", timeout.Token);
+
+        string? originalId = null;
+        for (var attachment = 0; attachment < 2; attachment++)
+        {
+            using var browser = await host.ConnectBrowserAsync(timeout.Token);
+            var initial = await ReadUntilAsync(browser, frame =>
+                frame.GetProperty("history").TryGetProperty("markers", out var marks) &&
+                marks.EnumerateArray().Any(mark => mark.GetProperty("phase").GetString() == "executing"), timeout.Token);
+            var mark = Assert.Single(initial.GetProperty("history").GetProperty("markers").EnumerateArray(),
+                mark => mark.GetProperty("phase").GetString() == "executing");
+            var id = mark.GetProperty("id").GetString();
+            Assert.NotNull(id);
+            Assert.Equal("command", mark.GetProperty("source").GetString());
+            Assert.Equal(0, mark.GetProperty("row").GetInt32());
+            originalId ??= id;
+            Assert.Equal(originalId, id);
+
+            await SendAsync(browser, JsonSerializer.Serialize(new { type = "marker", action = "details", requestId = 1, id }), timeout.Token);
+            var detailsFrame = await ReadUntilAsync(browser, frame =>
+                frame.GetProperty("history").GetProperty("markerResult") is { ValueKind: JsonValueKind.Object } result &&
+                result.GetProperty("requestId").GetInt32() == 1, timeout.Token);
+            var detailsResult = detailsFrame.GetProperty("history").GetProperty("markerResult");
+            Assert.True(detailsResult.GetProperty("success").GetBoolean());
+            Assert.Equal("executing", detailsResult.GetProperty("details").GetProperty("phase").GetString());
+            Assert.Equal("cmdline_url=echo%20retained", detailsResult.GetProperty("details").GetProperty("rawParameters").GetString());
+
+            await SendAsync(browser, JsonSerializer.Serialize(new { type = "marker", action = "jump", requestId = 2, id }), timeout.Token);
+            var jumped = await ReadUntilAsync(browser, frame =>
+                frame.GetProperty("history").GetProperty("markerResult") is { ValueKind: JsonValueKind.Object } result &&
+                result.GetProperty("requestId").GetInt32() == 2, timeout.Token);
+            Assert.True(jumped.GetProperty("history").GetProperty("markerResult").GetProperty("success").GetBoolean());
+            Assert.Equal(0, jumped.GetProperty("history").GetProperty("top").GetInt32());
+            await browser.CloseAsync(WebSocketCloseStatus.NormalClosure, "Detach", timeout.Token);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task BrowserView_ReflowsRetainedHistoryAndPreservesSoftWrapsAfterReconnect(bool useGrpc)
     {
         await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc);
