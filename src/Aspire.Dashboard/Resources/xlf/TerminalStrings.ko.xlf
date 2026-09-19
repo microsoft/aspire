@@ -178,8 +178,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarGridSizeAuto">
-        <source>Fit</source>
-        <target state="new">Fit</target>
+        <source>Fit terminal to available space</source>
+        <target state="new">Fit terminal to available space</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarIncreaseFontSize">

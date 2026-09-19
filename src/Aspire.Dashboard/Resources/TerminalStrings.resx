@@ -170,7 +170,7 @@
     <value>Terminal dimensions</value>
   </data>
   <data name="TerminalToolbarGridSizeAuto" xml:space="preserve">
-    <value>Fit</value>
+    <value>Fit terminal to available space</value>
   </data>
   <data name="TerminalToolbarOpenInWindow" xml:space="preserve">
     <value>Open in new window</value>
