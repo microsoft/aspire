@@ -393,6 +393,22 @@ public sealed class OpenIdConnectOptions
             _usernameClaimTypes = UsernameClaimType.Split(",", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
+        for (var i = 0; i < ClaimActions.Count; i++)
+        {
+            var claimAction = ClaimActions[i];
+            if (string.IsNullOrWhiteSpace(claimAction.ClaimType))
+            {
+                messages ??= [];
+                messages.Add($"OpenID Connect claim action type not configured. Specify a Dashboard:Frontend:OpenIdConnect:ClaimActions:{i}:ClaimType value.");
+            }
+
+            if (string.IsNullOrWhiteSpace(claimAction.JsonKey))
+            {
+                messages ??= [];
+                messages.Add($"OpenID Connect claim action JSON key not configured. Specify a Dashboard:Frontend:OpenIdConnect:ClaimActions:{i}:JsonKey value.");
+            }
+        }
+
         errorMessages = messages;
 
         return messages is null;
@@ -401,18 +417,8 @@ public sealed class OpenIdConnectOptions
 
 public sealed class ClaimAction
 {
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ClaimAction"/> class.
-    /// </summary>
-    [SetsRequiredMembers]
-    public ClaimAction()
-    {
-        ClaimType = null!;
-        JsonKey = null!;
-    }
-
-    public required string ClaimType { get; set; }
-    public required string JsonKey { get; set; }
+    public string ClaimType { get; set; } = "";
+    public string JsonKey { get; set; } = "";
     public string? SubKey { get; set; }
     public bool? IsUnique { get; set; }
     public string? ValueType { get; set; }

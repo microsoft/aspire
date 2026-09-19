@@ -401,6 +401,25 @@ public sealed class DashboardOptionsTests
         Assert.Equal("OpenID Connect claim type for username not configured. Specify a Dashboard:Frontend:OpenIdConnect:UsernameClaimType value.", result.FailureMessage);
     }
 
+    [Theory]
+    [InlineData("", "role", "OpenID Connect claim action type not configured. Specify a Dashboard:Frontend:OpenIdConnect:ClaimActions:0:ClaimType value.")]
+    [InlineData("role", "", "OpenID Connect claim action JSON key not configured. Specify a Dashboard:Frontend:OpenIdConnect:ClaimActions:0:JsonKey value.")]
+    public void OpenIdConnectOptions_ClaimActionRequiredValueMissing(string claimType, string jsonKey, string expectedMessage)
+    {
+        var options = GetValidOptions();
+        options.Frontend.AuthMode = FrontendAuthMode.OpenIdConnect;
+        options.Frontend.OpenIdConnect.ClaimActions.Add(new ClaimAction
+        {
+            ClaimType = claimType,
+            JsonKey = jsonKey
+        });
+
+        var result = new ValidateDashboardOptions().Validate(null, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(expectedMessage, result.FailureMessage);
+    }
+
     [Fact]
     public async Task OpenIdConnectOptions_ClaimActions_MapJsonKeyTestAsync()
     {
