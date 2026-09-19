@@ -6,7 +6,7 @@ using Aspire.Cli.Configuration;
 namespace Aspire.Cli.NuGet;
 
 /// <summary>
-/// Enables NuGet signature verification when spawning aspire-managed processes.
+/// Enables NuGet signature verification for NuGet operations.
 /// Mirrors the .NET SDK's NuGetSignatureVerificationEnabler behavior.
 /// </summary>
 internal static class NuGetSignatureVerificationEnabler
@@ -37,5 +37,19 @@ internal static class NuGetSignatureVerificationEnabler
             : bool.TrueString;
 
         environmentVariables[DotNetNuGetSignatureVerification] = effectiveValue;
+    }
+
+    /// <summary>
+    /// Applies NuGet signature verification to the current process before the in-process NuGet client initializes.
+    /// </summary>
+    public static void ApplyToCurrentProcess(IFeatures features, IEnvironment environment)
+    {
+        var environmentVariables = new Dictionary<string, string>();
+        Apply(environmentVariables, features, environment);
+
+        if (environmentVariables.TryGetValue(DotNetNuGetSignatureVerification, out var value))
+        {
+            Environment.SetEnvironmentVariable(DotNetNuGetSignatureVerification, value);
+        }
     }
 }

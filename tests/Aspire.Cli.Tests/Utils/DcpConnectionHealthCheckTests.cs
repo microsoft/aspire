@@ -28,6 +28,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         };
         var check = new DcpConnectionHealthCheck(
             new NullLayoutDiscovery(),
+            new NullBundleService(),
             tester,
             CreateExecutionContext(workspace),
             NullLogger<DcpConnectionHealthCheck>.Instance);
@@ -45,6 +46,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         var dcpDirectory = workspace.WorkspaceRoot.CreateSubdirectory("dcp");
         var check = new DcpConnectionHealthCheck(
             new FixedLayoutDiscovery(LayoutComponent.Dcp, dcpDirectory.FullName),
+            new NullBundleService(),
             new TestDcpConnectionChecker(),
             CreateExecutionContext(workspace),
             NullLogger<DcpConnectionHealthCheck>.Instance);
@@ -116,6 +118,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         };
         var check = new DcpConnectionHealthCheck(
             new FixedLayoutDiscovery(LayoutComponent.Dcp, dcpDirectory.FullName),
+            new NullBundleService(),
             tester,
             CreateExecutionContext(workspace),
             NullLogger<DcpConnectionHealthCheck>.Instance);
@@ -145,6 +148,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         };
         var check = new DcpConnectionHealthCheck(
             new FixedLayoutDiscovery(LayoutComponent.Dcp, dcpDirectory.FullName),
+            new NullBundleService(),
             tester,
             CreateExecutionContext(workspace),
             NullLogger<DcpConnectionHealthCheck>.Instance);
@@ -241,6 +245,38 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
             Assert.Equal(certificate.ExportCertificatePem(), File.ReadAllText(certificatePath));
             Assert.Equal("cached key", File.ReadAllText(keyPath));
         }, workspace.Path, options).Dispose();
+    }
+
+    [Fact]
+    public async Task CheckAsync_ExtractsBundleBeforeProbingForDcp()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dcpDirectory = CreateDcpDirectoryWithExecutable(workspace);
+        var tester = new TestDcpConnectionChecker
+        {
+            TestConnectionAsyncCallback = (path, useDeveloperCertificate, _) =>
+            {
+                Assert.Equal(dcpDirectory.FullName, path);
+                return Task.FromResult(TestDcpConnectionChecker.CreateResult(useDeveloperCertificate, EnvironmentCheckStatus.Pass, "passed"));
+            }
+        };
+
+        // Nothing has extracted the bundle yet, so on-disk discovery finds no layout. The check has
+        // to extract it first; otherwise `aspire doctor` reports the DCP bundle as missing on a
+        // fresh install just because no earlier command happened to extract it.
+        var bundleService = new RecordingBundleService(dcpDirectory.FullName);
+        var check = new DcpConnectionHealthCheck(
+            new NullLayoutDiscovery(),
+            bundleService,
+            tester,
+            CreateExecutionContext(workspace),
+            NullLogger<DcpConnectionHealthCheck>.Instance);
+
+        var result = Assert.Single(await check.CheckAsync());
+
+        Assert.Equal(1, bundleService.EnsureExtractedAndAcquireLayoutCallCount);
+        Assert.Equal(DcpConnectionHealthCheck.ConnectionCheckName, result.Name);
+        Assert.Equal(EnvironmentCheckStatus.Pass, result.Status);
     }
 
     private static DirectoryInfo CreateDcpDirectoryWithExecutable(TemporaryWorkspace workspace)
