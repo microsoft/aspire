@@ -230,15 +230,23 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     }
 
     [Fact]
-    public void NonWindowsDashboardSigningExcludesDebugSymbols()
+    public async Task MacOSDashboardDebugSymbolsAreRemovedBeforeSigning()
     {
-        var signingProps = XDocument.Load(Path.Combine(RepoRoot.Path, "eng", "Signing.props"));
-        var dashboardExecutable = Assert.Single(
-            signingProps.Descendants("ItemsToSign"),
-            item => (string?)item.Attribute("Include") == "$(ArtifactsBinDir)Aspire.Dashboard/**/publish/Aspire.Dashboard");
+        var pipeline = await File.ReadAllTextAsync(Path.Combine(
+            RepoRoot.Path, "eng", "pipelines", "templates", "build_sign_native.yml"));
 
-        Assert.Equal("!$([System.OperatingSystem]::IsWindows())", (string?)dashboardExecutable.Attribute("Condition"));
-        Assert.Equal("$(ArtifactsBinDir)Aspire.Dashboard/**/*.dSYM/**", (string?)dashboardExecutable.Attribute("Exclude"));
+        var prepareDashboardIndex = pipeline.IndexOf("displayName: 🟣Prepare Native AOT Dashboard", StringComparison.Ordinal);
+        var removeSymbolsIndex = pipeline.IndexOf("displayName: 🟣Remove Native AOT Dashboard debug symbols", StringComparison.Ordinal);
+        var signManagedIndex = pipeline.IndexOf("displayName: 🟣Sign managed executables", StringComparison.Ordinal);
+        var buildNativeIndex = pipeline.IndexOf("displayName: 🟣Build native packages", StringComparison.Ordinal);
+
+        Assert.True(prepareDashboardIndex >= 0);
+        Assert.True(prepareDashboardIndex < removeSymbolsIndex);
+        Assert.True(removeSymbolsIndex < signManagedIndex);
+        Assert.True(signManagedIndex < buildNativeIndex);
+        Assert.Contains("Aspire.Dashboard.dSYM", pipeline[(removeSymbolsIndex - 500)..removeSymbolsIndex]);
+        Assert.Contains("Remove-Item", pipeline[(removeSymbolsIndex - 500)..removeSymbolsIndex]);
+        Assert.Contains("eq(parameters.agentOs, 'macos')", pipeline[(removeSymbolsIndex - 500)..removeSymbolsIndex]);
     }
 
     private string CreatePublishProject(string rid, bool singleFile, bool duplicateUnrelatedAsset)

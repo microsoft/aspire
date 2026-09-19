@@ -227,6 +227,16 @@ jobs:
                 $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
               displayName: 🟣Ad-hoc codesign aspire-managed with JIT entitlements
 
+          # ESRP treats the Dashboard executable path as a discovery pattern and otherwise
+          # finds the adjacent .dSYM DWARF binary with the same name. Dashboard packages do
+          # not ship symbols, so remove the bundle before any signing pass evaluates inputs.
+          - ${{ if and(eq(parameters.codeSign, true), eq(parameters.agentOs, 'macos')) }}:
+            - pwsh: >-
+                Remove-Item
+                -LiteralPath "$(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/${{ targetRid }}/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard.dSYM"
+                -Recurse -Force
+              displayName: 🟣Remove Native AOT Dashboard debug symbols
+
           - ${{ if eq(parameters.codeSign, true) }}:
             - script: >-
                 $(Build.SourcesDirectory)/$(scriptName)
