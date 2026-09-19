@@ -36,7 +36,24 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
 
 ## REPL
 
-During local development, the Valkey resource includes a **REPL** command in the dashboard.
+Call `WithRepl()` to opt into a **REPL** command on the Valkey resource in the dashboard:
+
+```csharp
+builder.AddValkey("valkey").WithRepl();
+```
+
+```typescript
+await builder.addValkey("valkey").withRepl();
+```
+
+REPL access is disabled by default and is available only in run mode. Enable it only for trusted dashboard
+users: the shell uses the resource's configured credentials and is not read-only. Sharing the dashboard
+through a tunnel, Codespaces, or VS Code remote development also exposes this capability to users who can
+execute resource commands.
+
+Use `quit` before closing the terminal tab to end the session cleanly. Closing the tab alone can
+leave `valkey-cli` running inside the container. Stopping the container also ends any remaining REPL processes.
+
 When the container is running, this opens an authenticated `valkey-cli` session in the terminal dock.
 Use `quit` to exit. The session runs inside the container using Docker (or the configured Podman runtime);
 no local Valkey client is required. Passwords are passed through environment variables, not command-line arguments.

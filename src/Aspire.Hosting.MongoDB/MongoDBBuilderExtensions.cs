@@ -174,7 +174,31 @@ public static class MongoDBBuilderExtensions
             });
         }
 
-        return mongoBuilder.WithReplCommand(ct => CreateReplOptionsAsync(mongoServerResource, ct));
+        return mongoBuilder;
+    }
+
+    /// <summary>
+    /// Adds a REPL command that opens an authenticated MongoDB shell in the dashboard terminal dock.
+    /// </summary>
+    /// <param name="builder">The MongoDB server resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// This command is opt-in and available only in run mode. Dashboard users who can execute resource commands
+    /// can run commands with the resource's configured credentials. Enable it only for trusted dashboard users,
+    /// especially when sharing the dashboard through a tunnel or remote development environment.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddMongoDB("mongo").WithRepl();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<MongoDBServerResource> WithRepl(this IResourceBuilder<MongoDBServerResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
     }
 
     /// <summary>

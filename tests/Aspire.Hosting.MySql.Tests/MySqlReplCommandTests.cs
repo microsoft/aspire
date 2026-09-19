@@ -13,8 +13,24 @@ namespace Aspire.Hosting.MySql.Tests;
 
 public class MySqlReplCommandTests(ITestOutputHelper outputHelper) : ContainerReplCommandTestBase
 {
-    protected override IResourceBuilder<ContainerResource> AddContainer(IDistributedApplicationBuilder builder) =>
-        builder.AddMySql("mysql");
+    protected override IResourceBuilder<ContainerResource> AddContainer(IDistributedApplicationBuilder builder, bool enableRepl)
+    {
+        var resource = builder.AddMySql("mysql");
+        if (enableRepl)
+        {
+            Assert.Same(resource, resource.WithRepl());
+        }
+
+        return resource;
+    }
+
+    [Fact]
+    public void WithReplRejectsNullBuilder()
+    {
+        var exception = Assert.Throws<ArgumentNullException>(() => MySqlBuilderExtensions.WithRepl(null!));
+
+        Assert.Equal("builder", exception.ParamName);
+    }
 
     [Theory]
     [InlineData("repl-password", 3306)]
@@ -63,7 +79,7 @@ public class MySqlReplCommandTests(ITestOutputHelper outputHelper) : ContainerRe
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
         var password = builder.AddParameter("password", "repl-p@ss$word", secret: true);
-        var mysql = builder.AddMySql("mysql", password: password);
+        var mysql = builder.AddMySql("mysql", password: password).WithRepl();
         if (targetPort is { } port)
         {
             mysql.WithArgs($"--port={port.ToString(CultureInfo.InvariantCulture)}")

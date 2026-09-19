@@ -36,7 +36,24 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
 
 ## REPL
 
-During local development, the Redis resource includes a **REPL** command in the dashboard.
+Call `WithRepl()` to opt into a **REPL** command on the Redis resource in the dashboard:
+
+```csharp
+builder.AddRedis("redis").WithRepl();
+```
+
+```typescript
+await builder.addRedis("redis").withRepl();
+```
+
+REPL access is disabled by default and is available only in run mode. Enable it only for trusted dashboard
+users: the shell uses the resource's configured credentials and is not read-only. Sharing the dashboard
+through a tunnel, Codespaces, or VS Code remote development also exposes this capability to users who can
+execute resource commands.
+
+Use `quit` before closing the terminal tab to end the session cleanly. Closing the tab alone can
+leave `redis-cli` running inside the container. Stopping the container also ends any remaining REPL processes.
+
 When the container is running, this opens an authenticated `redis-cli` session in the terminal dock.
 Use `quit` to exit. The session runs inside the container using Docker (or the configured Podman runtime);
 no local Redis client is required. Passwords are passed through environment variables, not command-line

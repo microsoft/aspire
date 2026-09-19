@@ -9,12 +9,12 @@ using Terminals.AppHost;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddPostgres("postgres");
-builder.AddRedis("redis");
-builder.AddValkey("valkey");
-builder.AddMongoDB("mongo");
-builder.AddMySql("mysql");
-builder.AddSqlServer("sqlserver");
+builder.AddPostgres("postgres").WithRepl();
+builder.AddRedis("redis").WithRepl();
+builder.AddValkey("valkey").WithRepl();
+builder.AddMongoDB("mongo").WithRepl();
+builder.AddMySql("mysql").WithRepl();
+builder.AddSqlServer("sqlserver").WithRepl();
 
 // A multi-replica project that calls `WithTerminal()` so each replica gets its
 // own pseudo-terminal and the dashboard can attach to any of them via

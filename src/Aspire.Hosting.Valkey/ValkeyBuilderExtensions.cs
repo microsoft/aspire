@@ -185,8 +185,31 @@ public static class ValkeyBuilderExtensions
                 context.Args.Add(string.Join(' ', valkeyCommand));
 
                 return Task.CompletedTask;
-            })
-            .WithReplCommand(ct => CreateReplOptionsAsync(valkey, ct));
+            });
+    }
+
+    /// <summary>
+    /// Adds a REPL command that opens an authenticated Valkey shell in the dashboard terminal dock.
+    /// </summary>
+    /// <param name="builder">The Valkey resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// This command is opt-in and available only in run mode. Dashboard users who can execute resource commands
+    /// can run commands with the resource's configured credentials. Enable it only for trusted dashboard users,
+    /// especially when sharing the dashboard through a tunnel or remote development environment.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddValkey("valkey").WithRepl();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<ValkeyResource> WithRepl(this IResourceBuilder<ValkeyResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
     }
 
     internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(ValkeyResource resource, CancellationToken cancellationToken)

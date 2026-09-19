@@ -92,8 +92,32 @@ public static partial class SqlServerBuilderExtensions
                           {
                               await CreateDatabaseAsync(sqlConnection, sqlDatabase, @event.Services, ct).ConfigureAwait(false);
                           }
-                      })
-                      .WithReplCommand(ct => CreateReplOptionsAsync(sqlServer, ct));
+                      });
+    }
+
+    /// <summary>
+    /// Adds a REPL command that opens an authenticated SQL Server shell in the dashboard terminal dock.
+    /// </summary>
+    /// <param name="builder">The SQL Server resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// This command is opt-in and available only in run mode. Dashboard users who can execute resource commands
+    /// can run commands as <c>sa</c>, including server-side operating system commands when enabled.
+    /// Enable it only for trusted dashboard users, especially when sharing the dashboard through a tunnel
+    /// or remote development environment.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddSqlServer("sqlserver").WithRepl();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<SqlServerServerResource> WithRepl(this IResourceBuilder<SqlServerServerResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
     }
 
     /// <summary>
