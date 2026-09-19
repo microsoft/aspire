@@ -31,7 +31,7 @@ param env_outputs_azure_container_registry_endpoint string
 
 param env_outputs_azure_container_registry_managed_identity_id string
 
-resource apiservice 'Microsoft.App/containerApps@2025-02-02-preview' = {
+resource apiservice 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'apiservice'
   location: location
   properties: {
