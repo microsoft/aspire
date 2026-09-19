@@ -63,7 +63,6 @@ src/Aspire.Dashboard/wwwroot/framework/blazor.web.*.js
 *.nuget.props
 *.nuget.targets
 *.nupkg
-!eng/local-packages/*.nupkg
 **/packages/*
 
 ### Windows ###
