@@ -18,6 +18,26 @@ namespace Aspire.Dashboard.Components.Tests.Dialogs;
 [UseCulture("en-US")]
 public sealed class InteractionsTerminalDialogTests : DashboardTestContext
 {
+    [Fact]
+    public async Task WorkloadMetadata_IsShownAboveTheInteractiveTerminal()
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        var getCut = InteractionsSetupHelpers.SetupDialog<InteractionsTerminalDialog, InteractionsTerminalDialogViewModel>(this, p => p.Content, out var dialogService);
+        var viewModel = new InteractionsTerminalDialogViewModel { TerminalId = "terminal", Message = "Message" };
+        await dialogService.ShowDialogAsync<InteractionsTerminalDialog>(viewModel, new DialogParameters { Title = "Interaction" });
+        var cut = getCut();
+        var terminal = cut.FindComponent<TerminalView>().Instance;
+        await cut.InvokeAsync(() => terminal.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Connected = true,
+            Title = "deploy", WorkingDirectory = "/work/app", ProgressState = "warning", ProgressPercentage = 50
+        }));
+        Assert.Equal("deploy", cut.Find(".interaction-terminal-titlebar .terminal-title").TextContent);
+        Assert.Equal("/work/app", cut.Find(".interaction-terminal-titlebar .terminal-directory").GetAttribute("data-text"));
+        Assert.Equal("50", cut.Find(".interaction-terminal-titlebar [role=progressbar]").GetAttribute("aria-valuenow"));
+        Assert.Equal("Message", cut.Find(".interaction-message").TextContent.Trim());
+    }
+
     [Theory]
     [InlineData("", "terminal", "terminal")]
     [InlineData("/aspire/nested", "terminal", "terminal")]

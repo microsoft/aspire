@@ -24,6 +24,37 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 [UseCulture("en-US")]
 public partial class TerminalDockTests : DashboardTestContext
 {
+    [Fact]
+    public async Task WorkloadMetadata_FollowsTheActiveTerminalWithoutRemounting()
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        TerminalSetupHelpers.SetupTerminalComponents(this,
+            TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates));
+        var cut = RenderComponent<TerminalDock>();
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
+        var views = cut.FindComponents<TerminalView>().Select(view => view.Instance).ToArray();
+        for (var i = 0; i < views.Length; i++)
+        {
+            var index = i;
+            await cut.InvokeAsync(() => views[index].OnTerminalStateChanged(new TerminalToolbarState
+            {
+                TerminalId = 1, Generation = 1, Connected = true,
+                Title = $"title-{index}", WorkingDirectory = $"/work/{index}",
+                ProgressState = "normal", ProgressPercentage = 20 + index
+            }));
+        }
+        Assert.Equal("title-0", cut.Find(".terminal-dock-tabstrip .terminal-title").TextContent);
+        Assert.Equal("/work/0", cut.Find(".terminal-dock-tabstrip .terminal-directory").GetAttribute("data-text"));
+        await cut.FindAll(".terminal-dock-tab-select")[1].ClickAsync(new());
+        Assert.Equal("title-1", cut.Find(".terminal-dock-tabstrip .terminal-title").TextContent);
+        Assert.Equal("/work/1", cut.Find(".terminal-dock-tabstrip .terminal-directory").GetAttribute("data-text"));
+        Assert.Equal("21", cut.Find(".terminal-dock-tabstrip [role=progressbar]").GetAttribute("aria-valuenow"));
+        Assert.Equal(views, cut.FindComponents<TerminalView>().Select(view => view.Instance));
+        Assert.Equal(2, JSInterop.Invocations.Count(i => i.Identifier == "initTerminal"));
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("/aspire/nested")]

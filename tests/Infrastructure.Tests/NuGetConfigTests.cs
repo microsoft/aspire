@@ -53,11 +53,26 @@ public sealed class NuGetConfigTests
             });
 
         var sources = root.Element("packageSources")!.Elements("add").ToArray();
-        Assert.All(sources, source => AssertApprovedSource(source.Attribute("value")!.Value));
+        Assert.All(sources.Where(source => (string?)source.Attribute("key") != "nuget-hex1b"),
+            source => AssertApprovedSource(source.Attribute("value")!.Value));
         Assert.Equal(
             sources.Select(source => source.Attribute("key")!.Value).Order(StringComparer.Ordinal),
             root.Element("packageSourceMapping")!.Elements("packageSource")
                 .Select(source => source.Attribute("key")!.Value).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void NuGetOrgIsLimitedToHex1bPackages()
+    {
+        var root = XDocument.Load(Path.Combine(RepoRoot.Path, "NuGet.config")).Root!;
+        var source = Assert.Single(root.Element("packageSources")!.Elements("add"),
+            source => (string?)source.Attribute("key") == "nuget-hex1b");
+        Assert.Equal("https://api.nuget.org/v3/index.json", (string?)source.Attribute("value"));
+
+        var mapping = Assert.Single(root.Element("packageSourceMapping")!.Elements("packageSource"),
+            mapping => (string?)mapping.Attribute("key") == "nuget-hex1b");
+        Assert.Equal(["Hex1b", "Hex1b.McpServer", "Hex1b.Tool"],
+            mapping.Elements("package").Select(package => (string?)package.Attribute("pattern")));
     }
 
     [Fact]

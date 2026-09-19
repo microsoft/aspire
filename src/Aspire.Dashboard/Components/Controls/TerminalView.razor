@@ -16,7 +16,7 @@
         @if (!Chromeless)
         {
             <div class="terminal-titlebar">
-                <span class="terminal-title">@(ResourceName ?? Loc[nameof(Resources.TerminalStrings.TerminalTitle)].Value)</span>
+                <TerminalTitle State="@_state" FallbackTitle="@(ResourceName ?? Loc[nameof(Resources.TerminalStrings.TerminalTitle)].Value)" />
                 @if (ShowOpenInWindow && !string.IsNullOrEmpty(ResourceName))
                 {
                     <TerminalWindowButton Class="terminal-open-window"
@@ -47,21 +47,27 @@
         <div class="terminal-footer" tabindex="-1" @ref="_footerElement">
             <span class="terminal-focus-hint">@(FocusControlsHintLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalFocusControlsHint)])</span>
             <div class="terminal-controls">
-                <FluentButton Class="terminal-font-minus aspire-icon-button" Disabled="@(!_state.CanDecreaseFontSize || ReadOnly)"
+                <FluentButton Class="terminal-font-minus toolbar-button" Appearance="ButtonAppearance.Default" IconOnly="true" Disabled="@(!_state.CanDecreaseFontSize || ReadOnly)"
                               Title="@(DecreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)])"
                               aria-label="@(DecreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)])"
-                              OnClick="@(() => SetFontSizeAsync(_state.FontPx - 1))">−</FluentButton>
+                              OnClick="@(() => SetFontSizeAsync(_state.FontPx - 1))">
+                    <FluentIcon Icon="Icons.Regular.Size20.FontDecrease" Width="16px" Color="Color.Primary" />
+                </FluentButton>
                 <span class="terminal-font-size">@(_state.FontPx > 0 ? $"{_state.FontPx}px" : null)</span>
-                <FluentButton Class="terminal-font-plus aspire-icon-button" Disabled="@(!_state.CanIncreaseFontSize || ReadOnly)"
+                <FluentButton Class="terminal-font-plus toolbar-button" Appearance="ButtonAppearance.Default" IconOnly="true" Disabled="@(!_state.CanIncreaseFontSize || ReadOnly)"
                               Title="@(IncreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)])"
                               aria-label="@(IncreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)])"
-                              OnClick="@(() => SetFontSizeAsync(_state.FontPx + 1))">+</FluentButton>
+                              OnClick="@(() => SetFontSizeAsync(_state.FontPx + 1))">
+                    <FluentIcon Icon="Icons.Regular.Size20.FontIncrease" Width="16px" Color="Color.Primary" />
+                </FluentButton>
                 @if (ShowDimensionsPicker)
                 {
-                    <FluentButton Class="terminal-fit aspire-icon-button" Disabled="@(!_state.FitEnabled || ReadOnly)"
+                    <FluentButton Class="terminal-fit toolbar-button" Appearance="ButtonAppearance.Default" IconOnly="true" Disabled="@(!_state.FitEnabled || ReadOnly)"
                                   Title="@(FitLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)])"
                                   aria-label="@(FitLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)])"
-                                  OnClick="FitToContainerAsync">@(FitLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)])</FluentButton>
+                                  OnClick="FitToContainerAsync">
+                        <FluentIcon Icon="Icons.Regular.Size20.ArrowExpand" Width="16px" Color="Color.Primary" />
+                    </FluentButton>
                     <FluentSelect TOption="TerminalSizePreset" TValue="string" Class="terminal-size-select aspire-input" Items="@DisplayedSizePresets"
                                   OptionValue="@(p => p.Value)"
                                   OptionText="@(p => p.Label)"

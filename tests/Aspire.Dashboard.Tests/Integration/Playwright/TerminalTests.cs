@@ -54,7 +54,8 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             connection.Workload.Write("\u001b[?25lOutput while read-only\r\n");
             await connection.WaitForProducerTextAsync("Output while read-only", CancellationToken.None).DefaultTimeout();
             await ExpectObserverTextAsync(page, "Output while read-only");
-            await Assertions.Expect(terminal.Locator("canvas")).ToBeVisibleAsync();
+            // The overlay scrollbar has its own canvas after the terminal surface.
+            await Assertions.Expect(terminal.Locator("canvas").First).ToBeVisibleAsync();
             await page.EvaluateAsync("() => window.moduleTerminal.focus()");
             await page.Keyboard.TypeAsync("blocked-keyboard");
             await PasteAsync(input, "blocked-paste");
@@ -242,7 +243,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await MountObserverAsync(page, requestPrimary: false);
             connection.Workload.Write("\u001b[?25lready");
             await ExpectObserverTextAsync(page, "ready");
-            var canvas = page.Locator(".terminal-view canvas");
+            var canvas = page.Locator(".terminal-view canvas").First;
             var before = await canvas.ScreenshotAsync();
             connection.Workload.Write("\r\nTerminal browser output is visible");
             await ExpectObserverTextAsync(page, "Terminal browser output is visible");
@@ -351,7 +352,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
                 url.searchParams.set('viewId', viewId);
                 // Capture the public client returned by the real mount, without replacing
                 // its input implementation, to exercise direct paste/action entry points.
-                const { WebTerminal } = await import('/js/hex1b-web-terminal/dist/index.js');
+                const { WebTerminal } = await import('/js/hex1b-web-terminal/dist/index.min.js');
                 const mount = WebTerminal.mount;
                 WebTerminal.mount = async (...args) => {
                     const client = await mount.call(WebTerminal, ...args);
@@ -372,7 +373,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     {
         await page.EvaluateAsync("""
             async ({ endpoint, requestPrimary, columns, rows }) => {
-                const { WebTerminal } = await import('/js/hex1b-web-terminal/dist/index.js');
+                const { WebTerminal } = await import('/js/hex1b-web-terminal/dist/index.min.js');
                 const container = document.createElement('div');
                 container.dataset.testid = 'observer-terminal';
                 container.style.cssText = 'position:fixed;right:0;top:0;width:400px;height:200px';

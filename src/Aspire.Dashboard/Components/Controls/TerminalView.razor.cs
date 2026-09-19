@@ -98,6 +98,9 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// <summary>Gets the selected font size, or the initial preference before the first state notification.</summary>
     public int? FontSize => _state.FontPx > 0 ? _state.FontPx : InitialFontSize;
 
+    /// <summary>Gets the current presentation state for host-owned terminal chrome.</summary>
+    public TerminalToolbarState ToolbarState => _state;
+
     /// <summary>Gets or sets whether the footer offers fixed-resolution presets. Defaults to true.</summary>
     /// <remarks>The font stepper remains available on surfaces sized by a splitter or dialog.</remarks>
     [Parameter]
@@ -108,7 +111,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     [Parameter]
     public bool AutoFit { get; set; }
 
-    /// <summary>Raised when the terminal's role, dimensions, font or connection state changes.</summary>
+    /// <summary>Raised when the terminal's metadata, role, dimensions, font or connection state changes.</summary>
     [Parameter]
     public EventCallback<TerminalToolbarState> OnToolbarStateChanged { get; set; }
 
@@ -535,7 +538,7 @@ public sealed record TerminalViewOptions
     public required string FocusControlsHint { get; init; }
 }
 
-/// <summary>A generation-tagged snapshot of terminal role, sizing and connection state.</summary>
+/// <summary>A generation-tagged snapshot of terminal metadata, role, sizing and connection state.</summary>
 public sealed record TerminalToolbarState
 {
     /// <summary>The unique JS-side view identifier.</summary>
@@ -546,6 +549,16 @@ public sealed record TerminalToolbarState
     public string Status { get; init; } = "connecting";
     /// <summary>Whether a connected frame has been presented.</summary>
     public bool Connected { get; init; }
+    /// <summary>The workload-reported title, or empty when unset.</summary>
+    public string Title { get; init; } = string.Empty;
+    /// <summary>The decoded working directory reported by the shell, or null when unset.</summary>
+    public string? WorkingDirectory { get; init; }
+    /// <summary>The original working directory URI, displayed as text only.</summary>
+    public string? WorkingDirectoryUri { get; init; }
+    /// <summary>The reported progress state: none, normal, error, indeterminate or warning.</summary>
+    public string ProgressState { get; init; } = "none";
+    /// <summary>The reported percentage, or null for hidden or indeterminate progress.</summary>
+    public int? ProgressPercentage { get; init; }
     /// <summary>Whether this view owns resize authority.</summary>
     public bool IsPrimary { get; init; }
     /// <summary>Whether requesting resize authority is available.</summary>

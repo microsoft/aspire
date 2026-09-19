@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-import { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE, InputRoute } from "../../js/hex1b-web-terminal/dist/index.js";
+import { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE, InputRoute, createDefaultScrollbarRenderer, renderDefaultScrollbarTooltip } from "../../js/hex1b-web-terminal/dist/index.min.js";
 
 const terminals = new Map();
 const rememberedFontSizes = new Map();
@@ -19,6 +19,78 @@ const SIZE_PRESETS = [
     { value: "132x30", label: "132×30", cols: 132, rows: 30 },
     { value: "132x50", label: "132×50", cols: 132, rows: 50 },
 ];
+
+function scrollbarConfiguration(state) {
+    // Read Dashboard colors outside the terminal's intentionally dark scope.
+    // Resolve variables/system colors to concrete canvas colors before passing
+    // them to the snapshotted built-in painter.
+    const probe = document.createElement("span");
+    probe.style.cssText = "position:absolute;visibility:hidden;pointer-events:none;forced-color-adjust:none";
+    document.body.append(probe);
+    try {
+        const color = value => {
+            probe.style.color = value;
+            return getComputedStyle(probe).color;
+        };
+        const forced = state.forcedColors.matches;
+        const terminalStyle = getComputedStyle(state.element);
+        const tooltipStyle = {
+            background: color(forced ? "Canvas" : "var(--aspire-popup-background)"),
+            color: color(forced ? "CanvasText" : "var(--colorNeutralForeground1)"),
+            borderColor: color(forced ? "CanvasText" : "var(--colorNeutralStroke1)"),
+            borderRadius: "var(--aspire-popup-radius)",
+            boxShadow: forced ? "none" : getComputedStyle(probe).getPropertyValue("--aspire-popup-shadow"),
+            font: "var(--fontSizeBase200)/var(--lineHeightBase200) var(--fontFamilyBase)",
+            padding: "8px 12px",
+        };
+        const renderScrollbar = createDefaultScrollbarRenderer({
+            // The overlay belongs to the dark terminal surface, not the page.
+            // Resolve the light thumb in the terminal's dark theme scope, even on a light page.
+            track: {
+                color: forced ? color("Canvas") : terminalStyle.getPropertyValue("--terminal-background").trim(),
+                opacity: forced || state.moreContrast.matches ? 1 : 0.35,
+            },
+            thumb: {
+                color: forced ? color("CanvasText") : terminalStyle.getPropertyValue("--colorNeutralForeground1").trim(),
+            },
+            markers: {
+                color: color(forced ? "Highlight" : "var(--colorBrandForeground1)"),
+                errorColor: color(forced ? "LinkText" : "var(--error)"),
+                opacity: forced || state.moreContrast.matches ? 1 : 0.65,
+            },
+        });
+        return {
+            placement: "overlay",
+            markers: true,
+            tooltip(context) {
+                // Preserve upstream text escaping, async detail states and positioning.
+                const element = renderDefaultScrollbarTooltip(context);
+                Object.assign(element.style, tooltipStyle);
+                return element;
+            },
+            render(frame) {
+                // Hex1b paints a thumb outline after pointer release because the scrollbar
+                // retains focus. Suppress only that paint; its DOM :focus-visible outline
+                // still identifies keyboard focus, and real interaction state is unchanged.
+                return renderScrollbar({
+                    ...frame,
+                    interaction: { ...frame.interaction, focused: false },
+                });
+            },
+        };
+    } finally {
+        probe.remove();
+    }
+}
+
+function updateScrollbar(state) {
+    if (state.disposed) {
+        return;
+    }
+    state.scrollbar = scrollbarConfiguration(state);
+    // setScrollbar replaces, rather than merges, the configuration.
+    state.client?.setScrollbar(state.scrollbar);
+}
 
 function isCurrent(state, generation) {
     return !state.disposed && state.generation === generation;
@@ -89,6 +161,8 @@ function cancelReconnect(state) {
 }
 
 function releaseClient(state) {
+    state.inspectionObserver?.disconnect();
+    state.inspectionObserver = null;
     if (state.client?.element.contains(document.activeElement)) {
         requestFocus(state);
     }
@@ -98,6 +172,34 @@ function releaseClient(state) {
     state.client = null;
     controller?.abort();
     client?.dispose();
+}
+
+function configureTerminalChrome(client) {
+    // This pinned Hex1b release has no options/parts for its history chrome or
+    // pointer focus outline. Keep keyboard focus, errors and selection feedback;
+    // remove these overrides when upstream exposes controls for them.
+    const shadow = client.element.shadowRoot;
+    const status = shadow?.querySelector(".inspection-message");
+    if (!status || !shadow.querySelector(".return-live")) {
+        throw new Error("Hex1b history chrome could not be configured.");
+    }
+    const style = document.createElement("style");
+    style.textContent = `
+        .return-live { display: none !important; }
+        .inspection-message[data-aspire-history-position] { display: none !important; }
+        :host([data-aspire-pointer-input="true"]) .scrollbar-accessibility:focus-visible { outline: none; }
+    `;
+    shadow.append(style);
+    const update = () => {
+        // Hex1b emits "42 rows above live"; other status text includes selection
+        // feedback and navigation errors and must not be suppressed.
+        status.toggleAttribute("data-aspire-history-position",
+            status.dataset.level !== "error" && /^\d+ rows above live$/.test(status.textContent));
+    };
+    const observer = new MutationObserver(update);
+    observer.observe(status, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["data-level"] });
+    update();
+    return observer;
 }
 
 function scheduleReconnect(state, generation) {
@@ -387,6 +489,27 @@ async function mountClient(state, generation, controller) {
             label: state.options.label,
             sizing: state.sizing,
             readOnly: state.readOnly,
+            scrollbar: state.scrollbar,
+            padding: 3,
+            onTitleChange(title) {
+                if (current()) {
+                    state.title = title;
+                    notifyToolbar(state);
+                }
+            },
+            onWorkingDirectoryChange(directory) {
+                if (current()) {
+                    state.workingDirectory = directory.path;
+                    state.workingDirectoryUri = directory.uri;
+                    notifyToolbar(state);
+                }
+            },
+            onProgressChange(progress) {
+                if (current()) {
+                    state.progress = progress;
+                    notifyToolbar(state);
+                }
+            },
             onInput: input => inputPolicy(state, input),
             onClose(details) {
                 if (current()) {
@@ -447,6 +570,9 @@ async function mountClient(state, generation, controller) {
             return;
         }
         state.client = client;
+        state.inspectionObserver = configureTerminalChrome(client);
+        // Theme/accessibility settings can change while awaiting the first frame.
+        client.setScrollbar(state.scrollbar);
         // Selection notifications can precede mount completion, before the handle is available.
         clearInvalidatedSelection(state);
         // Policy can change while mount is waiting for its first frame.
@@ -527,10 +653,15 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         readOnly: !!options.readOnly,
         autoFit: !!options.autoFit,
         client: null,
+        inspectionObserver: null,
         controller: null,
         disposed: false,
         ended: false,
         connected: false,
+        title: "",
+        workingDirectory: null,
+        workingDirectoryUri: null,
+        progress: { state: "none", percentage: null },
         peer: { id: null, primaryId: null, isPrimary: false },
         geometry: null,
         sizing: { mode: "auto", fontSize },
@@ -547,7 +678,27 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         focusOrigin: document.activeElement,
         failurePending: false,
         listeners: new AbortController(),
+        forcedColors: window.matchMedia("(forced-colors: active)"),
+        moreContrast: window.matchMedia("(prefers-contrast: more)"),
     };
+    updateScrollbar(state);
+    state.themeObserver = new MutationObserver(() => updateScrollbar(state));
+    state.themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    for (const media of [state.forcedColors, state.moreContrast]) {
+        media.addEventListener("change", () => updateScrollbar(state), { signal: state.listeners.signal });
+    }
+    // A programmatically focused scrollbar can remain :focus-visible after a mouse
+    // drag. Track modality before Hex1b consumes events, without moving actual focus.
+    element.addEventListener("pointerdown", () => {
+        if (state.client) {
+            state.client.element.dataset.aspirePointerInput = "true";
+        }
+    }, { capture: true, signal: state.listeners.signal });
+    element.addEventListener("keydown", () => {
+        if (state.client) {
+            delete state.client.element.dataset.aspirePointerInput;
+        }
+    }, { capture: true, signal: state.listeners.signal });
     footer.addEventListener("click", event => focusAfterMouseControl(state, event),
         { signal: state.listeners.signal });
     footer.addEventListener("keydown", event => {
@@ -576,6 +727,12 @@ export function reconnectTerminal(id, wsUrl) {
     if (!state || (state.ended && state.wsUrl === wsUrl)) {
         return state?.generation ?? 0;
     }
+    if (state.wsUrl !== wsUrl) {
+        state.title = "";
+        state.workingDirectory = null;
+        state.workingDirectoryUri = null;
+        state.progress = { state: "none", percentage: null };
+    }
     state.wsUrl = wsUrl;
     state.ended = false;
     state.attempts = 0;
@@ -597,6 +754,7 @@ export function disposeTerminal(id) {
         cancelAnimationFrame(state.toolbarFrame);
     }
     state.observer.disconnect();
+    state.themeObserver.disconnect();
     state.listeners.abort();
     releaseClient(state);
     state.dotNetRef = null;
@@ -713,6 +871,11 @@ export function getToolbarState(id) {
         generation: state.generation,
         status: !connected ? "connecting" : isPrimary ? "primary" : state.peer.primaryId === null ? "no-primary" : "viewer",
         connected, isPrimary, canTakeControl,
+        title: state.title,
+        workingDirectory: state.workingDirectory,
+        workingDirectoryUri: state.workingDirectoryUri,
+        progressState: state.progress.state,
+        progressPercentage: state.progress.percentage,
         sizeMode: state.sizing.mode === "auto" ? "font" : "fixed",
         sizeKey: state.sizing.mode === "auto"
             ? state.geometry ? `${state.geometry.columns}x${state.geometry.rows}` : ""

@@ -62,7 +62,13 @@
                     }
                 </div>
             }
-            <div class="terminal-dock-filler"></div>
+            <div class="terminal-dock-filler">
+                @if (_activeTerminalId is { } activeId && IsPaneActive(activeId) && !_detachedTerminalIds.Contains(activeId) &&
+                    _terminalViews.TryGetValue(activeId, out var activeView))
+                {
+                    <TerminalTitle State="@activeView.ToolbarState" />
+                }
+            </div>
             @if (_popupBlocked)
             {
                 <span class="terminal-dock-popup-blocked">@Loc[nameof(Resources.TerminalStrings.TerminalDockDetachBlocked)]</span>

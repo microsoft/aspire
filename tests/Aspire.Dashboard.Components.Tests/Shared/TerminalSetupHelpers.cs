@@ -68,6 +68,7 @@ internal static class TerminalSetupHelpers
 
     public static BunitJSModuleInterop SetupTerminalViewModule(TestContext context, string modulePath)
     {
+        SetupTerminalTitle(context);
         context.Services.TryAddSingleton<TerminalViewSessionRegistry>();
         FluentUISetupHelpers.SetupFluentList(context);
         var module = context.JSInterop.SetupModule(modulePath);
@@ -80,6 +81,13 @@ internal static class TerminalSetupHelpers
         module.Setup<TerminalSizePreset[]>("getSizePresets").SetResult(
             [new("80x24", "80×24", 80, 24)]);
         return module;
+    }
+
+    public static void SetupTerminalTitle(TestContext context)
+    {
+        var module = context.JSInterop.SetupModule("./Components/Controls/TerminalTitle.razor.js");
+        module.SetupVoid("observePath", _ => true).SetVoidResult();
+        module.SetupVoid("disconnectPath", _ => true).SetVoidResult();
     }
 
     public static void SetupTerminalDock(TestContext context, string pathBase = "")
