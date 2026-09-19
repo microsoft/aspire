@@ -232,9 +232,9 @@ jobs:
                 $(Build.SourcesDirectory)/$(scriptName)
                 -restore -sign
                 ${{ parameters.extraBuildArgs }}
-                -projects "$(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj;$(Build.SourcesDirectory)/src/Aspire.Dashboard/Aspire.Dashboard.csproj"
+                -projects "$(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj"
                 /bl:$(Build.Arcade.LogsPath)SignManaged.binlog
-              displayName: 🟣Sign aspire-managed
+              displayName: 🟣Sign managed executables
               env:
                 SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
@@ -271,6 +271,32 @@ jobs:
               New-Item -ItemType Directory -Force -Path $destination | Out-Null
               Copy-Item -LiteralPath $source -Destination $destination -Force
             displayName: 🟣Stage Native AOT Dashboard artifact
+
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $archive = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/DashboardArtifacts/${{ targetRid }}/aspire-dashboard-${{ targetRid }}.zip"
+              $extractDirectory = Join-Path "$(Agent.TempDirectory)" "aspire-dashboard-${{ targetRid }}-$([guid]::NewGuid().ToString('N'))"
+              New-Item -ItemType Directory -Path $extractDirectory | Out-Null
+              try {
+                if ('${{ parameters.agentOs }}' -eq 'windows') {
+                  Expand-Archive -LiteralPath $archive -DestinationPath $extractDirectory
+                  $executable = Join-Path $extractDirectory 'Aspire.Dashboard.exe'
+                }
+                else {
+                  & unzip -q $archive -d $extractDirectory
+                  if ($LASTEXITCODE -ne 0) {
+                    throw "Failed to extract Native AOT Dashboard archive '$archive'."
+                  }
+                  $executable = Join-Path $extractDirectory 'Aspire.Dashboard'
+                }
+
+                & "$(Build.SourcesDirectory)/eng/scripts/test-native-dashboard.ps1" -DashboardPath $executable
+              }
+              finally {
+                Remove-Item -LiteralPath $extractDirectory -Recurse -Force -ErrorAction SilentlyContinue
+              }
+            displayName: 🟣Smoke test packaged Native AOT Dashboard (${{ targetRid }})
+            condition: and(succeeded(), eq(variables['Agent.OSArchitecture'], variables['_ridAgentArch']))
 
           - task: NodeTool@0
             displayName: 🟣Install node.js

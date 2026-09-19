@@ -48,6 +48,7 @@ jobs:
       run_homebrew_installer: ${{ fromJSON(steps.select_tests.outputs.selection).run_homebrew_installer }}
       run_nix_package: ${{ fromJSON(steps.select_tests.outputs.selection).run_nix_package }}
       run_cli_starter_validation: ${{ fromJSON(steps.select_tests.outputs.selection).run_cli_starter_validation }}
+      run_native_dashboard_validation: ${{ fromJSON(steps.select_tests.outputs.selection).run_native_dashboard_validation }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         # This job runs PR-authored code; don't leave the checkout's GITHUB_TOKEN persisted in
@@ -556,6 +557,60 @@ jobs:
       workflowRunId: ${{ github.run_id }}
       checkoutRef: ${{ github.event.pull_request.head.sha }}
 
+  native_dashboard_validation_linux_x64:
+    name: Native AOT Dashboard Validation (Ubuntu x64)
+    needs: [setup_for_tests, build_cli_archive_linux]
+    if: ${{ needs.setup_for_tests.outputs.run_native_dashboard_validation == 'true' }}
+    uses: ./.github/workflows/native-dashboard-validation.yml
+    with:
+      runner: ubuntu-latest
+      rid: linux-x64
+
+  native_dashboard_validation_linux_arm64:
+    name: Native AOT Dashboard Validation (Ubuntu ARM64)
+    needs: [setup_for_tests, build_cli_archive_linux_arm64]
+    if: ${{ needs.setup_for_tests.outputs.run_native_dashboard_validation == 'true' }}
+    uses: ./.github/workflows/native-dashboard-validation.yml
+    with:
+      runner: ubuntu-24.04-arm
+      rid: linux-arm64
+
+  native_dashboard_validation_windows_x64:
+    name: Native AOT Dashboard Validation (Windows x64)
+    needs: [setup_for_tests, build_cli_archive_windows]
+    if: ${{ needs.setup_for_tests.outputs.run_native_dashboard_validation == 'true' }}
+    uses: ./.github/workflows/native-dashboard-validation.yml
+    with:
+      runner: windows-latest
+      rid: win-x64
+
+  native_dashboard_validation_windows_arm64:
+    name: Native AOT Dashboard Validation (Windows ARM64)
+    needs: [setup_for_tests, build_cli_archive_windows_arm64]
+    if: ${{ needs.setup_for_tests.outputs.run_native_dashboard_validation == 'true' }}
+    uses: ./.github/workflows/native-dashboard-validation.yml
+    with:
+      runner: windows-11-arm
+      rid: win-arm64
+
+  native_dashboard_validation_macos_x64:
+    name: Native AOT Dashboard Validation (macOS x64)
+    needs: [setup_for_tests, build_cli_archive_macos_x64]
+    if: ${{ needs.setup_for_tests.outputs.run_native_dashboard_validation == 'true' }}
+    uses: ./.github/workflows/native-dashboard-validation.yml
+    with:
+      runner: macos-15-intel
+      rid: osx-x64
+
+  native_dashboard_validation_macos_arm64:
+    name: Native AOT Dashboard Validation (macOS ARM64)
+    needs: [setup_for_tests, build_cli_archive_macos]
+    if: ${{ needs.setup_for_tests.outputs.run_native_dashboard_validation == 'true' }}
+    uses: ./.github/workflows/native-dashboard-validation.yml
+    with:
+      runner: macos-latest
+      rid: osx-arm64
+
   extension_tests_win:
     name: Run VS Code extension unit tests (Windows)
     uses: ./.github/workflows/extension-unit-tests.yml
@@ -682,6 +737,12 @@ jobs:
       cli_starter_validation_windows_arm64,
       cli_starter_validation_macos_x64,
       cli_starter_validation_macos_arm64,
+      native_dashboard_validation_linux_x64,
+      native_dashboard_validation_linux_arm64,
+      native_dashboard_validation_windows_x64,
+      native_dashboard_validation_windows_arm64,
+      native_dashboard_validation_macos_x64,
+      native_dashboard_validation_macos_arm64,
       typescript_sdk_tests,
       typescript_api_compat,
       tests_no_nugets,
@@ -761,6 +822,8 @@ jobs:
         # - cli_starter_validation_*: these jobs run on pull requests when the selector routes the
         #   change to job:cli-starter-validation, and are expected to be skipped otherwise (a
         #   non-selecting PR, or any other workflow event).
+        # - native_dashboard_validation_*: these jobs run when the selector routes the change to
+        #   job:native-dashboard-validation and are expected to be skipped otherwise.
         # - extension_e2e_tests: this job only runs when the PR/push changes the VS Code extension,
         #   Aspire CLI, or the extension E2E workflow wiring.
         # - polyglot_validation: this job runs for pull requests and main branch builds; it is
@@ -770,6 +833,13 @@ jobs:
           ${{ always() &&
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
+                (needs.setup_for_tests.outputs.run_native_dashboard_validation == 'true' &&
+                 (needs.native_dashboard_validation_linux_x64.result == 'skipped' ||
+                  needs.native_dashboard_validation_linux_arm64.result == 'skipped' ||
+                  needs.native_dashboard_validation_windows_x64.result == 'skipped' ||
+                  needs.native_dashboard_validation_windows_arm64.result == 'skipped' ||
+                  needs.native_dashboard_validation_macos_x64.result == 'skipped' ||
+                  needs.native_dashboard_validation_macos_arm64.result == 'skipped')) ||
                ((github.event_name == 'pull_request' &&
                 ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true')) ||
                  (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&

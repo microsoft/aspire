@@ -102,34 +102,6 @@ jobs:
           /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
           ${{ inputs.versionOverrideArg }}
 
-      - name: Smoke test Native AOT Dashboard
-        # osx-x64 is cross-compiled on an Apple Silicon runner and cannot be executed there
-        # without introducing an undeclared Rosetta dependency.
-        if: ${{ matrix.targets.rids != 'osx-x64' }}
-        shell: pwsh
-        run: |
-          $extension = if ('${{ runner.os }}' -eq 'Windows') { '.exe' } else { '' }
-          $dashboardPath = (Join-Path '${{ github.workspace }}' 'artifacts/bin/Aspire.Dashboard/${{ matrix.targets.rids }}/${{ inputs.configuration }}/net11.0/${{ matrix.targets.rids }}/publish/Aspire.Dashboard') + $extension
-          ./eng/scripts/test-native-dashboard.ps1 -DashboardPath $dashboardPath
-
-      - name: Test Native AOT Dashboard interactivity
-        if: ${{ matrix.targets.rids == 'win-x64' }}
-        shell: pwsh
-        env:
-          NUGET_PACKAGES: ${{ github.workspace }}/.packages
-          ASPIRE_NATIVE_DASHBOARD_PATH: ${{ github.workspace }}/artifacts/bin/Aspire.Dashboard/win-x64/${{ inputs.configuration }}/net11.0/win-x64/publish/Aspire.Dashboard.exe
-        run: >
-          ./dotnet.cmd test
-          --project tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj
-          -c ${{ inputs.configuration }}
-          --no-launch-profile
-          /p:ContinuousIntegrationBuild=true
-          /p:InstallBrowsersForPlaywright=true
-          /p:RunOuterloopTests=true
-          --
-          --filter-method "*.NativeDashboard_LoadsInteractivePageWithoutBrowserErrors"
-          --filter-not-trait "quarantined=true"
-
       - name: Build CLI packages
         run: >
           ${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}
@@ -199,6 +171,15 @@ jobs:
         with:
           name: cli-native-archives-${{ matrix.targets.rids }}
           path: artifacts/packages/**/aspire-cli*
+          retention-days: 15
+          if-no-files-found: error
+
+      - name: Upload Native AOT Dashboard archive
+        if: success()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: native-dashboard-${{ matrix.targets.rids }}
+          path: artifacts/DashboardArtifacts/${{ inputs.configuration }}/${{ matrix.targets.rids }}/aspire-dashboard-${{ matrix.targets.rids }}.zip
           retention-days: 15
           if-no-files-found: error
 

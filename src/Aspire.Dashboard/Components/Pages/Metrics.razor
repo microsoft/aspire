@@ -124,7 +124,7 @@
                                                         @context.Name
                                                     </a>
                                                 </TemplateColumn>
-                                                <PropertyColumn Title="@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementDescriptionGridNameColumnHeader)]" Property="@(c => c.Description)" Tooltip="true" TooltipText="@(c => c.Description)" />
+                                                <PropertyColumn Title="@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementDescriptionGridNameColumnHeader)]" Property="@(c => c.Description)" SortBy="@s_instrumentDescriptionSort" Tooltip="true" TooltipText="@(c => c.Description)" />
                                             </ChildContent>
                                         </FluentDataGrid>
                                     }

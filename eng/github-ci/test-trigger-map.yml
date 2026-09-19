@@ -24,6 +24,7 @@
 #   job:homebrew-installer     tests.yml prepare_homebrew_installer_artifacts
 #   job:nix-package            tests.yml nix_package
 #   job:cli-starter-validation tests.yml cli_starter_validation_* (6 platforms)
+#   job:native-dashboard-validation tests.yml native_dashboard_validation_* (6 platforms)
 #   job:deployment-e2e         deployment-tests.yml      (schedule/dispatch-only today)
 #   ALL                        full test matrix + all jobs
 #   <GROUP_NAME>               a named group (see groups:) expanding recursively to its members
@@ -75,7 +76,6 @@ ignore:
   # them would add no coverage; accounting for them here avoids an unrelated full test matrix.
   - eng/scripts/verify-cli-npm-package.ps1
   - eng/scripts/verify-cli-tool-nupkg.ps1
-  - eng/scripts/test-native-dashboard.ps1
   # The stabilization job invokes this script independently of the tests selector.
   - eng/scripts/stabilization-smoke-init-restore.sh
   # Dev/AzDO-only eng/scripts with NO test consumer and no GH-CI build/test path: local debug-channel
@@ -271,6 +271,12 @@ path_rules:
       - eng/scripts/get-aspire-cli-pr.ps1
     targets: [job:cli-starter-validation]
     reason: the reusable workflow, PR installer, and scenario script implement starter validation
+  - paths:
+      - .github/workflows/native-dashboard-validation.yml
+      - eng/scripts/test-native-dashboard.ps1
+      - tests/Aspire.Dashboard.Tests/Integration/Playwright/NativeAotDashboardTests.cs
+    targets: [job:native-dashboard-validation]
+    reason: native Dashboard archive production and packaged runtime validation
 
   # --- outerloop / e2e test targets: loose paths (production projects in affected_project_rules) --------
   - paths:
@@ -371,7 +377,7 @@ path_rules:
     reason: the Homebrew installer artifact job invokes this installed-CLI smoke test
   - paths:
       - eng/dashboardpack/**
-    targets: [test:Aspire.Hosting.Sdk.Tests, test:Aspire.Templates.Tests, CLI_BUNDLE]
+    targets: [test:Aspire.Hosting.Sdk.Tests, test:Aspire.Templates.Tests, CLI_BUNDLE, job:native-dashboard-validation]
     reason: Native Dashboard publishing and packaging inputs
   - paths:
       - eng/dcppack/**
@@ -524,8 +530,8 @@ affected_project_rules:
     targets: [job:typescript-api-compat]
     reason: compares checked-in *.ats.txt baselines vs fresh `aspire sdk dump --format ci`
   - projects: [Aspire.Dashboard]
-    targets: [test:Aspire.Templates.Tests]
-    reason: Templates.Tests launches generated AppHosts with the packaged dashboard
+    targets: [test:Aspire.Templates.Tests, job:native-dashboard-validation]
+    reason: Templates.Tests and native validation launch the packaged dashboard
   - projects:
       - Aspire.AppHost.Sdk
       - Aspire.Cli
