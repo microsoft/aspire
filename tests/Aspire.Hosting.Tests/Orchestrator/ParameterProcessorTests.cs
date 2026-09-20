@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Backchannel;
@@ -1823,6 +1824,167 @@ public class ParameterProcessorTests
     }
 
     [Fact]
+    public async Task SetValueAsync_WhenClearedDuringPersistence_RemainsUnresolved()
+    {
+        var saveStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resumeSave = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stateManager = new CapturingMockDeploymentStateManager
+        {
+            BeforeSaveAsync = async cancellationToken =>
+            {
+                saveStarted.TrySetResult();
+                await resumeSave.Task.WaitAsync(cancellationToken);
+            }
+        };
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var processor = CreateParameterProcessor(
+            notificationService: notificationService,
+            interactionService: interactionService,
+            deploymentStateManager: stateManager);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+        await using var updates = notificationService.WatchAsync().GetAsyncEnumerator();
+
+        await processor.InitializeParametersAsync([parameter]).DefaultTimeout();
+        await updates.MoveNextAsync().DefaultTimeout();
+
+        using var saveCts = new CancellationTokenSource();
+        var saveTask = processor.SetValueAsync(parameter, "savedValue", saveToUserSecrets: true, saveCts.Token);
+        InteractionData? notification = null;
+        Task? resolutionTask = null;
+        try
+        {
+            await saveStarted.Task.DefaultTimeout();
+            await updates.MoveNextAsync().DefaultTimeout();
+            await parameter.SetValueAsync(null).DefaultTimeout();
+            await updates.MoveNextAsync().DefaultTimeout();
+            Assert.Equal(KnownResourceStates.ValueMissing, updates.Current.Snapshot.State?.Text);
+
+            notification = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+            resolutionTask = processor.InitializeParametersAsync([parameter], waitForResolution: true);
+            Assert.False(notification.CancellationToken.IsCancellationRequested);
+
+            resumeSave.TrySetResult();
+            await saveTask.DefaultTimeout();
+
+            await Assert.ThrowsAsync<MissingParameterValueException>(() => parameter.GetValueAsync(CancellationToken.None).AsTask()).DefaultTimeout();
+            Assert.False(notification.CancellationToken.IsCancellationRequested);
+            Assert.False(resolutionTask.IsCompleted);
+        }
+        finally
+        {
+            resumeSave.TrySetResult();
+            saveCts.Cancel();
+            await saveTask.DefaultTimeout();
+            await parameter.SetValueAsync("cleanupValue").DefaultTimeout();
+            notification?.CompletionTcs.TrySetResult(InteractionResult.Cancel<bool>());
+            if (resolutionTask is not null)
+            {
+                await resolutionTask.DefaultTimeout();
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HandleUnresolvedParametersAsync_WhenClearedDuringPersistence_PromptsAgain(bool secret)
+    {
+        var saveStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resumeSave = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stateManager = new CapturingMockDeploymentStateManager
+        {
+            BeforeSaveAsync = async cancellationToken =>
+            {
+                saveStarted.TrySetResult();
+                await resumeSave.Task.WaitAsync(cancellationToken);
+            }
+        };
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var processor = CreateParameterProcessor(interactionService: interactionService, deploymentStateManager: stateManager);
+        var parameter = CreateParameterWithMissingValue("testParam", secret);
+        // Keep the existing resolution loop active while the first parameter is saved.
+        var otherParameter = CreateParameterWithMissingValue("otherParam");
+        var initializeTask = processor.InitializeParametersAsync([parameter, otherParameter], waitForResolution: true);
+        InteractionData? interaction = null;
+        try
+        {
+            interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+            interaction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+            interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+            interaction.Inputs[parameter.Name].Value = "savedValue";
+            interaction.Inputs[ParameterProcessor.SaveToUserSecretsName].Value = "true";
+            interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
+
+            await saveStarted.Task.DefaultTimeout();
+            await parameter.SetValueAsync(null).DefaultTimeout();
+            resumeSave.TrySetResult();
+
+            interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+            interaction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+            interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+
+            Assert.True(interaction.Inputs.ContainsName(parameter.Name));
+            Assert.True(interaction.Inputs.ContainsName(otherParameter.Name));
+            Assert.False(interaction.CancellationToken.IsCancellationRequested);
+            await Assert.ThrowsAsync<MissingParameterValueException>(() => parameter.GetValueAsync(CancellationToken.None).AsTask()).DefaultTimeout();
+        }
+        finally
+        {
+            resumeSave.TrySetResult();
+            await parameter.SetValueAsync("cleanupValue").DefaultTimeout();
+            await otherParameter.SetValueAsync("cleanupValue").DefaultTimeout();
+            if (interaction is { Type: InteractionType.Notification })
+            {
+                interaction.CompletionTcs.TrySetResult(InteractionResult.Cancel<bool>());
+            }
+            else
+            {
+                interaction?.CompletionTcs.TrySetResult(InteractionResult.Cancel<InteractionInputCollection>());
+            }
+            await initializeTask.DefaultTimeout();
+        }
+    }
+
+    [Theory]
+    [InlineData(false, "Parameters:testParam")]
+    [InlineData(false, "ConnectionStrings:testParam")]
+    [InlineData(false, "Custom:testParam")]
+    [InlineData(true, "Parameters:testParam")]
+    public async Task InitializeParametersAsync_AfterClearingSavedValue_ReloadsExpectedDeploymentState(bool required, string configurationKey)
+    {
+        var stateManager = new CapturingMockDeploymentStateManager();
+        var processor = CreateParameterProcessor(
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            deploymentStateManager: stateManager);
+        var parameter = CreateParameterResource("testParam", "old-value");
+        parameter.Required = required;
+        parameter.ConfigurationKey = configurationKey;
+        var unchangedParameter = CreateParameterResource("unchanged", "retained-value");
+        var model = new DistributedApplicationModel([parameter, unchangedParameter]);
+
+        var section = await stateManager.AcquireSectionAsync(configurationKey).DefaultTimeout();
+        section.SetValue("old-value");
+        await stateManager.SaveSectionAsync(section).DefaultTimeout();
+        Assert.Equal("old-value", stateManager.State[configurationKey]?.GetValue<string>());
+
+        await parameter.SetValueAsync(null).DefaultTimeout();
+        await processor.InitializeParametersAsync(model).DefaultTimeout();
+
+        // Load the serialized, flattened state through the same configuration provider as LoadDeploymentState.
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(stateManager.State.ToJsonString()));
+        var configuration = new ConfigurationBuilder().AddJsonStream(stream).Build();
+        var reloadedParameter = new ParameterResource("testParam", _ =>
+            configuration[configurationKey] ?? throw new MissingParameterValueException("Parameter is missing."))
+        {
+            Required = required
+        };
+
+        Assert.Equal(required ? "old-value" : null, await reloadedParameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.Equal("retained-value", configuration[unchangedParameter.ConfigurationKey]);
+    }
+
+    [Fact]
     public async Task ParameterSetValueAsync_AfterInitializationUpdatesDashboardState()
     {
         var notificationService = ResourceNotificationServiceTestHelpers.Create();
@@ -2015,6 +2177,7 @@ public class ParameterProcessorTests
         public JsonObject State => _flattenedState ?? [];
         public string? StateFilePath => null;
         public bool ThrowOnDeleteSection { get; init; }
+        public Func<CancellationToken, Task>? BeforeSaveAsync { get; init; }
 
         public Task<DeploymentStateSection> AcquireSectionAsync(string sectionName, CancellationToken cancellationToken = default)
         {
@@ -2031,9 +2194,14 @@ public class ParameterProcessorTests
         public Task<DeploymentStateSection> AcquireCurrentSectionAsync(string sectionName, CancellationToken cancellationToken = default)
             => AcquireSectionAsync(sectionName, cancellationToken);
 
-        public Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
+        public async Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (BeforeSaveAsync is { } beforeSave)
+            {
+                await beforeSave(cancellationToken);
+            }
 
             // Increment version to allow multiple saves with the same instance (mimics FileDeploymentStateManager)
             section.Version++;
@@ -2043,8 +2211,6 @@ public class ParameterProcessorTests
 
             // Flatten the state to mimic what FileDeploymentStateManager saves to disk
             _flattenedState = JsonFlattener.FlattenJsonObject(_unflattenedState);
-
-            return Task.CompletedTask;
         }
 
         public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;

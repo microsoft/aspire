@@ -579,8 +579,6 @@ public sealed class ParameterProcessor(
                 logger.LogWarning(ex, "Failed to save parameter {ParameterName} to deployment state.", parameterResource.Name);
             }
         }
-
-        OnParameterResolved(_unresolvedParameters, parameterResource);
     }
 
     // Record a resolved secret value into the AppHost-scoped redaction history at the moment it is assigned or
@@ -703,8 +701,12 @@ public sealed class ParameterProcessor(
                             stateModified = true;
                         }
 
-                        // Remove the parameter from unresolved parameters list.
-                        OnParameterResolved(unresolvedParameters, parameter);
+                        // The version-checked observer owns the shared list. Persistence may have awaited
+                        // while a newer assignment made the parameter unresolved again.
+                        if (!ReferenceEquals(unresolvedParameters, _unresolvedParameters))
+                        {
+                            OnParameterResolved(unresolvedParameters, parameter);
+                        }
                     }
                 }
             }
@@ -801,6 +803,15 @@ public sealed class ParameterProcessor(
                     slot.SetValue(value);
                     await deploymentStateManager.SaveSectionAsync(slot, cancellationToken).ConfigureAwait(false);
                     savedCount++;
+                }
+                else if (!parameter.Required && value is null)
+                {
+                    // An optional null is a resolved value, not a failed resolution. Remove the old value
+                    // so the next publish does not reload it from deployment state.
+                    var slot = await deploymentStateManager.AcquireSectionAsync(parameter.ConfigurationKey, cancellationToken).ConfigureAwait(false);
+                    slot.Data.Clear();
+                    await deploymentStateManager.DeleteSectionAsync(slot, cancellationToken).ConfigureAwait(false);
+                    logger.LogInformation("Parameter value deleted from deployment state for {ParameterName}.", parameter.Name);
                 }
             }
             catch (Exception ex)
