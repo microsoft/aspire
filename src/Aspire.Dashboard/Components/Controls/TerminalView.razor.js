@@ -523,6 +523,7 @@ async function mountClient(state, generation, controller) {
                 }
             },
             // Force WebGL2 until Firefox's WebGPU terminal performance issue is resolved.
+            // https://bugzilla.mozilla.org/show_bug.cgi?id=1870699
             // Match Firefox/142.0 and the iOS Firefox token FxiOS/142.0, even when WebGPU is available.
             // Other browsers let the package choose WebGL2 on ordinary HTTP/unavailable WebGPU;
             // unexpected initialization and runtime rendering errors still surface.
