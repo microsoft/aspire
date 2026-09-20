@@ -18,10 +18,9 @@ If we ever want to show more chart types than those, we'll need to change the bu
 
 ## Hex1b web terminal
 
-`hex1b-web-terminal/` vendors `@hex1b/web-terminal` **0.169.0-alpha.1608.1.d6a20d4**,
-paired with the Hex1b, Hex1b.McpServer, and Hex1b.Tool NuGet packages at the same version,
-published by [run 35429880293](https://github.com/mitchdenny/hex1b/actions/runs/35429880293)
-from commit `d6a20d4f0674cbeb5b9d153a93ddabad0717bdf6`. The client and server use the evolving
+`hex1b-web-terminal/` vendors the published `@hex1b/web-terminal` **0.169.0** release,
+paired with the Hex1b, Hex1b.McpServer, and Hex1b.Tool NuGet packages and the
+repository-local `hex1b` tool at the same version. The client and server use the evolving
 HWT1 presentation transport and must be updated together. Do not substitute a
 different client based only on a similar version number.
 
@@ -62,7 +61,7 @@ path `woff2/CascadiaMonoNF.woff2`. Its relative path under
 `TerminalView.razor.js` imports only the minified public entry point.
 
 The temporary `nuget-hex1b` source in the repository's `NuGet.config` maps only
-`Hex1b`, `Hex1b.McpServer`, and `Hex1b.Tool` to nuget.org while this alpha awaits
+`Hex1b`, `Hex1b.McpServer`, and `Hex1b.Tool` to nuget.org while these versions await
 mirroring. Other packages continue to use the existing feeds.
 
 The terminal uses `renderer: "auto"`: WebGPU is preferred, with the package's
@@ -183,7 +182,7 @@ banner. Diagnostics include the exception, selection status, document focus, and
 clipboard permissions policy, never clipboard or selected text. These failures can
 include pending selection resolution before the browser clipboard API is called;
 they do not necessarily mean clipboard permission was denied.
-Hex1b 0.168.0 also displays its own inspection status inside its shadow root.
+Hex1b also displays its own inspection status inside its shadow root.
 Its public API does not currently expose an option to suppress that native message.
 Other terminal status and sizing errors offer **Dismiss**, which clears the local
 error and returns focus without reconnecting or discarding terminal history.

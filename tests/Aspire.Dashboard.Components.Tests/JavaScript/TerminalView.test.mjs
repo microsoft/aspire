@@ -1692,13 +1692,13 @@ test("frontend manifest, lockfile, minified bundle and backend use the exact pai
     const lockfile = JSON.parse(await readFile(new URL("package-lock.json", dashboard), "utf8"));
     const bundle = await readFile(new URL("dist/index.min.js", assets), "utf8");
     const version = manifest.dependencies["@hex1b/web-terminal"];
-    assert.equal(version, "0.169.0-alpha.1608.1.d6a20d4");
+    assert.equal(version, "0.169.0");
     assert.ok(bundle.startsWith(`// @hex1b/web-terminal ${version}; minified with Terser. See ../LICENSE.\n`));
     assert.equal(lockfile.packages[""].dependencies["@hex1b/web-terminal"], version);
     assert.equal(lockfile.packages["node_modules/@hex1b/web-terminal"].version, version);
 
     // Central package rows have the form:
-    //   <PackageVersion Include="Hex1b" Version="0.169.0-alpha.1608.1.d6a20d4" />
+    //   <PackageVersion Include="Hex1b" Version="0.169.0" />
     // Match the exact Include value, not Hex1b.Tool or Hex1b.McpServer;
     // whitespace, attribute order and either XML quote style are allowed.
     const packages = await readFile(new URL("../../Directory.Packages.props", dashboard), "utf8");
