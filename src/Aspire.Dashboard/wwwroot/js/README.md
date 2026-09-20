@@ -49,7 +49,13 @@ has its own SIL Open Font License and provenance under
 vendored files. `TerminalView.razor.js` imports only the public `dist/index.js`
 entry point, not the package's internal protocol/renderer modules.
 
-The terminal uses `renderer: "auto"`: WebGPU is preferred, with the package's
+Firefox terminals use `renderer: "webgl2"` until the
+[WebGPU performance issue](https://bugzilla.mozilla.org/show_bug.cgi?id=1870699)
+is resolved, even when WebGPU is available. Detection recognizes the `Firefox/`
+and iOS `FxiOS/` user-agent tokens and applies to every shared terminal mount,
+including automatic retries and explicit reconnects.
+
+Other browsers use `renderer: "auto"`: WebGPU is preferred, with the package's
 WebGL2 compatibility backend used when WebGPU's secure context, API, adapter,
 device acquisition, or presentation context is unavailable. Shader, font,
 validation and unexpected initialization failures remain errors; runtime GPU

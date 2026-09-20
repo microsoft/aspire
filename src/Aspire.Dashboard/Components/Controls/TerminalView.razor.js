@@ -399,10 +399,13 @@ async function mountClient(state, generation, controller) {
                     clearInvalidatedSelection(state);
                 }
             },
-            // The package chooses WebGL2 on ordinary HTTP/unavailable WebGPU;
+            // Force WebGL2 until Firefox's WebGPU terminal performance issue is resolved.
+            // https://bugzilla.mozilla.org/show_bug.cgi?id=1870699
+            // Match Firefox/142.0 and the iOS Firefox token FxiOS/142.0, even when WebGPU is available.
+            // Other browsers let the package choose WebGL2 on ordinary HTTP/unavailable WebGPU;
             // unexpected initialization and runtime rendering errors still surface.
             // https://github.com/mitchdenny/hex1b/pull/491
-            renderer: "auto",
+            renderer: /\b(?:Firefox|FxiOS)\//.test(navigator.userAgent) ? "webgl2" : "auto",
             onStatus(message, level) {
                 if (!current() || state.ended || level !== "error") {
                     return;
