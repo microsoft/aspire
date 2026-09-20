@@ -10,7 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureAppServiceEnvironmentExtensionsTests
+public class AzureAppServiceEnvironmentExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddAsExistingResource_ShouldBeIdempotent_ForAzureAppServiceEnvironmentResource()
@@ -30,7 +30,7 @@ public class AzureAppServiceEnvironmentExtensionsTests
     [Fact]
     public async Task AddAsExistingResource_RespectsExistingAzureResourceAnnotation_ForAzureAppServiceEnvironmentResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var existingName = builder.AddParameter("existing-appenv-name");
         var existingResourceGroup = builder.AddParameter("existing-appenv-rg");
 
@@ -51,7 +51,7 @@ public class AzureAppServiceEnvironmentExtensionsTests
     [Fact]
     public void ContainerRegistry_ReturnsDefaultContainerRegistry()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var appServiceEnvironment = builder.AddAzureAppServiceEnvironment("env");
 
@@ -64,7 +64,7 @@ public class AzureAppServiceEnvironmentExtensionsTests
     [Fact]
     public void ContainerRegistry_PrefersExplicitContainerRegistry()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("myacr");
         var appServiceEnvironment = builder.AddAzureAppServiceEnvironment("env")
@@ -87,7 +87,7 @@ public class AzureAppServiceEnvironmentExtensionsTests
     [Fact]
     public void ContainerRegistry_ThrowsWhenNonAzureRegistryConfigured()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var dockerRegistry = builder.AddContainerRegistry("docker-hub", "docker.io", "myuser");
         var appServiceEnvironment = builder.AddAzureAppServiceEnvironment("env")
@@ -102,7 +102,7 @@ public class AzureAppServiceEnvironmentExtensionsTests
     [Fact]
     public async Task CrossResourceGroupRegistry_UsesStandaloneAcrPullIdentityForFinalRegistry()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var firstRegistry = builder.AddAzureContainerRegistry("first-registry")
             .PublishAsExisting("firstacr", "first-resource-group");
@@ -138,7 +138,7 @@ public class AzureAppServiceEnvironmentExtensionsTests
     [Fact]
     public async Task SameScopeExistingRegistry_KeepsInlineAcrPullIdentity()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var registry = builder.AddAzureContainerRegistry("registry")
             .PublishAsExisting("myacr", resourceGroup: null);
@@ -158,7 +158,7 @@ public class AzureAppServiceEnvironmentExtensionsTests
     [Fact]
     public async Task CrossResourceGroupRegistry_PreservesAcrPullIdentityAddedAfterEnvironment()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var registry = builder.AddAzureContainerRegistry("registry")
             .PublishAsExisting("myacr", "my-existing-resource-group");
@@ -179,7 +179,7 @@ public class AzureAppServiceEnvironmentExtensionsTests
     [Fact]
     public async Task MultipleEnvironments_SharingCrossScopeRegistry_EachGetDistinctStandaloneAcrPullIdentity()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         // A single existing registry in another resource group, shared by two environments in the same app host.
         var registry = builder.AddAzureContainerRegistry("registry")

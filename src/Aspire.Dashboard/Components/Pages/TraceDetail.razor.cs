@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Layout;
@@ -14,6 +15,7 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
+using Aspire.Shared;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -187,6 +189,29 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
         var headerSpan = _trace.RootOrFirstSpan;
         return $"{GetResourceName(headerSpan.Source)}: {headerSpan.Name}";
+    }
+
+    private TraceDetailItem[] GetTraceDetailItems(OtlpTrace trace)
+    {
+        return
+        [
+            new(
+                Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceStartHeader)],
+                FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, trace.FirstSpan.StartTime, MillisecondsDisplay.Truncated),
+                FormatHelpers.FormatDateTime(TimeProvider, trace.FirstSpan.StartTime, MillisecondsDisplay.Full)),
+            new(
+                Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailDurationHeader)],
+                DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)),
+            new(
+                Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailResourcesHeader)],
+                _resourceCount.ToString(CultureInfo.CurrentCulture)),
+            new(
+                Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailDepthHeader)],
+                _maxDepth.ToString(CultureInfo.CurrentCulture)),
+            new(
+                Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTotalSpansHeader)],
+                trace.Spans.Count.ToString(CultureInfo.CurrentCulture))
+        ];
     }
 
     protected override async Task OnParametersSetAsync()
@@ -931,4 +956,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         }
 
     }
+
+    private sealed record TraceDetailItem(string Name, string Value, string? Tooltip = null);
 }

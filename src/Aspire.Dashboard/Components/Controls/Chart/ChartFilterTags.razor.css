@@ -14,6 +14,28 @@
     overflow-y: hidden;
 }
 
+/* Keep the first tag at its natural width while another tag is visible. Once it is the
+    only visible tag, allow it to shrink into the remaining space and show an ellipsis. */
+.dimension-overflow-ellipsis {
+    flex: 0 0 auto;
+}
+
+.dimension-overflow-ellipsis:not(:has(~ div:not([hidden]):not(.fluent-overflow-more))) {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: fit-content;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dimension-overflow-ellipsis:not(:has(~ div:not([hidden]):not(.fluent-overflow-more))) > .dimension-tag {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .filter-value-tag {
     cursor: pointer;
     user-select: none;

@@ -5,6 +5,7 @@ using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -123,6 +124,68 @@ public interface IInteractionService
     /// </returns>
     [Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     Task<InteractionResult<bool>> PromptProgressAsync(string message, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Displays a caller-owned terminal in a dialog while optional work runs.
+    /// </summary>
+    /// <param name="message">The message to display above the terminal.</param>
+    /// <param name="terminal">The exact terminal instance registered with this AppHost, with <see cref="TerminalPlacement.Dialog"/> placement.</param>
+    /// <param name="options">Optional title, cancel button text, message formatting, and work callback.</param>
+    /// <param name="cancellationToken">A token to cancel the interaction and signal cancellation to the work callback.</param>
+    /// <returns>
+    /// An <see cref="InteractionResult{T}"/> containing <c>true</c> when work or an explicit completion succeeds,
+    /// or a canceled result when the user or caller cancels the interaction.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="message"/> or <paramref name="terminal"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// The interaction service is unavailable, the terminal is not registered with this AppHost, or its placement is not <see cref="TerminalPlacement.Dialog"/>.
+    /// </exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was canceled before the interaction began.</exception>
+    /// <remarks>
+    /// <para>
+    /// Create and start the terminal before prompting, and dispose it when the caller is finished with it.
+    /// The interaction borrows the terminal: completion, cancellation, and viewer disconnection do not stop or
+    /// dispose it. The same terminal can be reused across prompts. The terminal process exiting does not close
+    /// the dialog.
+    /// </para>
+    /// <para>
+    /// When <see cref="TerminalInteractionOptions.Work"/> is supplied, successful completion closes the dialog.
+    /// The optional <see cref="InteractionOptions.PrimaryButtonText"/> labels a cancel button, not a submit button.
+    /// User or external cancellation closes the dialog and signals <see cref="TerminalContext.CancellationToken"/>;
+    /// this method waits for the callback to finish before returning. Non-cancellation callback exceptions are
+    /// propagated after the interaction is removed. Without a callback, the dialog waits for explicit completion,
+    /// the cancel button, or <paramref name="cancellationToken"/>.
+    /// </para>
+    /// <para>
+    /// Secondary and dismiss buttons are not shown. Disconnecting a viewer does not complete the interaction;
+    /// reconnecting can display the pending dialog again.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code language="csharp">
+    /// await using var terminal = terminalService.CreateTerminal(new TerminalLaunchOptions
+    /// {
+    ///     Title = "Setup",
+    ///     Executable = "./setup.sh",
+    ///     Placement = TerminalPlacement.Dialog
+    /// });
+    /// terminal.Start();
+    /// var result = await interactionService.PromptTerminalAsync("Running setup.", terminal,
+    ///     new TerminalInteractionOptions
+    ///     {
+    ///         Title = "Setup",
+    ///         PrimaryButtonText = "Cancel",
+    ///         Work = async context =>
+    ///         {
+    ///             await terminal.WaitForTextAsync("Continue? ", cancellationToken: context.CancellationToken);
+    ///             await terminal.SendTextAsync("y\r", context.CancellationToken);
+    ///             await terminal.WaitForTextAsync("Setup complete", cancellationToken: context.CancellationToken);
+    ///         }
+    ///     }, cancellationToken);
+    /// </code>
+    /// </example>
+    [Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
+    Task<InteractionResult<bool>> PromptTerminalAsync(string message, AspireTerminal terminal, TerminalInteractionOptions? options = null, CancellationToken cancellationToken = default);
 }
 
 internal record QueueLoadOptions(
@@ -945,6 +1008,50 @@ public sealed class ProgressContext
     /// Gets the <see cref="System.Threading.CancellationToken"/> that is triggered when the user clicks
     /// the cancel button or the operation is externally canceled.
     /// </summary>
+    public required CancellationToken CancellationToken { get; init; }
+}
+
+/// <summary>
+/// Options for displaying a caller-owned terminal in an interaction dialog.
+/// </summary>
+/// <remarks>
+/// Set <see cref="InteractionOptions.PrimaryButtonText"/> to show a cancel button; by default there is no button.
+/// Secondary and dismiss buttons are not shown. The terminal's lifetime is independent of these options.
+/// </remarks>
+[Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
+public class TerminalInteractionOptions : InteractionOptions
+{
+    /// <summary>
+    /// Gets or sets the optional dialog title. No title is displayed by default.
+    /// </summary>
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// Gets or sets optional asynchronous work to run while the terminal dialog is displayed.
+    /// </summary>
+    /// <remarks>
+    /// Successful completion closes the dialog. User or external cancellation signals
+    /// <see cref="TerminalContext.CancellationToken"/> and the prompt waits for the callback to finish.
+    /// Exceptions propagate from <see cref="IInteractionService.PromptTerminalAsync"/> after the dialog is removed.
+    /// Without work, the dialog waits for explicit completion or cancellation, not for terminal process exit.
+    /// Neither work completion nor cancellation disposes the caller-owned terminal.
+    /// </remarks>
+    public Func<TerminalContext, Task>? Work { get; set; }
+}
+
+/// <summary>
+/// Provides cancellation to the work callback of a terminal interaction.
+/// </summary>
+[Experimental(TerminalDiagnostics.DiagnosticId, UrlFormat = TerminalDiagnostics.UrlFormat)]
+public sealed class TerminalContext
+{
+    /// <summary>
+    /// Gets the token signaled when the user requests cancellation or the interaction is externally canceled.
+    /// </summary>
+    /// <remarks>
+    /// Observe this token in automation calls and other asynchronous work. Cancellation does not stop the terminal;
+    /// its caller remains responsible for disposing it when no longer needed.
+    /// </remarks>
     public required CancellationToken CancellationToken { get; init; }
 }
 

@@ -11,7 +11,7 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// Gap-documenting tests for cloud-managed Azure resource references when publishing to Radius.
 /// </summary>
 /// <remarks>
-/// Radius 0.59 supports portable recipe-backed resources such as <c>AddRedis</c>, but the
+/// Radius 0.60 supports portable recipe-backed resources such as <c>AddRedis</c>, but the
 /// Aspire Radius publisher does not currently translate cloud-managed Azure resources such as
 /// Key Vault, Storage, Service Bus, or Azure Managed Redis into Radius resources. Today
 /// <c>aspire publish</c> hangs in that scenario; the tracking issue

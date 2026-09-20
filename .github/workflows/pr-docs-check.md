@@ -82,7 +82,7 @@ checkout:
     # named after the repository, but this workflow authors docs at workspace root.
     path: .
     github-app:
-      app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+      client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
       private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
       owner: "microsoft"
       repositories: ["aspire.dev"]
@@ -108,7 +108,7 @@ tools:
     allowed-repos:
       - microsoft/*
     github-app:
-      app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+      client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
       private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
       owner: "microsoft"
       repositories: ["aspire.dev", "aspire"]
@@ -125,14 +125,15 @@ jobs:
       contents: read
     steps:
       - name: Check out outcome validator
-        uses: actions/checkout@v4.3.1
+        uses: actions/checkout@v6.0.3
         with:
+          persist-credentials: false
           sparse-checkout: |
             .github/workflows/pr-docs-check/resolve_safe_output_target.py
             .github/workflows/pr-docs-check/validate_outcome.py
           sparse-checkout-cone-mode: false
       - name: Download agent output
-        uses: actions/download-artifact@v4.3.0
+        uses: actions/download-artifact@v8.0.1
         with:
           name: agent
           path: /tmp/gh-aw/
@@ -141,7 +142,7 @@ jobs:
         if: needs.safe_outputs.outputs.created_pr_url != ''
         uses: actions/create-github-app-token@v3.1.1
         with:
-          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
           owner: microsoft
           repositories: aspire.dev
@@ -183,14 +184,14 @@ jobs:
 
 safe-outputs:
   github-app:
-    app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+    client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
     private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
     owner: "microsoft"
     repositories: ["aspire.dev", "aspire"]
   steps:
     - name: Check out safe-output target resolver
       if: contains(needs.agent.outputs.output_types, 'create_pull_request')
-      uses: actions/checkout@v4.3.1
+      uses: actions/checkout@v6.0.3
       with:
         path: _resolver
         persist-credentials: false
@@ -276,8 +277,9 @@ safe-outputs:
           type: string
       steps:
         - name: Check out outcome validator
-          uses: actions/checkout@v4.3.1
+          uses: actions/checkout@v6.0.3
           with:
+            persist-credentials: false
             path: _validator
             sparse-checkout: |
               .github/workflows/pr-docs-check/resolve_safe_output_target.py
@@ -288,7 +290,7 @@ safe-outputs:
           if: needs.safe_outputs.outputs.created_pr_url != ''
           uses: actions/create-github-app-token@v3.1.1
           with:
-            app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+            client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
             private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
             owner: microsoft
             repositories: aspire.dev
@@ -331,7 +333,7 @@ safe-outputs:
           id: aspire-token
           uses: actions/create-github-app-token@v3.1.1
           with:
-            app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+            client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
             private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
             owner: microsoft
             repositories: aspire
@@ -543,6 +545,7 @@ pre-agent-steps:
     # Both select the helper version associated with the workflow being run.
     uses: actions/checkout@v6.0.2
     with:
+      persist-credentials: false
       repository: microsoft/aspire
       path: _repos/aspire
       sparse-checkout: |
@@ -564,7 +567,7 @@ pre-agent-steps:
     id: resolve-target-app-token
     uses: actions/create-github-app-token@v3.1.1
     with:
-      app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+      client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
       private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
       owner: microsoft
       repositories: |

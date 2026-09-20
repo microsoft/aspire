@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO.Hashing;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Aspire.Dashboard.Configuration;
 using Aspire.Shared;
 using Microsoft.Extensions.Options;
@@ -12,7 +13,7 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Dashboard.ServiceClient;
 
 /// <summary>
-/// Provides the dashboard runs available for selection.
+/// Provides discovered dashboard runs.
 /// </summary>
 public interface IDashboardRunStore
 {
@@ -22,9 +23,9 @@ public interface IDashboardRunStore
     bool SupportsRunSelection { get; }
 
     /// <summary>
-    /// Gets the current and historical dashboard runs available for selection.
+    /// Gets the current and historical dashboard runs that have not been pruned.
     /// </summary>
-    /// <returns>The available dashboard runs.</returns>
+    /// <returns>The discovered dashboard runs.</returns>
     IReadOnlyList<DashboardRunDescriptor> GetRuns();
 
     /// <summary>
@@ -37,8 +38,9 @@ public interface IDashboardRunStore
     /// Gets the dashboard run with the specified ID.
     /// </summary>
     /// <param name="runId">The ID of the dashboard run.</param>
+    /// <param name="onlyCompatible"><see langword="true"/> to return only runs compatible with the current dashboard version; otherwise, <see langword="false"/>.</param>
     /// <returns>The dashboard run, or <see langword="null"/> when the run is not available.</returns>
-    DashboardRunDescriptor? GetRunById(string runId);
+    DashboardRunDescriptor? GetRunById(string runId, bool onlyCompatible);
 
     /// <summary>
     /// Pins or unpins the specified dashboard run.
@@ -60,7 +62,7 @@ public interface IDashboardRunStore
     void PublishRun();
 
     /// <summary>
-    /// Deletes dashboard runs beyond the retention limit.
+    /// Deletes dashboard runs beyond the retention limit and abandoned run lock files.
     /// </summary>
     void PruneExpiredRuns();
 }
@@ -78,6 +80,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     private readonly string? _runsDirectory;
     private readonly string? _metadataPath;
+    private readonly string _applicationMarkerFileName;
     private readonly string? _temporaryDirectory;
     private readonly FileLock? _runLock;
     private DashboardRunMetadata _metadata;
@@ -103,6 +106,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         _timeProvider = timeProvider;
         _deleteRunDirectory = deleteRunDirectory;
         var applicationName = string.IsNullOrWhiteSpace(options.Value.ApplicationName) ? "Aspire" : options.Value.ApplicationName;
+        _applicationMarkerFileName = GetApplicationDirectoryName(applicationName);
         var startedAt = timeProvider.GetUtcNow();
         // A millisecond timestamp collision is very unlikely. The exclusive run lock below also ensures that if two
         // Dashboard instances resolve the same run ID concurrently, the second fails instead of sharing the database.
@@ -113,35 +117,49 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         PersistenceMode = options.Value.Data.PersistenceMode;
 
         // Persistent data can contain environment variables, telemetry, and console logs. Restrict the
-        // application directory so the database, WAL, shared-memory, and metadata files aren't exposed
+        // persistence directory so the database, WAL, shared-memory, and metadata files aren't exposed
         // to other local users even when the data root was created with a permissive umask.
         switch (PersistenceMode)
         {
             case DashboardPersistenceMode.None:
+                // CreateTempSubdirectory uses owner-only permissions (0700) on Unix and inherits the
+                // current user's temporary directory ACL on Windows.
                 _temporaryDirectory = Directory.CreateTempSubdirectory(TemporaryDirectoryPrefix).FullName;
-                RunDirectory = _temporaryDirectory;
-                DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
-                _runLock = OpenRunLock(RunDirectory);
+                CurrentWorkingDirectory = _temporaryDirectory;
+                DatabasePath = Path.Combine(CurrentWorkingDirectory, DatabaseFileName);
+                _runLock = OpenRunLock(CurrentWorkingDirectory);
                 DeleteAbandonedTemporaryDirectories(deleteRunDirectory);
                 break;
             case DashboardPersistenceMode.Run:
-                var applicationDirectory = GetApplicationDirectory(options.Value.Data.Directory, applicationName);
-                DirectoryHelper.CreateWithOwnerOnlyPermissions(applicationDirectory);
-                _runsDirectory = Path.Combine(applicationDirectory, "runs");
-                RunDirectory = Path.Combine(_runsDirectory, runId);
-                DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
-                Directory.CreateDirectory(RunDirectory);
-                _runLock = OpenRequiredRunLock(
-                    RunDirectory,
+                _runsDirectory = GetRunsDirectory(options.Value.Data.Directory);
+                DirectoryHelper.CreateWithOwnerOnlyPermissions(_runsDirectory);
+                CurrentWorkingDirectory = Path.Combine(_runsDirectory, runId);
+                DatabasePath = Path.Combine(CurrentWorkingDirectory, DatabaseFileName);
+                // Assume that if the run directory can be created, then files in the run directory can be written as well.
+                Directory.CreateDirectory(CurrentWorkingDirectory);
+                var runLock = OpenRequiredRunLock(
+                    CurrentWorkingDirectory,
                     $"Dashboard run '{runId}' is already in use by another dashboard process.");
-                _metadataPath = Path.Combine(RunDirectory, "run.json");
+                try
+                {
+                    File.WriteAllText(Path.Combine(CurrentWorkingDirectory, _applicationMarkerFileName), string.Empty);
+                    _runLock = runLock;
+                }
+                catch
+                {
+                    runLock.Dispose();
+                    throw;
+                }
+                _metadataPath = Path.Combine(CurrentWorkingDirectory, "run.json");
                 break;
             case DashboardPersistenceMode.Resume:
-                RunDirectory = GetApplicationDirectory(options.Value.Data.Directory, applicationName);
-                DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
-                DirectoryHelper.CreateWithOwnerOnlyPermissions(RunDirectory);
+                var resumesDirectory = GetResumesDirectory(options.Value.Data.Directory);
+                DirectoryHelper.CreateWithOwnerOnlyPermissions(resumesDirectory);
+                CurrentWorkingDirectory = Path.Combine(resumesDirectory, _applicationMarkerFileName);
+                DatabasePath = Path.Combine(CurrentWorkingDirectory, DatabaseFileName);
+                DirectoryHelper.CreateWithOwnerOnlyPermissions(CurrentWorkingDirectory);
                 var resumeRunLock = OpenRequiredRunLock(
-                    RunDirectory,
+                    CurrentWorkingDirectory,
                     $"Dashboard data for application '{applicationName}' is already in use by another dashboard process. Database path: '{DatabasePath}'.");
                 try
                 {
@@ -185,18 +203,18 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         _runs = new(LoadRuns);
 
         _logger.LogDebug(
-            "Dashboard run store initialized with persistence mode '{PersistenceMode}'. Run directory: '{RunDirectory}'. Database path: '{DatabasePath}'.",
+            "Dashboard run store initialized with persistence mode '{PersistenceMode}'. Current working directory: '{CurrentWorkingDirectory}'. Database path: '{DatabasePath}'.",
             PersistenceMode,
-            RunDirectory,
+            CurrentWorkingDirectory,
             DatabasePath);
     }
 
     private void DeleteAbandonedTemporaryDirectories(Action<string> deleteRunDirectory)
     {
-        var temporaryRoot = Directory.GetParent(RunDirectory)!.FullName;
+        var temporaryRoot = Directory.GetParent(CurrentWorkingDirectory)!.FullName;
         foreach (var directory in Directory.EnumerateDirectories(temporaryRoot, $"{TemporaryDirectoryPrefix}*"))
         {
-            if (string.Equals(directory, RunDirectory, StringComparison.OrdinalIgnoreCase) ||
+            if (string.Equals(directory, CurrentWorkingDirectory, StringComparison.OrdinalIgnoreCase) ||
                 !File.Exists(Path.Combine(directory, DatabaseFileName)))
             {
                 continue;
@@ -220,30 +238,47 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                     directory);
             }
         }
+
+        DeleteUnheldLocks(
+            temporaryRoot,
+            $"{TemporaryDirectoryPrefix}*.lock",
+            GetRunLockPath(CurrentWorkingDirectory));
     }
 
-    public string RunDirectory { get; }
+    private static void DeleteUnheldLocks(string directory, string searchPattern, string currentLockPath)
+    {
+        foreach (var lockPath in Directory.EnumerateFiles(directory, searchPattern, SearchOption.TopDirectoryOnly))
+        {
+            if (string.Equals(lockPath, currentLockPath, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            // Acquiring the lock proves no dashboard process currently owns it. FileLock uses DeleteOnClose,
+            // so disposing a successfully acquired stale lock removes the file while active locks remain untouched.
+            using var runLock = FileLock.TryAcquire(lockPath);
+        }
+    }
+
+    public string CurrentWorkingDirectory { get; }
     public string DatabasePath { get; }
     public string RunId => _metadata.RunId;
     public DashboardPersistenceMode PersistenceMode { get; }
     public bool SupportsRunSelection => PersistenceMode == DashboardPersistenceMode.Run;
 
-    public IReadOnlyList<DashboardRunDescriptor> GetRuns()
-    {
-        var runs = _runs.Value;
-        return runs.Any(run => run.IsPruned || !run.IsSelectable)
-            ? runs.Where(run => !run.IsPruned && run.IsSelectable).ToArray()
-            : runs;
-    }
+    public IReadOnlyList<DashboardRunDescriptor> GetRuns() =>
+        _runs.Value.Where(run => !run.IsPruned).ToArray();
 
     public DashboardRunDescriptor GetCurrentRun() => GetRuns().Single(run => run.IsCurrent);
 
-    public DashboardRunDescriptor? GetRunById(string runId) =>
-        GetRuns().SingleOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal));
+    public DashboardRunDescriptor? GetRunById(string runId, bool onlyCompatible) =>
+        GetRuns().SingleOrDefault(run =>
+            (!onlyCompatible || run.IsCompatible) &&
+            string.Equals(run.RunId, runId, StringComparison.Ordinal));
 
     public void SetRunPinned(DashboardRunDescriptor run, bool isPinned)
     {
-        var storedRun = GetRunById(run.RunId);
+        var storedRun = GetRunById(run.RunId, onlyCompatible: false);
         if (storedRun is null)
         {
             throw new InvalidOperationException($"Dashboard run '{run.RunId}' is no longer available.");
@@ -266,7 +301,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     {
         var metadataPath = Path.Combine(runDirectory, "run.json");
         var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
-        if (metadata is not { SchemaVersion: SchemaVersion } ||
+        if (metadata?.SchemaVersion != run.SchemaVersion ||
             !string.Equals(metadata.RunId, run.RunId, StringComparison.Ordinal))
         {
             throw new InvalidDataException($"Dashboard run metadata for '{run.RunId}' is invalid.");
@@ -294,7 +329,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     }
 
     /// <summary>
-    /// Deletes run directories beyond the retention limit.
+    /// Deletes run directories beyond the retention limit and abandoned run lock files.
     /// </summary>
     /// <remarks>
     /// Kept separate from <see cref="PublishRun"/> because pruning walks every run directory, takes a cross-process
@@ -309,11 +344,12 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         }
 
         PruneRuns(_deleteRunDirectory);
+        DeleteUnheldLocks(_runsDirectory, "*.lock", GetRunLockPath(CurrentWorkingDirectory));
     }
 
     public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run)
     {
-        var storedRun = GetRunById(run.RunId);
+        var storedRun = GetRunById(run.RunId, onlyCompatible: true);
         if (storedRun is null)
         {
             return null;
@@ -337,14 +373,21 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     {
         var runs = new List<DashboardRunDescriptor>
         {
-            CreateDescriptor(_metadata, RunDirectory, isCurrent: true)
+            CreateDescriptor(_metadata, CurrentWorkingDirectory, isCurrent: true)
         };
 
         if (SupportsRunSelection && Directory.Exists(_runsDirectory))
         {
             foreach (var directory in Directory.EnumerateDirectories(_runsDirectory))
             {
-                if (string.Equals(directory, RunDirectory, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(directory, CurrentWorkingDirectory, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                // Each run has an empty file named with its application directory key. Checking that marker first
+                // avoids opening and deserializing run.json for every other application in the shared runs directory.
+                if (!File.Exists(Path.Combine(directory, _applicationMarkerFileName)))
                 {
                     continue;
                 }
@@ -353,12 +396,20 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 try
                 {
                     var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
-                    if (metadata is { SchemaVersion: SchemaVersion })
+                    if (metadata is not null)
                     {
                         var run = CreateDescriptor(metadata, directory, isCurrent: false);
-                        // Filter out in-progress runs that are owned by other Dashboard instances.
-                        using var runLock = TryOpenRunLock(directory);
-                        run.IsSelectable = runLock is not null;
+                        if (run.IsCompatible)
+                        {
+                            // Filter out in-progress runs that are owned by other Dashboard instances.
+                            using var runLock = TryOpenRunLock(directory);
+                            run.IsSelectable = runLock is not null;
+                        }
+                        else
+                        {
+                            run.IsSelectable = false;
+                        }
+
                         runs.Add(run);
                     }
                 }
@@ -376,7 +427,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             .ToArray();
         _logger.LogDebug(
             "Dashboard run discovery completed in directory '{RunsDirectory}'. Run count: {RunCount}. Run IDs: {RunIds}.",
-            _runsDirectory ?? RunDirectory,
+            _runsDirectory ?? CurrentWorkingDirectory,
             orderedRuns.Length,
             string.Join(", ", orderedRuns.Select(run => run.RunId)));
 
@@ -395,11 +446,11 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             {
                 Directory.Delete(_temporaryDirectory, recursive: true);
             }
-            else if (PersistenceMode == DashboardPersistenceMode.Run && Directory.Exists(RunDirectory))
+            else if (PersistenceMode == DashboardPersistenceMode.Run && Directory.Exists(CurrentWorkingDirectory))
             {
                 // Run metadata is published only after the host starts listening. If startup fails first, remove
                 // the initialized database so the attempted run never appears as empty historical data.
-                _deleteRunDirectory(RunDirectory);
+                _deleteRunDirectory(CurrentWorkingDirectory);
             }
         }
         finally
@@ -537,13 +588,17 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     internal static string GetApplicationDirectory(string? dataRoot, string applicationName)
     {
-        if (string.IsNullOrWhiteSpace(dataRoot))
-        {
-            dataRoot = Path.Combine(AspireHomeDirectory.GetDefault(), "dashboard");
-        }
-
-        return Path.Combine(Path.GetFullPath(dataRoot), GetApplicationDirectoryName(applicationName));
+        return Path.Combine(GetResumesDirectory(dataRoot), GetApplicationDirectoryName(applicationName));
     }
+
+    internal static string GetRunsDirectory(string? dataRoot) => Path.Combine(GetDataRoot(dataRoot), "runs");
+
+    internal static string GetResumesDirectory(string? dataRoot) => Path.Combine(GetDataRoot(dataRoot), "resumes");
+
+    private static string GetDataRoot(string? dataRoot) => Path.GetFullPath(
+        string.IsNullOrWhiteSpace(dataRoot)
+            ? Path.Combine(AspireHomeDirectory.GetDefault(), "dashboard")
+            : dataRoot);
 
     private static void DeleteDatabaseFiles(string databasePath)
     {
@@ -620,11 +675,13 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         public string? ApplicationName { get; init; }
         public required string DatabaseFileName { get; init; }
         public bool IsPinned { get; init; }
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement>? ExtensionData { get; init; }
     }
 }
 
 /// <summary>
-/// Describes a dashboard run available for selection.
+/// Describes a discovered dashboard run.
 /// </summary>
 /// <param name="RunId">The unique identifier for the dashboard run.</param>
 /// <param name="SchemaVersion">The dashboard database schema version used by the run.</param>
@@ -644,6 +701,8 @@ public sealed record DashboardRunDescriptor(
     string DatabasePath,
     bool IsCurrent)
 {
+    internal bool IsCompatible => SchemaVersion == DashboardRunStore.SchemaVersion;
+
     /// <summary>
     /// Gets or sets a value indicating whether the dashboard run was pruned.
     /// </summary>

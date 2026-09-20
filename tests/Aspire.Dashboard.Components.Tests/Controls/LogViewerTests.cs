@@ -74,6 +74,10 @@ public class LogViewerTests : DashboardTestContext
         });
 
         var scrollContainer = cut.Find("#logScrollContainer");
+        var scrollButton = Assert.Single(scrollContainer.QuerySelectorAll(":scope > aspire-scroll-to-bottom"));
+        Assert.True(scrollButton.HasAttribute("hidden"));
+        var controlsLoc = Services.GetRequiredService<IStringLocalizer<Resources.ControlsStrings>>();
+        Assert.Equal(controlsLoc[nameof(Resources.ControlsStrings.ScrollToBottom)].Value, scrollButton.GetAttribute("data-scroll-to-bottom-label"));
         var loc = Services.GetRequiredService<IStringLocalizer<Resources.ConsoleLogs>>();
 
         Assert.Equal("0", scrollContainer.GetAttribute("tabindex"));

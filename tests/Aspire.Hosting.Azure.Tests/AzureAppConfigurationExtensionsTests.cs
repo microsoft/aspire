@@ -13,7 +13,7 @@ public class AzureAppConfigurationExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task AddAzureAppConfiguration()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var appConfig = builder.AddAzureAppConfiguration("appConfig");
         appConfig.Resource.Outputs["appConfigEndpoint"] = "https://myendpoint";
@@ -111,7 +111,7 @@ public class AzureAppConfigurationExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task AddAsExistingResource_RespectsExistingAzureResourceAnnotation_ForAzureAppConfigurationResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
         var existingName = builder.AddParameter("existing-appconfig-name");
         var existingResourceGroup = builder.AddParameter("existing-appconfig-rg");
 
@@ -132,7 +132,7 @@ public class AzureAppConfigurationExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void RunAsEmulatorRegistersHealthCheck()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var appConfiguration = builder.AddAzureAppConfiguration("appconfig").RunAsEmulator();
 

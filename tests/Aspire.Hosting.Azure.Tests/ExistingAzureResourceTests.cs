@@ -8,12 +8,12 @@ using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class ExistingAzureResourceTests
+public class ExistingAzureResourceTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task AddExistingAzureServiceBusInRunMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var serviceBus = builder.AddAzureServiceBus("messaging")
@@ -30,7 +30,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task RequiresPublishAsExistingInPublishMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var serviceBus = builder.AddAzureServiceBus("messaging")
@@ -47,7 +47,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task AddExistingAzureServiceBusInPublishMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var serviceBus = builder.AddAzureServiceBus("messaging")
@@ -64,7 +64,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingServiceBusWithResourceGroupInPublishMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -89,7 +89,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingServiceBusWithStaticArguments()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         var serviceBus = builder.AddAzureServiceBus("messaging")
             .PublishAsExisting("existingResourceName", "existingResourceGroupName");
         serviceBus.AddServiceBusQueue("queue");
@@ -104,7 +104,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingStorageAccountWithResourceGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -121,7 +121,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingStorageAccountWithResourceGroupAndStaticArguments()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var storageAccount = builder.AddAzureStorage("storage")
             .PublishAsExisting("existingResourcename", "existingResourceGroupName");
@@ -136,7 +136,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingAppConfigurationWithResourceGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -153,7 +153,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingEventHubsWithResourceGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -170,7 +170,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingKeyVaultWithResourceGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -187,7 +187,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingLogAnalyticsWithResourceGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -204,7 +204,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingPostgresSqlWithResourceGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -221,7 +221,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingPostgresSqlWithResourceGroupWithPasswordAuth()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -242,7 +242,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingAzureSearchWithResourceGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -259,7 +259,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingAzureSignalRWithResourceGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -276,7 +276,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingAzureWebPubSubWithResourceGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -293,7 +293,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingAzureSqlServerWithResourceGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -310,7 +310,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingAzureSqlServerInRunMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var sqlServer = builder.AddAzureSqlServer("sqlServer")
@@ -327,7 +327,7 @@ public class ExistingAzureResourceTests
     [Obsolete]
     public async Task SupportsExistingAzureRedisWithResourceGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -345,7 +345,7 @@ public class ExistingAzureResourceTests
     [Obsolete]
     public async Task SupportsExistingAzureRedisWithResouceGroupAndAccessKeyAuth()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var redis = builder.AddAzureRedis("redis")
             .PublishAsExisting("existingResourceName", "existingResourceGroupName")
@@ -361,7 +361,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingAzureRedisEnterpriseWithResourceGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -377,7 +377,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingAzureRedisEnterpriseWithResourceGroupAndAccessKeyAuth()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var redis = builder.AddAzureManagedRedis("redis")
             .PublishAsExisting("existingResourceName", "existingResourceGroupName")
@@ -392,7 +392,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingAzureApplicationInsightsWithResourceGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -409,7 +409,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingAzureOpenAIWithResourceGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -432,7 +432,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingAzureCosmosDBWithResourceGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -452,7 +452,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingAzureCosmosDBWithResourceGroupAccessKey()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -473,7 +473,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingAzureContainerRegistryInRunMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var acr = builder.AddAzureContainerRegistry("acr")
@@ -489,7 +489,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingAzureContainerRegistryInPublishMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -506,7 +506,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingServiceBusWithResourceGroupAndSubscriptionInRunMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -528,7 +528,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingServiceBusWithTenantScopeInRunMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var serviceBus = builder.AddAzureServiceBus("messaging")
@@ -548,7 +548,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsExistingServiceBusWithResourceGroupAndSubscriptionInPublishMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingResourceName = builder.AddParameter("existingResourceName");
         var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
@@ -573,7 +573,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsBicepTemplateWithSubscriptionScopeInPublishMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var existingSubscriptionId = builder.AddParameter("existingSubscriptionId");
         var resource = builder.AddBicepTemplateString("subscriptionScoped",
@@ -596,7 +596,7 @@ public class ExistingAzureResourceTests
     [Fact]
     public async Task SupportsBicepTemplateWithTenantScopeInPublishMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var resource = builder.AddBicepTemplateString("tenantScoped",
             """

@@ -8,6 +8,7 @@ export interface RunSessionRecord {
     readonly kind: RunSessionKind;
     readonly ownerDcpId: string;
     readonly runId: string;
+    readonly startupCompletion: Promise<void>;
     completionRecorded: boolean;
     lifecycle: RunSessionLifecycle;
     retentionTimer?: NodeJS.Timeout;
@@ -21,6 +22,7 @@ export interface RunSessionRegistration {
     kind: RunSessionKind;
     ownerDcpId: string;
     runId: string;
+    startupCompletion: Promise<void>;
 }
 
 export interface RunSessionRegistryOptions {
@@ -166,7 +168,6 @@ export class RunSessionRegistry {
             return;
         }
 
-        record.terminalSent = true;
         const notification: SessionTerminatedNotification = {
             notification_type: 'sessionTerminated',
             session_id: record.runId,
@@ -174,6 +175,9 @@ export class RunSessionRegistry {
             ...(exitCode === undefined ? {} : { exit_code: exitCode }),
         };
         this._options.send(record.ownerDcpId, notification);
+        // Delivery is synchronous, so commit the terminal boundary only after it returns. A throw
+        // leaves the record available for DELETE to retry instead of suppressing its notification.
+        record.terminalSent = true;
     }
 
     private _recordCompletion(record: RunSessionRecord, exitCode: number): void {

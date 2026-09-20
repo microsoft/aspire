@@ -21,10 +21,6 @@
 #   - Aspire MCP prefix: aspire-<tool>            (e.g. aspire-list_resources)
 #   - Detection: COPILOT_CLI=1, or a "toolArgs" field present
 #
-# GitHub Copilot App:
-#   - Uses the Copilot CLI payload shape
-#   - Detection: AI_AGENT=github_copilot_app_agent
-#
 # Claude Code:
 #   - Field names: snake_case (tool_name, session_id, tool_input, hook_event_name)
 #   - Tool names: PascalCase (Skill, Read, Edit)
@@ -72,6 +68,45 @@ trap emit_continue EXIT
 # Aspire when its skill segment is one of these.
 ASPIRE_SKILLS="aspire aspire-init aspireify aspire-orchestration aspire-deployment aspire-monitoring"
 
+ASPIRE_MCP_TOOLS="doctor execute_resource_command get_doc list_apphosts list_console_logs list_docs list_integrations list_resources list_structured_logs list_trace_structured_logs list_traces refresh_tools search_docs select_apphost"
+
+# Only paths shipped by this repository are safe telemetry dimensions. Project-local skill
+# overrides can add arbitrary filenames beneath an Aspire skill directory, so a path is not
+# forwarded merely because it lives under skills/<aspire-skill>/.
+ASPIRE_REFERENCE_FILES="
+aspire-deployment/references/aws.md
+aspire-deployment/references/azure.md
+aspire-deployment/references/cicd.md
+aspire-deployment/references/docker-compose.md
+aspire-deployment/references/github-actions-azure-csharp.yml
+aspire-deployment/references/github-actions-azure-typescript.yml
+aspire-deployment/references/javascript.md
+aspire-deployment/references/kubernetes.md
+aspire-deployment/references/preflight.md
+aspire-init/references/init-workflow.md
+aspire-init/references/templates.md
+aspire-monitoring/references/diagnostics-bridge.md
+aspire-monitoring/references/monitoring.md
+aspire-monitoring/references/playwright-handoff.md
+aspire-orchestration/references/agent-workflows.md
+aspire-orchestration/references/app-commands.md
+aspire-orchestration/references/detection.md
+aspire-orchestration/references/resource-management.md
+aspire-orchestration/references/safety-guardrails.md
+aspire/references/aspire-13-3-breaking-changes.md
+aspire/references/aspire-13-5-breaking-changes.md
+aspireify/references/apphost-wiring.md
+aspireify/references/csharp-authoring.md
+aspireify/references/docker-compose.md
+aspireify/references/full-solution-apphosts.md
+aspireify/references/javascript-apps.md
+aspireify/references/opentelemetry.md
+aspireify/references/scan-and-propose.md
+aspireify/references/service-defaults.md
+aspireify/references/typescript-authoring.md
+aspireify/references/validation.md
+"
+
 # Opt out when the Aspire CLI telemetry switch is set. This is the single opt-out that also
 # gates the `aspire agent telemetry` command path, so honoring it here avoids spawning the CLI
 # at all for opted-out users. Lower-case first so the accepted set (1 / any-case true) matches
@@ -80,36 +115,277 @@ case "$(printf '%s' "${ASPIRE_CLI_TELEMETRY_OPTOUT}" | tr '[:upper:]' '[:lower:]
     1|true) exit 0 ;;
 esac
 
-# Extract a top-level string field, e.g. "toolName": "view"  ->  view
-# Uses sed (portable; no jq/grep -P dependency).
-extract_json_field() {
-    printf '%s' "$1" | sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n 1
+# Parse the event envelope once, or extract one field from the much smaller tool-input object.
+# Event mode emits a record-separator-delimited set of the top-level fields classification needs.
+# Values keep their JSON escaping until decode_event_value runs, so control characters cannot
+# corrupt that record format.
+extract_json_value() {
+    printf '%s' "$1" | awk -v target="$2" '
+        function skip_ws() {
+            while (position <= json_length && substr(json, position, 1) ~ /[ \t\r\n]/) {
+                position++
+            }
+        }
+
+        function parse_string(    value, raw, character, escape, unicode) {
+            if (substr(json, position, 1) != "\"") {
+                return 0
+            }
+
+            position++
+            value = ""
+            raw = ""
+            while (position <= json_length) {
+                character = substr(json, position, 1)
+                if (character == "\"") {
+                    position++
+                    parsed_value = value
+                    raw_value = raw
+                    parsed_type = "s"
+                    return 1
+                }
+
+                if (character == "\\") {
+                    position++
+                    if (position > json_length) {
+                        return 0
+                    }
+
+                    escape = substr(json, position, 1)
+                    raw = raw "\\" escape
+                    if (escape == "\"" || escape == "\\" || escape == "/") {
+                        value = value escape
+                    }
+                    else if (escape == "b") {
+                        value = value sprintf("%c", 8)
+                    }
+                    else if (escape == "f") {
+                        value = value sprintf("%c", 12)
+                    }
+                    else if (escape == "n") {
+                        value = value "\n"
+                    }
+                    else if (escape == "r") {
+                        value = value "\r"
+                    }
+                    else if (escape == "t") {
+                        value = value "\t"
+                    }
+                    else if (escape == "u") {
+                        if (position + 4 > json_length ||
+                            substr(json, position + 1, 4) !~ /^[0-9A-Fa-f]{4}$/) {
+                            return 0
+                        }
+
+                        # Aspire identifiers and allowlisted paths are ASCII. Preserve a valid
+                        # Unicode escape so it cannot be confused with an allowlisted value.
+                        unicode = substr(json, position + 1, 4)
+                        raw = raw unicode
+                        value = value "\\u" unicode
+                        position += 4
+                    }
+                    else {
+                        return 0
+                    }
+                }
+                else {
+                    value = value character
+                    raw = raw character
+                }
+
+                position++
+            }
+
+            return 0
+        }
+
+        function parse_compound(    start, opening, closing, depth, in_string, escaped, character) {
+            start = position
+            opening = substr(json, position, 1)
+            closing = opening == "{" ? "}" : "]"
+            depth = 0
+            in_string = 0
+            escaped = 0
+
+            while (position <= json_length) {
+                character = substr(json, position, 1)
+                if (in_string) {
+                    if (escaped) {
+                        escaped = 0
+                    }
+                    else if (character == "\\") {
+                        escaped = 1
+                    }
+                    else if (character == "\"") {
+                        in_string = 0
+                    }
+                }
+                else if (character == "\"") {
+                    in_string = 1
+                }
+                else if (character == opening) {
+                    depth++
+                }
+                else if (character == closing) {
+                    depth--
+                    if (depth == 0) {
+                        position++
+                        parsed_value = substr(json, start, position - start)
+                        raw_value = parsed_value
+                        gsub(/[\r\n\t]/, "", raw_value)
+                        parsed_type = "c"
+                        return 1
+                    }
+                }
+
+                position++
+            }
+
+            return 0
+        }
+
+        function parse_value(    character, start) {
+            skip_ws()
+            character = substr(json, position, 1)
+            if (character == "\"") {
+                return parse_string()
+            }
+
+            if (character == "{" || character == "[") {
+                return parse_compound()
+            }
+
+            start = position
+            while (position <= json_length &&
+                   substr(json, position, 1) !~ /[,}]/) {
+                position++
+            }
+
+            parsed_value = substr(json, start, position - start)
+            gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", parsed_value)
+            raw_value = parsed_value
+            parsed_type = "p"
+            return parsed_value ~ /^(true|false|null|-?[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?)$/
+        }
+
+        function emit_event_fields(    separator) {
+            separator = sprintf("%c", 28)
+            printf "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s", \
+                event_values["toolName"], separator, \
+                event_values["tool_name"], separator, \
+                event_values["sessionId"], separator, \
+                event_values["session_id"], separator, \
+                event_values["toolArgs"], separator, \
+                event_values["tool_input"], separator, \
+                event_values["hook_event_name"], separator, \
+                event_values["tool_use_id"], separator, \
+                event_values["transcript_path"]
+        }
+
+        {
+            json = json $0 "\n"
+        }
+
+        END {
+            json_length = length(json)
+            position = 1
+            skip_ws()
+            if (substr(json, position, 1) != "{") {
+                exit 2
+            }
+
+            position++
+            found = 0
+            while (position <= json_length) {
+                skip_ws()
+                if (substr(json, position, 1) == "}") {
+                    position++
+                    skip_ws()
+                    if (position <= json_length) {
+                        exit 2
+                    }
+
+                    if (target == "") {
+                        emit_event_fields()
+                    }
+                    else if (found) {
+                        printf "%s", found_value
+                    }
+                    exit 0
+                }
+
+                if (!parse_string()) {
+                    exit 2
+                }
+                key = parsed_value
+                skip_ws()
+                if (substr(json, position, 1) != ":") {
+                    exit 2
+                }
+
+                position++
+                if (!parse_value()) {
+                    exit 2
+                }
+                if (target == "" &&
+                    key ~ /^(toolName|tool_name|sessionId|session_id|toolArgs|tool_input|hook_event_name|tool_use_id|transcript_path)$/) {
+                    event_values[key] = parsed_type ":" raw_value
+                }
+                else if (!found && key == target) {
+                    found = 1
+                    found_value = parsed_value
+                }
+
+                skip_ws()
+                character = substr(json, position, 1)
+                if (character == ",") {
+                    position++
+                }
+                else if (character != "}") {
+                    exit 2
+                }
+            }
+
+            exit 2
+        }
+    '
 }
 
-# Read a string field's value from anywhere in the payload, best-effort, without assuming the
-# payload's shape or which client produced it. The nested tool input arrives in two shapes:
-#   - Claude/VS Code send a real nested object:   "tool_input":{"file_path":"..."}
-#   - Copilot sends toolArgs as a JSON-encoded STRING whose quotes are escaped:
-#       "toolArgs":"{\"path\":\"C:\\Users\\me\\skills\\aspire\\SKILL.md\"}"
-# Unescaping \" -> " turns the string form into the same flat "field":"value" pairs as the object
-# form, so a single extractor reads both. The value's own backslashes (doubled Windows path
-# separators) are left intact; the caller's path normalization (tr '\\' '/') collapses them.
-extract_nested_field() {
-    local unescaped
-    unescaped=$(printf '%s' "$1" | sed 's/\\"/"/g')
-    extract_json_field "$unescaped" "$2"
+decode_event_value() {
+    local encoded="$1"
+    case "$encoded" in
+        s:*)
+            # Reuse the validated string parser on this small value. Shell escape processing is
+            # not JSON-compatible for cases such as Windows paths and Unicode escapes.
+            extract_json_value "{\"value\":\"${encoded#s:}\"}" "value"
+            ;;
+        c:*) printf '%s' "${encoded#c:}" ;;
+        p:*) printf '%s' "${encoded#p:}" ;;
+    esac
 }
 
-# Extract a file path from tool input, trying the documented field names in order.
-extract_nested_path() {
-    local json="$1" value=""
-    for field in path filePath file_path; do
-        value=$(extract_nested_field "$json" "$field")
-        if [ -n "$value" ]; then
-            break
-        fi
-    done
-    printf '%s' "$value"
+extract_input_field() {
+    extract_json_value "$toolInput" "$1"
+}
+
+# Return the path beginning at the final skills/<skill>/ segment. The caller validates that final
+# skill name; falling back to an earlier Aspire segment would misattribute a nested third-party
+# skill read.
+extract_aspire_skill_path() {
+    printf '%s' "$1" | awk -F/ '
+        {
+            for (i = NF - 2; i >= 1; i--) {
+                if ($i == "skills") {
+                    value = $(i + 1)
+                    for (j = i + 2; j <= NF; j++) {
+                        value = value "/" $j
+                    }
+                    print value
+                    exit
+                }
+            }
+        }
+    '
 }
 
 # Return 0 when $1 is an allowlisted Aspire skill name.
@@ -123,13 +399,46 @@ is_aspire_skill() {
     return 1
 }
 
+is_aspire_mcp_tool() {
+    local candidate="$1" name
+    for name in $ASPIRE_MCP_TOOLS; do
+        if [ "$candidate" = "$name" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+is_aspire_reference() {
+    local candidate="$1" reference
+    for reference in $ASPIRE_REFERENCE_FILES; do
+        if [ "$candidate" = "$reference" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+is_session_id() {
+    [ "${#1}" -eq 36 ] || return 1
+    printf '%s' "$1" | grep -Eq '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
+}
+
 # No stdin (interactive) means nothing to track.
 if [ -t 0 ]; then
     exit 0
 fi
 
-rawInput=$(cat)
+rawInput=""
+LC_ALL=C IFS= read -r -n 65537 -d '' rawInput || true
+cat >/dev/null
 if [ -z "$rawInput" ]; then
+    exit 0
+fi
+
+# A hook runs synchronously in the agent tool loop. Large result payloads are not needed for
+# classification and must not turn the best-effort telemetry path into noticeable latency.
+if [ "${#rawInput}" -gt 65536 ]; then
     exit 0
 fi
 
@@ -142,29 +451,34 @@ case "$rawInput" in
     *) exit 0 ;;
 esac
 
-toolName=$(extract_json_field "$rawInput" "toolName")
-[ -z "$toolName" ] && toolName=$(extract_json_field "$rawInput" "tool_name")
+eventFields=$(extract_json_value "$rawInput" "") || exit 0
+fieldSeparator=$(printf '\034')
+IFS="$fieldSeparator" read -r toolNameCamel toolNameSnake sessionIdCamel sessionIdSnake toolArgsValue toolInputValue hookEventNameValue toolUseIdValue transcriptPathValue <<EOF
+$eventFields
+EOF
 
-sessionId=$(extract_json_field "$rawInput" "sessionId")
-[ -z "$sessionId" ] && sessionId=$(extract_json_field "$rawInput" "session_id")
+toolName=$(decode_event_value "${toolNameCamel:-$toolNameSnake}")
+sessionId=$(decode_event_value "${sessionIdCamel:-$sessionIdSnake}")
+[ -n "$sessionId" ] && ! is_session_id "$sessionId" && sessionId=""
+
+encodedToolInput="${toolArgsValue:-$toolInputValue}"
+[ "${#encodedToolInput}" -gt 8192 ] && exit 0
+toolInput=$(decode_event_value "$encodedToolInput")
 
 timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-# Detect the client (used only for a low-cardinality client-name tag). Keep the App marker before
-# COPILOT_CLI because App sessions also set COPILOT_CLI=1.
-if [ "$AI_AGENT" = "github_copilot_app_agent" ]; then
-    clientName="copilot-app"
-elif [ "$COPILOT_CLI" = "1" ]; then
+# Detect the client (used only for a low-cardinality client-name tag).
+if [ "$COPILOT_CLI" = "1" ]; then
     clientName="copilot-cli"
-elif printf '%s' "$rawInput" | grep -q '"hook_event_name"'; then
-    toolUseId=$(extract_json_field "$rawInput" "tool_use_id")
-    transcriptPath=$(extract_json_field "$rawInput" "transcript_path")
+elif [ -n "$hookEventNameValue" ]; then
+    toolUseId=$(decode_event_value "$toolUseIdValue")
+    transcriptPath=$(decode_event_value "$transcriptPathValue")
     transcriptPathNorm=$(printf '%s' "$transcriptPath" | tr '\\' '/')
     case "$toolUseId$transcriptPathNorm" in
         *__vscode*|*/Code/*|*/Code\ -\ Insiders/*) clientName="vscode" ;;
         *) clientName="claude-code" ;;
     esac
-elif printf '%s' "$rawInput" | grep -q '"toolArgs"'; then
+elif [ -n "$toolArgsValue" ]; then
     clientName="copilot-cli"
 else
     clientName="unknown"
@@ -183,7 +497,7 @@ fileReference=""
 
 # --- skill_invocation via the skill/Skill tool ---
 if [ "$toolName" = "skill" ] || [ "$toolName" = "Skill" ]; then
-    candidate=$(extract_nested_field "$rawInput" "skill")
+    candidate=$(extract_input_field "skill")
     # Claude prefixes plugin skill names, e.g. "aspire:aspire-deployment".
     candidate="${candidate#aspire:}"
     if is_aspire_skill "$candidate"; then
@@ -196,23 +510,28 @@ fi
 # --- skill_invocation / reference_file_read via a file read tool ---
 # Copilot CLI: view, Claude Code: Read, VS Code: read_file.
 if [ "$toolName" = "view" ] || [ "$toolName" = "Read" ] || [ "$toolName" = "read_file" ]; then
-    pathToCheck=$(extract_nested_path "$rawInput")
+    pathToCheck=""
+    for field in path filePath file_path; do
+        pathToCheck=$(extract_input_field "$field")
+        if [ -n "$pathToCheck" ]; then
+            break
+        fi
+    done
     if [ -n "$pathToCheck" ]; then
         # Normalize separators and collapse duplicate slashes. Example inputs:
         #   .agents/skills/aspire/SKILL.md
         #   /home/me/proj/.github/skills/aspire-deployment/references/deploy.md
         #   C:\src\.claude\skills\aspireify\SKILL.md
         normalized=$(printf '%s' "$pathToCheck" | tr '\\' '/' | sed 's|//*|/|g')
-        # Capture the skill segment after skills/. We only honor allowlisted Aspire skills.
-        skillSegment=$(printf '%s' "$normalized" | sed -n 's|.*/skills/\([^/]*\)/.*|\1|p')
-        if [ -z "$skillSegment" ]; then
-            # Handles a leading "skills/<skill>/..." with no parent directory.
-            skillSegment=$(printf '%s' "$normalized" | sed -n 's|^skills/\([^/]*\)/.*|\1|p')
+        skillPath=$(extract_aspire_skill_path "$normalized")
+        if [ -n "$skillPath" ]; then
+            skillSegment="${skillPath%%/*}"
+            if ! is_aspire_skill "$skillSegment"; then
+                skillPath=""
+            fi
         fi
-        if [ -n "$skillSegment" ] && is_aspire_skill "$skillSegment"; then
-            remainder=$(printf '%s' "$normalized" | sed -n 's|.*/skills/||p')
-            [ -z "$remainder" ] && remainder=$(printf '%s' "$normalized" | sed -n 's|^skills/||p')
-            case "$remainder" in
+        if [ -n "$skillPath" ]; then
+            case "$skillPath" in
                 */SKILL.md|SKILL.md|*/skill.md|skill.md)
                     # A SKILL.md read is a skill invocation, not a reference-file read.
                     if [ "$shouldTrack" = false ]; then
@@ -222,9 +541,8 @@ if [ "$toolName" = "view" ] || [ "$toolName" = "Read" ] || [ "$toolName" = "read
                     fi
                     ;;
                 *)
-                    if [ "$shouldTrack" = false ] && [ -n "$remainder" ]; then
-                        # Forward only the relative path after skills/ (e.g. aspire/references/deploy.md).
-                        fileReference="$remainder"
+                    if [ "$shouldTrack" = false ] && is_aspire_reference "$skillPath"; then
+                        fileReference="$skillPath"
                         eventType="reference_file_read"
                         shouldTrack=true
                     fi
@@ -238,12 +556,24 @@ fi
 # Conservative exact prefixes (avoid matching arbitrary "*aspire*" tools):
 #   Copilot: aspire-<tool>   Claude: mcp__aspire__<tool>   VS Code: mcp_aspire_<tool>
 case "$toolName" in
-    aspire-*|mcp__aspire__*|mcp_aspire_*)
+    aspire-*)
+        mcpTool="${toolName#aspire-}"
+        ;;
+    mcp__aspire__*)
+        mcpTool="${toolName#mcp__aspire__}"
+        ;;
+    mcp_aspire_*)
+        mcpTool="${toolName#mcp_aspire_}"
+        ;;
+    *)
+        mcpTool=""
+        ;;
+esac
+if [ -n "$mcpTool" ] && is_aspire_mcp_tool "$mcpTool"; then
         mcpToolName="$toolName"
         eventType="tool_invocation"
         shouldTrack=true
-        ;;
-esac
+fi
 
 if [ "$shouldTrack" != true ]; then
     exit 0
@@ -251,6 +581,11 @@ fi
 
 # Resolve the Aspire CLI. ASPIRE_CLI_COMMAND lets tests substitute a recording stub.
 aspireCmd="${ASPIRE_CLI_COMMAND:-aspire}"
+
+case "${ASPIRE_HOOK_TIMEOUT_SECONDS:-}" in
+    1|2|3|4|5|6|7|8|9|10) hookTimeoutSeconds="$ASPIRE_HOOK_TIMEOUT_SECONDS" ;;
+    *) hookTimeoutSeconds=10 ;;
+esac
 
 # Build the argument vector explicitly so untrusted hook values are passed as discrete args
 # (never concatenated into a shell string).
@@ -260,14 +595,34 @@ args=(agent telemetry --event-type "$eventType" --client-name "$clientName" --ti
 [ -n "$mcpToolName" ] && args+=(--tool-name "$mcpToolName")
 [ -n "$fileReference" ] && args+=(--file-reference "$fileReference")
 
-# Redirect all child output to null so a banner/log line can never contaminate hook stdout.
-# Bound the call so a hung CLI can't stall the agent; swallow every failure.
-if command -v timeout >/dev/null 2>&1; then
-    timeout 10 "$aspireCmd" "${args[@]}" >/dev/null 2>&1
-else
-    "$aspireCmd" "${args[@]}" >/dev/null 2>&1
-fi
+# Run the CLI in its own process group so the timeout can terminate descendants as well as the
+# immediate process. Job control is enabled only while starting the child; disabling it again
+# prevents background-job notifications from contaminating the hook response.
+set -m
+"$aspireCmd" "${args[@]}" >/dev/null 2>&1 &
+cliPid=$!
+set +m
+
+set -m
+(
+    sleep "$hookTimeoutSeconds"
+    kill -TERM -- "-$cliPid" >/dev/null 2>&1
+    sleep 1
+    kill -KILL -- "-$cliPid" >/dev/null 2>&1
+) >/dev/null 2>&1 &
+watchdogPid=$!
+set +m
+
+wait "$cliPid" >/dev/null 2>&1
+
+# Cancel the timer when the immediate process exits, then clean up any descendant that kept the
+# process group alive after its wrapper returned.
+exec 3>&2 2>/dev/null
+kill -KILL -- "-$watchdogPid" >/dev/null 2>&1
+wait "$watchdogPid" >/dev/null 2>&1
+kill -KILL -- "-$cliPid" >/dev/null 2>&1
+exec 2>&3 3>&-
 
 # Explicit exit 0: the EXIT trap prints the response, but we must not let the CLI's exit code
-# (e.g. timeout's 124) leak through as the hook's exit code.
+# leak through as the hook's exit code.
 exit 0

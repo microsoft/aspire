@@ -2,20 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
-using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
-using Aspire.Tests.Shared;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -692,10 +687,8 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
 
     private Func<IRenderedFragment> SetUpDialog(out DashboardDialogService dialogService)
     {
-        FluentUISetupHelpers.SetupDialogInfrastructure(this);
         FluentUISetupHelpers.SetupFluentInputLabel(this);
         FluentUISetupHelpers.SetupFluentTextField(this);
-        FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentInputFile(this);
         FluentUISetupHelpers.SetupFluentList(this);
         FluentUISetupHelpers.SetupFluentCombobox(this);
@@ -703,28 +696,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         var module = JSInterop.SetupModule("./Components/Dialogs/InteractionsInputDialog.razor.js");
         module.SetupVoid("togglePasswordVisibility", _ => true);
 
-        IRenderedFragment? cut = null;
-        TestDialogService? testDialogService = null;
-        testDialogService = new TestDialogService((content, _) =>
-        {
-            cut = RenderComponent<CascadingValue<IDialogInstance>>(builder =>
-            {
-                builder.Add(p => p.Value, testDialogService!.LastInstance!);
-                builder.AddChildContent<InteractionsInputDialog>(childBuilder =>
-                {
-                    childBuilder.Add(p => p.Content, Assert.IsType<InteractionsInputsDialogViewModel>(content));
-                });
-            });
-            return Task.CompletedTask;
-        });
-        Services.RemoveAll<IDialogService>();
-        Services.AddSingleton<IDialogService>(testDialogService);
-
-        dialogService = new DashboardDialogService(
-            testDialogService,
-            new TestStringLocalizer<Aspire.Dashboard.Resources.Dialogs>(),
-            Services.GetRequiredService<DimensionManager>());
-        return () => cut ?? throw new InvalidOperationException("The dialog was not rendered.");
+        return InteractionsSetupHelpers.SetupDialog<InteractionsInputDialog, InteractionsInputsDialogViewModel>(this, p => p.Content, out dialogService);
     }
 
     private static InteractionsInputsDialogViewModel CreateSecretTextViewModel()

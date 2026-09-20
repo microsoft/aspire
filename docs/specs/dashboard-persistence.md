@@ -92,11 +92,11 @@ The standalone `aspire dashboard run` command accepts `--application-name` and `
 
 When no data directory is configured, persistent modes use the `dashboard` directory under `ASPIRE_HOME`, whose default is the current user's `.aspire` directory. The configured directory must be scoped to and protected for the current user.
 
-On Unix, the per-application directory beneath the data root is created with owner-only (`0700`) permissions. Existing application directories are also restricted to that mode before persistent data is accessed. On Windows, the directory is created without Unix permission flags and uses the inherited ACL.
+On Unix, the shared `runs` and `resumes` directories are created with owner-only (`0700`) permissions. Resume application directories are also restricted to that mode before persistent data is accessed. Existing directories are repaired to that mode. On Windows, directories are created without Unix permission flags and use inherited ACLs.
 
 ## Storage layout
 
-Persistent data is partitioned by application. The application directory name contains a readable prefix and a stable hash:
+Persistent data uses an application storage key that contains a readable prefix and a stable hash:
 
 ```text
 <sanitized-application-name>-<16-character-xxhash3>
@@ -117,15 +117,15 @@ The Dashboard creates the directory with `Directory.CreateTempSubdirectory`, rem
 
 ```text
 <data-root>/
-└── <application-directory>/
-    └── runs/
-        ├── <utc-run-id>.lock
-        └── <utc-run-id>/
-            ├── dashboard.db
-            └── run.json
+└── runs/
+    ├── <utc-run-id>.lock
+    └── <utc-run-id>/
+        ├── <application-storage-key>
+        ├── dashboard.db
+        └── run.json
 ```
 
-Run IDs use the UTC start time in `yyyyMMddTHHmmssfffZ` format. `run.json` contains:
+All applications store run directories directly beneath the shared `runs` directory. Run IDs use the UTC start time in `yyyyMMddTHHmmssfffZ` format. Each run directory contains an empty file named with the application storage key. Discovery checks for this marker before opening `run.json`, avoiding metadata reads for other applications. `run.json` contains:
 
 - schema version
 - run ID
@@ -140,9 +140,10 @@ The metadata is written only after the database schema is initialized, so an int
 
 ```text
 <data-root>/
-├── <application-directory>.lock
-└── <application-directory>/
-    └── dashboard.db
+└── resumes/
+    ├── <application-storage-key>.lock
+    └── <application-storage-key>/
+        └── dashboard.db
 ```
 
 Later Dashboard processes continue writing to the same database. This mode does not create run metadata or expose the run selector.
@@ -151,11 +152,12 @@ SQLite can also create `dashboard.db-wal` and `dashboard.db-shm` beside a writab
 
 ## Run ownership and retention
 
-Each writable run has an adjacent lock file held open with exclusive sharing and `DeleteOnClose`. An adjacent lock lets a cooperating process hold the lock while deleting the run directory on Windows. A second Dashboard cannot use the same `Run` directory or `Resume` application database while its owner holds the lock.
+Each working directory has an adjacent lock file held open with exclusive sharing and `DeleteOnClose`. For `Run` mode, an adjacent lock lets a cooperating process hold the lock while deleting the run directory on Windows. A second Dashboard cannot use the same `Run` directory or `Resume` application database while its owner holds the lock.
 
 Historical discovery only includes directories that:
 
 - are not the current run;
+- contain the marker for the current application storage key;
 - are not locked by another Dashboard process;
 - have readable, valid `run.json` metadata; and
 - have the current metadata schema version.

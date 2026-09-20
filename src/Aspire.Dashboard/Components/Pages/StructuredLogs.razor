@@ -58,6 +58,7 @@
                         }
 
                         <div id="@ScrollContainerId" class="logs-grid-container continuous-scroll-overflow" tabindex="0" role="region" aria-label="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsHeader)]">
+                            <aspire-scroll-to-bottom hidden data-scroll-to-bottom-label="@ControlsStringsLoc[nameof(ControlsStrings.ScrollToBottom)]"></aspire-scroll-to-bottom>
                             <GridColumnManager @ref="_manager" Columns="@_gridColumns">
                                 <AspireFluentDataGrid @ref="_dataGrid"
                                                 HeaderCellAsButtonWithMenu="true"

@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureWebPubSubConnectionPropertiesTests
+public class AzureWebPubSubConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureWebPubSubResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var webpubsub = builder.AddAzureWebPubSub("webpubsub");
 
         var resource = Assert.Single(builder.Resources.OfType<AzureWebPubSubResource>());

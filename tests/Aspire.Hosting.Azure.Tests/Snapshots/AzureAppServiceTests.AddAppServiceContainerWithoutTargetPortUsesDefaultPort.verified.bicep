@@ -1,4 +1,4 @@
-@description('The location for the resource(s) to be deployed.')
+﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param env_outputs_azure_container_registry_endpoint string

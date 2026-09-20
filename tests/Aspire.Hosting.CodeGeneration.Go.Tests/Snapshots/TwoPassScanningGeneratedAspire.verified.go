@@ -1193,6 +1193,12 @@ type DistributedApplicationResourceEvent interface {
 	handleReference
 }
 
+// DotnetProgramResource marks types implementing IDotnetProgramResource.
+// Marker interface.
+type DotnetProgramResource interface {
+	handleReference
+}
+
 // ExpressionValue marks types implementing IExpressionValue.
 // Marker interface.
 type ExpressionValue interface {

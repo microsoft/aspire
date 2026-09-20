@@ -1,5 +1,138 @@
 # GitHub Workflows
 
+## Agentic workflow maintenance
+
+Agentic workflows are authored in `.github/workflows/*.md`. Upgrade the active
+compiler to the latest stable release and inspect its suggested migrations before
+recompiling:
+
+```shell
+gh extension upgrade aw
+gh aw version
+gh aw fix
+gh aw compile --force-refresh-action-pins
+gh aw compile
+```
+
+`gh aw fix` is a dry run unless `--write` is supplied. Its write mode also refreshes
+authoring agents and skills; apply source migrations deliberately rather than
+adding unrelated scaffolding. Keep the pinned `setup-cli` action and its `version`
+input in `copilot-setup-steps.yml` aligned with the compiler used to generate the
+workflows.
+
+Commit the generated `.lock.yml` files and `.github/aw/actions-lock.json` alongside
+their source changes. `agentics-maintenance-microsoft-aspire.dev.yml` is generated
+by the same full compilation despite not having a `.lock.yml` suffix. Do not edit
+generated workflows manually. The second compilation should produce no further
+changes.
+
+Explicit action versions in Markdown survive recompilation, so update deprecated
+inputs and action runtimes in the sources, not just the generated YAML. The
+`client-id` input to `actions/create-github-app-token` replaces `app-id`; the
+existing `ASPIRE_BOT_APP_ID` secret remains the identity source.
+
+The compiler's diagnostic `agent` artifact does not include arbitrary files from
+`/tmp/gh-aw/agent/`. Workflows that publish custom agent files must upload a named
+artifact in `post-steps`, allowlist only the required paths, and download it in the
+consuming safe-output job. CI analysis and milestone changelogs use this pattern;
+their canonical safe-output JSON remains compiler-managed.
+
+`locker.yml` still uses the archived `microsoft/vscode-github-triage-actions`
+Node 20 action. There is no supported Node 24 upgrade for that dependency;
+replacing it requires a separate migration of its authentication and locking
+behavior, rather than merely changing an action pin.
+
+## Main to Release 14.0 Synchronization
+
+`sync-main-to-release-14.yml` keeps the advance `release/14.0` integration branch
+up to date while `main` develops 13.6. It runs daily at **08:23 UTC** and can be
+dispatched manually, but only from `main` in `microsoft/aspire`.
+
+The workflow uses the existing Aspire App secrets (`ASPIRE_BOT_APP_ID` and
+`ASPIRE_BOT_PRIVATE_KEY`) with repository-scoped contents and pull-request write
+permissions. It only calls GitHub APIs; it never checks out or executes branch
+code with the bot token.
+
+The token deliberately uses the App's existing permissions, without requesting
+workflow-write access or requiring an installation permission update. Synchronizing
+already-existing workflow files with these permissions still needs live validation.
+If GitHub rejects a sync involving workflow files, the run fails visibly and a
+maintainer can complete that sync manually, using a merge commit. Investigate the
+actual failure before requesting broader App permissions; do not drop workflow
+changes from the sync or substitute more privileged credentials automatically.
+
+Each batch creates a `sync/main-to-release-14.0/<main-sha>` branch pointing at a
+snapshot of `main`, then opens a PR into `release/14.0`. There is at most one open
+sync PR. An open PR is reconciled rather than replaced or force-pushed, preserving
+manual conflict resolutions and avoiding CI churn. Commits arriving on `main`
+while that PR is open are picked up by the next run after it merges.
+
+### Auto-merge prerequisites
+
+- Enable **Allow merge commits** and **Allow auto-merge** in repository settings.
+- Allow merge commits in every ruleset applying to `release/14.0`. A separate
+  `main` ruleset can continue requiring squash merges for normal feature PRs.
+- Ensure branch push restrictions allow the Aspire App to merge. Required status
+  checks and reviews are respected, not bypassed or self-approved by the bot.
+
+With an approval requirement, a maintainer still needs to approve each PR; it
+then merges automatically when the remaining requirements pass. Fully unattended
+merges also require a deliberate branch-policy decision about reviews. The
+workflow does not change any repository settings or branch protections.
+
+To exempt only the App from approvals, use an approval-only ruleset targeting
+exactly `release/14.0`, with the Aspire App in its bypass list using **For pull
+requests only**. Keep required CI (including `Final Results`) in a **separate**
+ruleset without an App bypass. Keep force-push and deletion protections outside
+the bypassable ruleset too. Remove or adjust overlapping approval requirements,
+including classic branch protection: a more permissive ruleset does not override
+another rule. The bypass is granted to the merging App, not to a PR author; this
+workflow additionally verifies the PR's bot author, repository, branch prefix,
+and workflow marker before requesting a merge.
+
+Native auto-merge is intentionally the only deferred merge mechanism here.
+There are [reports that App approval bypasses are not honored by native
+auto-merge](https://github.com/orgs/community/discussions/190610), even when the
+normal merge API honors them. If a sync PR remains blocked on approval after CI
+passes, approve it manually; a CI-completion merge handler can be considered
+later. Do not solve that problem by giving the App permission to bypass CI.
+See GitHub's [bypass configuration](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository#granting-bypass-permissions-for-your-branch-or-tag-ruleset)
+and [rule layering](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets#about-rule-layering)
+documentation.
+
+If repository merge commits or auto-merge are disabled, the workflow leaves the
+PR open, warns in the run summary, and retries on the next run. Conflicts likewise
+leave an actionable PR open. Immediately mergeable states (`clean`, `has_hooks`,
+and `unstable`, matching GitHub CLI) use a normal merge commit with an expected-head
+check, without an administrative bypass. GitHub still enforces non-bypassable
+required checks, and a rejected merge fails the run rather than being ignored. If
+GitHub has not computed mergeability after a short retry window, rerun the
+workflow from `main` or let the next daily run reconcile it. Other API or
+permission failures fail the run and are covered by the scheduled-workflow watchdog.
+
+### Resolving conflicts
+
+Fetch and check out the sync PR's branch, merge `origin/release/14.0` into it,
+resolve conflicts, and push to that same branch. Keep the **14.0** version in
+`eng/Versions.props` when resolving version conflicts; other dependency changes
+from `main` should still flow forward. The next run retries enabling auto-merge.
+
+Never resolve these conflicts by merging `release/14.0` into `main`: doing so
+would leak 14.0-only changes into 13.6. Always merge sync PRs using **merge commits**,
+not squash or rebase, so Git can recognize already-integrated main commits.
+
+### Ending the temporary branch arrangement
+
+1. Create `release/13.6` from `main` for stabilization.
+2. Disable this workflow in Actions, cancel any queued/active runs, and merge or
+   close any outstanding sync PR before starting the reverse integration.
+3. Merge `release/14.0` back into `main`, preserving its 14.0 version. Prefer a
+   merge commit for this one-off integration too; a squash-only `main` ruleset
+   needs a temporary exception if preserving that ancestry.
+4. Remove the temporary synchronization workflow and its watchdog entry from
+   `monitor-scheduled-workflows.config.json`. `main` now develops 14.0; 13.6 fixes
+   can follow the normal release-branch backmerge process.
+
 ## Quarantine/Disable Test Workflow
 
 The `apply-test-attributes.yml` workflow allows repository maintainers to quarantine, unquarantine, disable, or enable tests directly from issue or PR comments.

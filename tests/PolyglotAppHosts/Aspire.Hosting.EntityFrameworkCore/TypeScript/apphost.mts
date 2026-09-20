@@ -3,8 +3,10 @@ import { createBuilder } from './.aspire/modules/aspire.mjs';
 const builder = await createBuilder();
 
 const api = await builder.addProject("api", "./src/Api");
+const dotnetApi = await builder.addDotnetProject("dotnet-api", "./src/Api/Api.csproj");
 const apiMigrations = await builder.addProject("api-migrations-project", "./src/Api.Migrations");
 
+await dotnetApi.addEFMigrations("dotnet-api-migrations");
 await api.addEFMigrations("api-migrations")
     .withMigrationsProject({ migrationsProject: "./src/Api.Migrations" });
 await api.addEFMigrations("api-dbcontext-migrations", { dbContextTypeName: "Api.Data.AppDbContext" })

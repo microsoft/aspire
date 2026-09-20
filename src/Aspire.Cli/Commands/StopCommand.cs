@@ -37,6 +37,9 @@ internal sealed class StopCommand : BaseCommand
     private const int MinimumHostingMajorVersionForPersistentResourceCleanup = 13;
     private const int MinimumHostingMinorVersionForPersistentResourceCleanup = 5;
     private const string MinimumHostingVersionForPersistentResourceCleanupDisplay = "13.5.0";
+    private const int MinimumHostingMajorVersionForPersistentVolumeCleanup = 13;
+    private const int MinimumHostingMinorVersionForPersistentVolumeCleanup = 6;
+    private const string MinimumHostingVersionForPersistentVolumeCleanupDisplay = "13.6.0";
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", StopCommandStrings.ProjectArgumentDescription);
 
@@ -48,6 +51,11 @@ internal sealed class StopCommand : BaseCommand
     private static readonly Option<bool> s_forceOption = new("--force")
     {
         Description = StopCommandStrings.ForceOptionDescription
+    };
+
+    private static readonly Option<bool> s_volumesOption = new("--volumes")
+    {
+        Description = StopCommandStrings.VolumesOptionDescription
     };
 
     public StopCommand(
@@ -80,6 +88,7 @@ internal sealed class StopCommand : BaseCommand
         Options.Add(s_appHostOption);
         Options.Add(s_allOption);
         Options.Add(s_forceOption);
+        Options.Add(s_volumesOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -87,6 +96,7 @@ internal sealed class StopCommand : BaseCommand
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var stopAll = parseResult.GetValue(s_allOption);
         var force = parseResult.GetValue(s_forceOption);
+        var volumes = parseResult.GetValue(s_volumesOption);
         using var activity = _profilingTelemetry.StartStopCommand(stopAll, passedAppHostProjectFile is not null);
 
         // Validate mutual exclusivity of --all and --project
@@ -100,9 +110,14 @@ internal sealed class StopCommand : BaseCommand
             return CommandResult.Failure(CompleteStopActivity(activity, CliExitCodes.InvalidCommand), string.Format(CultureInfo.InvariantCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_allOption.Name, s_forceOption.Name));
         }
 
+        if (volumes && !force)
+        {
+            return CommandResult.Failure(CompleteStopActivity(activity, CliExitCodes.InvalidCommand), string.Format(CultureInfo.InvariantCulture, StopCommandStrings.VolumesRequiresForce, s_volumesOption.Name, s_forceOption.Name));
+        }
+
         if (force)
         {
-            return CommandResult.FromExitCode(CompleteStopActivity(activity, await ForceStopAppHostAsync(passedAppHostProjectFile, cancellationToken).ConfigureAwait(false)));
+            return CommandResult.FromExitCode(CompleteStopActivity(activity, await ForceStopAppHostAsync(passedAppHostProjectFile, volumes, cancellationToken).ConfigureAwait(false)));
         }
 
         // Handle --all: stop all running AppHosts
@@ -120,7 +135,7 @@ internal sealed class StopCommand : BaseCommand
         return CommandResult.FromExitCode(CompleteStopActivity(activity, await ExecuteInteractiveAsync(passedAppHostProjectFile, cancellationToken)));
     }
 
-    private async Task<int> ForceStopAppHostAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken)
+    private async Task<int> ForceStopAppHostAsync(FileInfo? passedAppHostProjectFile, bool deleteVolumes, CancellationToken cancellationToken)
     {
         var stopResult = _hostEnvironment.SupportsInteractiveInput
             ? await ExecuteInteractiveWithResultAsync(passedAppHostProjectFile, cancellationToken).ConfigureAwait(false)
@@ -144,7 +159,7 @@ internal sealed class StopCommand : BaseCommand
             return CliExitCodes.FailedToFindProject;
         }
 
-        return await CleanupPersistentResourcesAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+        return await CleanupPersistentResourcesAsync(appHostFile, deleteVolumes, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<FileInfo?> TryResolveAppHostFileAsync(
@@ -333,16 +348,16 @@ internal sealed class StopCommand : BaseCommand
         return new StopAppHostResult(allStopped ? CliExitCodes.Success : CliExitCodes.FailedToDotnetRunAppHost, appHostFile);
     }
 
-    private async Task<int> CleanupPersistentResourcesAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    private async Task<int> CleanupPersistentResourcesAsync(FileInfo appHostFile, bool deleteVolumes, CancellationToken cancellationToken)
     {
-        await WarnIfPersistentResourceCleanupMayBeUnsupportedAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+        await WarnIfCleanupMayBeUnsupportedAsync(appHostFile, deleteVolumes, cancellationToken).ConfigureAwait(false);
 
         var appHostPath = appHostFile.FullName;
         var appHostDisplayPath = FileSystemHelper.ShortenPaths([appHostPath], _environment)[appHostPath];
         var workloadId = AppHostWorkloadId.Create(appHostFile);
         var cleanupResult = await InteractionService.ShowStatusAsync(
             string.Format(CultureInfo.CurrentCulture, StopCommandStrings.CleaningPersistentResources, appHostDisplayPath),
-            () => _dcpCleanupService.CleanupAsync(workloadId, cancellationToken),
+            () => _dcpCleanupService.CleanupAsync(workloadId, deleteVolumes, cancellationToken),
             emoji: KnownEmojis.Gear).ConfigureAwait(false);
 
         InteractionService.DisplayPlainText("");
@@ -364,7 +379,7 @@ internal sealed class StopCommand : BaseCommand
         return CliExitCodes.Success;
     }
 
-    private async Task WarnIfPersistentResourceCleanupMayBeUnsupportedAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    private async Task WarnIfCleanupMayBeUnsupportedAsync(FileInfo appHostFile, bool deleteVolumes, CancellationToken cancellationToken)
     {
         if (!IsDotNetAppHost(appHostFile))
         {
@@ -389,7 +404,14 @@ internal sealed class StopCommand : BaseCommand
             return;
         }
 
-        if (appHostInfo.IsUsingCliBundle || SupportsPersistentResourceCleanup(appHostInfo.AspireHostingVersion))
+        var minimumMajorVersion = deleteVolumes
+            ? MinimumHostingMajorVersionForPersistentVolumeCleanup
+            : MinimumHostingMajorVersionForPersistentResourceCleanup;
+        var minimumMinorVersion = deleteVolumes
+            ? MinimumHostingMinorVersionForPersistentVolumeCleanup
+            : MinimumHostingMinorVersionForPersistentResourceCleanup;
+
+        if (appHostInfo.IsUsingCliBundle || SupportsCleanup(appHostInfo.AspireHostingVersion, minimumMajorVersion, minimumMinorVersion))
         {
             return;
         }
@@ -397,14 +419,20 @@ internal sealed class StopCommand : BaseCommand
         var appHostVersion = string.IsNullOrWhiteSpace(appHostInfo.AspireHostingVersion)
             ? StopCommandStrings.UnknownAspireHostingVersion
             : appHostInfo.AspireHostingVersion;
+        var unsupportedMessage = deleteVolumes
+            ? StopCommandStrings.DcpVolumeCleanupUnsupportedAppHostVersion
+            : StopCommandStrings.DcpCleanupUnsupportedAppHostVersion;
+        var minimumVersionDisplay = deleteVolumes
+            ? MinimumHostingVersionForPersistentVolumeCleanupDisplay
+            : MinimumHostingVersionForPersistentResourceCleanupDisplay;
         InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(
             CultureInfo.CurrentCulture,
-            StopCommandStrings.DcpCleanupUnsupportedAppHostVersion,
+            unsupportedMessage,
             appHostVersion,
-            MinimumHostingVersionForPersistentResourceCleanupDisplay));
+            minimumVersionDisplay));
     }
 
-    private static bool SupportsPersistentResourceCleanup(string? aspireHostingVersion)
+    private static bool SupportsCleanup(string? aspireHostingVersion, int minimumMajorVersion, int minimumMinorVersion)
     {
         if (string.IsNullOrWhiteSpace(aspireHostingVersion) ||
             !SemVersion.TryParse(aspireHostingVersion, SemVersionStyles.Any, out var version))
@@ -412,9 +440,9 @@ internal sealed class StopCommand : BaseCommand
             return false;
         }
 
-        return version.Major > MinimumHostingMajorVersionForPersistentResourceCleanup ||
-            (version.Major == MinimumHostingMajorVersionForPersistentResourceCleanup &&
-             version.Minor >= MinimumHostingMinorVersionForPersistentResourceCleanup);
+        return version.Major > minimumMajorVersion ||
+            (version.Major == minimumMajorVersion &&
+             version.Minor >= minimumMinorVersion);
     }
 
     private bool IsDotNetAppHost(FileInfo appHostFile)

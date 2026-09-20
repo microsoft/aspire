@@ -26,7 +26,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [InlineData(9007)]
     public void AddAzureCosmosDBWithEmulatorGetsExpectedPort(int? port = null)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos");
 
@@ -47,7 +47,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [InlineData("1.0.7")]
     public void AddAzureCosmosDBWithEmulatorGetsExpectedImageTag(string imageTag)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos");
 
@@ -68,7 +68,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [InlineData(12)]
     public async Task AddAzureCosmosDBWithPartitionCountCanOverrideNumberOfPartitions(int partitionCount)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos");
 
@@ -81,7 +81,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void AddAzureCosmosDBWithDataExplorer()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos");
         cosmos.RunAsEmulator(e => e.WithDataExplorer());
@@ -98,7 +98,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void AzureCosmosDBHasCorrectConnectionStrings_ForAccountEndpoint()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos");
         var db1 = cosmos.AddCosmosDatabase("db1");
@@ -116,7 +116,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [InlineData(false)]
     public void AzureCosmosDBHasCorrectConnectionStrings(bool useAccessKeyAuth)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator();
         if (useAccessKeyAuth)
@@ -146,7 +146,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void AzureCosmosDBAppliesAzureFunctionsConfiguration()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos");
         var db1 = cosmos.AddCosmosDatabase("db1");
@@ -190,7 +190,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [InlineData(true)]
     public async Task AddAzureCosmosDB(bool useAcaInfrastructure)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, output);
 
         if (useAcaInfrastructure)
         {
@@ -244,7 +244,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task AddAzureCosmosDatabase_WorksWithAccessKeyAuth_ChildResources()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos")
             .WithAccessKeyAuthentication();
@@ -266,7 +266,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task AddAzureCosmosDBEmulator()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator(e =>
         {
@@ -287,7 +287,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task AddAzureCosmosDBClassicEmulator()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsClassicEmulator(e =>
         {
@@ -308,7 +308,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task AddAzureCosmosDB_WithAccessKeyAuthentication_NoKeyVaultWithEmulator()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         builder.AddAzureCosmosDB("cosmos").WithAccessKeyAuthentication().RunAsEmulator();
         builder.AddAzureCosmosDB("cosmos2").WithAccessKeyAuthentication().RunAsClassicEmulator();
@@ -325,7 +325,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [InlineData("mykeyvault")]
     public async Task AddAzureCosmosDBViaRunMode_WithAccessKeyAuthentication(string? kvName)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         IEnumerable<CosmosDBSqlDatabase>? callbackDatabases = null;
         var cosmos = builder.AddAzureCosmosDB("cosmos")
@@ -392,7 +392,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task AddAzureCosmosDBViaRunMode_NoAccessKeyAuthentication()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         IEnumerable<CosmosDBSqlDatabase>? callbackDatabases = null;
         var cosmos = builder.AddAzureCosmosDB("cosmos")
@@ -437,7 +437,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [InlineData(null)]
     public async Task AddAzureCosmosDBViaPublishMode_WithAccessKeyAuthentication(string? kvName)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         IEnumerable<CosmosDBSqlDatabase>? callbackDatabases = null;
         var cosmos = builder.AddAzureCosmosDB("cosmos")
@@ -496,7 +496,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task AddAzureCosmosDBViaPublishMode_NoAccessKeyAuthentication()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         IEnumerable<CosmosDBSqlDatabase>? callbackDatabases = null;
         var cosmos = builder.AddAzureCosmosDB("cosmos")
@@ -537,7 +537,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task AddAzureCosmosDBViaPublishMode_WithDefaultAzureSku()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
         var cosmos = builder.AddAzureCosmosDB("cosmos")
             .WithDefaultAzureSku();
 
@@ -548,7 +548,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void RunAsEmulatorAppliesEmulatorResourceAnnotation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
         var cosmos = builder.AddAzureCosmosDB("cosmos")
                            .RunAsEmulator();
 
@@ -560,7 +560,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void RunAsClassicEmulatorAppliesEmulatorResourceAnnotation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
         var cosmos = builder.AddAzureCosmosDB("cosmos")
                            .RunAsClassicEmulator();
 
@@ -572,7 +572,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task RunAsEmulatorAppliesOtlpExporterAnnotation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
         var cosmos = builder.AddAzureCosmosDB("cosmos")
                            .RunAsEmulator();
 
@@ -603,7 +603,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task AddAsExistingResource_RespectsExistingAzureResourceAnnotation_ForAzureCosmosDBResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
         var existingName = builder.AddParameter("existing-cosmosdb-name");
         var existingResourceGroup = builder.AddParameter("existing-cosmosdb-rg");
 
@@ -627,7 +627,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     public void WithAccessKeyAuthentication_SetsSecretOwner(string? kvName)
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos-data");
 
@@ -657,7 +657,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void RunAsEmulatorRegistersHttpsCertificateConfigurationCallback()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
         var cosmos = builder.AddAzureCosmosDB("cosmos")
                            .RunAsEmulator();
 
@@ -668,7 +668,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void RunAsClassicEmulatorDoesNotRegisterHttpsCertificateConfigurationCallback()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
         var cosmos = builder.AddAzureCosmosDB("cosmos")
                            .RunAsClassicEmulator();
 
@@ -679,7 +679,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task RunAsEmulatorHttpsCertificateCallbackSetsExpectedEnvironmentVariables()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
         var cosmos = builder.AddAzureCosmosDB("cosmos")
                            .RunAsEmulator();
 
@@ -714,7 +714,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task RunAsEmulatorCertificateTrustCallbackSetsNodeExtraCaCerts()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
         var cosmos = builder.AddAzureCosmosDB("cosmos")
                            .RunAsEmulator();
 
@@ -746,7 +746,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task RunAsEmulatorHttpsCertificateCallbackSetsPasswordWhenProvided()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
         var cosmos = builder.AddAzureCosmosDB("cosmos")
                            .RunAsEmulator();
 
@@ -782,7 +782,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task RunAsEmulatorSwitchesEndpointToHttpsWhenCertificateAvailable()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, output);
 
         builder.Services.AddSingleton<IDeveloperCertificateService>(new TestDeveloperCertificateService(
             new List<X509Certificate2>(),
@@ -813,7 +813,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task RunAsEmulatorKeepsHttpWhenNoCertificateAvailable()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, output);
 
         builder.Services.AddSingleton<IDeveloperCertificateService>(new TestDeveloperCertificateService(
             new List<X509Certificate2>(),
@@ -845,7 +845,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task WithDataExplorerSwitchesEndpointToHttpsWhenCertificateAvailable()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, output);
 
         builder.Services.AddSingleton<IDeveloperCertificateService>(new TestDeveloperCertificateService(
             new List<X509Certificate2>(),
@@ -874,7 +874,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task WithDataExplorerKeepsHttpWhenNoCertificateAvailable()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, output);
 
         builder.Services.AddSingleton<IDeveloperCertificateService>(new TestDeveloperCertificateService(
             new List<X509Certificate2>(),
@@ -904,7 +904,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void RunAsEmulatorUsesVNextLatestImageTag()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator();
 
@@ -917,7 +917,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void RunAsPreviewEmulatorUsesVNextLatestImageTag()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
 #pragma warning disable CS0618 // Type or member is obsolete
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsPreviewEmulator();
@@ -932,7 +932,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void RunAsClassicEmulatorUsesStableImageTag()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsClassicEmulator();
 
@@ -945,7 +945,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task WithDataVolumeOnVNextEmulatorUsesDataPathWithoutPersistenceEnvVar()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos")
                            .RunAsEmulator(e => e.WithDataVolume());
@@ -965,7 +965,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task WithDataVolumeOnClassicEmulatorUsesAppDataPathWithPersistenceEnvVar()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos")
                            .RunAsClassicEmulator(e => e.WithDataVolume());
@@ -983,7 +983,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void WithPartitionCountThrowsOnVNextEmulator()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos");
 
@@ -995,7 +995,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [InlineData(251)]
     public void WithPartitionCountThrowsWhenOutOfRange(int count)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos");
 
@@ -1005,7 +1005,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task WithDataExplorerExposesCustomPortAndEnablesExplorer()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos")
                            .RunAsEmulator(e => e.WithDataExplorer(9999));
@@ -1024,7 +1024,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void RunAsEmulatorUsesUrlBasedConnectionString()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator();
 
@@ -1040,7 +1040,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task RunAsEmulatorDisablesDataExplorerByDefault()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator();
 
@@ -1054,7 +1054,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task RunAsClassicEmulatorDoesNotSetEnableExplorer()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsClassicEmulator();
 
@@ -1066,7 +1066,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void RunAsEmulatorConfiguresHealthEndpoint()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator();
 
@@ -1081,7 +1081,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void RunAsClassicEmulatorRegistersHealthCheck()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsClassicEmulator();
 
@@ -1091,7 +1091,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void WithDataVolumeUsesProvidedVolumeName()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos")
                            .RunAsEmulator(e => e.WithDataVolume("my-custom-volume"));
@@ -1105,7 +1105,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [InlineData(250)]
     public async Task WithPartitionCountAcceptsBoundaryValues(int count)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsClassicEmulator(e => e.WithPartitionCount(count));
 
@@ -1116,7 +1116,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void WithDataExplorerDefaultPortLeavesHostPortNull()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos")
                            .RunAsEmulator(e => e.WithDataExplorer());
@@ -1130,7 +1130,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task RunAsEmulatorResourceReadyThrowsWhenCosmosClientNotInitialized()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator();
 
@@ -1145,7 +1145,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task RunAsEmulatorConnectionStringAvailableInitializesCosmosClient()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator(e =>
         {
@@ -1193,7 +1193,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void RunAsEmulatorInPublishModeIsNoOp()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator(e => e.WithDataVolume());
 
@@ -1207,7 +1207,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void RunAsClassicEmulatorInPublishModeIsNoOp()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsClassicEmulator(e => e.WithDataVolume());
 
@@ -1220,7 +1220,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task RunAsClassicEmulatorHealthCheckThrowsBeforeCosmosClientInitialized()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         builder.AddAzureCosmosDB("cosmos").RunAsClassicEmulator();
 
@@ -1239,7 +1239,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task RunAsEmulatorMarksHealthEndpointUrlAsDetailsOnly()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator();
 
@@ -1264,7 +1264,7 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task WithDataExplorerSetsDataExplorerDisplayText()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var cosmos = builder.AddAzureCosmosDB("cosmos").RunAsEmulator(e => e.WithDataExplorer());
 
