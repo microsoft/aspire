@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "Added experimental, opt-in support for Azure Container Apps Express deployment mode via `.AsExpress()` on a Container App environment (available from both C# and TypeScript AppHosts). Express environments default to zero minimum replicas and skip the implicit Consumption workload profile, managed dashboard, and .NET data-protection configuration, while app-to-app references resolve to standard public HTTPS endpoints.",
-  "docsPrs": [],
+  "docsPrs": [
+    1694
+  ],
   "docsRequired": true,
   "emoji": "⚡",
   "firstMergedAt": "2026-09-17T19:00:21Z",
