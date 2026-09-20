@@ -8,6 +8,17 @@ using Terminals.AppHost;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+builder.AddContainer("minecraft", "itzg/minecraft-server")
+    .WithContainerName("minecraft")
+    .WithEndpoint(port: 25565, targetPort: 25565, name: "minecraft", isProxied: false)
+    .WithEnvironment("EULA", "TRUE")
+    .WithTerminal(options =>
+    {
+        options.Columns = 120;
+        options.Rows = 32;
+        options.ShowTerminalHost = true;
+    });
+
 builder.AddCSharpApp("terminal-features", "Scripts/terminal-features.cs")
     .WithTerminal(options =>
     {
