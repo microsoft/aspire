@@ -473,16 +473,16 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // resolve it) but its constructor is internal, and the DI container only activates public constructors.
         _innerBuilder.Services.AddSingleton(sp =>
         {
-            var logger = sp.GetRequiredService<ILogger<Terminals.TerminalService>>();
+            var logger = sp.GetRequiredService<ILogger<TerminalService>>();
 
-            return new Terminals.TerminalService(logger, sp.GetRequiredService<IConfiguration>())
+            return new TerminalService(logger, sp.GetRequiredService<IConfiguration>())
             {
                 // Terminals belonging to resources are discovered from the model rather than registered, so the
                 // service is given a catalog to consult instead of owning their lifetime.
-                ResourceTerminals = new Terminals.ResourceTerminalCatalog(sp.GetRequiredService<DistributedApplicationModel>(), logger)
+                ResourceTerminals = new ResourceTerminalCatalog(sp.GetRequiredService<DistributedApplicationModel>(), logger)
             };
         });
-        _innerBuilder.Services.AddHostedService<Terminals.TerminalServiceHost>();
+        _innerBuilder.Services.AddHostedService<TerminalServiceHost>();
 
         ConfigureHealthChecks();
 

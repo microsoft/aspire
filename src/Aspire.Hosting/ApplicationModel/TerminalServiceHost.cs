@@ -5,7 +5,7 @@ using Microsoft.Extensions.Hosting;
 
 #pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
 
-namespace Aspire.Hosting.Terminals;
+namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// Stops AppHost-owned terminals during host shutdown rather than waiting for service-provider disposal.

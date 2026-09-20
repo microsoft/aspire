@@ -6,7 +6,6 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Lifecycle;
-using Aspire.Hosting.Terminals;
 using Aspire.Shared;
 using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.Configuration;
