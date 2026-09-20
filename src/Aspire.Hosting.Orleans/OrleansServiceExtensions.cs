@@ -360,6 +360,39 @@ public static class OrleansServiceExtensions
     }
 
     /// <summary>
+    /// Configures a resource to use the specified Orleans provider type.
+    /// </summary>
+    /// <param name="builder">The connection-string resource builder.</param>
+    /// <param name="providerType">The Orleans provider type to use for the resource.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// Use this when a resource can be used as a drop-in replacement for an Orleans provider type that is
+    /// inferred from a different resource name. For example, Garnet can be used wherever Orleans expects a
+    /// Redis provider.
+    /// </remarks>
+    /// <example>
+    /// Configure a Garnet resource as a Redis Orleans provider:
+    /// <code>
+    /// var garnet = builder.AddGarnet("garnet")
+    ///     .WithOrleansProviderType("Redis");
+    ///
+    /// var orleans = builder.AddOrleans("orleans")
+    ///     .WithClustering(garnet);
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="providerType"/> is null, empty, or consists only of white-space characters.</exception>
+    [AspireExport]
+    public static IResourceBuilder<T> WithOrleansProviderType<T>(this IResourceBuilder<T> builder, string providerType)
+        where T : IResourceWithConnectionString
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerType);
+
+        return builder.WithAnnotation(new OrleansProviderTypeAnnotation(providerType), ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    /// <summary>
     /// Returns a model of the clients of an Orleans service.
     /// </summary>
     /// <param name="orleansService">The Orleans service</param>

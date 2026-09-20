@@ -68,11 +68,32 @@ public class TraceCreator
     {
         if (Random.Shared.NextDouble() > 0.05)
         {
-            var name = parentName + "-0";
-
             var links = CreateLinks();
+            var distinctLinks = links.DistinctBy(l => l.Context.SpanId).ToArray();
 
-            using var activity = s_activitySource.StartActivity(ActivityKind.Client, name: name, links: links.DistinctBy(l => l.Context.SpanId));
+            var sameTraceCount = 0;
+            var crossTraceCount = 0;
+            var currentTraceId = Activity.Current?.TraceId.ToString();
+            foreach (var link in distinctLinks)
+            {
+                if (link.Context.TraceId.ToString() == currentTraceId)
+                {
+                    sameTraceCount++;
+                }
+                else
+                {
+                    crossTraceCount++;
+                }
+            }
+
+            var name = $"{parentName}-0";
+            var resolvedName = name;
+            if (distinctLinks.Length > 0)
+            {
+                resolvedName = $"{name} (links: {distinctLinks.Length}, same-trace: {sameTraceCount}, cross-trace: {crossTraceCount})";
+            }
+
+            using var activity = s_activitySource.StartActivity(ActivityKind.Client, name: resolvedName, links: distinctLinks);
             if (activity == null)
             {
                 return;
@@ -120,8 +141,6 @@ public class TraceCreator
                 activityTags.Add($"key-{j}", "Value!");
             }
 
-            // Create the activity link. There is a 50% chance the activity link goes to an activity
-            // that doesn't exist. This logic is here to ensure incomplete links are handled correctly.
             ActivityContext activityContext;
             if (!IncludeBrokenLinks || Random.Shared.Next() % 2 == 0)
             {
@@ -134,10 +153,35 @@ public class TraceCreator
                     ActivityTraceId.CreateRandom(),
                     ActivitySpanId.CreateRandom(),
                     ActivityTraceFlags.None);
+
+                if (Random.Shared.Next() % 2 == 0)
+                {
+                    // 50% of cross-trace links create a real new trace+span so the link is navigable.
+                    CreateLinkedTrace(activityContext);
+                }
             }
             links[i] = new ActivityLink(activityContext, activityTags);
         }
 
         return links;
+    }
+
+    private static void CreateLinkedTrace(ActivityContext activityContext)
+    {
+        // Temporarily clear Activity.Current so the new activity doesn't inherit the current trace.
+        var previous = Activity.Current;
+        Activity.Current = null;
+
+        var activity = s_activitySource.StartActivity("linked-trace-span", ActivityKind.Internal);
+        if (activity is not null)
+        {
+            // Force the activity to use the exact trace and span ID from activityContext
+            // so the span link points to this recorded span.
+            typeof(Activity).GetField("_spanId", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(activity, activityContext.SpanId.ToString());
+            typeof(Activity).GetField("_traceId", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(activity, activityContext.TraceId.ToString());
+            activity.Stop();
+        }
+
+        Activity.Current = previous;
     }
 }

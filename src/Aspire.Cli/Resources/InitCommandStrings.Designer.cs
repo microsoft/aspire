@@ -129,6 +129,18 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string FileBasedOptionDescription {
+            get {
+                return ResourceManager.GetString("FileBasedOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string FileBasedRequiresCSharp {
+            get {
+                return ResourceManager.GetString("FileBasedRequiresCSharp", resourceCulture);
+            }
+        }
+
         internal static string AppHostCreatedRunOne {
             get {
                 return ResourceManager.GetString("AppHostCreatedRunOne", resourceCulture);

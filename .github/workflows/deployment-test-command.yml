@@ -30,26 +30,26 @@ jobs:
     steps:
       - name: Check org membership
         id: check_membership
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const commenter = context.payload.comment.user.login;
             
             try {
-              // Check if user is a member of the dotnet org
+              // Check if user is a member of the microsoft org
               const { status } = await github.rest.orgs.checkMembershipForUser({
-                org: 'dotnet',
+                org: 'microsoft',
                 username: commenter
               });
               
               if (status === 204 || status === 302) {
-                core.info(`✅ ${commenter} is a member of dotnet org`);
+                core.info(`✅ ${commenter} is a member of microsoft org`);
                 core.setOutput('is_member', 'true');
                 return;
               }
             } catch (error) {
               if (error.status === 404) {
-                core.warning(`❌ ${commenter} is not a member of dotnet org`);
+                core.warning(`❌ ${commenter} is not a member of microsoft org`);
                 core.setOutput('is_member', 'false');
                 
                 // Post a comment explaining the restriction
@@ -57,7 +57,7 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: context.issue.number,
-                  body: `@${commenter} The \`/deployment-test\` command is restricted to dotnet org members for security reasons (it deploys to real Azure infrastructure).`
+                  body: `@${commenter} The \`/deployment-test\` command is restricted to microsoft org members for security reasons (it deploys to real Azure infrastructure).`
                 });
                 return;
               }
@@ -67,7 +67,7 @@ jobs:
       - name: Get PR details
         if: steps.check_membership.outputs.is_member == 'true'
         id: pr
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const { data: pr } = await github.rest.pulls.get({
@@ -75,6 +75,11 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.issue.number
             });
+
+            const baseRepository = `${context.repo.owner}/${context.repo.repo}`;
+            if (pr.head.repo?.full_name !== baseRepository) {
+              throw new Error(`Deployment tests can only run for branches in ${baseRepository}; fork PRs are not supported.`);
+            }
             
             core.setOutput('number', pr.number);
             core.setOutput('head_sha', pr.head.sha);
@@ -82,20 +87,34 @@ jobs:
 
       - name: Trigger deployment tests
         if: steps.check_membership.outputs.is_member == 'true'
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PR_HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
         with:
           script: |
+            const headRef = process.env.PR_HEAD_REF;
+            const prNumber = process.env.PR_NUMBER;
+
+            if (!headRef) {
+              throw new Error('PR head ref was not provided.');
+            }
+
+            if (!prNumber || !/^\d+$/.test(prNumber)) {
+              throw new Error('PR number was not provided or is invalid.');
+            }
+
             // Dispatch from the PR's head ref to test the PR's code changes.
-            // Security: Org membership check is the security boundary - only trusted
-            // dotnet org members can trigger this workflow.
+            // PR-controlled values are passed through environment variables so they remain
+            // data instead of being interpolated into this JavaScript source.
             // Note: The triggered workflow posts its own "starting" comment with the run URL.
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'deployment-tests.yml',
-              ref: '${{ steps.pr.outputs.head_ref }}',
+              ref: headRef,
               inputs: {
-                pr_number: '${{ steps.pr.outputs.number }}'
+                pr_number: prNumber
               }
             });
             

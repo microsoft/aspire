@@ -47,10 +47,12 @@ public partial class HostedAgentConfiguration(string image)
     /// <summary>
     /// The protocols that the agent supports for ingress communication of the containers.
     /// </summary>
+    /// <remarks>
+    /// This collection has no configuration-level default. The <c>AsHostedAgent</c> overloads add the selected
+    /// protocol version before deployment, and the C# convenience overload defaults that selection to Responses 2.0.0.
+    /// </remarks>
     [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
-    public IList<ProtocolVersionRecord> ContainerProtocolVersions { get; init; } = [
-        new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "1.0.0")
-    ];
+    public IList<ProtocolVersionRecord> ProtocolVersions { get; init; } = [];
 
     private decimal _cpu = 2.0m;
 
@@ -117,14 +119,18 @@ public partial class HostedAgentConfiguration(string image)
     {
         ValidateEnvironmentVariableNames(EnvironmentVariables.Keys, targetResourceName);
         ValidateEnvironmentVariableNamesAreNotReserved(EnvironmentVariables.Keys, targetResourceName);
+        ValidateProtocolVersions(targetResourceName);
 
         var def = new HostedAgentDefinition(
-            ContainerProtocolVersions,
             cpu: CpuString,
             memory: MemoryString)
         {
-            Image = Image
+            ContainerConfiguration = new ContainerConfiguration(Image)
         };
+        foreach (var protocolVersion in ProtocolVersions)
+        {
+            def.ProtocolVersions.Add(protocolVersion);
+        }
         if (ContentFilterConfiguration is not null)
         {
             def.ContentFilterConfiguration = ContentFilterConfiguration;
@@ -146,6 +152,14 @@ public partial class HostedAgentConfiguration(string image)
             options.Metadata[kvp.Key] = kvp.Value;
         }
         return options;
+    }
+
+    private void ValidateProtocolVersions(string? targetResourceName)
+    {
+        if (ProtocolVersions.Count == 0)
+        {
+            throw new DistributedApplicationException($"Foundry hosted agent for target resource '{targetResourceName}' must declare at least one protocol version.");
+        }
     }
 
     private static void ValidateEnvironmentVariableNames(IEnumerable<string> environmentVariableNames, string? targetResourceName)

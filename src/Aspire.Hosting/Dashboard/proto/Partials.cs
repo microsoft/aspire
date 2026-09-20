@@ -81,7 +81,25 @@ partial class Resource
 
         foreach (var property in snapshot.Properties)
         {
-            resource.Properties.Add(new ResourceProperty { Name = property.Name, Value = property.Value, IsSensitive = property.IsSensitive });
+            var resourceProperty = new ResourceProperty
+            {
+                Name = property.Name,
+                Value = property.Value,
+                IsSensitive = property.IsSensitive,
+                IsHighlighted = property.IsHighlighted
+            };
+
+            if (!string.IsNullOrEmpty(property.DisplayName))
+            {
+                resourceProperty.DisplayName = property.DisplayName;
+            }
+
+            if (property.SortOrder is { } sortOrder)
+            {
+                resourceProperty.SortOrder = sortOrder;
+            }
+
+            resource.Properties.Add(resourceProperty);
         }
 
         foreach (var volume in snapshot.Volumes)
@@ -156,7 +174,8 @@ partial class Resource
             Hosting.ApplicationModel.ResourceCommandState.Enabled => ResourceCommandState.Enabled,
             Hosting.ApplicationModel.ResourceCommandState.Disabled => ResourceCommandState.Disabled,
             Hosting.ApplicationModel.ResourceCommandState.Hidden => ResourceCommandState.Hidden,
-            _ => throw new InvalidOperationException("Unexpected state: " + state)
+            // A newer or malformed state must not terminate WatchResources or become actionable for older clients.
+            _ => ResourceCommandState.Hidden
         };
     }
 }

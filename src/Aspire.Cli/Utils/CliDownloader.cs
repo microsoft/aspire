@@ -19,6 +19,7 @@ internal interface ICliDownloader
 }
 
 internal class CliDownloader(
+    IEnvironment environment,
     ILogger<CliDownloader> logger,
     IInteractionService interactionService,
     IPackagingService packagingService) : ICliDownloader
@@ -121,20 +122,20 @@ internal class CliDownloader(
         return $"{fileName} from {source}";
     }
 
-    private static (string os, string arch) DetectPlatform()
+    private (string os, string arch) DetectPlatform()
     {
         var os = DetectOperatingSystem();
         var arch = DetectArchitecture();
         return (os, arch);
     }
 
-    private static string DetectOperatingSystem()
+    private string DetectOperatingSystem()
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (environment.IsWindows())
         {
             return "win";
         }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        else if (environment.IsLinux())
         {
             // Check if it's musl-based (Alpine, etc.)
             try
@@ -168,7 +169,7 @@ internal class CliDownloader(
             }
             return "linux";
         }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        else if (environment.IsMacOS())
         {
             return "osx";
         }

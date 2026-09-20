@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 
@@ -207,6 +209,104 @@ public class ResourceDependencyTests
         var dependencies = await exe.Resource.GetResourceDependenciesAsync(executionContext);
 
         Assert.Contains(param.Resource, dependencies);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ParameterInLaunchToolArgsIsIncluded(bool cacheAnnotationCallbackResults)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var param = builder.AddParameter("config");
+        var executable = builder.AddExecutable("app", "myapp", ".")
+            .WithLaunchToolArgs(context => context.Args.Add(param));
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await executable.Resource.GetResourceDependenciesAsync(
+            executionContext,
+            new ResourceDependencyDiscoveryOptions
+            {
+                DiscoveryMode = ResourceDependencyDiscoveryMode.DirectOnly,
+                CacheAnnotationCallbackResults = cacheAnnotationCallbackResults
+            });
+
+        Assert.Collection(dependencies, dependency => Assert.Same(param.Resource, dependency));
+    }
+
+    [Fact]
+    public async Task PeekCachedCallbackResultsOnly_OnlySeesCachedResultsAndNeverInvokesCallback()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var param = builder.AddParameter("config");
+        var invocations = 0;
+        var executable = builder.AddExecutable("app", "myapp", ".")
+            .WithEnvironment(context =>
+            {
+                invocations++;
+                context.EnvironmentVariables["CONFIG"] = param.Resource;
+            });
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var peekOptions = new ResourceDependencyDiscoveryOptions
+        {
+            DiscoveryMode = ResourceDependencyDiscoveryMode.DirectOnly,
+            PeekCachedCallbackResultsOnly = true
+        };
+
+        // Nothing has evaluated/cached the callback yet, so peek-only discovery must not invoke it and must not
+        // discover the referenced parameter — it only reads results that were already cached.
+        var beforePriming = await executable.Resource.GetResourceDependenciesAsync(executionContext, peekOptions);
+        Assert.Equal(0, invocations);
+        Assert.Empty(beforePriming);
+
+        // Mirror what DCP does when it starts the resource: evaluate the callback once so its result is cached.
+        var annotation = executable.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>().Single();
+        await annotation.AsCallbackAnnotation().EvaluateOnceAsync(
+            new EnvironmentCallbackContext(executionContext, executable.Resource, new Dictionary<string, object>()));
+        Assert.Equal(1, invocations);
+
+        // Peek-only discovery now surfaces the cached reference without invoking the callback a second time.
+        var afterPriming = await executable.Resource.GetResourceDependenciesAsync(executionContext, peekOptions);
+        Assert.Equal(1, invocations);
+        Assert.Contains(param.Resource, afterPriming);
+    }
+
+    [Fact]
+    public async Task OnlyLastLaunchToolArgsAnnotationContributesDependencies()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var replaced = builder.AddParameter("replaced");
+        var active = builder.AddParameter("active");
+        var executable = builder.AddExecutable("app", "myapp", ".")
+            .WithLaunchToolArgs(context => context.Args.Add(replaced))
+            .WithLaunchToolArgs(context => context.Args.Add(active));
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await executable.Resource.GetResourceDependenciesAsync(
+            executionContext,
+            ResourceDependencyDiscoveryMode.DirectOnly);
+
+        Assert.Collection(dependencies, dependency => Assert.Same(active.Resource, dependency));
+    }
+
+    [Fact]
+    public async Task LaunchToolArgsOnContainerDoNotContributeDependencies()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var param = builder.AddParameter("config");
+        var container = builder.AddContainer("container", "alpine")
+            .WithLaunchToolArgs(context => context.Args.Add(param));
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await container.Resource.GetResourceDependenciesAsync(
+            executionContext,
+            ResourceDependencyDiscoveryMode.DirectOnly);
+
+        Assert.Empty(dependencies);
     }
 
     [Fact]

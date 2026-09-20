@@ -21,19 +21,19 @@ public class ConformanceTests : ConformanceTests<NpgsqlDataSource, NpgsqlSetting
     // https://github.com/npgsql/npgsql/blob/ef9db1ffe9e432c1562d855b46dfac3514726b1b/src/Npgsql.OpenTelemetry/TracerProviderBuilderExtensions.cs#L18
     protected override string ActivitySourceName => "Npgsql";
 
-    protected override string[] RequiredLogCategories => new string[]
-    {
-        "Npgsql.Connection",
-        "Npgsql.Command",
-        "Npgsql.Transaction",
-        "Npgsql.Copy",
-        "Npgsql.Replication",
-        "Npgsql.Exception"
-    };
+    protected override RequiredLogCategory[] RequiredLogCategories =>
+    [
+        new("Npgsql.Connection"),
+        new("Npgsql.Command"),
+        new("Npgsql.Transaction"),
+        new("Npgsql.Copy"),
+        new("Npgsql.Replication"),
+        new("Npgsql.Exception"),
+    ];
 
     protected override bool SupportsKeyedRegistrations => true;
 
-    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker);
+    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers);
 
     protected override string? ConfigurationSectionName => "Aspire:Npgsql";
 
@@ -59,7 +59,7 @@ public class ConformanceTests : ConformanceTests<NpgsqlDataSource, NpgsqlSetting
     public ConformanceTests(PostgreSQLContainerFixture? containerFixture, ITestOutputHelper? output = null) : base(output)
     {
         _containerFixture = containerFixture;
-        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
                                         ? _containerFixture.GetConnectionString()
                                         : "Server=localhost;User ID=root;Password=password;Database=test_aspire_mysql";
     }
@@ -125,14 +125,14 @@ public class ConformanceTests : ConformanceTests<NpgsqlDataSource, NpgsqlSetting
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public void TracingEnablesTheRightActivitySource()
         => RemoteInvokeWithLogging(static connectionStringToUse =>
             RunWithConnectionString(connectionStringToUse, obj => obj.ActivitySourceTest(key: null)),
             ConnectionString, Output);
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public void TracingEnablesTheRightActivitySource_Keyed()
         => RemoteInvokeWithLogging(static connectionStringToUse =>
             RunWithConnectionString(connectionStringToUse, obj => obj.ActivitySourceTest(key: "key")),

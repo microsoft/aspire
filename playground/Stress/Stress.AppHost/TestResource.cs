@@ -66,6 +66,23 @@ static class TestResourceExtensions
     }
 
     [AspireExportIgnore(Reason = "Stress playground helper; not part of the supported ATS surface.")]
+    public static IResourceBuilder<HttpCommandGroupResource> AddHttpCommandGroup(this IDistributedApplicationBuilder builder, string name, IResource parent)
+    {
+        var rb = builder.AddResource(new HttpCommandGroupResource(name, parent))
+                      .WithInitialState(new()
+                      {
+                          ResourceType = "Command Group",
+                          State = "Running",
+                          Properties = [
+                              new(KnownProperties.Resource.ParentName, parent.Name)
+                          ]
+                      })
+                      .ExcludeFromManifest();
+
+        return rb;
+    }
+
+    [AspireExportIgnore(Reason = "Stress playground helper; not part of the supported ATS surface.")]
     public static IResourceBuilder<NoStatusResource> AddNoStatusResource(this IDistributedApplicationBuilder builder, string name)
     {
         var rb = builder.AddResource(new NoStatusResource(name))
@@ -74,6 +91,51 @@ static class TestResourceExtensions
                           ResourceType = "No Status Resource",
                           Properties = [
                               new(CustomResourceKnownProperties.Source, "Custom")
+                          ]
+                      })
+                      .ExcludeFromManifest();
+
+        return rb;
+    }
+
+    [AspireExportIgnore(Reason = "Stress playground helper; not part of the supported ATS surface.")]
+    public static IResourceBuilder<PropertyStressResource> AddPropertyStressResource(this IDistributedApplicationBuilder builder, string name)
+    {
+        var rb = builder.AddResource(new PropertyStressResource(name))
+                      .WithInitialState(new()
+                      {
+                          ResourceType = "Executable",
+                          State = "Running",
+                          Properties = [
+                              new(KnownProperties.Executable.Path, "/stress/known/path")
+                              {
+                                  DisplayName = "Known non-sensitive path"
+                              },
+                              new(KnownProperties.Executable.Args, "--api-key stress-secret-value")
+                              {
+                                  DisplayName = "Known sensitive arguments",
+                                  IsSensitive = true
+                              },
+                              new("stress.property.highlighted", "Visible highlighted value")
+                              {
+                                  DisplayName = "Unknown highlighted property",
+                                  IsHighlighted = true
+                              },
+                              new("stress.property.highlightedSecret", "Visible highlighted sensitive value")
+                              {
+                                  DisplayName = "Unknown highlighted sensitive property",
+                                  IsSensitive = true,
+                                  IsHighlighted = true
+                              },
+                              new("stress.property.hidden", "Hidden until Show all is selected")
+                              {
+                                  DisplayName = "Unknown non-highlighted property"
+                              },
+                              new("stress.property.hiddenSecret", "Hidden sensitive value until Show all is selected")
+                              {
+                                  DisplayName = "Unknown non-highlighted sensitive property",
+                                  IsSensitive = true
+                              }
                           ]
                       })
                       .ExcludeFromManifest();
@@ -156,6 +218,15 @@ sealed class CommandGroupResource(string name, IResource parent) : Resource(name
     public IResource Parent { get; } = parent;
 }
 
+sealed class HttpCommandGroupResource(string name, IResource parent) : Resource(name), IResourceWithParent, IResourceWithEndpoints
+{
+    public IResource Parent { get; } = parent;
+}
+
 sealed class NoStatusResource(string name) : Resource(name)
+{
+}
+
+sealed class PropertyStressResource(string name) : Resource(name)
 {
 }

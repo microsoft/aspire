@@ -1,14 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.AppContainers;
 
 namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
-public class AppContainersPublicApiTests
+public class AppContainersPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void PublishAsAzureContainerAppShouldThrowWhenContainerIsNull()
@@ -25,7 +24,7 @@ public class AppContainersPublicApiTests
     [Fact]
     public void PublishAsAzureContainerAppShouldThrowWhenConfigureIsNull()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var container = builder.AddContainer("api", "myimage");
         Action<AzureResourceInfrastructure, ContainerApp> configure = null!;
 
@@ -61,7 +60,7 @@ public class AppContainersPublicApiTests
     [Fact]
     public void PublishAsAzureContainerAppForExecutableShouldThrowWhenConfigureIsNull()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var executable = builder.AddExecutable("api", "node.exe", Environment.CurrentDirectory);
         Action<AzureResourceInfrastructure, ContainerApp> configure = null!;
 
@@ -102,7 +101,7 @@ public class AppContainersPublicApiTests
     [Fact]
     public void PublishAsAzureContainerAppForProjectShouldThrowWhenConfigureIsNull()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var project = builder.AddProject<ProjectA>("serviceA", o => o.ExcludeLaunchProfile = true);
         Action<AzureResourceInfrastructure, ContainerApp> configure = null!;
 
@@ -113,10 +112,9 @@ public class AppContainersPublicApiTests
     }
 
     [Fact]
-    [Experimental("ASPIREACADOMAINS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public void ConfigureCustomDomainShouldThrowWhenAppIsNull()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         ContainerApp app = null!;
         var customDomain = builder.AddParameter("customDomain");
         var certificateName = builder.AddParameter("certificateName");
@@ -128,10 +126,9 @@ public class AppContainersPublicApiTests
     }
 
     [Fact]
-    [Experimental("ASPIREACADOMAINS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public void ConfigureCustomDomainShouldThrowWhenCustomDomainIsNull()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var app = new ContainerApp("app");
         IResourceBuilder<ParameterResource> customDomain = null!;
         var certificateName = builder.AddParameter("certificateName");
@@ -143,10 +140,9 @@ public class AppContainersPublicApiTests
     }
 
     [Fact]
-    [Experimental("ASPIREACADOMAINS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public void ConfigureCustomDomainShouldThrowWhenCertificateNameIsNull()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var app = new ContainerApp("app");
         var customDomain = builder.AddParameter("customDomain");
         IResourceBuilder<ParameterResource> certificateName = null!;

@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureKeyVaultConnectionPropertiesTests
+public class AzureKeyVaultConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureKeyVaultResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var keyVault = builder.AddAzureKeyVault("keyvault");
 
         var properties = ((IResourceWithConnectionString)keyVault.Resource).GetConnectionProperties().ToArray();

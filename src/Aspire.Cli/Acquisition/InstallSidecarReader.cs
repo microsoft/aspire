@@ -16,9 +16,9 @@ namespace Aspire.Cli.Acquisition;
 /// </summary>
 internal sealed class InstallSidecarReader : IInstallSidecarReader
 {
-    private readonly ILogger<InstallSidecarReader>? _logger;
+    private readonly ILogger<InstallSidecarReader> _logger;
 
-    public InstallSidecarReader(ILogger<InstallSidecarReader>? logger = null)
+    public InstallSidecarReader(ILogger<InstallSidecarReader> logger)
     {
         _logger = logger;
     }
@@ -44,40 +44,48 @@ internal sealed class InstallSidecarReader : IInstallSidecarReader
     {
         if (string.IsNullOrEmpty(binaryDir))
         {
-            _logger?.LogDebug("Install sidecar read skipped because the binary directory is empty.");
+            _logger.LogDebug("Install sidecar read skipped because the binary directory is empty.");
             return new InstallSidecarReadResult.NotFound(string.Empty);
         }
 
         var sidecarPath = Path.Combine(binaryDir, SidecarFileName);
         if (!File.Exists(sidecarPath))
         {
-            _logger?.LogDebug("Install sidecar file '{SidecarPath}' does not exist.", sidecarPath);
+            _logger.LogDebug("Install sidecar file '{SidecarPath}' does not exist.", sidecarPath);
             return new InstallSidecarReadResult.NotFound(sidecarPath);
         }
 
         if (TryGetOversizedSidecarReason(sidecarPath, out var oversizedReason))
         {
-            _logger?.LogDebug("Install sidecar file '{SidecarPath}' rejected: {Reason}.", sidecarPath, oversizedReason);
+            _logger.LogDebug("Install sidecar file '{SidecarPath}' rejected: {Reason}.", sidecarPath, oversizedReason);
             return new InstallSidecarReadResult.Invalid(sidecarPath, oversizedReason);
         }
 
-        if (!TryReadSourceFieldFromExistingSidecar(sidecarPath, out var rawSource, out var error))
+        if (!TryReadSidecarFields(sidecarPath, out var fields, out var error))
         {
             if (error is JsonException)
             {
-                _logger?.LogDebug(error, "Install sidecar file '{SidecarPath}' contains malformed JSON.", sidecarPath);
+                _logger.LogDebug(error, "Install sidecar file '{SidecarPath}' contains malformed JSON.", sidecarPath);
             }
             else
             {
-                _logger?.LogDebug(error, "Install sidecar file '{SidecarPath}' could not be read due to a path, permission, or IO error.", sidecarPath);
+                _logger.LogDebug(error, "Install sidecar file '{SidecarPath}' could not be read due to a path, permission, or IO error.", sidecarPath);
             }
 
             return new InstallSidecarReadResult.Invalid(sidecarPath, error?.Message ?? "Install sidecar file could not be read.");
         }
 
-        var effectiveRawSource = rawSource ?? string.Empty;
+        var effectiveRawSource = fields.Source ?? string.Empty;
         var parsed = InstallSourceExtensions.ParseInstallSource(effectiveRawSource);
-        return new InstallSidecarReadResult.Ok(new InstallSidecarInfo(sidecarPath, parsed, effectiveRawSource));
+        return new InstallSidecarReadResult.Ok(new InstallSidecarInfo(
+            sidecarPath,
+            parsed,
+            effectiveRawSource,
+            Channel: fields.Channel,
+            Version: fields.Version,
+            Commit: fields.Commit,
+            NuGetServiceIndexOverride: fields.NuGetServiceIndexOverride,
+            Packages: fields.Packages));
     }
 
     /// <summary>
@@ -99,8 +107,8 @@ internal sealed class InstallSidecarReader : IInstallSidecarReader
             return null;
         }
 
-        return TryReadSourceFieldFromExistingSidecar(sidecarPath, out var rawSource, out _)
-            ? rawSource
+        return TryReadSidecarFields(sidecarPath, out var fields, out _)
+            ? fields.Source
             : null;
     }
 
@@ -126,28 +134,59 @@ internal sealed class InstallSidecarReader : IInstallSidecarReader
         return false;
     }
 
-    private static string? ReadSourceFieldFromExistingSidecar(string sidecarPath)
+    /// <summary>
+    /// Parsed identity / override fields read from an on-disk sidecar.
+    /// All fields are nullable because the sidecar schema treats them as
+    /// optional — older sidecars and routes that do not yet write identity
+    /// keep emitting the <c>source</c>-only shape and the missing fields fall
+    /// back to the resolver's terminal/assembly defaults. Non-string JSON
+    /// values for any of these fields silently resolve to <see langword="null"/>
+    /// here so a malformed identity field does not poison the whole sidecar read.
+    /// </summary>
+    private readonly record struct SidecarFields(
+        string? Source,
+        string? Channel,
+        string? Version,
+        string? Commit,
+        string? NuGetServiceIndexOverride,
+        string? Packages);
+
+    private static SidecarFields ReadSidecarFieldsFromExistingSidecar(string sidecarPath)
     {
         using var stream = File.OpenRead(sidecarPath);
         using var doc = JsonDocument.Parse(stream);
-        if (doc.RootElement.ValueKind == JsonValueKind.Object &&
-            doc.RootElement.TryGetProperty("source", out var sourceElement) &&
-            sourceElement.ValueKind == JsonValueKind.String)
+        if (doc.RootElement.ValueKind != JsonValueKind.Object)
         {
-            return sourceElement.GetString();
+            return default;
+        }
+
+        return new SidecarFields(
+            Source: ReadOptionalString(doc.RootElement, "source"),
+            Channel: ReadOptionalString(doc.RootElement, "channel"),
+            Version: ReadOptionalString(doc.RootElement, "version"),
+            Commit: ReadOptionalString(doc.RootElement, "commit"),
+            NuGetServiceIndexOverride: ReadOptionalString(doc.RootElement, "nugetServiceIndexOverride"),
+            Packages: ReadOptionalString(doc.RootElement, "packages"));
+    }
+
+    private static string? ReadOptionalString(JsonElement obj, string propertyName)
+    {
+        if (obj.TryGetProperty(propertyName, out var el) && el.ValueKind == JsonValueKind.String)
+        {
+            return el.GetString();
         }
 
         return null;
     }
 
-    private static bool TryReadSourceFieldFromExistingSidecar(string sidecarPath, out string? rawSource, out Exception? exception)
+    private static bool TryReadSidecarFields(string sidecarPath, out SidecarFields fields, out Exception? exception)
     {
-        rawSource = null;
+        fields = default;
         exception = null;
 
         try
         {
-            rawSource = ReadSourceFieldFromExistingSidecar(sidecarPath);
+            fields = ReadSidecarFieldsFromExistingSidecar(sidecarPath);
             return true;
         }
         catch (Exception ex) when (IsSidecarReadException(ex))

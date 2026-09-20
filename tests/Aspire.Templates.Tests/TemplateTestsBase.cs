@@ -325,48 +325,56 @@ public partial class TemplateTestsBase
                                     .WithWorkingDirectory(testProjectDirectory)
                                     .WithTimeout(TimeSpan.FromSeconds(testRunTimeoutSecs));
 
-            (await buildCmd.ExecuteAsync($"test -c {config}")).EnsureSuccessful();
+            (await buildCmd.ExecuteAsync($"build -c {config}")).EnsureSuccessful();
 
             // .. then test with --no-build
             using var testCmd = new DotNetCommand(testOutput, label: $"test-{testType}")
                                     .WithWorkingDirectory(testProjectDirectory)
                                     .WithTimeout(TimeSpan.FromSeconds(testRunTimeoutSecs));
 
-            var testRes = (await testCmd.ExecuteAsync($"test -c {config} --no-build"))
+            // MSTest uses an MTP executable. Run it directly to support SDKs 8 and 9 as well as
+            // SDK 10+, where MTP 2 no longer supports the VSTest-based dotnet test entry point.
+            // This also avoids imposing a global.json runner selection on generated projects.
+            // See https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-integration-dotnet-test.
+            var command = testType == "mstest" ? "run" : "test";
+            var testRes = (await testCmd.ExecuteAsync($"{command} -c {config} --no-build"))
                                 .EnsureSuccessful();
 
-            Assert.Matches("Passed! * - Failed: *0, Passed: *1, Skipped: *0, Total: *1", testRes.Output);
+            if (testType == "mstest")
+            {
+                TestRunOutput.AssertSinglePassedMtpTest(testRes.Output);
+            }
+            else
+            {
+                Assert.Matches("Passed! * - Failed: *0, Passed: *1, Skipped: *0, Total: *1", testRes.Output);
+            }
             return testRes;
         }
     }
 
     public static TheoryData<string, string, TestSdk, TestTargetFramework, string?> TestDataForNewAndBuildTemplateTests(string templateName, string extraArgs) => new()
         {
-            // Previous Sdk, Previous TFM
-            { templateName, extraArgs, TestSdk.Previous, TestTargetFramework.Previous, null },
-            // Previous Sdk - Current TFM
-            { templateName, extraArgs, TestSdk.Previous, TestTargetFramework.Current, "The current .NET SDK does not support targeting .NET 9.0" },
+            { templateName, extraArgs, TestSdk.Net8, TestTargetFramework.Net8, null },
+            { templateName, extraArgs, TestSdk.Net8, TestTargetFramework.Net9, "The current .NET SDK does not support targeting .NET 9.0" },
 
-            // Current SDK, Previous TFM
-            { templateName, extraArgs, TestSdk.Current, TestTargetFramework.Previous, null },
-            // Current SDK, Current TFM
-            { templateName, extraArgs, TestSdk.Current, TestTargetFramework.Current, null },
-            // Current SDK, Next TFM
-            { templateName, extraArgs, TestSdk.Current, TestTargetFramework.Next, "The current .NET SDK does not support targeting .NET 10.0" },
+            { templateName, extraArgs, TestSdk.Net9, TestTargetFramework.Net8, null },
+            { templateName, extraArgs, TestSdk.Net9, TestTargetFramework.Net9, null },
+            { templateName, extraArgs, TestSdk.Net9, TestTargetFramework.Net10, "The current .NET SDK does not support targeting .NET 10.0" },
 
-            // Next SDK, Previous TFM
-            { templateName, extraArgs, TestSdk.Next, TestTargetFramework.Previous, null },
-            // Next SDK, Current TFM
-            { templateName, extraArgs, TestSdk.Next, TestTargetFramework.Current, null },
-            // Next SDK, Next TFM
-            { templateName, extraArgs, TestSdk.Next, TestTargetFramework.Next, null },
+            { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net8, null },
+            { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net9, null },
+            { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net10, null },
+            { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net11, "The current .NET SDK does not support targeting .NET 11.0" },
 
-            // Current SDK + previous runtime, Previous TFM
-            { templateName, extraArgs, TestSdk.NextSdkWithCurrentAndPreviousRuntime, TestTargetFramework.Previous, null },
-            // Current SDK + previous runtime, Current TFM
-            { templateName, extraArgs, TestSdk.NextSdkWithCurrentAndPreviousRuntime, TestTargetFramework.Current, null },
-            // Next SDK + current runtime, Next TFM
-            { templateName, extraArgs, TestSdk.NextSdkWithCurrentAndPreviousRuntime, TestTargetFramework.Next, null },
+            { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net8, null },
+            { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net9, null },
+            { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net10, null },
+            { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net11, null },
+
+            { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net8, null },
+            { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net9, null },
+            { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net10, null },
+            { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net11, null },
         };
 
     // Taken from dotnet/runtime src/tasks/Common/Utils.cs

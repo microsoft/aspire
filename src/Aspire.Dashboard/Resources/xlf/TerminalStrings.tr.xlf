@@ -1,0 +1,192 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="tr" original="../TerminalStrings.resx">
+    <body>
+      <trans-unit id="MainLayoutToggleTerminalDock">
+        <source>Toggle terminal (`)</source>
+        <target state="new">Toggle terminal (`)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDisconnected">
+        <source>The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</source>
+        <target state="new">The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDismissError">
+        <source>Dismiss</source>
+        <target state="new">Dismiss</target>
+        <note>Dismisses a terminal input, clipboard, or sizing error without reconnecting.</note>
+      </trans-unit>
+      <trans-unit id="TerminalDockCloseTab">
+        <source>Close terminal '{0}'</source>
+        <target state="new">Close terminal '{0}'</target>
+        <note>{0} is the terminal's display title.</note>
+      </trans-unit>
+      <trans-unit id="TerminalDockCloseTimedOutMessage">
+        <source>Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</source>
+        <target state="new">Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</target>
+        <note>{0} is the terminal's display title.</note>
+      </trans-unit>
+      <trans-unit id="TerminalDockCloseTimedOutTitle">
+        <source>Terminal close timed out</source>
+        <target state="new">Terminal close timed out</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockDetach">
+        <source>Open terminal in a new window</source>
+        <target state="new">Open terminal in a new window</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockDetachBlocked">
+        <source>The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</source>
+        <target state="new">The browser blocked the terminal window. Allow pop-ups for the dashboard and try again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockDetached">
+        <source>This terminal is running in a separate window.</source>
+        <target state="new">This terminal is running in a separate window.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockFocusWindow">
+        <source>Focus window</source>
+        <target state="new">Focus window</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockHeight">
+        <source>{0} pixels high</source>
+        <target state="new">{0} pixels high</target>
+        <note>{0} is the terminal dock height in CSS pixels.</note>
+      </trans-unit>
+      <trans-unit id="TerminalDockHide">
+        <source>Hide terminal panel (`)</source>
+        <target state="new">Hide terminal panel (`)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockMoreInformation">
+        <source>More information</source>
+        <target state="new">More information</target>
+        <note>Link to documentation about dashboard terminals, shown when the terminal dock is empty.</note>
+      </trans-unit>
+      <trans-unit id="TerminalDockPanelBody">
+        <source>App host code can open terminals here. Resource terminals are shown separately on their resource pages.</source>
+        <target state="new">App host code can open terminals here. Resource terminals are shown separately on their resource pages.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockPanelHeading">
+        <source>No docked terminals</source>
+        <target state="new">No docked terminals</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockPanelHint">
+        <source>Press the backtick key (`) to hide this panel.</source>
+        <target state="new">Press the backtick key (`) to hide this panel.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockRecoveringWindow">
+        <source>This terminal may still be open in a separate window. Focus it or return it to the panel to continue.</source>
+        <target state="new">This terminal may still be open in a separate window. Focus it or return it to the panel to continue.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockResizeHelp">
+        <source>Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</source>
+        <target state="new">Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockResourceTerminals">
+        <source>Resource terminals:</source>
+        <target state="new">Resource terminals:</target>
+        <note>Label before a comma-separated list of links to resource terminal pages in the empty terminal dock.</note>
+      </trans-unit>
+      <trans-unit id="TerminalDockReturnToDock">
+        <source>Return to panel</source>
+        <target state="new">Return to panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockTabs">
+        <source>Terminals</source>
+        <target state="new">Terminals</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalFocusControlsHint">
+        <source>F6: Focus terminal controls</source>
+        <target state="new">F6: Focus terminal controls</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalInputFailed">
+        <source>The terminal could not complete the input or clipboard action. Check browser clipboard permissions and try again.</source>
+        <target state="new">The terminal could not complete the input or clipboard action. Check browser clipboard permissions and try again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalInputLabel">
+        <source>Interactive terminal input</source>
+        <target state="new">Interactive terminal input</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalMountFailed">
+        <source>The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</source>
+        <target state="new">The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalRetry">
+        <source>Reconnect terminal</source>
+        <target state="new">Reconnect terminal</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalSizingFailed">
+        <source>The terminal could not take resize control or change its dimensions. Try selecting the dimensions again.</source>
+        <target state="new">The terminal could not take resize control or change its dimensions. Try selecting the dimensions again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalTitle">
+        <source>Terminal</source>
+        <target state="new">Terminal</target>
+        <note>Default terminal title when no resource name is available.</note>
+      </trans-unit>
+      <trans-unit id="TerminalToolbarDecreaseFontSize">
+        <source>Decrease font size</source>
+        <target state="new">Decrease font size</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarGridSize">
+        <source>Terminal dimensions</source>
+        <target state="new">Terminal dimensions</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarGridSizeAuto">
+        <source>Fit</source>
+        <target state="new">Fit</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarIncreaseFontSize">
+        <source>Increase font size</source>
+        <target state="new">Increase font size</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarOpenInWindow">
+        <source>Open in new window</source>
+        <target state="new">Open in new window</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarOpenInWindowBlocked">
+        <source>The browser blocked the terminal window. Allow pop-ups for this site and try again.</source>
+        <target state="new">The browser blocked the terminal window. Allow pop-ups for this site and try again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalToolbarOpenInWindowFailed">
+        <source>Unable to open the terminal window. Reload the dashboard and try again.</source>
+        <target state="new">Unable to open the terminal window. Reload the dashboard and try again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalWindowEnded">
+        <source>This terminal has ended.</source>
+        <target state="new">This terminal has ended.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalWindowTrackingFailed">
+        <source>Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</source>
+        <target state="new">Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

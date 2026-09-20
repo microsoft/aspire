@@ -2,10 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text.Json.Nodes;
 using System.Web;
 using Aspire.Cli.Backchannel;
+using Aspire.Dashboard.Model;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Mcp.Tools;
 
@@ -110,5 +114,117 @@ internal static class McpToolHelpers
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Checks whether a resource snapshot has the <c>resource.excludeFromMcp</c> property set to true.
+    /// Resources with this property should be excluded from all MCP tool results.
+    /// </summary>
+    internal static bool IsExcludedFromMcp(ResourceSnapshot snapshot)
+    {
+        if (snapshot.Properties.TryGetValue(KnownProperties.Resource.ExcludeFromMcp, out var value) && value is not null)
+        {
+            if (value is JsonValue jsonValue)
+            {
+                if (jsonValue.TryGetValue<bool>(out var boolValue))
+                {
+                    return boolValue;
+                }
+
+                if (jsonValue.TryGetValue<string>(out var stringValue) && bool.TryParse(stringValue, out var parsedBool))
+                {
+                    return parsedBool;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Gets the error message text for a resource that is excluded from MCP.
+    /// </summary>
+    internal static string GetResourceNotAvailableMessage(string resourceName) =>
+        $"Resource '{resourceName}' is not available.";
+
+    /// <summary>
+    /// Gets resource snapshots from the backchannel and checks whether the specified resource is excluded from MCP.
+    /// Returns an error <see cref="CallToolResult"/> if the resource is excluded, or <c>null</c> if it is not excluded.
+    /// </summary>
+    internal static async Task<CallToolResult?> CheckResourceExcludedAsync(
+        IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor,
+        string resourceName,
+        CancellationToken cancellationToken)
+    {
+        var excludedNames = await GetExcludedResourceNamesAsync(auxiliaryBackchannelMonitor, cancellationToken).ConfigureAwait(false);
+        return CreateExcludedResult(excludedNames, resourceName);
+    }
+
+    /// <summary>
+    /// Checks whether the specified resource is excluded from MCP using an existing connection.
+    /// Returns an error <see cref="CallToolResult"/> if the resource is excluded, or <c>null</c> if it is not excluded.
+    /// </summary>
+    internal static async Task<CallToolResult?> CheckResourceExcludedAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        string resourceName,
+        CancellationToken cancellationToken)
+    {
+        var excludedNames = await GetExcludedResourceNamesAsync(connection, cancellationToken).ConfigureAwait(false);
+        return CreateExcludedResult(excludedNames, resourceName);
+    }
+
+    private static CallToolResult? CreateExcludedResult(HashSet<string> excludedNames, string resourceName)
+    {
+        if (excludedNames.Contains(resourceName))
+        {
+            return new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = GetResourceNotAvailableMessage(resourceName) }],
+                IsError = true
+            };
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Gets the set of resource names that are excluded from MCP.
+    /// </summary>
+    internal static async Task<HashSet<string>> GetExcludedResourceNamesAsync(
+        IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor,
+        CancellationToken cancellationToken)
+    {
+        var connection = await AppHostConnectionHelper.GetSelectedConnectionAsync(auxiliaryBackchannelMonitor, NullLogger.Instance, cancellationToken).ConfigureAwait(false);
+        if (connection is null)
+        {
+            return [];
+        }
+
+        return await GetExcludedResourceNamesAsync(connection, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gets the set of resource names that are excluded from MCP using an existing connection.
+    /// </summary>
+    internal static async Task<HashSet<string>> GetExcludedResourceNamesAsync(
+        IAppHostAuxiliaryBackchannel connection,
+        CancellationToken cancellationToken)
+    {
+        var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
+        var excludedNames = new HashSet<string>(StringComparers.ResourceName);
+
+        foreach (var snapshot in snapshots)
+        {
+            if (IsExcludedFromMcp(snapshot))
+            {
+                excludedNames.Add(snapshot.Name);
+                if (snapshot.DisplayName is not null)
+                {
+                    excludedNames.Add(snapshot.DisplayName);
+                }
+            }
+        }
+
+        return excludedNames;
     }
 }

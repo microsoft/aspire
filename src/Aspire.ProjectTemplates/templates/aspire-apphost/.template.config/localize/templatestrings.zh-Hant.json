@@ -6,6 +6,7 @@
   "symbols/Framework/choices/net8.0/description": "目標 net8.0",
   "symbols/Framework/choices/net9.0/description": "目標 net9.0",
   "symbols/Framework/choices/net10.0/description": "目標 net10.0",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/appHostHttpPort/description": "要用於 AppHost 專案 launchSettings.json 中 HTTP 端點的連接埠號碼。",
   "symbols/appHostOtlpHttpPort/description": "要用於 AppHost 專案 launchSettings.json 中 OTLP HTTP 端點的連接埠號碼。",
   "symbols/appHostResourceHttpPort/description": "要用於 AppHost 專案 launchSettings.json 中資源服務 HTTP 端點的連接埠號碼。",

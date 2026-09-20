@@ -1,15 +1,19 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREDENO001 // AddDenoApp and its implementation use the experimental Deno resource
+
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREEXTENSION001
+#pragma warning disable ASPIRECOMMAND001
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
 using Aspire.Hosting.JavaScript;
@@ -26,30 +30,53 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Provides extension methods for adding JavaScript applications to an <see cref="IDistributedApplicationBuilder"/>.
 /// </summary>
-public static class JavaScriptHostingExtensions
+public static partial class JavaScriptHostingExtensions
 {
     private const string BrowserCapability = "browser";
     private const string DefaultNodeVersion = "22";
+    // Default to the public npm registry so generated Dockerfiles work for customers out of the box.
+    // Operators who want an internal mirror can override it at build time via `--build-arg NPM_REGISTRY=...`.
+    // See https://github.com/microsoft/aspire/issues/19370.
+    private const string DefaultNpmRegistry = "https://registry.npmjs.org/";
+    private const string DefaultPnpmVersion = "10.30.1";
     private const string DefaultJavaScriptRunScriptName = "dev";
     private const string DefaultYarpImage = Yarp.YarpContainerImageTags.Registry + "/" + Yarp.YarpContainerImageTags.Image + ":" + Yarp.YarpContainerImageTags.Tag;
+
+    // Help links surfaced when a required command is missing, mapped to a command by ResolveHelpLink.
+    private const string NodeHelpLink = "https://nodejs.org/en/download/";
+    private const string NpmHelpLink = "https://nodejs.org/en/download";
+    private const string BunHelpLink = "https://bun.sh/docs/installation";
+    private const string DenoHelpLink = "https://docs.deno.com/runtime/getting_started/installation/";
+    private const string YarnHelpLink = "https://yarnpkg.com/getting-started/install";
+    private const string PnpmHelpLink = "https://pnpm.io/installation";
+    private const string DenoDefaultUser = "deno";
+    private const string DenoDefaultUserAndGroup = "deno:deno";
+
+    // Deno's dependency store. Pinned to a known path so multi-stage builds can copy it from the
+    // build stage into the runtime stage. See https://docs.deno.com/runtime/reference/docker/.
+    private const string DenoCacheDirectory = "/deno-dir";
+
+    // npm/yarn/pnpm are Node CLIs: whether they install packages or launch the app's run script, they spawn
+    // node, so node must be on PATH too. bun is a full Node replacement and needs no node.
+    private static readonly string[] s_nodeBasedPackageManagers = ["npm", "yarn", "pnpm"];
 
     // This is the order of config files that Vite will look for by default
     // See https://github.com/vitejs/vite/blob/main/packages/vite/src/node/constants.ts#L97
     private static readonly string[] s_defaultConfigFiles = ["vite.config.js", "vite.config.mjs", "vite.config.ts", "vite.config.cjs", "vite.config.mts", "vite.config.cts"];
 
     // The token to replace with the relative path to the user's Vite config file
-    private const string AspireViteRelativeConfigToken = "%%ASPIRE_VITE_RELATIVE_CONFIG_PATH%%";
+    private const string AspireViteConfigPathToken = "%%ASPIRE_VITE_CONFIG_PATH%%";
 
     // The token to replace with the absolute path to the original Vite config file
     private const string AspireViteAbsoluteConfigToken = "%%ASPIRE_VITE_ABSOLUTE_CONFIG_PATH%%";
 
     // A template Vite config that loads an existing config provides a default https configuration if one isn't present
     // Uses environment variables to configure a TLS certificate in PFX format and its password if specified
-    // The value of %%ASPIRE_VITE_RELATIVE_CONFIG_PATH%% is replaced with the path to the user's actual Vite config file at runtime
+    // The value of %%ASPIRE_VITE_CONFIG_PATH%% is replaced with the relative path to the user's actual Vite config file at runtime
     // Vite only supports module style config files, so we don't have to handle commonjs style imports or exports here
     private const string AspireViteConfig = """
     import { defineConfig } from 'vite'
-    import config from '%%ASPIRE_VITE_RELATIVE_CONFIG_PATH%%'
+    import config from '%%ASPIRE_VITE_CONFIG_PATH%%'
 
     console.log('Applying Aspire specific Vite configuration for HTTPS support.')
     console.log('Found original Vite configuration at "%%ASPIRE_VITE_ABSOLUTE_CONFIG_PATH%%"')
@@ -165,16 +192,21 @@ public static class JavaScriptHostingExtensions
                 {
                     var defaultBaseImage = new Lazy<string>(() => GetDefaultBaseImage(appDirectory, "alpine", dockerfileContext.Services));
 
-                    // Get custom base image from annotation, if present
+                    // Get custom base image from annotation, if present. A caller can configure only a runtime
+                    // image, which leaves BuildImage null, so fall back to the package manager's own image
+                    // before the Node.js default - bun and deno are absent from the Node.js images.
                     dockerfileContext.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation);
+                    resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager);
 
-                    var baseBuildImage = baseImageAnnotation?.BuildImage ?? defaultBaseImage.Value;
+                    var baseBuildImage = baseImageAnnotation?.BuildImage
+                        ?? packageManager?.DefaultBuildImage
+                        ?? defaultBaseImage.Value;
                     var builderStage = dockerfileContext.Builder
                         .From(baseBuildImage, "build")
                         .EmptyLine()
                         .WorkDir("/app");
 
-                    if (resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
+                    if (packageManager is not null)
                     {
                         // Initialize the Docker build stage with package manager-specific setup commands.
                         // This allows package managers to add prerequisite commands (e.g., enabling pnpm via corepack)
@@ -184,20 +216,7 @@ public static class JavaScriptHostingExtensions
                         var copiedAllSource = false;
                         if (resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand))
                         {
-                            // Copy package files first for better layer caching
-                            if (packageManager.PackageFilesPatterns.Count > 0)
-                            {
-                                foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
-                                {
-                                    builderStage.Copy(packageFilePattern.Source, packageFilePattern.Destination);
-                                }
-                            }
-                            else
-                            {
-                                builderStage.Copy(".", ".");
-                                copiedAllSource = true;
-                            }
-
+                            copiedAllSource = builderStage.CopyPackageFilesForInstall(packageManager);
                             builderStage.AddInstallCommand(packageManager, installCommand);
                         }
 
@@ -209,16 +228,8 @@ public static class JavaScriptHostingExtensions
 
                         if (resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
                         {
-                            var commandArgs = new List<string>() { packageManager.ExecutableName };
-                            if (!string.IsNullOrEmpty(packageManager.ScriptCommand))
-                            {
-                                commandArgs.Add(packageManager.ScriptCommand);
-                            }
-                            commandArgs.Add(buildCommand.ScriptName);
-                            commandArgs.AddRange(buildCommand.Args);
-
                             builderStage.EmptyLine()
-                                .Run(string.Join(' ', commandArgs));
+                                .Run(BuildPackageScriptCommand(packageManager, buildCommand));
                         }
                     }
                     else
@@ -288,7 +299,7 @@ public static class JavaScriptHostingExtensions
 
     private static IResourceBuilder<TResource> WithNodeDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
         builder.WithOtlpExporter()
-            .WithRequiredCommand("node", "https://nodejs.org/en/download/")
+            .WithRequiredCommandsFromPackageManager("node")
             .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
             .WithCertificateTrustConfiguration((ctx) =>
             {
@@ -316,6 +327,92 @@ public static class JavaScriptHostingExtensions
 
                 return Task.CompletedTask;
             });
+
+    // Registers a hook that materializes the resource's required commands just before start. The annotations are
+    // added on BeforeStartEvent in every execution context, but they only have an effect in run mode, where
+    // RequiredCommandValidationEventingSubscriber validates them against the local PATH on
+    // BeforeResourceStartedEvent (which fires after BeforeStartEvent). Resolving them here - rather than eagerly
+    // as each With* method runs - lets the package-manager selection settle first, so a later selection fully
+    // replaces an earlier one without having to remove stale RequiredCommandAnnotations.
+    // See https://github.com/microsoft/aspire/issues/18625.
+    //
+    // runtimeCommand is the executable the app was created to run with (node for
+    // AddNodeApp/AddViteApp/AddJavaScriptApp, bun for AddBunApp); it launches the app whenever the app is not
+    // routed through a package-manager run script.
+    private static IResourceBuilder<TResource> WithRequiredCommandsFromPackageManager<TResource>(
+        this IResourceBuilder<TResource> builder,
+        string runtimeCommand) where TResource : JavaScriptAppResource
+    {
+        var resource = builder.Resource;
+        builder.ApplicationBuilder.OnBeforeStart((_, _) =>
+        {
+            foreach (var (command, helpLink) in ResolveRequiredCommands(resource, runtimeCommand))
+            {
+                // Idempotent: skip commands already present so an unexpected second publish of BeforeStartEvent
+                // cannot add duplicate RequiredCommandAnnotations for the same command.
+                if (!resource.Annotations.OfType<RequiredCommandAnnotation>().Any(a => string.Equals(a.Command, command, StringComparison.Ordinal)))
+                {
+                    resource.Annotations.Add(new RequiredCommandAnnotation(command) { HelpLink = helpLink });
+                }
+            }
+
+            return Task.CompletedTask;
+        });
+
+        return builder;
+    }
+
+    // Resolves the executables that must be on PATH for the app to install and run, from how the app is actually
+    // launched. Two independent axes:
+    //   - Runtime: apps that launch via a named package-manager run script (npm run dev / bun run dev) - which is
+    //     every AddViteApp/AddJavaScriptApp, plus AddNodeApp/AddBunApp when WithRunScript is used - are launched by
+    //     the package manager, so the package manager is the runtime. Apps that invoke a script file directly
+    //     (AddNodeApp "server.js" / AddBunApp "server.ts" with no run script) are launched by their fixed runtime
+    //     (node/bun) regardless of any package manager.
+    //   - Install: a selected package manager also runs at install time, so it must be on PATH even when a
+    //     different runtime launches the app - e.g. AddNodeApp(...).WithBun() runs `node server.js` but installs
+    //     with `bun`, so both node and bun are required.
+    // npm/yarn/pnpm additionally require node (they are Node CLIs); bun does not. This projection is what fixes
+    // https://github.com/microsoft/aspire/issues/18625 (AddViteApp(...).WithBun() requires only bun) without
+    // dropping the runtime for direct-script apps.
+    private static IEnumerable<(string Command, string? HelpLink)> ResolveRequiredCommands(IResource resource, string runtimeCommand)
+    {
+        resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager);
+
+        // A package manager only replaces the runtime when the app launches through a run script; otherwise the
+        // runtime executes the script file directly.
+        var launchesViaRunScript = resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _);
+        var runCommand = launchesViaRunScript && packageManager is not null
+            ? packageManager.ExecutableName
+            : runtimeCommand;
+
+        var commands = new HashSet<string>(StringComparer.Ordinal) { runCommand };
+
+        if (packageManager is not null)
+        {
+            commands.Add(packageManager.ExecutableName);
+        }
+
+        if (commands.Overlaps(s_nodeBasedPackageManagers))
+        {
+            commands.Add("node");
+        }
+
+        return commands.Select(static command => (command, ResolveHelpLink(command)));
+    }
+
+    // Maps a required executable to the install/help link surfaced when the command is missing on PATH.
+    private static string? ResolveHelpLink(string command) => command switch
+    {
+        "node" => NodeHelpLink,
+        "npm" => NpmHelpLink,
+        "bun" => BunHelpLink,
+        "deno" => DenoHelpLink,
+        "yarn" => YarnHelpLink,
+        "pnpm" => PnpmHelpLink,
+        // Unknown/custom package manager: no specific install help link.
+        _ => null,
+    };
 
     // The default Docker image used for AddBunApp build and runtime stages.
     // Pinned to the major version tag to keep generated Dockerfiles deterministic
@@ -454,20 +551,7 @@ public static class JavaScriptHostingExtensions
                         var copiedAllSource = false;
                         if (resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand))
                         {
-                            // Copy package files first for better layer caching
-                            if (packageManager.PackageFilesPatterns.Count > 0)
-                            {
-                                foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
-                                {
-                                    builderStage.Copy(packageFilePattern.Source, packageFilePattern.Destination);
-                                }
-                            }
-                            else
-                            {
-                                builderStage.Copy(".", ".");
-                                copiedAllSource = true;
-                            }
-
+                            copiedAllSource = builderStage.CopyPackageFilesForInstall(packageManager);
                             builderStage.AddInstallCommand(packageManager, installCommand);
                         }
 
@@ -478,16 +562,8 @@ public static class JavaScriptHostingExtensions
 
                         if (resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
                         {
-                            var commandArgs = new List<string>() { packageManager.ExecutableName };
-                            if (!string.IsNullOrEmpty(packageManager.ScriptCommand))
-                            {
-                                commandArgs.Add(packageManager.ScriptCommand);
-                            }
-                            commandArgs.Add(buildCommand.ScriptName);
-                            commandArgs.AddRange(buildCommand.Args);
-
                             builderStage.EmptyLine()
-                                .Run(string.Join(' ', commandArgs));
+                                .Run(BuildPackageScriptCommand(packageManager, buildCommand));
                         }
                     }
                     else
@@ -535,7 +611,7 @@ public static class JavaScriptHostingExtensions
                             prodDepsStage.Copy("package.json", "./");
                         }
 
-                        var prodInstallCmd = $"{pm.ExecutableName} {string.Join(' ', install.Args)} {install.ProductionInstallArgs}";
+                        var prodInstallCmd = BuildProductionInstallCommand(pm, install);
                         if (!string.IsNullOrEmpty(pm.CacheMount))
                         {
                             prodDepsStage.Run($"--mount=type=cache,target={pm.CacheMount} {prodInstallCmd}");
@@ -630,7 +706,7 @@ public static class JavaScriptHostingExtensions
 
     private static IResourceBuilder<TResource> WithBunDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
         builder.WithOtlpExporter()
-            .WithRequiredCommand("bun", "https://bun.sh/docs/installation")
+            .WithRequiredCommandsFromPackageManager("bun")
             // Bun honors NODE_ENV for module resolution and runtime mode the same way Node does.
             // See https://bun.com/docs/runtime/env
             .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
@@ -673,6 +749,408 @@ public static class JavaScriptHostingExtensions
                 return Task.CompletedTask;
             });
 
+    // The default Docker image used for AddDenoApp build and runtime stages.
+    // Pin to a concrete tag because denoland/deno does not publish floating major tags.
+    // The official image provides a non-root `deno` user.
+    private const string DefaultDenoImage = "denoland/deno:2.9.0";
+
+    // Default .dockerignore content emitted alongside the generated Deno Dockerfile using
+    // BuildKit's per-Dockerfile ignore convention. The runtime stage copies source from the
+    // build stage, but an ignore file keeps local .git, dotenv files, and Aspire artifacts out
+    // of the build context. Deno can still materialize node_modules for npm compatibility
+    // (`--node-modules-dir=auto` or `manual`), so keep local dependency folders out of
+    // the build context just like the Bun/Node variants.
+    private const string DefaultDenoBuildContextIgnoreContent = """
+        # Generated by Aspire. Author <contextRoot>/.dockerignore to override.
+        node_modules
+        .git
+        .gitignore
+        .DS_Store
+        .env
+        .env.*
+        .aspire
+        aspire-output
+        Dockerfile
+        Dockerfile.*
+        *.Dockerfile.dockerignore
+        .dockerignore
+        *.tsbuildinfo
+
+        """;
+
+    /// <summary>
+    /// Adds a Deno application to the application model. Deno should be available on the PATH.
+    /// </summary>
+    /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/> to add the resource to.</param>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="appDirectory">The path to the directory containing the Deno application.</param>
+    /// <param name="scriptPath">The path to the script (for example, <c>main.ts</c>) relative to <paramref name="appDirectory"/> to run.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// In run mode this method executes the script directly using <c>deno run -A &lt;script&gt;</c>. Generated
+    /// containers use the more restrictive <c>deno run --allow-net --allow-env &lt;script&gt;</c> default. Deno
+    /// natively runs JavaScript and TypeScript files so no transpile step is required. Deno's built-in OpenTelemetry
+    /// integration is enabled via the <c>OTEL_DENO</c> environment variable, so traces, metrics, and logs flow to the
+    /// Aspire dashboard with no application-level SDK wiring.
+    ///
+    /// The full Deno flag surface (granular permissions, <c>--config</c>/<c>--import-map</c>/<c>--lock</c>, unstable
+    /// features, <c>--watch</c>, inspector flags, script args, and the <c>run</c>/<c>task</c>/<c>serve</c> sub-command
+    /// modes) can be configured with the fluent <c>WithDeno*</c> methods (for example <see cref="WithDenoAllow"/>,
+    /// <see cref="WithDenoConfig"/>, <see cref="WithDenoUnstable"/>, <see cref="WithDenoServe"/>). Configuring any of
+    /// these fully replaces the default arg vector, so a Deno workload never has to fall back to <c>AddExecutable</c>.
+    ///
+    /// If the application directory contains a <c>package.json</c>, <c>deno.json</c>, or <c>deno.jsonc</c> file, Deno will
+    /// be added as the default package manager. When publishing to a container, the default base image is
+    /// <c>denoland/deno:2.9.0</c> for both the build and runtime stages.
+    /// </remarks>
+    /// <example>
+    /// Add a Deno app to the application model:
+    /// <code lang="csharp">
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    ///
+    /// builder.AddDenoApp("api", "../api", "main.ts");
+    ///
+    /// builder.Build().Run();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<DenoAppResource> AddDenoApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string scriptPath)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(scriptPath);
+
+        appDirectory = Path.GetFullPath(appDirectory, builder.AppHostDirectory);
+        ValidateDenoScriptPath(scriptPath);
+        var resource = new DenoAppResource(name, "deno", appDirectory);
+
+        var resourceBuilder = builder.AddResource(resource)
+            .WithDenoDefaults()
+            .WithArgs(c =>
+            {
+                // An explicit Deno command-line annotation (configured via the WithDeno* fluent flag methods)
+                // composes with WithRunScript. If no fluent mode method selected run/task/serve explicitly,
+                // a run script still launches through `deno task <name>` and the Deno flags that are valid for
+                // task launches are preserved.
+                if (c.Resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var denoCommandLine))
+                {
+                    var serveEndpointArguments = denoCommandLine.Mode == DenoCommandMode.Serve
+                        ? GetDenoServeEndpointArguments(c.Resource, c.ExecutionContext.IsPublishMode)
+                        : null;
+                    c.Resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var runScript);
+                    c.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager);
+                    foreach (var arg in BuildDenoArgs(
+                        denoCommandLine,
+                        scriptPath,
+                        serveEndpointArguments,
+                        runScript: runScript,
+                        packageManager: packageManager))
+                    {
+                        c.Args.Add(arg);
+                    }
+                }
+                // If the JavaScriptRunScriptAnnotation is present, use that to run the app via `deno task <name>`.
+                else if (c.Resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var runCommand) &&
+                    c.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
+                {
+                    if (!string.IsNullOrEmpty(packageManager.ScriptCommand))
+                    {
+                        c.Args.Add(packageManager.ScriptCommand);
+                    }
+
+                    c.Args.Add(runCommand.ScriptName);
+
+                    foreach (var arg in runCommand.Args)
+                    {
+                        c.Args.Add(arg);
+                    }
+                }
+                else
+                {
+                    // Direct execution differs from Node/Bun: Deno requires the `run` subcommand and, unlike
+                    // Node/Bun, runs under a deny-by-default permission model. Aspire injects configuration via
+                    // environment variables (PORT, OTLP endpoints, cert paths) and the app reads them with
+                    // Deno.env / opens sockets with Deno.serve, both of which throw NotCapable without an explicit
+                    // grant. `-A` (allow-all) is used to keep the developer experience on par with Node/Bun, whose
+                    // runtimes are permissive by default. Users who want least-privilege can opt out with
+                    // WithDenoAllowAll(false) and add explicit permission flags via the WithDeno* methods.
+                    c.Args.Add("run");
+                    c.Args.Add("-A");
+                    c.Args.Add(scriptPath);
+                }
+            })
+            .WithIconName("CodeJsRectangle")
+            .PublishAsDockerFile(c =>
+            {
+                // Only generate a Dockerfile if one doesn't already exist in the app directory
+                if (File.Exists(Path.Combine(resource.WorkingDirectory, "Dockerfile")))
+                {
+                    return;
+                }
+
+                c.WithDockerfileBuilder(resource.WorkingDirectory, dockerfileContext =>
+                {
+                    // Get custom base image from annotation, if present
+                    dockerfileContext.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation);
+
+                    // Provide a default .dockerignore emitted alongside the generated Dockerfile using
+                    // BuildKit's per-Dockerfile ignore convention (<dockerfile-name>.dockerignore). The
+                    // runtime stage copies source from the build stage, so an ignore file keeps the user's
+                    // local .git, dotenv files, and Aspire output out of the image.
+                    if (dockerfileContext.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
+                    {
+                        dockerfileBuildAnnotation.BuildContextIgnoreContent ??= DefaultDenoBuildContextIgnoreContent;
+                    }
+
+                    ThrowIfUnsupportedDenoDockerfileOptions(dockerfileContext.Resource);
+
+                    // Deno ships its own runtime, so both stages default to the same Deno image. Unlike the Bun
+                    // variant there is no separate production-dependency install stage: Deno caches remote and
+                    // npm dependencies under DENO_DIR. Direct run/serve entrypoints pre-populate that cache in
+                    // the build stage and use --cached-only at runtime. Task entrypoints are opaque shell
+                    // commands in deno.json, so Aspire cannot safely infer their module graph.
+                    var baseBuildImage = baseImageAnnotation?.BuildImage ?? DefaultDenoImage;
+                    var buildStage = dockerfileContext.Builder
+                        .From(baseBuildImage, "build");
+
+                    // Package-script builds install from the manifest layer before copying the remaining source.
+                    // Direct run/serve builds copy the full module graph first, then cache it with the same
+                    // resolution and lock flags used by the runtime entrypoint.
+                    dockerfileContext.Resource.TryGetLastAnnotation<JavaScriptPublishModeAnnotation>(out var publishMode);
+                    if (publishMode?.Mode == JavaScriptPublishMode.PackageScript)
+                    {
+                        if (!dockerfileContext.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager) ||
+                            !dockerfileContext.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand))
+                        {
+                            throw new InvalidOperationException("PublishAsPackageScript requires a Deno package manager. Add a deno.json file or call WithDeno().");
+                        }
+
+                        buildStage.EmptyLine();
+                        packageManager.InitializeDockerBuildStage?.Invoke(buildStage);
+                        buildStage
+                            .EmptyLine()
+                            .WorkDir("/app");
+
+                        var copiedAllSource = buildStage.CopyPackageFilesForInstall(packageManager);
+                        buildStage.AddInstallCommand(packageManager, installCommand);
+
+                        if (!copiedAllSource)
+                        {
+                            buildStage.Copy(".", ".");
+                        }
+                    }
+                    else
+                    {
+                        var denoCacheCommand = BuildDenoCacheCommand(dockerfileContext.Resource, scriptPath, resource.WorkingDirectory);
+                        buildStage
+                            .EmptyLine()
+                            // Pin DENO_DIR to a deterministic path so the runtime stage can copy the cache
+                            // regardless of the base image's own default. The official denoland/deno image
+                            // already uses /deno-dir, but a custom build image (WithDockerfileBaseImage) may not.
+                            .Env("DENO_DIR", "/deno-dir")
+                            .EmptyLine()
+                            .WorkDir("/app")
+                            .Copy(".", ".")
+                            .EmptyLine()
+                            .Run(denoCacheCommand);
+                    }
+
+                    if (dockerfileContext.Resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
+                    {
+                        if (!dockerfileContext.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
+                        {
+                            throw new InvalidOperationException("WithBuildScript requires a Deno package manager. Add a deno.json file or call WithDeno().");
+                        }
+
+                        buildStage
+                            .EmptyLine()
+                            .Run(BuildPackageScriptCommand(packageManager, buildCommand));
+                    }
+
+                    var logger = dockerfileContext.Services.GetService<ILogger<JavaScriptAppResource>>();
+                    dockerfileContext.Builder.AddContainerFilesStages(dockerfileContext.Resource, logger);
+
+                    var hasCustomRuntimeImage = baseImageAnnotation?.RuntimeImage is not null;
+                    var baseRuntimeImage = baseImageAnnotation?.RuntimeImage ?? DefaultDenoImage;
+                    var runtimeStage = dockerfileContext.Builder
+                        .From(baseRuntimeImage, "runtime")
+                            .EmptyLine()
+                            // Match the build stage's DENO_DIR so the copied cache is discovered at runtime.
+                            .Env("DENO_DIR", "/deno-dir")
+                            .EmptyLine()
+                            .WorkDir("/app");
+
+                    if (hasCustomRuntimeImage)
+                    {
+                        runtimeStage
+                            .CopyFrom("build", "/app", "/app")
+                            // Ship the pre-populated dependency cache so direct run/serve container starts
+                            // resolve everything locally instead of re-fetching from the network.
+                            .CopyFrom("build", "/deno-dir", "/deno-dir");
+                    }
+                    else
+                    {
+                        runtimeStage
+                            .CopyFrom("build", "/app", "/app", DenoDefaultUserAndGroup)
+                            // Ship the pre-populated dependency cache so direct run/serve container starts
+                            // resolve everything locally instead of re-fetching from the network.
+                            .CopyFrom("build", "/deno-dir", "/deno-dir", DenoDefaultUserAndGroup);
+                    }
+
+                    runtimeStage
+                            .AddContainerFiles(dockerfileContext.Resource, "/app", logger)
+                            .EmptyLine()
+                            // Deno honors NODE_ENV in its Node-compatibility mode (npm: specifiers, package.json
+                            // "exports" conditions) exactly as Node/Bun do. Match the Bun publish block.
+                            .Env("NODE_ENV", "production")
+                            .EmptyLine();
+
+                    if (!hasCustomRuntimeImage)
+                    {
+                        // The default denoland/deno images provide a non-root `deno` user. Respect custom runtime
+                        // images' configured defaults because not every supported Deno variant defines that user
+                        // (for example, denoland/deno:2.1-distroless).
+                        // See https://github.com/denoland/deno_docker
+                        runtimeStage
+                            .User(DenoDefaultUser)
+                            .EmptyLine();
+                    }
+
+                    runtimeStage.Entrypoint(BuildDenoEntrypoint(dockerfileContext.Resource, resource.Command, scriptPath));
+                });
+            });
+
+        // Configure pipeline to ensure container file sources are built first
+        resourceBuilder.WithPipelineConfiguration(context =>
+        {
+            if (resourceBuilder.Resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out var containerFilesAnnotations))
+            {
+                var buildSteps = context.GetSteps(resourceBuilder.Resource, WellKnownPipelineTags.BuildCompute);
+
+                foreach (var containerFile in containerFilesAnnotations)
+                {
+                    buildSteps.DependsOn(context.GetSteps(containerFile.Source, WellKnownPipelineTags.BuildCompute));
+                }
+            }
+        });
+
+        // Automatically add Deno as the package manager if a Deno or npm project manifest exists. Deno projects are
+        // commonly configured through deno.json/deno.jsonc (tasks, imports), and Deno also honors package.json in its
+        // Node compatibility mode.
+        if (File.Exists(Path.Combine(appDirectory, "package.json")) ||
+            File.Exists(Path.Combine(appDirectory, "deno.json")) ||
+            File.Exists(Path.Combine(appDirectory, "deno.jsonc")))
+        {
+            resourceBuilder.WithDeno();
+        }
+
+        resourceBuilder.WithVSCodeDebugging(scriptPath, "deno");
+
+        if (builder.ExecutionContext.IsRunMode)
+        {
+            builder.OnBeforeStart((_, _) =>
+            {
+                ThrowIfDenoOptionsConflictWithPackageManager(resourceBuilder.Resource);
+
+                // Set the command to the package manager executable if a WithRunScript was configured.
+                // For the default Deno package manager this is a no-op (executable is "deno"), but it keeps the
+                // command consistent if a user opts into a different package manager.
+                if (resourceBuilder.Resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _) &&
+                    resourceBuilder.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
+                {
+                    resourceBuilder.WithCommand(packageManager.ExecutableName);
+                }
+
+                return Task.CompletedTask;
+            });
+        }
+
+        return resourceBuilder;
+    }
+
+    private static IResourceBuilder<TResource> WithDenoDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource
+    {
+        // Deno has first-class, built-in OpenTelemetry support. Setting OTEL_DENO=true enables automatic export
+        // of traces, metrics, and logs with no application-level SDK required. Enable it only when an OTLP HTTP
+        // endpoint is injected; dashboard-free AppHosts remain valid and should not require an observability
+        // backend merely because they host a Deno workload.
+        //
+        // Deno's native exporter sends OTLP as Protobuf over HTTP, so request that dashboard endpoint instead
+        // of Aspire's default gRPC preference.
+        //
+        // No `--unstable-otel` flag is emitted: native OTel is STABLE on the pinned Deno 2.9.0 image.
+        // Verified empirically on Deno 2.9.0 (2026-07) — `OTEL_DENO=true`
+        // alone activates and exports traces/metrics/logs; `--unstable-otel` is no longer listed by
+        // `deno run --help=unstable` and is only a backward-compat no-op. OTEL_DENO accepts only the literal
+        // "true"/"false" (not "1"), which is what we emit.
+        // See https://docs.deno.com/runtime/fundamentals/open_telemetry/
+        builder.WithDenoOtlpExporter()
+            .WithRequiredCommandsFromPackageManager("deno")
+            // Deno honors NODE_ENV in its Node-compatibility mode (npm: specifier resolution, package.json
+            // "exports" conditions) the same way Node/Bun do. Mirror the Bun defaults so npm-compat behaves.
+            // See https://docs.deno.com/runtime/reference/env_variables/
+            .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
+            .WithCertificateTrustConfiguration((ctx) =>
+            {
+                if (ctx.Scope is CertificateTrustScope.Append or CertificateTrustScope.Override or CertificateTrustScope.System)
+                {
+                    // DENO_CERT loads the configured PEM certificate file into Deno's trust store. The optional
+                    // DENO_TLS_CA_STORE value below chooses whether that bundle is combined with Deno's Mozilla
+                    // store, replaces it, or is combined with the operating system store.
+                    // See https://docs.deno.com/runtime/reference/env_variables/#special-environment-variables
+                    ctx.EnvironmentVariables["DENO_CERT"] = ctx.CertificateBundlePath;
+
+                    // Deno's built-in OTLP exporter is implemented in Rust and uses the OpenTelemetry certificate
+                    // variable rather than DENO_CERT for HTTPS exporter trust.
+                    // See https://opentelemetry.io/docs/specs/otel/protocol/exporter/
+                    ctx.EnvironmentVariables["OTEL_EXPORTER_OTLP_CERTIFICATE"] = ctx.CertificateBundlePath;
+
+                    if (ctx.Scope == CertificateTrustScope.Override)
+                    {
+                        ctx.EnvironmentVariables["DENO_TLS_CA_STORE"] = "";
+                    }
+                    else if (ctx.Scope == CertificateTrustScope.System)
+                    {
+                        ctx.EnvironmentVariables["DENO_TLS_CA_STORE"] = "system";
+                    }
+                }
+
+                return Task.CompletedTask;
+            });
+
+        return builder;
+    }
+
+    private static IResourceBuilder<TResource> WithDenoOtlpExporter<TResource>(this IResourceBuilder<TResource> builder)
+        where TResource : IResourceWithEnvironment
+    {
+        builder.WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf);
+
+        var exporter = builder.Resource.Annotations.OfType<OtlpExporterAnnotation>().Last();
+        builder.Resource.Annotations.Remove(exporter);
+        builder.Resource.Annotations.Add(new DenoOtlpExporterAnnotation
+        {
+            RequiredProtocol = exporter.RequiredProtocol,
+        });
+
+        return builder;
+    }
+
+    private static void ValidateDenoScriptPath(string scriptPath)
+    {
+        if (!TryNormalizeDenoContainerRelativePath(scriptPath, out _))
+        {
+            throw new ArgumentException("The script path must resolve inside the Deno application directory.", nameof(scriptPath));
+        }
+    }
+
+    private static bool IsWindowsDriveQualifiedPath(string path) =>
+        path.Length >= 2 &&
+        char.IsAsciiLetter(path[0]) &&
+        path[1] == ':';
+
     /// <summary>
     /// Adds a JavaScript application resource to the distributed application using the specified app directory and
     /// run script.
@@ -708,6 +1186,10 @@ public static class JavaScriptHostingExtensions
     /// <param name="builder">The JavaScript resource builder.</param>
     /// <param name="configure">Optional callback to configure <see cref="PublishAsStaticWebsiteOptions"/>.</param>
     /// <returns>The updated resource builder.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown during generated Dockerfile creation when this method is used with a Deno app added by
+    /// <c>AddDenoApp</c>. Use <c>AddJavaScriptApp(...).WithDeno()</c> or provide a custom Dockerfile.
+    /// </exception>
     /// <remarks>
     /// <para>
     /// The published container uses a YARP reverse proxy image for static file serving.
@@ -742,6 +1224,10 @@ public static class JavaScriptHostingExtensions
     /// </param>
     /// <param name="configure">Optional callback to configure <see cref="PublishAsStaticWebsiteOptions"/>.</param>
     /// <returns>The updated resource builder.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown during generated Dockerfile creation when this method is used with a Deno app added by
+    /// <c>AddDenoApp</c>. Use <c>AddJavaScriptApp(...).WithDeno()</c> or provide a custom Dockerfile.
+    /// </exception>
     /// <remarks>
     /// <para>
     /// The published container uses a YARP reverse proxy image for static file serving and API
@@ -867,7 +1353,7 @@ public static class JavaScriptHostingExtensions
         builder.WithAnnotation(annotation)
                .ClearContainerFilesSources()
                .WithContainerFilesSource(GetContainerFilesSourcePath(options.OutputPath))
-               .WithOtlpExporter();
+               .WithOtlpExporterIfMissing();
 
         if (builder.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation))
         {
@@ -890,6 +1376,10 @@ public static class JavaScriptHostingExtensions
     /// The relative path containing the built runtime files to copy into the published container. Defaults to the application root.
     /// </param>
     /// <returns>The updated resource builder.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown during generated Dockerfile creation when this method is used with a Deno app added by
+    /// <c>AddDenoApp</c>. Use <c>AddJavaScriptApp(...).WithDeno()</c> or provide a custom Dockerfile.
+    /// </exception>
     /// <remarks>
     /// <para>
     /// Use this method for frameworks that produce a Node.js server artifact during the build and recommend
@@ -925,7 +1415,7 @@ public static class JavaScriptHostingExtensions
         builder.WithAnnotation(annotation)
                .ClearContainerFilesSources()
                .WithContainerFilesSource(GetContainerFilesSourcePath(outputPath))
-               .WithOtlpExporter()
+               .WithOtlpExporterIfMissing()
                .WithEnvironment("HOST", "0.0.0.0")
                .WithEnvironment("HOSTNAME", "0.0.0.0");
 
@@ -938,14 +1428,16 @@ public static class JavaScriptHostingExtensions
     }
 
     /// <summary>
-    /// Configures the JavaScript application to publish as a Node.js server that uses a <c>package.json</c> script at runtime.
+    /// Configures the JavaScript application to publish as a server that runs a package manager script at runtime.
     /// </summary>
     /// <typeparam name="TResource">The JavaScript resource type.</typeparam>
     /// <param name="builder">The JavaScript resource builder.</param>
     /// <param name="scriptName">
-    /// The name of the <c>package.json</c> script to run in the published container.
+    /// The name of the script to run in the published container. For Node.js and Bun applications this is a
+    /// <c>package.json</c> script; for Deno applications it is a task defined in <c>deno.json</c>.
     /// For example, <c>start</c> invokes the configured package manager's run command for the <c>start</c> script,
-    /// such as <c>npm run start</c>, <c>pnpm run start</c>, <c>yarn run start</c>, or <c>bun run start</c>.
+    /// such as <c>npm run start</c>, <c>pnpm run start</c>, <c>yarn run start</c>, <c>bun run start</c>, or
+    /// <c>deno task start</c>.
     /// </param>
     /// <param name="runScriptArguments">
     /// Optional arguments appended after the script name at runtime,
@@ -954,13 +1446,28 @@ public static class JavaScriptHostingExtensions
     /// <returns>The updated resource builder.</returns>
     /// <remarks>
     /// <para>
-    /// Use this method for frameworks where the production server depends on packages in <c>node_modules</c> at runtime.
-    /// The resulting container includes the full application with production dependencies installed.
+    /// Use this method for frameworks where the production server depends on packages resolved at runtime, either
+    /// from <c>node_modules</c> or from the Deno dependency cache. The resulting container includes the full
+    /// application with its production dependencies already installed.
     /// </para>
     /// <para>
     /// This method is appropriate for frameworks like Nuxt (where <c>useAsyncData</c>/<c>useFetch</c> requires the
     /// full Nitro environment), Remix (where <c>react-router-serve</c> is an npm dependency), and Astro SSR
     /// (where the built entry point imports unbundled <c>@astrojs/*</c> packages).
+    /// </para>
+    /// <para>
+    /// For Deno applications the generated container runs <c>deno task &lt;scriptName&gt;</c> and copies the populated
+    /// <c>DENO_DIR</c> cache from the build stage, so whatever the build resolved is already present at runtime.
+    /// Unlike the Node.js and Bun package managers there is no separate production install step, because the build
+    /// stage runs <c>deno install</c> and <c>DENO_DIR</c> is carried forward as-is rather than being pruned.
+    /// </para>
+    /// <para>
+    /// <c>deno install</c> only resolves the dependencies declared in <c>deno.json</c> or <c>package.json</c>. An
+    /// import written as a bare specifier in source, such as <c>import { assert } from "jsr:@std/assert"</c>, is not
+    /// declared anywhere the installer can see, so it is fetched on first use and the container needs network access
+    /// at startup. The same applies to anything reachable only from inside the build script's own task command, which
+    /// Aspire cannot inspect. Add those imports to the <c>imports</c> map in <c>deno.json</c> if the container has to
+    /// start without network access.
     /// </para>
     /// <para>
     /// For frameworks that produce a self-contained server artifact that does not require <c>node_modules</c>,
@@ -988,7 +1495,7 @@ public static class JavaScriptHostingExtensions
 
         builder.WithAnnotation(annotation)
                .ClearContainerFilesSources()
-               .WithOtlpExporter()
+               .WithOtlpExporterIfMissing()
                .WithEnvironment("HOST", "0.0.0.0")
                .WithEnvironment("HOSTNAME", "0.0.0.0");
 
@@ -1000,10 +1507,46 @@ public static class JavaScriptHostingExtensions
         return builder;
     }
 
+    private static bool CopyPackageFilesForInstall(this DockerfileStage builderStage, JavaScriptPackageManagerAnnotation packageManager)
+    {
+        // deno.json can reference sibling import maps, workspace members, and other files that `deno install`
+        // resolves immediately. Copy the complete build context before install because the manifest files alone
+        // are not a self-contained dependency description.
+        if (packageManager.ExecutableName == "deno")
+        {
+            builderStage.Copy(".", ".");
+            return true;
+        }
+
+        if (packageManager.PackageFilesPatterns.Count > 0)
+        {
+            foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
+            {
+                builderStage.Copy(packageFilePattern.Source, packageFilePattern.Destination);
+            }
+
+            return false;
+        }
+
+        builderStage.Copy(".", ".");
+        return true;
+    }
+
+    private static IResourceBuilder<TResource> WithOtlpExporterIfMissing<TResource>(this IResourceBuilder<TResource> builder)
+        where TResource : JavaScriptAppResource
+    {
+        if (!builder.Resource.Annotations.OfType<OtlpExporterAnnotation>().Any())
+        {
+            builder.WithOtlpExporter();
+        }
+
+        return builder;
+    }
+
     private static void AddInstallCommand(this DockerfileStage builderStage, JavaScriptPackageManagerAnnotation packageManager, JavaScriptInstallCommandAnnotation installCommand)
     {
         // Use BuildKit cache mount for package manager cache if available
-        var installCmd = $"{packageManager.ExecutableName} {string.Join(' ', installCommand.Args)}";
+        var installCmd = JoinDockerShellCommand([packageManager.ExecutableName, .. installCommand.Args]);
         if (!string.IsNullOrEmpty(packageManager.CacheMount))
         {
             builderStage.Run($"--mount=type=cache,target={packageManager.CacheMount} {installCmd}");
@@ -1013,6 +1556,82 @@ public static class JavaScriptHostingExtensions
             builderStage.Run(installCmd);
         }
     }
+
+    /// <summary>
+    /// Builds the <c>RUN</c> command that executes a package script during the Docker build, for example
+    /// <c>npm run build</c> or <c>deno task build</c>.
+    /// </summary>
+    /// <remarks>
+    /// The script name and its arguments are caller-supplied and are each a single logical token, so they are
+    /// shell-quoted. A script named <c>build prod</c> would otherwise emit <c>RUN npm run build prod</c>, which
+    /// runs the <c>build</c> script with an extra argument instead of the script the caller named.
+    /// </remarks>
+    private static string BuildPackageScriptCommand(JavaScriptPackageManagerAnnotation packageManager, JavaScriptBuildScriptAnnotation buildCommand)
+    {
+        var commandArgs = new List<string>() { packageManager.ExecutableName };
+        if (!string.IsNullOrEmpty(packageManager.ScriptCommand))
+        {
+            commandArgs.Add(packageManager.ScriptCommand);
+        }
+        commandArgs.Add(buildCommand.ScriptName);
+        commandArgs.AddRange(buildCommand.Args);
+
+        return JoinDockerShellCommand(commandArgs);
+    }
+
+    /// <summary>
+    /// Builds the production dependency install command, appending the package manager's production-only flag.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="JavaScriptInstallCommandAnnotation.ProductionInstallArgs"/> is deliberately not quoted. Unlike the
+    /// entries in <see cref="JavaScriptInstallCommandAnnotation.Args"/>, which are individual tokens, it is documented
+    /// as a pre-formatted flag fragment (for example <c>--omit=dev</c>), so quoting it would break a caller who
+    /// supplies more than one flag.
+    /// </remarks>
+    private static string BuildProductionInstallCommand(JavaScriptPackageManagerAnnotation packageManager, JavaScriptInstallCommandAnnotation installCommand)
+        => $"{JoinDockerShellCommand([packageManager.ExecutableName, .. installCommand.Args])} {installCommand.ProductionInstallArgs}";
+
+    /// <summary>
+    /// Joins arguments into a single command string for Dockerfile <c>RUN</c>, quoting each argument so that
+    /// values containing spaces or shell metacharacters survive as one token.
+    /// </summary>
+    private static string JoinDockerShellCommand(IEnumerable<string> args)
+        => string.Join(' ', args.Select(QuoteDockerShellArgument));
+
+    /// <summary>
+    /// Quotes a single argument for a Dockerfile <c>RUN</c> instruction, which is executed through <c>/bin/sh -c</c>.
+    /// </summary>
+    /// <remarks>
+    /// Uses a fail-closed allowlist: anything outside the set of characters that are unambiguously inert to the shell
+    /// is quoted. A denylist would silently pass through any metacharacter nobody enumerated.
+    /// </remarks>
+    private static string QuoteDockerShellArgument(string value)
+    {
+        if (value.Length == 0)
+        {
+            return "''";
+        }
+
+        if (value.All(IsUnquotedDockerShellArgumentCharacter))
+        {
+            return value;
+        }
+
+        // Single-quote the argument and use the standard POSIX shell escape sequence for embedded quotes:
+        //   import map's.json -> 'import map'"'"'s.json'
+        return $"'{value.Replace("'", "'\"'\"'", StringComparison.Ordinal)}'";
+    }
+
+    private static bool IsUnquotedDockerShellArgumentCharacter(char c) =>
+        c is >= 'a' and <= 'z'
+            or >= 'A' and <= 'Z'
+            or >= '0' and <= '9'
+            or '-'
+            or '_'
+            or '.'
+            or '/'
+            or ':'
+            or '=';
 
     private static string GetPackageScriptRuntimeImage(
         string appDirectory,
@@ -1075,9 +1694,13 @@ public static class JavaScriptHostingExtensions
 
                     if (c.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
                     {
-                        // Get custom base image from annotation, if present
+                        // Get custom base image from annotation, if present. A caller can configure only a runtime
+                        // image, which leaves BuildImage null, so fall back to the package manager's own image
+                        // before the Node.js default - bun and deno are absent from the Node.js images.
                         dockerfileContext.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out var baseImageAnnotation);
-                        var baseImage = baseImageAnnotation?.BuildImage ?? GetDefaultBaseImage(appDirectory, "slim", dockerfileContext.Services);
+                        var baseImage = baseImageAnnotation?.BuildImage
+                            ?? packageManager.DefaultBuildImage
+                            ?? GetDefaultBaseImage(appDirectory, "slim", dockerfileContext.Services);
 
                         var dockerBuilder = publishMode is not null
                             ? dockerfileContext.Builder.From(baseImage, "build").WorkDir("/app")
@@ -1087,21 +1710,7 @@ public static class JavaScriptHostingExtensions
                         // for the default JavaScript app builder (used by Vite and other build-less apps).
                         packageManager.InitializeDockerBuildStage?.Invoke(dockerBuilder);
 
-                        var copiedAllSource = false;
-
-                        // Copy package files first for better layer caching
-                        if (packageManager.PackageFilesPatterns.Count > 0)
-                        {
-                            foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
-                            {
-                                dockerBuilder.Copy(packageFilePattern.Source, packageFilePattern.Destination);
-                            }
-                        }
-                        else
-                        {
-                            dockerBuilder.Copy(".", ".");
-                            copiedAllSource = true;
-                        }
+                        var copiedAllSource = dockerBuilder.CopyPackageFilesForInstall(packageManager);
 
                         if (c.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand))
                         {
@@ -1116,15 +1725,7 @@ public static class JavaScriptHostingExtensions
 
                         if (c.Resource.TryGetLastAnnotation<JavaScriptBuildScriptAnnotation>(out var buildCommand))
                         {
-                            var commandArgs = new List<string>() { packageManager.ExecutableName };
-                            if (!string.IsNullOrEmpty(packageManager.ScriptCommand))
-                            {
-                                commandArgs.Add(packageManager.ScriptCommand);
-                            }
-                            commandArgs.Add(buildCommand.ScriptName);
-                            commandArgs.AddRange(buildCommand.Args);
-
-                            dockerBuilder.Run(string.Join(' ', commandArgs));
+                            dockerBuilder.Run(BuildPackageScriptCommand(packageManager, buildCommand));
                         }
 
                         switch (publishMode?.Mode)
@@ -1157,6 +1758,57 @@ public static class JavaScriptHostingExtensions
                             case JavaScriptPublishMode.PackageScript:
                             {
                                 var runtimeImage = GetPackageScriptRuntimeImage(appDirectory, dockerfileContext.Services, baseImageAnnotation, packageManager, baseImage);
+                                var runCommand = string.IsNullOrWhiteSpace(publishMode.RunScriptArguments)
+                                    ? $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName}"
+                                    : $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName} {publishMode.RunScriptArguments}";
+
+                                if (packageManager.ExecutableName == "deno")
+                                {
+                                    var usesDefaultDenoRuntimeImage = string.Equals(runtimeImage, DefaultDenoImage, StringComparison.Ordinal);
+                                    var denoRuntimeStage = dockerfileContext.Builder
+                                        .From(runtimeImage, "runtime")
+                                        .WorkDir("/app");
+
+                                    if (usesDefaultDenoRuntimeImage)
+                                    {
+                                        denoRuntimeStage.CopyFrom("build", "/app", "/app", DenoDefaultUserAndGroup);
+                                    }
+                                    else
+                                    {
+                                        denoRuntimeStage.CopyFrom("build", "/app", "/app");
+                                    }
+
+                                    // Carry the populated dependency store across stages so the container does not
+                                    // re-download dependencies on first run.
+                                    denoRuntimeStage.Env("DENO_DIR", DenoCacheDirectory);
+                                    if (usesDefaultDenoRuntimeImage)
+                                    {
+                                        denoRuntimeStage.CopyFrom("build", DenoCacheDirectory, DenoCacheDirectory, DenoDefaultUserAndGroup);
+                                    }
+                                    else
+                                    {
+                                        denoRuntimeStage.CopyFrom("build", DenoCacheDirectory, DenoCacheDirectory);
+                                    }
+
+                                    packageManager.InitializeDockerRuntimeStage?.Invoke(denoRuntimeStage);
+
+                                    denoRuntimeStage
+                                        .Env("NODE_ENV", "production");
+
+                                    if (usesDefaultDenoRuntimeImage)
+                                    {
+                                        denoRuntimeStage.User(DenoDefaultUser);
+                                    }
+
+                                    // Exec form (no `sh -c`) so the container also works with shell-less Deno
+                                    // runtime images such as denoland/deno:*-distroless.
+                                    denoRuntimeStage.Entrypoint(BuildDenoPackageScriptEntrypoint(
+                                        packageManager.ExecutableName,
+                                        packageManager.ScriptCommand ?? "run",
+                                        publishMode.ScriptName!,
+                                        publishMode.RunScriptArguments));
+                                    break;
+                                }
 
                                 // Production dependencies stage for optimized image
                                 var prodDepsStage = dockerfileContext.Builder
@@ -1186,7 +1838,7 @@ public static class JavaScriptHostingExtensions
                                     throw new InvalidOperationException($"Package manager '{packageManager.ExecutableName}' does not have ProductionInstallArgs configured, which is required for PublishAsPackageScript.");
                                 }
 
-                                var prodInstallCmd = $"{packageManager.ExecutableName} {string.Join(' ', installAnnotation.Args)} {installAnnotation.ProductionInstallArgs}";
+                                var prodInstallCmd = BuildProductionInstallCommand(packageManager, installAnnotation);
                                 if (!string.IsNullOrEmpty(packageManager.CacheMount))
                                 {
                                     prodDepsStage.Run($"--mount=type=cache,target={packageManager.CacheMount} {prodInstallCmd}");
@@ -1197,10 +1849,6 @@ public static class JavaScriptHostingExtensions
                                 }
 
                                 // Runtime stage: copy build output then overlay prod deps
-                                var runCommand = string.IsNullOrWhiteSpace(publishMode.RunScriptArguments)
-                                    ? $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName}"
-                                    : $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName} {publishMode.RunScriptArguments}";
-
                                 var runtimeStage = dockerfileContext.Builder
                                     .From(runtimeImage, "runtime")
                                     .WorkDir("/app")
@@ -1366,6 +2014,7 @@ public static class JavaScriptHostingExtensions
         ArgumentException.ThrowIfNullOrEmpty(appDirectory);
 
         appDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, appDirectory));
+        var appHostId = builder.Configuration["AppHost:Sha256"]![..10].ToLowerInvariant();
         var resource = new ViteAppResource(name, "npm", appDirectory);
 
         var resourceBuilder = builder.CreateDefaultJavaScriptAppBuilder(
@@ -1411,7 +2060,7 @@ public static class JavaScriptHostingExtensions
                 {
                     configTarget = ctx.Arguments[cfgIndex + 1] switch
                     {
-                        string s when !string.IsNullOrEmpty(s) && !s.StartsWith("--") => s,
+                        string s when !string.IsNullOrEmpty(s) && !s.StartsWith("--", StringComparison.Ordinal) => s,
                         ReferenceExpression re => await re.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false),
                         _ => null,
                     };
@@ -1452,18 +2101,39 @@ public static class JavaScriptHostingExtensions
                     {
                         // Determine the absolute path to the original config file
                         var absoluteConfigPath = Path.GetFullPath(configTarget, appDirectory);
-                        // Determine the relative path from the Aspire vite config to the original config file
-                        var relativeConfigPath = Path.GetRelativePath(Path.Join(appDirectory, "node_modules", ".bin"), absoluteConfigPath);
 
-                        // If we are expecting to run the vite app with HTTPS termination, generate an Aspire specific Vite config file that can mutate the user's original config
+                        // Find the nearest node_modules directory by walking up from the app directory.
+                        // This handles package managers that hoist dependencies (e.g. yarn workspaces)
+                        // where node_modules lives at the repo root rather than in the app directory.
+                        // Writing inside node_modules ensures Node.js module resolution can find
+                        // bare imports like 'vite' in the generated wrapper config.
+                        var nodeModulesDir = FindNearestNodeModules(appDirectory);
+                        if (nodeModulesDir is null)
+                        {
+                            var resourceLoggerService = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
+                            var resourceLogger = resourceLoggerService.GetLogger(resource);
+                            resourceLogger.LogWarning("Could not find a node_modules directory in or above '{AppDirectory}' for resource '{ResourceName}'. Automatic HTTPS configuration won't be available. Ensure packages are installed before starting the app.", appDirectory, resource.Name);
+                            ctx.Arguments.Add("--config");
+                            ctx.Arguments.Add(configTarget);
+                            return;
+                        }
+
+                        // Use the same per-AppHost discriminator as persistent resource names so concurrent
+                        // AppHosts sharing a hoisted node_modules directory cannot overwrite each other's wrappers.
+                        var aspireConfigDir = Path.Join(nodeModulesDir, ".aspire", appHostId, resource.Name);
+                        Directory.CreateDirectory(aspireConfigDir);
+
+                        // Compute the relative path from the wrapper location to the original config
+                        var relativeConfigPath = Path.GetRelativePath(aspireConfigDir, absoluteConfigPath).Replace("\\", "/");
+
+                        // Generate an Aspire specific Vite config file that wraps the user's original config with HTTPS support
                         var aspireConfig = AspireViteConfig
-                            .Replace(AspireViteRelativeConfigToken, relativeConfigPath.Replace("\\", "/"), StringComparison.Ordinal)
+                            .Replace(AspireViteConfigPathToken, relativeConfigPath, StringComparison.Ordinal)
                             .Replace(AspireViteAbsoluteConfigToken, absoluteConfigPath.Replace("\\", "\\\\"), StringComparison.Ordinal);
-                        var aspireConfigPath = Path.Join(appDirectory, "node_modules", ".bin", $"aspire.{Path.GetFileName(configTarget)}");
+                        var aspireConfigPath = Path.Join(aspireConfigDir, $"aspire.{Path.GetFileName(configTarget)}");
                         File.WriteAllText(aspireConfigPath, aspireConfig);
 
-                        // Override the path to the Vite config file to use the Aspire generated one. If we made it here, we
-                        // know there isn't an existing --config argument present.
+                        // Override the path to the Vite config file to use the Aspire generated one
                         ctx.Arguments.Add("--config");
                         ctx.Arguments.Add(aspireConfigPath);
 
@@ -1493,7 +2163,8 @@ public static class JavaScriptHostingExtensions
         if (builder.ExecutionContext.IsRunMode)
         {
             // Vite only supports a single endpoint, so we have to modify the existing endpoint to use HTTPS instead of
-            // adding a new one.
+            // adding a new one. The user explicitly opted into HTTPS via WithHttpsDeveloperCertificate(), so the scheme
+            // change is unconditional here.
             resourceBuilder.SubscribeHttpsEndpointsUpdate(ctx =>
             {
                 resourceBuilder.WithEndpoint("http", ep => ep.UriScheme = "https");
@@ -1681,8 +2352,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation([installCommand, .. installArgs ?? []])
             {
                 ProductionInstallArgs = "--omit=dev"
-            })
-            .WithRequiredCommand("npm", "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm");
+            });
 
         AddInstaller(resource, install);
         return resource;
@@ -1744,12 +2414,12 @@ public static class JavaScriptHostingExtensions
                 // bun supports passing script flags without the `--` separator.
                 CommandSeparator = null,
                 ResolvePackageScriptRuntimeImage = buildImage => buildImage,
+                DefaultBuildImage = DefaultBunImage,
             })
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--production"
-            })
-            .WithRequiredCommand("bun", "https://bun.sh/docs/installation");
+            });
 
         if (!resource.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out _))
         {
@@ -1763,6 +2433,109 @@ public static class JavaScriptHostingExtensions
         }
 
         AddInstaller(resource, install);
+        return resource;
+    }
+
+    /// <summary>
+    /// Configures the JavaScript resource to use Deno as the package manager.
+    /// </summary>
+    /// <typeparam name="TResource">The type of the JavaScript application resource being configured.</typeparam>
+    /// <param name="resource">The JavaScript application resource builder.</param>
+    /// <param name="install">
+    /// When <see langword="true"/>, creates an installer resource that runs <c>deno install</c> before the application
+    /// starts. Defaults to <see langword="false"/>: unlike npm/Bun, Deno does not require a separate install step —
+    /// <c>deno run</c> fetches and caches dependencies under <c>DENO_DIR</c> on first use — so no installer is wired by
+    /// default. Set to <see langword="true"/> to pre-cache dependencies or to materialize a <c>node_modules</c> folder
+    /// for Node compatibility.
+    /// </param>
+    /// <param name="installArgs">Additional command-line arguments passed to <c>deno install</c>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// Package scripts are run through Deno's task runner (<c>deno task &lt;name&gt;</c>) rather than <c>run</c>.
+    /// Publishing to a container requires Deno to be present in the build image. This method configures a Deno build
+    /// image (<c>denoland/deno:2.9.0</c>) when one is not already specified.
+    /// </remarks>
+    /// <ats-remarks />
+    /// <example>
+    /// Run a Deno app using a <c>deno.json</c> task:
+    /// <code lang="csharp">
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    ///
+    /// builder.AddDenoApp("api", "../api", "main.ts")
+    ///        .WithDeno()
+    ///        .WithRunScript("dev");
+    ///
+    /// builder.Build().Run();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<TResource> WithDeno<TResource>(this IResourceBuilder<TResource> resource, bool install = false, string[]? installArgs = null) where TResource : JavaScriptAppResource
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        var workingDirectory = resource.Resource.WorkingDirectory;
+
+        installArgs ??= [];
+
+        // Copy the manifest and lockfile first for better layer caching in publish-mode Dockerfiles.
+        var packageFilesSourcePattern = "";
+        foreach (var manifest in new[] { "deno.json", "deno.jsonc", "deno.lock", "package.json" })
+        {
+            if (File.Exists(Path.Combine(workingDirectory, manifest)))
+            {
+                packageFilesSourcePattern += packageFilesSourcePattern.Length == 0 ? manifest : $" {manifest}";
+            }
+        }
+
+        var packageManager = new JavaScriptPackageManagerAnnotation("deno", runScriptCommand: "task")
+        {
+            // Deno's task runner forwards script arguments without requiring the `--` separator.
+            CommandSeparator = null,
+            ResolvePackageScriptRuntimeImage = buildImage => buildImage,
+            DefaultBuildImage = DefaultDenoImage,
+            // Deliberately no BuildKit cache mount. For npm/bun/pnpm the mount only holds a download cache
+            // while the resolved dependencies still land in /app/node_modules, so discarding the mount at the
+            // end of the build is harmless. For Deno, DENO_DIR *is* the dependency store, so mounting it would
+            // leave the runtime image with no dependencies and force a re-download on first run. Instead the
+            // cache is written into the build stage layer and copied into the runtime stage, which is what
+            // Deno's own Docker guidance recommends. See https://docs.deno.com/runtime/reference/docker/.
+            InitializeDockerBuildStage = stage => stage.Env("DENO_DIR", DenoCacheDirectory),
+        };
+
+        if (packageFilesSourcePattern.Length > 0)
+        {
+            packageManager.PackageFilesPatterns.Add(new CopyFilePattern(packageFilesSourcePattern, "./"));
+        }
+
+        resource
+            .WithAnnotation(packageManager)
+            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]));
+
+        if (!resource.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out _))
+        {
+            // Deno is not available in the default Node.js base images used for publish-mode Dockerfile generation.
+            // We override the build image so that install/build steps can execute with deno.
+            resource.WithAnnotation(new DockerfileBaseImageAnnotation
+            {
+                // Use a constant major version tag to keep builds deterministic.
+                BuildImage = DefaultDenoImage,
+            });
+        }
+
+        // Deno does not need an install step by default: `deno run` fetches and caches dependencies under DENO_DIR
+        // on first use. Only wire an installer resource when the caller explicitly opts in (e.g. to pre-cache deps
+        // or materialize node_modules for Node compatibility).
+        if (install)
+        {
+            AddInstaller(resource, install);
+        }
+        else
+        {
+            DisableExistingInstaller(resource);
+        }
+
         return resource;
     }
 
@@ -1827,8 +2600,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--production"
-            })
-            .WithRequiredCommand("yarn", "https://yarnpkg.com/getting-started/install");
+            });
 
         AddInstaller(resource, install);
         return resource;
@@ -1863,6 +2635,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">The command-line arguments passed to "pnpm install".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when <c>package.json</c> declares an invalid pnpm package manager version or integrity.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<TResource> WithPnpm<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
@@ -1872,6 +2645,19 @@ public static class JavaScriptHostingExtensions
         var workingDirectory = resource.Resource.WorkingDirectory;
         var hasPnpmLock = File.Exists(Path.Combine(workingDirectory, "pnpm-lock.yaml"));
         var hasPnpmWorkspace = File.Exists(Path.Combine(workingDirectory, "pnpm-workspace.yaml"));
+        var pnpmPackageManager = GetPnpmPackageManager(workingDirectory);
+        var initializeDockerStage = new Action<DockerfileStage>(stage =>
+        {
+            stage.Arg("NPM_REGISTRY", DefaultNpmRegistry);
+            if (pnpmPackageManager.Integrity is { } integrity)
+            {
+                stage.Run($"archive=\"$(npm pack --json pnpm@{pnpmPackageManager.Version} --registry \"$NPM_REGISTRY\" | node -e 'const result = JSON.parse(require(\"fs\").readFileSync(0, \"utf8\")); process.stdout.write(result[0].filename)')\" && node -e 'const [algorithm, expected, file] = process.argv.slice(1); const actual = require(\"crypto\").createHash(algorithm).update(require(\"fs\").readFileSync(file)).digest(\"hex\"); if (actual !== expected) {{ console.error(\"Integrity check failed for \" + file); process.exit(1); }}' \"{integrity.Algorithm}\" \"{integrity.Hash}\" \"$archive\" && npm install --global --registry \"$NPM_REGISTRY\" \"./$archive\" && rm \"$archive\"");
+            }
+            else
+            {
+                stage.Run($"npm install --global --registry \"$NPM_REGISTRY\" pnpm@{pnpmPackageManager.Version}");
+            }
+        });
 
         installArgs ??= GetDefaultPnpmInstallArgs(resource, hasPnpmLock);
 
@@ -1892,20 +2678,14 @@ public static class JavaScriptHostingExtensions
                 PackageFilesPatterns = { new CopyFilePattern(packageFilesSourcePattern, "./") },
                 // pnpm does not strip the -- separator and passes it to the script, causing Vite to ignore subsequent arguments.
                 CommandSeparator = null,
-                // pnpm is not included in the Node.js Docker image by default, so we need to enable it via corepack
-                InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm"),
-                InitializeDockerRuntimeStage = stage =>
-                {
-                    // Corepack's shim is not enough by itself: without invoking pnpm during the image build,
-                    // the first container start can try to download pnpm before running the app.
-                    stage.Run("corepack enable pnpm && pnpm --version");
-                },
+                // pnpm is not included in the Node.js Docker image by default.
+                InitializeDockerBuildStage = initializeDockerStage,
+                InitializeDockerRuntimeStage = initializeDockerStage,
             })
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--prod"
-            })
-            .WithRequiredCommand("pnpm", "https://pnpm.io/installation");
+            });
 
         AddInstaller(resource, install);
         return resource;
@@ -1915,6 +2695,75 @@ public static class JavaScriptHostingExtensions
         resource.ApplicationBuilder.ExecutionContext.IsPublishMode && hasPnpmLock
             ? ["--frozen-lockfile"]
             : [];
+
+    private static (string Version, (string Algorithm, string Hash)? Integrity) GetPnpmPackageManager(string workingDirectory)
+    {
+        var packageJsonPath = Path.Combine(workingDirectory, "package.json");
+        if (!File.Exists(packageJsonPath))
+        {
+            return (DefaultPnpmVersion, null);
+        }
+
+        try
+        {
+            using var packageJson = JsonDocument.Parse(File.ReadAllText(packageJsonPath));
+            if (packageJson.RootElement.TryGetProperty("packageManager", out var packageManagerElement) &&
+                packageManagerElement.ValueKind == JsonValueKind.String &&
+                packageManagerElement.GetString() is { } packageManager &&
+                packageManager.StartsWith("pnpm@", StringComparison.Ordinal))
+            {
+                var version = packageManager.AsSpan("pnpm@".Length);
+                ReadOnlySpan<char> integrity = default;
+                var hashSeparator = version.IndexOf('+');
+                var hasIntegrity = hashSeparator >= 0;
+                if (hasIntegrity)
+                {
+                    integrity = version[(hashSeparator + 1)..];
+                    version = version[..hashSeparator];
+                }
+
+                if (PnpmVersionRegex().IsMatch(version))
+                {
+                    var integritySeparator = integrity.IndexOf('.');
+                    if (integritySeparator > 0 &&
+                        integrity[(integritySeparator + 1)..] is { IsEmpty: false } hash &&
+                        hash.IndexOfAnyExcept("0123456789abcdefABCDEF") < 0 &&
+                        integrity[..integritySeparator] is "sha224" or "sha256" or "sha384" or "sha512")
+                    {
+                        return (version.ToString(), (integrity[..integritySeparator].ToString(), hash.ToString().ToLowerInvariant()));
+                    }
+
+                    if (!hasIntegrity)
+                    {
+                        return (version.ToString(), null);
+                    }
+                }
+
+                // A declared pnpm specification controls the binary installed in the published image.
+                // Fail closed instead of silently discarding the requested version and integrity.
+                throw new InvalidOperationException(
+                    $"The packageManager value '{packageManager}' in '{packageJsonPath}' is invalid. Expected 'pnpm@<version>' or 'pnpm@<version>+<sha224|sha256|sha384|sha512>.<hex hash>'.");
+            }
+        }
+        catch (JsonException)
+        {
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+
+        return (DefaultPnpmVersion, null);
+    }
+
+    // Corepack requires packageManager values to use an exact semantic version. node-semver
+    // also accepts the ecosystem's conventional leading "v"; integrity metadata is parsed
+    // separately after the version's '+' delimiter.
+    // See https://github.com/nodejs/corepack/blob/436b358a19f6d2592cff740078db1b06953c3578/sources/specUtils.ts
+    [GeneratedRegex("""^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?$""", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking)]
+    private static partial Regex PnpmVersionRegex();
 
     /// <summary>
     /// Adds a build script annotation to the resource builder using the specified command-line arguments.
@@ -1964,24 +2813,49 @@ public static class JavaScriptHostingExtensions
         var workingDirectory = Path.GetFullPath(resource.WorkingDirectory);
 
         return builder.WithDebugSupport(
-            mode =>
+            context =>
             {
+                context.CancellationToken.ThrowIfCancellationRequested();
+
                 // Compute at run time so the launch config reflects the final annotation state
                 var hasRunScript = resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _);
                 var hasPackageManager = resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var pmAnnotation);
-                var isPackageManagerScript = hasRunScript && hasPackageManager;
+                var denoCommandLine = launchConfigType == "deno" &&
+                    resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var deno)
+                    ? deno
+                    : null;
+                var isDenoTask = denoCommandLine?.Mode == DenoCommandMode.Task;
+                var isExplicitDenoDirectLaunch = denoCommandLine is
+                {
+                    ModeSet: true,
+                    Mode: DenoCommandMode.Run or DenoCommandMode.Serve
+                };
+                // WithRunScript annotations remain after an explicit Deno mode changes the emitted command.
+                // Match BuildDenoArgs precedence so launch metadata describes the final command.
+                var isPackageManagerScript = isDenoTask ||
+                    (hasRunScript && hasPackageManager && !isExplicitDenoDirectLaunch);
+                var effectiveLaunchConfigType = launchConfigType == "deno" && hasRunScript && hasPackageManager
+                    ? GetJavaScriptPackageManagerLaunchConfigurationType(pmAnnotation!.ExecutableName)
+                    : launchConfigType;
 
-                return new JavaScriptLaunchConfiguration(launchConfigType)
+                return Task.FromResult(new JavaScriptLaunchConfiguration(effectiveLaunchConfigType)
                 {
                     ScriptPath = Path.GetFullPath(scriptPath, workingDirectory),
-                    Mode = mode,
-                    RuntimeExecutable = isPackageManagerScript ? pmAnnotation!.ExecutableName : launchConfigType,
+                    Mode = context.Mode,
+                    RuntimeExecutable = hasRunScript && hasPackageManager ? pmAnnotation!.ExecutableName : launchConfigType,
                     LaunchMethod = isPackageManagerScript ? JavaScriptLaunchConfiguration.LaunchMethodPackageManager : JavaScriptLaunchConfiguration.LaunchMethodDirect,
                     WorkingDirectory = workingDirectory
-                };
+                });
             },
             launchConfigType);
     }
+
+    private static string GetJavaScriptPackageManagerLaunchConfigurationType(string packageManagerExecutable) => packageManagerExecutable switch
+    {
+        "bun" => "bun",
+        "deno" => "deno",
+        _ => "node",
+    };
 
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     internal static IResourceBuilder<T> WithVSCodeDebugging<T>(this IResourceBuilder<T> builder)
@@ -1996,6 +2870,12 @@ public static class JavaScriptHostingExtensions
         {
             throw new InvalidOperationException(
                 $"Bun apps cannot be debugged through the Node dev-server debug path. '{resource.Name}' is a {nameof(BunAppResource)}; use {nameof(AddBunApp)}, which wires its own Bun debug support.");
+        }
+
+        if (resource is DenoAppResource)
+        {
+            throw new InvalidOperationException(
+                $"Deno apps cannot be debugged through the Node dev-server debug path. '{resource.Name}' is a {nameof(DenoAppResource)}; use {nameof(AddDenoApp)}, which wires its own Deno debug support.");
         }
 
         return builder.WithDebugSupport(
@@ -2137,18 +3017,18 @@ public static class JavaScriptHostingExtensions
 
             if (existingResource is not null)
             {
-                // Installer already exists, update its configuration based on install parameter
-                if (!install)
+                // Installer already exists, update its configuration based on install parameter. Package manager
+                // methods are composable (for example `.WithDeno(install: false).WithDeno(install: true)`), so the
+                // final call has to be able to re-enable a previously disabled installer, not just disable it.
+                if (install)
                 {
-                    // Remove wait annotation if install is false
-                    resource.Resource.Annotations.OfType<WaitAnnotation>()
-                        .Where(w => w.Resource == existingResource.Resource)
-                        .ToList()
-                        .ForEach(w => resource.Resource.Annotations.Remove(w));
-
-                    // Add WithExplicitStart to the existing installer
-                    existingResource.WithExplicitStart();
+                    EnableInstaller(resource, existingResource);
                 }
+                else
+                {
+                    DisableInstaller(resource, existingResource);
+                }
+
                 return;
             }
 
@@ -2190,6 +3070,46 @@ public static class JavaScriptHostingExtensions
             }
 
             resource.WithAnnotation(new JavaScriptPackageInstallerAnnotation(installer));
+        }
+    }
+
+    private static void DisableExistingInstaller<TResource>(IResourceBuilder<TResource> resource) where TResource : JavaScriptAppResource
+    {
+        if (!resource.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            return;
+        }
+
+        var installerName = $"{resource.Resource.Name}-installer";
+        resource.ApplicationBuilder.TryCreateResourceBuilder<JavaScriptInstallerResource>(installerName, out var existingResource);
+        if (existingResource is not null)
+        {
+            DisableInstaller(resource, existingResource);
+        }
+    }
+
+    private static void DisableInstaller<TResource>(IResourceBuilder<TResource> resource, IResourceBuilder<JavaScriptInstallerResource> installer) where TResource : JavaScriptAppResource
+    {
+        resource.Resource.Annotations.OfType<WaitAnnotation>()
+            .Where(w => w.Resource == installer.Resource)
+            .ToList()
+            .ForEach(w => resource.Resource.Annotations.Remove(w));
+
+        installer.WithExplicitStart();
+    }
+
+    private static void EnableInstaller<TResource>(IResourceBuilder<TResource> resource, IResourceBuilder<JavaScriptInstallerResource> installer) where TResource : JavaScriptAppResource
+    {
+        // Undo WithExplicitStart so the installer starts automatically again.
+        installer.Resource.Annotations.OfType<ExplicitStartupAnnotation>()
+            .ToList()
+            .ForEach(a => installer.Resource.Annotations.Remove(a));
+
+        // WaitForCompletion adds a new WaitAnnotation each time, so only restore the relationship when the
+        // previous disable removed it.
+        if (!resource.Resource.Annotations.OfType<WaitAnnotation>().Any(w => w.Resource == installer.Resource))
+        {
+            resource.WaitForCompletion(installer);
         }
     }
 
@@ -2279,6 +3199,31 @@ public static class JavaScriptHostingExtensions
                 throw new ArgumentException($"The apiPath must contain only URL-safe path characters (alphanumeric, '/', '-', '_'). Invalid character: '{c}'", nameof(apiPath));
             }
         }
+    }
+
+    /// <summary>
+    /// Walks up from <paramref name="startDirectory"/> to find the nearest <c>node_modules</c> directory.
+    /// </summary>
+    private static string? FindNearestNodeModules(string startDirectory)
+    {
+        var current = Path.GetFullPath(startDirectory);
+        while (current is not null)
+        {
+            var candidate = Path.Join(current, "node_modules");
+            if (Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            var parent = Path.GetDirectoryName(current);
+            if (parent == current)
+            {
+                break;
+            }
+            current = parent;
+        }
+
+        return null;
     }
 
     private static string NormalizeRelativePath(string path)

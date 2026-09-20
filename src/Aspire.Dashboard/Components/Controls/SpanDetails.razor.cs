@@ -4,14 +4,12 @@
 using Aspire.Dashboard.Components.Controls.PropertyValues;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
@@ -35,13 +33,12 @@ public partial class SpanDetails : IDisposable
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required IJSRuntime JS { get; init; }
-
-    [Inject]
-    public required IAIContextProvider AIContextProvider { get; init; }
 
     [Inject]
     public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
@@ -80,11 +77,7 @@ public partial class SpanDetails : IDisposable
     private List<TelemetryPropertyViewModel> _contextAttributes = null!;
     private bool _dataChanged;
     private SpanDetailsViewModel? _viewModel;
-    private AIContext? _aiContext;
     private Dictionary<string, ComponentMetadata>? _valueComponents;
-
-    private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
-    private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
 
     private readonly CancellationTokenSource _cts = new();
 
@@ -96,9 +89,7 @@ public partial class SpanDetails : IDisposable
 
     protected override void OnInitialized()
     {
-        _aiContext = CreateAIContext();
         TelemetryContextProvider.Initialize(TelemetryContext);
-        (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(Loc);
     }
 
     private void UpdateSpanActionsMenu()
@@ -120,9 +111,6 @@ public partial class SpanDetails : IDisposable
             if (!string.Equals(ViewModel.Span.SpanId, _viewModel?.Span.SpanId, StringComparisons.OtlpSpanId))
             {
                 _dataChanged = true;
-
-                // Update AI context with new resource.
-                _aiContext?.ContextHasChanged();
             }
 
             _viewModel = ViewModel;
@@ -226,30 +214,11 @@ public partial class SpanDetails : IDisposable
         }
     }
 
-    private AIContext CreateAIContext()
-    {
-        return AIContextProvider.AddNew(nameof(SpanDetails), c =>
-        {
-            c.BuildIceBreakers = (builder, context) =>
-            {
-                if (ViewModel is { } viewModel)
-                {
-                    builder.Span(context, viewModel.Span);
-                }
-                else
-                {
-                    builder.Default(context);
-                }
-            };
-        });
-    }
-
     // IComponentWithTelemetry impl
     public ComponentTelemetryContext TelemetryContext { get; } = new(ComponentType.Control, TelemetryComponentIds.SpanDetails);
 
     public void Dispose()
     {
-        _aiContext?.Dispose();
         _cts.Cancel();
         _cts.Dispose();
 

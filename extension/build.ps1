@@ -58,6 +58,12 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
+$nodeMajorVersion = [int](node -p "process.versions.node.split('.')[0]")
+if ($nodeMajorVersion -lt 22) {
+    Write-Error "Error: Node.js 22 or later is required. Found $(node --version)."
+    exit 1
+}
+
 # npm is required to install our pinned Corepack. It ships with every official
 # Node.js distribution, so this should only fail on broken installs.
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {

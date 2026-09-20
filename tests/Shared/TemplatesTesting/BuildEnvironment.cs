@@ -37,31 +37,33 @@ public class BuildEnvironment
     public static bool IsRunningOnCI => IsRunningOnHelix || IsRunningOnCIBuildMachine || IsRunningOnGithubActions;
     public static bool ShouldRunPlaywrightTests => PlaywrightProvider.HasPlaywrightSupport && !EnvironmentVariables.RunOnlyBasicBuildTemplatesTests;
 
-    private static readonly Lazy<BuildEnvironment> s_instance_80 = new(() =>
+    private static readonly Lazy<BuildEnvironment> s_net8Sdk = new(() =>
         new BuildEnvironment(sdkDirName: "dotnet-8"));
 
-    private static readonly Lazy<BuildEnvironment> s_instance_90 = new(() =>
+    private static readonly Lazy<BuildEnvironment> s_net9Sdk = new(() =>
         new BuildEnvironment(sdkDirName: "dotnet-9"));
 
-    private static readonly Lazy<BuildEnvironment> s_instance_100 = new(() =>
+    private static readonly Lazy<BuildEnvironment> s_net10Sdk = new(() =>
         new BuildEnvironment(sdkDirName: "dotnet-10"));
 
-    private static readonly Lazy<BuildEnvironment> s_instance_100_90_80 = new(() =>
+    private static readonly Lazy<BuildEnvironment> s_net11Sdk = new(() =>
+        new BuildEnvironment(sdkDirName: "dotnet-11"));
+
+    private static readonly Lazy<BuildEnvironment> s_net11SdkWithAllSupportedRuntimes = new(() =>
         new BuildEnvironment(sdkDirName: "dotnet-tests"));
 
-    public static BuildEnvironment ForPreviousSdkOnly => s_instance_80.Value;
-    public static BuildEnvironment ForCurrentSdkOnly => s_instance_90.Value;
-    public static BuildEnvironment ForNextSdkOnly => s_instance_100.Value;
-    public static BuildEnvironment ForNextSdkWithCurrentAndPreviousRuntimes => s_instance_100_90_80.Value;
+    public static BuildEnvironment ForNet8SdkOnly => s_net8Sdk.Value;
+    public static BuildEnvironment ForNet9SdkOnly => s_net9Sdk.Value;
+    public static BuildEnvironment ForNet10SdkOnly => s_net10Sdk.Value;
+    public static BuildEnvironment ForNet11SdkOnly => s_net11Sdk.Value;
+    public static BuildEnvironment ForNet11SdkWithAllSupportedRuntimes => s_net11SdkWithAllSupportedRuntimes.Value;
 
     public static BuildEnvironment ForDefaultFramework =>
         DefaultTargetFramework switch
         {
-            TestTargetFramework.Previous => ForPreviousSdkOnly,
-
-            // Use current+previous to allow running tests on helix built with 9.0 sdk
-            // but targeting 8.0 tfm
-            TestTargetFramework.Current => ForNextSdkWithCurrentAndPreviousRuntimes,
+            TestTargetFramework.Net8 => ForNet8SdkOnly,
+            TestTargetFramework.Net9 or TestTargetFramework.Net10 => ForNet11SdkWithAllSupportedRuntimes,
+            TestTargetFramework.Net11 => ForNet11SdkOnly,
 
             _ => throw new ArgumentOutOfRangeException(nameof(DefaultTargetFramework))
         };
@@ -158,7 +160,11 @@ public class BuildEnvironment
         }
 
         sdkForTemplatePath = Path.GetFullPath(sdkForTemplatePath);
-        DefaultBuildArgs = string.Empty;
+        // The generated AppHost project opts into the CLI bundle, so an environment variable
+        // cannot disable it: project properties override properties imported from the environment.
+        // Template tests use repo-built DCP and dashboard packages instead of an installed bundle,
+        // so pass the opt-out as a global MSBuild property that the project cannot override.
+        DefaultBuildArgs = "/p:AspireUseCliBundle=false";
         NuGetPackagesPath = UsesCustomDotNet ? Path.Combine(AppContext.BaseDirectory, $"nuget-cache-{Guid.NewGuid()}") : null;
         EnvVars = new Dictionary<string, string>();
         if (UsesCustomDotNet)
@@ -179,6 +185,10 @@ public class BuildEnvironment
         // in the tests
         EnvVars["_MSBUILDTLENABLED"] = "0";
         EnvVars["SkipAspireWorkloadManifest"] = "true";
+        // Template tests build generated apps from repo-built packages, not from an installed
+        // Aspire CLI bundle layout, so keep bundle resolution disabled for these test builds.
+        EnvVars["AspireUseCliBundle"] = "false";
+        EnvVars["NoWarn"] = "ASPIRE010";
 
         if (OperatingSystem.IsMacOS())
         {
@@ -287,9 +297,10 @@ public class BuildEnvironment
     private static TestTargetFramework ComputeDefaultTargetFramework()
         => EnvironmentVariables.DefaultTFMForTesting?.ToLowerInvariant() switch
         {
-            null or "" or "net9.0" => TestTargetFramework.Current,
-            "net8.0" => TestTargetFramework.Previous,
-            "net10.0" => TestTargetFramework.Next,
+            null or "" or "net9.0" => TestTargetFramework.Net9,
+            "net8.0" => TestTargetFramework.Net8,
+            "net10.0" => TestTargetFramework.Net10,
+            "net11.0" => TestTargetFramework.Net11,
             _ => throw new ArgumentOutOfRangeException(nameof(EnvironmentVariables.DefaultTFMForTesting), EnvironmentVariables.DefaultTFMForTesting, "Invalid value")
         };
 
@@ -297,10 +308,10 @@ public class BuildEnvironment
 
 public enum TestTargetFramework
 {
-    // Current is default
-    Current,
-    Previous,
-    Next,
+    Net8,
+    Net9,
+    Net10,
+    Net11,
     None
 }
 
@@ -308,9 +319,10 @@ public static class TestTargetFrameworkExtensions
 {
     public static string ToTFMString(this TestTargetFramework tfm) => tfm switch
     {
-        TestTargetFramework.Previous => "net8.0",
-        TestTargetFramework.Current => "net9.0",
-        TestTargetFramework.Next => "net10.0",
+        TestTargetFramework.Net8 => "net8.0",
+        TestTargetFramework.Net9 => "net9.0",
+        TestTargetFramework.Net10 => "net10.0",
+        TestTargetFramework.Net11 => "net11.0",
         _ => throw new ArgumentOutOfRangeException(nameof(tfm))
     };
 }

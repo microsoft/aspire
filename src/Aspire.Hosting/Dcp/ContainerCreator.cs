@@ -131,6 +131,23 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         _appResources.Add(new AppResource<ContainerNetwork>(network));
     }
 
+    internal IReadOnlyList<ContainerVolume> PrepareContainerVolumes()
+    {
+        var volumeNames = _model.GetContainerResources()
+            .SelectMany(resource => resource.Annotations.OfType<ContainerMountAnnotation>())
+            .Where(mount => mount.Type == ContainerMountType.Volume && !string.IsNullOrEmpty(mount.Source))
+            .Select(mount => mount.Source!)
+            .Distinct(StringComparer.Ordinal);
+
+        var volumes = volumeNames
+            .Select(volumeName => ContainerVolume.Create(DcpNameGenerator.GetContainerVolumeName(volumeName), volumeName))
+            .ToArray();
+
+        _appResources.AddRange(volumes.Select(volume => new AppResource<ContainerVolume>(volume)));
+
+        return volumes;
+    }
+
     public IEnumerable<RenderedModelResource<Container>> PrepareObjects()
     {
         var modelContainerResources = _model.GetContainerResources().ToArray();
@@ -199,7 +216,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             }
 
             var containerAppResource = new RenderedModelResource<Container>(container, ctr);
-            DcpModelUtilities.AddServicesProducedInfo(containerAppResource, _appResources.Get(), _logger);
+            DcpModelUtilities.AddServicesProducedInfo(containerAppResource, _appResources.Get());
             _appResources.Add(containerAppResource);
             result.Add(containerAppResource);
         }
@@ -316,11 +333,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         spec.RunArgs = runArgs;
 
         var (configuration, pemCertificates, createFiles) = await BuildContainerConfiguration(cr, logger, cToken).ConfigureAwait(false);
-        // Configuration callbacks are the last pre-creation point where on-demand allocation can run.
-        cr.ModelResource.Annotations
-            .OfType<OnDemandEndpointAllocationAnnotation>()
-            .SingleOrDefault()
-            ?.StopAllocating();
 
         if (configuration.Exception is not null)
         {
@@ -404,9 +416,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             await factory.CreateRenderedResourcesAsync(containerExecCreator, containerExes, EmptyCreationContext.s_instance, cToken).ConfigureAwait(false);
         }
     }
-
-    IEnumerable<RenderedModelResource<ContainerExec>> IObjectCreator<ContainerExec, EmptyCreationContext>.PrepareObjects()
-        => _appResources.Get().OfType<RenderedModelResource<ContainerExec>>();
 
     bool IObjectCreator<ContainerExec, EmptyCreationContext>.IsReadyToCreate(RenderedModelResource<ContainerExec> resource, EmptyCreationContext context)
         => true;
@@ -517,8 +526,8 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         ContainerNetworkService[] containerNetworkServices;
 
         // While not strictly necessary from correctness perspective, it is better for performance if tunnel creation
-        // is as "chunky" as possible. That is why we serialize the discovery of host dependencies, 
-        // so concurrently-created containers that share host dependencies do not "split" these dependencies 
+        // is as "chunky" as possible. That is why we serialize the discovery of host dependencies,
+        // so concurrently-created containers that share host dependencies do not "split" these dependencies
         // (and associated tunnels) between themselves.
         await _tunnelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -575,7 +584,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             finally
             {
                 _tunnelSemaphore.Release();
-            };
+            }
         }
 
         await factory.UpdateWithEffectiveAddressInfo(serviceObjects, cancellationToken, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
@@ -729,6 +738,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             {
                 CertificatePath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.crt"),
                 KeyPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.key"),
+                CertificateWithKeyPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.pem"),
                 PfxPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.pfx"),
             })
             .BuildAsync(_executionContext, resourceLogger, cancellationToken)
@@ -781,6 +791,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             {
                 CertificatePath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{thumbprint}.crt"),
                 KeyPath = tlsCertificateConfiguration.KeyPathReference,
+                CertificateWithKeyPath = tlsCertificateConfiguration.CertificateWithKeyPathReference,
                 PfxPath = tlsCertificateConfiguration.PfxPathReference,
                 Password = tlsCertificateConfiguration.Password,
             };
@@ -809,10 +820,10 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             var thumbprint = tlsCertificateConfiguration.Certificate.Thumbprint;
             var publicCertificatePem = tlsCertificateConfiguration.Certificate.ExportCertificatePem();
             (var keyPem, var pfxBytes) = await DeveloperCertificateService.GetKeyMaterialAsync(
-                tlsCertificateConfiguration.Certificate,
-                tlsCertificateConfiguration.Password,
-                tlsCertificateConfiguration.IsKeyPathReferenced,
-                tlsCertificateConfiguration.IsPfxPathReferenced,
+                certificate: tlsCertificateConfiguration.Certificate,
+                password: tlsCertificateConfiguration.Password,
+                needKeyPem: tlsCertificateConfiguration.IsKeyPathReferenced || tlsCertificateConfiguration.IsCertificateWithKeyPathReferenced,
+                needPfx: tlsCertificateConfiguration.IsPfxPathReferenced,
                 cancellationToken
             ).ConfigureAwait(false);
 
@@ -823,7 +834,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     Name = thumbprint + ".crt",
                     Type = ContainerFileSystemEntryType.File,
                     Contents = new string(publicCertificatePem),
-                }
+                },
             };
 
             if (keyPem is not null)
@@ -834,6 +845,16 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     Type = ContainerFileSystemEntryType.File,
                     Contents = new string(keyPem),
                 });
+
+                if (tlsCertificateConfiguration.IsCertificateWithKeyPathReferenced)
+                {
+                    certificateFiles.Add(new ContainerFileSystemEntry
+                    {
+                        Name = thumbprint + ".pem",
+                        Type = ContainerFileSystemEntryType.File,
+                        Contents = new string([.. keyPem, '\n', .. publicCertificatePem]),
+                    });
+                }
 
                 Array.Clear(keyPem, 0, keyPem.Length);
             }

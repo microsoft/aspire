@@ -38,6 +38,8 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(List<EnvVar>))]
 [JsonSerializable(typeof(List<string>))]
 [JsonSerializable(typeof(DebugSessionOptions))]
+[JsonSerializable(typeof(InteractionMessageAction[]))]
+[JsonSerializable(typeof(ExtensionAppHostLogEntry))]
 [JsonSerializable(typeof(bool?))]
 [JsonSerializable(typeof(AppHostProjectSearchResultPoco))]
 [JsonSerializable(typeof(AppHostInformation))]
@@ -95,6 +97,9 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(PipelineStepInfo[]))]
 [JsonSerializable(typeof(GetPipelineStepsRequest))]
 [JsonSerializable(typeof(GetPipelineStepsResponse))]
+[JsonSerializable(typeof(UploadFileRequest))]
+[JsonSerializable(typeof(UploadFileResponse))]
+[JsonSerializable(typeof(FileReferenceDto[]))]
 [JsonSerializable(typeof(GetTerminalInfoRequest))]
 [JsonSerializable(typeof(GetTerminalInfoResponse))]
 [JsonSerializable(typeof(TerminalReplicaInfo))]
@@ -105,6 +110,8 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(ListTerminalsResponse))]
 [JsonSerializable(typeof(TerminalSummary))]
 [JsonSerializable(typeof(TerminalSummary[]))]
+[JsonSerializable(typeof(AppHostTerminalSummary))]
+[JsonSerializable(typeof(AppHostTerminalSummary[]))]
 internal partial class BackchannelJsonSerializerContext : JsonSerializerContext
 {
     [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2026:RequiresUnreferencedCode", Justification = "Using the Json source generator.")]

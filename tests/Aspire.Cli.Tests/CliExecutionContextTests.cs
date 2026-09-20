@@ -7,16 +7,14 @@ namespace Aspire.Cli.Tests;
 
 public class CliExecutionContextTests(ITestOutputHelper outputHelper)
 {
-    private static CliExecutionContext CreateContext(string? channel = "daily")
+    private static CliExecutionContext CreateContext(string channel = "local")
     {
         var workingDir = new DirectoryInfo(AppContext.BaseDirectory);
         var hivesDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "hives"));
         var cacheDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "cache"));
         var sdksDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "sdks"));
         var logsDir = new DirectoryInfo(Path.Combine(AppContext.BaseDirectory, "logs"));
-        return channel is null
-            ? new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log")
-            : new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log", identityChannel: channel);
+        return new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log", identityChannel: channel);
     }
 
     private static CliExecutionContext CreateContextWithHives(DirectoryInfo hivesDir)
@@ -25,13 +23,16 @@ public class CliExecutionContextTests(ITestOutputHelper outputHelper)
         var cacheDir = new DirectoryInfo(Path.Combine(workingDir.FullName, "cache"));
         var sdksDir = new DirectoryInfo(Path.Combine(workingDir.FullName, "sdks"));
         var logsDir = new DirectoryInfo(Path.Combine(workingDir.FullName, "logs"));
-        return new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log");
+        return new CliExecutionContext(workingDir, hivesDir, cacheDir, sdksDir, logsDir, "test.log", identityChannel: "local");
     }
 
     [Fact]
-    public void Channel_DefaultsToLocal_WhenNotSpecified()
+    public void Helper_DefaultsIdentityChannelToLocal_WhenNotSpecified()
     {
-        var ctx = CreateContext(channel: null);
+        // identityChannel is a required constructor parameter (a CLI build always has an
+        // identity), so the "local" convenience default now lives in the test factory —
+        // mirroring production, where Program.BuildCliExecutionContext always supplies it.
+        var ctx = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory));
 
         Assert.Equal("local", ctx.IdentityChannel);
     }
@@ -61,7 +62,7 @@ public class CliExecutionContextTests(ITestOutputHelper outputHelper)
         // sub-menu in `aspire add`, and the explicit-channel inclusion in
         // IntegrationPackageSearchService. A clean machine has no
         // ~/.aspire/hives directory at all; the count must be 0 in that case.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var nonexistentHives = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "no-hives-here"));
         Assert.False(nonexistentHives.Exists);
 
@@ -73,7 +74,7 @@ public class CliExecutionContextTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetHiveCount_ReturnsZero_WhenHivesDirectoryEmpty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var hivesDir = workspace.CreateDirectory("hives");
 
         var ctx = CreateContextWithHives(hivesDir);
@@ -84,7 +85,7 @@ public class CliExecutionContextTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetHiveCount_ReturnsSubdirectoryCount_WhenPopulated()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var hivesDir = workspace.CreateDirectory("hives");
         hivesDir.CreateSubdirectory("pr-1");
         hivesDir.CreateSubdirectory("pr-16820");
@@ -102,7 +103,7 @@ public class CliExecutionContextTests(ITestOutputHelper outputHelper)
         // must not be counted as hives. Hives are directories produced by the
         // dogfood/PR install scripts; mistakenly counting a file would falsely
         // trigger the channel picker on machines that otherwise wouldn't see it.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var hivesDir = workspace.CreateDirectory("hives");
         hivesDir.CreateSubdirectory("pr-1");
         File.WriteAllText(Path.Combine(hivesDir.FullName, "README.md"), "stray");

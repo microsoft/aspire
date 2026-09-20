@@ -17,6 +17,8 @@ internal sealed class FakeInstallationDiscovery : IInstallationDiscovery
     private readonly IReadOnlyList<InstallationInfo> _others;
     private readonly Exception? _discoverAllException;
 
+    public Func<CancellationToken, Task<IReadOnlyList<InstallationInfo>>>? DiscoverAllAsyncCallback { get; init; }
+
     public FakeInstallationDiscovery(InstallationInfo self, IReadOnlyList<InstallationInfo>? others = null, Exception? discoverAllException = null)
     {
         _self = self;
@@ -29,6 +31,11 @@ internal sealed class FakeInstallationDiscovery : IInstallationDiscovery
     public Task<IReadOnlyList<InstallationInfo>> DiscoverAllAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (DiscoverAllAsyncCallback is not null)
+        {
+            return DiscoverAllAsyncCallback(cancellationToken);
+        }
+
         if (_discoverAllException is not null)
         {
             throw _discoverAllException;

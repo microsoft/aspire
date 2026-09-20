@@ -174,6 +174,17 @@ internal partial class AspireExportAnalyzer
             isEnabledByDefault: true,
             helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DtoMutableCollectionPropertyMustBeInitSettableId}");
 
+        private const string MissingPolyglotCompatibleMarkerId = "ASPIREEXPORT017";
+        internal static readonly DiagnosticDescriptor s_missingPolyglotCompatibleMarker = new(
+            id: MissingPolyglotCompatibleMarkerId,
+            title: "Polyglot integration must have AspireExport coverage or opt out",
+            messageFormat: "Assembly '{0}' is treated as a polyglot-compatible integration but has no [AspireExport] coverage. Add [AspireExport] members, or set <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible> in the project to acknowledge it is not a polyglot integration (which also omits the 'polyglot' NuGet tag so `aspire add` does not surface it to non-C# AppHosts).",
+            category: "Design",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true,
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{MissingPolyglotCompatibleMarkerId}",
+            customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
         public static readonly ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics = ImmutableArray.Create(
             s_exportMethodMustBeStatic,
             s_invalidExportIdFormat,
@@ -190,7 +201,8 @@ internal partial class AspireExportAnalyzer
             s_duplicatePolyglotCapabilityId,
             s_duplicateGeneratedMethodName,
             s_descriptionShouldUseXmlDocs,
-            s_dtoMutableCollectionPropertyMustBeInitSettable
+            s_dtoMutableCollectionPropertyMustBeInitSettable,
+            s_missingPolyglotCompatibleMarker
         );
     }
 }

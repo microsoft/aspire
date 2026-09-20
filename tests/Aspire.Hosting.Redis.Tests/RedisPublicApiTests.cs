@@ -134,6 +134,47 @@ public class RedisPublicApiTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void WithModuleShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<RedisResource> builder = null!;
+
+        var action = () => builder.WithModule(RedisModules.Json);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WithModuleShouldThrowWhenPathIsNullOrEmpty(bool isNull)
+    {
+        var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("Redis");
+        var path = isNull ? null! : string.Empty;
+
+        var action = () => redis.WithModule(path);
+
+        var exception = isNull
+            ? Assert.Throws<ArgumentNullException>(action)
+            : Assert.Throws<ArgumentException>(action);
+        Assert.Equal(nameof(path), exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData("custom-module.so")]
+    public void WithModuleShouldThrowWhenPathIsNotAbsolutePath(string path)
+    {
+        var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("Redis");
+
+        var action = () => redis.WithModule(path);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+        Assert.Equal(nameof(path), exception.ParamName);
+    }
+
+    [Fact]
     public void RedisInsightWithDataVolumeShouldThrowWhenBuilderIsNull()
     {
         IResourceBuilder<RedisInsightResource> builder = null!;

@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE003
+#pragma warning disable ASPIREAZURE001
+#pragma warning disable ASPIREPIPELINES002
 
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
@@ -31,6 +33,15 @@ internal sealed class AzureResourcePreparer(
         var azureResources = GetAzureResourcesFromAppModel(model);
         if (azureResources.Count == 0)
         {
+            // AddAzureProvisioning creates the environment before resources are configured, so wait until
+            // preparation to hide it when the final run-mode model contains only local emulators.
+            if (executionContext.IsRunMode &&
+                model.Resources.OfType<AzureEnvironmentResource>().SingleOrDefault() is { } environmentResource &&
+                !environmentResource.HasAnnotationOfType<HiddenAnnotation>())
+            {
+                environmentResource.Annotations.Add(new HiddenAnnotation(HiddenBehavior.Always));
+            }
+
             return;
         }
 
@@ -42,6 +53,7 @@ internal sealed class AzureResourcePreparer(
         }
 
         await BuildRoleAssignmentAnnotations(model, azureResources, cancellationToken).ConfigureAwait(false);
+        PropagateReferencedDeploymentPrerequisites(model);
 
         if (executionContext.IsRunMode)
         {
@@ -422,12 +434,7 @@ internal sealed class AzureResourcePreparer(
                 ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,
             };
 
-            // existing resource role assignments need to be scoped to the resource's resource group
-            if (targetResource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAnnotation) &&
-                existingAnnotation.ResourceGroup is not null)
-            {
-                roleAssignmentResource.Scope = new(existingAnnotation.ResourceGroup);
-            }
+            ApplyExistingResourceScope(roleAssignmentResource, targetResource);
 
             roleAssignmentResources.Add(roleAssignmentResource);
         }
@@ -546,6 +553,23 @@ internal sealed class AzureResourcePreparer(
         }
     }
 
+    private static void PropagateReferencedDeploymentPrerequisites(DistributedApplicationModel appModel)
+    {
+        foreach (var resource in appModel.Resources.OfType<AzureBicepResource>().ToArray())
+        {
+            var prerequisiteResources = resource.GetExplicitAzureReferences()
+                .SelectMany(reference => reference.Annotations.OfType<DeploymentPrerequisitesAnnotation>())
+                .SelectMany(annotation => annotation.Resources)
+                .Where(prerequisite => prerequisite != resource)
+                .ToHashSet();
+
+            // References drive pipeline provision ordering. Keep the annotation too so compute
+            // environment publishers can transfer these prerequisites to workload resources.
+            resource.References.UnionWith(prerequisiteResources);
+            AddDeploymentPrerequisitesAnnotation(resource, prerequisiteResources);
+        }
+    }
+
     private AzureRoleAssignmentResource CreateGlobalRoleAssignmentsResource(
         AzureProvisioningResource targetResource,
         IEnumerable<RoleDefinition> roles)
@@ -560,14 +584,18 @@ internal sealed class AzureResourcePreparer(
             ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,
         };
 
-        // existing resource role assignments need to be scoped to the resource's resource group
-        if (targetResource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAnnotation) &&
-            existingAnnotation.ResourceGroup is not null)
-        {
-            roleAssignmentResource.Scope = new(existingAnnotation.ResourceGroup);
-        }
+        ApplyExistingResourceScope(roleAssignmentResource, targetResource);
 
         return roleAssignmentResource;
+    }
+
+    private static void ApplyExistingResourceScope(AzureBicepResource roleAssignmentResource, AzureProvisioningResource targetResource)
+    {
+        if (targetResource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAnnotation) &&
+            AzureBicepResourceScope.FromExistingResourceAnnotation(existingAnnotation) is { } scope)
+        {
+            roleAssignmentResource.Scope = scope;
+        }
     }
 
     private void AddGlobalRoleAssignmentsInfrastructure(

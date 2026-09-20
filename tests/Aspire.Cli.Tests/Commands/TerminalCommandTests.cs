@@ -5,6 +5,7 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Hosting.Backchannel;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,7 +17,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalCommand_Help_Works()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
@@ -32,7 +33,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     {
         // The 'terminal' parent command is non-runnable; it prints help when invoked
         // alone and returns InvalidCommand to mirror the DashboardCommand pattern.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
@@ -46,7 +47,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalAttachCommand_WhenNoResourceArgument_FailsParsing()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
@@ -60,7 +61,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalCommand_WhenNoAppHostRunning_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
@@ -75,7 +76,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalCommand_WhenAppHostLacksTerminalsV1Capability_ReturnsAppHostIncompatible()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -95,7 +96,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalCommand_WhenResourceNotFound_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -115,7 +116,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalCommand_WhenTerminalNotAvailable_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -140,7 +141,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalCommand_WhenReplicasArrayEmpty_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -165,7 +166,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalCommand_WhenReplicaIndexOutOfRange_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -209,7 +210,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         // Replicated resources share a DisplayName equal to the parent resource that
         // carries the TerminalAnnotation. Passing the parent name on the CLI must
         // resolve to the same canonical name when looking up terminal info.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string? capturedResourceName = null;
 
         var (provider, backchannel) = CreateProviderWithBackchannel(
@@ -232,7 +233,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             var monitor = (TestAuxiliaryBackchannelMonitor)provider.GetRequiredService<IAuxiliaryBackchannelMonitor>();
             var capturing = new CapturingTerminalAppHostBackchannel(backchannel, name => capturedResourceName = name);
             monitor.ClearConnections();
-            monitor.AddConnection("hash1", "socket.hash1", capturing);
+            monitor.AddConnection("socket.hash1", capturing);
 
             var command = provider.GetRequiredService<RootCommand>();
             var result = command.Parse("terminal attach myresource");
@@ -250,7 +251,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     {
         // When stdin or stdout is redirected and the resource has more than one replica,
         // the command must require --replica explicitly (rather than try to prompt).
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -293,7 +294,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalPsCommand_WhenNoAppHostRunning_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, o => o.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled]);
         using var provider = services.BuildServiceProvider();
 
@@ -311,7 +312,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         // Older AppHosts that pre-date the 'terminals.v1' capability return
         // SupportsTerminalsV1=false; the command must surface that explicitly rather
         // than misleadingly listing nothing.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
@@ -331,14 +332,15 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalPsCommand_WhenNoTerminalsRegistered_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
             {
                 backchannel.ListTerminalsResponse = new ListTerminalsResponse
                 {
-                    Terminals = Array.Empty<TerminalSummary>()
+                    ResourceTerminals = [],
+                    AppHostTerminals = []
                 };
             });
         using (provider)
@@ -354,14 +356,15 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalPsCommand_WhenTerminalsPresent_RendersTableSuccessfully()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
             {
                 backchannel.ListTerminalsResponse = new ListTerminalsResponse
                 {
-                    Terminals =
+                    AppHostTerminals = [],
+                    ResourceTerminals =
                     [
                         new TerminalSummary
                         {
@@ -400,7 +403,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TerminalPsCommand_JsonFormat_WhenEmpty_EmitsEmptyArray()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         // Capture stdout so we can verify the actual JSON contract — exit code
         // alone passes vacuously even if no JSON was written, the formatter
         // silently fell back to the text table, or the output isn't valid JSON.
@@ -413,7 +416,8 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             {
                 backchannel.ListTerminalsResponse = new ListTerminalsResponse
                 {
-                    Terminals = Array.Empty<TerminalSummary>()
+                    ResourceTerminals = [],
+                    AppHostTerminals = []
                 };
             },
             options =>
@@ -451,7 +455,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         // ps --format json` to jq depend on field names + casing + verbose-only Peers
         // visibility staying stable; any rename, drop, or accidental verbosity
         // regression here breaks consumers silently.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var capturedOutput = new TestOutputTextWriter(outputHelper);
 
         // Two-resource shape covers the interesting matrix:
@@ -464,7 +468,8 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             {
                 backchannel.ListTerminalsResponse = new ListTerminalsResponse
                 {
-                    Terminals =
+                    AppHostTerminals = [],
+                    ResourceTerminals =
                     [
                         new TerminalSummary
                         {
@@ -562,6 +567,8 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             Assert.Equal(120, frontend.ConfiguredColumns);
             Assert.Equal(30, frontend.ConfiguredRows);
             Assert.True(frontend.IsHostReachable);
+            Assert.Equal("resource", frontend.Owner);
+            Assert.NotNull(frontend.Replicas);
             Assert.Equal(2, frontend.Replicas.Length);
 
             var replica0 = frontend.Replicas[0];
@@ -597,6 +604,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             Assert.False(backend.IsHostReachable);
             // Per #6 fix: degraded shape still surfaces Replicas so operators
             // can diagnose which replicas the AppHost expected.
+            Assert.NotNull(backend.Replicas);
             Assert.Single(backend.Replicas);
             Assert.False(backend.Replicas[0].IsAlive);
             Assert.Null(backend.Replicas[0].CurrentColumns);
@@ -612,34 +620,173 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Fact]
+    public async Task TerminalPsCommand_ListsAppHostTerminalsAlongsideResourceTerminals()
+    {
+        // `terminal ps` answers "what terminals exist", which includes the ones the AppHost owns: dock tabs,
+        // terminals being shown in an interaction dialog, and automation-only sessions. Listing only resource
+        // terminals would hide every terminal a command opened.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var capturedOutput = new TestOutputTextWriter(outputHelper);
+
+        var (provider, _) = CreateProviderWithBackchannel(
+            workspace,
+            backchannel =>
+            {
+                backchannel.ListTerminalsResponse = new ListTerminalsResponse
+                {
+                    ResourceTerminals = [],
+                    AppHostTerminals =
+                    [
+                        new AppHostTerminalSummary
+                        {
+                            TerminalId = "abc123",
+                            Title = "Azure login",
+                            Placement = "Dialog",
+                        },
+                        new AppHostTerminalSummary
+                        {
+                            TerminalId = "def456",
+                            Title = "Build output",
+                            Placement = "Dock",
+                        }
+                    ]
+                };
+            },
+            options =>
+            {
+                options.OutputTextWriter = capturedOutput;
+                options.DisableAnsi = true;
+            });
+
+        using (provider)
+        {
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse("terminal ps --format json");
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+
+            var stdout = string.Join("\n", capturedOutput.Logs).Trim();
+            var entries = JsonSerializer.Deserialize(stdout, TerminalPsJsonContext.Default.ListTerminalPsJsonEntry);
+
+            Assert.NotNull(entries);
+            Assert.Equal(2, entries.Count);
+            Assert.All(entries, e => Assert.Equal("apphost", e.Owner));
+
+            var dialog = entries[0];
+            Assert.Equal("abc123", dialog.TerminalId);
+            Assert.Equal("Azure login", dialog.DisplayName);
+            Assert.Equal("Dialog", dialog.Placement);
+
+            // The resource-shaped members describe replicas and terminal hosts, neither of which an AppHost
+            // terminal has. They must be omitted rather than emitted as nulls a script would have to filter.
+            Assert.Null(dialog.ResourceName);
+            Assert.Null(dialog.Replicas);
+            Assert.DoesNotContain("\"replicas\"", stdout);
+        }
+    }
+
+    [Fact]
+    public async Task TerminalPsCommand_WhenNoAppHostTerminals_StillListsResourceTerminals()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var capturedOutput = new TestOutputTextWriter(outputHelper);
+
+        var (provider, _) = CreateProviderWithBackchannel(
+            workspace,
+            backchannel =>
+            {
+                backchannel.ListTerminalsResponse = new ListTerminalsResponse
+                {
+                    ResourceTerminals =
+                    [
+                        new TerminalSummary
+                        {
+                            ResourceName = "frontend",
+                            DisplayName = "Frontend",
+                            ConfiguredColumns = 120,
+                            ConfiguredRows = 30,
+                            IsHostReachable = true,
+                            Replicas =
+                            [
+                                new TerminalReplicaInfo
+                                {
+                                    ReplicaIndex = 0,
+                                    Label = "frontend-0",
+                                    ConsumerUdsPath = "/tmp/frontend-0.host.sock",
+                                    IsAlive = true,
+                                    ProducerConnected = true,
+                                    RestartCount = 0,
+                                }
+                            ]
+                        }
+                    ],
+                    AppHostTerminals = [],
+                };
+            },
+            options =>
+            {
+                options.OutputTextWriter = capturedOutput;
+                options.DisableAnsi = true;
+            });
+
+        using (provider)
+        {
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse("terminal ps --format json");
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+
+            var stdout = string.Join("\n", capturedOutput.Logs).Trim();
+            var entries = JsonSerializer.Deserialize(stdout, TerminalPsJsonContext.Default.ListTerminalPsJsonEntry);
+
+            Assert.NotNull(entries);
+            var entry = Assert.Single(entries);
+            Assert.Equal("resource", entry.Owner);
+            Assert.Equal("frontend", entry.ResourceName);
+        }
+    }
+
+    [Fact]
+    public async Task TerminalPsCommand_WhenNoTerminalsOfEitherKind_ReportsEmpty()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var capturedOutput = new TestOutputTextWriter(outputHelper);
+
+        var (provider, _) = CreateProviderWithBackchannel(
+            workspace,
+            backchannel =>
+            {
+                backchannel.ListTerminalsResponse = new ListTerminalsResponse
+                {
+                    ResourceTerminals = [],
+                    AppHostTerminals = [],
+                };
+            },
+            options =>
+            {
+                options.OutputTextWriter = capturedOutput;
+                options.DisableAnsi = true;
+            });
+
+        using (provider)
+        {
+            var command = provider.GetRequiredService<RootCommand>();
+            var result = command.Parse("terminal ps --format json");
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            Assert.Equal("[]", string.Join("\n", capturedOutput.Logs).Trim());
+        }
+    }
+
     private (ServiceProvider Provider, TestAppHostAuxiliaryBackchannel Backchannel) CreateProviderWithBackchannel(
         TemporaryWorkspace workspace,
         Action<TestAppHostAuxiliaryBackchannel> configure,
         Action<CliServiceCollectionTestOptions>? configureOptions = null)
-    {
-        var monitor = new TestAuxiliaryBackchannelMonitor();
-        var backchannel = new TestAppHostAuxiliaryBackchannel
-        {
-            IsInScope = true,
-            AppHostInfo = new AppHostInformation
-            {
-                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
-                ProcessId = 1234
-            },
-            SupportsTerminalsV1 = true
-        };
-        configure(backchannel);
-        monitor.AddConnection("hash1", "socket.hash1", backchannel);
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.EnabledFeatures = [KnownFeatures.TerminalCommandsEnabled];
-            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
-            configureOptions?.Invoke(options);
-        });
-
-        return (services.BuildServiceProvider(), backchannel);
-    }
+        => TerminalCommandTestServices.CreateProvider(workspace, outputHelper, configure, configureOptions);
 
     private static ResourceSnapshot CreateSnapshot(string name, string? displayName = null)
     {
@@ -668,7 +815,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             _onGetTerminalInfo = onGetTerminalInfo;
         }
 
-        public string Hash => _inner.Hash;
+        public IAppHostSocket Socket => _inner.Socket;
         public string SocketPath => _inner.SocketPath;
         public AppHostInformation? AppHostInfo => _inner.AppHostInfo;
         public bool IsInScope => _inner.IsInScope;
@@ -676,6 +823,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         public bool SupportsV2 => _inner.SupportsV2;
         public bool SupportsV3 => _inner.SupportsV3;
         public bool SupportsTerminalsV1 => _inner.SupportsTerminalsV1;
+        public bool SupportsResourceSnapshotVersionsV1 => _inner.SupportsResourceSnapshotVersionsV1;
 
         public Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
         {

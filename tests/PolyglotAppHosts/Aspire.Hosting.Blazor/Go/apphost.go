@@ -28,6 +28,10 @@ func main() {
 		WithOtlpExporter(&aspire.WithOtlpExporterOptions{Protocol: &protocol})
 	gateway.WithBlazorClientApp(blazorApp)
 
+	dotnetProjectBlazorApp := builder.AddBlazorWasmProject("dotnet-app", "./src/Client/Client.csproj")
+	dotnetProjectGateway := builder.AddDotnetProjectBlazorGateway("dotnet-gateway")
+	dotnetProjectGateway.WithBlazorClientApp(dotnetProjectBlazorApp)
+
 	app, err := builder.Build()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))

@@ -35,7 +35,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/dotnet/dnceng/issues/6232", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningOnAzdoBuildMachine))]
     public async Task CanLoadFromDirectoryOutsideOfAppContextBaseDirectory()
     {
@@ -82,7 +82,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task CreateAsyncWithOptions(bool genericEntryPoint)
@@ -129,7 +129,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task HasEndPoints(bool genericEntryPoint)
@@ -153,7 +153,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task CanGetResources(bool genericEntryPoint)
@@ -171,7 +171,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task HttpClientGetTest(bool genericEntryPoint)
@@ -197,7 +197,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task GetHttpClientBeforeStart(bool genericEntryPoint)
@@ -214,7 +214,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     /// Tests that arguments propagate into the application host.
     /// </summary>
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
@@ -260,7 +260,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     /// Tests that arguments propagate into the application host.
     /// </summary>
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData(true)]
     [InlineData(false)]
     public async Task ArgsPropagateToAppHostConfigurationAdHocBuilder(bool directArgs)
@@ -300,7 +300,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     /// populating in configuration.
     /// </summary>
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData("http", false)]
     [InlineData("http", true)]
     [InlineData("https", false)]
@@ -349,7 +349,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     /// populating in configuration.
     /// </summary>
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData("http", false)]
     [InlineData("http", true)]
     [InlineData("https", false)]
@@ -396,7 +396,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task SetsCorrectContentRoot(bool genericEntryPoint)
@@ -412,7 +412,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData(false)]
     [InlineData(true)]
     public async Task SelectsFirstLaunchProfile(bool genericEntryPoint)
@@ -443,7 +443,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
 
     // Tests that DistributedApplicationTestingBuilder throws exceptions at the right times when the app crashes.
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData(true, "before-build")]
     [InlineData(true, "after-build")]
     [InlineData(true, "after-start")]
@@ -496,7 +496,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     /// Checks that DisposeAsync does not throw an exception when the application is disposed with a still on-going StartAsync call.
     /// </summary>
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task StartAsyncAbandonedAfterCrash()
     {
         var timeout = TimeSpan.FromMinutes(5);
@@ -517,7 +517,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task StartAsyncAbandonedAfterHang()
     {
         var timeout = TimeSpan.FromMinutes(5);
@@ -571,7 +571,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task DashboardEnabledInTestingBuilderShouldWorkWithDynamicPorts()
     {
         var builder = DistributedApplicationTestingBuilder.Create([], (options, _) =>
@@ -594,7 +594,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [InlineData("https://127.0.0.1:0", "127.0.0.1")]
     [InlineData("https://[::1]:0", "[::1]")]
     public async Task LoopbackWithDynamicPorts(string endpointUrl, string expectedHost)
@@ -622,7 +622,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task NonLocalResourceServiceEndpointThrows()
     {
         var builder = DistributedApplicationTestingBuilder.Create([], (opt, _) =>

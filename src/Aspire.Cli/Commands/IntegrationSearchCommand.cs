@@ -1,9 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
@@ -17,10 +19,15 @@ namespace Aspire.Cli.Commands;
 internal abstract class IntegrationDiscoveryCommand : BaseCommand
 {
     private readonly IntegrationPackageSearchService _integrationPackageSearchService;
+    private readonly IFeatures _features;
     private readonly OptionWithLegacy<FileInfo?> _appHostOption = new("--apphost", "--project", AddCommandStrings.IntegrationSearchAppHostOptionDescription);
     private readonly Option<OutputFormat> _formatOption = new("--format")
     {
         Description = AddCommandStrings.FormatOptionDescription
+    };
+    private readonly Option<bool> _allOption = new("--all")
+    {
+        Description = AddCommandStrings.AllArgumentDescription
     };
 
     protected IntegrationDiscoveryCommand(
@@ -31,9 +38,11 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         : base(name, description, services)
     {
         _integrationPackageSearchService = integrationPackageSearchService;
+        _features = services.Features;
 
         Options.Add(_appHostOption);
         Options.Add(_formatOption);
+        Options.Add(_allOption);
     }
 
     protected abstract string? GetSearchTerm(ParseResult parseResult);
@@ -47,24 +56,79 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             var searchTerm = GetSearchTerm(parseResult);
             var passedAppHostProjectFile = parseResult.GetValue(_appHostOption);
             var format = parseResult.GetValue(_formatOption);
+            var includeAllIntegrations = parseResult.GetValue(_allOption);
 
-            var (workingDirectory, configuredChannel, contextExitCode) = await _integrationPackageSearchService.GetPackageSearchContextAsync(passedAppHostProjectFile, cancellationToken);
+            var (workingDirectory, configuredChannel, languageId, contextExitCode) = await _integrationPackageSearchService.GetPackageSearchContextAsync(passedAppHostProjectFile, cancellationToken);
             if (contextExitCode is { } exitCode)
             {
                 return CommandResult.FromExitCode(exitCode);
             }
 
-            var packagesWithChannels = (await InteractionService.ShowStatusAsync(
-                AddCommandStrings.SearchingForAspirePackages,
-                async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, cancellationToken)))
-                .ToArray();
+            // Match `aspire add`: a non-C# (polyglot) AppHost can only consume integrations with ATS
+            // export coverage (the `polyglot` NuGet tag), so list/search hide the rest unless --all is
+            // passed. The language is only known when an AppHost was resolved; otherwise show everything.
+            //
+            // The filter is opt-in and off by default for the same reason as `aspire add`: no remote feed
+            // answers a `tags:polyglot` search usefully (see PackageChannel.PolyglotTagSearchTerm), so the
+            // allow-list comes back empty and the filter fails closed, hiding every integration.
+            // See https://github.com/microsoft/aspire/issues/19161.
+            var applyPolyglotFilter = _features.IsFeatureEnabled(KnownFeatures.PolyglotIntegrationFilterEnabled, false)
+                && languageId is not null
+                && languageId != KnownLanguageId.CSharp
+                && !includeAllIntegrations;
+
+            (NuGetPackage Package, PackageChannel Channel)[] packagesWithChannels;
+            IReadOnlySet<string> polyglotCompatibleIds = ImmutableHashSet<string>.Empty;
+            if (applyPolyglotFilter)
+            {
+                // Resolve the integration list and the polyglot allow-list in a single discovery pass.
+                var (discoveredPackages, discoveredPolyglotIds) = await InteractionService.ShowStatusAsync(
+                    AddCommandStrings.SearchingForAspirePackages,
+                    async () => await _integrationPackageSearchService.GetIntegrationPackagesWithPolyglotCompatibilityAsync(workingDirectory, configuredChannel, cancellationToken));
+                packagesWithChannels = discoveredPackages.ToArray();
+                polyglotCompatibleIds = discoveredPolyglotIds;
+            }
+            else
+            {
+                packagesWithChannels = (await InteractionService.ShowStatusAsync(
+                    AddCommandStrings.SearchingForAspirePackages,
+                    async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, cancellationToken)))
+                    .ToArray();
+            }
 
             var packagesWithShortName = packagesWithChannels
                 .Select(IntegrationPackageSearchService.GenerateFriendlyName)
                 .OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer())
                 .ToArray();
 
-            return CommandResult.FromExitCode(DisplayIntegrationResults(packagesWithShortName, searchTerm, format));
+            var polyglotFilterRemovedAllIntegrations = false;
+            if (applyPolyglotFilter)
+            {
+                var compatiblePackagesWithShortName = packagesWithShortName
+                    .Where(p => polyglotCompatibleIds.Contains(p.Package.Id))
+                    .ToArray();
+                var hiddenIntegrationCount = packagesWithShortName.Length - compatiblePackagesWithShortName.Length;
+                packagesWithShortName = compatiblePackagesWithShortName;
+
+                // Distinguish "the polyglot filter removed every integration" from "a search term matched
+                // nothing". Only the former should report NoPolyglotCompatibleIntegrationsFound; when
+                // compatible integrations exist but none match the query, DisplayIntegrationResults must
+                // fall through to NoIntegrationPackagesMatchedSearchTerm instead of falsely claiming the
+                // AppHost language has no compatible integrations.
+                polyglotFilterRemovedAllIntegrations = hiddenIntegrationCount > 0 && packagesWithShortName.Length == 0;
+
+                // Mirror `aspire add`: tell the user when the polyglot filter removed integrations and how to
+                // reveal them. Only show this when results remain; when the filter removes every integration,
+                // DisplayIntegrationResults reports NoPolyglotCompatibleIntegrationsFound (which also points at
+                // --all), so suppressing the count here avoids a redundant pair of --all hints. Skip for JSON
+                // so the machine-readable payload on stdout stays clean.
+                if (hiddenIntegrationCount > 0 && packagesWithShortName.Length > 0 && format is not OutputFormat.Json)
+                {
+                    InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.PolyglotIntegrationsHidden, hiddenIntegrationCount));
+                }
+            }
+
+            return CommandResult.FromExitCode(DisplayIntegrationResults(packagesWithShortName, searchTerm, format, polyglotFilterRemovedAllIntegrations));
         }
         catch (ProjectLocatorException ex)
         {
@@ -82,7 +146,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         }
     }
 
-    private int DisplayIntegrationResults(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? searchTerm, OutputFormat format)
+    private int DisplayIntegrationResults(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? searchTerm, OutputFormat format, bool polyglotFilterRemovedAllIntegrations)
     {
         var matches = (searchTerm is null
             ? packages.Select(p => (p.FriendlyName, p.Package, p.Channel, SearchScore: 0.0))
@@ -112,7 +176,14 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
 
         if (results.Length == 0)
         {
-            if (searchTerm is not null)
+            if (polyglotFilterRemovedAllIntegrations)
+            {
+                // The polyglot filter removed every result, so point the user at --all rather than
+                // implying no integrations exist at all. A search-term mismatch (compatible integrations
+                // exist but none match the query) does not reach this branch; it falls through below.
+                InteractionService.DisplayError(AddCommandStrings.NoPolyglotCompatibleIntegrationsFound);
+            }
+            else if (searchTerm is not null)
             {
                 InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.NoIntegrationPackagesMatchedSearchTerm, searchTerm));
             }

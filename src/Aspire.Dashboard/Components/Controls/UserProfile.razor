@@ -2,31 +2,36 @@
 {
     <AuthorizeView>
         <Authorized>
-            <div class="profile-menu-container">
-                <FluentProfileMenu Initials="@_initials"
-                                   EMail="@_username"
-                                   FullName="@_name"
-                                   ButtonSize="@ButtonSize"
-                                   FooterLink="">
-                    <HeaderTemplate>
-                        <FluentStack VerticalAlignment="VerticalAlignment.Center">
-                            <FluentLabel>@Loc[nameof(Resources.Login.LoggedInAs)]</FluentLabel>
-                            <FluentSpacer />
+            <div class="profile-menu-container" style="--profile-button-size: @ButtonSize; --profile-image-size: @ImageSize;">
+                <FluentButton Id="@_profileButtonId"
+                              Class="profile-menu-button"
+                              Appearance="ButtonAppearance.Transparent"
+                              IconOnly="true"
+                              OnClick="@(() => _profileMenuOpen = !_profileMenuOpen)"
+                              Title="@_name"
+                              aria-label="@_name"
+                              aria-haspopup="dialog"
+                              aria-expanded="@_profileMenuOpen.ToString().ToLowerInvariant()">
+                    <span class="profile-initials">@_initials</span>
+                </FluentButton>
+                <FluentPopover AnchorId="@_profileButtonId" @bind-Opened="_profileMenuOpen" Class="profile-menu-popover">
+                    <div class="profile-popover-content">
+                        <div class="profile-popover-header">
+                            <span>@Loc[nameof(Resources.Login.LoggedInAs)]</span>
                             <form @formname="sign-out-form" class="sign-out-form" action="authentication/logout" method="post">
                                 <AntiforgeryToken />
-                                <FluentButton Appearance="Appearance.Stealth" Type="ButtonType.Submit">Sign out</FluentButton>
+                                <FluentButton Appearance="ButtonAppearance.Subtle" Type="ButtonType.Submit">@Loc[nameof(Resources.Login.SignOut)]</FluentButton>
                             </form>
-                        </FluentStack>
-                    </HeaderTemplate>
-                    <ChildContent>
-                        <FluentStack class="inner-persona-container">
-                            <FluentPersona Initials="@_initials" ImageSize="@ImageSize" Class="inner-persona">
+                        </div>
+                        <div class="profile-persona">
+                            <div class="profile-avatar" aria-hidden="true">@_initials</div>
+                            <div class="profile-identity">
                                 <div class="full-name">@_name</div>
                                 <div class="user-id">@_username</div>
-                            </FluentPersona>
-                        </FluentStack>
-                    </ChildContent>
-                </FluentProfileMenu>
+                            </div>
+                        </div>
+                    </div>
+                </FluentPopover>
             </div>
         </Authorized>
     </AuthorizeView>

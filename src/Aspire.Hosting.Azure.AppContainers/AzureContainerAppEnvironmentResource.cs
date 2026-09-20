@@ -23,11 +23,11 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// </summary>
 #pragma warning disable CS0618 // Type or member is obsolete
 public class AzureContainerAppEnvironmentResource :
-    AzureProvisioningResource, IAzureComputeEnvironmentResource, IAzureContainerRegistry, IAzureDelegatedSubnetResource
+    AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureDelegatedSubnetResource
 #pragma warning restore CS0618 // Type or member is obsolete
 {
     /// <inheritdoc />
-    string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => "Microsoft.App/environments";
+    string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.ContainerAppEnvironments;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureContainerAppEnvironmentResource"/> class.
@@ -48,10 +48,14 @@ public class AzureContainerAppEnvironmentResource :
             // BeforeStartEvent subscribers (and downstream code) can observe the deployment targets.
             var prepareStep = new PipelineStep
             {
-                Name = $"prepare-azure-container-apps-{name}",
+                Name = $"{AzureContainerAppExtensions.PrepareContainerAppsStepNamePrefix}{name}",
                 Description = $"Prepares Azure Container Apps deployment targets for {name}.",
                 Action = ctx => PrepareDeploymentTargetsAsync(ctx),
-                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
+                DependsOnSteps =
+                [
+                    AzureEnvironmentResource.PrepareResourcesStepName,
+                    WellKnownPipelineSteps.ValidateComputeEnvironments
+                ],
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
 
@@ -208,6 +212,17 @@ public class AzureContainerAppEnvironmentResource :
                 continue;
             }
 
+            // This step is reachable from two pipeline executions: it is RequiredBy "before-start"
+            // (so it runs during AppHost startup) and it is also part of the publish/deploy DAG.
+            // Adding a second DeploymentTargetAnnotation on the second pass makes
+            // ResourceExtensions.GetDeploymentTargetAnnotation throw on the ambiguity, so the step has
+            // to be idempotent. Skipping early also avoids building the container app twice, which
+            // would append duplicate environment variables to the resource.
+            if (r.Annotations.OfType<DeploymentTargetAnnotation>().Any(a => a.ComputeEnvironment == this))
+            {
+                continue;
+            }
+
             var containerApp = await containerAppEnvironmentContext.CreateContainerAppAsync(r, options.Value, cancellationToken).ConfigureAwait(false);
 
             // Capture information about the container registry used by the
@@ -228,11 +243,32 @@ public class AzureContainerAppEnvironmentResource :
 
     internal bool UseCompactResourceNaming { get; set; }
 
+    internal bool UseUniqueResourceNaming { get; set; }
+
     /// <summary>
     /// Gets or sets a value indicating whether the Aspire dashboard should be included in the container app environment.
-    /// Default is true.
+    /// Defaults to enabled for standard environments and disabled for Express environments.
     /// </summary>
-    internal bool EnableDashboard { get; set; } = true;
+    internal bool EnableDashboard
+    {
+        get => _enableDashboard ?? !IsExpress;
+        set => _enableDashboard = value;
+    }
+
+    private bool? _enableDashboard;
+
+    internal bool IsExpress { get; set; }
+
+    internal void ValidatePublicEndpointReference(EndpointReference endpointReference)
+    {
+        if (!endpointReference.EndpointAnnotation.IsExternal)
+        {
+            throw new InvalidOperationException(
+                $"Azure Container Apps Express environment '{Name}' cannot reference internal endpoint " +
+                $"'{endpointReference.EndpointName}' on resource '{endpointReference.Resource.Name}'. " +
+                "Use WithExternalHttpEndpoints() to explicitly enable public HTTPS ingress, or use a standard Azure Container Apps environment.");
+        }
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether HTTP endpoints should be preserved as HTTP instead of being upgraded to HTTPS.
@@ -329,6 +365,14 @@ public class AzureContainerAppEnvironmentResource :
     [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
+        if (IsExpress)
+        {
+            // Express apps are reachable only over public ingress, so there is no ".internal"
+            // hostname to fall back to. Reject the reference instead of emitting a private
+            // hostname that would not resolve.
+            ValidatePublicEndpointReference(endpointReference);
+        }
+
         var resource = endpointReference.Resource;
 
         var builder = new ReferenceExpressionBuilder();

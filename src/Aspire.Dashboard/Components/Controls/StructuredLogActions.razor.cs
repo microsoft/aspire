@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
@@ -23,17 +23,16 @@ public partial class StructuredLogActions : ComponentBase
     public required EventCallback<string> OnViewDetails { get; set; }
 
     [Parameter]
-    public required OtlpLogEntry LogEntry { get; set; }
+    public required LogSummary LogEntry { get; set; }
 
-    private readonly List<MenuButtonItem> _menuItems = new();
-
-    protected override void OnParametersSet()
+    private IList<MenuButtonItem> GetMenuItems()
     {
-        _menuItems.Clear();
-
+        var menuItems = new List<MenuButtonItem>();
         StructuredLogMenuBuilder.AddMenuItems(
-            _menuItems,
+            menuItems,
             LogEntry,
             EventCallback.Factory.Create(this, () => OnViewDetails.InvokeAsync(_menuButton?.MenuButtonId)));
+
+        return menuItems;
     }
 }

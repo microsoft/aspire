@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Tests.Shared.DashboardModel;
+using DashboardComponents = Aspire.Dashboard.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.ConsoleLogsTests;
@@ -27,7 +28,7 @@ public class CreateResourceSelectModelsTests
         var allResourceViewModel = new SelectViewModel<ResourceTypeDetails> { Id = null, Name = allResourceText };
 
         // Act
-        var viewModels = Components.Pages.ConsoleLogs.GetConsoleLogResourceSelectViewModels(resourcesByName, allResourceViewModel, unknownStateText, false, out var optionToSelect);
+        var viewModels = DashboardComponents.Pages.ConsoleLogs.GetConsoleLogResourceSelectViewModels(resourcesByName, allResourceViewModel, unknownStateText, false, out var optionToSelect);
 
         // Assert
         Assert.NotNull(optionToSelect);
@@ -70,7 +71,7 @@ public class CreateResourceSelectModelsTests
         var allResourceViewModel = new SelectViewModel<ResourceTypeDetails> { Id = null, Name = allResourceText };
 
         // Act
-        var viewModels = Components.Pages.ConsoleLogs.GetConsoleLogResourceSelectViewModels(resourcesByName, allResourceViewModel, unknownStateText, false, out var optionToSelect);
+        var viewModels = DashboardComponents.Pages.ConsoleLogs.GetConsoleLogResourceSelectViewModels(resourcesByName, allResourceViewModel, unknownStateText, false, out var optionToSelect);
 
         // Assert
         Assert.Null(optionToSelect);
@@ -151,7 +152,7 @@ public class CreateResourceSelectModelsTests
         var allResourceViewModel = new SelectViewModel<ResourceTypeDetails> { Id = null, Name = allResourceText };
 
         // Act
-        var viewModels = Components.Pages.ConsoleLogs.GetConsoleLogResourceSelectViewModels(
+        var viewModels = DashboardComponents.Pages.ConsoleLogs.GetConsoleLogResourceSelectViewModels(
             resourcesByName,
             allResourceViewModel,
             unknownStateText,
@@ -184,7 +185,7 @@ public class CreateResourceSelectModelsTests
         var allResourceViewModel = new SelectViewModel<ResourceTypeDetails> { Id = null, Name = allResourceText };
 
         // Act
-        var viewModels = Components.Pages.ConsoleLogs.GetConsoleLogResourceSelectViewModels(
+        var viewModels = DashboardComponents.Pages.ConsoleLogs.GetConsoleLogResourceSelectViewModels(
             resourcesByName,
             allResourceViewModel,
             unknownStateText,

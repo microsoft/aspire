@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 using Spectre.Console;
 
@@ -67,6 +68,11 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
     public bool SupportsAnsi { get; }
 
     public CliHostEnvironment(IConfiguration configuration, bool nonInteractive)
+        : this(configuration, nonInteractive, Console.IsOutputRedirected)
+    {
+    }
+
+    internal CliHostEnvironment(IConfiguration configuration, bool nonInteractive, bool isOutputRedirected)
     {
         // If --non-interactive is explicitly set, disable interactive input and output.
         // ANSI support is still determined from the host configuration so explicit
@@ -77,17 +83,18 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
             SupportsInteractiveOutput = false;
             SupportsAnsi = DetectAnsiSupport(configuration);
         }
-        // Check if ASPIRE_PLAYGROUND is set to force interactive mode
+        // Playground mode can force interactive input and ANSI output, but a redirected stdout
+        // still cannot support the cursor manipulation required by Spectre live rendering.
         else if (IsPlaygroundMode(configuration))
         {
             SupportsInteractiveInput = true;
-            SupportsInteractiveOutput = true;
+            SupportsInteractiveOutput = !isOutputRedirected;
             SupportsAnsi = true;
         }
         else
         {
             SupportsInteractiveInput = DetectInteractiveInput(configuration);
-            SupportsInteractiveOutput = DetectInteractiveOutput(configuration);
+            SupportsInteractiveOutput = DetectInteractiveOutput(configuration, isOutputRedirected);
             SupportsAnsi = DetectAnsiSupport(configuration);
         }
     }
@@ -116,6 +123,14 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
             return false;
         }
 
+        // The extension backchannel provides input independently of the terminal, so ambient CI
+        // markers must not suppress prompts when the extension explicitly enables them.
+        if (configuration[KnownConfigNames.ExtensionEndpoint] is not null &&
+            configuration[KnownConfigNames.ExtensionPromptEnabled] is "true")
+        {
+            return true;
+        }
+
         // Check if running in CI environment (no interactive input possible)
         if (IsCI(configuration))
         {
@@ -125,7 +140,7 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
         return true;
     }
 
-    private static bool DetectInteractiveOutput(IConfiguration configuration)
+    private static bool DetectInteractiveOutput(IConfiguration configuration, bool isOutputRedirected)
     {
         // Check if explicitly disabled via configuration
         var nonInteractive = configuration["ASPIRE_NON_INTERACTIVE"];
@@ -138,6 +153,11 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
 
         // Check if running in CI environment (spinners pollute logs)
         if (IsCI(configuration))
+        {
+            return false;
+        }
+
+        if (isOutputRedirected)
         {
             return false;
         }

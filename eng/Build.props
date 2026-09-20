@@ -60,10 +60,17 @@
          Other projects in the AspireWithMaui playground can still be built.
          The aspireify-eval projects are intentionally un-aspirified sample apps used
          as eval inputs for the aspireify skill — they do not import the repo's
-         Directory.Build.props/targets and are not meant to be built by CI. -->
+         Directory.Build.props/targets and are not meant to be built by CI.
+         `.aspire/` holds throwaway projects the CLI scaffolds while running a polyglot
+         AppHost (for example integration-restore/IntegrationRestore.csproj). They pin the
+         released Aspire.Hosting version, so building them against the repo's -dev version
+         fails with NU1605. They are gitignored, but that does not keep them out of an
+         MSBuild glob — so running any polyglot playground would otherwise break the next
+         `./build.sh` until the directory was deleted by hand. -->
     <ProjectToBuild Include="$(RepoRoot)playground\**\*.csproj"
                     Exclude="$(RepoRoot)playground\AspireWithMaui\AspireWithMaui.MauiClient\*.csproj;
-                             $(RepoRoot)playground\aspireify-eval\**\*.csproj"
+                             $(RepoRoot)playground\aspireify-eval\**\*.csproj;
+                             $(RepoRoot)playground\**\.aspire\**\*.csproj"
                     Condition="'$(SkipPlaygroundProjects)' != 'true'"/>
   </ItemGroup>
 

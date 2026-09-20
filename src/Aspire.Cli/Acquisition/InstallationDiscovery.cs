@@ -21,12 +21,13 @@ namespace Aspire.Cli.Acquisition;
 /// </remarks>
 internal sealed partial class InstallationDiscovery : IInstallationDiscovery
 {
-    private static readonly string s_aspireBinaryName = OperatingSystem.IsWindows() ? "aspire.exe" : "aspire";
+    private readonly string _aspireBinaryName;
 
     private readonly IIdentityChannelReader _channelReader;
     private readonly IInstallSidecarReader _sidecarReader;
     private readonly IPeerInstallProbe _peerProbe;
     private readonly CliExecutionContext _executionContext;
+    private readonly IEnvironment _environment;
     private readonly ILogger<InstallationDiscovery> _logger;
     private readonly IReadOnlyList<IInstallationCandidateSource> _candidateSources;
 
@@ -35,22 +36,27 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
         IInstallSidecarReader sidecarReader,
         IPeerInstallProbe peerProbe,
         CliExecutionContext executionContext,
+        IEnvironment environment,
         ILogger<InstallationDiscovery> logger,
-        IEnumerable<IInstallationCandidateSource>? candidateSources = null)
+        IEnumerable<IInstallationCandidateSource> candidateSources)
     {
         ArgumentNullException.ThrowIfNull(channelReader);
         ArgumentNullException.ThrowIfNull(sidecarReader);
         ArgumentNullException.ThrowIfNull(peerProbe);
         ArgumentNullException.ThrowIfNull(executionContext);
+        ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(candidateSources);
 
         _channelReader = channelReader;
         _sidecarReader = sidecarReader;
         _peerProbe = peerProbe;
         _executionContext = executionContext;
+        _environment = environment;
         _logger = logger;
-        var sources = candidateSources?.ToArray();
-        _candidateSources = sources is { Length: > 0 } ? sources : CreateDefaultCandidateSources();
+        _aspireBinaryName = environment.IsWindows() ? "aspire.exe" : "aspire";
+        var sources = candidateSources.ToArray();
+        _candidateSources = sources.Length > 0 ? sources : CreateDefaultCandidateSources();
     }
 
     /// <inheritdoc />
@@ -93,6 +99,11 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
             // non-empty when resolution fails on a malformed input.
             Path = canonicalPath ?? processPath ?? string.Empty,
             CanonicalPath = canonicalPath,
+            // physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md):
+            // `aspire doctor --self` reports the REAL build installed on disk, so this must read
+            // the assembly's stamped version even when ASPIRE_CLI_VERSION / the sidecar override
+            // the CLI's runtime identity. Routing this through CliExecutionContext.IdentityVersion
+            // would make doctor lie about what is physically installed.
             Version = VersionHelper.GetDefaultTemplateVersion(),
             Channel = TryReadChannel(),
             Route = route,
@@ -130,7 +141,7 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
         // the same canonical path are silently dropped.
         var seen = new HashSet<string>(
             self.CanonicalPath is { Length: > 0 } sp ? [sp] : [],
-            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            _environment.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
         if (pathHits.Count == 0)
         {
@@ -148,7 +159,7 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
 
         var candidateCount = 0;
         var candidateContext = new InstallationCandidateContext(
-            s_aspireBinaryName,
+            _aspireBinaryName,
             _executionContext.HomeDirectory,
             _executionContext.AspireHomeDirectory,
             pathHits,
@@ -446,14 +457,14 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
         }
     }
 
-    private static string GetPathStatus(string? canonicalPath, IEnumerable<InstallationPathHit> pathHits)
+    private string GetPathStatus(string? canonicalPath, IEnumerable<InstallationPathHit> pathHits)
     {
         if (string.IsNullOrEmpty(canonicalPath))
         {
             return InstallationPathStatus.NotOnPath;
         }
 
-        var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var comparer = _environment.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         var isFirst = true;
         foreach (var pathHit in pathHits)
         {

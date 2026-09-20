@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // PipelineStepAnnotation is experimental; used to wire migration-bundle pipeline steps.
+#pragma warning disable ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.EntityFrameworkCore;
@@ -234,7 +235,7 @@ public static class EFMigrationResourceBuilderExtensions
     /// should be the startup project (the project that contains the DbContext configuration).
     /// </para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withMigrationsProject dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withMigrationsProject dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> WithMigrationsProject(this IResourceBuilder<EFMigrationResource> builder, string projectPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectPath);
@@ -258,11 +259,13 @@ public static class EFMigrationResourceBuilderExtensions
     /// should be the startup project (the project that contains the DbContext configuration).
     /// </para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type. Polyglot app hosts use the internal withMigrationsProject dispatcher export.")]
+    [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type. Polyglot AppHosts use the internal withMigrationsProject dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> WithMigrationsProject<TProject>(this IResourceBuilder<EFMigrationResource> builder)
         where TProject : IProjectMetadata, new()
     {
-        builder.Resource.MigrationsProjectPath = new TProject().ProjectPath;
+        var metadata = new TProject();
+        builder.Resource.MigrationsProjectPath = metadata.ProjectPath;
+        builder.Resource.MigrationsProjectMetadata = metadata;
         return builder;
     }
 
@@ -272,7 +275,7 @@ public static class EFMigrationResourceBuilderExtensions
     [AspireExport("withMigrationsProject")]
     internal static IResourceBuilder<EFMigrationResource> WithMigrationsProjectForPolyglot(
         this IResourceBuilder<EFMigrationResource> builder,
-        [AspireUnion(typeof(string), typeof(IResourceBuilder<ProjectResource>))] object? migrationsProject = null)
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<IDotnetProgramResource>))] object? migrationsProject = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
@@ -280,9 +283,27 @@ public static class EFMigrationResourceBuilderExtensions
         {
             null => builder,
             string projectPath => builder.WithMigrationsProject(projectPath),
-            IResourceBuilder<ProjectResource> projectBuilder => builder.WithMigrationsProject(projectBuilder.Resource.GetProjectMetadata().ProjectPath),
+            IResourceBuilder<IDotnetProgramResource> projectBuilder => WithMigrationsProjectResource(builder, projectBuilder.Resource),
             _ => throw new ArgumentException("Migrations project must be omitted, a project path string, or a project resource builder.", nameof(migrationsProject))
         };
+    }
+
+    private static IResourceBuilder<EFMigrationResource> WithMigrationsProjectResource(
+        IResourceBuilder<EFMigrationResource> builder,
+        IDotnetProgramResource projectResource)
+    {
+        var metadata = projectResource.GetProjectMetadata();
+        if (metadata.IsFileBasedApp)
+        {
+            throw new InvalidOperationException(
+                $"EF Core migrations require a project file. Resource '{projectResource.Name}' is a file-based app.");
+        }
+
+        builder.WithMigrationsProject(metadata.ProjectPath);
+        // A path alone loses the build-readiness capability and configured providers on this resource.
+        builder.Resource.MigrationsProjectResource = projectResource;
+        builder.Resource.MigrationsProjectMetadata = metadata;
+        return builder;
     }
 
     // Base image repositories used when publishing the migration bundle as a container. The

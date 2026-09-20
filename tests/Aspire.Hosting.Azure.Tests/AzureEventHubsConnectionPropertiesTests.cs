@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureEventHubsConnectionPropertiesTests
+public class AzureEventHubsConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureEventHubsResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var eventHubs = builder.AddAzureEventHubs("eventhubs");
 
         var properties = ((IResourceWithConnectionString)eventHubs.Resource).GetConnectionProperties().ToArray();
@@ -33,7 +33,7 @@ public class AzureEventHubsConnectionPropertiesTests
     [Fact]
     public void AzureEventHubsResourceGetConnectionPropertiesReturnsConnectionStringForEmulator()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var eventHubs = builder.AddAzureEventHubs("eventhubs").RunAsEmulator();
 
         var properties = ((IResourceWithConnectionString)eventHubs.Resource).GetConnectionProperties().ToArray();

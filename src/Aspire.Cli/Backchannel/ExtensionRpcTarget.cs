@@ -29,13 +29,16 @@ internal interface IExtensionRpcTarget
     Task<string[]> GetCliCapabilitiesAsync();
 }
 
-internal class ExtensionRpcTarget(IConfiguration configuration) : IExtensionRpcTarget
+internal class ExtensionRpcTarget(
+    IConfiguration configuration,
+    CliExecutionContext executionContext,
+    ConsoleCancellationManager cancellationManager) : IExtensionRpcTarget
 {
     public Func<string, ValidationResult>? ValidationFunction { get; set; }
 
     public Task<string> GetCliVersionAsync()
     {
-        return Task.FromResult(VersionHelper.GetDefaultTemplateVersion());
+        return Task.FromResult(executionContext.IdentityVersion);
     }
 
     public Task<ValidationResult?> ValidatePromptInputStringAsync(string input)
@@ -45,7 +48,9 @@ internal class ExtensionRpcTarget(IConfiguration configuration) : IExtensionRpcT
 
     public Task StopCliAsync()
     {
-        Environment.Exit(CliExitCodes.Success);
+        // The extension's stop request is cooperative. Route it through the same cancellation
+        // path as Ctrl+C so in-flight child processes release their workspace handles before exit.
+        cancellationManager.Cancel(CliExitCodes.Success);
         return Task.CompletedTask;
     }
 

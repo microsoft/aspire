@@ -296,7 +296,7 @@ public static class AzurePostgresExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withPasswordAuthentication dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withPasswordAuthentication dispatcher export.")]
     public static IResourceBuilder<AzurePostgresFlexibleServerResource> WithPasswordAuthentication(
         this IResourceBuilder<AzurePostgresFlexibleServerResource> builder,
         IResourceBuilder<ParameterResource>? userName = null,
@@ -350,7 +350,7 @@ public static class AzurePostgresExtensions
     /// <param name="userName">The parameter used to provide the user name for the PostgreSQL resource. If <see langword="null"/> a default value will be used.</param>
     /// <param name="password">The parameter used to provide the administrator password for the PostgreSQL resource. If <see langword="null"/> a random password will be generated.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> builder.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withPasswordAuthentication dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withPasswordAuthentication dispatcher export.")]
     public static IResourceBuilder<AzurePostgresFlexibleServerResource> WithPasswordAuthentication(
         this IResourceBuilder<AzurePostgresFlexibleServerResource> builder,
         IResourceBuilder<IAzureKeyVaultResource> keyVaultBuilder,

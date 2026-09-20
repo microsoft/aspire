@@ -721,6 +721,17 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
+    public void GetDotnetAddPackageCommand_UsesLocalHivePackageVersionWhenPresent()
+    {
+        var command = AspireCliShellCommandHelpers.GetDotnetAddPackageCommand("K8sDeployTest.ApiService", "Aspire.StackExchange.Redis");
+
+        Assert.Contains("PKG_PATH=$(find \"$HOME/.aspire/hives\" -path \"*/packages/$PKG.[0-9]*.nupkg\"", command);
+        Assert.Contains("PKG_VERSION=${PKG_FILE#\"$PKG.\"}", command);
+        Assert.Contains("dotnet add \"$TARGET\" package \"$PKG\" --version \"$PKG_VERSION\"", command);
+        Assert.Contains("else dotnet add \"$TARGET\" package \"$PKG\" --prerelease", command);
+    }
+
+    [Fact]
     public void Detect_ReturnsLocalArchive_WhenArchiveDirIsSetInCIWithoutPrMetadata()
     {
         var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");

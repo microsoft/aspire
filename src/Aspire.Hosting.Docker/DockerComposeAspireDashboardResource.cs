@@ -22,4 +22,6 @@ public class DockerComposeAspireDashboardResource(string name) : ContainerResour
     /// Gets the OTLP gRPC endpoint for telemetry data.
     /// </summary>
     public EndpointReference OtlpGrpcEndpoint => new(this, "otlp-grpc");
+
+    internal EndpointReference OtlpHttpEndpoint => new(this, "otlp-http");
 }

@@ -36,7 +36,7 @@ internal sealed class DestroyCommand : PipelineCommandBase
     protected override string OperationFailedPrefix => DestroyCommandStrings.OperationFailedPrefix;
     protected override string GetOutputPathDescription() => DestroyCommandStrings.OutputPathArgumentDescription;
 
-    protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, string? targetStep, ParseResult parseResult, CancellationToken cancellationToken)
     {
         var baseArgs = new List<string> { "--operation", "publish", "--step", "destroy" };
 

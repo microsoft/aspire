@@ -1,4 +1,5 @@
-﻿[  
+﻿[
+  
 PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
 =====================================
 
@@ -17,16 +18,16 @@ Steps with no dependencies run first, followed by steps that depend on them.
   1. azure-prepare-resources
   2. validate-compute-environments
   3. prepare-azure-app-service-aas-env
-  4. prepare-azure-container-apps-aca-env
-  5. validate-azure-app-service
-  6. validate-azure-container-apps
+  4. validate-azure-container-apps
+  5. prepare-azure-container-apps-aca-env
+  6. validate-azure-app-service
   7. before-start
   8. process-parameters
   9. build-prereq
- 10. check-container-runtime
- 11. validate-build-only-container-references
- 12. deploy-prereq
- 13. build-api-service
+ 10. validate-build-only-container-references
+ 11. deploy-prereq
+ 12. build-api-service
+ 13. check-container-runtime
  14. build-python-app
  15. build
  16. validate-azure-login
@@ -85,7 +86,7 @@ Step: build
 
 Step: build-api-service
     Description: Builds the container image for the api-service project.
-    Dependencies: ✓ build-prereq, ✓ check-container-runtime, ✓ deploy-prereq, ✓ deploy-prereq
+    Dependencies: ✓ build-prereq, ✓ deploy-prereq, ✓ deploy-prereq
     Resource: api-service (ProjectResource)
     Tags: build-compute
 
@@ -167,7 +168,7 @@ Step: prepare-azure-app-service-aas-env
 
 Step: prepare-azure-container-apps-aca-env
     Description: Prepares Azure Container Apps deployment targets for aca-env.
-    Dependencies: ✓ azure-prepare-resources, ✓ validate-compute-environments
+    Dependencies: ✓ azure-prepare-resources, ✓ validate-azure-container-apps, ✓ validate-compute-environments
     Resource: aca-env (AzureContainerAppEnvironmentResource)
 
 Step: print-api-service-summary
@@ -302,7 +303,7 @@ Step: validate-azure-app-service
     Dependencies: none
 
 Step: validate-azure-container-apps
-    Dependencies: none
+    Dependencies: ✓ azure-prepare-resources
 
 Step: validate-azure-login
     Description: Validates Azure CLI authentication before deployment.
@@ -338,9 +339,10 @@ If targeting 'before-start':
   Direct dependencies: azure-prepare-resources, prepare-azure-app-service-aas-env, prepare-azure-container-apps-aca-env, validate-azure-app-service, validate-azure-container-apps, validate-compute-environments
   Total steps: 7
   Execution order:
-    [0] azure-prepare-resources | validate-azure-app-service | validate-azure-container-apps | validate-compute-environments (parallel)
-    [1] prepare-azure-app-service-aas-env | prepare-azure-container-apps-aca-env (parallel)
-    [2] before-start
+    [0] azure-prepare-resources | validate-azure-app-service | validate-compute-environments (parallel)
+    [1] prepare-azure-app-service-aas-env | validate-azure-container-apps (parallel)
+    [2] prepare-azure-container-apps-aca-env
+    [3] before-start
 
 If targeting 'build':
   Direct dependencies: build-api-service, build-python-app
@@ -352,10 +354,10 @@ If targeting 'build':
     [3] build
 
 If targeting 'build-api-service':
-  Direct dependencies: build-prereq, check-container-runtime, deploy-prereq, deploy-prereq
-  Total steps: 6
+  Direct dependencies: build-prereq, deploy-prereq, deploy-prereq
+  Total steps: 5
   Execution order:
-    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service
 
@@ -408,9 +410,9 @@ If targeting 'deploy':
 
 If targeting 'deploy-api-service':
   Direct dependencies: print-api-service-summary
-  Total steps: 18
+  Total steps: 17
   Execution order:
-    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -516,17 +518,18 @@ If targeting 'prepare-azure-app-service-aas-env':
     [1] prepare-azure-app-service-aas-env
 
 If targeting 'prepare-azure-container-apps-aca-env':
-  Direct dependencies: azure-prepare-resources, validate-compute-environments
-  Total steps: 3
+  Direct dependencies: azure-prepare-resources, validate-azure-container-apps, validate-compute-environments
+  Total steps: 4
   Execution order:
     [0] azure-prepare-resources | validate-compute-environments (parallel)
-    [1] prepare-azure-container-apps-aca-env
+    [1] validate-azure-container-apps
+    [2] prepare-azure-container-apps-aca-env
 
 If targeting 'print-api-service-summary':
   Direct dependencies: provision-api-service-website
-  Total steps: 17
+  Total steps: 16
   Execution order:
-    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -647,9 +650,9 @@ If targeting 'provision-aca-env-acr':
 
 If targeting 'provision-api-service-website':
   Direct dependencies: create-provisioning-context, provision-aas-env, push-api-service
-  Total steps: 16
+  Total steps: 15
   Execution order:
-    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -756,9 +759,9 @@ If targeting 'push':
 
 If targeting 'push-api-service':
   Direct dependencies: build-api-service, push-prereq
-  Total steps: 14
+  Total steps: 13
   Execution order:
-    [0] check-container-runtime | process-parameters | validate-build-only-container-references (parallel)
+    [0] process-parameters | validate-build-only-container-references (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api-service | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -807,10 +810,11 @@ If targeting 'validate-azure-app-service':
     [0] validate-azure-app-service
 
 If targeting 'validate-azure-container-apps':
-  Direct dependencies: none
-  Total steps: 1
+  Direct dependencies: azure-prepare-resources
+  Total steps: 2
   Execution order:
-    [0] validate-azure-container-apps
+    [0] azure-prepare-resources
+    [1] validate-azure-container-apps
 
 If targeting 'validate-azure-login':
   Direct dependencies: deploy-prereq

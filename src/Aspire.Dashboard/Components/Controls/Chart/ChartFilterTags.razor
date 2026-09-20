@@ -1,0 +1,39 @@
+@namespace Aspire.Dashboard.Components
+
+@{
+    var orderedValues = GetOrderedValues(Filter.Values).ToList();
+}
+
+<FluentOverflow TItem="DimensionValueViewModel" Items="@orderedValues" Class="dimension-overflow" MaxRenderedItems="@MaxRenderedOverflowItems" Threshold="0">
+    <ItemTemplate Context="item">
+        @{
+            var isFirstItem = ReferenceEquals(item, orderedValues[0]);
+            var isIncludedInFilters = Filter.SelectedValues.Contains(item);
+            var isIncludedInFiltersClass = isIncludedInFilters ? "included-in-filters" : "";
+        }
+        <div class="@(isFirstItem ? "dimension-overflow-ellipsis" : null)" behavior="@(isFirstItem ? "ellipsis" : null)">
+            <button type="button"
+                    class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
+                    aria-pressed="@isIncludedInFilters"
+                    @onclick="args => OnTagClickedAsync(args, item)">
+                @item.Text
+            </button>
+        </div>
+    </ItemTemplate>
+    <MoreTemplate Context="overflow">
+        @{
+            var hasSelectedInOverflow = overflow.Items.Any(Filter.SelectedValues.Contains);
+            var isIncludedInFiltersClass = hasSelectedInOverflow ? "included-in-filters" : "";
+        }
+        @* Display must be inline block so the width is correctly calculated. *@
+        <button type="button"
+                class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
+                style="display:inline-block;"
+                @onclick="@ShowPopover">
+            @($"+{overflow.OverflowCount}")
+        </button>
+    </MoreTemplate>
+    <OverflowTemplate Context="overflow">
+        @* Intentionally empty. Don't display an overflow template here. *@
+    </OverflowTemplate>
+</FluentOverflow>

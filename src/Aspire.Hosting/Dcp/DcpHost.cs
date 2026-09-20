@@ -3,8 +3,10 @@
 
 using System.Buffers;
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipelines;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Aspire.Dashboard.Utils;
@@ -24,6 +26,7 @@ namespace Aspire.Hosting.Dcp;
 
 internal sealed class DcpHost
 {
+    private const string DcpConPtyPathEnvironmentVariable = "DCP_CONPTY_PATH";
     private const int LoggingSocketConnectionBacklog = 3;
 
     private readonly DistributedApplicationModel _applicationModel;
@@ -45,10 +48,10 @@ internal sealed class DcpHost
     // These environment variables should never be inherited by DCP from the app host.
     private static readonly string[] s_doNotInheritEnvironmentVars =
     [
-        "ASPNETCORE_URLS",
+        KnownAspNetCoreConfigNames.Urls,
         "DOTNET_LAUNCH_PROFILE",
-        "ASPNETCORE_ENVIRONMENT",
-        "DOTNET_ENVIRONMENT",
+        KnownAspNetCoreConfigNames.Environment,
+        KnownAspNetCoreConfigNames.DotNetEnvironment,
         KnownConfigNames.AspireLogLevel,
     ];
 
@@ -346,6 +349,8 @@ internal sealed class DcpHost
             }
         }
 
+        ConfigureBundledConPty(dcpProcessSpec.EnvironmentVariables);
+
         // DCP intentionally owns DCP_OTEL_* names instead of reading Aspire's ASPIRE_* profiling
         // names. Apply the mapping after copying the AppHost environment so this capture's
         // profiling settings win over any inherited DCP_OTEL_* values.
@@ -370,6 +375,89 @@ internal sealed class DcpHost
         }
 
         return dcpProcessSpec;
+    }
+
+    private void ConfigureBundledConPty(IDictionary<string, string> environmentVariables)
+    {
+        if (!OperatingSystem.IsWindows() ||
+            environmentVariables.Keys.Any(key => string.Equals(key, DcpConPtyPathEnvironmentVariable, StringComparison.OrdinalIgnoreCase)))
+        {
+            // An explicitly inherited value, including an empty value, is authoritative. DCP treats an empty
+            // value as a request to use the inbox provider and reports invalid nonempty paths itself.
+            return;
+        }
+
+        if (TryGetBundledConPtyPath(
+            _dcpOptions.TerminalHostPath,
+            RuntimeInformation.ProcessArchitecture,
+            RuntimeInformation.OSArchitecture,
+            out var conPtyPath))
+        {
+            environmentVariables[DcpConPtyPathEnvironmentVariable] = conPtyPath;
+            _logger.LogDebug("Configured DCP to use the bundled ConPTY provider at '{ConPtyPath}'.", conPtyPath);
+        }
+        else
+        {
+            // Older or customized layouts may not contain Hex1b's native payload. Leaving the variable unset
+            // preserves DCP's inbox CreatePseudoConsole behavior instead of turning an optional enhancement into
+            // an application startup failure.
+            _logger.LogDebug("A complete bundled ConPTY provider was not found; DCP will use the inbox Windows provider.");
+        }
+    }
+
+    internal static bool TryGetBundledConPtyPath(
+        string? terminalHostPath,
+        Architecture processArchitecture,
+        Architecture osArchitecture,
+        [NotNullWhen(true)] out string? conPtyPath)
+    {
+        conPtyPath = null;
+        if (string.IsNullOrWhiteSpace(terminalHostPath) ||
+            Path.GetDirectoryName(Path.GetFullPath(terminalHostPath)) is not { } directory)
+        {
+            return false;
+        }
+
+        var nativeHostDirectory = osArchitecture switch
+        {
+            Architecture.X64 => "x64",
+            Architecture.Arm64 => "arm64",
+            _ => null
+        };
+
+        var runtimeIdentifier = processArchitecture switch
+        {
+            Architecture.X64 => "win-x64",
+            Architecture.Arm64 => "win-arm64",
+            _ => null
+        };
+
+        if (nativeHostDirectory is null || runtimeIdentifier is null)
+        {
+            return false;
+        }
+
+        // Shipped CLI bundles flatten the selected RID's native assets into managed/. Repo-local portable builds
+        // keep every RID under runtimes/<rid>/native. In both layouts conpty.dll must match the DCP/AppHost process
+        // architecture, while OpenConsole.exe must match the native Windows architecture (for example, an x64
+        // process running under emulation on ARM64 Windows uses win-x64/conpty.dll with arm64/OpenConsole.exe).
+        string[] candidates =
+        [
+            directory,
+            Path.Combine(directory, "runtimes", runtimeIdentifier, "native")
+        ];
+
+        foreach (var candidate in candidates)
+        {
+            if (File.Exists(Path.Combine(candidate, "conpty.dll")) &&
+                File.Exists(Path.Combine(candidate, nativeHostDirectory, "OpenConsole.exe")))
+            {
+                conPtyPath = candidate;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void SetDcpProfilingEnvironment(IDictionary<string, string> environmentVariables)
@@ -427,14 +515,7 @@ internal sealed class DcpHost
         var directoryName = Path.GetDirectoryName(socketPath);
         if (!string.IsNullOrEmpty(directoryName))
         {
-            if (OperatingSystem.IsWindows())
-            {
-                Directory.CreateDirectory(directoryName);
-            }
-            else
-            {
-                Directory.CreateDirectory(directoryName, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
-            }
+            DirectoryHelper.CreateWithOwnerOnlyPermissions(directoryName);
         }
 
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
@@ -694,4 +775,3 @@ internal sealed class DcpHost
         return false;
     }
 }
-

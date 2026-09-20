@@ -10,25 +10,27 @@ interface SelfSignedCert {
 /**
  * Generates a valid X.509 serial number as a hexadecimal string.
  * Per RFC 5280, serial numbers must be positive integers up to 20 octets.
- * DER encoding requires minimal representation (no unnecessary leading zeros)
- * and a leading 0x00 byte if the high bit of the first byte is set (to ensure positive).
+ * DER INTEGER encoding is minimal: a leading 0x00 is only legal when the next
+ * byte would otherwise make the integer negative.
+ * See https://www.rfc-editor.org/rfc/rfc5280#section-4.1.2.2.
  */
-function generateSerialNumber(): string {
-  // Generate 16 random bytes (128 bits) - plenty of entropy while leaving room for padding
-  const bytes = randomBytes(16);
-
-  // Ensure the first byte doesn't have its high bit set to avoid needing a 0x00 prefix.
-  // This guarantees the number is positive without extra padding.
-  // We mask off the high bit (AND with 0x7F) to ensure it's always < 128.
-  bytes[0] = bytes[0] & 0x7f;
-
-  // Ensure the serial number is non-zero by setting the least significant bit if all bytes are zero
-  // (extremely unlikely with 16 random bytes, but handles the edge case)
-  if (bytes.every(b => b === 0)) {
-    bytes[15] = 1;
+export function generateCertificateSerialNumber(bytes: Buffer = randomBytes(16)): string {
+  if (bytes.length !== 16) {
+    throw new Error(`Certificate serial numbers must use exactly 16 bytes, got ${bytes.length}.`);
   }
 
-  return bytes.toString('hex');
+  const serialBytes = Buffer.from(bytes);
+
+  // Keep the value positive without requiring DER to prepend a 0x00 byte.
+  serialBytes[0] = serialBytes[0] & 0x7f;
+  // node-forge strips at most one redundant leading 0x00 when DER-encoding INTEGERs.
+  // Avoid a leading zero entirely so draws with multiple zero bytes cannot leave
+  // illegal padding after that normalization.
+  if (serialBytes[0] === 0) {
+    serialBytes[0] = 1;
+  }
+
+  return serialBytes.toString('hex');
 }
 
 export async function createSelfSignedCertAsync(commonName: string = 'localhost'): Promise<SelfSignedCert> {
@@ -46,7 +48,7 @@ export async function createSelfSignedCertAsync(commonName: string = 'localhost'
 
   const cert = pki.createCertificate();
   cert.publicKey = keys.publicKey;
-  cert.serialNumber = generateSerialNumber();
+  cert.serialNumber = generateCertificateSerialNumber();
   cert.validity.notBefore = new Date();
   cert.validity.notAfter = new Date();
   cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);

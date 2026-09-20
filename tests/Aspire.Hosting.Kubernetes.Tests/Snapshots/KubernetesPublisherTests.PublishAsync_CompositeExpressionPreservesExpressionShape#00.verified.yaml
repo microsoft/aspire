@@ -1,0 +1,7 @@
+﻿parameters: {}
+secrets: {}
+config:
+  myapp:
+    COMPOSITE: ""
+    second: "beta"
+    first: "alpha"

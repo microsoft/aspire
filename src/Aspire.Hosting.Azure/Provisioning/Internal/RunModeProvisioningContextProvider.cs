@@ -24,7 +24,7 @@ internal sealed class RunModeProvisioningContextProvider(
     IHostEnvironment environment,
     ILogger<RunModeProvisioningContextProvider> logger,
     IArmClientProvider armClientProvider,
-    IUserPrincipalProvider userPrincipalProvider,
+    IAzurePrincipalProvider azurePrincipalProvider,
     ITokenCredentialProvider tokenCredentialProvider,
     IDeploymentStateManager deploymentStateManager,
     DistributedApplicationExecutionContext distributedApplicationExecutionContext) : BaseProvisioningContextProvider(
@@ -33,7 +33,7 @@ internal sealed class RunModeProvisioningContextProvider(
         environment,
         logger,
         armClientProvider,
-        userPrincipalProvider,
+        azurePrincipalProvider,
         tokenCredentialProvider,
         deploymentStateManager,
         distributedApplicationExecutionContext), IAzureProvisioningOptionsManager, IDisposable
@@ -183,6 +183,24 @@ internal sealed class RunModeProvisioningContextProvider(
 
             await PersistProvisioningOptionsAsync(cancellationToken).ConfigureAwait(false);
 
+            return new AzureProvisioningOptionsState(
+                _options.SubscriptionId,
+                _options.ResourceGroup,
+                _options.Location,
+                _options.TenantId);
+        }
+        finally
+        {
+            _provisioningOptionsLock.Release();
+        }
+    }
+
+    public async Task<AzureProvisioningOptionsState> GetProvisioningOptionsAsync(CancellationToken cancellationToken = default)
+    {
+        await _provisioningOptionsLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
             return new AzureProvisioningOptionsState(
                 _options.SubscriptionId,
                 _options.ResourceGroup,

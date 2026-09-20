@@ -76,6 +76,7 @@ public static class RabbitMQBuilderExtensions
         var rabbitmq = builder.AddResource(rabbitMq)
                               .WithImage(RabbitMQContainerImageTags.Image, RabbitMQContainerImageTags.Tag)
                               .WithImageRegistry(RabbitMQContainerImageTags.Registry)
+                              .WithIconName("MailMultiple")
                               .WithEndpoint(port: port, targetPort: 5672, name: RabbitMQServerResource.PrimaryEndpointName)
                               .WithEnvironment(context =>
                               {
@@ -133,7 +134,7 @@ public static class RabbitMQBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <exception cref="DistributedApplicationException">Thrown when the current container image and tag do not match the defaults for <see cref="RabbitMQServerResource"/>.</exception>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withManagementPlugin dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withManagementPlugin dispatcher export.")]
     public static IResourceBuilder<RabbitMQServerResource> WithManagementPlugin(this IResourceBuilder<RabbitMQServerResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -167,7 +168,7 @@ public static class RabbitMQBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withManagementPlugin dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withManagementPlugin dispatcher export.")]
     public static IResourceBuilder<RabbitMQServerResource> WithManagementPlugin(this IResourceBuilder<RabbitMQServerResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -205,7 +206,7 @@ public static class RabbitMQBuilderExtensions
                 if (existingTag.Length > alpine.Length)
                 {
                     // Transform tag like "3.12-alpine" to "3.12-management-alpine"
-                    var tagPrefix = existingTag[..existingTag.IndexOf($"-{alpine}")];
+                    var tagPrefix = existingTag[..existingTag.IndexOf($"-{alpine}", StringComparison.Ordinal)];
                     annotation.Tag = $"{tagPrefix}-{management}-{alpine}";
                 }
                 else

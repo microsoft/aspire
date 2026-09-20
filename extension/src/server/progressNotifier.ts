@@ -1,10 +1,8 @@
 import * as vscode from 'vscode';
-import { ICliRpcClient } from './rpcClient';
-import { formatText } from '../utils/strings';
+import { collapseWhitespace, escapeCodicons, formatText } from '../utils/strings';
 import { extensionLogOutputChannel } from '../utils/logging';
 
 export class ProgressNotifier {
-    private _rpcClient?: ICliRpcClient;
     private _currentProgress?: {
         resolve: () => void;
         updateMessage: (msg: string) => void;
@@ -18,10 +16,6 @@ export class ProgressNotifier {
         return !!this._currentProgress || !!this._pendingClearTimeout;
     }
 
-    constructor(rpcClient?: ICliRpcClient) {
-        this._rpcClient = rpcClient;
-    }
-
     show(statusText: string | null) {
         extensionLogOutputChannel.info(`Setting status/progress: ${statusText ?? 'null'}`);
 
@@ -29,7 +23,7 @@ export class ProgressNotifier {
             // If there is an active progress, wait a short period before
             // actually clearing it. This allows callers to quickly call
             // show(null) followed by show(non-null) within 250ms and have the
-            // existing notification updated instead of being torn down and recreated.
+            // existing progress updated instead of being torn down and recreated.
             if (this._currentProgress) {
                 if (this._pendingClearTimeout) {
                     clearTimeout(this._pendingClearTimeout);
@@ -50,10 +44,10 @@ export class ProgressNotifier {
             this._pendingClearTimeout = undefined;
         }
 
-        // If a progress notification is already active, update its message
+        // If progress is already active, update its message
         if (this._currentProgress) {
             try {
-                this._currentProgress.updateMessage(formatText(statusText));
+                this._currentProgress.updateMessage(renderStatusMessage(statusText));
             }
             catch (err) {
                 extensionLogOutputChannel.error(`Failed to update progress message: ${err}`);
@@ -61,7 +55,6 @@ export class ProgressNotifier {
             return;
         }
 
-        // No active progress: create one that can be cancelled by the user
         let resolveFn: () => void;
         const waitPromise = new Promise<void>(resolve => { resolveFn = resolve; });
 
@@ -70,31 +63,20 @@ export class ProgressNotifier {
             updateMessage: (_m: string) => {}
         };
 
+        // `Window` rather than `Notification`: CLI status is reported for as long as the operation
+        // runs, and a progress notification cannot be dismissed while it is active, so it sits on
+        // top of the editor for the whole run (https://github.com/microsoft/aspire/issues/19036).
+        // Window progress renders in the status bar, which the user can ignore or hide.
         vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            cancellable: true
-        }, async (progress, token) => {
+            location: vscode.ProgressLocation.Window
+        }, async progress => {
             this._currentProgress!.updateMessage = (m: string) => progress.report({ message: m });
 
             // Report the initial message as the progress message (no title)
-            progress.report({ message: formatText(statusText) });
-
-            const cancelListener = token.onCancellationRequested(() => {
-                extensionLogOutputChannel.info('User cancelled progress; attempting to stop CLI');
-                try {
-                    this._rpcClient?.stopCli();
-                }
-                catch (err) {
-                    extensionLogOutputChannel.error(`Failed to stop CLI: ${err}`);
-                }
-            });
+            progress.report({ message: renderStatusMessage(statusText) });
 
             // Keep the progress alive until show(null) calls resolve
-            try {
-                return await waitPromise;
-            } finally {
-                return cancelListener.dispose();
-            }
+            return await waitPromise;
         }).then(undefined, (err: any) => {
             extensionLogOutputChannel.error(`Progress failed: ${err}`);
         });
@@ -113,4 +95,12 @@ export class ProgressNotifier {
             this._currentProgress = undefined;
         }
     }
+}
+
+/**
+ * Makes CLI controlled status text safe to render as window progress: a single line, and without
+ * arbitrary codicons injected into the status bar.
+ */
+function renderStatusMessage(statusText: string): string {
+    return escapeCodicons(collapseWhitespace(formatText(statusText)));
 }

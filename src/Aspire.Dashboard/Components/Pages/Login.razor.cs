@@ -15,7 +15,7 @@ namespace Aspire.Dashboard.Components.Pages;
 public partial class Login : IAsyncDisposable, IComponentWithTelemetry
 {
     private IJSObjectReference? _jsModule;
-    private FluentTextField? _tokenTextField;
+    private FluentTextInput? _tokenTextField;
     private ValidationMessageStore? _messageStore;
 
     private TokenFormModel _formModel = default!;
@@ -71,7 +71,10 @@ public partial class Login : IAsyncDisposable, IComponentWithTelemetry
         {
             _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/Components/Pages/Login.razor.js");
 
-            _tokenTextField?.FocusAsync();
+            if (_tokenTextField is not null)
+            {
+                await _tokenTextField.Element.FocusAsync();
+            }
         }
     }
 
@@ -85,7 +88,7 @@ public partial class Login : IAsyncDisposable, IComponentWithTelemetry
         // Invoke a JS function to validate the token. This is required because a cookie can't be set from a SignalR connection.
         // The JS function calls an API back on the server to validate the token and that API call sets the cookie.
         // Because the browser made the API call the cookie is set in the browser.
-        var result = await _jsModule.InvokeAsync<string>("validateToken", _formModel.Token);
+        var result = await _jsModule.InvokeAsync<string>("validateToken", _formModel.Token?.Trim());
 
         if (bool.TryParse(result, out var success))
         {

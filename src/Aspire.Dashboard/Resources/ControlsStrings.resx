@@ -127,12 +127,21 @@
     <value>Graph</value>
   </data>
   <data name="ChartContainerTableTab" xml:space="preserve">
+    <value>Table</value>
+  </data>
+  <data name="ResourcesContainerTableTab" xml:space="preserve">
     <value>Resources</value>
   </data>
-  <data name="ChartContainerParametersTab" xml:space="preserve">
+  <data name="ResourcesContainerParametersTab" xml:space="preserve">
     <value>Parameters</value>
   </data>
+  <data name="ResourcesContainerGraphTab" xml:space="preserve">
+    <value>Graph</value>
+  </data>
   <data name="ChartContainerGraphAccessibleLabel" xml:space="preserve">
+    <value>Graph. For an accessible view please navigate to the Table tab</value>
+  </data>
+  <data name="ResourcesContainerGraphAccessibleLabel" xml:space="preserve">
     <value>Graph. For an accessible view please navigate to the Resources tab</value>
   </data>
   <data name="EnvironmentVariablesFilterToggleShowSpecOnly" xml:space="preserve">
@@ -209,6 +218,14 @@
   </data>
   <data name="SummaryDetailsViewSplitVertical" xml:space="preserve">
     <value>Split vertical</value>
+  </data>
+  <data name="TextVisualizerContentLabel" xml:space="preserve">
+    <value>Text content</value>
+    <comment>Accessible name for the scrollable text/code region in the text visualizer.</comment>
+  </data>
+  <data name="ScrollToBottom" xml:space="preserve">
+    <value>Scroll to bottom</value>
+    <comment>Accessible name and tooltip for the floating button that jumps a large scroll region to the bottom.</comment>
   </data>
   <data name="SummaryDetailsViewCloseView" xml:space="preserve">
     <value>Close</value>
@@ -520,8 +537,8 @@
   <data name="SpanTypeCloud" xml:space="preserve">
     <value>Cloud</value>
   </data>
-  <data name="ExportJson" xml:space="preserve">
-    <value>Export JSON</value>
+  <data name="ViewJson" xml:space="preserve">
+    <value>View JSON</value>
   </data>
   <data name="ExportEnv" xml:space="preserve">
     <value>Export .env</value>

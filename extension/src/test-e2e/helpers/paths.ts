@@ -41,6 +41,15 @@ export function getControlFilePath(): string | undefined {
     return process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE ? path.resolve(process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE) : undefined;
 }
 
+/**
+ * The id the runner assigned to this E2E run. The state and control files live at a stable
+ * per-shard path, so this is what distinguishes the extension host launched for this run from one
+ * left behind by an earlier run that is still polling the same files.
+ */
+export function getRunId(): string | undefined {
+    return process.env.ASPIRE_EXTENSION_E2E_RUN_ID;
+}
+
 export function ensureDiagnosticsDir(): string {
     const diagnosticsDir = getDiagnosticsDir();
     fs.mkdirSync(diagnosticsDir, { recursive: true });

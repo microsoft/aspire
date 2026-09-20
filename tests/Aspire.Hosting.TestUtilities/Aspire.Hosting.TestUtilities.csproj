@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+
+    <!--
+      This is a shared test-helper assembly, not a test project. Other test projects reference it
+      instead of Aspire.Hosting.Tests so that changes to integrations referenced only by
+      Aspire.Hosting.Tests do not transitively rebuild every dependent test project.
+    -->
+    <IsTestUtilityProject>true</IsTestUtilityProject>
+
+    <!--
+      CS8002: Referenced assembly does not have a strong name. KubernetesClient package is unsigned, we ignore that warning on purpose
+    -->
+    <NoWarn>$(NoWarn);CS8002;ASPIRETERMINAL001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Aspire.Hosting\Aspire.Hosting.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Testing\Aspire.Hosting.Testing.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" IsAspireProjectResource="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+
+    <!--
+      Verify.XunitV3's buildTransitive props add the global `using Xunit;` (and the VerifyXunit
+      usings). Aspire.Hosting.Tests referenced this package, so every test project that referenced
+      Aspire.Hosting.Tests inherited `using Xunit;` transitively. Keep that reference here so the
+      same global usings continue to flow to consumers that now reference this helper assembly
+      instead. Verify is a pure test package and pulls in no integration assemblies.
+    -->
+    <PackageReference Include="Verify.XunitV3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Several moved helpers are internal (e.g. TestDcpExecutor, MockUserSecretsManager,
+      KubernetesHelper). They were internal when they lived in Aspire.Hosting.Tests and are used
+      only by that project's own tests. Grant it access so we keep the public surface minimal.
+    -->
+    <InternalsVisibleTo Include="Aspire.Hosting.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Aspire.Hosting" />
+    <Using Include="Aspire.Hosting.ApplicationModel" />
+    <Using Include="Aspire.Tests.Utils" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
+    <!-- Verify's [ModuleInitializer] that points snapshot resolution at each test's Snapshots/ dir.
+         Consumers that only reference this helper assembly (and no longer reference Aspire.Hosting.Tests)
+         rely on this initializer loading transitively, exactly as it did from Aspire.Hosting.Tests before
+         the helper extraction. The VerifyInitializer.TryInitialize() guard makes double-init across
+         assemblies safe. -->
+    <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" Link="shared/TestModuleInitializer.cs" />
+    <Compile Include="$(TestsSharedDir)Logging\*.cs" LinkBase="shared/Logging" />
+    <Compile Include="$(TestsSharedDir)DistributedApplicationTestingBuilderExtensions.cs" Link="shared/DistributedApplicationTestingBuilderExtensions.cs" />
+  </ItemGroup>
+
+</Project>

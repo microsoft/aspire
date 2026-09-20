@@ -7,12 +7,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class FoundryDeploymentConnectionPropertiesTests
+public class FoundryDeploymentConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void FoundryDeploymentResourceGetConnectionPropertiesReturnsExpectedValues_Local()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var deployment = builder.AddFoundry("aifoundry")
             .RunAsFoundryLocal()
             .AddDeployment("chat", FoundryModel.Local.Phi4);
@@ -20,6 +20,7 @@ public class FoundryDeploymentConnectionPropertiesTests
         // These would be set when the resource starts
         deployment.Resource.Parent.EmulatorServiceUri = new Uri("http://localhost:8080");
         deployment.Resource.Parent.ApiKey = "OPENAI_KEY";
+        deployment.Resource.LocalModelId = "Phi-4-mini-instruct-generic-gpu:5";
 
         var properties = ((IResourceWithConnectionString)deployment.Resource).GetConnectionProperties().ToArray();
 
@@ -43,7 +44,7 @@ public class FoundryDeploymentConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("ModelName", property.Key);
-                Assert.Equal(FoundryModel.Local.Phi4.Name, property.Value.ValueExpression);
+                Assert.Equal("Phi-4-mini-instruct-generic-gpu:5", property.Value.ValueExpression);
             },
             property =>
             {
@@ -60,7 +61,7 @@ public class FoundryDeploymentConnectionPropertiesTests
     [Fact]
     public void FoundryDeploymentResourceGetConnectionPropertiesReturnsExpectedValues_Azure()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var deployment = builder.AddFoundry("aifoundry")
             .AddDeployment("chat", FoundryModel.Microsoft.Phi4);
 

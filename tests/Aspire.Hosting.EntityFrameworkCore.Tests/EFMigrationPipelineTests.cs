@@ -1,19 +1,83 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPIPELINES001, ASPIREDOTNETPROJECT001, ASPIREDOTNETTOOL, ASPIREPROJECTS001, ASPIREFILESYSTEM001
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.EntityFrameworkCore.Tests.TestServices;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.EntityFrameworkCore.Tests;
 
 public class EFMigrationPipelineTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task CustomBuildWarningPreservesPublishingResult(bool bundle, bool fail)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null);
+        using var services = builder.Services.BuildServiceProvider();
+        using var workspace = services.GetRequiredService<IFileSystemService>().TempDirectory.CreateTempSubdirectory();
+        builder.Services.Configure<PipelineOptions>(options => options.OutputPath = workspace.Path);
+        var callbackCalls = 0;
+        var project = builder.AddDotnetProject("api", new Projects.ServiceA().ProjectPath,
+            options => options.ExcludeLaunchProfile = true).WithBuildEnvironment(_ => { callbackCalls++; });
+        var migrations = project.AddEFMigrations("migrations");
+        if (bundle)
+        {
+            migrations.PublishAsMigrationBundle();
+        }
+        else
+        {
+            migrations.PublishAsMigrationScript();
+        }
+        var tool = new TestEfTool
+        {
+            Result = fail ? CommandResults.Failure("EF output is missing") : CommandResults.Success()
+        };
+        migrations.Resource.ToolResource = tool.Resource;
+        using var app = builder.Build();
+        var sink = new TestSink();
+        var context = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(), builder.ExecutionContext, app.Services,
+            new TestLogger("EF", sink, level => level >= LogLevel.Information), TestContext.Current.CancellationToken);
+        var steps = new List<PipelineStep>();
+        foreach (var annotation in migrations.Resource.Annotations.OfType<PipelineStepAnnotation>())
+        {
+            steps.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+            {
+                PipelineContext = context,
+                Resource = migrations.Resource
+            }));
+        }
+        var step = Assert.Single(steps);
+        var stepContext = new PipelineStepContext { PipelineContext = context, ReportingStep = null! };
+
+        if (fail)
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => step.Action(stepContext));
+            Assert.Contains("EF output is missing", exception.Message);
+        }
+        else
+        {
+            await step.Action(stepContext);
+        }
+
+        var invocation = Assert.Single(tool.Invocations);
+        Assert.DoesNotContain("--no-build", invocation);
+        Assert.Single(sink.Writes, write => write.LogLevel == LogLevel.Warning);
+        Assert.Equal(0, callbackCalls);
+    }
+
     [Fact]
     public async Task BundleOnlyProducesGenerateStep()
     {
@@ -726,6 +790,44 @@ public class EFMigrationPipelineTests
         Assert.Contains(WellKnownPipelineSteps.Publish, generateStep.RequiredBySteps);
     }
 
+    [Fact]
+    public void GetToolEnvironmentVariablesOmitsConnectionStringPlaceholdersInPublishMode()
+    {
+        var db = new TestDatabaseResource("postgresdb");
+        var config = new TestExecutionConfigurationResult
+        {
+            EnvironmentVariablesWithUnprocessed =
+            [
+                new("ConnectionStrings__postgresdb", (new ConnectionStringReference(db, optional: false), "{postgresdb.connectionString}")),
+                new("OTHER", ("not-a-connection-string", "value")),
+            ]
+        };
+
+        var result = EFResourceBuilderExtensions.GetToolEnvironmentVariables(config, isPublishMode: true).ToList();
+
+        // The connection string placeholder is omitted so the EF tool doesn't receive an invalid value.
+        Assert.DoesNotContain(result, kvp => kvp.Key == "ConnectionStrings__postgresdb");
+        Assert.Contains(result, kvp => kvp.Key == "OTHER" && kvp.Value == "value");
+    }
+
+    [Fact]
+    public void GetToolEnvironmentVariablesKeepsConnectionStringsInRunMode()
+    {
+        var db = new TestDatabaseResource("postgresdb");
+        var config = new TestExecutionConfigurationResult
+        {
+            EnvironmentVariablesWithUnprocessed =
+            [
+                new("ConnectionStrings__postgresdb", (new ConnectionStringReference(db, optional: false), "Host=localhost;Database=postgresdb")),
+            ]
+        };
+
+        var result = EFResourceBuilderExtensions.GetToolEnvironmentVariables(config, isPublishMode: false).ToList();
+
+        // In run mode the connection string resolves to a real value and must be forwarded to the tool.
+        Assert.Contains(result, kvp => kvp.Key == "ConnectionStrings__postgresdb" && kvp.Value == "Host=localhost;Database=postgresdb");
+    }
+
     private static async Task<List<PipelineStep>> CreateStepsAsync(
         IDistributedApplicationTestingBuilder builder,
         EFMigrationResource migrationResource)
@@ -777,5 +879,20 @@ public class EFMigrationPipelineTests
 
         public ReferenceExpression ConnectionStringExpression =>
             ReferenceExpression.Create($"{Parent};Database={Name}");
+    }
+
+    /// <summary>
+    /// A minimal <see cref="IExecutionConfigurationResult"/> used to exercise environment-variable
+    /// selection without starting a real EF tool process.
+    /// </summary>
+    private sealed class TestExecutionConfigurationResult : IExecutionConfigurationResult
+    {
+        public IEnumerable<object> References { get; init; } = [];
+        public IEnumerable<(object Unprocessed, string Processed, bool IsSensitive)> ArgumentsWithUnprocessed { get; init; } = [];
+        public IEnumerable<(string Value, bool IsSensitive)> Arguments => ArgumentsWithUnprocessed.Select(a => (a.Processed, a.IsSensitive));
+        public IEnumerable<KeyValuePair<string, (object Unprocessed, string Processed)>> EnvironmentVariablesWithUnprocessed { get; init; } = [];
+        public IEnumerable<KeyValuePair<string, string>> EnvironmentVariables => EnvironmentVariablesWithUnprocessed.Select(kvp => new KeyValuePair<string, string>(kvp.Key, kvp.Value.Processed));
+        public IEnumerable<IExecutionConfigurationData> AdditionalConfigurationData { get; init; } = [];
+        public Exception? Exception { get; init; }
     }
 }

@@ -10,19 +10,29 @@ description: |
   Data is collected in `pre-agent-steps` using `gh api`. The agent reads
   the resulting JSON files and renders the issue body.
 
+max-daily-ai-credits: -1
+
 on:
   schedule:
     - cron: "0 16 * * *"   # 16:00 UTC daily (08:00 PT in PST / 09:00 PT in PDT)
   workflow_dispatch:
 
+# Only run in the canonical repository. Forks don't have the required
+# secrets/permissions for this report workflow.
+if: github.repository == 'microsoft/aspire'
+
 permissions:
   contents: read
   issues: read
   pull-requests: read
+  copilot-requests: write
 
 network: defaults
 
 tools:
+  # Shell access is explicit because the unfiltered GitHub integrity setting
+  # requires an intentional allowlist for reading the preloaded data bundle.
+  bash: ["cat", "ls", "grep", "head", "tail", "wc"]
   github:
     # Data collection runs in pre-agent-steps via `gh api`; the agent
     # does not need to search GitHub itself.

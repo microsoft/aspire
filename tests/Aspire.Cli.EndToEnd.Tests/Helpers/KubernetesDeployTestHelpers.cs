@@ -11,6 +11,8 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 /// </summary>
 internal static class KubernetesDeployTestHelpers
 {
+    private const string KindRegistryOwnerLabel = "aspire.e2e.kind-registry-owner";
+
     private static string KindVersion => KubernetesE2EVersions.KindVersion;
     private static string HelmVersion => KubernetesE2EVersions.HelmVersion;
     private static string KubectlVersion => KubernetesE2EVersions.KubectlVersion;
@@ -73,8 +75,15 @@ internal static class KubernetesDeployTestHelpers
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
-        // Start or reuse a local Docker registry at localhost:5001
-        await auto.TypeAsync("docker inspect -f '{{.State.Running}}' kind-registry 2>/dev/null || docker run -d --restart=always -p 5001:5000 --network bridge --name kind-registry registry:2");
+        // Label only registries this test creates. A pre-existing registry can belong to a
+        // developer or another cluster, so neither cleanup path may remove it. Do not start
+        // a stopped pre-existing registry on its owner's behalf; fail setup explicitly.
+        await auto.TypeAsync(
+            "if docker container inspect kind-registry >/dev/null 2>&1; then " +
+            "test \"$(docker inspect -f '{{.State.Running}}' kind-registry)\" = true || " +
+            "{ echo 'Existing kind-registry is stopped; refusing to modify it.' >&2; false; }; " +
+            "else docker run -d --restart=always -p 5001:5000 --network bridge --name kind-registry " +
+            $"--label '{KindRegistryOwnerLabel}={clusterName}' registry:2; fi");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
@@ -136,6 +145,85 @@ internal static class KubernetesDeployTestHelpers
         await auto.TypeAsync($"kubectl cluster-info --context kind-{clusterName}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Installs the Radius <c>rad</c> CLI into ~/.local/bin (already added to PATH
+    /// by <see cref="InstallKindAndHelmAsync"/>) using the official install script,
+    /// pinned to <see cref="KubernetesE2EVersions.RadiusVersion"/>. Skips the
+    /// download when <c>rad</c> is already on PATH, and retries up to 3 times to
+    /// tolerate transient GitHub CDN failures (mirrors the KinD/Helm downloads).
+    /// </summary>
+    internal static async Task InstallRadCliAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        var radiusVersion = KubernetesE2EVersions.RadiusVersion;
+
+        await auto.TypeAsync("mkdir -p ~/.local/bin");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // The install script is fetched from the matching release tag (which carries
+        // the leading `v`), while its `--version` flag expects the bare number. rad
+        // downloads its companion `bicep` to ~/.rad/bin on the first `rad deploy`.
+        await auto.TypeAsync($"command -v rad >/dev/null 2>&1 || {{ rm -f ~/.local/bin/rad; for i in 1 2 3; do curl -fsSL \"https://raw.githubusercontent.com/radius-project/radius/v{radiusVersion}/deploy/install.sh\" | /bin/bash -s -- --version {radiusVersion} --install-dir \"$HOME/.local/bin\" && test -x \"$HOME/.local/bin/rad\" && break; echo \"Retry $i: rad download failed, retrying in 5s...\"; rm -f ~/.local/bin/rad; sleep 5; done; test -x \"$HOME/.local/bin/rad\"; }}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        await auto.TypeAsync("export PATH=\"$HOME/.local/bin:$PATH\" && rad version");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Installs the Radius control plane onto the KinD cluster and creates the
+    /// resource group, environment, and workspace that <c>rad deploy</c> (driven by
+    /// <c>aspire deploy</c>) resolves against. No Azure is involved.
+    /// </summary>
+    /// <remarks>
+    /// Two non-obvious behaviors this sequence works around:
+    /// <list type="bullet">
+    ///   <item><description>
+    ///     In rad 0.60.0, <c>rad</c> ignores <c>KUBECONFIG</c> and targets the current-context of
+    ///     <c>~/.kube/config</c>. In this container <c>kind export kubeconfig
+    ///     --internal</c> has already set that to <c>kind-&lt;cluster&gt;</c>, but we
+    ///     still pass <c>--kubecontext</c>/<c>--context</c> explicitly so the
+    ///     control-plane install and workspace are pinned to the intended cluster.
+    ///   </description></item>
+    ///   <item><description>
+    ///     Default scope creation during <c>rad install kubernetes</c> varies by version:
+    ///     rad 0.60.0 provisioned the <c>default</c> resource group and environment,
+    ///     while 0.60.2 can finish installing without them. The explicit
+    ///     <c>rad group create</c>/<c>rad env create</c> calls ensure both exist before
+    ///     workspace creation; they are idempotent when installation already created them.
+    ///     Installation does not persist a workspace, so we also create it explicitly
+    ///     for <c>rad deploy</c> to resolve its scope.
+    ///   </description></item>
+    /// </list>
+    /// </remarks>
+    internal static async Task InstallRadiusControlPlaneAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        string clusterName)
+    {
+        // Installing the control plane pulls several images and waits for the
+        // radius-system pods to become ready, so allow a generous budget.
+        await auto.TypeAsync($"rad install kubernetes --kubecontext kind-{clusterName}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(10));
+
+        await auto.TypeAsync("rad group create default");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        await auto.TypeAsync("rad env create default --group default");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        await auto.TypeAsync($"rad workspace create kubernetes radius-e2e --context kind-{clusterName} --group default --environment default --force");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
     }
 
     /// <summary>
@@ -245,18 +333,21 @@ internal static class KubernetesDeployTestHelpers
             await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
         }
 
-        // Step 4: Add client NuGet packages to ApiService (--prerelease needed for PR builds)
+        // Step 4: Add client NuGet packages to ApiService (uses local hive version when available, otherwise falls back to --prerelease)
         foreach (var package in apiClientPackages)
         {
-            await auto.TypeAsync($"dotnet add {projectName}.ApiService package {package} --prerelease");
+            await auto.TypeAsync(AspireCliShellCommandHelpers.GetDotnetAddPackageCommand($"{projectName}.ApiService", package));
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
         }
 
         // Step 5: Inject custom AppHost.cs and ApiService/Program.cs into the template-created project
         var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
         var apiDir = Path.Combine(projectDir, $"{projectName}.ApiService");
 
+        Assert.True(File.Exists(Path.Combine(appHostDir, "AppHost.cs")));
+        Assert.True(File.Exists(Path.Combine(apiDir, $"{projectName}.ApiService.csproj")));
+        Assert.True(File.Exists(Path.Combine(apiDir, "Properties", "launchSettings.json")));
         output.WriteLine($"Writing AppHost.cs to: {Path.Combine(appHostDir, "AppHost.cs")}");
         File.WriteAllText(Path.Combine(appHostDir, "AppHost.cs"), appHostCode);
         File.WriteAllText(Path.Combine(apiDir, "Program.cs"), apiProgramCode);
@@ -302,7 +393,7 @@ internal static class KubernetesDeployTestHelpers
 
     /// <summary>
     /// Verifies a K8s deployment by port-forwarding and curling the test endpoint.
-    /// Returns the curl output for assertion.
+    /// An optional exact response can be supplied instead of the default PASSED marker.
     /// </summary>
     internal static async Task VerifyDeploymentAsync(
         this Hex1bTerminalAutomator auto,
@@ -310,7 +401,8 @@ internal static class KubernetesDeployTestHelpers
         string @namespace,
         string serviceName,
         int localPort,
-        string testPath = "/test-deployment")
+        string testPath = "/test-deployment",
+        string? expectedResponse = null)
     {
         // Wait for all pods to be ready in the namespace
         await auto.TypeAsync($"kubectl wait --for=condition=Ready pod --all -n {@namespace} --timeout=180s");
@@ -332,37 +424,66 @@ internal static class KubernetesDeployTestHelpers
         await auto.EnterAsync();
         await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-        // Port-forward in background
-        await auto.TypeAsync($"kubectl port-forward -n {@namespace} svc/{serviceName}-service {localPort}:8080 &");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        // Brief pause for port-forward to establish
-        await auto.TypeAsync("sleep 3");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        // Curl the test endpoint with retries, looking for "PASSED" in response body.
-        // Database containers (Postgres, MySQL, SQL Server) may need 60-120s to fully initialize,
-        // so we retry up to 30 times with 5s intervals (150s total).
-        await auto.TypeAsync($"for i in $(seq 1 30); do " +
-            $"result=$(curl -s -w '\\nHTTP_%{{http_code}}' http://localhost:{localPort}{testPath} 2>/dev/null); " +
-            "if echo \"$result\" | grep -q 'PASSED'; then echo \"VERIFY_OK: $result\"; break; fi; " +
-            "echo \"Attempt $i: got $result, retrying...\"; sleep 5; done");
-        await auto.EnterAsync();
-
-        // Wait for the VERIFY_OK marker to appear
-        await auto.WaitUntilTextAsync("VERIFY_OK", timeout: TimeSpan.FromMinutes(4));
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
-
-        // Kill the port-forward background process
-        await auto.TypeAsync("kill %1 2>/dev/null || true");
-        await auto.EnterAsync();
-        await auto.WaitForAnyPromptAsync(counter);
+        await auto.VerifyForwardedEndpointAsync(
+            counter, @namespace, $"svc/{serviceName}-service", localPort, 8080, testPath, expectedResponse);
     }
 
     /// <summary>
-    /// Cleans up a KinD cluster and registry (best-effort, in-terminal).
+    /// Verifies a specific ready workload uses the image built for this deployment.
+    /// </summary>
+    internal static async Task VerifyPodImageAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        string @namespace,
+        string selector,
+        string expectedImage)
+    {
+        await auto.RunCommandAsync(
+            $"kubectl wait --for=condition=Ready pod -n {@namespace} -l {selector} --timeout=180s",
+            counter, TimeSpan.FromMinutes(4));
+
+        // jsonpath emits one image per line, e.g. localhost:5001/aspire-e2e-abc/server:project-v2.
+        // Require exactly one pod/container, rather than accepting an unrelated ready workload.
+        await auto.RunCommandAsync(
+            $"test \"$(kubectl get pods -n {@namespace} -l {selector} " +
+            "-o jsonpath='{range .items[*]}{range .spec.containers[*]}{.image}{\"\\n\"}{end}{end}')\" " +
+            $"= '{expectedImage}'",
+            counter);
+    }
+
+    /// <summary>
+    /// Probes a forwarded service or deployment with bounded HTTP retries and scoped cleanup.
+    /// </summary>
+    internal static async Task VerifyForwardedEndpointAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        string @namespace,
+        string target,
+        int localPort,
+        int targetPort,
+        string testPath,
+        string? expectedResponse)
+    {
+        var responseCheck = expectedResponse is null
+            ? "printf '%s' \"$result\" | grep -q 'PASSED'"
+            : $"[ \"$result\" = '{expectedResponse.Replace("'", "'\"'\"'")}' ]";
+
+        // Run in a subshell so the EXIT trap owns only this forward, even on HTTP failure.
+        // A prompt-success assertion checks the final `test`, not an echoed success sentinel.
+        // Each curl is bounded; retries also absorb startup of the forward without a fixed sleep.
+        await auto.RunCommandAsync(
+            $"(kubectl port-forward -n {@namespace} {target} {localPort}:{targetPort} > port-forward.log 2>&1 & " +
+            "forward_pid=$!; trap 'kill \"$forward_pid\" 2>/dev/null || true' EXIT; " +
+            "found=0; for i in $(seq 1 30); do " +
+            $"if result=$(curl --connect-timeout 2 --max-time 5 -fsS http://localhost:{localPort}{testPath}) && " +
+            $"{responseCheck}; then found=1; printf '%s\\n' \"$result\"; break; fi; " +
+            "echo \"Attempt $i: got [$result], retrying...\"; sleep 5; done; " +
+            "test \"$found\" = 1)",
+            counter, TimeSpan.FromMinutes(6));
+    }
+
+    /// <summary>
+    /// Cleans up a KinD cluster and its owned registry (best-effort, in-terminal).
     /// </summary>
     internal static async Task CleanupKubernetesDeploymentAsync(
         this Hex1bTerminalAutomator auto,
@@ -373,7 +494,12 @@ internal static class KubernetesDeployTestHelpers
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
-        await auto.TypeAsync("docker rm -f kind-registry 2>/dev/null || true");
+        // Resolve and remove by ID, not name, so a replacement registry is never deleted.
+        await auto.TypeAsync(
+            "registry_id=$(docker container ls -aq --filter 'name=^/kind-registry$' " +
+            $"--filter 'label={KindRegistryOwnerLabel}={clusterName}') && " +
+            "if [ -n \"$registry_id\" ]; then docker container rm -f -v \"$registry_id\"; " +
+            "else echo 'Cleanup: no registry owned by this test; leaving any reused registry intact.'; fi");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
     }
@@ -383,38 +509,12 @@ internal static class KubernetesDeployTestHelpers
     /// </summary>
     internal static async Task CleanupKindClusterOutOfBandAsync(string clusterName, ITestOutputHelper output)
     {
-        try
-        {
-            using var kindProcess = new System.Diagnostics.Process();
-            kindProcess.StartInfo.FileName = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin", "kind");
-            kindProcess.StartInfo.Arguments = $"delete cluster --name={clusterName}";
-            kindProcess.StartInfo.RedirectStandardOutput = true;
-            kindProcess.StartInfo.RedirectStandardError = true;
-            kindProcess.StartInfo.UseShellExecute = false;
-            kindProcess.Start();
-            await kindProcess.WaitForExitAsync(TestContext.Current.CancellationToken);
-            output.WriteLine($"Cleanup: KinD cluster '{clusterName}' deleted (exit code: {kindProcess.ExitCode})");
-        }
-        catch (Exception ex)
-        {
-            output.WriteLine($"Cleanup: Failed to delete KinD cluster '{clusterName}': {ex.Message}");
-        }
-
-        try
-        {
-            using var registryProcess = new System.Diagnostics.Process();
-            registryProcess.StartInfo.FileName = "docker";
-            registryProcess.StartInfo.Arguments = "rm -f kind-registry";
-            registryProcess.StartInfo.RedirectStandardOutput = true;
-            registryProcess.StartInfo.RedirectStandardError = true;
-            registryProcess.StartInfo.UseShellExecute = false;
-            registryProcess.Start();
-            await registryProcess.WaitForExitAsync(TestContext.Current.CancellationToken);
-        }
-        catch
-        {
-            // Best-effort cleanup
-        }
+        // KinD is installed inside the helper container, not necessarily on the test host.
+        // Delete only this cluster's nodes through the shared Docker daemon when the terminal
+        // has failed; keep the shared kind network intact. Tests using kind-registry run serially.
+        await LocalDeploymentTestHelpers.CleanupLabeledDockerResourcesAsync(
+            $"io.x-k8s.kind.cluster={clusterName}", output);
+        await LocalDeploymentTestHelpers.CleanupLabeledDockerResourcesAsync(
+            $"{KindRegistryOwnerLabel}={clusterName}", output);
     }
 }

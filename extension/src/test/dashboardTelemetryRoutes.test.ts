@@ -24,19 +24,28 @@ interface RecordedEvent {
     properties?: Record<string, string>;
     measurements?: Record<string, number>;
     isError?: true;
+    isDangerous?: true;
 }
 
 class FakeReporter {
     public events: RecordedEvent[] = [];
+    public telemetryLevel: 'all' | 'error' | 'crash' | 'off' = 'all';
 
     sendTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        // Production routes through VS Code's logger and then a prefix-stripping
+        // transport sender. Recording the regular path too makes accidental
+        // bypasses visible in these route tests.
         this.events.push({ name, properties, measurements });
     }
     sendTelemetryErrorEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
         this.events.push({ name, properties, measurements, isError: true });
     }
-    sendDangerousTelemetryEvent(): void { /* not used */ }
-    sendDangerousTelemetryErrorEvent(): void { /* not used */ }
+    sendDangerousTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        this.events.push({ name, properties, measurements, isDangerous: true });
+    }
+    sendDangerousTelemetryErrorEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        this.events.push({ name, properties, measurements, isError: true, isDangerous: true });
+    }
     sendRawTelemetryEvent(): void { /* not used */ }
     dispose(): Promise<void> { return Promise.resolve(); }
 }
@@ -101,14 +110,14 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
     setup(async () => { h = await startHarness(); });
     teardown(async () => { await stopHarness(h); });
 
-    test('POST /telemetry/operation normalizes the dashboard event name into dashboard_event_name', async () => {
+    test('POST /telemetry/operation preserves a known dashboard event name after cleaning', async () => {
         // The whole reason the registry exists: dashboard-supplied event
-        // names like `aspire/dashboard/component/paramsset` must NOT become
+        // names like `aspire/dashboard/component/paramsSet` must NOT become
         // extension event names (which would force a new classification row
         // per dashboard event). They live on a fixed `dashboard/operation`
         // event, with the raw name carried in a single classified property.
         const { status } = await postJson(h.baseUrl, '/telemetry/operation', {
-            eventName: 'aspire/dashboard/component/paramsset',
+            eventName: 'aspire/dashboard/component/paramsSet',
             properties: {
                 'aspire.dashboard.componentId': { value: 'metrics', propertyType: 1 },
             },
@@ -119,28 +128,135 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
         const event = h.fake.events[0];
         // Pin the contract: the extension event name is FIXED, the dashboard
         // event name is carried as a property.
-        assert.strictEqual(event.name, 'dashboard/operation');
-        assert.strictEqual(event.properties?.dashboard_event_name, 'aspire/dashboard/component/paramsset');
+        assert.strictEqual(event.name, 'aspire/dashboard/operation');
+        assert.strictEqual(event.properties?.dashboard_event_name, 'aspire/dashboard/component/paramsSet');
         assert.strictEqual(event.properties?.result, 'Success');
         assert.strictEqual(event.isError, undefined);
     });
 
+    test('POST /telemetry/operation preserves event names from supported older dashboards', async () => {
+        for (const eventName of ['aspire/dashboard/aiassistant/feedback', 'aspire/dashboard/mcp/toolcall']) {
+            const { status } = await postJson(h.baseUrl, '/telemetry/operation', {
+                eventName,
+                properties: {},
+                result: 1,
+            });
+
+            assert.strictEqual(status, 200);
+            assert.strictEqual(h.fake.events.at(-1)?.properties?.dashboard_event_name, eventName);
+        }
+    });
+
+    test('POST /telemetry/operation keeps sanitized dashboard_properties parseable', async () => {
+        const { status } = await postJson(h.baseUrl, '/telemetry/operation', {
+            eventName: 'aspire/dashboard/component/open',
+            properties: {
+                'Aspire.Dashboard.UserAgent': { value: 'Browser C:\\Users\\bob\\workspace', propertyType: 1 },
+            },
+            result: 1,
+        });
+
+        assert.strictEqual(status, 200);
+        assert.strictEqual(h.fake.events.length, 1);
+        const dashboardProperties = h.fake.events[0].properties?.dashboard_properties;
+        if (dashboardProperties === undefined) {
+            assert.fail('Expected dashboard_properties to be emitted.');
+        }
+        const parsed = JSON.parse(dashboardProperties);
+        assert.strictEqual(parsed.v['Aspire.Dashboard.UserAgent'], '<redacted>');
+    });
+
+    test('POST /telemetry/operation redacts VS Code secret patterns before bundling', async () => {
+        for (const value of [
+            `AIza${'A'.repeat(35)}`,
+            'xoxb-a',
+            `ghp_${'A'.repeat(36)}`,
+            'secret sauce',
+            'login host -p value',
+            'eyJhbGci',
+            'user@example.-',
+        ]) {
+            const { status } = await postJson(h.baseUrl, '/telemetry/operation', {
+                eventName: 'aspire/dashboard/component/open',
+                properties: {
+                    'Aspire.Dashboard.UserAgent': { value, propertyType: 1 },
+                },
+                result: 1,
+            });
+
+            assert.strictEqual(status, 200);
+            const dashboardProperties = h.fake.events.at(-1)?.properties?.dashboard_properties;
+            if (dashboardProperties === undefined) {
+                assert.fail('Expected dashboard_properties to be emitted.');
+            }
+            const parsed = JSON.parse(dashboardProperties);
+            assert.strictEqual(parsed.v['Aspire.Dashboard.UserAgent'], '<redacted>');
+        }
+    });
+
+    test('POST /telemetry/operation sanitizes paths and whitespace credentials before bundling', async () => {
+        const { status } = await postJson(h.baseUrl, '/telemetry/operation', {
+            eventName: 'aspire/dashboard/component/open',
+            properties: {
+                'Aspire.Dashboard.RequestId': { value: 'customer/project/file.cs', propertyType: 1 },
+                'Aspire.Dashboard.UserAgent': { value: 'client_secret =   ', propertyType: 1 },
+            },
+            result: 1,
+        });
+
+        assert.strictEqual(status, 200);
+        const parsed = JSON.parse(h.fake.events[0].properties?.dashboard_properties ?? '');
+        assert.strictEqual(parsed.v['Aspire.Dashboard.RequestId'], '<redacted>');
+        assert.strictEqual(parsed.v['Aspire.Dashboard.UserAgent'], '<redacted>');
+    });
+
+    test('POST /telemetry/operation sanitizes every nested string-array entry', async () => {
+        const { status } = await postJson(h.baseUrl, '/telemetry/operation', {
+            eventName: 'aspire/dashboard/component/open',
+            properties: {
+                'Aspire.Dashboard.Resource.Types': {
+                    value: [
+                        'project',
+                        '../customer/secrets.json',
+                        '--token =   secret',
+                        '--token secret',
+                        'token="supersecret"',
+                        'customer/project/file.cs',
+                        'https://private.example/resource',
+                    ],
+                    propertyType: 1,
+                },
+            },
+            result: 1,
+        });
+
+        assert.strictEqual(status, 200);
+        const parsed = JSON.parse(h.fake.events[0].properties?.dashboard_properties ?? '');
+        assert.deepStrictEqual(
+            parsed.v['Aspire.Dashboard.Resource.Types'],
+            ['project', '<redacted>', '<redacted>', '<redacted>', '<redacted>', '<redacted>', '<redacted>']
+        );
+    });
+
     test('POST /telemetry/userTask emits dashboard/usertask, not the raw dashboard name', async () => {
         const { status } = await postJson(h.baseUrl, '/telemetry/userTask', {
-            eventName: 'aspire/dashboard/mcp/toolcall',
+            eventName: 'aspire/dashboard/command',
             properties: {},
             result: 1,
         });
         assert.strictEqual(status, 200);
         assert.strictEqual(h.fake.events.length, 1);
-        assert.strictEqual(h.fake.events[0].name, 'dashboard/usertask');
-        assert.strictEqual(h.fake.events[0].properties?.dashboard_event_name, 'aspire/dashboard/mcp/toolcall');
+        assert.strictEqual(h.fake.events[0].name, 'aspire/dashboard/usertask');
+        assert.strictEqual(h.fake.events[0].properties?.dashboard_event_name, 'aspire/dashboard/command');
     });
 
     test('POST /telemetry/fault always routes through the error channel', async () => {
-        // Faults are the dashboard's exception telemetry channel; they MUST
-        // go through sendTelemetryErrorEvent so the reporter applies its
-        // stricter scrubbing pass.
+        // Faults are the dashboard's exception telemetry channel; they MUST go
+        // through sendTelemetryErrorEvent so they respect the user's error-level
+        // opt-in (emitted at 'error' or 'all'). String-named error events still emit
+        // an EventData/customEvent payload, so downstream distinguishes faults by
+        // the `aspire/dashboard/fault` event name and result, not by an App Insights
+        // exception envelope.
         const { status } = await postJson(h.baseUrl, '/telemetry/fault', {
             eventName: 'aspire/dashboard/error',
             description: 'short fault description',
@@ -149,7 +265,7 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
         });
         assert.strictEqual(status, 200);
         assert.strictEqual(h.fake.events.length, 1);
-        assert.strictEqual(h.fake.events[0].name, 'dashboard/fault');
+        assert.strictEqual(h.fake.events[0].name, 'aspire/dashboard/fault');
         assert.strictEqual(h.fake.events[0].isError, true);
         assert.strictEqual(h.fake.events[0].properties?.fault_severity, 'Critical');
     });
@@ -185,7 +301,7 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
 
     test('POST /telemetry/startOperation + endOperation emits matched scope start/end events', async () => {
         const startRes = await postJson(h.baseUrl, '/telemetry/startOperation', {
-            eventName: 'aspire/dashboard/component/paramsset',
+            eventName: 'aspire/dashboard/component/paramsSet',
             settings: {
                 postStartEvent: true,
                 startEventProperties: {
@@ -206,10 +322,10 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
         // Exactly one start event + one end event.
         assert.strictEqual(h.fake.events.length, 2);
         const [startEvent, endEvent] = h.fake.events;
-        assert.strictEqual(startEvent.name, 'dashboard/scope/start');
-        assert.strictEqual(startEvent.properties?.dashboard_event_name, 'aspire/dashboard/component/paramsset');
+        assert.strictEqual(startEvent.name, 'aspire/dashboard/scope/start');
+        assert.strictEqual(startEvent.properties?.dashboard_event_name, 'aspire/dashboard/component/paramsSet');
         assert.strictEqual(startEvent.properties?.operation_id, operationId);
-        assert.strictEqual(endEvent.name, 'dashboard/scope/end');
+        assert.strictEqual(endEvent.name, 'aspire/dashboard/scope/end');
         assert.strictEqual(endEvent.properties?.operation_id, operationId);
         assert.strictEqual(endEvent.properties?.result, 'Success');
         // operation_id alone joins start↔end; dashboard_correlated_with must
@@ -241,7 +357,7 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
         // postStartEvent: false → no start event emitted, just the end.
         assert.strictEqual(h.fake.events.length, 1);
         const event = h.fake.events[0];
-        assert.strictEqual(event.name, 'dashboard/scope/end');
+        assert.strictEqual(event.name, 'aspire/dashboard/scope/end');
         assert.strictEqual(event.isError, true);
         assert.strictEqual(event.properties?.result, 'Failure');
         assert.strictEqual(event.properties?.error_message, undefined);
@@ -277,7 +393,7 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
 
         await postJson(h.baseUrl, '/telemetry/endOperation', { id: operationId, result: 1 });
         assert.strictEqual(h.fake.events.length, 1);
-        assert.strictEqual(h.fake.events[0].name, 'dashboard/scope/end');
+        assert.strictEqual(h.fake.events[0].name, 'aspire/dashboard/scope/end');
     });
 
     test('GET /telemetry/enabled returns all three casing variants', async () => {
@@ -295,6 +411,36 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
         // would observe inconsistent state.
         assert.strictEqual(body.IsEnabled, body.isEnabled);
         assert.strictEqual(body.IsEnabled, body.is_enabled);
+    });
+
+    test('GET /telemetry/enabled remains enabled for errors-only telemetry', async () => {
+        // The dashboard only starts its send loop when this handshake returns
+        // true. VS Code's "errors only" setting must still allow dashboard
+        // faults/failures through `sendTelemetryErrorEvent`, while regular
+        // usage events remain gated at send time.
+        h.fake.telemetryLevel = 'error';
+
+        const res = await fetch(`${h.baseUrl}/telemetry/enabled`);
+
+        assert.strictEqual(res.status, 200);
+        const body = await res.json() as { IsEnabled?: boolean; isEnabled?: boolean; is_enabled?: boolean };
+        assert.strictEqual(body.IsEnabled, true);
+        assert.strictEqual(body.isEnabled, true);
+        assert.strictEqual(body.is_enabled, true);
+    });
+
+    test('GET /telemetry/enabled is disabled for crash-only and off telemetry', async () => {
+        for (const level of ['crash', 'off'] as const) {
+            h.fake.telemetryLevel = level;
+
+            const res = await fetch(`${h.baseUrl}/telemetry/enabled`);
+
+            assert.strictEqual(res.status, 200);
+            const body = await res.json() as { IsEnabled?: boolean; isEnabled?: boolean; is_enabled?: boolean };
+            assert.strictEqual(body.IsEnabled, false);
+            assert.strictEqual(body.isEnabled, false);
+            assert.strictEqual(body.is_enabled, false);
+        }
     });
 
     test('PostFault drops exception message/stack-trace and never forwards the free-form description (privacy guarantee)', async () => {
@@ -356,21 +502,16 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
         assert.strictEqual(envelope.v['Aspire.Dashboard.Version'], '10.0.0');
     });
 
-    test('PostOperation clamps dashboard-supplied event names so a buggy upstream cannot leak long strings', async () => {
-        // dashboard_event_name is forwarded verbatim onto the telemetry
-        // event. A future dashboard regression that puts a workspace path or
-        // user-controlled string into eventName would otherwise leak it at
-        // full length. Defense-in-depth via clampDashboardKey.
-        const longName = 'aspire/dashboard/' + 'x'.repeat(500);
+    test('PostOperation maps near-miss dashboard event names to other', async () => {
+        // The dashboard currently has a closed event-name vocabulary. Avoid
+        // forwarding a future free-form value before it has been classified.
         const { status } = await postJson(h.baseUrl, '/telemetry/operation', {
-            eventName: longName,
+            eventName: 'aspire/dashboard/component/paramsset',
             properties: {},
             result: 1,
         });
         assert.strictEqual(status, 200);
-        const carried = h.fake.events[0].properties?.dashboard_event_name ?? '';
-        assert.ok(carried.length < longName.length, 'expected event name to be clamped');
-        assert.ok(carried.endsWith('...[truncated]'), 'expected truncation marker');
+        assert.strictEqual(h.fake.events[0].properties?.dashboard_event_name, 'other');
     });
 
     test('PostOperation with malformed correlatedWith does not crash the handler', async () => {

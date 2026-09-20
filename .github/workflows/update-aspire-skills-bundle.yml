@@ -25,7 +25,7 @@ jobs:
         id: update-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
         with:
-          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
 
       - name: Update embedded Aspire skills bundle
@@ -44,7 +44,7 @@ jobs:
       - name: Restore solution
         run: ./restore.sh
 
-      - name: Test Aspire skills installer
+      - name: Test Aspire skills bundle and telemetry hooks
         run: >
           dotnet test --project tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj
           --no-launch-profile
@@ -52,6 +52,8 @@ jobs:
           --filter-class "*.AspireSkillsInstallerTests"
           --filter-class "*.AspireSkillsBundleTests"
           --filter-class "*.AgentInitCommandTests"
+          --filter-class "*.TelemetryHookInstallerTests"
+          --filter-class "*.TelemetryHookScriptTests"
           --filter-not-trait "quarantined=true"
           --filter-not-trait "outerloop=true"
 
@@ -59,7 +61,7 @@ jobs:
         id: pr-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
         with:
-          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
 
       - name: Create or update pull request

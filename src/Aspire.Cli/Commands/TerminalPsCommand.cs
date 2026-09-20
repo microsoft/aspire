@@ -7,7 +7,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
@@ -16,8 +15,9 @@ using Spectre.Console;
 namespace Aspire.Cli.Commands;
 
 /// <summary>
-/// Lists every <c>WithTerminal</c>-enabled resource in the connected AppHost, with current grid
-/// size, attached-peer count, and per-replica health. Backs <c>aspire terminal ps</c>.
+/// Lists every terminal in the connected AppHost — those belonging to <c>WithTerminal</c>-enabled
+/// resources, and those the AppHost itself owns (dock tabs, interaction dialogs, automation-only
+/// sessions). Backs <c>aspire terminal ps</c>.
 /// </summary>
 /// <remarks>
 /// The command:
@@ -26,10 +26,10 @@ namespace Aspire.Cli.Commands;
 /// <item>Verifies the AppHost advertises the <c>terminals.v1</c> capability and falls back to a
 ///   "not supported" error message when it does not (older AppHosts pre-13.4 lack the entire
 ///   WithTerminal/<c>terminal attach</c>+<c>terminal ps</c> surface).</item>
-/// <item>Calls <see cref="IAppHostAuxiliaryBackchannel.ListTerminalsAsync"/> to enumerate every
-///   terminal-enabled resource. Resources whose host process isn't reachable are still listed
-///   with a status indicating they are unavailable rather than silently dropped.</item>
-/// <item>Renders the result as a Spectre.Console table or — when <c>--format json</c> is supplied
+/// <item>Calls <see cref="IAppHostAuxiliaryBackchannel.ListTerminalsAsync"/> to enumerate them.
+///   Resources whose host process isn't reachable are still listed with a status indicating they
+///   are unavailable rather than silently dropped.</item>
+/// <item>Renders the result as Spectre.Console tables or — when <c>--format json</c> is supplied
 ///   — a flat JSON document for scripting.</item>
 /// </list>
 /// </remarks>
@@ -55,15 +55,14 @@ internal sealed class TerminalPsCommand : BaseCommand
     };
 
     public TerminalPsCommand(
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IProjectLocator projectLocator,
+        AppHostConnectionResolver connectionResolver,
         ILogger<TerminalPsCommand> logger,
         CommonCommandServices services)
         : base("ps", "List interactive terminal sessions in the connected AppHost.", services)
     {
         _interactionService = services.InteractionService;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, services.InteractionService, projectLocator, services.ExecutionContext, logger);
+        _connectionResolver = connectionResolver;
 
         Options.Add(s_appHostOption);
         Options.Add(s_formatOption);
@@ -126,7 +125,7 @@ internal sealed class TerminalPsCommand : BaseCommand
             "Listing terminal sessions...",
             async () => await connection.ListTerminalsAsync(cancellationToken).ConfigureAwait(false));
 
-        if (response.Terminals.Length == 0)
+        if (response.ResourceTerminals.Length == 0 && response.AppHostTerminals.Length == 0)
         {
             if (format == OutputFormat.Json)
             {
@@ -135,15 +134,16 @@ internal sealed class TerminalPsCommand : BaseCommand
             else
             {
                 _interactionService.DisplayMessage(KnownEmojis.Information,
-                    "No resources in the connected AppHost are configured for interactive terminals (`.WithTerminal()`).");
+                    "No terminals are running in the connected AppHost. Resources opt in with `.WithTerminal()`; AppHost-owned terminals appear here while they are open.");
             }
             return CommandResult.Success();
         }
 
         _logger.LogDebug(
-            "ListTerminalsAsync returned {Count} terminal(s); reachable={Reachable}",
-            response.Terminals.Length,
-            response.Terminals.Count(t => t.IsHostReachable));
+            "ListTerminalsAsync returned {ResourceCount} resource terminal(s) (reachable={Reachable}) and {AppHostCount} AppHost terminal(s)",
+            response.ResourceTerminals.Length,
+            response.ResourceTerminals.Count(t => t.IsHostReachable),
+            response.AppHostTerminals.Length);
 
         if (format == OutputFormat.Json)
         {
@@ -159,8 +159,8 @@ internal sealed class TerminalPsCommand : BaseCommand
 
     private void EmitJson(Aspire.Cli.Backchannel.ListTerminalsResponse response, bool verbose)
     {
-        var dtos = new List<TerminalPsJsonEntry>(response.Terminals.Length);
-        foreach (var terminal in response.Terminals)
+        var dtos = new List<TerminalPsJsonEntry>(response.ResourceTerminals.Length + response.AppHostTerminals.Length);
+        foreach (var terminal in response.ResourceTerminals)
         {
             var replicas = new List<TerminalPsJsonReplica>(terminal.Replicas?.Length ?? 0);
             if (terminal.Replicas is not null)
@@ -190,6 +190,7 @@ internal sealed class TerminalPsCommand : BaseCommand
 
             dtos.Add(new TerminalPsJsonEntry
             {
+                Owner = "resource",
                 ResourceName = terminal.ResourceName,
                 DisplayName = terminal.DisplayName,
                 ConfiguredColumns = terminal.ConfiguredColumns,
@@ -199,13 +200,89 @@ internal sealed class TerminalPsCommand : BaseCommand
             });
         }
 
+        foreach (var terminal in response.AppHostTerminals)
+        {
+            dtos.Add(new TerminalPsJsonEntry
+            {
+                Owner = "apphost",
+                TerminalId = terminal.TerminalId,
+                DisplayName = terminal.Title,
+                Placement = terminal.Placement,
+            });
+        }
+
         var json = JsonSerializer.Serialize(dtos, TerminalPsJsonContext.Default.ListTerminalPsJsonEntry);
         _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
     }
 
     private void DisplayTable(Aspire.Cli.Backchannel.ListTerminalsResponse response, bool verbose)
     {
-        var table = new Table();
+        if (response.ResourceTerminals.Length > 0)
+        {
+            DisplayResourceTerminals(response);
+        }
+
+        if (response.AppHostTerminals.Length > 0)
+        {
+            DisplayAppHostTerminals(response.AppHostTerminals);
+        }
+
+        if (verbose)
+        {
+            DisplayPeerDetails(response);
+        }
+    }
+
+    /// <summary>
+    /// Renders terminals whose lifetime is owned by the AppHost.
+    /// </summary>
+    /// <remarks>
+    /// Kept in its own table rather than merged with the resource table because none of the resource
+    /// columns — replica, liveness, size, peers, restarts — mean anything for these. Merging would produce
+    /// a row of placeholders that implies the data is missing rather than inapplicable.
+    /// </remarks>
+    private void DisplayAppHostTerminals(Aspire.Cli.Backchannel.AppHostTerminalSummary[] terminals)
+    {
+        var table = new Table
+        {
+            Title = new TableTitle("AppHost terminals"),
+        };
+
+        table.AddBoldColumn("Terminal");
+        table.AddBoldColumn("Id");
+        table.AddBoldColumn("Shown");
+
+        foreach (var terminal in terminals)
+        {
+            table.AddRow(
+                Markup.Escape(terminal.Title),
+                Markup.Escape(terminal.TerminalId),
+                Markup.Escape(DescribePlacement(terminal.Placement)));
+        }
+
+        _interactionService.DisplayRenderable(table);
+    }
+
+    /// <summary>
+    /// Turns a <c>TerminalPlacement</c> value into something readable, passing through anything the AppHost
+    /// added after this CLI was built rather than hiding it behind "unknown".
+    /// </summary>
+    private static string DescribePlacement(string placement) => placement switch
+    {
+        "Dock" => "dock",
+        "Dialog" => "dialog",
+        "ResourceView" => "resource view",
+        "None" => "not shown",
+        _ => placement,
+    };
+
+    private void DisplayResourceTerminals(Aspire.Cli.Backchannel.ListTerminalsResponse response)
+    {
+        var table = new Table
+        {
+            Title = new TableTitle("Resource terminals"),
+        };
+
         table.AddBoldColumn("Resource");
         table.AddBoldColumn("Replica");
         table.AddBoldColumn("Status");
@@ -213,7 +290,7 @@ internal sealed class TerminalPsCommand : BaseCommand
         table.AddBoldColumn("Peers");
         table.AddBoldColumn("Restarts");
 
-        foreach (var terminal in response.Terminals)
+        foreach (var terminal in response.ResourceTerminals)
         {
             // Host-unreachable terminals get one row with a placeholder so users understand why
             // detail is missing rather than silently omitting them.
@@ -254,16 +331,11 @@ internal sealed class TerminalPsCommand : BaseCommand
         }
 
         _interactionService.DisplayRenderable(table);
-
-        if (verbose)
-        {
-            DisplayPeerDetails(response);
-        }
     }
 
     private void DisplayPeerDetails(Aspire.Cli.Backchannel.ListTerminalsResponse response)
     {
-        var hasAnyPeer = response.Terminals
+        var hasAnyPeer = response.ResourceTerminals
             .Any(t => t.Replicas is not null && t.Replicas.Any(r => r.Peers is { Length: > 0 }));
         if (!hasAnyPeer)
         {
@@ -276,7 +348,7 @@ internal sealed class TerminalPsCommand : BaseCommand
         peers.AddBoldColumn("Peer Id");
         peers.AddBoldColumn("Display Name");
 
-        foreach (var terminal in response.Terminals)
+        foreach (var terminal in response.ResourceTerminals)
         {
             if (terminal.Replicas is null)
             {
@@ -305,12 +377,38 @@ internal sealed class TerminalPsCommand : BaseCommand
 
 internal sealed class TerminalPsJsonEntry
 {
-    public required string ResourceName { get; init; }
+    /// <summary>
+    /// Gets what owns the terminal's workload: <c>resource</c> or <c>apphost</c>. Discriminates which of the
+    /// remaining properties are populated.
+    /// </summary>
+    public required string Owner { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TerminalId { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ResourceName { get; init; }
+
     public required string DisplayName { get; init; }
-    public required int ConfiguredColumns { get; init; }
-    public required int ConfiguredRows { get; init; }
-    public required bool IsHostReachable { get; init; }
-    public required TerminalPsJsonReplica[] Replicas { get; init; }
+
+    /// <summary>
+    /// Gets where an AppHost terminal is displayed. Absent for resource terminals, which are always shown
+    /// on their resource.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Placement { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ConfiguredColumns { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ConfiguredRows { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? IsHostReachable { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TerminalPsJsonReplica[]? Replicas { get; init; }
 }
 
 internal sealed class TerminalPsJsonReplica

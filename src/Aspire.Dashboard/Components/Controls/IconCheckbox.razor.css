@@ -1,0 +1,24 @@
+.icon-checkbox {
+    align-items: center;
+    border-radius: var(--borderRadiusLarge);
+    cursor: pointer;
+    display: inline-flex;
+    height: 32px;
+    justify-content: center;
+    margin-right: 8px;
+    vertical-align: middle;
+    width: 32px;
+}
+
+.icon-checkbox:not([aria-disabled="true"]):hover {
+    background: var(--colorSubtleBackgroundHover);
+}
+
+.icon-checkbox:not([aria-disabled="true"]):active {
+    background: var(--colorSubtleBackgroundPressed);
+}
+
+.icon-checkbox[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.3;
+}

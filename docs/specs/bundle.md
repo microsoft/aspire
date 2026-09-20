@@ -169,6 +169,8 @@ aspire-{version}-{platform}/
 
 **Key change from previous layout**: The separate `.NET Runtime` (~106 MB), `dashboard/` (~42 MB), `aspire-server/` (~19 MB), `tools/aspire-nuget/` (~5 MB), and `tools/dev-certs/` directories have been consolidated into a single `managed/aspire-managed` self-contained binary. Certificate management has been moved natively into the CLI itself, eliminating the need for a separate dev-certs tool.
 
+Windows bundles also include `managed/hex1bpty.exe`, `managed/conpty.dll`, and `managed/arm64/OpenConsole.exe`; `win-x64` additionally includes `managed/x64/OpenConsole.exe`. These PTY sidecars stay outside the managed single-file executable because Hex1b locates its helper beside the application. ConPTY selects `OpenConsole.exe` relative to its DLL using the **OS architecture**, so the x64 bundle must retain the ARM64 helper for execution under emulation. `CreateLayout` preserves this layout and fails if a required sidecar is missing.
+
 **Total Bundle Size:**
 - **Unzipped:** ~220 MB (down from ~323 MB — eliminated separate runtime)
 - **Zipped:** ~80 MB
@@ -387,7 +389,7 @@ This dual-discovery approach ensures:
 
 ## NuGet Operations
 
-The bundle includes NuGet operations via the `aspire-managed nuget` subcommand, which provides package search and restore functionality without requiring the .NET SDK.
+The bundle includes NuGet operations via the `aspire-managed nuget` subcommand, which provides package search, restore, and probe manifest generation without requiring the .NET SDK.
 
 ### NuGet Helper Commands
 
@@ -413,11 +415,6 @@ The bundle includes NuGet operations via the `aspire-managed nuget` subcommand, 
   --output <workspace>/.aspire/integrations/package-restore/hash/integration-package-probe-manifest.json \
   --framework net10.0
 
-# Create flat layout from restored packages (legacy and diagnostic scenarios)
-{managed}/aspire-managed nuget layout \
-  --assets <workspace>/.aspire/integrations/package-restore/hash/obj/project.assets.json \
-  --output <workspace>/.aspire/integrations/legacy-layout/libs \
-  --framework net10.0
 ```
 
 ### Search Output Format
@@ -429,7 +426,7 @@ The bundle includes NuGet operations via the `aspire-managed nuget` subcommand, 
       "id": "Aspire.Hosting.Redis",
       "version": "13.2.0",
       "allVersions": ["13.1.0", "13.2.0"],
-      "description": "Redis hosting integration for .NET Aspire",
+      "description": "Redis hosting integration for Aspire",
       "authors": ["Microsoft"],
       "source": "nuget.org",
       "deprecated": false
@@ -1290,7 +1287,7 @@ This section tracks the implementation progress of the bundle feature.
 - [x] **NuGet operations** - embedded in `src/Aspire.Managed/NuGet/`
   - [x] Search command (NuGet v3 HTTP API)
   - [x] Restore command (NuGet RestoreRunner)
-  - [x] Layout command (flat DLL + XML doc layout from project.assets.json)
+  - [x] Manifest command (package probe manifest from project.assets.json)
 - [x] **Layout services registered in DI** - `src/Aspire.Cli/Program.cs`
 - [x] **Pre-built AppHost server class** - `src/Aspire.Cli/Projects/PrebuiltAppHostServer.cs`
 - [x] **DCP/Dashboard/Runtime env var support** - `src/Aspire.Hosting/Dcp/DcpOptions.cs`, `src/Aspire.Hosting/Dashboard/DashboardEventHandlers.cs`
@@ -1356,7 +1353,7 @@ This section tracks the implementation progress of the bundle feature.
 | `src/Aspire.Cli/Layout/LayoutDiscovery.cs` | Priority-based layout discovery (env > config > relative) |
 | `src/Aspire.Cli/Layout/LayoutProcessRunner.cs` | Run managed DLLs via layout's .NET runtime |
 | `src/Aspire.Cli/NuGet/BundleNuGetService.cs` | NuGet operations wrapper for bundle mode |
-| `src/Aspire.Managed/NuGet/` | NuGet search/restore/layout commands (embedded in aspire-managed) |
+| `src/Aspire.Managed/NuGet/` | NuGet search, restore, and manifest commands (embedded in aspire-managed) |
 | `src/Aspire.Cli/Projects/PrebuiltAppHostServer.cs` | Bundle-mode server runner |
 | `src/Aspire.Cli/Projects/GuestAppHostProject.cs` | Main polyglot handler with bundle/SDK mode switching |
 | `src/Aspire.Hosting/Dcp/DcpOptions.cs` | DCP/Dashboard path resolution with env var support |

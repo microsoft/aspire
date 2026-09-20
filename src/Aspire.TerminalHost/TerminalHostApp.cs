@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.Tracing;
+using Aspire.Hosting;
 using Aspire.Shared.TerminalHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -99,18 +101,9 @@ public sealed class TerminalHostApp : IAsyncDisposable
     /// </summary>
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
-        if (_args.Shell is { } shell)
-        {
-            _logger.LogInformation(
-                "Aspire terminal host starting: shell hint='{Shell}', size={Cols}x{Rows}, producer='{Producer}', consumer='{Consumer}'.",
-                shell, _args.Columns, _args.Rows, _args.ProducerUdsPath, _args.ConsumerUdsPath);
-        }
-        else
-        {
-            _logger.LogInformation(
-                "Aspire terminal host starting: size={Cols}x{Rows}, producer='{Producer}', consumer='{Consumer}'.",
-                _args.Columns, _args.Rows, _args.ProducerUdsPath, _args.ConsumerUdsPath);
-        }
+        _logger.LogInformation(
+            "Aspire terminal host starting: size={Cols}x{Rows}, producer='{Producer}', consumer='{Consumer}'.",
+            _args.Columns, _args.Rows, _args.ProducerUdsPath, _args.ConsumerUdsPath);
 
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken, _shutdownCts.Token);
@@ -272,35 +265,25 @@ public sealed class TerminalHostApp : IAsyncDisposable
             return 64; // EX_USAGE
         }
 
-        // The Aspire AppHost wires OTEL_EXPORTER_OTLP_ENDPOINT (and protocol/headers) into the
-        // host environment via OtlpConfigurationExtensions.AddOtlpEnvironment on each
-        // TerminalHostResource. When that variable isn't set — e.g. a standalone
-        // `dotnet run --project src/Aspire.TerminalHost` invocation for local debugging — we
-        // intentionally fall back to NullLoggerFactory rather than scribbling on stderr, since
-        // DCP captures stderr into the resource log stream and any accidental log line would
-        // surface as noisy resource output. The dashboard is the only intended sink.
-        var otlpEndpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT");
-        var otlpProtocol = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_PROTOCOL");
-        var otlpHeaders = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_HEADERS");
-        var serviceName = Environment.GetEnvironmentVariable("OTEL_SERVICE_NAME");
-        var resourceAttrs = Environment.GetEnvironmentVariable("OTEL_RESOURCE_ATTRIBUTES");
-        var otelEnabled = !string.IsNullOrEmpty(otlpEndpoint);
-
-        // One-shot stderr diagnostic at startup so the dashboard's resource log tab for
-        // *-terminalhost-N shows whether OTLP is wired. Single line; subsequent operational
-        // logs go through the OTel pipeline (or NullLoggerFactory) per the gating below.
-        // headers length is logged (not the value) because it contains the dashboard's x-otlp-api-key:
-        // a missing/empty header yields 401 from the dashboard OTLP listener and silently drops
-        // every signal, which presents as "telemetry is wired but nothing shows up".
-        await Console.Error.WriteLineAsync(
-            $"[Aspire.TerminalHost] startup pid={Environment.ProcessId} otel={(otelEnabled ? "on" : "off")} endpoint='{otlpEndpoint}' protocol='{otlpProtocol}' headers.len={otlpHeaders?.Length ?? 0} service='{serviceName}' resource='{resourceAttrs}'")
-            .ConfigureAwait(false);
+        var configuration = new ConfigurationBuilder().AddEnvironmentVariables().Build();
+        var hostBuilder = CreateTelemetryHostBuilder(configuration);
 
         ILoggerFactory loggerFactory;
         IHost? host = null;
         OtelSelfDiagnosticsListener? selfDiag = null;
-        if (otelEnabled)
+        if (hostBuilder is not null)
         {
+            var otlpEndpoint = configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
+            var otlpProtocol = configuration["OTEL_EXPORTER_OTLP_PROTOCOL"];
+            var otlpHeaders = configuration["OTEL_EXPORTER_OTLP_HEADERS"];
+            var serviceName = configuration["OTEL_SERVICE_NAME"];
+            var resourceAttrs = configuration["OTEL_RESOURCE_ATTRIBUTES"];
+
+            // Log only the header length: its value contains the dashboard OTLP API key.
+            await Console.Error.WriteLineAsync(
+                $"[Aspire.TerminalHost] startup pid={Environment.ProcessId} otel=on endpoint='{otlpEndpoint}' protocol='{otlpProtocol}' headers.len={otlpHeaders?.Length ?? 0} service='{serviceName}' resource='{resourceAttrs}'")
+                .ConfigureAwait(false);
+
             // Surface OTLP exporter failures (cert trust, connection refused, 401, schema
             // mismatches) to stderr. Without this, every Warning/Error from
             // OpenTelemetry-Exporter-OpenTelemetryProtocol (and the SDK proper) is swallowed
@@ -308,63 +291,8 @@ public sealed class TerminalHostApp : IAsyncDisposable
             // Listener is disposed in the finally below.
             selfDiag = new OtelSelfDiagnosticsListener();
 
-            // Configure OTel via the same composite pattern the Aspire ServiceDefaults template
-            // emits: a single `services.AddOpenTelemetry()...UseOtlpExporter()` chain that wires
-            // logs, metrics, and traces to one shared OtlpExporterOptions. The legacy per-signal
-            // `.AddOtlpExporter()` shorthand (three separate calls on `Sdk.Create*Builder()`)
-            // resolves endpoints inconsistently — under gRPC it sends to the root path and the
-            // dashboard's gRPC OTLP listener returns `Status(Unimplemented, "Service is
-            // unimplemented.")` for executable consumers, silently dropping every signal.
-            // UseOtlpExporter goes through the same code path every ServiceDefaults-wired
-            // project uses, so by definition it talks to the dashboard the way the dashboard
-            // expects.
-            //
-            // OTEL_SERVICE_NAME and the service.instance.id resource attribute are set by DCP
-            // via CustomResource.OtelServiceNameAnnotation /
-            // CustomResource.OtelServiceInstanceIdAnnotation on each executable; the default
-            // resource detector picks them up from the environment, so we don't override them.
-            //
-            // We build an IHost (via Host.CreateEmptyApplicationBuilder so we don't inherit a
-            // console logger — DCP captures stderr into the consumer log stream and any
-            // accidental log line would corrupt that view) and start it, rather than using a
-            // bare ServiceCollection + BuildServiceProvider. The reason: OpenTelemetry's
-            // tracer and meter providers are registered as DI singletons by
-            // `services.AddOpenTelemetry().With{Tracing,Metrics}()`, but the thing that
-            // instantiates them — and thereby starts the OTLP export pipelines — is
-            // OpenTelemetry.Extensions.Hosting's `TelemetryHostedService.StartAsync`. Without
-            // an IHost to run that hosted service, metrics and spans never reach the
-            // exporter even though the code looks correctly wired. Logs happen to work
-            // without IHost because resolving ILoggerFactory transitively builds the logging
-            // pipeline, but tracer/meter providers have no such eager resolver.
-
-            // Minimum log level — honour ASPIRE_TERMINAL_HOST_LOG_LEVEL so playground/dev
-            // can crank verbosity from launchSettings.json without code changes. Recognised
-            // values match the Microsoft.Extensions.Logging.LogLevel enum (Trace, Debug,
-            // Information, Warning, Error, Critical, None). Default: Information.
-            var minLevel = ParseLogLevel(Environment.GetEnvironmentVariable("ASPIRE_TERMINAL_HOST_LOG_LEVEL"));
-
-            // Use Host.CreateApplicationBuilder so we get the standard set of services every
-            // other .NET host gets: configuration providers, logging registrations (console +
-            // debug + eventsource), and ILoggerFactory wiring. The console logger writes to
-            // the host process's own stdout/stderr, which DCP captures into this terminal
-            // host's "Console logs" tab in the dashboard — completely separate from the PTY
-            // consumer stream, which is over the consumer UDS. So we're not corrupting
-            // anything by emitting console output here.
-            var hostBuilder = Host.CreateApplicationBuilder();
-
-            hostBuilder.Logging.SetMinimumLevel(minLevel);
-            hostBuilder.Logging.AddOpenTelemetry(logging =>
-            {
-                logging.IncludeFormattedMessage = true;
-                logging.IncludeScopes = true;
-            });
-
-            hostBuilder.Services.AddOpenTelemetry()
-                .ConfigureResource(r => r.AddService(TerminalHostTelemetry.SourceName))
-                .WithTracing(t => t.AddSource(TerminalHostTelemetry.SourceName))
-                .WithMetrics(m => m.AddMeter(TerminalHostTelemetry.SourceName))
-                .UseOtlpExporter();
-
+            // Starting the host eagerly initializes the tracer and meter providers through
+            // OpenTelemetry's hosted service, rather than only activating the logging pipeline.
             host = hostBuilder.Build();
             await host.StartAsync(cancellationToken).ConfigureAwait(false);
 
@@ -422,6 +350,40 @@ public sealed class TerminalHostApp : IAsyncDisposable
             }
             selfDiag?.Dispose();
         }
+    }
+
+    internal static HostApplicationBuilder? CreateTelemetryHostBuilder(IConfiguration configuration)
+    {
+        // An inherited OTLP endpoint must not turn a hidden implementation detail into
+        // a telemetry resource. The AppHost explicitly sets this flag from ShowTerminalHost.
+        // Malformed values (e.g. "not-a-bool") must leave telemetry disabled, not stop the terminal.
+        if (!configuration.GetBool(KnownConfigNames.TerminalHostTelemetryEnabled, defaultValue: false) ||
+            string.IsNullOrEmpty(configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+        {
+            return null;
+        }
+
+        var hostBuilder = Host.CreateApplicationBuilder();
+        hostBuilder.Configuration.AddConfiguration(configuration);
+        hostBuilder.Logging.SetMinimumLevel(ParseLogLevel(configuration["ASPIRE_TERMINAL_HOST_LOG_LEVEL"]));
+        hostBuilder.Logging.AddOpenTelemetry(logging =>
+        {
+            logging.IncludeFormattedMessage = true;
+            logging.IncludeScopes = true;
+        });
+
+        // Preserve DCP's service name and instance ID so telemetry matches the helper
+        // resource instead of creating an unrelated resource in the dashboard.
+        var serviceName = configuration["OTEL_SERVICE_NAME"];
+        hostBuilder.Services.AddOpenTelemetry()
+            .ConfigureResource(r => r.AddService(
+                string.IsNullOrEmpty(serviceName) ? TerminalHostTelemetry.SourceName : serviceName,
+                autoGenerateServiceInstanceId: false))
+            .WithTracing(t => t.AddSource(TerminalHostTelemetry.SourceName))
+            .WithMetrics(m => m.AddMeter(TerminalHostTelemetry.SourceName))
+            .UseOtlpExporter();
+
+        return hostBuilder;
     }
 
     // Parse a friendly LogLevel string from the env var. Case-insensitive; bad/empty values

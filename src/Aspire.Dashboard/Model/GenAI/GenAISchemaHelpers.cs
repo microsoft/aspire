@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
-using Microsoft.OpenApi;
 
 namespace Aspire.Dashboard.Model.GenAI;
 
@@ -16,9 +15,9 @@ internal static class GenAISchemaHelpers
     private const string TypeObject = "object";
     private const string TypeArray = "array";
 
-    internal static OpenApiSchema? ParseOpenApiSchema(JsonObject schemaObj)
+    internal static ToolDefinitionSchema ParseToolDefinitionSchema(JsonObject schemaObj)
     {
-        var schema = new OpenApiSchema
+        var schema = new ToolDefinitionSchema
         {
             Type = ParseTypeValue(schemaObj["type"]),
             Description = schemaObj["description"]?.GetValue<string>()
@@ -27,16 +26,12 @@ internal static class GenAISchemaHelpers
         // Parse properties
         if (schemaObj["properties"] is JsonObject propsObj)
         {
-            schema.Properties = new Dictionary<string, IOpenApiSchema>();
+            schema.Properties = new Dictionary<string, ToolDefinitionSchema>();
             foreach (var prop in propsObj)
             {
                 if (prop.Value is JsonObject propSchemaObj)
                 {
-                    var parsedSchema = ParseOpenApiSchema(propSchemaObj);
-                    if (parsedSchema != null)
-                    {
-                        schema.Properties[prop.Key] = parsedSchema;
-                    }
+                    schema.Properties[prop.Key] = ParseToolDefinitionSchema(propSchemaObj);
                 }
             }
         }
@@ -44,7 +39,7 @@ internal static class GenAISchemaHelpers
         // Parse items (for array types)
         if (schemaObj["items"] is JsonObject itemsObj)
         {
-            schema.Items = ParseOpenApiSchema(itemsObj);
+            schema.Items = ParseToolDefinitionSchema(itemsObj);
         }
 
         // Parse required
@@ -140,7 +135,7 @@ internal static class GenAISchemaHelpers
         return schemaType != default;
     }
 
-    internal static IList<string> ConvertTypeToNames(IOpenApiSchema? schema)
+    internal static IList<string> ConvertTypeToNames(ToolDefinitionSchema? schema)
     {
         if (schema?.Type == null)
         {
@@ -187,7 +182,7 @@ internal static class GenAISchemaHelpers
             return type == JsonSchemaType.Null ? type : type & ~JsonSchemaType.Null;
         }
 
-        static string GetArrayTypeName(IOpenApiSchema? itemsSchema)
+        static string GetArrayTypeName(ToolDefinitionSchema? itemsSchema)
         {
             if (itemsSchema?.Type != null)
             {

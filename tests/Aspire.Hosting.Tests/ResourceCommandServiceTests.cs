@@ -2,20 +2,35 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
+using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Tests;
+
+#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 
 [Trait("Partition", "2")]
 public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 {
+    /// <summary>
+    /// Creates a test builder with version checking disabled to prevent the VersionCheckService
+    /// from racing with tests that use IInteractionService.
+    /// </summary>
+    private IDistributedApplicationTestingBuilder CreateBuilder()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration[KnownConfigNames.VersionCheckDisabled] = "true";
+        return builder;
+    }
+
     [Fact]
     public async Task ExecuteCommandAsync_NoMatchingResource_Failure()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
 
@@ -34,7 +49,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task ExecuteCommandAsync_ResourceNameMultipleMatches_Failure()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithAnnotation(new DcpInstancesAnnotation([
@@ -57,7 +72,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task ExecuteCommandAsync_NoMatchingCommand_Failure()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
 
@@ -75,7 +90,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_NoMatchingCommand_SingleInstance_MessageUsesDisplayName()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithAnnotation(new DcpInstancesAnnotation([
@@ -94,7 +109,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_NoMatchingCommand_HasReplicas_MessageUsesResourceId()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithAnnotation(new DcpInstancesAnnotation([
@@ -117,7 +132,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task ExecuteCommandAsync_ResourceNameMultipleMatches_Success()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var commandResourcesChannel = Channel.CreateUnbounded<string>();
 
@@ -154,7 +169,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task ExecuteCommandAsync_HasReplicas_Success_CalledPerReplica()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var commandResourcesChannel = Channel.CreateUnbounded<string>();
 
@@ -196,7 +211,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task ExecuteCommandAsync_HasReplicas_Failure_CalledPerReplica()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithAnnotation(new DcpInstancesAnnotation([
@@ -235,7 +250,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task ExecuteCommandAsync_Canceled_Success()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: "mycommand",
@@ -261,7 +276,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task ExecuteCommandAsync_HasReplicas_Canceled_CalledPerReplica()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithAnnotation(new DcpInstancesAnnotation([
@@ -291,7 +306,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task ExecuteCommandAsync_HasReplicas_MixedFailureAndCanceled_OnlyFailuresInErrorMessage()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var callCount = 0;
         var custom = builder.AddResource(new CustomResource("myResource"));
@@ -346,7 +361,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task ExecuteCommandAsync_OperationCanceledException_Canceled()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: "mycommand",
@@ -369,10 +384,32 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ExecuteCommandAsync_CommandException_Failure()
+    {
+        using var builder = CreateBuilder();
+        const string diagnostic = "Failed to apply launch configuration. Process fallback is unavailable.";
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(
+            name: "mycommand",
+            displayName: "My command",
+            executeCommand: _ => throw new FailedToApplyEnvironmentException(diagnostic));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "mycommand");
+
+        Assert.False(result.Success);
+        Assert.False(result.Canceled);
+        Assert.Equal(diagnostic, result.Message);
+    }
+
+    [Fact]
     public async Task ExecuteCommandAsync_LegacyCommandName_FallsBackToCurrentName()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: KnownResourceCommands.StartCommand,
@@ -393,7 +430,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task ExecuteCommandAsync_LegacyCommandName_ById_FallsBackToCurrentName()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: KnownResourceCommands.StopCommand,
@@ -415,7 +452,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [InlineData("delete-parameter", "parameter-delete")]
     public async Task ExecuteCommandAsync_LegacyParameterCommandName_FallsBackToCurrentName(string currentCommandName, string legacyCommandName)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: currentCommandName,
@@ -433,7 +470,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_SuccessWithResult_ReturnsResultData()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: "generate-token",
@@ -454,7 +491,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_SuccessWithoutResult_ReturnsNoResultData()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: "mycommand",
@@ -473,7 +510,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_WithArgumentCollection_PassesArgumentsToCommand()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         InteractionInputCollection? capturedArguments = null;
         var custom = builder.AddResource(new CustomResource("myResource"));
@@ -531,7 +568,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_WithArgumentValuesAndResource_PassesArgumentsToCommand()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         InteractionInputCollection? capturedArguments = null;
         var custom = builder.AddResource(new CustomResource("myResource"));
@@ -572,7 +609,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_WithArgumentValuesAndResource_DoesNotRequirePublishedResourceState()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         InteractionInputCollection? capturedArguments = null;
         var custom = builder.AddResource(new CustomResource("myResource"));
@@ -612,7 +649,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_SecretTextArgument_PreservesWhitespace()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         InteractionInputCollection? capturedArguments = null;
         var custom = builder.AddResource(new CustomResource("myResource"));
@@ -659,7 +696,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task CreateCommandArguments_WithOrderedArgumentValues_MapsArgumentsByOrder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: "mycommand",
@@ -704,7 +741,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task CreateCommandArguments_TooManyOrderedArgumentValues_ReturnsError()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: "mycommand",
@@ -735,7 +772,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task CreateCommandArguments_UnknownNamedArgumentValues_ReturnsError()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: "mycommand",
@@ -766,7 +803,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task CreateCommandArguments_DisabledNamedArgumentValues_ReturnsError()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: "mycommand",
@@ -798,7 +835,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task CreateCommandArguments_DynamicDisabledNamedArgumentValues_DoesNotReturnError()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: "mycommand",
@@ -839,7 +876,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task CreateCommandArguments_DisabledOrderedArgumentValues_ReturnsError()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: "mycommand",
@@ -871,7 +908,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_NoArguments_PassesEmptyArgumentsToCommand()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         InteractionInputCollection? capturedArguments = null;
         var custom = builder.AddResource(new CustomResource("myResource"));
@@ -896,7 +933,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_InvalidBuiltInArgumentValidation_DoesNotExecuteCommand()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var executed = false;
         var custom = builder.AddResource(new CustomResource("myResource"));
@@ -938,7 +975,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_LoadsDependentChoiceOptionsBeforeBuiltInValidation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var executed = false;
         var loadCount = 0;
@@ -1012,7 +1049,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_SubmittedDynamicArgumentStillDisabledAfterLoading_ReturnsDisabledValidationError()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var executed = false;
         var custom = builder.AddResource(new CustomResource("myResource"));
@@ -1104,7 +1141,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_LoadedDynamicArgumentStillDisabledWithDefaultValue_DoesNotReturnDisabledValidationError()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         InteractionInputCollection? capturedArguments = null;
         var custom = builder.AddResource(new CustomResource("myResource"));
@@ -1174,7 +1211,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_UnknownNamedArgumentValues_DoesNotExecuteCommand()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var executed = false;
         var custom = builder.AddResource(new CustomResource("myResource"));
@@ -1221,7 +1258,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_InteractiveWithoutArguments_PromptsForArguments()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var testInteractionService = new TestInteractionService();
         builder.Services.AddSingleton<IInteractionService>(testInteractionService);
@@ -1274,10 +1311,184 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("#submit", capturedArguments.GetString("selector"));
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task ExecuteCommandAsync_Arguments_IsolateInputStateAcrossInteractions(bool dismissFirst, bool cancelFirst)
+    {
+        using var builder = CreateBuilder();
+
+        // Exercise the real interaction lifecycle with prompting enabled, without starting a dashboard in the test.
+        builder.Services.AddSingleton<InteractionService>(services => new InteractionService(
+            services.GetRequiredService<ILogger<InteractionService>>(),
+            new DistributedApplicationOptions(),
+            services,
+            builder.Configuration,
+            services.GetRequiredService<IInteractionFileUploadStore>()));
+
+        var textDefinition = new InteractionInput
+        {
+            Name = "text",
+            InputType = InputType.Text
+        };
+        var messageDefinition = new InteractionInput
+        {
+            Name = "message",
+            InputType = InputType.Text,
+            Value = "default"
+        };
+        InteractionInputCollection? capturedArguments = null;
+        var executionCount = 0;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(
+            name: "mycommand",
+            displayName: "My command",
+            executeCommand: context =>
+            {
+                capturedArguments = context.Arguments;
+                executionCount++;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions { Arguments = [textDefinition, messageDefinition] });
+
+        await using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+        var interactionService = app.Services.GetRequiredService<InteractionService>();
+        InteractionInput? previousInput = null;
+
+        for (var invocation = 0; invocation < 2; invocation++)
+        {
+            capturedArguments = null;
+            using var cts = new CancellationTokenSource();
+            var resultTask = app.ResourceCommands.ExecuteCommandAsync(
+                "myResource",
+                "mycommand",
+                new ResourceCommandExecutionOptions { NonInteractive = false },
+                cts.Token);
+
+            var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+            var inputs = Assert.IsType<Interaction.InputsInteractionInfo>(interaction.InteractionInfo).Inputs;
+            var input = inputs["text"];
+            Assert.NotSame(textDefinition, input);
+            Assert.NotSame(previousInput, input);
+            Assert.False(input.Disabled);
+            Assert.Equal("default", inputs.GetString("message"));
+
+            input.Disabled = true;
+            inputs["message"].Value = $"invocation-{invocation}";
+            var canceled = invocation == 0 && (dismissFirst || cancelFirst);
+            if (invocation == 0 && cancelFirst)
+            {
+                cts.Cancel();
+            }
+            else
+            {
+                await interactionService.ProcessInteractionFromClientAsync(
+                    interaction.InteractionId,
+                    (_, _, _) => new InteractionCompletionState { Complete = true, State = canceled ? null : inputs },
+                    CancellationToken.None).DefaultTimeout();
+            }
+
+            var result = await resultTask.DefaultTimeout();
+            Assert.Equal(!canceled, result.Success);
+            Assert.Equal(canceled, result.Canceled);
+            if (canceled)
+            {
+                Assert.Null(capturedArguments);
+            }
+            else
+            {
+                Assert.NotNull(capturedArguments);
+                Assert.Same(input, capturedArguments["text"]);
+                Assert.Equal($"invocation-{invocation}", capturedArguments.GetString("message"));
+            }
+
+            Assert.Empty(interactionService.GetCurrentInteractions());
+            Assert.False(textDefinition.Disabled);
+            Assert.Equal("default", messageDefinition.Value);
+            previousInput = input;
+        }
+
+        Assert.Equal(dismissFirst || cancelFirst ? 1 : 2, executionCount);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_InteractiveDisabledDynamicArgumentWithDefaultValue_Succeeds()
+    {
+        using var builder = CreateBuilder();
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(
+            name: "mycommand",
+            displayName: "My command",
+            executeCommand: context =>
+            {
+                capturedArguments = context.Arguments;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "generateTraces",
+                        InputType = InputType.Boolean,
+                        Required = true,
+                        Value = "true"
+                    },
+                    new InteractionInput
+                    {
+                        Name = "traceCount",
+                        InputType = InputType.Number,
+                        Required = true,
+                        Value = "50000",
+                        DynamicLoading = new InputLoadOptions
+                        {
+                            DependsOnInputs = ["generateTraces"],
+                            LoadCallback = context =>
+                            {
+                                context.Input.Disabled = !context.AllInputs.GetBoolean("generateTraces");
+                                return Task.CompletedTask;
+                            }
+                        }
+                    }
+                ]
+            });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var resultTask = app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions { NonInteractive = false },
+            CancellationToken.None).DefaultTimeout();
+
+        var interaction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        interaction.Inputs["generateTraces"].Value = "false";
+        interaction.Inputs["traceCount"].Disabled = true;
+        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
+
+        var result = await resultTask;
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.False(capturedArguments.GetBoolean("generateTraces"));
+        Assert.Equal(50000, capturedArguments.GetInt32("traceCount"));
+        Assert.True(capturedArguments["traceCount"].Disabled);
+        Assert.Empty(capturedArguments["traceCount"].ValidationErrors);
+    }
+
     [Fact]
     public async Task ExecuteCommandAsync_NonInteractiveWithoutArguments_DoesNotPrompt()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var testInteractionService = new TestInteractionService();
         builder.Services.AddSingleton<IInteractionService>(testInteractionService);
@@ -1326,7 +1537,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_NonInteractive_IsAvailableReturnsFalse()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         bool? isAvailableDuringExecution = null;
         var custom = builder.AddResource(new CustomResource("myResource"));
@@ -1356,7 +1567,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_Interactive_IsAvailableNotAffectedByScope()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         bool? isAvailableDuringExecution = null;
         var custom = builder.AddResource(new CustomResource("myResource"));
@@ -1392,7 +1603,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_PartialArgumentCollection_ValidatesMissingDeclaredArguments()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var executed = false;
         var custom = builder.AddResource(new CustomResource("myResource"));
@@ -1448,7 +1659,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_InvalidCustomArgumentValidation_DoesNotExecuteCommand()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var executed = false;
         var custom = builder.AddResource(new CustomResource("myResource"));
@@ -1496,7 +1707,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task ExecuteCommandAsync_HasReplicas_SuccessWithResult_ReturnsFirstResultData()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
 
         var callCount = 0;
         var custom = builder.AddResource(new CustomResource("myResource"));
@@ -1528,10 +1739,10 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     {
         const string rebuildOutputMarker = "ASPIRE_REBUILD_OUTPUT_MARKER";
 
-        using var tempDirectory = new TestTempDirectory();
-        var projectPath = CreateBuildOutputTestProject(tempDirectory.Path, rebuildOutputMarker);
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var projectPath = CreateBuildOutputTestProject(workspace.WorkspaceRoot.FullName, rebuildOutputMarker);
 
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = CreateBuilder();
         var project = builder.AddProject("myProject", projectPath, options => options.ExcludeLaunchProfile = true);
         using var app = builder.Build();
 
@@ -1613,9 +1824,167 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         return projectPath;
     }
 
+    [Fact]
+    public async Task ExecuteCommandAsync_WithProgressOptions_CancelsCommandWhenProgressCanceled()
+    {
+        using var builder = CreateBuilder();
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        var commandStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "cancelable-command",
+                displayName: "Cancelable Command",
+                executeCommand: async e =>
+                {
+                    commandStarted.SetResult();
+                    await Task.Delay(Timeout.Infinite, e.CancellationToken);
+                    return CommandResults.Success();
+                },
+                commandOptions: new CommandOptions
+                {
+                    Progress = new CommandProgressOptions { Message = "Processing...", Title = "Cancelable Command" }
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var resultTask = app.ResourceCommands.ExecuteCommandAsync("myResource", "cancelable-command");
+
+        // Wait for the Work callback to write the interaction and for the command to start.
+        var interaction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(InteractionType.Progress, interaction.Type);
+        Assert.Equal("Cancelable Command", interaction.Title);
+        Assert.Equal("Processing...", interaction.Message);
+        await commandStarted.Task.DefaultTimeout();
+
+        // Simulate the user clicking the Cancel button in the progress dialog.
+        interaction.CompletionTcs.SetResult(InteractionResult.Cancel<bool>());
+
+        var result = await resultTask.DefaultTimeout();
+
+        Assert.True(testInteractionService.PromptProgressCalled);
+        Assert.False(result.Success);
+        Assert.True(result.Canceled);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_WithProgressOptions_ReturnsCanceledWhenCommandHandlesProgressCancellation()
+    {
+        using var builder = CreateBuilder();
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        var commandStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "cancelable-command",
+                displayName: "Cancelable Command",
+                executeCommand: async e =>
+                {
+                    commandStarted.SetResult();
+
+                    try
+                    {
+                        await Task.Delay(Timeout.Infinite, e.CancellationToken);
+                    }
+                    catch (OperationCanceledException) when (e.CancellationToken.IsCancellationRequested)
+                    {
+                        return CommandResults.Success("Cleanup completed.");
+                    }
+
+                    return CommandResults.Success();
+                },
+                commandOptions: new CommandOptions
+                {
+                    Progress = new CommandProgressOptions { Message = "Processing..." }
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var resultTask = app.ResourceCommands.ExecuteCommandAsync("myResource", "cancelable-command");
+
+        var interaction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(InteractionType.Progress, interaction.Type);
+        await commandStarted.Task.DefaultTimeout();
+
+        interaction.CompletionTcs.SetResult(InteractionResult.Cancel<bool>());
+
+        var result = await resultTask.DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.True(result.Canceled);
+        Assert.Null(result.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_WithProgressOptions_SkipsProgressWhenNotAvailable()
+    {
+        using var builder = CreateBuilder();
+
+        var testInteractionService = new TestInteractionService();
+        testInteractionService.IsAvailable = false;
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "progress-command",
+                displayName: "Progress Command",
+                executeCommand: e =>
+                {
+                    executed = true;
+                    return Task.FromResult(CommandResults.Success("Done"));
+                },
+                commandOptions: new CommandOptions
+                {
+                    Progress = new CommandProgressOptions { Message = "Working..." }
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "progress-command");
+
+        Assert.True(result.Success);
+        Assert.Equal("Done", result.Message);
+        Assert.True(executed);
+        Assert.False(testInteractionService.PromptProgressCalled);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_WithProgressOptions_SuccessPathPropagatesResult()
+    {
+        using var builder = CreateBuilder();
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "success-command",
+                displayName: "Success Command",
+                executeCommand: e =>
+                {
+                    return Task.FromResult(CommandResults.Success("Operation completed successfully."));
+                },
+                commandOptions: new CommandOptions
+                {
+                    Progress = new CommandProgressOptions { Message = "Processing..." }
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "success-command");
+
+        Assert.True(result.Success);
+        Assert.Equal("Operation completed successfully.", result.Message);
+        Assert.True(testInteractionService.PromptProgressCalled);
+    }
+
     private sealed class CustomResource(string name) : Resource(name), IResourceWithEndpoints, IResourceWithWaitSupport
     {
 
     }
 }
-

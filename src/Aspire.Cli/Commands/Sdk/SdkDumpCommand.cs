@@ -34,6 +34,7 @@ namespace Aspire.Cli.Commands.Sdk;
 internal sealed class SdkDumpCommand : BaseCommand
 {
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
+    private readonly IAppHostServerSessionFactory _serverSessionFactory;
     private readonly ILogger<SdkDumpCommand> _logger;
 
     private static readonly Argument<string[]> s_integrationArgument = new("integrations")
@@ -56,11 +57,13 @@ internal sealed class SdkDumpCommand : BaseCommand
 
     public SdkDumpCommand(
         IAppHostServerProjectFactory appHostServerProjectFactory,
+        IAppHostServerSessionFactory serverSessionFactory,
         ILogger<SdkDumpCommand> logger,
         CommonCommandServices services)
         : base("dump", "Dump ATS capabilities from Aspire integration libraries.", services)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
+        _serverSessionFactory = serverSessionFactory;
         _logger = logger;
 
         Arguments.Add(s_integrationArgument);
@@ -158,6 +161,12 @@ internal sealed class SdkDumpCommand : BaseCommand
             emoji: KnownEmojis.MagnifyingGlassTiltedLeft));
     }
 
+    private Task<IAppHostServerProject> CreateCapabilityScannerProjectAsync(string tempDir, CancellationToken cancellationToken)
+    {
+        var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot(tempDir);
+        return _appHostServerProjectFactory.CreateAsync(tempDir, restoreRootConfigDirectory: repoRoot, cancellationToken);
+    }
+
     private async Task<int> DumpCapabilitiesAsync(
         List<IntegrationReference> integrations,
         FileInfo? outputFile,
@@ -169,12 +178,12 @@ internal sealed class SdkDumpCommand : BaseCommand
 
         try
         {
-            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(tempDir, cancellationToken);
+            var appHostServerProject = await CreateCapabilityScannerProjectAsync(tempDir, cancellationToken);
 
             _logger.LogDebug("Building AppHost server for capability scanning with {Count} integrations", integrations.Count);
 
             var prepareResult = await appHostServerProject.PrepareAsync(
-                VersionHelper.GetDefaultTemplateVersion(),
+                ExecutionContext.IdentityVersion,
                 integrations,
                 cancellationToken: cancellationToken);
 
@@ -191,11 +200,11 @@ internal sealed class SdkDumpCommand : BaseCommand
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            await using var serverSession = AppHostServerSession.Start(
-                appHostServerProject,
-                environmentVariables: null,
-                debug: false,
-                _logger);
+            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
+            // Short-lived RPC session: StartAsync() spawns the server. We never observe the
+            // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
+            // activity scope and the only failure mode we care about surfaces via the RPC call below.
+            await serverSession.StartAsync();
 
             // Connect and get capabilities
             var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
@@ -268,12 +277,12 @@ internal sealed class SdkDumpCommand : BaseCommand
 
         try
         {
-            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(tempDir, cancellationToken);
+            var appHostServerProject = await CreateCapabilityScannerProjectAsync(tempDir, cancellationToken);
 
             _logger.LogDebug("Building AppHost server for batched capability scanning with {Count} integrations", integrations.Count);
 
             var prepareResult = await appHostServerProject.PrepareAsync(
-                VersionHelper.GetDefaultTemplateVersion(),
+                ExecutionContext.IdentityVersion,
                 integrations,
                 cancellationToken: cancellationToken);
 
@@ -290,11 +299,11 @@ internal sealed class SdkDumpCommand : BaseCommand
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            await using var serverSession = AppHostServerSession.Start(
-                appHostServerProject,
-                environmentVariables: null,
-                debug: false,
-                _logger);
+            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
+            // Short-lived RPC session: StartAsync() spawns the server. We never observe the
+            // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
+            // activity scope and the only failure mode we care about surfaces via the RPC call below.
+            await serverSession.StartAsync();
 
             var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
             outputDirectory.Create();
@@ -739,6 +748,7 @@ internal sealed class CapabilityInfo
     public string QualifiedMethodName { get; set; } = "";
     public string? Description { get; set; }
     public DocumentationInfo? Documentation { get; set; }
+    public bool IsExperimental { get; set; }
     public string CapabilityKind { get; set; } = "";
     public string? TargetTypeId { get; set; }
     public string? TargetParameterName { get; set; }
@@ -774,6 +784,7 @@ internal sealed class TypeRefInfo
     public string TypeId { get; set; } = "";
     public string Category { get; set; } = "";
     public bool IsInterface { get; set; }
+    public bool? IsNullable { get; set; }
     public bool IsReadOnly { get; set; }
     public TypeRefInfo? ElementType { get; set; }
     public TypeRefInfo? KeyType { get; set; }

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -12,6 +13,129 @@ namespace Aspire.Hosting.Testing;
 /// </summary>
 public static class DistributedApplicationHostingTestingExtensions
 {
+    private const string DashboardResourceName = "aspire-dashboard";
+
+    /// <summary>
+    /// Gets the URL for the running Aspire dashboard.
+    /// </summary>
+    /// <param name="app">The distributed application.</param>
+    /// <param name="cancellationToken">A token used to cancel the operation.</param>
+    /// <returns>
+    /// An absolute <see cref="Uri"/> that can be opened in a browser. The URL authenticates the browser when
+    /// authentication is enabled and otherwise points directly to the dashboard.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// Enable dashboard support with <see cref="DistributedApplicationTestingBuilderOptions.EnableDashboard"/> when creating
+    /// the testing builder.
+    /// </para>
+    /// <para>
+    /// This method does not start the distributed application. Call <see cref="DistributedApplication.StartAsync(CancellationToken)"/>
+    /// before requesting the dashboard URL.
+    /// </para>
+    /// <para>
+    /// This method waits for the dashboard resource to become healthy. Pass a cancellation token when the wait must
+    /// be bounded. When authentication is enabled, the returned URI contains an authentication credential and should
+    /// be treated as sensitive.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="app"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the application is in publish mode, the dashboard is disabled, the application has not started,
+    /// or a dashboard URL is unavailable.
+    /// </exception>
+    /// <exception cref="DistributedApplicationException">Thrown when the dashboard reaches a terminal failure state.</exception>
+    /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled.</exception>
+    /// <exception cref="ObjectDisposedException">Thrown when the distributed application has been disposed.</exception>
+    /// <example>
+    /// <code lang="csharp">
+    /// var options = new DistributedApplicationTestingBuilderOptions
+    /// {
+    ///     EnableDashboard = true
+    /// };
+    ///
+    /// var builder = await DistributedApplicationTestingBuilder.CreateAsync&lt;Projects.MyAppHost_AppHost&gt;(options, []);
+    /// await using var app = await builder.BuildAsync();
+    /// await app.StartAsync();
+    ///
+    /// var dashboardUrl = await app.GetDashboardUrlAsync();
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "Use the exported getDashboardUrl overload without a cancellation token.")]
+    public static async Task<Uri> GetDashboardUrlAsync(
+        this DistributedApplication app,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+
+        var executionContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>();
+        if (executionContext.IsPublishMode)
+        {
+            throw new InvalidOperationException(Properties.Resources.DashboardUrlPublishModeExceptionMessage);
+        }
+
+        var applicationOptions = app.Services.GetRequiredService<DistributedApplicationOptions>();
+        if (applicationOptions.DisableDashboard)
+        {
+            throw new InvalidOperationException(Properties.Resources.DashboardDisabledExceptionMessage);
+        }
+
+        ThrowIfNotStarted(app, Properties.Resources.DashboardUrlApplicationNotStartedExceptionMessage);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(
+            DashboardResourceName,
+            WaitBehavior.StopOnResourceUnavailable,
+            cancellationToken).ConfigureAwait(false);
+
+        var applicationModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        if (!applicationModel.Resources.TryGetByName(DashboardResourceName, out var resource) ||
+            resource is not IResourceWithEndpoints dashboardResource)
+        {
+            throw new InvalidOperationException(Properties.Resources.DashboardUrlUnavailableExceptionMessage);
+        }
+
+        var httpsEndpoint = dashboardResource.GetEndpoint("https");
+        var httpEndpoint = dashboardResource.GetEndpoint("http");
+        var dashboardEndpoint = httpsEndpoint.Exists ? httpsEndpoint : httpEndpoint;
+        if (!dashboardEndpoint.Exists)
+        {
+            throw new InvalidOperationException(Properties.Resources.DashboardUrlUnavailableExceptionMessage);
+        }
+
+        var dashboardUrl = await EndpointHostHelpers.GetUrlWithTargetHostAsync(dashboardEndpoint, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(dashboardUrl))
+        {
+            throw new InvalidOperationException(Properties.Resources.DashboardUrlUnavailableExceptionMessage);
+        }
+
+        var browserToken = app.Services.GetRequiredService<IConfiguration>()["AppHost:BrowserToken"];
+        if (!string.IsNullOrEmpty(browserToken))
+        {
+            dashboardUrl = $"{dashboardUrl.TrimEnd('/')}/login?t={Uri.EscapeDataString(browserToken)}";
+        }
+
+        if (!Uri.TryCreate(dashboardUrl, UriKind.Absolute, out var dashboardUri))
+        {
+            throw new InvalidOperationException(Properties.Resources.DashboardUrlUnavailableExceptionMessage);
+        }
+
+        return dashboardUri;
+    }
+
+    /// <summary>
+    /// Gets the URL for the running Aspire dashboard.
+    /// </summary>
+    /// <returns>
+    /// An absolute <see cref="Uri"/> that can be opened in a browser. When authentication is enabled, the URI
+    /// contains an authentication credential and should be treated as sensitive.
+    /// </returns>
+    [AspireExport("getDashboardUrl")]
+    internal static Task<Uri> GetDashboardUrlAsyncExport(this DistributedApplication app)
+    {
+        return app.GetDashboardUrlAsync(default);
+    }
+
     /// <summary>
     /// Creates an <see cref="HttpClient"/> configured to communicate with the specified resource.
     /// </summary>
@@ -127,7 +251,7 @@ public static class DistributedApplicationHostingTestingExtensions
 
     static IResource GetResource(DistributedApplication app, string resourceName)
     {
-        ThrowIfNotStarted(app);
+        ThrowIfNotStarted(app, Properties.Resources.ApplicationNotStartedExceptionMessage);
         var applicationModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         if (!applicationModel.Resources.TryGetByName(resourceName, out var resource))
@@ -166,12 +290,12 @@ public static class DistributedApplicationHostingTestingExtensions
         return endpoint.Url;
     }
 
-    static void ThrowIfNotStarted(DistributedApplication app)
+    static void ThrowIfNotStarted(DistributedApplication app, string exceptionMessage)
     {
         var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
         if (!lifetime.ApplicationStarted.IsCancellationRequested)
         {
-            throw new InvalidOperationException(Properties.Resources.ApplicationNotStartedExceptionMessage);
+            throw new InvalidOperationException(exceptionMessage);
         }
     }
 

@@ -19,7 +19,23 @@ public sealed class DashboardOptions
     public TelemetryLimitOptions TelemetryLimits { get; set; } = new();
     public DebugSessionOptions DebugSession { get; set; } = new();
     public UIOptions UI { get; set; } = new();
-    public AIOptions AI { get; set; } = new();
+    public DashboardDataOptions Data { get; set; } = new();
+}
+
+public sealed class DashboardDataOptions
+{
+    // Configure this to a location whose permissions protect persisted Dashboard data from undesirable accounts.
+    public string? Directory { get; set; }
+    public DashboardPersistenceMode PersistenceMode { get; set; }
+
+    internal string? PersistenceModeParseError { get; set; }
+}
+
+public enum DashboardPersistenceMode
+{
+    None,
+    Run,
+    Resume
 }
 
 // Don't set values after validating/parsing options.
@@ -392,11 +408,6 @@ public sealed class ClaimAction
     public string? ValueType { get; set; }
 }
 
-public sealed class AIOptions
-{
-    public bool? Disabled { get; set; }
-}
-
 public sealed class DebugSessionOptions
 {
     private X509Certificate2? _serverCertificate;
@@ -426,7 +437,11 @@ public sealed class DebugSessionOptions
 
             try
             {
+#if NET9_0_OR_GREATER
+                _serverCertificate = X509CertificateLoader.LoadCertificate(data);
+#else
                 _serverCertificate = new X509Certificate2(data);
+#endif
             }
             catch (Exception ex)
             {

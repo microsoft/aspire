@@ -1,10 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -132,11 +132,12 @@ public class FriendlyHealthCheckErrorMessagesTests(ITestOutputHelper testOutputH
     [Fact]
     public async Task StaticUriHealthCheck_ReturnsStatusCodeMessage()
     {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var endpoint = new Uri($"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/");
-        using var serverCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var serverTask = WriteResponseAsync(listener, HttpStatusCode.NotFound, serverCts.Token);
+        var webAppBuilder = WebApplication.CreateSlimBuilder();
+        webAppBuilder.WebHost.UseUrls("http://127.0.0.1:0");
+        await using var webApp = webAppBuilder.Build();
+        webApp.MapGet("/", () => Results.NotFound());
+        await webApp.StartAsync();
+        var endpoint = new Uri(webApp.Urls.First() + "/");
 
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var externalService = builder.AddExternalService("test", endpoint.ToString())
@@ -156,7 +157,6 @@ public class FriendlyHealthCheckErrorMessagesTests(ITestOutputHelper testOutputH
 
         Assert.Equal(HealthStatus.Unhealthy, entry.Status);
         Assert.Equal($"Request to {endpoint} returned 404 NotFound", entry.Description);
-        await serverTask.DefaultTimeout();
     }
 
     [Fact]
@@ -217,15 +217,5 @@ public class FriendlyHealthCheckErrorMessagesTests(ITestOutputHelper testOutputH
 
         Assert.Contains("404", message);
         Assert.Contains("NotFound", message);
-    }
-
-    private static async Task WriteResponseAsync(TcpListener listener, HttpStatusCode statusCode, CancellationToken cancellationToken)
-    {
-        using var client = await listener.AcceptTcpClientAsync(cancellationToken);
-        await using var stream = client.GetStream();
-
-        var response = Encoding.ASCII.GetBytes(
-            $"HTTP/1.1 {(int)statusCode} {statusCode}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
-        await stream.WriteAsync(response, cancellationToken);
     }
 }

@@ -6,6 +6,7 @@
   "symbols/Framework/choices/net8.0/description": "Target net8.0",
   "symbols/Framework/choices/net9.0/description": "Target net9.0",
   "symbols/Framework/choices/net10.0/description": "Target net10.0",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/UseRedisCache/displayName": "_Use Redis for caching (requires a supported container runtime)",
   "symbols/UseRedisCache/description": "Configures whether to setup the application to use Redis for caching. Requires a supported container runtime to run locally, see https://aka.ms/aspire/containers for more details.",
   "symbols/appHostHttpPort/description": "Port number to use for the HTTP endpoint in launchSettings.json of the AppHost project.",

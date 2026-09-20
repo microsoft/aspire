@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Hex1b;
 
@@ -119,5 +120,88 @@ internal static class DeploymentE2ETestHelpers
     internal static string? GetGitHubStepSummaryPath()
     {
         return Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+    }
+
+    /// <summary>
+    /// Stops a detached AppHost out-of-band, without going through the test terminal.
+    /// </summary>
+    /// <remarks>
+    /// Run-mode tests bind <c>terminal.RunAsync</c> to the test's cancellation token, so when the
+    /// overall test timeout fires the terminal is gone and an <c>aspire stop</c> typed into it can
+    /// never run — the detached AppHost would keep provisioning into a resource group that cleanup
+    /// is about to delete. Launching the CLI directly keeps the stop working on that path, and gives
+    /// it a timeout independent of the test budget. <c>StopCommand</c> locates the AppHost from the
+    /// working directory rather than from terminal state, so running it out-of-band is equivalent.
+    /// </remarks>
+    internal static async Task StopAppHostAsync(string workspacePath, Action<string> log)
+    {
+        try
+        {
+            var cliPath = ResolveAspireCliPath();
+            if (cliPath is null)
+            {
+                log("Skipping AppHost stop: could not locate the aspire CLI.");
+                return;
+            }
+
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = cliPath,
+                    Arguments = "stop --non-interactive",
+                    WorkingDirectory = workspacePath,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false
+                }
+            };
+
+            process.Start();
+
+            using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                log($"AppHost stop exited with code {process.ExitCode}.");
+            }
+            catch (OperationCanceledException)
+            {
+                // A hung stop must not block resource group cleanup, which is the step that actually
+                // stops us paying for the deployment.
+                process.Kill(entireProcessTree: true);
+                log("AppHost stop timed out after 2 minutes and was killed.");
+            }
+        }
+        catch (Exception ex)
+        {
+            log($"Failed to stop AppHost: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Locates the installed aspire CLI, checking the PR-isolated, current, and legacy install layouts.
+    /// </summary>
+    private static string? ResolveAspireCliPath()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+        var candidates = new List<string>();
+
+        // The PR install route isolates the CLI under a per-PR directory rather than the shared bin dir:
+        //   compute_cli_install_dir() -> "$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/bin"  (INSTALL_PREFIX=$HOME/.aspire)
+        // See eng/scripts/get-aspire-cli-pr.sh. CliInstallStrategy.Detect() selects that route whenever
+        // GITHUB_PR_NUMBER and GITHUB_PR_HEAD_SHA are set, so probe it first: a PR-route machine may have
+        // no CLI in the shared layout at all, and falling through would silently skip the AppHost stop.
+        var prNumber = Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER");
+        if (!string.IsNullOrEmpty(prNumber))
+        {
+            candidates.Add(Path.Combine(home, ".aspire", "dogfood", $"pr-{prNumber}", "bin", "aspire"));
+        }
+
+        candidates.Add(Path.Combine(home, ".aspire", "bin", "aspire"));
+        candidates.Add(Path.Combine(home, ".aspire", "aspire"));
+
+        return candidates.Find(File.Exists);
     }
 }

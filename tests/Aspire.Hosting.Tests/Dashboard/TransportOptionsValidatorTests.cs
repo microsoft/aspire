@@ -18,7 +18,7 @@ public class TransportOptionsValidatorTests
         options.AllowUnsecureTransport = false;
 
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = "http://localhost:1234";
+        config[KnownAspNetCoreConfigNames.Urls] = "http://localhost:1234";
 
         var validator = new TransportOptionsValidator(config, executionContext, distributedApplicationOptions);
         var result = validator.Validate(null, options);
@@ -38,7 +38,7 @@ public class TransportOptionsValidatorTests
         options.AllowUnsecureTransport = false;
 
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = "http://localhost:1234";
+        config[KnownAspNetCoreConfigNames.Urls] = "http://localhost:1234";
 
         var validator = new TransportOptionsValidator(config, executionContext, distributedApplicationOptions);
         var result = validator.Validate(null, options);
@@ -56,7 +56,7 @@ public class TransportOptionsValidatorTests
         var options = new TransportOptions();
 
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = "http://localhost:1234";
+        config[KnownAspNetCoreConfigNames.Urls] = "http://localhost:1234";
 
         var validator = new TransportOptionsValidator(config, executionContext, distributedApplicationOptions);
         var result = validator.Validate(null, options);
@@ -74,7 +74,7 @@ public class TransportOptionsValidatorTests
         var options = new TransportOptions();
 
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = "http://localhost:1234";
+        config[KnownAspNetCoreConfigNames.Urls] = "http://localhost:1234";
 
         var validator = new TransportOptionsValidator(config, executionContext, distributedApplicationOptions);
         var result = validator.Validate(null, options);
@@ -91,7 +91,7 @@ public class TransportOptionsValidatorTests
 
         var invalidUrl = "...invalid...url...";
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = invalidUrl;
+        config[KnownAspNetCoreConfigNames.Urls] = invalidUrl;
 
         var validator = new TransportOptionsValidator(config, executionContext, distributedApplicationOptions);
         var result = validator.Validate(null, options);
@@ -126,7 +126,7 @@ public class TransportOptionsValidatorTests
         options.AllowUnsecureTransport = false;
 
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = string.Empty;
+        config[KnownAspNetCoreConfigNames.Urls] = string.Empty;
 
         var validator = new TransportOptionsValidator(config, executionContext, distributedApplicationOptions);
         var result = validator.Validate(null, options);
@@ -144,7 +144,7 @@ public class TransportOptionsValidatorTests
         options.AllowUnsecureTransport = false;
 
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = "https://localhost:1234";
+        config[KnownAspNetCoreConfigNames.Urls] = "https://localhost:1234";
         config[resourceServiceEndpointUrlKey] = string.Empty;
         config[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "https://localhost:1236";
 
@@ -164,7 +164,7 @@ public class TransportOptionsValidatorTests
         options.AllowUnsecureTransport = false;
 
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = "https://localhost:1234";
+        config[KnownAspNetCoreConfigNames.Urls] = "https://localhost:1234";
         config[KnownConfigNames.ResourceServiceEndpointUrl] = "https://localhost:1235";
         config[dashboardOtlpGrpcEndpointUrlKey] = string.Empty;
 
@@ -185,7 +185,7 @@ public class TransportOptionsValidatorTests
 
         var invalidUrl = "...invalid...url...";
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = "https://localhost:1234";
+        config[KnownAspNetCoreConfigNames.Urls] = "https://localhost:1234";
         config[resourceServiceEndpointUrlKey] = invalidUrl;
         config[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "https://localhost:1236";
 
@@ -212,7 +212,7 @@ public class TransportOptionsValidatorTests
 
         var invalidUrl = "...invalid...url...";
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = "https://localhost:1234";
+        config[KnownAspNetCoreConfigNames.Urls] = "https://localhost:1234";
         config[KnownConfigNames.ResourceServiceEndpointUrl] = "https://localhost:1235";
         config[otlpEndpointConfigName] = invalidUrl;
 
@@ -236,7 +236,7 @@ public class TransportOptionsValidatorTests
         options.AllowUnsecureTransport = false;
 
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = "https://localhost:1234";
+        config[KnownAspNetCoreConfigNames.Urls] = "https://localhost:1234";
         config[KnownConfigNames.ResourceServiceEndpointUrl] = "https://localhost:1235";
         config[otlpEndpointConfigName] = "http://localhost:1236";
 
@@ -260,7 +260,7 @@ public class TransportOptionsValidatorTests
         options.AllowUnsecureTransport = false;
 
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = "https://localhost:1234";
+        config[KnownAspNetCoreConfigNames.Urls] = "https://localhost:1234";
         config[resourceServiceEndpointUrlKey] = "http://localhost:1235";
         config[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "https://localhost:1236";
 
@@ -282,7 +282,7 @@ public class TransportOptionsValidatorTests
         options.AllowUnsecureTransport = true;
 
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = "http://localhost:1234";
+        config[KnownAspNetCoreConfigNames.Urls] = "http://localhost:1234";
 
         var validator = new TransportOptionsValidator(config, executionContext, distributedApplicationOptions);
         var result = validator.Validate(null, options);
@@ -298,7 +298,7 @@ public class TransportOptionsValidatorTests
         options.AllowUnsecureTransport = true;
 
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = "https://localhost:1234";
+        config[KnownAspNetCoreConfigNames.Urls] = "https://localhost:1234";
 
         var validator = new TransportOptionsValidator(config, executionContext, distributedApplicationOptions);
         var result = validator.Validate(null, options);
@@ -318,7 +318,7 @@ public class TransportOptionsValidatorTests
         options.AllowUnsecureTransport = false;
 
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = "https://localhost:1234";
+        config[KnownAspNetCoreConfigNames.Urls] = "https://localhost:1234";
         config[dashboardOtlpHttpEndpointUrlKey] = "https://localhost:1235";
         config[resourceServiceEndpointUrlKey] = "https://localhost:1236";
 
@@ -338,7 +338,7 @@ public class TransportOptionsValidatorTests
         // This is a valid Kestrel binding address but fails Uri.TryCreate validation
         var bindingAddress = "https://0:0:0:0:17008";
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = bindingAddress;
+        config[KnownAspNetCoreConfigNames.Urls] = bindingAddress;
         config[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "https://localhost:1236";
         config[KnownConfigNames.ResourceServiceEndpointUrl] = "https://localhost:1237";
 
@@ -362,7 +362,7 @@ public class TransportOptionsValidatorTests
         // This is a valid Kestrel binding address but fails Uri.TryCreate validation
         var grpcBindingAddress = "https://0:0:0:0:18001";
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        config[KnownConfigNames.AspNetCoreUrls] = "https://localhost:1234";
+        config[KnownAspNetCoreConfigNames.Urls] = "https://localhost:1234";
         config[otlpEndpointConfigName] = grpcBindingAddress;
         config[KnownConfigNames.ResourceServiceEndpointUrl] = "https://localhost:1237";
 

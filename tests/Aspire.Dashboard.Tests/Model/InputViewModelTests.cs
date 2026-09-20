@@ -10,6 +10,23 @@ namespace Aspire.Dashboard.Tests.Model;
 public class InputViewModelTests
 {
     [Fact]
+    public void Value_NullIsNormalizedToEmptyString()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Choose Color",
+            InputType = InputType.Choice,
+            Value = "blue"
+        };
+        var viewModel = new InputViewModel(input);
+
+        viewModel.Value = null;
+
+        Assert.Equal(string.Empty, viewModel.Value);
+        Assert.Equal(string.Empty, input.Value);
+    }
+
+    [Fact]
     public void InputViewModel_ChoiceWithoutPlaceholder_DefaultsToFirstOption()
     {
         // Arrange
@@ -69,6 +86,7 @@ public class InputViewModelTests
 
         // Assert
         Assert.Equal("blue", viewModel.Value);
+        Assert.Equal("blue", viewModel.SelectedOption?.Id);
     }
 
     [Fact]
@@ -177,6 +195,25 @@ public class InputViewModelTests
 
         // Assert - When AllowCustomChoice is true, value should not default
         Assert.True(string.IsNullOrEmpty(viewModel.Value));
+    }
+
+    [Fact]
+    public void InputViewModel_CustomChoiceWithFreeFormValue_CreatesSelectedOption()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Choose Color",
+            InputType = InputType.Choice,
+            AllowCustomChoice = true,
+            Value = "purple"
+        };
+        input.Options.Add("red", "Red");
+        input.Options.Add("blue", "Blue");
+
+        var viewModel = new InputViewModel(input);
+
+        Assert.Equal("purple", viewModel.SelectedOption?.Id);
+        Assert.Equal("purple", viewModel.SelectedOption?.Name);
     }
 
     [Fact]
@@ -386,5 +423,68 @@ public class InputViewModelTests
         viewModel.SetInput(updatedInput);
 
         Assert.Equal("local", viewModel.Value);
+    }
+
+    [Fact]
+    public void InputViewModel_File_DefaultsToEmptyValue()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Select File",
+            InputType = InputType.File
+        };
+
+        var viewModel = new InputViewModel(input);
+
+        Assert.True(string.IsNullOrEmpty(viewModel.Value));
+        Assert.Empty(viewModel.FileReferences);
+    }
+
+    [Fact]
+    public void InputViewModel_File_SetFileReferencesSerializesToValue()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Select File",
+            InputType = InputType.File
+        };
+        var viewModel = new InputViewModel(input);
+
+        viewModel.SetFileReferences([
+            new FileReferenceViewModel { Id = "abc123", Name = "readme.txt" }
+        ]);
+
+        Assert.Single(viewModel.FileReferences);
+        Assert.Equal("readme.txt", viewModel.FileReferences[0].Name);
+        Assert.Contains("abc123", viewModel.Value);
+        Assert.Contains("readme.txt", viewModel.Value);
+    }
+
+    [Fact]
+    public void InputViewModel_File_SetInputPreservesFileReferencesWhenValueIsPreserved()
+    {
+        var initialInput = new InteractionInput
+        {
+            Label = "Select File",
+            InputType = InputType.File,
+            Value = "[{\"Id\":\"id1\",\"Name\":\"local-file.txt\"}]"
+        };
+        var viewModel = new InputViewModel(initialInput);
+        viewModel.SetFileReferences([
+            new FileReferenceViewModel { Id = "id1", Name = "local-file.txt" }
+        ]);
+
+        var newInput = new InteractionInput
+        {
+            Label = "Select Another File",
+            InputType = InputType.File,
+            Value = string.Empty,
+        };
+
+        viewModel.SetInput(newInput);
+
+        Assert.Equal("[{\"Id\":\"id1\",\"Name\":\"local-file.txt\"}]", viewModel.Value);
+        Assert.Single(viewModel.FileReferences);
+        Assert.Equal("local-file.txt", viewModel.FileReferences[0].Name);
     }
 }

@@ -18,6 +18,40 @@
     align-content: center;
 }
 
+::deep .fluent-data-grid {
+    --datagrid-hover-color: color-mix(in srgb, var(--colorBrandBackground) 8%, var(--colorNeutralBackground1));
+}
+
+::deep .fluent-data-grid-row[row-type='sticky-header'] > th {
+    background-color: var(--dialog-background-color);
+}
+
+.manage-data-dialog-body ::deep > [slot="title-action"] fluent-button,
+.manage-data-dialog-body ::deep > [slot="title-action"] fluent-button::part(control),
+.manage-data-dialog-body ::deep > [slot="action"] fluent-button,
+.manage-data-dialog-body ::deep > [slot="action"] fluent-button::part(control),
+.button-container ::deep fluent-button,
+.button-container ::deep fluent-button::part(control) {
+    border-radius: 6px;
+}
+
+.manage-data-dialog-body ::deep > [slot="title-action"] fluent-button {
+    --aspire-button-foreground: var(--colorNeutralForeground1);
+    color: var(--aspire-button-foreground);
+}
+
+.manage-data-dialog-body ::deep > [slot="action"] fluent-button,
+.manage-data-dialog-body ::deep > [slot="action"] fluent-button::part(control) {
+    --aspire-button-border-color: var(--colorBrandBackground);
+    border-color: var(--aspire-button-border-color);
+}
+
+.button-container ::deep fluent-button,
+.button-container ::deep fluent-button::part(control) {
+    --aspire-button-background: var(--colorNeutralBackground2);
+    background-color: var(--aspire-button-background);
+}
+
 .button-container {
     display: grid;
     grid-template-columns: 1fr auto;
@@ -26,6 +60,6 @@
 
 .error-message {
     color: var(--error);
-    font-size: var(--type-ramp-minus-1-font-size);
+    font-size: var(--fontSizeBase200);
     margin-top: 8px;
 }

@@ -7,12 +7,12 @@ using Azure.Provisioning.Storage;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureInfrastructureExtensionsTests
+public class AzureInfrastructureExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task AddAzureInfrastructureGeneratesCorrectManifestEntry()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var infrastructure1 = builder.AddAzureInfrastructure("infrastructure1", (infrastructure) =>
         {
             var storage = new StorageAccount("storage")
@@ -32,7 +32,7 @@ public class AzureInfrastructureExtensionsTests
     [Fact]
     public async Task AssignParameterPopulatesParametersEverywhere()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.Configuration["Parameters:skuName"] = "Standard_ZRS";
 
         var skuName = builder.AddParameter("skuName");
@@ -71,7 +71,7 @@ public class AzureInfrastructureExtensionsTests
     [Fact]
     public async Task AssignParameterWithSpecifiedNamePopulatesParametersEverywhere()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.Configuration["Parameters:skuName"] = "Standard_ZRS";
 
         var skuName = builder.AddParameter("skuName");

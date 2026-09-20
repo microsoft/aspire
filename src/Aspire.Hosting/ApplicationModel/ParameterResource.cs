@@ -4,7 +4,9 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Resources;
+using static Aspire.Hosting.Resources.MessageStrings;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -126,6 +128,10 @@ public class ParameterResource : Resource, IExpressionValue
 
     internal event Func<ParameterResource, ParameterResourceValueChangedEventArgs, CancellationToken, Task>? ValueChanged;
 
+    // Record secrets synchronously before releasing value waiters. Asynchronous notifications can be
+    // canceled or superseded, but every assigned value must remain redactable in lagging snapshots.
+    internal event Action<ParameterResource, string?>? ValueChanging;
+
     /// <summary>
     /// Attempts to get the current value for this parameter without waiting for unresolved input.
     /// </summary>
@@ -199,7 +205,17 @@ public class ParameterResource : Resource, IExpressionValue
         lock (_valueTaskLock)
         {
             var waitForValueTcs = GetOrCreateWaitForValueTcs();
+            if (waitForValueTcs.Task.IsCompleted)
+            {
+                return false;
+            }
+
             var missingValueException = CreateMissingValueException(value);
+            if (missingValueException is null)
+            {
+                ValueChanging?.Invoke(this, value);
+            }
+
             var valueWasSet = missingValueException is null
                 ? waitForValueTcs.TrySetResult(value)
                 : waitForValueTcs.TrySetException(missingValueException);
@@ -279,6 +295,7 @@ public class ParameterResource : Resource, IExpressionValue
             var missingValueException = CreateMissingValueException(value);
             if (missingValueException is null)
             {
+                ValueChanging?.Invoke(this, value);
                 waitForValueTcs.SetResult(value);
                 eventArgs = CreateValueChangedEventArgs(value);
             }
@@ -407,6 +424,17 @@ public class ParameterResource : Resource, IExpressionValue
         }
 
         return new MissingParameterValueException($"Parameter resource '{Name}' requires a value.");
+    }
+
+    internal ResourcePropertySnapshot CreateValueSnapshotProperty(string value)
+    {
+        return new(KnownProperties.Parameter.Value, value)
+        {
+            IsSensitive = Secret,
+            DisplayName = ResourcePropertyParameterValueDisplayName,
+            IsHighlighted = true,
+            SortOrder = 0
+        };
     }
 
     /// <summary>

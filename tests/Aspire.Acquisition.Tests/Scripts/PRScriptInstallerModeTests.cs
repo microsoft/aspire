@@ -106,12 +106,13 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
         return (manifestDir, archiveRoot);
     }
 
-    private static async Task<string> CreateMockHomebrewBinAsync(TestEnvironment env, int aspireExitCode)
+    private static async Task<string> CreateMockHomebrewBinAsync(TestEnvironment env, int aspireExitCode, int codesignExitCode = 0)
     {
         var mockBinDir = Path.Combine(env.TempDirectory, "mock-homebrew-bin");
         var brewRepository = Path.Combine(env.TempDirectory, "brew-repository");
         var brewPrefix = Path.Combine(env.TempDirectory, "brew-prefix");
         var brewLog = Path.Combine(env.TempDirectory, "brew.log");
+        var codesignLog = Path.Combine(env.TempDirectory, "codesign.log");
 
         Directory.CreateDirectory(mockBinDir);
         Directory.CreateDirectory(brewRepository);
@@ -130,6 +131,8 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
             exit {{aspireExitCode}}
             ASPIRE
               chmod +x "{{mockBinDir}}/aspire"
+                            mkdir -p "{{brewPrefix}}/Caskroom/aspire/13.3.0"
+                            cp "{{mockBinDir}}/aspire" "{{brewPrefix}}/Caskroom/aspire/13.3.0/aspire"
             }
 
             case "${1:-}" in
@@ -151,13 +154,26 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
                 tap="${@: -1}"
                 org="${tap%%/*}"
                 repo="${tap##*/}"
-                mkdir -p "{{brewRepository}}/Library/Taps/$org/homebrew-$repo"
+                tap_root="{{brewRepository}}/Library/Taps/$org/homebrew-$repo"
+                mkdir -p "$tap_root/.github/workflows"
+                cat > "$tap_root/.github/workflows/tests.yml" <<'WORKFLOW'
+            jobs:
+              test:
+                options: --privileged
+            WORKFLOW
+                echo "# generated tap" > "$tap_root/README.md"
                 exit 0
                 ;;
               style|audit|info)
                 exit 0
                 ;;
               test-bot)
+                tap_root="{{brewRepository}}/Library/Taps/local/homebrew-aspire"
+                unexpected_file="$(find "$tap_root" -type f ! -path "$tap_root/Casks/aspire.rb" -print -quit)"
+                if [[ -n "$unexpected_file" ]]; then
+                  echo "Homebrew-generated file reached tap syntax validation: $unexpected_file" >&2
+                  exit 1
+                fi
                 exit 0
                 ;;
               install)
@@ -166,6 +182,7 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
                 ;;
               uninstall)
                 rm -f "{{mockBinDir}}/aspire"
+                                rm -rf "{{brewPrefix}}/Caskroom/aspire"
                 exit 0
                 ;;
               untap)
@@ -185,6 +202,14 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
             exit 0
             """);
         FileHelper.MakeExecutable(curlPath);
+
+        var codesignPath = Path.Combine(mockBinDir, "codesign");
+        await File.WriteAllTextAsync(codesignPath, $$"""
+            #!/usr/bin/env bash
+            echo "$*" >> "{{codesignLog}}"
+            exit {{codesignExitCode}}
+            """);
+        FileHelper.MakeExecutable(codesignPath);
 
         return mockBinDir;
     }
@@ -561,6 +586,25 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
     [Fact]
     [RequiresTools(["ruby"])]
     [SkipOnPlatform(TestPlatforms.Windows, "Bash script tests require bash shell")]
+    public async Task Bash_ValidateHomebrewCask_RemovesGeneratedTapTemplateBeforeSyntaxCheck()
+    {
+        using var env = new TestEnvironment();
+        var caskPath = Path.Combine(env.TempDirectory, "aspire.rb");
+        await File.WriteAllTextAsync(caskPath, "cask \"aspire\" do\n  version \"13.3.0\"\nend\n");
+        var mockBinDir = await CreateMockHomebrewBinAsync(env, aspireExitCode: 0);
+        using var cmd = new ScriptToolCommand("eng/homebrew/validate-cask-artifact.sh", env, _testOutput);
+        cmd.WithEnvironmentVariable("PATH", $"{mockBinDir}{Path.PathSeparator}/usr/bin:/bin:/usr/sbin:/sbin");
+
+        var result = await cmd.ExecuteAsync(
+            "--cask-file", caskPath,
+            "--validation-mode", "LiveArchives");
+
+        result.EnsureSuccessful();
+    }
+
+    [Fact]
+    [RequiresTools(["ruby"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Bash script tests require bash shell")]
     public async Task Bash_PrepareHomebrewCask_FailedVerification_UninstallsCask()
     {
         using var env = new TestEnvironment();
@@ -581,6 +625,38 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
             "--validation-mode", "LiveRelease");
 
         Assert.NotEqual(0, result.ExitCode);
+        var brewLog = await File.ReadAllTextAsync(Path.Combine(env.TempDirectory, "brew.log"));
+        Assert.Contains("audit --cask --online local/aspire/aspire", brewLog);
+        Assert.DoesNotContain("--signing", brewLog);
+        Assert.DoesNotContain("--no-signing", brewLog);
+        Assert.Contains("uninstall --cask local/aspire-test/aspire", brewLog);
+        var codesignLog = await File.ReadAllTextAsync(Path.Combine(env.TempDirectory, "codesign.log"));
+        Assert.Contains("--verify -R=notarized --check-notarization", codesignLog);
+        Assert.Contains("Caskroom/aspire/13.3.0/aspire", codesignLog);
+    }
+
+    [Fact]
+    [RequiresTools(["ruby"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Bash script tests require bash shell")]
+    public async Task Bash_PrepareHomebrewCask_FailedSigningValidation_UninstallsCask()
+    {
+        using var env = new TestEnvironment();
+        var archiveRoot = Path.Combine(env.TempDirectory, "archives");
+        await CreateFakeHomebrewArchivesAsync(archiveRoot);
+        var mockBinDir = await CreateMockHomebrewBinAsync(env, aspireExitCode: 0, codesignExitCode: 42);
+        using var cmd = new ScriptToolCommand("eng/homebrew/prepare-cask-artifact.sh", env, _testOutput);
+        cmd.WithEnvironmentVariable("PATH", $"{mockBinDir}{Path.PathSeparator}/usr/bin:/bin:/usr/sbin:/sbin");
+
+        var result = await cmd.ExecuteAsync(
+            "--version", "13.3.0",
+            "--channel", "stable",
+            "--archive-root", archiveRoot,
+            "--output-dir", Path.Combine(env.TempDirectory, "homebrew-output"),
+            "--validation-mode", "LiveRelease");
+
+        Assert.NotEqual(0, result.ExitCode);
+        var codesignLog = await File.ReadAllTextAsync(Path.Combine(env.TempDirectory, "codesign.log"));
+        Assert.Contains("--verify -R=notarized --check-notarization", codesignLog);
         var brewLog = await File.ReadAllTextAsync(Path.Combine(env.TempDirectory, "brew.log"));
         Assert.Contains("uninstall --cask local/aspire-test/aspire", brewLog);
     }
@@ -610,22 +686,26 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
         var cask = await File.ReadAllTextAsync(Path.Combine(outputDir, "aspire.rb"));
         Assert.Contains("version \"13.3.0\"", cask);
         Assert.Contains("https://github.com/microsoft/aspire/releases/download/v#{version}/aspire-cli-osx-#{arch}-#{version}.tar.gz", cask);
-        Assert.Contains("verified: \"github.com/microsoft/aspire/\"", cask);
+        Assert.DoesNotContain("verified:", cask);
+        Assert.Contains("postflight_steps do", cask);
+        Assert.Contains("write_file \".aspire-install.json\", \"{\\\"source\\\":\\\"brew\\\"}\\n\", base: :staged_path", cask);
         Assert.Contains((await GetSha256HexAsync(Path.Combine(archiveRoot, "aspire-cli-osx-arm64-13.3.0.tar.gz"))).ToLowerInvariant(), cask);
         Assert.Contains((await GetSha256HexAsync(Path.Combine(archiveRoot, "aspire-cli-osx-x64-13.3.0.tar.gz"))).ToLowerInvariant(), cask);
         Assert.DoesNotContain("${", cask);
         Assert.True(File.Exists(Path.Combine(outputDir, "dogfood.sh")));
 
-        // LiveArchives mode must drop `--online` and add `--no-signing` to `brew audit`,
-        // because the cask URL points at a github.com/microsoft/aspire release that does
+        // LiveArchives mode must drop `--online` from `brew audit`, because the cask URL
+        // points at a github.com/microsoft/aspire release that does
         // not exist yet at source-build time. See the `audit_args` block in
         // eng/homebrew/validate-cask-artifact.sh for the full rationale; this assertion
         // locks the contract so a regression in the mode selection surfaces here rather
         // than silently failing (or worse, silently succeeding) in the source-build
         // prepare stage.
         var brewLog = await File.ReadAllTextAsync(Path.Combine(env.TempDirectory, "brew.log"));
-        Assert.Contains("audit --cask --no-signing local/aspire/aspire", brewLog);
+        Assert.Contains("audit --cask local/aspire/aspire", brewLog);
         Assert.DoesNotContain("audit --cask --online", brewLog);
+        Assert.DoesNotContain("--signing", brewLog);
+        Assert.DoesNotContain("--no-signing", brewLog);
     }
 
     [Fact]

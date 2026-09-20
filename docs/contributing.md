@@ -29,6 +29,7 @@ These instructions will get you ready to contribute to this project. If you just
   - [Native build](#native-build)
   - [Building the VS Code extension](#building-the-vs-code-extension)
 - [Trying your changes locally](#trying-your-changes-locally)
+  - [Running the Aspire CLI from source](#running-the-aspire-cli-from-source)
   - [Generating local NuGet packages](#generating-local-nuget-packages)
   - [Creating a local Aspire build with `localhive`](#creating-a-local-aspire-build-with-localhive)
 - [Tips and known issues](#tips-and-known-issues)
@@ -47,6 +48,10 @@ After restore, `dotnet` commands run from this repo use the repo-local SDK becau
 ### Build the repo
 
 First run `./restore.sh` (macOS and Linux) or `.\restore.cmd` (Windows) to install the repo-local .NET SDK. Then build with `./build.sh` (macOS and Linux) or `.\build.cmd` (Windows).
+
+Builds treat warnings as errors, except for the repository-wide `WarningsNotAsErrors` policy. The build entry points evaluate `eng/WarningPolicy.proj`, which imports `Directory.Build.props`, with the build's configuration and MSBuild property arguments. They forward the resulting exemptions through Arcade's `-warnNotAsError` option so they also apply to its standalone NuGet restore. Additional exemptions supplied with that option are merged with the evaluated policy; warning codes do not need to be duplicated in the scripts. Cleanup (`-clean`) skips this evaluation and does not require installing the SDK.
+
+NuGet auditing uses `https://data.nuget.org/v3/index.json` for vulnerability metadata, independently of the package download feeds. Vulnerability findings remain visible as warnings by default. Pass `/p:TreatNuGetAuditWarningsAsErrors=true` to make them errors instead. Arcade disables auditing for official builds; this behavior is unchanged. These exemptions do not remediate vulnerable dependencies.
 
 ## Verify your setup
 
@@ -196,6 +201,18 @@ yarn compile
 Use `yarn watch` while editing TypeScript. When adding or changing user-facing extension text, keep the strings localized in both `extension/package.nls.json` and `extension/src/loc/strings.ts`. For VSIX signing and release packaging details, see [extension-signing.md](/docs/extension-signing.md).
 
 ## Trying your changes locally
+
+### Running the Aspire CLI from source
+
+For a fast in-repo development loop, use `run-aspire.sh` (macOS and Linux) or `run-aspire.cmd` (Windows). The wrapper runs the CLI from the current worktree without installing it, preserves your current directory, and forwards any Aspire command:
+
+```bash
+cd playground/rust
+../../run-aspire.sh restore
+../../run-aspire.sh run
+```
+
+On Windows, use `..\..\run-aspire.cmd` instead. Use [`localhive`](#creating-a-local-aspire-build-with-localhive) when you need to validate the complete locally built product, including packages and the bundle payload.
 
 ### Generating local NuGet packages
 

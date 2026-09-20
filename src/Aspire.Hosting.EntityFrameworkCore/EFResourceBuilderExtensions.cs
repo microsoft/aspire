@@ -3,7 +3,9 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable ASPIREPROJECTS001
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.EntityFrameworkCore;
 using Aspire.Hosting.Pipelines;
@@ -41,7 +43,7 @@ public static class EFResourceBuilderExtensions
     /// Multiple calls to this method with different context types are supported, allowing you to manage
     /// migrations for multiple DbContexts in the same project.
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addEFMigrations dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name,
@@ -88,7 +90,7 @@ public static class EFResourceBuilderExtensions
     /// <param name="name">The name of the migration resource.</param>
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
     /// <exception cref="InvalidOperationException">Thrown if migrations have already been added for any DbContext type on this project.</exception>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addEFMigrations dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name)
@@ -104,7 +106,7 @@ public static class EFResourceBuilderExtensions
     /// </summary>
     [AspireExport("addEFMigrations")]
     internal static IResourceBuilder<EFMigrationResource> AddEFMigrationsForPolyglot(
-        this IResourceBuilder<ProjectResource> builder,
+        this IResourceBuilder<IDotnetProgramResource> builder,
         [ResourceName] string name,
         string? dbContextTypeName = null)
     {
@@ -139,15 +141,97 @@ public static class EFResourceBuilderExtensions
         return AddEFMigrationsCore(builder, name, dbContextTypeName: null, configureToolResource);
     }
 
+    /// <summary>
+    /// Adds EF Core migration management for a specific DbContext type on a .NET program resource.
+    /// </summary>
+    /// <param name="builder">The startup .NET program resource builder.</param>
+    /// <param name="name">The name of the migration resource.</param>
+    /// <param name="dbContextTypeName">The fully qualified name of the DbContext type.</param>
+    /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
+    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
+    public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
+        this IResourceBuilder<IDotnetProgramResource> builder,
+        [ResourceName] string name,
+        string dbContextTypeName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(dbContextTypeName);
+
+        return AddEFMigrationsCore(builder, name, dbContextTypeName, configureToolResource: null);
+    }
+
+    /// <summary>
+    /// Adds EF Core migration management for a specific DbContext type on a .NET program resource.
+    /// </summary>
+    /// <param name="builder">The startup .NET program resource builder.</param>
+    /// <param name="name">The name of the migration resource.</param>
+    /// <param name="dbContextTypeName">The fully qualified name of the DbContext type.</param>
+    /// <param name="configureToolResource">An optional callback that configures the dotnet-ef tool resource.</param>
+    /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
+    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Action<IResourceBuilder<DotnetToolResource>> callbacks are not ATS-compatible.")]
+    public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
+        this IResourceBuilder<IDotnetProgramResource> builder,
+        [ResourceName] string name,
+        string dbContextTypeName,
+        Action<IResourceBuilder<DotnetToolResource>>? configureToolResource)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(dbContextTypeName);
+
+        return AddEFMigrationsCore(builder, name, dbContextTypeName, configureToolResource);
+    }
+
+    /// <summary>
+    /// Adds EF Core migration management for the only DbContext type in a .NET program resource.
+    /// </summary>
+    /// <param name="builder">The startup .NET program resource builder.</param>
+    /// <param name="name">The name of the migration resource.</param>
+    /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
+    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addEFMigrations dispatcher export.")]
+    public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
+        this IResourceBuilder<IDotnetProgramResource> builder,
+        [ResourceName] string name)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return AddEFMigrationsCore(builder, name, dbContextTypeName: null, configureToolResource: null);
+    }
+
+    /// <summary>
+    /// Adds EF Core migration management for the only DbContext type in a .NET program resource.
+    /// </summary>
+    /// <param name="builder">The startup .NET program resource builder.</param>
+    /// <param name="name">The name of the migration resource.</param>
+    /// <param name="configureToolResource">An optional callback that configures the dotnet-ef tool resource.</param>
+    /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
+    [Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Action<IResourceBuilder<DotnetToolResource>> callbacks are not ATS-compatible.")]
+    public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
+        this IResourceBuilder<IDotnetProgramResource> builder,
+        [ResourceName] string name,
+        Action<IResourceBuilder<DotnetToolResource>>? configureToolResource)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return AddEFMigrationsCore(builder, name, dbContextTypeName: null, configureToolResource);
+    }
+
     private static IResourceBuilder<EFMigrationResource> AddEFMigrationsCore(
-        IResourceBuilder<ProjectResource> builder,
+        IResourceBuilder<IDotnetProgramResource> builder,
         string name,
         string? dbContextTypeName,
         Action<IResourceBuilder<DotnetToolResource>>? configureToolResource)
     {
         var existingMigrationResources = builder.ApplicationBuilder.Resources
             .OfType<EFMigrationResource>()
-            .Where(r => r.ProjectResource == builder.Resource)
+            .Where(r => ReferenceEquals(r.StartupProjectResource, builder.Resource))
             .ToList();
 
         if (dbContextTypeName != null)
@@ -171,9 +255,16 @@ public static class EFResourceBuilderExtensions
                 throw new InvalidOperationException(
                      $"Cannot register migrations without a context type when they have already been registered without a context type on resource '{builder.Resource.Name}'.");
             }
-            
+
             throw new InvalidOperationException(
                 $"Cannot register migrations without a context type when they have already been registered for specific DbContext types on resource '{builder.Resource.Name}'.");
+        }
+
+        var projectMetadata = builder.Resource.GetProjectMetadata();
+        if (projectMetadata.IsFileBasedApp)
+        {
+            throw new InvalidOperationException(
+                $"EF Core migrations require a project file. Resource '{builder.Resource.Name}' is a file-based app.");
         }
 
         var migrationResource = new EFMigrationResource(name, builder.Resource, dbContextTypeName)
@@ -361,9 +452,7 @@ public static class EFResourceBuilderExtensions
 #pragma warning restore ASPIREPIPELINES004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var executor = new EFCoreOperationExecutor(
-            migrationResource.ProjectResource,
-            migrationResource.MigrationsProjectPath,
-            migrationResource.DbContextTypeName,
+            migrationResource,
             logger,
             stepContext.CancellationToken,
             stepContext.Services,
@@ -453,34 +542,17 @@ public static class EFResourceBuilderExtensions
                 CreateNoWindow = true
             };
 
-            // Build command-line arguments by directly invoking each annotation's Callback.
-            // We intentionally bypass ExecutionConfigurationBuilder.WithArgumentsConfig() here
-            // because it uses EvaluateOnceAsync which caches callback results. When the tool
-            // resource is reused across sequential EF commands (e.g., script then bundle),
-            // the cached BuildToolExecArguments callback does not re-populate the shared
-            // callbackContext.Args list, so later annotations (the per-command EF args) run
-            // against an empty list.
-            if (toolResource.TryGetAnnotationsOfType<CommandLineArgsCallbackAnnotation>(out var cmdLineAnnotations))
+            var toolArguments = await GatherToolArgumentsAsync(
+                toolResource,
+                executionContext,
+                context.Logger,
+                context.CancellationToken).ConfigureAwait(false);
+            foreach (var argument in toolArguments)
             {
-                IList<object> args = [];
-                var callbackContext = new CommandLineArgsCallbackContext(args, toolResource, context.CancellationToken)
-                {
-                    Logger = context.Logger,
-                    ExecutionContext = executionContext
-                };
-
-                foreach (var ann in cmdLineAnnotations)
-                {
-                    await ann.Callback(callbackContext).ConfigureAwait(false);
-                }
-
-                foreach (var arg in callbackContext.Args)
-                {
-                    startInfo.ArgumentList.Add(arg.ToString()!);
-                }
+                startInfo.ArgumentList.Add(argument.ToString()!);
             }
 
-            foreach (var kvp in executionConfiguration.EnvironmentVariables)
+            foreach (var kvp in GetToolEnvironmentVariables(executionConfiguration, executionContext.IsPublishMode))
             {
                 startInfo.Environment[kvp.Key] = kvp.Value;
             }
@@ -608,6 +680,42 @@ public static class EFResourceBuilderExtensions
         }
     }
 
+    /// <summary>
+    /// Composes the EF tool arguments without cached callback results so sequential commands remain independent.
+    /// </summary>
+    internal static ValueTask<List<object>> GatherToolArgumentsAsync(
+        DotnetToolResource toolResource,
+        DistributedApplicationExecutionContext executionContext,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        return toolResource.GatherArgumentValuesWithoutCachingAsync(
+            executionContext,
+            logger,
+            cancellationToken);
+    }
+
+    // Selects the environment variables to apply to the EF tool process. In publish mode connection
+    // string references resolve to manifest placeholder expressions (e.g. "{postgres.connectionString}")
+    // rather than real values because the target resources aren't provisioned yet. Passing such a
+    // placeholder to the EF tool makes design-time DbContext creation fail with "Format of the
+    // initialization string does not conform to specification". Generating the migration script/bundle
+    // doesn't require a live database, so omit connection strings entirely in publish mode and let the
+    // bundle receive the real connection string at deploy time.
+    internal static IEnumerable<KeyValuePair<string, string>> GetToolEnvironmentVariables(
+        IExecutionConfigurationResult executionConfiguration, bool isPublishMode)
+    {
+        foreach (var kvp in executionConfiguration.EnvironmentVariablesWithUnprocessed)
+        {
+            if (isPublishMode && kvp.Value.Unprocessed is ConnectionStringReference)
+            {
+                continue;
+            }
+
+            yield return new KeyValuePair<string, string>(kvp.Key, kvp.Value.Processed);
+        }
+    }
+
     private const string EFToolPackageId = "dotnet-ef";
 
     private static void AddEFMigrationCommands(
@@ -619,7 +727,7 @@ public static class EFResourceBuilderExtensions
 
         // Create hidden DotnetToolResource for running EF commands
         var toolName = $"ef-tool-{migrationResource.Name}";
-        var startupProjectDir = Path.GetDirectoryName(migrationResource.ProjectResource.GetProjectMetadata().ProjectPath)!;
+        var startupProjectDir = Path.GetDirectoryName(migrationResource.StartupProjectResource.GetProjectMetadata().ProjectPath)!;
         var toolBuilder = migrationBuilder.ApplicationBuilder.AddDotnetTool(toolName, EFToolPackageId)
             .WithParentRelationship(migrationBuilder)
             .WithWorkingDirectory(startupProjectDir)
@@ -642,13 +750,30 @@ public static class EFResourceBuilderExtensions
         migrationResource.ConfigureToolResource?.Invoke(toolBuilder);
 
         // Copy environment annotations from project resource to tool resource
-        if (migrationResource.ProjectResource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var envCallbacks))
+        if (migrationResource.StartupProjectResource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var envCallbacks))
         {
             foreach (var callback in envCallbacks)
             {
                 toolBuilder.WithAnnotation(callback);
             }
         }
+
+        // Forward the migration resource's own environment to the tool resource at start time.
+        // The connection string the user declares via `.WithReference(<db>)` lands on the migration
+        // resource as an EnvironmentCallbackAnnotation *after* this method runs, so the annotations
+        // cannot be copied eagerly like the project ones above. Evaluating them lazily here ensures the
+        // dotnet-ef process receives `ConnectionStrings__<db>`; without it the design-time DbContext
+        // has no connection string and fails with "The ConnectionString property has not been initialized."
+        toolBuilder.WithEnvironment(async context =>
+        {
+            if (migrationResource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var migrationEnvCallbacks))
+            {
+                foreach (var callback in migrationEnvCallbacks)
+                {
+                    await callback.Callback(context).ConfigureAwait(false);
+                }
+            }
+        });
 
         migrationResource.ToolResource = toolBuilder.Resource;
 
@@ -819,9 +944,7 @@ public static class EFResourceBuilderExtensions
             logger.LogInformation("Executing EF Core {Operation} command...", operationDisplayName);
 
             using var executor = new EFCoreOperationExecutor(
-                migrationResource.ProjectResource,
-                migrationResource.MigrationsProjectPath,
-                migrationResource.DbContextTypeName,
+                migrationResource,
                 logger,
                 context.CancellationToken,
                 context.Services,

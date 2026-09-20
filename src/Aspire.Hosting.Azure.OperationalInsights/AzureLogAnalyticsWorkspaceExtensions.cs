@@ -59,6 +59,7 @@ public static class AzureLogAnalyticsWorkspaceExtensions
         };
 
         var resource = new AzureLogAnalyticsWorkspaceResource(name, configureInfrastructure);
-        return builder.AddResource(resource);
+        return builder.AddResource(resource)
+            .WithIconName("ChartMultiple");
     }
 }

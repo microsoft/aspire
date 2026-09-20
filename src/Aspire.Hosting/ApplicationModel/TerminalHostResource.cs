@@ -6,28 +6,10 @@ using System.Diagnostics;
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// A hidden, DCP-launched executable resource that bridges <strong>one</strong> parent-resource
-/// replica's PTY traffic between DCP (the producer) and viewers like the Aspire Dashboard
-/// and the <c>aspire terminal</c> CLI command (the consumers) using Hex1b's HMP v1 muxer.
+/// Represents the hidden terminal host process for one parent-resource replica.
 /// </summary>
-/// <remarks>
-/// <para>
-/// One <see cref="TerminalHostResource"/> instance is created <strong>per replica</strong> of
-/// the target resource configured with
-/// <see cref="TerminalResourceBuilderExtensions.WithTerminal{T}(IResourceBuilder{T}, Action{TerminalOptions}?)"/>.
-/// A target with <c>N</c> replicas yields <c>N</c> independent terminal host processes,
-/// each with its own UDS triple (producer/consumer/control). The host process itself is
-/// opaque to its parent replica index — it just listens on whatever paths it's told.
-/// </para>
-/// <para>
-/// Because <see cref="TerminalHostResource"/> derives from <see cref="ExecutableResource"/>, DCP
-/// launches it like any other executable, which keeps the host process out-of-process and
-/// isolates PTY state from the AppHost. The actual binary path is resolved during
-/// <see cref="Aspire.Hosting.ApplicationModel.BeforeStartEvent"/> from <see cref="Aspire.Hosting.Dcp.DcpOptions.TerminalHostPath"/>.
-/// </para>
-/// </remarks>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Parent = {Parent.Name}, ParentReplicaIndex = {ParentReplicaIndex}")]
-public sealed class TerminalHostResource : ExecutableResource, IResourceWithParent<IResource>
+internal sealed class TerminalHostResource : ExecutableResource, IResourceWithParent<IResource>
 {
     // The host is created before its real binary path is known (DcpOptions is not yet
     // configured at WithTerminal time). A BeforeStartEvent subscriber rewrites the

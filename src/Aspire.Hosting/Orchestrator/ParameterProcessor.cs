@@ -7,6 +7,7 @@
 using System.Globalization;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Logging;
@@ -37,6 +38,15 @@ public sealed class ParameterProcessor(
     private readonly object _resolutionTaskLock = new();
     private CancellationTokenSource? _allParametersResolvedCts;
     private Task? _parameterResolutionTask;
+
+    /// <summary>
+    /// AppHost-scoped history that records resolved secret parameter values so <c>aspire describe</c>/<c>watch</c>
+    /// can redact them. Assigned by DI after construction (see <c>DistributedApplicationBuilder</c>) rather than
+    /// injected through the public constructor, to keep the public API surface unchanged for backporting. Null when
+    /// the processor is created outside the AppHost container (e.g. in unit tests), in which case recording is a
+    /// no-op.
+    /// </summary>
+    internal SecretRedactionHistory? SecretRedactionHistory { get; set; }
 
     /// <summary>
     /// Initializes parameter resources and handles unresolved parameters if interaction service is available.
@@ -196,6 +206,7 @@ public sealed class ParameterProcessor(
                 return;
             }
 
+            parameterResource.ValueChanging += RecordSecretValueForRedaction;
             parameterResource.ValueChanged += OnParameterValueChangedAsync;
         }
     }
@@ -572,8 +583,22 @@ public sealed class ParameterProcessor(
         OnParameterResolved(_unresolvedParameters, parameterResource);
     }
 
+    // Record a resolved secret value into the AppHost-scoped redaction history at the moment it is assigned or
+    // replaced, so `aspire describe`/`watch` redacts it even before any backchannel connection has peeked it. The
+    // describe path only observes a secret once a connection is open; a value assigned (and possibly replaced) before
+    // the first connection would otherwise be absent from the history and leak from a lagging snapshot
+    // (https://github.com/microsoft/aspire/issues/19241). No-op for non-secret parameters, empty values, or when no
+    // history is wired (e.g. unit tests that construct the processor directly).
+    private void RecordSecretValueForRedaction(ParameterResource parameterResource, string? value)
+    {
+        if (parameterResource.Secret && value is { Length: > 0 } && SecretRedactionHistory is { } history)
+        {
+            history.AddValues([value]);
+        }
+    }
+
     // Internal for testing purposes - allows passing specific parameters to test.
-    internal async Task HandleUnresolvedParametersAsync(IList<ParameterResource> unresolvedParameters, CancellationToken cancellationToken)
+    internal async Task HandleUnresolvedParametersAsync(IList<ParameterResource> unresolvedParameters, CancellationToken allParametersResolvedToken)
     {
         var stateModified = false;
 
@@ -596,7 +621,20 @@ public sealed class ParameterProcessor(
                         Intent = MessageIntent.Warning,
                         PrimaryButtonText = InteractionStrings.ParametersBarPrimaryButtonText
                     },
-                    cancellationToken).ConfigureAwait(false);
+                    allParametersResolvedToken).ConfigureAwait(false);
+
+                if (result.Canceled)
+                {
+                    logger.LogDebug("Unresolved parameters notification was dismissed. The notification will not be shown again.");
+
+                    // OnParameterResolved cancels this token after the last parameter is resolved. Convert that
+                    // cancellation into successful task completion so waitForResolution callers remain blocked
+                    // without surfacing an OperationCanceledException.
+                    var allParametersResolved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    using var registration = allParametersResolvedToken.Register(static state => ((TaskCompletionSource)state!).TrySetResult(), allParametersResolved);
+                    await allParametersResolved.Task.ConfigureAwait(false);
+                    break;
+                }
 
                 proceedToInputs = result.Data;
             }
@@ -637,7 +675,7 @@ public sealed class ParameterProcessor(
                         ShowDismiss = true,
                         EnableMessageMarkdown = true,
                     },
-                    cancellationToken).ConfigureAwait(false);
+                    allParametersResolvedToken).ConfigureAwait(false);
 
                 if (!valuesPrompt.Canceled)
                 {
@@ -656,7 +694,9 @@ public sealed class ParameterProcessor(
                             continue;
                         }
 
-                        await SetValueCoreAsync(parameter, inputValue, shouldSave, ParameterValueSource.UserInteraction, cancellationToken).ConfigureAwait(false);
+                        // Applying the last value cancels allParametersResolvedToken via the resource observer.
+                        // That token dismisses pending prompts; it must not cancel persistence of the accepted value.
+                        await SetValueCoreAsync(parameter, inputValue, shouldSave, ParameterValueSource.UserInteraction, CancellationToken.None).ConfigureAwait(false);
 
                         if (shouldSave)
                         {
@@ -781,7 +821,7 @@ public sealed class ParameterProcessor(
         {
             var properties = value is null
                 ? s.Properties.RemoveResourceProperty(KnownProperties.Parameter.Value)
-                : s.Properties.SetResourceProperty(KnownProperties.Parameter.Value, value, parameterResource.Secret);
+                : s.Properties.SetResourcePropertyRange([parameterResource.CreateValueSnapshotProperty(value)]);
 
             return s with
             {

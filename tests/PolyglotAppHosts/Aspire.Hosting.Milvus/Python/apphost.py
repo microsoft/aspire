@@ -36,9 +36,9 @@ with create_builder() as builder:
     builder.add_milvus("resource")
     # ── 15. withReference: use Milvus database from a container resource ───────
     api = builder.add_container("resource", "image")
-    api.with_reference()
+    api.with_reference(db)
     # ── 16. withReference: use Milvus server directly ──────────────────────────
-    api.with_reference()
+    api.with_reference(milvus)
     # ---- Property access on MilvusServerResource ----
     _endpoint = milvus.primary_endpoint
     _host = milvus.host

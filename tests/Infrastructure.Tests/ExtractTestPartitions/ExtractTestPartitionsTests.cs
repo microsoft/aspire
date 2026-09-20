@@ -11,7 +11,7 @@ namespace Infrastructure.Tests;
 /// </summary>
 public class ExtractTestPartitionsTests : IClassFixture<ExtractTestPartitionsFixture>, IDisposable
 {
-    private readonly TestTempDirectory _tempDir = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly ExtractTestPartitionsFixture _fixture;
     private readonly ITestOutputHelper _output;
 
@@ -19,21 +19,22 @@ public class ExtractTestPartitionsTests : IClassFixture<ExtractTestPartitionsFix
     {
         _fixture = fixture;
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
     }
 
-    public void Dispose() => _tempDir.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     public async Task ExtractsPartitionTraits()
     {
         // Arrange
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithPartitions(
             assemblyPath,
             ("TestClass1", "PartitionA"),
             ("TestClass2", "PartitionB"));
 
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.txt");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.txt");
 
         // Act
         var result = await RunTool(assemblyPath, outputFile);
@@ -52,13 +53,13 @@ public class ExtractTestPartitionsTests : IClassFixture<ExtractTestPartitionsFix
     public async Task IgnoresCollectionAttributes()
     {
         // Arrange - Collection attributes are for shared fixtures, not CI splitting
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithCollections(
             assemblyPath,
             ("TestClass1", "CollectionX"),
             ("TestClass2", "CollectionY"));
 
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.txt");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.txt");
 
         // Act
         var result = await RunTool(assemblyPath, outputFile);
@@ -73,13 +74,13 @@ public class ExtractTestPartitionsTests : IClassFixture<ExtractTestPartitionsFix
     public async Task ExtractsOnlyTraitPartitionsFromMixedAttributes()
     {
         // Arrange
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithMixedAttributes(
             assemblyPath,
             partitions: [("PartitionTest1", "PartA")],
             collections: [("CollectionTest1", "CollB")]);
 
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.txt");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.txt");
 
         // Act
         var result = await RunTool(assemblyPath, outputFile);
@@ -97,10 +98,10 @@ public class ExtractTestPartitionsTests : IClassFixture<ExtractTestPartitionsFix
     public async Task ReturnsEmptyForNoAttributes()
     {
         // Arrange
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithNoAttributes(assemblyPath);
 
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.txt");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.txt");
 
         // Act
         var result = await RunTool(assemblyPath, outputFile);
@@ -115,14 +116,14 @@ public class ExtractTestPartitionsTests : IClassFixture<ExtractTestPartitionsFix
     public async Task SortsPartitionsAlphabetically()
     {
         // Arrange
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithPartitions(
             assemblyPath,
             ("TestZ", "Zebra"),
             ("TestA", "Apple"),
             ("TestM", "Mango"));
 
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.txt");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.txt");
 
         // Act
         var result = await RunTool(assemblyPath, outputFile);
@@ -140,14 +141,14 @@ public class ExtractTestPartitionsTests : IClassFixture<ExtractTestPartitionsFix
     public async Task DeduplicatesPartitions()
     {
         // Arrange - same partition name with different casing
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithPartitions(
             assemblyPath,
             ("TestClass1", "PartitionA"),
             ("TestClass2", "partitiona"), // lowercase variant
             ("TestClass3", "PARTITIONA")); // uppercase variant
 
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.txt");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.txt");
 
         // Act
         var result = await RunTool(assemblyPath, outputFile);
@@ -163,8 +164,8 @@ public class ExtractTestPartitionsTests : IClassFixture<ExtractTestPartitionsFix
     public async Task HandlesInvalidAssemblyPath()
     {
         // Arrange
-        var nonExistentPath = Path.Combine(_tempDir.Path, "DoesNotExist.dll");
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.txt");
+        var nonExistentPath = Path.Combine(_workspace.Path, "DoesNotExist.dll");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.txt");
 
         // Act
         var result = await RunTool(nonExistentPath, outputFile);
@@ -189,13 +190,13 @@ public class ExtractTestPartitionsTests : IClassFixture<ExtractTestPartitionsFix
     public async Task CreatesOutputDirectory()
     {
         // Arrange
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithPartitions(
             assemblyPath,
             ("TestClass1", "PartitionA"));
 
         // Output in nested directory that doesn't exist
-        var outputFile = Path.Combine(_tempDir.Path, "nested", "dir", "partitions.txt");
+        var outputFile = Path.Combine(_workspace.Path, "nested", "dir", "partitions.txt");
 
         // Act
         var result = await RunTool(assemblyPath, outputFile);
@@ -209,12 +210,12 @@ public class ExtractTestPartitionsTests : IClassFixture<ExtractTestPartitionsFix
     public async Task ExtractsPartitionsFromNestedTypes()
     {
         // Arrange - Test classes can be nested (Outer+Inner pattern)
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithNestedTypePartitions(
             assemblyPath,
             ("OuterClass", "InnerClass", "NestedPartition"));
 
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.txt");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.txt");
 
         // Act
         var result = await RunTool(assemblyPath, outputFile);
@@ -231,14 +232,14 @@ public class ExtractTestPartitionsTests : IClassFixture<ExtractTestPartitionsFix
     public async Task IgnoresEmptyPartitionNames()
     {
         // Arrange - Empty/whitespace partition names should be ignored
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithPartitions(
             assemblyPath,
             ("TestClass1", "ValidPartition"),
             ("TestClass2", ""), // Empty name
             ("TestClass3", "   ")); // Whitespace-only name
 
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.txt");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.txt");
 
         // Act
         var result = await RunTool(assemblyPath, outputFile);
@@ -256,14 +257,14 @@ public class ExtractTestPartitionsTests : IClassFixture<ExtractTestPartitionsFix
     public async Task IgnoresNonPartitionTraits()
     {
         // Arrange - Only Traits with key "Partition" should be extracted
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithNonPartitionTraits(
             assemblyPath,
             ("TestClass1", "Partition", "ShouldInclude"),
             ("TestClass2", "Category", "ShouldIgnore"),
             ("TestClass3", "OtherKey", "AlsoIgnore"));
 
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.txt");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.txt");
 
         // Act
         var result = await RunTool(assemblyPath, outputFile);

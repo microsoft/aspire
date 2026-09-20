@@ -1,27 +1,13 @@
 # Install the Aspire CLI
 
-The Aspire CLI is a cross-platform tool that helps you create, run, and manage Aspire applications.
+The Aspire CLI creates, runs, and manages Aspire apps.
 
-### Latest release
+Choose **Install the Aspire CLI** to pick a package manager for your platform and run the selected installation command in an integrated terminal.
 
-> [Run install in terminal](command:aspire-vscode.installCliStable)
+> [Install the Aspire CLI](command:aspire-vscode.installCli)
 
-| Platform | Command |
-|----------|---------|
-| macOS / Linux | `curl -sSL https://aspire.dev/install.sh \| bash` |
-| Windows | `irm https://aspire.dev/install.ps1 \| iex` |
+Already installed? Make sure VS Code can find it on your PATH.
 
-### Daily build (preview)
+> [Verify installation](command:aspire-vscode.verifyCliInstalled)
 
-> [Run daily install in terminal](command:aspire-vscode.installCliDaily)
-
-| Platform | Command |
-|----------|---------|
-| macOS / Linux | `curl -sSL https://aspire.dev/install.sh \| bash -s -- -q dev` |
-| Windows | `iex "& { $(irm https://aspire.dev/install.ps1) } -Quality dev"` |
-
-### Verify
-
-After installing, click **Verify installation** in the sidebar or run `aspire --version`.
-
-> For more details, see the [Aspire CLI installation guide](https://aspire.dev/get-started/install-cli/).
+Need another option? See the [installation guide](https://aspire.dev/get-started/install-cli/).
