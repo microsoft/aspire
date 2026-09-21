@@ -2,12 +2,179 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Tray.Tests.Helpers;
+using Microsoft.Extensions.Time.Testing;
 using static Aspire.Tray.Tests.Helpers.TestAppHostClient;
 
 namespace Aspire.Tray.Tests;
 
 public class TrayControllerSavedStateTests
 {
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public async Task UnobservedStartExpiresAndAllowsExplicitRetry(bool successful, bool pinned)
+    {
+        using var directory = new TestTrayStateDirectory();
+        var path = directory.CreateAppHost("apphost.cs");
+        var client = new TestAppHostClient();
+        var time = new FakeTimeProvider();
+        var controller = new TrayController(client, new MemoryTraySavedStateStore(), 10, time);
+        await using var lifetime = controller.ConfigureAwait(true);
+        controller.Start();
+        await client.PublishAndWaitAsync(controller, new([], DiscoveryState.Live));
+        controller.SetPinned(path, pinned);
+        controller.RequestStart(path);
+        await client.NextStartAsync();
+
+        // The deadline must not release a still-running CLI command.
+        time.Advance(TrayController.StartReconciliationTimeout);
+        Assert.Throws<InvalidOperationException>(() => controller.RequestStart(path));
+        var previous = controller.State;
+        client.CompleteStart(path, new(successful ? StartOutcome.Started : StartOutcome.TimedOut, null));
+        await WaitForStateAsync(controller, state => !ReferenceEquals(previous, state));
+        time.Advance(TrayController.StartReconciliationTimeout - TimeSpan.FromSeconds(1));
+        Assert.Throws<InvalidOperationException>(() => controller.RequestStart(path));
+        time.Advance(TimeSpan.FromSeconds(1));
+
+        await WaitForStateAsync(controller, state => state.AppHosts.Concat(state.RecentAppHosts).Any(row => row.CanStart));
+        var row = Assert.Single(controller.State.AppHosts.Concat(controller.State.RecentAppHosts));
+        Assert.Equal("Start was not confirmed by discovery. The AppHost may still start; check before retrying.", row.Error);
+        Assert.False(row.IsStarting);
+        Assert.False(row.IsRunning);
+        Assert.False(controller.State.HasActiveAppHosts);
+        Assert.True(controller.State.ShowStatus);
+        Assert.Equal([path], client.StartRequests.ToArray());
+
+        controller.RequestStart(path);
+        Assert.Equal(path, await client.NextStartAsync());
+        row = Assert.Single(controller.State.AppHosts.Concat(controller.State.RecentAppHosts));
+        Assert.True(row.IsStarting);
+        Assert.False(row.CanStart);
+        Assert.Null(row.Error);
+        Assert.Equal([path, path], client.StartRequests.ToArray());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ExpiredStartCannotRetryDuringDisconnectAndLateDiscoveryWins(bool successful)
+    {
+        using var directory = new TestTrayStateDirectory();
+        var path = directory.CreateAppHost("apphost.cs");
+        var client = new TestAppHostClient();
+        var time = new FakeTimeProvider();
+        var controller = new TrayController(client, new MemoryTraySavedStateStore(), 10, time);
+        await using var lifetime = controller.ConfigureAwait(true);
+        controller.Start();
+        await client.PublishAndWaitAsync(controller, new([], DiscoveryState.Live));
+        controller.RequestStart(path);
+        await client.NextStartAsync();
+        var previous = controller.State;
+        client.CompleteStart(path, new(successful ? StartOutcome.Started : StartOutcome.TimedOut, null));
+        await WaitForStateAsync(controller, state => !ReferenceEquals(previous, state));
+        await client.PublishAndWaitAsync(controller, new([], DiscoveryState.Disconnected));
+        time.Advance(TrayController.StartReconciliationTimeout);
+        await WaitForStateAsync(controller, state => state.RecentAppHosts.SingleOrDefault()?.Error ==
+            "Start was not confirmed by discovery. The AppHost may still start; check before retrying.");
+        Assert.False(Assert.Single(controller.State.RecentAppHosts).CanStart);
+        Assert.Throws<InvalidOperationException>(() => controller.RequestStart(path));
+
+        var running = Host(42) with { AppHostPath = path };
+        await client.PublishAndWaitAsync(controller, new([running], DiscoveryState.Live));
+        var row = Assert.Single(controller.State.AppHosts);
+        Assert.Equal(running.Id, row.Id);
+        Assert.True(row.IsRunning);
+        Assert.True(row.CanOpenDashboard);
+        Assert.Null(row.Error);
+        Assert.False(controller.State.ShowStatus);
+        Assert.Empty(controller.State.RecentAppHosts);
+        Assert.Throws<InvalidOperationException>(() => controller.RequestStart(path));
+        Assert.Equal([path], client.StartRequests.ToArray());
+    }
+
+    [Fact]
+    public async Task ClearedHistoryStillReportsUnconfirmedStartAndClearsErrorOnDiscovery()
+    {
+        using var directory = new TestTrayStateDirectory();
+        var path = directory.CreateAppHost("apphost.cs");
+        var client = new TestAppHostClient();
+        var time = new FakeTimeProvider();
+        var controller = new TrayController(client, new MemoryTraySavedStateStore(), 10, time);
+        await using var lifetime = controller.ConfigureAwait(true);
+        controller.Start();
+        await client.PublishAndWaitAsync(controller, new([], DiscoveryState.Live));
+        controller.RequestStart(path);
+        await client.NextStartAsync();
+        client.CompleteStart(path, new(StartOutcome.Started, 0));
+        await WaitForStateAsync(controller, state => state.RecentAppHosts.Count == 0);
+        controller.ClearRecent();
+        time.Advance(TrayController.StartReconciliationTimeout);
+        await WaitForStateAsync(controller, state => state.Status ==
+            "Start was not confirmed by discovery. The AppHost may still start; check before retrying.");
+        Assert.True(controller.State.ShowStatus);
+        Assert.Empty(controller.State.RecentAppHosts);
+        Assert.False(controller.State.HasActiveAppHosts);
+
+        await client.PublishAndWaitAsync(controller, new([Host(42) with { AppHostPath = path }], DiscoveryState.Live));
+        Assert.False(controller.State.ShowStatus);
+        Assert.Null(Assert.Single(controller.State.AppHosts).Error);
+        Assert.True(controller.State.HasActiveAppHosts);
+    }
+
+    [Fact]
+    public async Task ObservedStartDeadlineCannotChangeAReplacementStart()
+    {
+        using var directory = new TestTrayStateDirectory();
+        var path = directory.CreateAppHost("apphost.cs");
+        var client = new TestAppHostClient();
+        var time = new FakeTimeProvider();
+        var controller = new TrayController(client, new MemoryTraySavedStateStore(), 10, time);
+        await using var lifetime = controller.ConfigureAwait(true);
+        controller.Start();
+        await client.PublishAndWaitAsync(controller, new([], DiscoveryState.Live));
+        controller.RequestStart(path);
+        await client.NextStartAsync();
+        client.CompleteStart(path, new(StartOutcome.Started, 0));
+        await WaitForStateAsync(controller, state => state.RecentAppHosts.Count == 0);
+        await client.PublishAndWaitAsync(controller, new([Host(42) with { AppHostPath = path }], DiscoveryState.Live));
+        await client.PublishAndWaitAsync(controller, new([], DiscoveryState.Live));
+        controller.RequestStart(path);
+        await client.NextStartAsync();
+        time.Advance(TrayController.StartReconciliationTimeout);
+        var row = Assert.Single(controller.State.RecentAppHosts);
+        Assert.True(row.IsStarting);
+        Assert.False(row.CanStart);
+        Assert.Null(row.Error);
+        Assert.Throws<InvalidOperationException>(() => controller.RequestStart(path));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task QuitCancelsStartReconciliationWithoutWaitingForDeadline(bool successful)
+    {
+        using var directory = new TestTrayStateDirectory();
+        var path = directory.CreateAppHost("apphost.cs");
+        var client = new TestAppHostClient();
+        var time = new FakeTimeProvider();
+        var controller = new TrayController(client, new MemoryTraySavedStateStore(), 10, time);
+        await using var lifetime = controller.ConfigureAwait(true);
+        controller.Start();
+        await client.PublishAndWaitAsync(controller, new([], DiscoveryState.Live));
+        controller.RequestStart(path);
+        await client.NextStartAsync();
+        var previous = controller.State;
+        client.CompleteStart(path, new(successful ? StartOutcome.Started : StartOutcome.TimedOut, null));
+        await WaitForStateAsync(controller, state => !ReferenceEquals(previous, state));
+
+        await controller.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        Assert.True(client.WatchFinished.Task.IsCompletedSuccessfully);
+        Assert.Empty(client.Requests);
+        Assert.Equal([path], client.StartRequests.ToArray());
+    }
+
     [Fact]
     public async Task SavedHistoryAndPinsReloadWithoutLiveIdentityOrStartingAnything()
     {

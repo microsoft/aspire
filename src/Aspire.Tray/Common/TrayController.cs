@@ -10,6 +10,8 @@ internal sealed class TrayController : IAsyncDisposable
     private readonly IAppHostClient _client;
     private readonly ITraySavedStateStore _savedStateStore;
     private readonly int _recentAppHostLimit;
+    private readonly TimeProvider _timeProvider;
+    internal static TimeSpan StartReconciliationTimeout => TimeSpan.FromSeconds(60);
     private readonly object _gate = new();
     private readonly CancellationTokenSource _shutdown = new();
     private readonly Dictionary<AppHostId, StopOperation> _stops = [];
@@ -36,12 +38,18 @@ internal sealed class TrayController : IAsyncDisposable
     }
 
     public TrayController(IAppHostClient client, ITraySavedStateStore savedStateStore, int recentAppHostLimit)
+        : this(client, savedStateStore, recentAppHostLimit, TimeProvider.System)
+    {
+    }
+
+    internal TrayController(IAppHostClient client, ITraySavedStateStore savedStateStore, int recentAppHostLimit, TimeProvider timeProvider)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(recentAppHostLimit);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(recentAppHostLimit, TraySavedState.MaximumRecentAppHosts);
         _client = client;
         _savedStateStore = savedStateStore;
         _recentAppHostLimit = recentAppHostLimit;
+        _timeProvider = timeProvider;
         try
         {
             _savedState = savedStateStore.Load();
@@ -345,6 +353,10 @@ internal sealed class TrayController : IAsyncDisposable
                     var path = TrayAppHostPath.Normalize(host.AppHostPath);
                     if (_starts.TryGetValue(path, out var start))
                     {
+                        if (_actionError == GetStartError(start))
+                        {
+                            _actionError = null;
+                        }
                         start.Discovered = true;
                         if (start.Task.IsCompleted)
                         {
@@ -439,6 +451,7 @@ internal sealed class TrayController : IAsyncDisposable
         {
             Console.Error.WriteLine($"The AppHost start command did not succeed ({result.Outcome}, exit {result.ExitCode}).");
         }
+        Task? reconciliation = null;
         lock (_gate)
         {
             operation.Result = result;
@@ -446,11 +459,45 @@ internal sealed class TrayController : IAsyncDisposable
             {
                 return;
             }
+            // A CLI success is not proof that discovery will ever see the AppHost: it
+            // can exit between snapshots. Bound only reconciliation, not the CLI call,
+            // and permit an explicit retry only through the usual live-discovery guard.
+            if (!operation.Discovered && result.Outcome is StartOutcome.Started or StartOutcome.TimedOut)
+            {
+                reconciliation = Task.Delay(StartReconciliationTimeout, _timeProvider, _shutdown.Token);
+            }
             var removedPins = PruneMissingPinsLocked();
             if ((result.Outcome != StartOutcome.NotFound || !removedPins.Contains(path))
                 && !_savedState.AppHosts.Any(host => TrayAppHostPath.Comparer.Equals(host.AppHostPath, path)))
             {
-                _actionError = GetStartError(result);
+                _actionError = GetStartError(operation);
+            }
+            PublishLocked();
+        }
+        Changed?.Invoke();
+        if (reconciliation is null)
+        {
+            return;
+        }
+        try
+        {
+            await reconciliation.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (_shutdown.IsCancellationRequested)
+        {
+            return;
+        }
+        lock (_gate)
+        {
+            if (_disposed || operation.Discovered || !_starts.TryGetValue(path, out var current) || current != operation)
+            {
+                return;
+            }
+            operation.ReconciliationExpired = true;
+            Console.Error.WriteLine("The AppHost was not observed before the start reconciliation deadline.");
+            if (!_savedState.AppHosts.Any(host => TrayAppHostPath.Comparer.Equals(host.AppHostPath, path)))
+            {
+                _actionError = GetStartError(operation);
             }
             PublishLocked();
         }
@@ -571,7 +618,7 @@ internal sealed class TrayController : IAsyncDisposable
         }
         var recent = _savedState.AppHosts.Where(host => host.IsRecent && !listedPaths.Contains(host.AppHostPath)
                 && (!_starts.TryGetValue(host.AppHostPath, out var operation)
-                    || operation.Result?.Outcome != StartOutcome.Started || operation.Discovered))
+                    || operation.Result?.Outcome != StartOutcome.Started || operation.Discovered || operation.ReconciliationExpired))
             .Select(host => CreateSavedMenuItem(host, live)).ToArray();
         var pending = rows.Count(row => row.IsStopping);
         var starting = _starts.Values.Count(operation => operation.IsPending);
@@ -606,7 +653,7 @@ internal sealed class TrayController : IAsyncDisposable
         var host = new AppHostInfo(saved.AppHostPath, 0, null);
         _starts.TryGetValue(saved.AppHostPath, out var start);
         var starting = start?.IsPending == true;
-        var error = GetStartError(start?.Result);
+        var error = GetStartError(start);
         var subtitle = error ?? (starting ? "Starting AppHost; waiting for discovery..."
             : saved.IsPinned || File.Exists(saved.AppHostPath) ? "Stopped" : "AppHost source file not found");
         return new(host.Id, AppHostPresentation.GetTitle(host), subtitle, AppHostPresentation.GetDisplayName(host),
@@ -620,12 +667,16 @@ internal sealed class TrayController : IAsyncDisposable
         };
     }
 
-    private static string? GetStartError(StartResult? result) => result?.Outcome switch
+    private static string? GetStartError(StartOperation? operation) => operation?.Discovered == true
+        ? null
+        : operation?.ReconciliationExpired == true
+        ? "Start was not confirmed by discovery. The AppHost may still start; check before retrying."
+        : operation?.Result?.Outcome switch
     {
         null or StartOutcome.Started => null,
         StartOutcome.NotFound => "The AppHost source file no longer exists.",
         StartOutcome.TimedOut => "Start timed out. The AppHost may still start; wait for discovery before retrying.",
-        _ => $"Unable to start AppHost{(result.ExitCode is int code ? $" (CLI exit {code})" : "")}."
+        _ => $"Unable to start AppHost{(operation.Result.ExitCode is int code ? $" (CLI exit {code})" : "")}."
     };
 
     private static string? GetStopError(StopResult? result) => result?.Outcome switch
@@ -679,7 +730,8 @@ internal sealed class TrayController : IAsyncDisposable
         public Task Task { get; set; } = Task.CompletedTask;
         public StartResult? Result { get; set; }
         public bool Discovered { get; set; }
-        public bool IsPending => Result is null || (Result.Outcome == StartOutcome.Started && !Discovered);
-        public bool BlocksStart => IsPending || (Result?.Outcome == StartOutcome.TimedOut && !Discovered);
+        public bool ReconciliationExpired { get; set; }
+        public bool IsPending => Result is null || (Result.Outcome == StartOutcome.Started && !Discovered && !ReconciliationExpired);
+        public bool BlocksStart => IsPending || (Result?.Outcome == StartOutcome.TimedOut && !Discovered && !ReconciliationExpired);
     }
 }

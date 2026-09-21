@@ -156,6 +156,10 @@ The menu-bar connection badge indicates AppHost presence, not aggregate health.
 removes that preference. Both are available in the AppHost action submenu and
 through a right-click context action. An offline pin has a neutral icon and an
 explicit **Start AppHost** action. Merely opening an AppHost submenu never starts it.
+After the CLI reports a successful or timed-out start, the tray waits up to 60 seconds
+for discovery to observe the AppHost. If it never appears, the tray shows an unconfirmed-start
+warning and allows an explicit retry while discovery is connected and the path is not listed.
+The AppHost may still start late, so check before retrying; the tray never retries automatically.
 Missing pinned projects are automatically removed from saved state rather than
 kept as broken entries. A discovery disconnection alone does not remove pins.
 
