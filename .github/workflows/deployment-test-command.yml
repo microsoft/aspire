@@ -2,7 +2,7 @@
 #
 # Usage: Comment `/deployment-test` on a PR
 #
-# This workflow validates the commenter is an org member and triggers
+# This workflow validates the commenter has repository write access and triggers
 # the deployment-tests.yml workflow with the PR context.
 #
 name: Deployment Test Command
@@ -28,44 +28,35 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check org membership
-        id: check_membership
+      - name: Check repository write access
+        id: check_permission
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const commenter = context.payload.comment.user.login;
-            
-            try {
-              // Check if user is a member of the microsoft org
-              const { status } = await github.rest.orgs.checkMembershipForUser({
-                org: 'microsoft',
-                username: commenter
+            const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: commenter
+            });
+
+            if (!['admin', 'write'].includes(permission.permission)) {
+              core.setOutput('has_write_access', 'false');
+              core.setFailed(`@${commenter} does not have write access to this repository.`);
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `@${commenter} The \`/deployment-test\` command requires write access to this repository for security reasons (it deploys to real Azure infrastructure).`
               });
-              
-              if (status === 204 || status === 302) {
-                core.info(`✅ ${commenter} is a member of microsoft org`);
-                core.setOutput('is_member', 'true');
-                return;
-              }
-            } catch (error) {
-              if (error.status === 404) {
-                core.warning(`❌ ${commenter} is not a member of microsoft org`);
-                core.setOutput('is_member', 'false');
-                
-                // Post a comment explaining the restriction
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: `@${commenter} The \`/deployment-test\` command is restricted to microsoft org members for security reasons (it deploys to real Azure infrastructure).`
-                });
-                return;
-              }
-              throw error;
+              return;
             }
 
+            core.info(`Verified ${commenter} has ${permission.permission} access to the repository.`);
+            core.setOutput('has_write_access', 'true');
+
       - name: Get PR details
-        if: steps.check_membership.outputs.is_member == 'true'
+        if: steps.check_permission.outputs.has_write_access == 'true'
         id: pr
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
@@ -86,7 +77,7 @@ jobs:
             core.setOutput('head_ref', pr.head.ref);
 
       - name: Trigger deployment tests
-        if: steps.check_membership.outputs.is_member == 'true'
+        if: steps.check_permission.outputs.has_write_access == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           PR_HEAD_REF: ${{ steps.pr.outputs.head_ref }}
