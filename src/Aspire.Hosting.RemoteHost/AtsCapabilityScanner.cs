@@ -1969,7 +1969,7 @@ public static class AtsCapabilityScanner
                 }
 
                 // Get return type
-                var returnTypeRef = CreateTypeRef(method.ReturnType, enumCollector: null, assemblyExportedTypeCache);
+                var returnTypeRef = CreateReturnTypeRef(method, assemblyExportedTypeCache);
 
                 var obsoleteData = AttributeDataReader.GetObsoleteData(method);
                 var isExperimental = AttributeDataReader.HasExperimentalData(method);
@@ -2146,7 +2146,7 @@ public static class AtsCapabilityScanner
         }
 
         // Get return type
-        var returnTypeRef = CreateTypeRef(method.ReturnType, enumCollector: null, assemblyExportedTypeCache);
+        var returnTypeRef = CreateReturnTypeRef(method, assemblyExportedTypeCache);
         var returnTypeId = MapToAtsTypeId(method.ReturnType, assemblyExportedTypeCache);
 
         // Only set ReturnsBuilder if the return type is actually a resource builder type
@@ -2669,6 +2669,27 @@ public static class AtsCapabilityScanner
         TypeId = AtsConstants.Void,
         Category = AtsTypeCategory.Primitive
     };
+
+    private static AtsTypeRef? CreateReturnTypeRef(MethodInfo method, AssemblyExportedTypeCache assemblyExportedTypeCache)
+    {
+        var typeRef = CreateTypeRef(method.ReturnType, enumCollector: null, assemblyExportedTypeCache);
+        if (typeRef is null)
+        {
+            return null;
+        }
+
+        var nullability = new NullabilityInfoContext().Create(method.ReturnParameter);
+        // CreateTypeRef unwraps async results. Read the matching T annotation, not the Task's
+        // nullability: Task<string?> is non-nullable, but its serialized result can be null.
+        while (nullability.Type.IsGenericType &&
+            (nullability.Type.GetGenericTypeDefinition() == typeof(Task<>) ||
+             nullability.Type.GetGenericTypeDefinition() == typeof(ValueTask<>)))
+        {
+            nullability = nullability.GenericTypeArguments[0];
+        }
+
+        return WithNullability(typeRef, nullability.Type, nullability.ReadState);
+    }
 
     private static AtsTypeRef WithNullability(AtsTypeRef typeRef, Type declaredType, NullabilityState nullabilityState)
     {

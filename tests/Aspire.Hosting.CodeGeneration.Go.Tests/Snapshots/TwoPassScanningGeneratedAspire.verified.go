@@ -5567,8 +5567,8 @@ type Configuration interface {
 	handleReference
 	Exists(key string) (bool, error)
 	GetChildren() ([]ConfigurationSection, error)
-	GetConfigValue(key string) (string, error)
-	GetConnectionString(name string) (string, error)
+	GetConfigValue(key string) (*string, error)
+	GetConnectionString(name string) (*string, error)
 	GetSection(key string) ConfigurationSection
 	Err() error
 }
@@ -5615,8 +5615,8 @@ func (s *configuration) GetChildren() ([]ConfigurationSection, error) {
 }
 
 // GetConfigValue gets a configuration value by key.
-func (s *configuration) GetConfigValue(key string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+func (s *configuration) GetConfigValue(key string) (*string, error) {
+	if s.err != nil { var zero *string; return zero, s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"configuration": s.handle.ToJSON(),
@@ -5624,15 +5624,15 @@ func (s *configuration) GetConfigValue(key string) (string, error) {
 	reqArgs["key"] = serializeValue(key)
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getConfigValue", reqArgs)
 	if err != nil {
-		var zero string
+		var zero *string
 		return zero, err
 	}
-	return decodeAs[string](result)
+	return decodeAs[*string](result)
 }
 
 // GetConnectionString gets a connection string by name.
-func (s *configuration) GetConnectionString(name string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+func (s *configuration) GetConnectionString(name string) (*string, error) {
+	if s.err != nil { var zero *string; return zero, s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"configuration": s.handle.ToJSON(),
@@ -5640,10 +5640,10 @@ func (s *configuration) GetConnectionString(name string) (string, error) {
 	reqArgs["name"] = serializeValue(name)
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getConnectionString", reqArgs)
 	if err != nil {
-		var zero string
+		var zero *string
 		return zero, err
 	}
-	return decodeAs[string](result)
+	return decodeAs[*string](result)
 }
 
 // GetSection gets a configuration section by key.
@@ -13048,7 +13048,7 @@ type EndpointReference interface {
 	ExcludeReferenceEndpoint() (bool, error)
 	Exists() (bool, error)
 	GetTlsValue(enabledValue *ReferenceExpression, disabledValue *ReferenceExpression) *ReferenceExpression
-	GetValueAsync(options ...*GetValueAsyncOptions) (string, error)
+	GetValueAsync(options ...*GetValueAsyncOptions) (*string, error)
 	Host() (string, error)
 	IsAllocated() (bool, error)
 	IsHttp() (bool, error)
@@ -13156,8 +13156,8 @@ func (s *endpointReference) GetTlsValue(enabledValue *ReferenceExpression, disab
 }
 
 // GetValueAsync gets the URL of the endpoint asynchronously. Waits for the endpoint to be allocated if necessary.
-func (s *endpointReference) GetValueAsync(options ...*GetValueAsyncOptions) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+func (s *endpointReference) GetValueAsync(options ...*GetValueAsyncOptions) (*string, error) {
+	if s.err != nil { var zero *string; return zero, s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -13177,10 +13177,10 @@ func (s *endpointReference) GetValueAsync(options ...*GetValueAsyncOptions) (str
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EndpointReference.getValueAsync", reqArgs)
 	if err != nil {
-		var zero string
+		var zero *string
 		return zero, err
 	}
-	return decodeAs[string](result)
+	return decodeAs[*string](result)
 }
 
 // Host gets the host for this endpoint.
@@ -18757,7 +18757,7 @@ type ParameterResource interface {
 	SetValueAsync(options ...*SetValueAsyncOptions) error
 	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ParameterResource
 	TestWaitFor(dependency Resource) ParameterResource
-	TryGetCurrentValue() (string, error)
+	TryGetCurrentValue() (*string, error)
 	WithCancellableOperation(operation func(arg *CancellationToken)) ParameterResource
 	WithChildRelationship(child Resource) ParameterResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ParameterResource
@@ -19011,18 +19011,18 @@ func (s *parameterResource) TestWaitFor(dependency Resource) ParameterResource {
 }
 
 // TryGetCurrentValue gets the current value for this parameter without waiting for unresolved input.
-func (s *parameterResource) TryGetCurrentValue() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+func (s *parameterResource) TryGetCurrentValue() (*string, error) {
+	if s.err != nil { var zero *string; return zero, s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue", reqArgs)
 	if err != nil {
-		var zero string
+		var zero *string
 		return zero, err
 	}
-	return decodeAs[string](result)
+	return decodeAs[*string](result)
 }
 
 // WithCancellableOperation performs a cancellable operation
@@ -28693,6 +28693,214 @@ func (s *testResourceContext) Value() (float64, error) {
 	return decodeAs[float64](result)
 }
 
+// TestReturnValueContext is the public interface for handle type TestReturnValueContext.
+type TestReturnValueContext interface {
+	handleReference
+	GetInt() (float64, error)
+	GetIntTaskAsync() (float64, error)
+	GetIntValueTaskAsync() (float64, error)
+	GetNullableInt() (*float64, error)
+	GetNullableIntTaskAsync() (*float64, error)
+	GetNullableIntValueTaskAsync() (*float64, error)
+	GetNullableString() (*string, error)
+	GetNullableStringTaskAsync() (*string, error)
+	GetNullableStringValueTaskAsync() (*string, error)
+	GetString() (string, error)
+	GetStringTaskAsync() (string, error)
+	GetStringValueTaskAsync() (string, error)
+	Err() error
+}
+
+// testReturnValueContext is the unexported impl of TestReturnValueContext.
+type testReturnValueContext struct {
+	*resourceBuilderBase
+}
+
+// newTestReturnValueContextFromHandle wraps an existing handle as TestReturnValueContext.
+func newTestReturnValueContextFromHandle(h *handle, c *client) TestReturnValueContext {
+	return &testReturnValueContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// GetInt invokes the GetInt method
+func (s *testReturnValueContext) GetInt() (float64, error) {
+	if s.err != nil { var zero float64; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getInt", reqArgs)
+	if err != nil {
+		var zero float64
+		return zero, err
+	}
+	return decodeAs[float64](result)
+}
+
+// GetIntTaskAsync invokes the GetIntTaskAsync method
+func (s *testReturnValueContext) GetIntTaskAsync() (float64, error) {
+	if s.err != nil { var zero float64; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntTaskAsync", reqArgs)
+	if err != nil {
+		var zero float64
+		return zero, err
+	}
+	return decodeAs[float64](result)
+}
+
+// GetIntValueTaskAsync invokes the GetIntValueTaskAsync method
+func (s *testReturnValueContext) GetIntValueTaskAsync() (float64, error) {
+	if s.err != nil { var zero float64; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntValueTaskAsync", reqArgs)
+	if err != nil {
+		var zero float64
+		return zero, err
+	}
+	return decodeAs[float64](result)
+}
+
+// GetNullableInt invokes the GetNullableInt method
+func (s *testReturnValueContext) GetNullableInt() (*float64, error) {
+	if s.err != nil { var zero *float64; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableInt", reqArgs)
+	if err != nil {
+		var zero *float64
+		return zero, err
+	}
+	return decodeAs[*float64](result)
+}
+
+// GetNullableIntTaskAsync invokes the GetNullableIntTaskAsync method
+func (s *testReturnValueContext) GetNullableIntTaskAsync() (*float64, error) {
+	if s.err != nil { var zero *float64; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntTaskAsync", reqArgs)
+	if err != nil {
+		var zero *float64
+		return zero, err
+	}
+	return decodeAs[*float64](result)
+}
+
+// GetNullableIntValueTaskAsync invokes the GetNullableIntValueTaskAsync method
+func (s *testReturnValueContext) GetNullableIntValueTaskAsync() (*float64, error) {
+	if s.err != nil { var zero *float64; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntValueTaskAsync", reqArgs)
+	if err != nil {
+		var zero *float64
+		return zero, err
+	}
+	return decodeAs[*float64](result)
+}
+
+// GetNullableString invokes the GetNullableString method
+func (s *testReturnValueContext) GetNullableString() (*string, error) {
+	if s.err != nil { var zero *string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableString", reqArgs)
+	if err != nil {
+		var zero *string
+		return zero, err
+	}
+	return decodeAs[*string](result)
+}
+
+// GetNullableStringTaskAsync invokes the GetNullableStringTaskAsync method
+func (s *testReturnValueContext) GetNullableStringTaskAsync() (*string, error) {
+	if s.err != nil { var zero *string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringTaskAsync", reqArgs)
+	if err != nil {
+		var zero *string
+		return zero, err
+	}
+	return decodeAs[*string](result)
+}
+
+// GetNullableStringValueTaskAsync invokes the GetNullableStringValueTaskAsync method
+func (s *testReturnValueContext) GetNullableStringValueTaskAsync() (*string, error) {
+	if s.err != nil { var zero *string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringValueTaskAsync", reqArgs)
+	if err != nil {
+		var zero *string
+		return zero, err
+	}
+	return decodeAs[*string](result)
+}
+
+// GetString invokes the GetString method
+func (s *testReturnValueContext) GetString() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getString", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// GetStringTaskAsync invokes the GetStringTaskAsync method
+func (s *testReturnValueContext) GetStringTaskAsync() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringTaskAsync", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// GetStringValueTaskAsync invokes the GetStringValueTaskAsync method
+func (s *testReturnValueContext) GetStringValueTaskAsync() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringValueTaskAsync", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
 // UpdateCommandStateContext is the public interface for handle type UpdateCommandStateContext.
 type UpdateCommandStateContext interface {
 	handleReference
@@ -30417,6 +30625,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext", func(h *handle, c *client) any {
 		return newTestResourceContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext", func(h *handle, c *client) any {
+		return newTestReturnValueContextFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext", func(h *handle, c *client) any {
 		return newUpdateCommandStateContextFromHandle(h, c)

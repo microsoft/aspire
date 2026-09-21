@@ -2828,6 +2828,8 @@ public class AtsJavaCodeGeneratorTests
     [Fact]
     public async Task GeneratedCapabilities_NullablePrimitiveResultsReturnNull()
     {
+        var parameterValue = Assert.Single(ScanCapabilitiesFromHostingAssembly(),
+            c => c.CapabilityId == "Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue");
         var resourceType = new AtsTypeRef
         {
             TypeId = "Tests/ProbeResource",
@@ -2842,7 +2844,8 @@ public class AtsJavaCodeGeneratorTests
             CreateProbeCapability(
                 resourceType,
                 "nullableNumber",
-                new AtsTypeRef { TypeId = AtsConstants.Number, Category = AtsTypeCategory.Primitive, IsNullable = true }));
+                new AtsTypeRef { TypeId = AtsConstants.Number, Category = AtsTypeCategory.Primitive, IsNullable = true }),
+            CreateProbeCapability(resourceType, "nullableString", parameterValue.ReturnType));
 
         using var workspace = await CreateJavaProbeWorkspaceAsync(context, "aspire/ProbeResource.java");
         workspace.WriteSource(
@@ -2883,6 +2886,13 @@ public class AtsJavaCodeGeneratorTests
                     Number number = numberCall.get(2, TimeUnit.SECONDS);
                     if (number != null) {
                         throw new IllegalStateException("nullable Number was not null");
+                    }
+
+                    var stringCall = CompletableFuture.supplyAsync(resource::nullableString);
+                    writeNullResponse(serverOutput, extractId(readMessage(serverInput)));
+                    String value = stringCall.get(2, TimeUnit.SECONDS);
+                    if (value != null) {
+                        throw new IllegalStateException("nullable String was not null");
                     }
 
                     System.out.println("OK");

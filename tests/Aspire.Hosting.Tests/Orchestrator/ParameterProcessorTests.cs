@@ -386,8 +386,20 @@ public class ParameterProcessorTests
         Assert.False(initializeTask.IsCompleted);
         Assert.False(testInteractionService.Interactions.Reader.TryRead(out _));
 
+        await parameterWithMissingValue.SetValueAsync(null).DefaultTimeout();
+        Assert.False(testInteractionService.Interactions.Reader.TryRead(out _));
+        Assert.False(initializeTask.IsCompleted);
+
         await parameterProcessor.SetParameterCoreAsync(parameterWithMissingValue, CreateSetParameterArguments("resolvedValue"), CancellationToken.None).DefaultTimeout();
         await initializeTask.DefaultTimeout();
+
+        await parameterWithMissingValue.SetValueAsync(null).DefaultTimeout();
+        var newNotification = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        var secondInitializeTask = parameterProcessor.InitializeParametersAsync([parameterWithMissingValue], waitForResolution: true);
+        Assert.False(newNotification.CancellationToken.IsCancellationRequested);
+        await parameterWithMissingValue.SetValueAsync("resolvedAgain").DefaultTimeout();
+        newNotification.CompletionTcs.SetResult(InteractionResult.Cancel<bool>());
+        await secondInitializeTask.DefaultTimeout();
     }
 
     [Fact]
@@ -398,6 +410,78 @@ public class ParameterProcessorTests
 
         // Act & Assert - Should not throw
         await parameterProcessor.InitializeParametersAsync([]).DefaultTimeout();
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task InitializeParametersAsync_WhenLastParameterClearedBeforePromptExits_RestartsResolution(bool publish, bool enterInputs)
+    {
+        var interactions = new TestInteractionService();
+        var processor = CreateParameterProcessor(
+            interactionService: interactions,
+            executionContext: new DistributedApplicationExecutionContext(publish ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run));
+        var parameter = CreateParameterWithMissingValue("missingParam");
+        var initializeTask = processor.InitializeParametersAsync([parameter], waitForResolution: true);
+        var prompt = await interactions.Interactions.Reader.ReadAsync().DefaultTimeout();
+
+        try
+        {
+            for (var cycle = 0; cycle < 3; cycle++)
+            {
+                if (!publish && enterInputs)
+                {
+                    prompt.CompletionTcs.SetResult(InteractionResult.Ok(true));
+                    prompt = await interactions.Interactions.Reader.ReadAsync().DefaultTimeout();
+                }
+
+                await parameter.SetValueAsync("resolved").DefaultTimeout();
+                Assert.True(prompt.CancellationToken.IsCancellationRequested);
+                await parameter.SetValueAsync(null).DefaultTimeout();
+
+                // Keep the canceled prompt in flight until the clear has requested another resolution.
+                Assert.False(initializeTask.IsCompleted);
+                Assert.False(interactions.Interactions.Reader.TryRead(out _));
+                if (prompt.Type == InteractionType.Notification)
+                {
+                    prompt.CompletionTcs.SetResult(InteractionResult.Cancel<bool>());
+                }
+                else
+                {
+                    prompt.CompletionTcs.SetResult(InteractionResult.Cancel<InteractionInputCollection>());
+                }
+
+                prompt = await interactions.Interactions.Reader.ReadAsync().DefaultTimeout();
+                Assert.False(prompt.CancellationToken.IsCancellationRequested);
+                Assert.False(initializeTask.IsCompleted);
+            }
+
+            if (!publish)
+            {
+                prompt.CompletionTcs.SetResult(InteractionResult.Ok(true));
+                prompt = await interactions.Interactions.Reader.ReadAsync().DefaultTimeout();
+            }
+
+            prompt.Inputs[parameter.Name].Value = "finalValue";
+            prompt.CompletionTcs.SetResult(InteractionResult.Ok(prompt.Inputs));
+            await initializeTask.DefaultTimeout();
+            Assert.Equal("finalValue", await parameter.GetValueAsync(CancellationToken.None));
+            Assert.False(interactions.Interactions.Reader.TryRead(out _));
+        }
+        finally
+        {
+            await parameter.SetValueAsync("cleanup").DefaultTimeout();
+            if (prompt.Type == InteractionType.Notification)
+            {
+                prompt.CompletionTcs.TrySetResult(InteractionResult.Cancel<bool>());
+            }
+            else
+            {
+                prompt.CompletionTcs.TrySetResult(InteractionResult.Cancel<InteractionInputCollection>());
+            }
+            await initializeTask.DefaultTimeout();
+        }
     }
 
     [Fact]
@@ -1886,9 +1970,11 @@ public class ParameterProcessorTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task HandleUnresolvedParametersAsync_WhenClearedDuringPersistence_PromptsAgain(bool secret)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task HandleUnresolvedParametersAsync_WhenClearedDuringPersistence_PromptsAgain(bool secret, bool keepOtherParameterUnresolved)
     {
         var saveStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var resumeSave = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1903,9 +1989,10 @@ public class ParameterProcessorTests
         var interactionService = new TestInteractionService { IsAvailable = true };
         var processor = CreateParameterProcessor(interactionService: interactionService, deploymentStateManager: stateManager);
         var parameter = CreateParameterWithMissingValue("testParam", secret);
-        // Keep the existing resolution loop active while the first parameter is saved.
         var otherParameter = CreateParameterWithMissingValue("otherParam");
-        var initializeTask = processor.InitializeParametersAsync([parameter, otherParameter], waitForResolution: true);
+        // Exercise both an active loop and a canceled generation while the last value is being saved.
+        var initializeTask = processor.InitializeParametersAsync(
+            keepOtherParameterUnresolved ? [parameter, otherParameter] : [parameter], waitForResolution: true);
         InteractionData? interaction = null;
         try
         {
@@ -1925,8 +2012,9 @@ public class ParameterProcessorTests
             interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
 
             Assert.True(interaction.Inputs.ContainsName(parameter.Name));
-            Assert.True(interaction.Inputs.ContainsName(otherParameter.Name));
+            Assert.Equal(keepOtherParameterUnresolved, interaction.Inputs.ContainsName(otherParameter.Name));
             Assert.False(interaction.CancellationToken.IsCancellationRequested);
+            Assert.False(initializeTask.IsCompleted);
             await Assert.ThrowsAsync<MissingParameterValueException>(() => parameter.GetValueAsync(CancellationToken.None).AsTask()).DefaultTimeout();
         }
         finally

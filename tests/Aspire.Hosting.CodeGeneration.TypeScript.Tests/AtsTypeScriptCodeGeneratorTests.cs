@@ -647,13 +647,13 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Equal(AtsCapabilityKind.InstanceMethod, setValue.CapabilityKind);
         Assert.Equal("setValueAsync", setValue.MethodName);
         Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource", setValue.TargetTypeId);
+        Assert.Equal(AtsConstants.Void, setValue.ReturnType.TypeId);
+        Assert.NotEqual(true, setValue.ReturnType.IsNullable);
 
         var valueParameter = Assert.Single(setValue.Parameters, p => p.Name == "value");
         Assert.True(valueParameter.IsOptional);
-        // Reference-type nullability (string?) is intentionally NOT surfaced in the ATS model: only
-        // Nullable<T> value types are marked nullable. This keeps the generated polyglot API stable and
-        // consistent with existing string?-returning members (e.g. getConnectionString). The value
-        // parameter is still omittable because it has a C# default (= null), which IsOptional captures above.
+        // Reference-type parameter nullability is not surfaced in the ATS model. This parameter
+        // is still omittable because it has a C# default (= null), which IsOptional captures above.
         Assert.False(valueParameter.IsNullable);
         Assert.NotNull(valueParameter.Type);
         Assert.Equal("string", valueParameter.Type.TypeId);
@@ -667,9 +667,29 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.DoesNotContain(tryGetCurrentValue.Parameters, p => p.Name != "context");
         Assert.NotNull(tryGetCurrentValue.ReturnType);
         Assert.Equal("string", tryGetCurrentValue.ReturnType.TypeId);
-        // See the note above: reference-type nullability is not surfaced, so the string? return renders as
-        // a non-nullable string (AtsTypeRef.IsNullable is left unset rather than true).
-        Assert.NotEqual(true, tryGetCurrentValue.ReturnType.IsNullable);
+        Assert.True(tryGetCurrentValue.ReturnType.IsNullable);
+    }
+
+    [Theory]
+    [InlineData("getNullableString", "string", true)]
+    [InlineData("getNullableStringTaskAsync", "string", true)]
+    [InlineData("getNullableStringValueTaskAsync", "string", true)]
+    [InlineData("getString", "string", false)]
+    [InlineData("getStringTaskAsync", "string", false)]
+    [InlineData("getStringValueTaskAsync", "string", false)]
+    [InlineData("getNullableInt", "number", true)]
+    [InlineData("getNullableIntTaskAsync", "number", true)]
+    [InlineData("getNullableIntValueTaskAsync", "number", true)]
+    [InlineData("getInt", "number", false)]
+    [InlineData("getIntTaskAsync", "number", false)]
+    [InlineData("getIntValueTaskAsync", "number", false)]
+    [InlineData("getStaticNullableStringAsync", "string", true)]
+    public void Scanner_MethodReturnTypes_PreserveNullability(string methodName, string typeId, bool nullable)
+    {
+        var capability = Assert.Single(ScanCapabilitiesFromTestAssembly(), c => c.MethodName == methodName);
+
+        Assert.Equal(typeId, capability.ReturnType.TypeId);
+        Assert.Equal(nullable, capability.ReturnType.IsNullable == true);
     }
 
     [Fact]

@@ -35,8 +35,8 @@ public sealed class ParameterProcessor(
     private readonly Dictionary<ParameterResource, SemaphoreSlim> _parameterUpdateLocks = [];
     private readonly object _observedParametersLock = new();
     private readonly object _unresolvedParametersLock = new();
-    private readonly object _resolutionTaskLock = new();
     private CancellationTokenSource? _allParametersResolvedCts;
+    private Task _allParametersResolvedCancellation = Task.CompletedTask;
     private Task? _parameterResolutionTask;
 
     /// <summary>
@@ -82,22 +82,69 @@ public sealed class ParameterProcessor(
 
     private Task EnsureParameterResolutionTaskRunningAsync()
     {
-        lock (_resolutionTaskLock)
+        lock (_unresolvedParametersLock)
         {
-            if (_parameterResolutionTask is null || _parameterResolutionTask.IsCompleted)
+            if (_parameterResolutionTask is null)
             {
                 var cts = new CancellationTokenSource();
                 _allParametersResolvedCts = cts;
                 _parameterResolutionTask = Task.Run(async () =>
                 {
-                    try
+                    while (true)
                     {
-                        await HandleUnresolvedParametersAsync(_unresolvedParameters, cts.Token).ConfigureAwait(false);
-                        logger.LogDebug("All unresolved parameters have been handled successfully.");
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "Failed to handle unresolved parameters.");
+                        var failed = false;
+                        try
+                        {
+                            await HandleUnresolvedParametersAsync(_unresolvedParameters, cts.Token).ConfigureAwait(false);
+                            logger.LogDebug("All unresolved parameters have been handled successfully.");
+                        }
+                        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+                        {
+                        }
+                        catch (Exception ex)
+                        {
+                            failed = true;
+                            logger.LogError(ex, "Failed to handle unresolved parameters.");
+                        }
+
+                        bool canRestart;
+                        Task cancellation;
+                        lock (_unresolvedParametersLock)
+                        {
+                            canRestart = !failed || cts.IsCancellationRequested;
+                            cancellation = _allParametersResolvedCancellation;
+                            _allParametersResolvedCancellation = Task.CompletedTask;
+                            _allParametersResolvedCts = null;
+                        }
+
+                        try
+                        {
+                            await cancellation.ConfigureAwait(false);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(ex, "Failed to cancel resolved parameter interactions.");
+                        }
+                        finally
+                        {
+                            cts.Dispose();
+                        }
+
+                        lock (_unresolvedParametersLock)
+                        {
+                            // A clear can arrive while the canceled prompt or its callbacks are exiting.
+                            // Recheck after both finish and keep the successor inside the same task so
+                            // waitForResolution waits for it. Additions and shutdown share this lock,
+                            // so a clear either joins this task or starts a new one, never losing a wakeup.
+                            if (!canRestart || _unresolvedParameters.Count == 0)
+                            {
+                                _parameterResolutionTask = null;
+                                return;
+                            }
+
+                            cts = new CancellationTokenSource();
+                            _allParametersResolvedCts = cts;
+                        }
                     }
                 });
             }
@@ -601,7 +648,7 @@ public sealed class ParameterProcessor(
         var stateModified = false;
 
         // This method will continue in a loop until all unresolved parameters are resolved.
-        while (HasUnresolvedParameters(unresolvedParameters))
+        while (!allParametersResolvedToken.IsCancellationRequested && HasUnresolvedParameters(unresolvedParameters))
         {
             var showNotification = executionContext.IsRunMode;
             var showSaveToSecrets = executionContext.IsRunMode;
@@ -620,6 +667,11 @@ public sealed class ParameterProcessor(
                         PrimaryButtonText = InteractionStrings.ParametersBarPrimaryButtonText
                     },
                     allParametersResolvedToken).ConfigureAwait(false);
+
+                if (allParametersResolvedToken.IsCancellationRequested)
+                {
+                    break;
+                }
 
                 if (result.Canceled)
                 {
@@ -675,6 +727,11 @@ public sealed class ParameterProcessor(
                     },
                     allParametersResolvedToken).ConfigureAwait(false);
 
+                if (allParametersResolvedToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
                 if (!valuesPrompt.Canceled)
                 {
                     var shouldSave = saveParameters?.Value is not null &&
@@ -726,9 +783,11 @@ public sealed class ParameterProcessor(
             {
                 unresolvedParameters.Remove(parameter);
 
-                if (unresolvedParameters.Count == 0)
+                if (unresolvedParameters.Count == 0 && _allParametersResolvedCts is { IsCancellationRequested: false } cts)
                 {
-                    _allParametersResolvedCts?.Cancel();
+                    // Mark this generation canceled under the same lock as additions/restarts, but run
+                    // callbacks asynchronously so interaction continuations cannot reenter under the lock.
+                    _allParametersResolvedCancellation = cts.CancelAsync();
                 }
             }
 
@@ -736,11 +795,6 @@ public sealed class ParameterProcessor(
         }
 
         unresolvedParameters.Remove(parameter);
-
-        if (unresolvedParameters.Count == 0)
-        {
-            _allParametersResolvedCts?.Cancel();
-        }
     }
 
     private bool AddUnresolvedParameter(ParameterResource parameter)
