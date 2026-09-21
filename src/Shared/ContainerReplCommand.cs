@@ -56,7 +56,7 @@ internal static class ContainerReplCommand
             return CommandResults.Success();
         }, new CommandOptions
         {
-            Description = "Open an authenticated REPL inside the running container in the terminal dock.",
+            Description = "Open a REPL inside the running container in the terminal dock.",
             IconName = "WindowConsole",
             UpdateState = context => context.ResourceSnapshot.State?.Text == KnownResourceStates.Running &&
                 !string.IsNullOrEmpty(GetContainerId(context.ResourceSnapshot))
