@@ -2,11 +2,11 @@
   "id": "aspire-hosting-azure-servicebus-stopasync-taskcanceled",
   "type": "flaky-test",
   "title": "Flaky: Aspire.Hosting.Tests host shutdown times out with TaskCanceledException in DistributedApplication.StopAsync",
-  "test_name": "Aspire.Hosting.Tests.DistributedApplicationTests.StartAsync_DashboardAuthConfig_PassedToDashboardProcess",
-  "job_name": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-1, Hosting-1, tests/Aspire.Hosting.Te... / Hosting-1 (8-core-ubuntu-latest)",
+  "test_name": "Aspire.Hosting.Azure.Tests.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects",
+  "job_name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
   "error_pattern": "System.Threading.Tasks.TaskCanceledException : A task was canceled.\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T]\n   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync\n   at Aspire.Hosting.DistributedApplication.StopAsync",
-  "analysis": "The test times out during application shutdown (DistributedApplication.StopAsync), a symptom of CI resource contention/timing rather than any behavior touched by this PR, which only modifies VS Code extension E2E test files. This is the same recurring shutdown-timeout signature seen previously in Aspire.Hosting.Azure.Tests.",
-  "failure_details": "Error: System.Threading.Tasks.TaskCanceledException : A task was canceled.\nStack Trace:\nat Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StopAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 497\n   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in /home/runner/work/aspire/aspire/tests/Shared/AsyncTestHelpers.cs:line 190\n   at Aspire.Hosting.Tests.DistributedApplicationTests.StartAsync_DashboardAuthConfig_PassedToDashboardProcess(String tokenEnvVarName) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Tests/DistributedApplicationTests.cs:line 1402\nStandard Output (redacted):\n| Dashboard DLL not found: /home/runner/work/aspire/aspire/artifacts/bin/Aspire.Dashboard/Debug/net8.0/Aspire.Dashboard.dll\n| Distributed application starting.\n| DCP started with arguments: start-apiserver --monitor 6426 --detach --kubeconfig [REDACTED] --tls-cert-thumbprint [REDACTED] --tls-cert-file [REDACTED] --tls-key-file [REDACTED]\n| Preparing services. Ports randomized: True",
+  "analysis": "Test AddAzureFunctionsProject_WorksWithMultipleProjects failed with a TaskCanceledException while the host was shutting down inside DistributedApplication.StopAsync, matching a known recurring flaky shutdown-timeout pattern (issue #20227, previously seen 9 times across different tests). The PR only touches unrelated .github/extensions/aspire-team-app JS files.",
+  "failure_details": "Error: System.Threading.Tasks.TaskCanceledException : A task was canceled.\nStack Trace: at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StopAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 497\n   at Aspire.Hosting.Azure.Tests.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Azure.Tests/AzureFunctionsTests.cs:line 200\n--- End of stack trace from previous location ---\nStandard Output (redacted): [2026-09-21T20:19:05] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 13.6.0-ci ... Distributed application starting ... Starting DCP with arguments: start-apiserver --monitor 5955 --detach --kubeconfig [REDACTED] --tls-cert-thumbprint [REDACTED] --tls-cert-file [REDACTED] --tls-key-file [REDACTED] ... Preparing services. Ports randomized: True ... Resource azure-environment/azure-environment update published ... Resource funcstorage53c8d/funcstorage53c8d-kaqymqqm update published",
   "occurrences": [
     {
       "run_id": 35322237059,
@@ -70,6 +70,13 @@
       "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-1, Hosting-1, tests/Aspire.Hosting.Te... / Hosting-1 (8-core-ubuntu-latest)",
       "pr_number": 20116,
       "observed_at": "2026-09-21T18:02:22Z"
+    },
+    {
+      "run_id": 35649687113,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35649687113",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "pr_number": 20192,
+      "observed_at": "2026-09-21T21:09:35Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20227"

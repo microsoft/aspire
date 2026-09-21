@@ -2,10 +2,10 @@
   "id": "build-test-project-widespread-exit1-unrelated",
   "type": "infra-failure",
   "title": "Multiple unrelated 'Build test project' jobs (Hosting.RemoteHost, Hosting.Azure, Hosting.Azure.Kubernetes, Playground, Dashboard) fail with generic exit code 1",
-  "job_name": "Tests / No-package tests (regular, Aspire.Hosting.Rust.Tests, Hosting.Rust, Hosting.Rust, tests/Aspire.Ho... / Hosting.Rust (windows-latest)",
+  "job_name": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
   "error_pattern": "Process completed with exit code 1. (Build test project step failed across multiple unrelated jobs simultaneously; job logs unavailable: 'Failed to fetch logs for job').",
-  "analysis": "The 'Build test project' step fails with a bare exit code 1 and no retrievable job logs, on a project (Hosting.Rust) entirely unrelated to the PR's changes (Aspire skills bundle and telemetry hooks). This matches a widespread, recurring pattern seen across many unrelated job/project combinations.",
-  "failure_details": "Annotations: failure: Process completed with exit code 1. Failed Steps: Build test project. Job logs unavailable ('Failed to fetch logs for job 105726793832'). PR changed files are limited to .github/workflows/update-aspire-skills-bundle.yml, src/Aspire.Cli/Agents/**, tests/Aspire.Cli.Tests/Agents/** — none touch Aspire.Hosting.Rust.",
+  "analysis": "The 'Build test project' step failed with only a generic exit code 1 annotation and no job log content was retrievable ('Failed to fetch logs for job'). The PR only modifies unrelated JavaScript files under .github/extensions/aspire-team-app, which cannot affect the Aspire.Hosting.RemoteHost.Tests build. This matches a previously observed widespread pattern of unrelated build-test-project failures across many jobs simultaneously.",
+  "failure_details": "Job: Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)\nFailed Steps: Build test project\nAnnotation: failure: Process completed with exit code 1.\nLogs: (Failed to fetch logs for job 106499466155)",
   "occurrences": [
     {
       "run_id": 33494022725,
@@ -111,6 +111,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.Rust.Tests, Hosting.Rust, Hosting.Rust, tests/Aspire.Ho... / Hosting.Rust (windows-latest)",
       "pr_number": 19393,
       "observed_at": "2026-09-18T20:03:34Z"
+    },
+    {
+      "run_id": 35649687113,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35649687113",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
+      "pr_number": 20192,
+      "observed_at": "2026-09-21T21:09:35Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19838"
