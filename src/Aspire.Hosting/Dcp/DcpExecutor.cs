@@ -1028,6 +1028,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 await _executorEvents.PublishAsync(new OnResourceChangedContext(
                     _shutdownCancellation.Token, resourceType, modelResource,
                     r.DcpResourceName, new ResourceStatus(null, null, null),
+                    PreviousState: null,
                     snapshotBuild)
                 ).ConfigureAwait(false);
             }
@@ -1046,6 +1047,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                         cancellationToken, resourceType, modelResource,
                         r.DcpResource.Metadata.Name,
                         new ResourceStatus(KnownResourceStates.NotStarted, null, null),
+                        PreviousState: null,
                         s => s with
                         {
                             State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, null)
@@ -1066,6 +1068,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                         cancellationToken, resourceType, modelResource,
                         r.DcpResource.Metadata.Name,
                         new ResourceStatus(KnownResourceStates.NotStarted, null, null),
+                        PreviousState: null,
                         s => s with
                         {
                             State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, null)
