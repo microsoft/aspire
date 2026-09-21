@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES004
 
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -31,6 +32,413 @@ internal sealed class RadiusDeploymentPipelineStep
     // then caught by RadCliDetectionTests.RadCliNotFoundException_ContainsInstallLinkAndRemediation exercising this method.
     internal static InvalidOperationException CreateRadCliNotFoundException() =>
         new($"The 'rad' CLI was not found. Please install it from {RadInstallUrl} and ensure it is available on your PATH.");
+
+    // The oldest Radius control plane whose schemas match the Bicep this integration emits.
+    // v0.60 renamed the `Radius.Core/recipePacks` fields `recipeKind`/`recipeLocation` to
+    // `kind`/`source`. The Radius API server *drops* fields it does not recognize rather than
+    // rejecting them, so deploying these artifacts to an older control plane silently produces an
+    // empty recipe pack: `rad deploy` reports success and every backing resource then fails to
+    // resolve a recipe. That failure mode is why this is a hard preflight rather than a README note.
+    internal static Version MinimumControlPlaneVersion { get; } = new(0, 60);
+
+    internal static InvalidOperationException CreateUnsupportedControlPlaneException(Version controlPlaneVersion, string kubeContext) =>
+        new($"The Radius control plane in Kubernetes context '{kubeContext}' is v{controlPlaneVersion}, but this " +
+            $"integration requires v{MinimumControlPlaneVersion} or later. Deploying to an older control plane appears " +
+            $"to succeed while silently discarding the recipe pack, leaving every backing resource without a recipe. Run " +
+            $"'rad upgrade kubernetes' to bring the control plane up to date, then deploy again. " +
+            $"Diagnostic: ASPIRERADIUS091.");
+
+    /// <summary>
+    /// Extracts the control plane version from <c>rad version -o json</c>.
+    /// </summary>
+    /// <remarks>
+    /// The payload is the CLI's <c>CombinedVersionInfo</c>:
+    /// <code>
+    /// { "cli": { "release": "0.60.0", "version": "v0.60.0", "bicep": "0.35.1", "commit": "abc123" },
+    ///   "controlPlane": { "version": "0.60.0", "status": "Installed" } }
+    /// </code>
+    /// When the cluster is unreachable or Radius is not installed the CLI still exits 0 and reports
+    /// <c>{ "version": "Not installed", "status": "Not connected" }</c>, and an edge/dev build
+    /// reports a non-numeric version such as <c>edge</c>. Every one of those is "unknown" rather
+    /// than "unsupported": the gate must not fail a deploy on a version it could not read.
+    /// See https://github.com/radius-project/radius/blob/main/pkg/cli/cmd/version/version.go.
+    /// </remarks>
+    internal static bool TryParseControlPlaneVersion(string json, out Version? version)
+    {
+        version = null;
+
+        try
+        {
+            // Read the node as a JsonValue and ask for a string rather than calling
+            // GetValue<string>() directly: a `version` that is a number, object or array would make
+            // GetValue<string>() throw InvalidOperationException, which would defeat the fail-open
+            // policy this method exists to implement.
+            if (JsonNode.Parse(json) is not JsonObject root ||
+                root["controlPlane"] is not JsonObject controlPlane ||
+                controlPlane["version"] is not JsonValue versionValue ||
+                !versionValue.TryGetValue<string>(out var rawVersion))
+            {
+                return false;
+            }
+
+            // Releases are reported bare (`0.60.0`) but tolerate the `v` prefix the CLI uses for its
+            // own version, in case the two ever converge on one format.
+            return Version.TryParse(rawVersion.TrimStart('v', 'V'), out version);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Fails the deploy when the cluster the active <c>rad</c> workspace targets runs a control
+    /// plane older than <see cref="MinimumControlPlaneVersion"/>. A version that cannot be
+    /// determined is allowed through: the gate exists to convert one specific silent failure into a
+    /// loud one, not to become a new way for deploys to fail.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>rad version</c> accepts no context flag and leaves the CLI's <c>KubeContext</c> unset, so
+    /// on its own it reports the control plane in whatever context happens to be current in the
+    /// ambient kubeconfig. That is not necessarily the cluster <c>rad deploy</c> will target: a user
+    /// can switch kubectl contexts without switching rad workspaces, which would let this gate
+    /// approve an unsupported cluster or reject a supported one.
+    /// </para>
+    /// <para>
+    /// To inspect the correct cluster the gate resolves the active workspace's context through
+    /// <see cref="RadiusWorkspaceKubeContext"/> — the same resolver
+    /// <see cref="SealedSecretApplyStep"/> uses, including the
+    /// <c>ASPIRE_RADIUS_KUBE_CONTEXT</c> override — then flattens that single context into a
+    /// throwaway, self-contained kubeconfig with <c>kubectl config view --minify --flatten</c> and
+    /// runs the child
+    /// <c>rad version</c> against a private home directory holding that kubeconfig. When the
+    /// context cannot be resolved the gate is skipped rather than falling back to ambient state,
+    /// because a verdict about the wrong cluster is worse than no verdict.
+    /// </para>
+    /// <para>
+    /// Setting <c>KUBECONFIG</c> alone is not sufficient. Parts of the Radius CLI load
+    /// <c>clientcmd.RecommendedHomeFile</c> (<c>~/.kube/config</c>) directly instead of going
+    /// through client-go's standard loading rules, so they ignore <c>KUBECONFIG</c> entirely — the
+    /// same behavior documented in <c>KubernetesDeployTestHelpers.InstallRadiusControlPlaneAsync</c>
+    /// and visible in <c>pkg/kubeutil.NewClientConfigFromLocal</c>. Because a supported ambient
+    /// cluster could then let an unsupported workspace target pass the gate (or the reverse), the
+    /// isolation redirects the home directory the CLI resolves <c>~/.kube/config</c> against, and
+    /// sets <c>KUBECONFIG</c> as well for the code paths that do honor it. Both point at the same
+    /// minified file, so every loader inside <c>rad</c> reaches the workspace's cluster. The
+    /// redirect deliberately keeps kubeconfig <c>exec</c> plugins working by pinning their
+    /// credential state back to the real home — see
+    /// <see cref="BuildIsolatedKubeConfigEnvironment"/>, which explains why <c>--flatten</c> is not
+    /// enough for managed clusters.
+    /// See https://github.com/radius-project/radius/blob/main/pkg/kubeutil/config.go.
+    /// </para>
+    /// </remarks>
+    internal static async Task VerifyControlPlaneVersionAsync(ILogger logger, CancellationToken cancellationToken)
+    {
+        var kubeContext = await RadiusWorkspaceKubeContext.TryResolveAsync(RunAsync, cancellationToken).ConfigureAwait(false);
+        await VerifyControlPlaneVersionAsync(logger, kubeContext, RunAsync, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The gate's decision logic, with the two things that need a real cluster — resolving the
+    /// workspace's Kubernetes context and running <c>kubectl</c>/<c>rad</c> — supplied by the
+    /// caller. Everything the gate actually decides (which commands it issues, the environment it
+    /// isolates them with, how it reads the version, and whether it throws or lets the deploy
+    /// through) runs unchanged, so a regression that lets an unsupported control plane pass is
+    /// caught here rather than only against a live v0.59 cluster.
+    /// </summary>
+    internal static async Task VerifyControlPlaneVersionAsync(
+        ILogger logger,
+        string? kubeContext,
+        RadiusCommandRunner runCommand,
+        CancellationToken cancellationToken)
+    {
+        if (kubeContext is null)
+        {
+            logger.LogDebug(
+                "Could not resolve the active Radius workspace's Kubernetes context; skipping the control plane version check.");
+            return;
+        }
+
+        // Created with restrictive permissions because the minified kubeconfig written into it can
+        // carry client certificates or tokens for the target cluster.
+        var kubeConfigHome = Directory.CreateTempSubdirectory("aspire-radius-kubeconfig");
+
+        try
+        {
+            // Laid out as a real home directory (<home>/.kube/config) rather than an arbitrary
+            // path, because the isolation works by redirecting HOME: the parts of `rad` that ignore
+            // KUBECONFIG resolve exactly this location.
+            var kubeConfigPath = Path.Combine(kubeConfigHome.FullName, ".kube", "config");
+            Directory.CreateDirectory(Path.GetDirectoryName(kubeConfigPath)!);
+
+            // --flatten inlines file-backed credentials (client certificates, keys, token files)
+            // into the exported document. Without it --minify still emits *paths*, and kubeconfig
+            // resolves relative paths against the file's own location — so relocating the export
+            // under the temporary home would break them, `rad version` would fail, and the gate
+            // would skip and let an unsupported control plane through.
+            var minified = await runCommand(
+                "kubectl",
+                ["config", "view", "--raw", "--minify", "--flatten", "--context", kubeContext, "--output", "yaml"],
+                environment: null,
+                cancellationToken).ConfigureAwait(false);
+
+            if (minified is not { ExitCode: 0, StandardOutput.Length: > 0 } minifiedResult)
+            {
+                logger.LogDebug(
+                    "Could not export a kubeconfig for Kubernetes context '{KubeContext}'; skipping the control plane version check.",
+                    kubeContext);
+                return;
+            }
+
+            await File.WriteAllTextAsync(kubeConfigPath, minifiedResult.StandardOutput, cancellationToken).ConfigureAwait(false);
+
+            var version = await runCommand(
+                "rad",
+                ["version", "--output", "json"],
+                environment: BuildIsolatedKubeConfigEnvironment(
+                    kubeConfigHome.FullName,
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    Environment.GetEnvironmentVariable),
+                cancellationToken).ConfigureAwait(false);
+
+            if (version is not { ExitCode: 0 } versionResult)
+            {
+                logger.LogDebug("Could not run 'rad version --output json'; skipping the control plane version check.");
+                return;
+            }
+
+            if (!TryParseControlPlaneVersion(versionResult.StandardOutput, out var controlPlaneVersion) || controlPlaneVersion is null)
+            {
+                logger.LogDebug(
+                    "Could not determine the Radius control plane version in Kubernetes context '{KubeContext}'; skipping the control plane version check.",
+                    kubeContext);
+                return;
+            }
+
+            if (controlPlaneVersion < MinimumControlPlaneVersion)
+            {
+                throw CreateUnsupportedControlPlaneException(controlPlaneVersion, kubeContext);
+            }
+
+            logger.LogInformation(
+                "Radius control plane v{ControlPlaneVersion} detected in Kubernetes context '{KubeContext}'.",
+                controlPlaneVersion,
+                kubeContext);
+        }
+        finally
+        {
+            try
+            {
+                kubeConfigHome.Delete(recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Best effort: a leaked temp kubeconfig must never fail an otherwise valid deploy.
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds the environment for the child <c>rad version</c> so every kubeconfig loader inside the
+    /// CLI resolves to <paramref name="kubeConfigHome"/>'s <c>.kube/config</c> rather than the
+    /// developer's ambient cluster. A <see langword="null"/> value means the variable is removed
+    /// from the child's environment.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>HOME</c>, <c>USERPROFILE</c> and <c>HOMEDRIVE</c>/<c>HOMEPATH</c> are all set or cleared
+    /// because client-go's <c>homedir.HomeDir()</c> — which computes the
+    /// <c>clientcmd.RecommendedHomeFile</c> that <c>rad</c> reads directly — consults <c>HOME</c> on
+    /// Unix and <c>USERPROFILE</c> then <c>HOMEDRIVE</c>+<c>HOMEPATH</c> on Windows. Leaving any of
+    /// them pointing at the real profile would let the ambient kubeconfig win on that platform.
+    /// See https://github.com/kubernetes/client-go/blob/master/util/homedir/homedir.go.
+    /// </para>
+    /// <para>
+    /// Redirecting the home directory is what isolates the kubeconfig, but it would also hide the
+    /// credential state that kubeconfig <c>exec</c> plugins read, and <c>--flatten</c> does not help
+    /// there: it inlines file-backed certificates, keys and token files, but an <c>exec</c> entry is
+    /// carried through untouched and still shells out at load time. Managed clusters are configured
+    /// exactly that way — <c>kubelogin</c> for AKS, <c>aws eks get-token</c> for EKS,
+    /// <c>gke-gcloud-auth-plugin</c> for GKE — and each of those resolves its own credentials under
+    /// the home directory. Under a bare redirect they would find an empty home, fail to
+    /// authenticate, and take <c>rad version</c> down with them; because the gate fails open on an
+    /// unreadable version, it would then silently skip for most managed-cluster users, which is the
+    /// population it is most needed for. Each helper's state is therefore pinned back to
+    /// <paramref name="realHome"/> through the variable it already documents for relocating it.
+    /// </para>
+    /// <para>
+    /// A variable the caller has already set is left alone: the child inherits the ambient
+    /// environment, and an explicit value may deliberately point somewhere other than the home
+    /// directory. Values are pinned without probing the file system, because a helper that finds no
+    /// state under the real home is no worse off than one pointed at the empty temporary home.
+    /// </para>
+    /// </remarks>
+    internal static Dictionary<string, string?> BuildIsolatedKubeConfigEnvironment(
+        string kubeConfigHome,
+        string? realHome,
+        Func<string, string?> getEnvironmentVariable)
+    {
+        var environment = new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            ["KUBECONFIG"] = Path.Combine(kubeConfigHome, ".kube", "config"),
+            ["HOME"] = kubeConfigHome,
+            ["USERPROFILE"] = kubeConfigHome,
+            // Cleared rather than split into a drive/path pair: an empty HOMEDRIVE or HOMEPATH makes
+            // homedir.HomeDir() skip the combination entirely and fall through to USERPROFILE above.
+            ["HOMEDRIVE"] = null,
+            ["HOMEPATH"] = null,
+        };
+
+        if (string.IsNullOrEmpty(realHome))
+        {
+            return environment;
+        }
+
+        // https://learn.microsoft.com/cli/azure/azure-cli-configuration - `az`, and so `kubelogin`
+        // in its azurecli login mode, keeps its token cache and profile here.
+        Pin("AZURE_CONFIG_DIR", Path.Combine(realHome, ".azure"));
+
+        // https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html - `aws eks
+        // get-token` reads the profile and long-lived credentials from these two files.
+        Pin("AWS_CONFIG_FILE", Path.Combine(realHome, ".aws", "config"));
+        Pin("AWS_SHARED_CREDENTIALS_FILE", Path.Combine(realHome, ".aws", "credentials"));
+
+        // https://cloud.google.com/sdk/docs/configurations - `gke-gcloud-auth-plugin` resolves the
+        // active gcloud configuration and its credentials from this directory.
+        Pin("CLOUDSDK_CONFIG", Path.Combine(realHome, ".config", "gcloud"));
+
+        return environment;
+
+        void Pin(string variable, string homeRelativeDefault)
+        {
+            if (string.IsNullOrEmpty(getEnvironmentVariable(variable)))
+            {
+                environment[variable] = homeRelativeDefault;
+            }
+        }
+    }
+
+    // Returns null when the executable is not on PATH, which every caller here treats as "unknown"
+    // rather than "unsupported". A null value in `environment` removes that variable from the child.
+    // Internal because it is the production RadiusCommandRunner shared by the deploy-time steps.
+    internal static async Task<ProcessRunResult?> RunAsync(
+        string fileName,
+        string[] arguments,
+        IReadOnlyDictionary<string, string?>? environment,
+        CancellationToken cancellationToken)
+    {
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo
+        {
+            FileName = fileName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+
+        foreach (var argument in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
+        if (environment is not null)
+        {
+            foreach (var (key, value) in environment)
+            {
+                if (value is null)
+                {
+                    process.StartInfo.Environment.Remove(key);
+                }
+                else
+                {
+                    process.StartInfo.Environment[key] = value;
+                }
+            }
+        }
+
+        try
+        {
+            process.Start();
+        }
+        catch (Win32Exception)
+        {
+            return null;
+        }
+
+        // Read both pipes concurrently, and start reading before waiting: draining only stdout
+        // lets a chatty stderr fill its pipe buffer, block the child, and hang the wait forever.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            var standardOutput = await stdoutTask.ConfigureAwait(false);
+            await stderrTask.ConfigureAwait(false);
+            return new ProcessRunResult(process.ExitCode, standardOutput);
+        }
+        catch (OperationCanceledException)
+        {
+            // Disposing Process only releases the handle, so without this the cancelled deploy
+            // would leave the child — and the Helm/Kubernetes work it started — running, which on
+            // Windows also keeps the temporary kubeconfig open and defeats its cleanup.
+            if (!process.HasExited)
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or Win32Exception)
+                {
+                    // The process exited between the HasExited check and Kill, or termination was
+                    // refused. Either way the caller asked for cancellation, so surface that rather
+                    // than replacing it with a teardown failure.
+                }
+            }
+
+            await ObserveCleanupAsync(process, stdoutTask, stderrTask).ConfigureAwait(false);
+
+            throw;
+        }
+    }
+
+    // A cancelled deploy must stay cancelled: if Kill was refused and the child keeps the pipes
+    // open, waiting on it without a bound would hang the caller forever, which is worse than the
+    // leaked process this cleanup exists to prevent.
+    private static readonly TimeSpan s_cancellationCleanupTimeout = TimeSpan.FromSeconds(5);
+
+    // Attempts a bounded reap of the child and observation of both drain tasks before the caller's
+    // `using` disposes the Process — tasks still attached to the pipes would otherwise fault against
+    // a disposed handle. Cleanup that has not finished within the timeout is deliberately abandoned.
+    private static async Task ObserveCleanupAsync(Process process, Task<string> stdoutTask, Task<string> stderrTask)
+    {
+        var cleanupTask = Task.WhenAll(
+            process.WaitForExitAsync(CancellationToken.None),
+            stdoutTask,
+            stderrTask);
+
+        // Attached before the bounded wait: when that wait gives up, this task may still fault
+        // afterwards, and an unobserved faulted task would reach TaskScheduler.UnobservedTaskException.
+        // Observing the aggregate is enough — WhenAll consumes its antecedents' exceptions to build it.
+        _ = cleanupTask.ContinueWith(
+            static faulted => _ = faulted.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+        try
+        {
+            await cleanupTask.WaitAsync(s_cancellationCleanupTimeout).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Timed out, or a wait failed. Deliberately swallowed: the caller's cancellation is the
+            // meaningful outcome, and abandoning the wait is what keeps a child that refused to die
+            // from hanging the deploy.
+        }
+    }
 
     private readonly RadiusEnvironmentResource _environment;
 
@@ -256,7 +664,9 @@ internal sealed class RadiusDeploymentPipelineStep
             return null;
         }
 
-        var parameters = annotations.Last().Parameters;
+        var annotation = annotations.Last();
+        var parameters = annotation.Parameters;
+        var rabbitMqUserNames = annotation.RabbitMqUserNames;
         if (parameters.Count == 0)
         {
             return null;
@@ -269,6 +679,12 @@ internal sealed class RadiusDeploymentPipelineStep
         foreach (var (identifier, parameter) in parameters)
         {
             var value = await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false) ?? string.Empty;
+            if (rabbitMqUserNames.TryGetValue(parameter, out var rabbitMqOwners) &&
+                string.Equals(value, "guest", StringComparison.Ordinal))
+            {
+                throw RadiusInfrastructureBuilder.CreateRabbitMqGuestUserNameException(rabbitMqOwners[0]);
+            }
+
             parametersNode[identifier] = new JsonObject { ["value"] = value };
         }
 

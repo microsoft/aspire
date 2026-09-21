@@ -218,8 +218,7 @@
     grid-area: details;
     align-items: center;
     min-width: 0;
-    min-height: 32px;
-    gap: 8px;
+    --fluent-overflow-gap: 8px;
 }
 
 ::deep .trace-header-details .fluent-overflow-item {

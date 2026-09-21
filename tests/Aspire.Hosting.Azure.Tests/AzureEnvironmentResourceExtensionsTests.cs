@@ -26,7 +26,7 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureEnvironmentResourceExtensionsTests
+public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddAzureEnvironment_ShouldAddResourceToBuilder_InPublishMode()
@@ -4888,6 +4888,18 @@ public class AzureEnvironmentResourceExtensionsTests
     }
 
     [Fact]
+    public void AddAzureEnvironment_UsesCloudCubeIcon()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+
+        var resourceBuilder = builder.AddAzureEnvironment();
+
+        var icon = Assert.Single(resourceBuilder.Resource.Annotations.OfType<ResourceIconAnnotation>());
+        Assert.Equal("CloudCube", icon.IconName);
+        Assert.Equal(IconVariant.Filled, icon.IconVariant);
+    }
+
+    [Fact]
     public void AzureEnvironmentResource_PreservesDefaultResourceNameValidation()
     {
         var builder = CreateBuilder(isRunMode: true);
@@ -4947,10 +4959,10 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.Equal(expectedResourceGroup.Resource, resource.ResourceGroupName);
     }
 
-    private static IDistributedApplicationBuilder CreateBuilder(bool isRunMode = false)
+    private IDistributedApplicationBuilder CreateBuilder(bool isRunMode = false)
     {
         var operation = isRunMode ? DistributedApplicationOperation.Run : DistributedApplicationOperation.Publish;
-        return TestDistributedApplicationBuilder.Create(operation);
+        return TestDistributedApplicationBuilder.Create(operation, testOutputHelper);
     }
 
     /// <summary>

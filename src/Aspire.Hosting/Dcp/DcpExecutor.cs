@@ -155,6 +155,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         try
         {
             _containerCreator.PrepareContainerNetworks();
+            var containerVolumes = _containerCreator.PrepareContainerVolumes();
 
             using (var prepareServicesActivity = ProfilingTelemetry.StartDcpPrepareServices(_configuration))
             {
@@ -207,6 +208,18 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
             var createContainerNetworks = Task.Run(() => CreateAllDcpObjectsAsync<ContainerNetwork>(ct), ct);
 
+            var createContainerVolumes = Task.Run(async () =>
+            {
+                await CreateDcpObjectsAsync(containerVolumes, ct).ConfigureAwait(false);
+                var observedVolumes = await WaitForStateAsync(
+                    containerVolumes,
+                    volume => volume.Status?.State,
+                    [ContainerVolumeState.Ready],
+                    TimeSpan.FromMinutes(1),
+                    ct).ConfigureAwait(false);
+                EnsureContainerVolumesReady(observedVolumes);
+            }, ct);
+
             var createWorkloadEndpoints = Task.Run(async () =>
             {
                 await Task.WhenAll([getProxyAddresses, createContainerNetworks]).WaitAsync(ct).ConfigureAwait(false);
@@ -257,7 +270,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
             var createContainers = Task.Run(async () =>
             {
-                await createWorkloadEndpoints.ConfigureAwait(false);
+                await Task.WhenAll(createWorkloadEndpoints, createContainerVolumes).ConfigureAwait(false);
 
                 await CreateRenderedResourcesAsync(_containerCreator, containers, cctx, ct).ConfigureAwait(false);
             }, ct);
@@ -542,6 +555,23 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         {
             activity.SetDcpServiceAllocatedCount(initialServiceCount - stillPending.Count);
         }
+    }
+
+    internal static void EnsureContainerVolumesReady(IEnumerable<ContainerVolume> volumes)
+    {
+        var unreadyVolumes = volumes
+            .Where(volume => !string.Equals(volume.Status?.State, ContainerVolumeState.Ready, StringComparison.Ordinal))
+            .ToArray();
+        if (unreadyVolumes.Length == 0)
+        {
+            return;
+        }
+
+        var details = string.Join(
+            ", ",
+            unreadyVolumes.Select(volume =>
+                $"'{volume.Spec.Name ?? volume.Metadata.Name}': current state is '{volume.Status?.State ?? "(unknown)"}'"));
+        throw new DistributedApplicationException($"One or more container volumes did not become ready: {details}");
     }
 
     // Waits until each provided object reports a state that is in finalStates, or until timeout elapses.

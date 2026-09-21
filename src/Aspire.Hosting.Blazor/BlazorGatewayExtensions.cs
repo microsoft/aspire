@@ -78,22 +78,10 @@ public static class BlazorGatewayExtensions
     /// <see cref="ProjectResource"/> used by <see cref="AddBlazorGateway"/>. The gateway is shipped as
     /// Gateway.cs alongside this library and launched via <c>AddDotnetProject</c>. No separate project is needed.
     /// </summary>
-    /// <remarks>
-    /// Publishing is not yet supported for the <see cref="DotnetProjectResource"/>-backed gateway because the
-    /// resource does not implement the container-files destination pipeline that the publish path relies on to
-    /// merge each WASM client's static assets into the gateway image. Use <see cref="AddBlazorGateway"/> for
-    /// publish scenarios. This restriction is expected to be lifted once container execution lands for
-    /// <see cref="DotnetProjectResource"/>.
-    /// </remarks>
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The name of the gateway resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the gateway resource.</returns>
-    /// <exception cref="NotSupportedException">Thrown when the application is being published.</exception>
-    /// <ats-summary>Adds the built-in Blazor gateway as a run-mode .NET resource.</ats-summary>
-    /// <ats-remarks>
-    /// This gateway can be used only when running the AppHost. Publishing it is not supported; use the standard
-    /// Blazor gateway for publish scenarios.
-    /// </ats-remarks>
+    /// <ats-summary>Adds the built-in Blazor gateway as a .NET program resource.</ats-summary>
     /// <ats-param name="builder">The distributed application builder.</ats-param>
     /// <ats-param name="name">The name of the gateway resource.</ats-param>
     /// <ats-returns>The gateway resource builder.</ats-returns>
@@ -103,16 +91,6 @@ public static class BlazorGatewayExtensions
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
     {
-        if (builder.ExecutionContext.IsPublishMode)
-        {
-            // A DotnetProjectResource is an ExecutableResource and is not an IContainerFilesDestinationResource,
-            // so the WASM static-asset merge that the publish path performs (via ContainerFilesDestinationAnnotation)
-            // would silently produce a gateway image missing the client apps. Fail fast instead of emitting a
-            // broken deployment until container execution is implemented for DotnetProjectResource.
-            throw new NotSupportedException(
-                $"Publishing a {nameof(DotnetProjectResource)}-backed Blazor gateway is not supported yet. Use {nameof(AddBlazorGateway)} for publish scenarios.");
-        }
-
         var gatewayPath = GetScriptPath("Gateway.cs");
         return builder.AddDotnetProject(name, gatewayPath)
             .WithHttpEndpoint()

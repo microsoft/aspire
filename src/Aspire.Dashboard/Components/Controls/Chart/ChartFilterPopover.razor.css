@@ -23,8 +23,30 @@
 
 .chart-filter-button-container + ::deep .chart-filter-popover::part(dialog) {
     transform: translateX(calc(-100% + 32px));
+    box-sizing: border-box;
+    max-width: 400px;
+    width: max-content;
 }
 
-::deep .chart-filter-popover .dimension-popup > fluent-field {
+.dimension-popup-container {
+    min-width: 0;
+}
+
+.dimension-popup-container ::deep .dimension-popup {
+    min-width: 0;
+    row-gap: 4px;
+    width: 100%;
+}
+
+.dimension-popup-container ::deep .dimension-popup > fluent-field {
     cursor: pointer;
+    grid-template-columns: auto minmax(0, 1fr);
+    min-width: 0;
+    width: 100%;
+}
+
+.dimension-popup-container ::deep .dimension-popup > fluent-field > label[slot="label"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }

@@ -1131,7 +1131,11 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
 
     private (string? ResourceWrapperType, string? ResourceWrapperParameterType) GetResourceBuilderWrapperType(string wrapperType)
     {
-        if (!wrapperType.StartsWith("I", StringComparison.Ordinal))
+        // Resource interfaces use an I-prefixed generated handle name. An enum or DTO can
+        // legitimately have the same prefix (for example IsolationScope), so only generate
+        // the handle bridge when the mapped class is one of the discovered handle types.
+        if (!wrapperType.StartsWith("I", StringComparison.Ordinal) ||
+            !_classNames.ContainsValue(wrapperType))
         {
             return (null, null);
         }

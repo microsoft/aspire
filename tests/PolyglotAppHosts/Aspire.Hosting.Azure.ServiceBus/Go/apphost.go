@@ -14,6 +14,10 @@ func main() {
 
 	// ── 1. AddAzureServiceBus ──────────────────────────────────────────────────
 	serviceBus := builder.AddAzureServiceBus("messaging")
+	_ = serviceBus.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		namespace := infrastructure.GetServiceBusNamespace()
+		namespace.Tags().Set("provisioning-proxy", "go")
+	})
 	if serviceBus.Err() != nil {
 		log.Fatalf(aspire.FormatError(serviceBus.Err()))
 	}

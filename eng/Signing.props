@@ -29,8 +29,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FileSignInfo Include="Dapper.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Fractions.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Hex1b.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="hex1bpty.exe" CertificateName="3PartySHA2" />
     <FileSignInfo Include="IdentityModel.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="IdentityModel.OidcClient.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="KubernetesClient.Basic.dll" CertificateName="3PartySHA2" />
@@ -59,9 +61,14 @@
     <FileSignInfo Include="OpenTelemetry.Exporter.Console.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="OpenTelemetry.Exporter.OpenTelemetryProtocol.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="OpenTelemetry.Extensions.Hosting.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="OpenTelemetry.Instrumentation.AspNetCore.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="OpenTelemetry.PersistentStorage.Abstractions.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="OpenTelemetry.PersistentStorage.FileSystem.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="SQLitePCLRaw.batteries_v2.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="SQLitePCLRaw.core.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="SQLitePCLRaw.provider.e_sqlite3.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="BouncyCastle.Cryptography.dll" CertificateName="3PartySHA2" />
+    <FileSignInfo Include="e_sqlite3.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Semver.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Sigstore.dll" CertificateName="3PartySHA2" />
     <FileSignInfo Include="Tuf.dll" CertificateName="3PartySHA2" />
@@ -108,6 +115,8 @@
     <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Managed\**\publish\aspire-managed.exe" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsLinux())" Include="$(ArtifactsBinDir)Aspire.Managed/**/publish/aspire-managed" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsMacOS())" Include="$(ArtifactsBinDir)Aspire.Managed/**/publish/aspire-managed" />
+    <!-- Select only Hex1b's unsigned helper, preserving the upstream signatures on ConPTY and OpenConsole. -->
+    <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Managed\**\publish\hex1bpty.exe" />
     <!--
       Note: VS Code extension (.vsix) is NOT included here.
       Signing the VSIX changes its hash, breaking manifest integrity verification.

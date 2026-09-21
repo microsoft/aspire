@@ -1,12 +1,18 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import ReferenceExpression, create_builder
+from aspire_app import AzureResourceInfrastructure, ReferenceExpression, create_builder
+
+
+def configure_provisioning(infrastructure: AzureResourceInfrastructure) -> None:
+    service = infrastructure.get_web_pub_sub_service()
+    service.tags.set("provisioning-proxy", "python")
 
 
 with create_builder() as builder:
     # addAzureWebPubSub — factory method
     webpubsub = builder.add_azure_web_pub_sub("resource")
+    webpubsub.configure_infrastructure(configure_provisioning)
     # addHub — adds a hub to the Web PubSub resource (with optional hubName)
     hub = webpubsub.add_hub("resource")
     hub_with_name = webpubsub.add_hub("resource")

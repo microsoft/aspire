@@ -30,7 +30,6 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(55);
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/19172")]
     public async Task DeployStarterTemplateToRadiusOnAks()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
@@ -125,21 +124,21 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             // KUBECONFIG/DOCKER_CONFIG isolation where needed. radiusVersion pins the CLI version;
             // `rad install kubernetes` (Step 9) then installs the matching control plane, keeping the run
             // deterministic across Radius releases. Keep this aligned with
-            // RadiusBicepExtension.Version (major.minor 0.59) so the installed control plane matches
+            // RadiusBicepExtension.Version (major.minor 0.60) so the installed control plane matches
             // the Bicep types the publisher emits. install.sh is fetched pinned to the immutable
-            // commit SHA behind the v0.59.0 release tag (radiusInstallScriptSha) rather than a branch
+            // commit SHA behind the v0.60.2 release tag (radiusInstallScriptSha) rather than a branch
             // or tag ref, either of which can be retargeted, so the executed installer content cannot
             // drift out from under this pin (supply-chain hardening). The download is retried a few
             // times to tolerate transient GitHub CDN failures on scheduled runs. install.sh's needsSudo
             // checks the install dir first and skips sudo when that directory already exists and is
             // writable; it only falls back to the parent dir when the install dir is absent. Pre-creating
             // the user-owned {wsRoot}/radbin makes it see a writable target and skip sudo entirely.
-            const string radiusVersion = "0.59.0";
+            const string radiusVersion = "0.60.2";
 
-            // Immutable commit SHA that the v0.59.0 tag pointed to in radius-project/radius. Update this
+            // Immutable commit SHA that the v0.60.2 tag pointed to in radius-project/radius. Update this
             // together with radiusVersion (and RadiusBicepExtension.Version) when bumping the Radius
             // release, re-resolving the tag to its commit SHA.
-            const string radiusInstallScriptSha = "2bf2c25fcdde20d4cba1371618829bbbe1f9a997";
+            const string radiusInstallScriptSha = "a3916f884df2e412c4cb662db63132bcf1344ca8";
             output.WriteLine("Step 1a: Installing the Radius (rad) CLI into the workspace...");
             await auto.TypeAsync(
                 // `set -o pipefail` so a failed `curl` propagates through the pipe instead of being
@@ -277,8 +276,18 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(10));
 
-            // Configure a deterministic default workspace bound to this cluster. `rad install
-            // kubernetes` already ensures the `default` group and environment exist; `rad deploy`
+            // Radius 0.60.2 can finish installing without creating the default group/environment.
+            // Create them explicitly before binding the workspace, as the KinD E2E helper does.
+            output.WriteLine("Step 9a: Creating the default Radius resource group and environment...");
+            await auto.TypeAsync("rad group create default");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            await auto.TypeAsync("rad env create default --group default");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            // Configure a deterministic default workspace bound to this cluster. `rad deploy`
             // (invoked by `aspire deploy`) passes no --workspace/--group/--environment, so it
             // resolves the default workspace scope. Create the workspace explicitly instead of
             // relying on the interactive `rad init`. This (and every other `rad`) goes through the
@@ -475,9 +484,9 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             // ===== PHASE 6: Verify the deployed application =====
 
             // The Radius application name is fixed to "app" by the publisher. Show the deployed
-            // graph and the container resources; both must succeed.
+            // Radius.Core graph, then verify its container entries.
             //
-            // --preview forces the Radius.Core graph implementation. Without it, the pinned 0.59
+            // --preview forces the Radius.Core graph implementation. Without it, the pinned 0.60
             // `rad app graph` routes to the legacy Applications.Core graph API, which the legacy
             // `app` that Radius creates for Redis satisfies on its own -- so the command could
             // succeed without ever proving the Radius.Core UDT application that owns the project
@@ -497,7 +506,11 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            await auto.TypeAsync("rad resource list Radius.Compute/containers -a app");
+            // Like the graph command, resource list needs --preview to resolve the Radius.Core
+            // application instead of the legacy Applications.Core application. Assert both names
+            // because an empty resource list also exits successfully.
+            // https://github.com/radius-project/radius/blob/v0.60.2/pkg/cli/cmd/resource/list/list.go
+            await auto.TypeAsync("R=$(rad resource list Radius.Compute/containers -a app --preview) && echo \"$R\" && echo \"$R\" | grep -q apiservice && echo \"$R\" | grep -q webfrontend");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 

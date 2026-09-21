@@ -17,8 +17,8 @@ public class TerminalHostArgsTests
         Assert.Equal("/tmp/p.sock", args.ProducerUdsPath);
         Assert.Equal("/tmp/c.sock", args.ConsumerUdsPath);
         Assert.Equal("/tmp/ctrl.sock", args.ControlUdsPath);
-        Assert.Equal(120, args.Columns);
-        Assert.Equal(30, args.Rows);
+        Assert.Equal(132, args.Columns);
+        Assert.Equal(50, args.Rows);
     }
 
     [Fact]

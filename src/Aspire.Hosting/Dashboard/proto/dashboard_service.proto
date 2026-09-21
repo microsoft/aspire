@@ -368,6 +368,7 @@ message WatchInteractionsRequestUpdate {
         InteractionInputsDialog inputs_dialog = 4;
         InteractionNotification notification = 5;
         InteractionPromptProgress prompt_progress = 7;
+        InteractionPromptTerminal prompt_terminal = 8;
     }
 
     // A flag indicating that the message is an update and shouldn't complete the interaction.
@@ -393,6 +394,7 @@ message WatchInteractionsResponseUpdate {
         InteractionInputsDialog inputs_dialog = 18;
         InteractionNotification notification = 19;
         InteractionPromptProgress prompt_progress = 20;
+        InteractionPromptTerminal prompt_terminal = 21;
     }
 }
 // Represents the completion of an interaction.
@@ -413,6 +415,12 @@ message InteractionNotification {
 // Represents a progress interaction, which is a modal dialog with an indeterminate progress indicator.
 message InteractionPromptProgress {
     optional bool result = 1;
+}
+// A modal view onto a caller-owned terminal. Work completion or cancellation closes the interaction,
+// independently of the terminal process lifetime.
+message InteractionPromptTerminal {
+    string terminal_id = 1;
+    optional bool result = 2;
 }
 // Represents a dialog that collects inputs from the user.
 message InteractionInputsDialog {
@@ -476,6 +484,83 @@ message UploadFileResponse {
 
 ////////////////////////////////////////////
 
+// A message sent by the dashboard to the AppHost for a terminal session.
+//
+// The stream carries an opaque HMP1 (Hex1b Muxer Protocol v1) byte stream, tunneled
+// so that the terminal can be owned by the AppHost process itself rather than by a
+// separate terminal host process reachable over a Unix domain socket. Neither the
+// dashboard nor this service interprets `data`; both sides are byte-level relays
+// between the browser's HMP1 client and the AppHost's HMP1 server.
+message TerminalClientFrame {
+    // A chunk of the HMP1 byte stream flowing from the browser to the AppHost.
+    // Empty on the first frame, which only carries the session selector.
+    bytes data = 1;
+
+    // The terminal to attach to (sent in the first frame).
+    string terminal_id = 2;
+}
+
+// A message sent by the AppHost to the dashboard for a terminal session.
+message TerminalServerFrame {
+    // A chunk of the HMP1 byte stream flowing from the AppHost to the browser.
+    bytes data = 1;
+
+    // The workload has ended. Sent separately from HMP1 bytes so it also works before
+    // the HMP1 handshake and does not depend on Hex1b delivering its Exit frame.
+    bool ended = 2;
+}
+
+////////////////////////////////////////////
+
+// A terminal owned by the AppHost and displayed as a tab in the dashboard's terminal dock.
+message TerminalDescriptor {
+    string terminal_id = 1;
+    string title = 2;
+}
+
+enum TerminalChangeType {
+    TERMINAL_CHANGE_TYPE_UNSPECIFIED = 0;
+    TERMINAL_CHANGE_TYPE_ADDED = 1;
+    TERMINAL_CHANGE_TYPE_REMOVED = 2;
+    TERMINAL_CHANGE_TYPE_RETITLED = 3;
+    // The AppHost called Show() on this terminal. Dashboards should reveal the dock
+    // and switch to this terminal's tab.
+    TERMINAL_CHANGE_TYPE_ACTIVATED = 4;
+}
+
+message WatchTerminalsRequest {
+}
+
+message TerminalDescriptorList {
+    repeated TerminalDescriptor terminals = 1;
+    // A recovery snapshot can coalesce a pending Show() request. A nonempty id reveals
+    // the dock and selects that terminal if it is still listed. The id can refer to a
+    // terminal removed before recovery; reveal the dock without recreating its tab.
+    string activated_terminal_id = 2;
+}
+
+message TerminalChangeNotification {
+    TerminalChangeType change_type = 1;
+    TerminalDescriptor terminal = 2;
+}
+
+message WatchTerminalsUpdate {
+    oneof kind {
+        // Sent first, and again to replace buffered changes when a watcher falls behind.
+        TerminalDescriptorList snapshot = 1;
+        TerminalChangeNotification change = 2;
+    }
+}
+
+message CloseTerminalRequest {
+    string terminal_id = 1;
+}
+
+message CloseTerminalResponse {
+}
+
+////////////////////////////////////////////
+
 service DashboardService {
     rpc GetApplicationInformation(ApplicationInformationRequest) returns (ApplicationInformationResponse);
     rpc WatchResources(WatchResourcesRequest) returns (stream WatchResourcesUpdate);
@@ -483,4 +568,7 @@ service DashboardService {
     rpc ExecuteResourceCommand(ResourceCommandRequest) returns (ResourceCommandResponse);
     rpc WatchInteractions(stream WatchInteractionsRequestUpdate) returns (stream WatchInteractionsResponseUpdate);
     rpc UploadFile(stream UploadFileChunk) returns (UploadFileResponse);
+    rpc AttachTerminal(stream TerminalClientFrame) returns (stream TerminalServerFrame);
+    rpc WatchTerminals(WatchTerminalsRequest) returns (stream WatchTerminalsUpdate);
+    rpc CloseTerminal(CloseTerminalRequest) returns (CloseTerminalResponse);
 }

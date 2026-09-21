@@ -10,7 +10,6 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Telemetry;
@@ -1351,9 +1350,13 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
-    [InlineData("true")]
-    [InlineData("2")]
-    public async Task CheckCopilotCliAsync_SkipsGitHubTokenCandidatesInCI(string ciValue)
+    [InlineData("true", true)]
+    [InlineData("1", true)]
+    [InlineData("yes", true)]
+    [InlineData("on", true)]
+    [InlineData("2", false)]
+    [InlineData(" true ", false)]
+    public async Task CheckCopilotCliAsync_SkipsGitHubTokenCandidatesOnlyInCI(string ciValue, bool isCI)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var handler = new TestGitHubHttpMessageHandler((request, _) =>
@@ -1372,7 +1375,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
         var result = await detector.CheckCopilotCliAsync(CancellationToken.None);
 
         Assert.False(result.IsInternalMicrosoft);
-        Assert.Empty(handler.GetRequestPaths());
+        Assert.Equal<string>(isCI ? [] : ["/user"], handler.GetRequestPaths());
     }
 
     [Fact]
@@ -1666,10 +1669,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
             new DirectoryInfo(Path.GetDirectoryName(cacheFilePath) ?? AppContext.BaseDirectory),
             homeDirectory: homeDirectory);
         var effectiveEnvironment = environment ?? new TestEnvironment(environmentVariables);
-        var ciEnvironmentDetector = new CIEnvironmentDetector(
-            new ConfigurationBuilder()
-                .AddInMemoryCollection(effectiveEnvironment.Variables)
-                .Build());
+        var ciEnvironmentDetector = new CIEnvironmentDetector(effectiveEnvironment);
 
         return new InternalMicrosoftDetector(
             executionContext,

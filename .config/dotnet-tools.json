@@ -3,19 +3,19 @@
   "isRoot": true,
   "tools": {
     "dotnet-coverage": {
-      "version": "17.13.1",
+      "version": "18.11.0",
       "commands": [
         "dotnet-coverage"
       ]
     },
     "PowerShell": {
-      "version": "7.5.0",
+      "version": "7.6.6",
       "commands": [
         "pwsh"
       ]
     },
     "hex1b.tool": {
-      "version": "0.78.0",
+      "version": "0.165.0",
       "commands": [
         "hex1b"
       ]

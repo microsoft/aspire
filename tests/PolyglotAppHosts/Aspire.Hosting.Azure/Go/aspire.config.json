@@ -7,6 +7,19 @@
     "experimentalPolyglot:go": true
   },
   "packages": {
-    "Aspire.Hosting.Azure": ""
+    "Aspire.Hosting.Azure": "",
+    "Aspire.Hosting.Azure.Provisioning": "",
+    "Aspire.Hosting.Azure.Provisioning.ApplicationInsights": "",
+    "Aspire.Hosting.Azure.Provisioning.CognitiveServices": "",
+    "Aspire.Hosting.Azure.Provisioning.ContainerRegistry": "",
+    "Aspire.Hosting.Azure.Provisioning.CosmosDB": "",
+    "Aspire.Hosting.Azure.Provisioning.EventHubs": "",
+    "Aspire.Hosting.Azure.Provisioning.KeyVault": "",
+    "Aspire.Hosting.Azure.Provisioning.OperationalInsights": "",
+    "Aspire.Hosting.Azure.Provisioning.Search": "",
+    "Aspire.Hosting.Azure.Provisioning.ServiceBus": "",
+    "Aspire.Hosting.Azure.Provisioning.Sql": "",
+    "Aspire.Hosting.Azure.Provisioning.Storage": "",
+    "Aspire.Hosting.Azure.Provisioning.WebPubSub": ""
   }
 }

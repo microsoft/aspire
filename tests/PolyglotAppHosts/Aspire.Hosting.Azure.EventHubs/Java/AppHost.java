@@ -3,6 +3,10 @@ import aspire.*;
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var eventHubs = builder.addAzureEventHubs("eventhubs");
+        eventHubs.configureInfrastructure((infrastructure) -> {
+            var namespace = infrastructure.getEventHubsNamespace();
+            namespace.tags().set("provisioning-proxy", "java");
+        });
         eventHubs.withEventHubsRoleAssignments(eventHubs, new AzureEventHubsRole[] { AzureEventHubsRole.AZURE_EVENT_HUBS_DATA_OWNER });
         var hub = eventHubs.addHub("orders", "orders-hub");
         hub.withProperties((configuredHub) -> {

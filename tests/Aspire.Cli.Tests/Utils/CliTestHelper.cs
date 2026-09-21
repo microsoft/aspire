@@ -276,8 +276,11 @@ internal static class CliTestHelper
         services.AddTransient<DescribeCommand>();
         services.AddTransient<LogsCommand>();
         services.AddTransient<TerminalCommand>();
+        services.AddTransient<TerminalResourceResolver>();
         services.AddTransient<TerminalAttachCommand>();
         services.AddTransient<TerminalPsCommand>();
+        services.AddTransient<TerminalTapeCommand>();
+        services.AddTransient<TerminalTapePlayCommand>();
         services.AddTransient<IntegrationPackageSearchService>();
         services.AddTransient<IntegrationCommand>();
         services.AddTransient<IntegrationListCommand>();
@@ -598,7 +601,8 @@ internal sealed class CliServiceCollectionTestOptions
     {
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        return new ExtensionRpcTarget(configuration, executionContext);
+        var cancellationManager = serviceProvider.GetRequiredService<ConsoleCancellationManager>();
+        return new ExtensionRpcTarget(configuration, executionContext, cancellationManager);
     };
 
     public Func<IServiceProvider, IExtensionBackchannel> ExtensionBackchannelFactory { get; set; } = serviceProvider =>

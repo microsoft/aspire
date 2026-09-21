@@ -75,6 +75,13 @@ internal static partial class BicepPostProcessor
             infra.Add(resource);
         }
 
+        // Radius.Security/secrets — emitted before the resource type instances that consume them by
+        // `.id`, so the generated Bicep reads top-down.
+        foreach (var resource in options.SecuritySecrets)
+        {
+            infra.Add(resource);
+        }
+
         foreach (var resource in options.ResourceTypeInstances)
         {
             infra.Add(resource);
@@ -343,6 +350,11 @@ internal static partial class BicepPostProcessor
         foreach (var instance in options.ResourceTypeInstances)
         {
             Register(instance.BicepIdentifier, "a resource type instance");
+        }
+
+        foreach (var secret in options.SecuritySecrets)
+        {
+            Register(secret.BicepIdentifier, "a Radius.Security/secrets resource");
         }
 
         foreach (var container in options.Containers)

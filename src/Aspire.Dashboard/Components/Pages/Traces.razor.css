@@ -38,6 +38,17 @@
     margin-right: 7px;
 }
 
+.trace-overflow-tooltip-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    row-gap: 8px;
+}
+
+::deep .trace-overflow-tooltip {
+    padding-block: 8px;
+}
+
 ::deep .duration-container {
     display: flex;
     align-items: center;

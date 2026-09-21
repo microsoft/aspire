@@ -21,6 +21,16 @@ public static class TestDistributedApplicationBuilder
 {
     public static IDistributedApplicationTestingBuilder Create(DistributedApplicationOperation operation, string outputPath = "./", string? logLevel = "information", string? step = "publish")
     {
+        return CreateForOperation(operation, testOutputHelper: null, outputPath, logLevel, step);
+    }
+
+    public static IDistributedApplicationTestingBuilder Create(DistributedApplicationOperation operation, ITestOutputHelper testOutputHelper, string outputPath = "./", string? logLevel = "information", string? step = "publish")
+    {
+        return CreateForOperation(operation, testOutputHelper, outputPath, logLevel, step);
+    }
+
+    private static IDistributedApplicationTestingBuilder CreateForOperation(DistributedApplicationOperation operation, ITestOutputHelper? testOutputHelper, string outputPath, string? logLevel, string? step)
+    {
         var args = operation switch
         {
             DistributedApplicationOperation.Run => (string[])[],
@@ -28,7 +38,7 @@ public static class TestDistributedApplicationBuilder
             _ => throw new ArgumentOutOfRangeException(nameof(operation))
         };
 
-        return Create(args);
+        return CreateCore(args, (options) => { options.TrustDeveloperCertificate = false; }, testOutputHelper);
     }
 
     public static IDistributedApplicationTestingBuilder Create(params string[] args)
@@ -67,6 +77,7 @@ public static class TestDistributedApplicationBuilder
         builder.Services.ConfigureHttpClientDefaults(http => http.AddStandardResilienceHandler());
 
         builder.Services.AddSingleton<ApplicationOrchestratorProxy>(sp => new ApplicationOrchestratorProxy(sp.GetRequiredService<ApplicationOrchestrator>()));
+
         if (testOutputHelper is not null)
         {
             builder.WithTestAndResourceLogging(testOutputHelper);

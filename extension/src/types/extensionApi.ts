@@ -118,9 +118,10 @@ export interface AspireExtensionE2EStateFile {
 }
 
 /**
- * A browser debug session (`pwa-chrome`, `pwa-msedge`, or `firefox`) that VS Code currently
- * reports as active. Browser sessions are not part of the extension's own state snapshot, so
- * E2E tests use this to observe whether a launched dashboard browser actually terminated.
+ * A browser debug session (`pwa-chrome` or `pwa-msedge`) or managed Blazor WebAssembly root
+ * (`blazorwasm`) that VS Code currently reports as active. These sessions are not part of the
+ * extension's own state snapshot, so E2E tests use this to observe whether a launched browser
+ * and its managed root actually terminated.
  */
 export interface AspireExtensionE2EBrowserDebugSession {
     id: string;
@@ -272,7 +273,19 @@ export type AspireExtensionE2EControlCommand =
         isApphost?: boolean;
         debuggers?: Readonly<Record<string, DebugLaunchSettings>>;
         environmentKeys?: readonly string[];
+        csharpExtensionVersion?: string | null;
     }
     | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; resourceRequestPath?: string; timeoutMs?: number }
+    | {
+        name: 'proveBlazorWasmDebugging';
+        appHostPath: string;
+        resourceName: string;
+        sourcePath: string;
+        breakpointLine: number;
+        requestPath: string;
+        expectedBrowser: 'edge' | 'chrome';
+        closeMode: 'explicit' | 'natural';
+        timeoutMs?: number;
+    }
     | { name: 'proveMauiResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number }
     | { name: 'proveDenoResourceDebugging'; appHostPath: string; resourceName: string; sourcePath: string; breakpointLine: number; timeoutMs?: number; pauseOnBreakpointMs?: number };

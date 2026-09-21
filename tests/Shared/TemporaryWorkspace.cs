@@ -220,10 +220,17 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
         var workspaceDirectory = parentDir.CreateSubdirectory(IOPath.GetRandomFileName());
         outputHelper.WriteLine($"Temporary workspace created at: {workspaceDirectory.FullName}");
 
-        // Register workspace path for CaptureWorkspaceOnFailure attribute
+        // CaptureWorkspaceOnFailure runs after method-local disposal. Preserve the workspace
+        // immediately so disposal defers deletion until the attribute has copied or released it.
         TestContext.Current?.KeyValueStorage["WorkspacePath"] = workspaceDirectory.FullName;
+        var workspace = new TemporaryWorkspace(outputHelper, workspaceDirectory);
+        if (TestContext.Current?.KeyValueStorage.TryGetValue("PreserveWorkspaceOnFailure", out var preserveValue) == true &&
+            preserveValue is true)
+        {
+            workspace.Preserve();
+        }
 
-        return new TemporaryWorkspace(outputHelper, workspaceDirectory);
+        return workspace;
     }
 
     /// <summary>

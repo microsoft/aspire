@@ -5,6 +5,10 @@ void main() throws Exception {
         // For more information, see: https://aspire.dev
         var builder = DistributedApplication.CreateBuilder();
         var openai = builder.addAzureOpenAI("openai");
+        openai.configureInfrastructure((infrastructure) -> {
+            var account = infrastructure.getCognitiveServicesAccount();
+            account.tags().set("provisioning-proxy", "java");
+        });
         openai.addDeployment("chat", "gpt-4o-mini", "2024-07-18");
         var api = builder.addContainer("api", "redis:latest");
         api.withCognitiveServicesRoleAssignments(openai, new AzureOpenAIRole[] { AzureOpenAIRole.COGNITIVE_SERVICES_OPEN_AIUSER });

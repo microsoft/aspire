@@ -138,12 +138,22 @@ public class BackchannelJsonSerializerContextTests
     }
 
     [Fact]
-    public void ListTerminalsResponse_RoundTripsThroughSerializer()
+    public async Task ListTerminalsResponse_RoundTripsThroughSerializer()
     {
         var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
+        options.WriteIndented = true;
         var response = new ListTerminalsResponse
         {
-            Terminals =
+            AppHostTerminals =
+            [
+                new AppHostTerminalSummary
+                {
+                    TerminalId = "terminal-1",
+                    Title = "Shell",
+                    Placement = "Dock"
+                }
+            ],
+            ResourceTerminals =
             [
                 new TerminalSummary
                 {
@@ -158,7 +168,7 @@ public class BackchannelJsonSerializerContextTests
                         {
                             ReplicaIndex = 0,
                             Label = "myresource-0",
-                            ConsumerUdsPath = "/tmp/r0.sock",
+                            ConsumerUdsPath = "/terminal/r0.sock",
                             IsAlive = true,
                             CurrentColumns = 130,
                             CurrentRows = 32,
@@ -177,9 +187,9 @@ public class BackchannelJsonSerializerContextTests
         var roundTripped = JsonSerializer.Deserialize<ListTerminalsResponse>(json, options);
 
         Assert.NotNull(roundTripped);
-        Assert.Single(roundTripped.Terminals);
+        Assert.Single(roundTripped.ResourceTerminals);
 
-        var terminal = roundTripped.Terminals[0];
+        var terminal = roundTripped.ResourceTerminals[0];
         Assert.Equal("myresource", terminal.ResourceName);
         Assert.True(terminal.IsHostReachable);
         Assert.NotNull(terminal.Replicas);
@@ -193,5 +203,36 @@ public class BackchannelJsonSerializerContextTests
         Assert.Single(replica.Peers);
         Assert.Equal("peer-1", replica.Peers[0].PeerId);
         Assert.Equal("viewer-1", replica.Peers[0].DisplayName);
+
+        var appHostTerminal = Assert.Single(roundTripped.AppHostTerminals);
+        Assert.Equal("terminal-1", appHostTerminal.TerminalId);
+        Assert.Equal("Shell", appHostTerminal.Title);
+        Assert.Equal("Dock", appHostTerminal.Placement);
+
+        await Verify(json, "json");
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"resourceTerminals":[]}""")]
+    [InlineData("""{"appHostTerminals":[]}""")]
+    [InlineData("""{"terminals":[],"appHostTerminals":[]}""")]
+    public void ListTerminalsResponse_MissingRequiredCollections_Throws(string json)
+    {
+        var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
+
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<ListTerminalsResponse>(json, options));
+    }
+
+    [Fact]
+    public void ListTerminalsResponse_EmptyCollections_Deserializes()
+    {
+        var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
+        var response = JsonSerializer.Deserialize<ListTerminalsResponse>(
+            """{"resourceTerminals":[],"appHostTerminals":[]}""", options);
+
+        Assert.NotNull(response);
+        Assert.Empty(response.ResourceTerminals);
+        Assert.Empty(response.AppHostTerminals);
     }
 }

@@ -236,14 +236,23 @@ internal sealed class ExecutableCreator(
         {
             EnsureRequiredAnnotations(resource);
 
-            var instance = DcpExecutor.GetDcpInstance(resource, instanceIndex: 0);
-            var executable = Executable.Create(instance.Name, resource.Command);
-            executable.Spec.WorkingDirectory = resource.WorkingDirectory;
+            if (!resource.TryGetInstances(out var instances))
+            {
+                throw new DistributedApplicationException($"Couldn't find required {nameof(DcpInstancesAnnotation)} annotation on resource {resource.Name}.");
+            }
 
-            ApplyCommonAnnotations(executable, resource, instance, replicaCount: 1, replicaIndex: 0);
-            ApplyExplicitStart(resource, executable.Spec);
-            DcpExecutor.SetInitialResourceState(resource, executable);
-            AddRenderedResource(resource, executable);
+            // Naming determines replica eligibility. Consume those instances without enabling
+            // replica annotations on ordinary executables that still receive only one instance.
+            foreach (var instance in instances)
+            {
+                var executable = Executable.Create(instance.Name, resource.Command);
+                executable.Spec.WorkingDirectory = resource.WorkingDirectory;
+
+                ApplyCommonAnnotations(executable, resource, instance, instances.Length, instance.Index);
+                ApplyExplicitStart(resource, executable.Spec);
+                DcpExecutor.SetInitialResourceState(resource, executable);
+                AddRenderedResource(resource, executable);
+            }
         }
     }
 

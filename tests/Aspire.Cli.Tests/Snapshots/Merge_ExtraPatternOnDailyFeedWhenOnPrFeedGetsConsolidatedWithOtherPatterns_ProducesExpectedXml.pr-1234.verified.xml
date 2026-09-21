@@ -1,4 +1,4 @@
-<configuration>
+﻿<configuration>
   <packageSources>
     <clear />
     <add key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />

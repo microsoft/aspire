@@ -35,6 +35,10 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="MongoDB.Driver.Core.Extensions.DiagnosticSources" VersionOverride="[1.5.0,2.0.0)" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <!-- MongoDB.Driver.Core 2.30.0 permits Snappier >= 1.0.0. Require the patched version
+         for consumers of this v2 package without changing the central MongoDB v3 graph.
+         https://github.com/advisories/GHSA-pggp-6c3x-2xmx -->
+    <PackageReference Include="Snappier" VersionOverride="1.3.1" />
   </ItemGroup>
 
 </Project>

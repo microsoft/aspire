@@ -361,9 +361,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
             {
                 try
                 {
-                    // Note: The extension backchannel protocol does not yet support preSelected items.
-                    // Pre-selected items are applied only when falling back to the console interaction service.
-                    var result = await Backchannel.PromptForSelectionsAsync(StringUtils.RemoveMarkup(promptText), choices, choiceFormatter, _cancellationToken).ConfigureAwait(false);
+                    var result = await Backchannel.PromptForSelectionsAsync(StringUtils.RemoveMarkup(promptText), choices, choiceFormatter, preSelected, _cancellationToken).ConfigureAwait(false);
                     tcs.SetResult(result);
                 }
                 catch (Exception ex)

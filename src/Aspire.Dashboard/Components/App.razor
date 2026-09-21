@@ -1,5 +1,4 @@
-﻿@inject IStringLocalizer<Aspire.Dashboard.Resources.ControlsStrings> ControlsLoc
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="@GlobalizationHelpers.GetHtmlLanguageName(System.Globalization.CultureInfo.CurrentUICulture)">
 
 <head>
@@ -21,7 +20,7 @@
     <HeadOutlet @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
 </head>
 
-<body data-scroll-to-bottom-label="@ControlsLoc[nameof(Aspire.Dashboard.Resources.ControlsStrings.ScrollToBottom)]">
+<body>
     <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
     <ReconnectModal />
     <script src="js/imask-7.6.1.min.js"></script>
@@ -30,6 +29,7 @@
     <script src="js/app-reconnect.js"></script>
 
     <script src="js/app-theme.js" type="module"></script>
+    <script src="js/app-scroll.js" type="module"></script>
     <script src="_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js" type="module"></script>
 </body>
 </html>

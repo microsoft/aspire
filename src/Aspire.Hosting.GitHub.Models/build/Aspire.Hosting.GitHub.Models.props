@@ -1,5 +1,0 @@
-<Project>
-  <ItemGroup>
-    <Using Include="Aspire.Hosting.GitHub.GitHubModel" Alias="GitHubModel" />
-  </ItemGroup>
-</Project>

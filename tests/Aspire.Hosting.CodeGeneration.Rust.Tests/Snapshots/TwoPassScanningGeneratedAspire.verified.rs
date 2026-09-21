@@ -11882,6 +11882,32 @@ impl IDistributedApplicationResourceEvent {
     }
 }
 
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IDotnetProgramResource
+pub struct IDotnetProgramResource {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for IDotnetProgramResource {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl IDotnetProgramResource {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
 /// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder
 pub struct IExecutionConfigurationBuilder {
     handle: Handle,

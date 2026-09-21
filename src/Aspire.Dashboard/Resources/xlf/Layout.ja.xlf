@@ -12,6 +12,11 @@
         <target state="new">Live run</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardRunSelectIncompatibleTooltip">
+        <source>This run can't be viewed because it was created by an incompatible version of the dashboard.</source>
+        <target state="new">This run can't be viewed because it was created by an incompatible version of the dashboard.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DashboardRunSelectPin">
         <source>Pin run</source>
         <target state="new">Pin run</target>
