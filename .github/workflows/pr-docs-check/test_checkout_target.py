@@ -56,10 +56,6 @@ class CheckoutTargetTests(unittest.TestCase):
         _git(self.seed, "config", "user.email", "checkout-target@example.test")
 
         self._write(self.seed / ".agents" / "source.md", "main agent\n")
-        self._write(
-            self.seed / ".agents" / "skills" / "doc-writer" / "SKILL.md",
-            "main documentation skill\n",
-        )
         self._write(self.seed / ".github" / "workflow.yml", "main workflow\n")
         self._write(self.seed / ".mcp.json", '{"source":"main"}\n')
         self._write(self.seed / "src" / "content" / "docs" / "page.md", "main docs\n")
@@ -70,14 +66,6 @@ class CheckoutTargetTests(unittest.TestCase):
 
         _git(self.seed, "checkout", "-b", "release/13.5")
         self._write(self.seed / ".agents" / "source.md", "release agent\n")
-        self._write(
-            self.seed / ".agents" / "skills" / "doc-writer" / "SKILL.md",
-            "release documentation skill\n",
-        )
-        self._write(
-            self.seed / ".agents" / "skills" / "doc-writer" / "references" / "terminal-recordings.md",
-            "release terminal recording guidance\n",
-        )
         self._write(
             self.seed / "src" / "content" / "docs" / "page.md",
             "release docs\n",
@@ -170,14 +158,6 @@ class CheckoutTargetTests(unittest.TestCase):
             "trusted agent\n",
         )
         self.assertEqual(_git(workspace, "status", "--porcelain").stdout, "")
-        self.assertEqual(
-            (workspace / ".pr-docs-check" / "doc-writer" / "SKILL.md").read_text(encoding="utf-8"),
-            "release documentation skill\n",
-        )
-        self.assertEqual(
-            (workspace / ".pr-docs-check" / "doc-writer" / "references" / "terminal-recordings.md").read_text(encoding="utf-8"),
-            "release terminal recording guidance\n",
-        )
 
         self._write(
             workspace / "src" / "content" / "docs" / "page.md",
@@ -270,69 +250,6 @@ class CheckoutTargetTests(unittest.TestCase):
             "Resolved target branch 'release/99.9' could not be fetched",
         ):
             self._prepare(workspace, effective_target="release/99.9")
-
-    def test_materializes_main_skill_from_git_not_overlaid_working_tree(self) -> None:
-        workspace = self._clone("main-skill", "--branch", "main")
-        self._restore_trusted_configuration(workspace)
-
-        checkout_target._materialize_doc_writer(workspace, "origin/main")
-
-        self.assertEqual(
-            (workspace / ".pr-docs-check" / "doc-writer" / "SKILL.md").read_text(encoding="utf-8"),
-            "main documentation skill\n",
-        )
-        self.assertEqual(
-            (workspace / ".agents" / "trusted.md").read_text(encoding="utf-8"),
-            "trusted agent\n",
-        )
-
-    def test_materializes_legacy_skill_location(self) -> None:
-        (self.seed / ".github" / "skills").mkdir()
-        _git(self.seed, "mv", ".agents/skills/doc-writer", ".github/skills/doc-writer")
-        _git(self.seed, "commit", "-m", "Use legacy skill location")
-        _git(self.seed, "push", "origin", "release/13.5")
-        workspace = self._clone("legacy-skill")
-
-        self._prepare(workspace)
-
-        self.assertEqual(
-            (workspace / ".pr-docs-check" / "doc-writer" / "SKILL.md").read_text(encoding="utf-8"),
-            "release documentation skill\n",
-        )
-        self.assertEqual(
-            (workspace / ".pr-docs-check" / "doc-writer" / "references" / "terminal-recordings.md").read_text(encoding="utf-8"),
-            "release terminal recording guidance\n",
-        )
-        self.assertEqual(_git(workspace, "status", "--porcelain").stdout, "")
-
-    def test_prefers_current_skill_when_both_locations_exist(self) -> None:
-        self._write(
-            self.seed / ".github" / "skills" / "doc-writer" / "SKILL.md",
-            "outdated legacy skill\n",
-        )
-        _git(self.seed, "add", ".github/skills")
-        _git(self.seed, "commit", "-m", "Add legacy skill")
-        _git(self.seed, "push", "origin", "release/13.5")
-        workspace = self._clone("both-skills")
-
-        self._prepare(workspace)
-
-        self.assertEqual(
-            (workspace / ".pr-docs-check" / "doc-writer" / "SKILL.md").read_text(encoding="utf-8"),
-            "release documentation skill\n",
-        )
-
-    def test_missing_skill_reports_clear_error(self) -> None:
-        _git(self.seed, "rm", "-r", ".agents/skills/doc-writer")
-        _git(self.seed, "commit", "-m", "Remove documentation skill")
-        _git(self.seed, "push", "origin", "release/13.5")
-        workspace = self._clone("missing-skill")
-
-        with self.assertRaisesRegex(
-            checkout_target.CheckoutError,
-            "Required doc-writer/SKILL.md is missing",
-        ):
-            self._prepare(workspace)
 
     def test_restore_uses_generated_gh_aw_script_contract(self) -> None:
         workspace = self.root / "restore-workspace"

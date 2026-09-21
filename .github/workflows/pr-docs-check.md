@@ -42,10 +42,22 @@ if: >-
 # agent into a retry loop that crossed the 25M effective-token rail and
 # hard-failed the run.
 #
-# Prepared skill/patch inputs and bounded research reduce wasted invocations.
-# The prompt reserves the final calls for completion, queues the notification
-# before terminal PR creation, and prohibits retrying deterministic failures.
-# Keep the cap as a backstop; incomplete output still fails outcome validation.
+# The PRIMARY runaway protection is behavioral, not numeric: the anti-loop
+# guidance in "Create Draft PR" below treats any deterministic
+# `create_pull_request` failure as non-retryable, so the loop is stopped at its
+# source. `max-turns` is only a coarse backstop for a true runaway, plus the
+# 25M `maxEffectiveTokens` rail remains the ultimate hard stop.
+#
+# This cap is deliberately set ABOVE the known-good ceiling rather than just
+# above a skip run. AWF audit data: healthy skip-path runs use ~4-5 inference
+# requests, but a heavy-but-SUCCESSFUL skip run was observed at ~35 requests,
+# and a real doc-DRAFTING run (read the skill, pull comment threads + file
+# patches, browse docs, write several files, open the PR) legitimately needs
+# more than a skip. A cap at or below that ceiling would truncate a valid
+# drafting run mid-flight — and a truncated run never emits `notify_source_pr`,
+# so the source PR would get no comment at all. 50 leaves the drafting path
+# ample headroom while still cutting a pathological loop long before it could
+# accrete a runaway transcript, with the AWF token rail backing it up.
 max-turns: 50
 
 checkout:
@@ -243,10 +255,9 @@ safe-outputs:
         opened on microsoft/aspire.dev) request a review from the SME
         identified from the source PR.
 
-        Emit exactly one `notify_source_pr` item per run. On the drafting path,
-        prepare both payloads, emit this notification intent immediately BEFORE
-        `create_pull_request`, then make PR creation your final action. Use `result:
-        "drafted"` when you are ready to emit `create_pull_request`; use `result:
+        Emit exactly one `notify_source_pr` item per run, after you've finished
+        any `create_pull_request` or no-docs-needed reasoning. Use `result:
+        "drafted"` when you just emitted a `create_pull_request`; use `result:
         "skipped"` when no docs PR is needed; use `result: "draft_failed"` when
         docs WERE required but you could not produce a docs PR (a genuine
         failure that must be surfaced, not reported as a green no-op). DO NOT
@@ -263,7 +274,7 @@ safe-outputs:
           required: true
           type: number
         result:
-          description: "'drafted' when ready to request a docs PR on microsoft/aspire.dev (post-processing verifies creation); 'skipped' if no docs PR was needed; 'draft_failed' if docs were required but a docs PR could not be prepared."
+          description: "'drafted' if a docs PR was opened on microsoft/aspire.dev; 'skipped' if no docs PR was needed; 'draft_failed' if docs were required but a docs PR could not be produced."
           required: true
           type: string
         sme_login:
@@ -412,8 +423,13 @@ safe-outputs:
                   summary
                 ].join('\n');
               } else if (renderKind === 'draft_failed') {
-                // Docs were required, but the agent could not prepare a valid
-                // draft. Keep this distinct from "skipped": docs are still owed.
+                // Step 5 determined docs WERE required, but Step 10 could not
+                // produce a docs PR (e.g. a base-branch/validation error, a
+                // protected-file rejection, or an empty/invalid patch). This is
+                // a genuine failure, not a no-op: surface it under the ⚠️ banner
+                // so the author sees that documentation is still owed, rather
+                // than letting it fall through to the green "no update needed"
+                // branch below. The agent-supplied summary names the reason.
                 body = [
                   MARKER,
                   '⚠️ Documentation was required for this change, but a docs PR could not be drafted automatically.',
@@ -466,26 +482,12 @@ safe-outputs:
                 core.warning(`Failed to enumerate prior comments: ${e.message}`);
               }
 
-              try {
-                await github.rest.issues.createComment({
-                  owner: 'microsoft',
-                  repo: 'aspire',
-                  issue_number: sourcePrNumber,
-                  body,
-                });
-              } catch (e) {
-                // Locked conversations reject bot comments even after a docs PR
-                // was created. Preserve that outcome without hiding other 403s.
-                if (e.status !== 403 || e.response?.data?.message !== 'Unable to create comment because issue is locked.') {
-                  throw e;
-                }
-                core.warning(`Source PR microsoft/aspire#${sourcePrNumber} is locked; the documentation outcome is recorded in the job summary.`);
-                await core.summary
-                  .addRaw(`Source PR microsoft/aspire#${sourcePrNumber} is locked; no comment was posted.\n\n`)
-                  .addRaw(body)
-                  .write();
-                return;
-              }
+              await github.rest.issues.createComment({
+                owner: 'microsoft',
+                repo: 'aspire',
+                issue_number: sourcePrNumber,
+                body,
+              });
               core.info(`Posted ${renderKind || 'unknown'} comment on microsoft/aspire#${sourcePrNumber}`);
         - name: Request SME review on draft PR
           if: needs.safe_outputs.outputs.created_pr_url != ''
@@ -1035,10 +1037,7 @@ pre-agent-steps:
       python3 _repos/aspire/.github/workflows/pr-docs-check/resolve_sme.py \
         "${PR_CONTEXT_OUT}" "${REVIEWS_JSON}" "${SME_OUT}"
 
-      # Keep patches available for targeted reads without inflating pr.json or
-      # spending model calls fetching and decoding the same API response again.
-      mv "${FILES_JSON}" .pr-docs-check/files.json
-      rm -f "${PR_JSON}" "${REVIEWS_JSON}"
+      rm -f "${PR_JSON}" "${FILES_JSON}" "${REVIEWS_JSON}"
 
       echo "--- ${OUT} ---"
       cat "${OUT}"
@@ -1081,26 +1080,6 @@ needed, create a draft PR with the actual documentation changes.
 > `workflow_dispatch` with `pr_number` when a maintainer wants to run the docs
 > check manually for a merged fork PR.
 
-## Execution budget and completion
-
-Keep research bounded within the 50-invocation limit. Read the prepared
-`.pr-docs-check/` inputs together, batch related searches and file reads, and
-start finalizing by invocation 35 so editing and both safe outputs have room.
-Do not repeat searches once you have enough evidence for the smallest accurate
-documentation change. If you cannot safely finish a required draft, emit
-`notify_source_pr` with `result: "draft_failed"` and the concrete blocker rather
-than continuing research until the cap.
-
-The workspace contains documentation, not the Aspire source tree.
-`_repos/aspire` is a sparse checkout of workflow helpers only. Use cached
-patches first and GitHub tools only for additional source context you actually
-need. Never search the whole filesystem for missing inputs.
-
-Prepare both final payloads before submitting them. On the drafting path,
-emit the notification intent first, then `create_pull_request` as the final
-action and stop. PR creation is a terminal safe output: never leave notification
-preparation or emission until afterward.
-
 ## Step 1: Read PR Information
 
 The source PR's metadata was gathered deterministically by a `pre-agent-steps:`
@@ -1117,13 +1096,11 @@ use are:
 | `linked_issues` | Same-repo issue numbers from `Closes`/`Fixes`/`Resolves #N` in the body. |
 | `changed_files` | Each `{filename, status, additions, deletions}`. |
 
-Diff hunks (`patch`) are omitted from this compact file but the already-fetched
-changed-file payload is available in `.pr-docs-check/files.json`. Read only the
-entries for files likely to affect user-facing behavior, configuration, or public
-API surface, and only on the drafting path. Do not read the entire patch payload
-into context. Use GitHub tools only when a needed patch is absent or insufficient;
-do not re-fetch diffs already present locally. Do not fetch diffs on the cheap
-skip path.
+Diff hunks (`patch`) are intentionally omitted to keep this file small. Inspect a
+file's diff only for files likely to affect user-facing behavior, configuration,
+or public API surface (or when significance is unclear from the filename), and
+only on the doc-drafting path — fetch the patch for that specific file with the
+GitHub tools in Step 9. Do **not** fetch diffs on the cheap skip path.
 
 **Defer the expensive comment-thread reads until you actually need them.** They
 are only required when you are writing documentation (Step 9), so do **not**
@@ -1141,7 +1118,7 @@ docs-drafting path, fetch:
 PR/review comment threads together as the canonical context.** Steps 9 and 10
 must paraphrase the explanation the author and reviewers wrote, so the docs
 reflect the change as it was reviewed — not as a model might re-imagine it from
-filenames. Step 10 must cite at least one piece of evidence per triggered signal
+filenames. Step 11 must cite at least one piece of evidence per triggered signal
 category, and the comment threads are often where that evidence lives in
 human-readable form.
 
@@ -1253,7 +1230,7 @@ internal reasoning** like:
 > Triggered signals (5): `cli_command_added`, `cli_command_file_changed`, `cli_option_added`, `cli_resource_strings_changed`, `mcp_tool_file_changed`. Evidence: `LogsCommand.cs` is a new command file that adds `Option<string?>("--search")`; `LogsCommandStrings.resx` adds `SearchOptionDescription`; `ListConsoleLogsTool.cs` was modified to wire up the new search option.
 
 This enumeration is not optional. The PR description you write in
-Step 11 and the `summary` you emit in Step 10 must both cite at least
+Step 10 and the `summary` you emit in Step 11 must both cite at least
 one `evidence` entry per triggered signal category so a human auditor
 can verify the decision.
 
@@ -1306,7 +1283,7 @@ identifies. To use this exception you **must** do all of the following:
    `SearchOptionDescription`, the JSON property name, the API symbol).
 2. Open the matching docs file and quote a sentence or code block that
    mentions the identifier by name.
-3. In the `notify_source_pr` `summary` (Step 10), include — per
+3. In the `notify_source_pr` `summary` (Step 11), include — per
    triggered signal — the docs file path **and** the quoted text. Plain
    statements like *"the existing docs cover this area"* or *"this is
    internal"* are not acceptable; the audit trail must show the
@@ -1387,11 +1364,8 @@ output on the no-docs path.
 
 ## Step 7: Read the doc-writer Skill
 
-Read `.pr-docs-check/doc-writer/SKILL.md` and any relevant relative references.
-The pre-agent helper materialized this skill from the exact selected
-`microsoft/aspire.dev` commit, outside the trusted runtime configuration overlay.
-Do not search `.agents`, `.github`, Git history, or the filesystem for another
-copy. This skill contains comprehensive guidelines for
+Read the file `.github/skills/doc-writer/SKILL.md` from the checked-out
+`microsoft/aspire.dev` workspace. This skill contains comprehensive guidelines for
 writing documentation on the Aspire docs site, including:
 
 - Site structure and file organization
@@ -1457,41 +1431,34 @@ Ensure all changes follow the doc-writer skill guidelines from Step 7. Include:
 - Cross-references to related documentation pages
 - Correct use of Aside, Steps, Tabs, and other components
 
-## Step 10: Prepare and Emit the Documentation Outcome
-
-Finish the documentation edits and prepare the complete PR title, body, branch,
-and base described in Step 11 before emitting any output. Prepare a single
-`notify_source_pr` payload with:
-
-- `source_pr_number`: the source PR number from Step 1.
-- `result`: `"drafted"`.
-- `sme_login`: `SME_LOGIN` from Step 2 (or an empty string).
-- `target_branch`: `effective_target_branch` from `.pr-docs-check/target.json`.
-- `summary`: a short summary of the changes and modified files, citing the
-  triggered signals. Do not invent a PR URL or number.
-
-If you cannot prepare a valid documentation patch, emit `result: "draft_failed"`
-instead, naming the blocker and triggered signals, then stop. Only use
-`"skipped"` when Step 5 permits it, or when the signal is a proven false positive
-with no actual user-facing change; explain that evidence.
-
-When both payloads are ready, emit `notify_source_pr` first and proceed
-immediately to Step 11. `"drafted"` records intent, not a successful remote
-operation: trusted post-processing verifies the actual PR before commenting or
-requesting review. A notification without a created PR still fails validation.
-
-## Step 11: Create Draft PR and Stop
+## Step 10: Create Draft PR
 
 > [!IMPORTANT]
 > Emit `create_pull_request` **exactly once**, and only after you have actually
 > written documentation file changes to the workspace in Step 9. The safe output
 > builds the PR from those workspace changes.
 >
-> **Stop after `create_pull_request`, whether it succeeds or fails.** Never
-> re-emit it, retry a deterministic failure, push manually, or emit another
-> notification. The notification intent was already recorded in Step 10.
-> Trusted post-processing surfaces a missing PR as a failure, not as a skipped
-> documentation update.
+> **Treat any `create_pull_request` failure as non-retryable and never re-emit the
+> same safe output after it.** Re-emitting after a deterministic error (no commits
+> found, no diff to commit, an empty/invalid patch, a base-branch or validation
+> error, a protected-file rejection, etc.) is a failure loop that burns the run's
+> token budget without making progress. Handle a failure exactly once:
+>
+> - If it failed because you had not yet written any doc changes, write them now
+>   (Step 9) and emit `create_pull_request` one more time — at most.
+> - If it failed for any other deterministic reason — a base-branch or validation
+>   error, a protected-file rejection, or an empty/invalid patch — **stop
+>   drafting** and emit a single `notify_source_pr` with `result: "draft_failed"`.
+>   Docs were required (Step 5), so this is a genuine failure, not a no-op: the
+>   `draft_failed` result is surfaced under a ⚠️ banner so the author knows
+>   documentation is still owed. The `summary` must name the failure reason and
+>   list the triggered signals. Do not loop.
+> - Only if, on inspection, there is genuinely nothing to document — the
+>   triggering signal fired on a string that is not actually an Aspire
+>   user-facing feature (a true false positive), so there is no concrete
+>   documentation edit to make — **stop drafting** and emit a single
+>   `notify_source_pr` with `result: "skipped"` whose `summary` explains that the
+>   signal was a false positive and lists the triggered signals. Do not loop.
 >
 > Before emitting the safe output, stage only the documentation paths you
 > intentionally edited. Never use `git add -A`, `git commit -a`, or include
@@ -1543,8 +1510,25 @@ Do **not** include `reviewers` in the `create_pull_request` emission. The SME
 identified in Step 2 is requested as a reviewer by the `notify_source_pr`
 safe-output job, not by `create_pull_request`.
 
+## Step 11: Notify Source PR
+
+After emitting `create_pull_request`, emit a single `notify_source_pr` safe output
+with:
+
+- `source_pr_number`: the source PR number from Step 1.
+- `result`: `"drafted"`.
+- `sme_login`: `SME_LOGIN` from Step 2 (or an empty string if none was found).
+- `target_branch`: the `effective_target_branch` value from
+  `.pr-docs-check/target.json` (read in Step 3) — for example,
+  `release/13.3` or `main`. Do not derive or modify this value.
+- `summary`: a short markdown summary (1–3 sentences plus optional bullet list)
+  of the documentation changes made. List the files modified or created. Do **not**
+  describe links here — the workflow injects the drafted PR's URL automatically.
+
 > [!IMPORTANT]
-> Do not call `add_comment` on any path. The `notify_source_pr` job uses the
-> previously queued intent and the handler's real PR URL and number to post the
-> outcome after validating the upstream base and fork head. No agent work remains
-> after PR creation.
+> Do **not** try to compose the drafted PR's URL or PR number yourself in the
+> `summary` text. The `notify_source_pr` safe-output job knows the real values
+> from the safe-outputs handler and will substitute them when posting the
+> comment. Likewise, do **not** call `add_comment` for the "drafted",
+> "skipped", or "draft_failed" path — `notify_source_pr` is the only commenting
+> path used by this workflow.

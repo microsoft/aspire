@@ -60,16 +60,6 @@ def payload(create: list[dict], notifications: list[dict] | None = None) -> dict
 
 
 class ResolveTargetBranchTests(unittest.TestCase):
-    def test_notification_before_terminal_creation_passes(self) -> None:
-        self.assertEqual(
-            "release/13.5",
-            resolve_target_branch(
-                {"items": [notification(), create_item(base="release/13.5")]},
-                EXPECTED_SOURCE_PR_NUMBER,
-                [notification(), raw_create_item()],
-            ),
-        )
-
     def test_current_base_passes(self) -> None:
         self.assertEqual(
             "release/13.5",

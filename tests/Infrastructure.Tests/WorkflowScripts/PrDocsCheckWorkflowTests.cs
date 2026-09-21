@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.TestUtilities;
 using Xunit;
@@ -11,8 +10,6 @@ namespace Infrastructure.Tests;
 
 public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
 {
-    private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web);
-
     [Fact]
     public void SourceWorkflowUsesSeparateForkInstallationWithoutChangingUpstreamCheckout()
     {
@@ -48,26 +45,6 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
         Assert.Contains("${{ steps.safe-outputs-head-app-token.outputs.token }}", safeOutputs, StringComparison.Ordinal);
         Assert.Contains("\\\"head-repo\\\":\\\"IEvangelist/aspire.dev\\\"", safeOutputs, StringComparison.Ordinal);
         Assert.Contains("\\\"target-repo\\\":\\\"microsoft/aspire.dev\\\"", safeOutputs, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void PromptUsesPreparedInputsAndQueuesNotificationBeforeTerminalOutput()
-    {
-        var workflow = ReadWorkflow("pr-docs-check.md");
-        var skillStep = GetSection(workflow, "^## Step 7: [^\r\n]*", "^## Step 8:");
-        var notificationStep = GetSection(workflow, "^## Step 10: [^\r\n]*", "^## Step 11:");
-        var finalStep = GetSection(workflow, "^## Step 11: [^\r\n]*", "\\z");
-
-        Assert.Contains(".pr-docs-check/doc-writer/SKILL.md", skillStep, StringComparison.Ordinal);
-        Assert.Contains("relevant relative references", skillStep, StringComparison.Ordinal);
-        Assert.Contains("mv \"${FILES_JSON}\" .pr-docs-check/files.json", workflow, StringComparison.Ordinal);
-        Assert.Contains(
-            "mv \\\"${FILES_JSON}\\\" .pr-docs-check/files.json",
-            ReadWorkflow("pr-docs-check.lock.yml"),
-            StringComparison.Ordinal);
-        Assert.Contains("start finalizing by invocation 35", workflow, StringComparison.Ordinal);
-        Assert.Contains("emit `notify_source_pr` first", notificationStep, StringComparison.Ordinal);
-        Assert.Contains("**Stop after `create_pull_request`, whether it succeeds or fails.**", finalStep, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -195,100 +172,6 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
                 validationStep,
                 ["CREATED_PR_BASE", "CREATED_PR_URL", "EXPECTED_SOURCE_PR_NUMBER"]);
         }
-    }
-
-    [Theory]
-    [InlineData("pr-docs-check.md", "drafted")]
-    [InlineData("pr-docs-check.lock.yml", "drafted")]
-    [InlineData("pr-docs-check.md", "skipped")]
-    [InlineData("pr-docs-check.lock.yml", "skipped")]
-    [InlineData("pr-docs-check.md", "draft_failed")]
-    [InlineData("pr-docs-check.lock.yml", "draft_failed")]
-    [RequiresTools(["node"])]
-    public async Task LockedSourcePrPreservesOutcomeInJobSummary(string workflowName, string renderKind)
-    {
-        var posted = await RunNotificationScriptAsync(workflowName, renderKind);
-        var locked = await RunNotificationScriptAsync(
-            workflowName, renderKind, 403, "Unable to create comment because issue is locked.");
-
-        Assert.Null(posted.Error);
-        Assert.Null(locked.Error);
-        var comment = Assert.Single(posted.Attempts);
-        Assert.Equal(comment, Assert.Single(locked.Attempts));
-        Assert.Equal("microsoft", comment.Owner);
-        Assert.Equal("aspire", comment.Repo);
-        Assert.Equal(20195, comment.IssueNumber);
-        Assert.Equal(
-            $"Source PR microsoft/aspire#20195 is locked; no comment was posted.\n\n{comment.Body}",
-            locked.Summary);
-        Assert.Equal(
-            ["Source PR microsoft/aspire#20195 is locked; the documentation outcome is recorded in the job summary."],
-            locked.Warnings);
-        Assert.Equal(1, locked.SummaryWrites);
-        Assert.Equal(0, posted.SummaryWrites);
-        Assert.Empty(posted.Warnings);
-        if (renderKind == "drafted")
-        {
-            Assert.Contains("[microsoft/aspire.dev#1531](https://github.com/microsoft/aspire.dev/pull/1531)", comment.Body, StringComparison.Ordinal);
-        }
-    }
-
-    [Theory]
-    [InlineData("pr-docs-check.md", 403, "Resource not accessible by integration")]
-    [InlineData("pr-docs-check.lock.yml", 403, "Resource not accessible by integration")]
-    [InlineData("pr-docs-check.md", 422, "Validation Failed")]
-    [InlineData("pr-docs-check.lock.yml", 422, "Validation Failed")]
-    [InlineData("pr-docs-check.md", 500, "Unable to create comment because issue is locked.")]
-    [InlineData("pr-docs-check.lock.yml", 500, "Unable to create comment because issue is locked.")]
-    [RequiresTools(["node"])]
-    public async Task OtherCommentFailuresRemainFatal(string workflowName, int status, string message)
-    {
-        var result = await RunNotificationScriptAsync(workflowName, "drafted", status, message);
-
-        Assert.Equal(message, result.Error);
-        Assert.Single(result.Attempts);
-        Assert.Equal(0, result.SummaryWrites);
-        Assert.Empty(result.Warnings);
-    }
-
-    private async Task<NotificationResult> RunNotificationScriptAsync(
-        string workflowName, string renderKind, int? errorStatus = null, string? errorMessage = null)
-    {
-        using var workspace = TemporaryWorkspace.Create(testOutput);
-        var commentStep = GetSection(
-            ReadWorkflow(workflowName),
-            "^\\s*- name: Post status comment on source PR",
-            "^\\s*- name: Request SME review on draft PR");
-        var scriptMatch = Regex.Match(commentStep, @"(?ms)^ +script: \|\r?\n(?<script>.*)");
-        Assert.True(scriptMatch.Success);
-        var lines = scriptMatch.Groups["script"].Value.Replace("\r\n", "\n").Split('\n');
-        var indent = lines.Where(line => !string.IsNullOrWhiteSpace(line))
-            .Min(line => line.Length - line.TrimStart().Length);
-        var script = string.Join('\n', lines.Select(line => line.Length >= indent ? line[indent..] : line));
-        var outcomeFile = Path.Combine(workspace.Path, "outcome.json");
-        await File.WriteAllTextAsync(outcomeFile, JsonSerializer.Serialize(new
-        {
-            allow_comment = true,
-            source_pr_number = 20195,
-            render_kind = renderKind,
-            target_branch = "release/13.6",
-            summary = "Document the new CLI flags.",
-        }));
-        var requestPath = Path.Combine(workspace.Path, "request.json");
-        var resultPath = Path.Combine(workspace.Path, "result.json");
-        await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(
-            new { script, outcomeFile, errorStatus, errorMessage }, s_jsonOptions));
-
-        using var command = new NodeCommand(testOutput, "pr-docs-check-notification");
-        command.WithWorkingDirectory(RepoRoot.Path).WithTimeout(TimeSpan.FromSeconds(30));
-        var result = await command.ExecuteScriptAsync(
-            Path.Combine(RepoRoot.Path, "tests", "Infrastructure.Tests", "WorkflowScripts", "pr-docs-check-notification.harness.js"),
-            requestPath, resultPath);
-        Assert.Equal(0, result.ExitCode);
-        var response = JsonSerializer.Deserialize<NotificationResult>(
-            await File.ReadAllTextAsync(resultPath), s_jsonOptions);
-        Assert.NotNull(response);
-        return response;
     }
 
     [Fact]
@@ -455,9 +338,4 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
         Assert.True(rejectHeadIndex >= 0 && exitIndex > rejectHeadIndex && exportBaseIndex > exitIndex,
             "A wrong or missing fork head must fail before exporting the actual base for trusted side effects.");
     }
-
-    private sealed record NotificationResult(
-        CommentAttempt[] Attempts, string[] Warnings, string Summary, int SummaryWrites, string? Error);
-
-    private sealed record CommentAttempt(string Owner, string Repo, int IssueNumber, string Body);
 }
