@@ -5,14 +5,53 @@ using System.Globalization;
 using Aspire.Cli.Resources;
 using Aspire.Hosting.Utils;
 
-namespace Aspire.Cli.Agents.Configuration;
+namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Resolves file and ancestor-directory links without replacing user-owned symlinks.
+/// Shares home expansion and physical file identity across agent configuration and managed payloads.
 /// </summary>
-internal static class AgentConfigurationPath
+internal static class AgentPath
 {
     public static StringComparer Comparer { get; } = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+    public static string? GetOverride(string variable, CliExecutionContext executionContext, IEnvironment environment)
+        => environment.GetEnvironmentVariable(variable) is { Length: > 0 } value
+            ? Expand(value, executionContext)
+            : null;
+
+    public static string Expand(string path, CliExecutionContext executionContext)
+        => Expand(path, executionContext.HomeDirectory.FullName, executionContext.WorkingDirectory.FullName);
+
+    public static string Expand(string path, string homeDirectory, string workingDirectory)
+    {
+        // Overrides accept "~", "~/config", and "~\config" against the injected home.
+        // "~other-user" is not expanded. Defer path validation to each target's error boundary.
+        if (path == "~")
+        {
+            return homeDirectory;
+        }
+
+        if (path.StartsWith("~/", StringComparison.Ordinal) || path.StartsWith(@"~\", StringComparison.Ordinal))
+        {
+            var relative = path[2..].Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+            return Path.Join(homeDirectory, relative);
+        }
+
+        return Path.IsPathFullyQualified(path) ? path : Path.Combine(workingDirectory, path);
+    }
+
+    public static string GetManagedDirectory(CliExecutionContext executionContext, IEnvironment environment, string productName, string unixName)
+    {
+        if (environment.IsWindows())
+        {
+            return Path.Combine(GetOverride("ProgramFiles", executionContext, environment) ??
+                Path.Combine(Path.GetPathRoot(executionContext.HomeDirectory.FullName)!, "Program Files"), productName);
+        }
+
+        return environment.IsMacOS()
+            ? Path.Combine(Path.DirectorySeparatorChar.ToString(), "Library", "Application Support", productName)
+            : Path.Combine(Path.DirectorySeparatorChar.ToString(), "etc", unixName);
+    }
 
     public static string Resolve(string path) => ResolveCasing(Resolve(path, 0));
 

@@ -2,13 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.Configuration;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Agents;
 
-public class AgentConfigurationPathsTests(ITestOutputHelper output)
+public class AgentPathTests(ITestOutputHelper output)
 {
     [Theory]
     [InlineData("~", "")]
@@ -26,9 +25,9 @@ public class AgentConfigurationPathsTests(ITestOutputHelper output)
             ? context.Home.FullName
             : Path.Combine(context.Home.FullName, relative.Replace('/', Path.DirectorySeparatorChar));
 
-        Assert.Equal(expected, context.Paths.ClaudeDirectory);
-        Assert.Equal(Path.Combine(expected, ".claude.json"), context.Paths.ClaudeMcpFile);
-        Assert.Equal(expected, context.Paths.Absolute(value));
+        Assert.Equal(expected, context.ClaudeDirectory);
+        Assert.Equal(Path.Combine(expected, ".claude.json"), context.ClaudeMcpFile);
+        Assert.Equal(expected, AgentPath.Expand(value, context.ExecutionContext));
         Assert.Empty(context.Project.EnumerateFileSystemInfos());
         Assert.Empty(context.Home.EnumerateFileSystemInfos());
     }
@@ -44,10 +43,10 @@ public class AgentConfigurationPathsTests(ITestOutputHelper output)
         context.SetVariable(variable, @"~\custom-config");
         var expected = Path.Combine(context.Home.FullName, "custom-config");
 
-        Assert.Equal(expected, context.Paths.Override(variable));
+        Assert.Equal(expected, AgentPath.GetOverride(variable, context.ExecutionContext, context.Environment));
         if (variable == "COPILOT_HOME")
         {
-            Assert.Equal(expected, context.Paths.CopilotDirectory);
+            Assert.Equal(expected, context.CopilotDirectory);
         }
     }
 
@@ -56,7 +55,7 @@ public class AgentConfigurationPathsTests(ITestOutputHelper output)
     {
         using var context = new AgentConfigurationTestContext(output);
 
-        Assert.Equal(Path.Combine(context.Project.FullName, "~other-user"), context.Paths.Absolute("~other-user"));
+        Assert.Equal(Path.Combine(context.Project.FullName, "~other-user"), AgentPath.Expand("~other-user", context.ExecutionContext));
     }
 
     [Fact]
@@ -68,7 +67,7 @@ public class AgentConfigurationPathsTests(ITestOutputHelper output)
         TestSymlinkHelper.TryCreateSymlink(alias, projectDirectory.FullName);
         context.SetVariable("COPILOT_HOME", alias);
 
-        Assert.Equal(AgentConfigurationPath.Resolve(projectDirectory.FullName), AgentConfigurationPath.Resolve(alias));
+        Assert.Equal(AgentPath.Resolve(projectDirectory.FullName), AgentPath.Resolve(alias));
         var result = await context.ConfigureNativeAsync(context.Request([AgentClientKind.CopilotCli, AgentClientKind.CopilotApp])).DefaultTimeout();
 
         var target = Assert.Single(result);
@@ -88,7 +87,7 @@ public class AgentConfigurationPathsTests(ITestOutputHelper output)
         TestSymlinkHelper.TryCreateSymlink(alias, file, isDirectory: false);
         var originalLink = new FileInfo(alias).LinkTarget;
 
-        Assert.Equal(AgentConfigurationPath.Resolve(file), AgentConfigurationPath.Resolve(alias));
+        Assert.Equal(AgentPath.Resolve(file), AgentPath.Resolve(alias));
         Assert.Equal(originalLink, new FileInfo(alias).LinkTarget);
         Assert.Equal("{}", await File.ReadAllTextAsync(file).DefaultTimeout());
     }
@@ -103,7 +102,7 @@ public class AgentConfigurationPathsTests(ITestOutputHelper output)
         var alias = Path.Combine(context.Project.FullName, "dangling-link");
         TestSymlinkHelper.TryCreateSymlink(alias, missing, isDirectory: directory);
 
-        Assert.Throws<AgentConfigurationException>(() => AgentConfigurationPath.Resolve(alias));
+        Assert.Throws<AgentConfigurationException>(() => AgentPath.Resolve(alias));
         Assert.False(Path.Exists(missing));
     }
 
@@ -127,13 +126,13 @@ public class AgentConfigurationPathsTests(ITestOutputHelper output)
         var projectFile = Path.Combine(projectDirectory.FullName, "settings.json");
         var aliasFile = Path.Combine(caseAlias, "settings.json");
         Assert.False(File.Exists(projectFile));
-        Assert.Equal(AgentConfigurationPath.Resolve(projectFile), AgentConfigurationPath.Resolve(aliasFile));
+        Assert.Equal(AgentPath.Resolve(projectFile), AgentPath.Resolve(aliasFile));
 
         var results = await context.ConfigureNativeAsync(context.Request([AgentClientKind.CopilotCli])).DefaultTimeout();
 
         Assert.Equal(AgentConfigurationStatus.Configured, Assert.Single(results).Status);
         Assert.True(File.Exists(projectFile));
-        Assert.Equal(AgentConfigurationPath.Resolve(projectFile), AgentConfigurationPath.Resolve(Path.Combine(caseAlias, "SETTINGS.JSON")));
+        Assert.Equal(AgentPath.Resolve(projectFile), AgentPath.Resolve(Path.Combine(caseAlias, "SETTINGS.JSON")));
     }
 
     [Fact]
@@ -150,6 +149,6 @@ public class AgentConfigurationPathsTests(ITestOutputHelper output)
 
         await File.WriteAllTextAsync(alternate, """{"different":true}""").DefaultTimeout();
 
-        Assert.NotEqual(AgentConfigurationPath.Resolve(original), AgentConfigurationPath.Resolve(alternate));
+        Assert.NotEqual(AgentPath.Resolve(original), AgentPath.Resolve(alternate));
     }
 }

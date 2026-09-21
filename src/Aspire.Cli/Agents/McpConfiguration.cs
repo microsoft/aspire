@@ -4,7 +4,7 @@
 using System.Text.Json.Nodes;
 using Aspire.Cli.Resources;
 
-namespace Aspire.Cli.Agents.Configuration;
+namespace Aspire.Cli.Agents;
 
 /// <summary>
 /// Conservative MCP entry creation and selected-target repair of the old "aspire mcp start" command.
@@ -18,7 +18,6 @@ internal static class McpConfiguration
         string containerName,
         bool commandArray,
         string type,
-        bool copilot,
         bool bare = false)
     {
         var servers = bare ? root : AgentConfigurationJson.Object(root, containerName);
@@ -33,14 +32,6 @@ internal static class McpConfiguration
             {
                 server["command"] = "aspire";
                 server["args"] = new JsonArray("agent", "mcp");
-            }
-
-            if (copilot)
-            {
-                // Copilot does not inherit arbitrary environment variables for local MCP
-                // servers. Preserve the existing Aspire DOTNET_ROOT pass-through contract.
-                server["env"] = new JsonObject { ["DOTNET_ROOT"] = "${DOTNET_ROOT}" };
-                server["tools"] = new JsonArray("*");
             }
 
             servers[ServerName] = server;

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.Configuration;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -192,7 +191,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
         var link = Path.Combine(workspace.Path, "linked");
         TestSymlinkHelper.TryCreateSymlink(link, original.FullName);
         var logicalPath = Path.Combine(link, "payload");
-        var physicalPath = AgentConfigurationPath.Resolve(logicalPath);
+        var physicalPath = AgentPath.Resolve(logicalPath);
 
         await Assert.ThrowsAsync<IOException>(() => AgentFileCommitter.CommitAsync(
             physicalPath,
@@ -205,7 +204,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
             },
             _ =>
             {
-                if (!AgentConfigurationPath.Comparer.Equals(physicalPath, AgentConfigurationPath.Resolve(logicalPath)))
+                if (!AgentPath.Comparer.Equals(physicalPath, AgentPath.Resolve(logicalPath)))
                 {
                     throw new IOException(AgentConfigurationStrings.ConcurrentChange);
                 }

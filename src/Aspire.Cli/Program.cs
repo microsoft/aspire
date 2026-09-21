@@ -10,6 +10,7 @@ using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.Copilot;
+using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Agents.VsCode;
@@ -546,7 +547,10 @@ public class Program
         builder.Services.AddSingleton<PlaywrightCliInstaller>();
         builder.Services.AddSingleton<IAgentSkillInstaller, AgentSkillInstaller>();
         builder.Services.AddSingleton<AgentClientCatalog>();
-        builder.Services.AddAgentConfigurationServices();
+        builder.Services.AddSingleton<AgentConfigurationWriter>();
+        builder.Services.AddSingleton<ITelemetryHookInstaller, TelemetryHookInstaller>();
+        builder.Services.AddSingleton<ITelemetryHookConfigurator, TelemetryHookConfigurator>();
+        builder.Services.AddSingleton<IAgentInitService, AgentInitService>();
 
         // Agent environment detection.
         builder.Services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();

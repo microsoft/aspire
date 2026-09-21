@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Nodes;
+
 namespace Aspire.Cli.Agents;
 
 /// <summary>
@@ -62,6 +64,36 @@ internal sealed record AgentTargetResult(
     AgentConfigurationScope Scope,
     AgentConfigurationStatus Status,
     string? Message);
+
+/// <summary>
+/// An edit to one named entry in a native settings file.
+/// </summary>
+internal sealed record AgentConfigurationTarget(
+    string Path,
+    AgentConfigurationScope Scope,
+    AgentAssetKind Asset,
+    IReadOnlyList<AgentClientKind> Clients,
+    string Entry,
+    Func<JsonObject, AgentConfigurationWriter.ReadContext, CancellationToken, Task<AgentConfigurationEdit>> ApplyAsync)
+{
+    public AgentTargetResult ToResult(AgentConfigurationStatus status, string message)
+        => new(Asset, Clients, Path, Scope, status, message);
+}
+
+/// <summary>
+/// The outcome of an in-memory edit; the writer determines whether anything changed.
+/// </summary>
+internal sealed record AgentConfigurationEdit(AgentConfigurationStatus Status, string Message)
+{
+    public static AgentConfigurationEdit Applied(string message) => new(AgentConfigurationStatus.Configured, message);
+    public static AgentConfigurationEdit Skipped(string message) => new(AgentConfigurationStatus.Skipped, message);
+    public static AgentConfigurationEdit Blocked(string message) => new(AgentConfigurationStatus.Blocked, message);
+}
+
+/// <summary>
+/// A configuration conflict that must leave the affected entry untouched.
+/// </summary>
+internal sealed class AgentConfigurationException(string message) : Exception(message);
 
 /// <summary>
 /// Aggregates configuration outcomes without claiming client-owned content was acquired.

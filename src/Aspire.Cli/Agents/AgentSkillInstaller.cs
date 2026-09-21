@@ -3,7 +3,7 @@
 
 using System.Globalization;
 using System.Text;
-using Aspire.Cli.Agents.Configuration;
+using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
@@ -16,7 +16,7 @@ namespace Aspire.Cli.Agents;
 internal sealed class AgentSkillInstaller(
     PlaywrightCliInstaller playwrightInstaller,
     CliExecutionContext executionContext,
-    AgentConfigurationPaths paths,
+    IEnvironment environment,
     ILogger<AgentSkillInstaller> logger) : IAgentSkillInstaller
 {
     /// <inheritdoc />
@@ -68,7 +68,7 @@ internal sealed class AgentSkillInstaller(
 
     private IReadOnlyList<SkillTarget> ResolveTargets(AgentInitRequest request)
     {
-        Dictionary<string, SkillTarget> targets = new(AgentConfigurationPath.Comparer);
+        Dictionary<string, SkillTarget> targets = new(AgentPath.Comparer);
         AgentAssetKind[] assets = [AgentAssetKind.Playwright, AgentAssetKind.DotnetInspect];
         AgentConfigurationScope[] scopes = [AgentConfigurationScope.Project, AgentConfigurationScope.User];
 
@@ -92,8 +92,8 @@ internal sealed class AgentSkillInstaller(
                     string? error = null;
                     try
                     {
-                        logicalPath = Path.GetFullPath(Path.Combine(GetSkillBaseDirectory(client, scope, root), GetSkillName(asset)));
-                        physicalPath = AgentConfigurationPath.Resolve(logicalPath);
+                        logicalPath = Path.GetFullPath(Path.Combine(GetSkillBaseDirectory(client, scope, request.WorkspaceRoot), GetSkillName(asset)));
+                        physicalPath = AgentPath.Resolve(logicalPath);
                     }
                     catch (Exception ex) when (ex is AgentConfigurationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
                     {
@@ -128,7 +128,7 @@ internal sealed class AgentSkillInstaller(
         return targets.Values.ToArray();
     }
 
-    private string GetSkillBaseDirectory(AgentClientKind client, AgentConfigurationScope scope, string root)
+    private string GetSkillBaseDirectory(AgentClientKind client, AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
     {
         // These clients natively discover both project and home .agents/skills directories.
         // COPILOT_HOME and OPENCODE_CONFIG_DIR relocate their own configuration, not this
@@ -138,6 +138,7 @@ internal sealed class AgentSkillInstaller(
         // https://opencode.ai/docs/skills/
         if (client is AgentClientKind.CopilotCli or AgentClientKind.CopilotApp or AgentClientKind.VsCode or AgentClientKind.OpenCode)
         {
+            var root = scope is AgentConfigurationScope.Project ? workspaceRoot.FullName : executionContext.HomeDirectory.FullName;
             return Path.Combine(root, ".agents", "skills");
         }
 
@@ -146,11 +147,7 @@ internal sealed class AgentSkillInstaller(
             throw new ArgumentOutOfRangeException(nameof(client), client, null);
         }
 
-        // CLAUDE_CONFIG_DIR relocates personal .claude content, including skills, but
-        // not the project's .claude directory: https://code.claude.com/docs/en/claude-directory
-        return scope is AgentConfigurationScope.User
-            ? Path.Combine(paths.ClaudeDirectory, "skills")
-            : Path.Combine(root, ".claude", "skills");
+        return ClaudeCodeAgentConfiguration.GetSkillDirectory(workspaceRoot, scope, executionContext, environment);
     }
 
     private async Task<AgentTargetResult> InstallFilesAsync(SkillTarget target, IReadOnlyList<AgentSkillFile> files, CancellationToken cancellationToken)
@@ -184,7 +181,7 @@ internal sealed class AgentSkillInstaller(
                 async Task ValidateBeforeCommitAsync(CancellationToken token)
                 {
                     ValidateTargetPath(target);
-                    if (!AgentConfigurationPath.Comparer.Equals(path, ResolveSkillFile(target, file.RelativePath)))
+                    if (!AgentPath.Comparer.Equals(path, ResolveSkillFile(target, file.RelativePath)))
                     {
                         throw new IOException(AgentConfigurationStrings.ConcurrentChange);
                     }
@@ -212,7 +209,7 @@ internal sealed class AgentSkillInstaller(
         // was repointed while npm/generation or staging ran. Revalidate every logical alias.
         foreach (var alias in target.Aliases)
         {
-            if (!AgentConfigurationPath.Comparer.Equals(target.Path, AgentConfigurationPath.Resolve(alias)))
+            if (!AgentPath.Comparer.Equals(target.Path, AgentPath.Resolve(alias)))
             {
                 throw new IOException(AgentConfigurationStrings.ConcurrentChange);
             }
@@ -222,7 +219,7 @@ internal sealed class AgentSkillInstaller(
     private static string ResolveSkillFile(SkillTarget target, string relativePath)
     {
         var logicalPath = Path.Combine(target.Path, relativePath);
-        var physicalPath = AgentConfigurationPath.Resolve(logicalPath);
+        var physicalPath = AgentPath.Resolve(logicalPath);
         // A whole skill directory can be a shared, deduplicated target. A link within
         // it must not redirect a payload write into an unrelated skill or cache.
         var relativePhysicalPath = Path.GetRelativePath(target.Path, physicalPath);

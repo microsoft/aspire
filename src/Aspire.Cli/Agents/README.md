@@ -6,9 +6,16 @@ client evidence; it does not register applicators, migrate settings, or install
 tools. See the [CLI usage guide](../README.md#ai-agent-setup) for the flags and
 defaults.
 
+Like the template provider's definitions, `AgentClientCatalog` collects client
+metadata and callbacks without doing I/O. Copilot, Claude Code, VS Code, and
+OpenCode own their definitions, native paths, configuration rules, and hook
+formats in their respective namespaces. The catalog dispatches selected native
+configuration; hook targeting remains detection-based.
+
 ## Native configuration
 
-The configuration service groups mutations by physical file and entry identity.
+`AgentConfigurationWriter` groups edits by physical file and entry identity;
+its grouping and read snapshots are implementation details, not separate services.
 Project and user targets are automatic; selecting multiple frontends does not
 duplicate a shared target.
 
@@ -91,7 +98,7 @@ add a minimum release version or legacy bundle fallback to hook maintenance.
 Command tests inject `TestAgentInitService` and the shared detector fake rather
 than touching host settings. Shared CLI test defaults represent one deterministic
 Copilot CLI detection; explicit empty-detector tests enforce the unattended
-`--clients` requirement. Native handlers, safe merges, managed payloads, and hook
+`--clients` requirement. Client definitions, safe merges, managed payloads, and hook
 behavior have their own isolated tests.
 
 `AgentCommandTests` exercises the existing Linux-container/Hex1b flow with native

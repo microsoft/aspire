@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.Configuration;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Resources;
@@ -854,9 +853,9 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         return new AgentSkillInstaller(
             playwrightInstaller,
             context,
-            new AgentConfigurationPaths(context, environment ?? new TestEnvironment()),
+            environment ?? new TestEnvironment(),
             NullLogger<AgentSkillInstaller>.Instance);
     }
 
-    private static string Canonical(string path) => AgentConfigurationPath.Resolve(path);
+    private static string Canonical(string path) => AgentPath.Resolve(path);
 }

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Agents.Configuration;
 using Aspire.Cli.Agents.Hooks;
 
 namespace Aspire.Cli.Agents;
@@ -10,10 +9,12 @@ namespace Aspire.Cli.Agents;
 /// Orchestrates offline native registration and the independently selected CLI-managed tool skills.
 /// </summary>
 internal sealed class AgentInitService(
-    AgentConfigurationPlanner planner,
+    AgentClientCatalog catalog,
     AgentConfigurationWriter writer,
     IAgentSkillInstaller skillInstaller,
-    ITelemetryHookConfigurator hooks) : IAgentInitService
+    ITelemetryHookConfigurator hooks,
+    CliExecutionContext executionContext,
+    IEnvironment environment) : IAgentInitService
 {
     public async Task<AgentInitResult> ConfigureAsync(AgentInitRequest request, CancellationToken cancellationToken)
     {
@@ -25,7 +26,7 @@ internal sealed class AgentInitService(
 
         var results = new List<AgentTargetResult>();
         IEnumerable<AgentConfigurationTarget> nativeTargets = request.Assets.Mcp || request.Assets.AspireSkills
-            ? planner.GetTargets(request)
+            ? catalog.GetTargets(request, executionContext, environment)
             : [];
         results.AddRange(await writer.ApplyAsync(nativeTargets.Concat(hooks.Plan(request)), cancellationToken));
 

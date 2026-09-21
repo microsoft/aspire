@@ -2,8 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.Configuration;
+using Aspire.Cli.Agents.ClaudeCode;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Agents.OpenCode;
+using Aspire.Cli.Agents.VsCode;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -30,19 +33,12 @@ internal sealed class AgentConfigurationTestContext : IDisposable
         // the fixture rather than depending on policies installed on the test machine.
         Environment = TestEnvironment.CreateWindows(_variables);
         ExecutionContext = TestExecutionContextHelper.CreateExecutionContext(Project, homeDirectory: Home);
-        Paths = new AgentConfigurationPaths(ExecutionContext, Environment);
+        Catalog = new AgentClientCatalog();
         Writer = new AgentConfigurationWriter(NullLogger<AgentConfigurationWriter>.Instance);
         HookInstaller = new TestAgentConfigurationHookInstaller(ExecutionContext);
-        Hooks = new TelemetryHookConfigurator(HookInstaller, ExecutionContext, Paths, NullLogger<TelemetryHookConfigurator>.Instance);
+        Hooks = new TelemetryHookConfigurator(HookInstaller, ExecutionContext, Environment, NullLogger<TelemetryHookConfigurator>.Instance);
         SkillInstaller = new TestAgentConfigurationSkillInstaller();
-        Planner = new AgentConfigurationPlanner(
-        [
-            new CopilotConfigurationHandler(Paths),
-            new ClaudeCodeConfigurationHandler(Paths),
-            new VsCodeConfigurationHandler(Paths),
-            new OpenCodeConfigurationHandler(Paths, Environment)
-        ]);
-        Service = new AgentInitService(Planner, Writer, SkillInstaller, Hooks);
+        Service = new AgentInitService(Catalog, Writer, SkillInstaller, Hooks, ExecutionContext, Environment);
     }
 
     public TemporaryWorkspace Workspace { get; }
@@ -50,15 +46,21 @@ internal sealed class AgentConfigurationTestContext : IDisposable
     public DirectoryInfo Home { get; }
     public TestEnvironment Environment { get; }
     public CliExecutionContext ExecutionContext { get; }
-    public AgentConfigurationPaths Paths { get; }
+    public AgentClientCatalog Catalog { get; }
+    public string CopilotDirectory => CopilotPaths.GetConfigDirectory(ExecutionContext, Environment);
+    public string ClaudeDirectory => ClaudeCodeAgentConfiguration.GetConfigDirectory(ExecutionContext, Environment);
+    public string ClaudeMcpFile => ClaudeCodeAgentConfiguration.GetMcpFile(ExecutionContext, Environment);
+    public string ClaudeManagedDirectory => ClaudeCodeAgentConfiguration.GetManagedDirectory(ExecutionContext, Environment);
+    public string OpenCodeDirectory => OpenCodeAgentConfiguration.GetConfigDirectory(ExecutionContext, Environment);
     public AgentConfigurationWriter Writer { get; }
-    public AgentConfigurationPlanner Planner { get; }
     public TestAgentConfigurationHookInstaller HookInstaller { get; }
     public TestAgentConfigurationSkillInstaller SkillInstaller { get; }
     public TelemetryHookConfigurator Hooks { get; }
     public AgentInitService Service { get; }
 
     public void SetVariable(string name, string value) => _variables[name] = value;
+
+    public string VsCodeUserDirectory(bool insiders) => VsCodeAgentConfiguration.GetUserDirectory(insiders, ExecutionContext, Environment);
 
     public AgentInitRequest Request(
         IReadOnlyList<AgentClientKind> clients,
@@ -70,7 +72,7 @@ internal sealed class AgentConfigurationTestContext : IDisposable
         => new(Project, new AgentAssetSelection(mcp, playwright, dotnetInspect, skills), clients, detections ?? []);
 
     public Task<IReadOnlyList<AgentTargetResult>> ConfigureNativeAsync(AgentInitRequest request, CancellationToken cancellationToken = default)
-        => Writer.ApplyAsync(Planner.GetTargets(request), cancellationToken);
+        => Writer.ApplyAsync(Catalog.GetTargets(request, ExecutionContext, Environment), cancellationToken);
 
     public static async Task WriteAsync(string path, string content)
     {

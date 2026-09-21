@@ -3,7 +3,6 @@
 
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.Configuration;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Agents;
@@ -26,7 +25,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
         });
         Assert.Equal([AgentConfigurationScope.Project, AgentConfigurationScope.User], results.Select(result => result.Scope));
         var project = await File.ReadAllTextAsync(Path.Combine(context.Project.FullName, ".github", "copilot", "settings.json")).DefaultTimeout();
-        var user = await File.ReadAllTextAsync(Path.Combine(context.Paths.CopilotDirectory, "settings.json")).DefaultTimeout();
+        var user = await File.ReadAllTextAsync(Path.Combine(context.CopilotDirectory, "settings.json")).DefaultTimeout();
         Assert.Equal(project, user);
         Assert.Empty(context.SkillInstaller.Requests);
         Assert.Equal(0, context.HookInstaller.Calls);
@@ -39,7 +38,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
     public async Task Claude_PreservesPinsPreferencesAndExistingBytes()
     {
         using var context = new AgentConfigurationTestContext(output);
-        var userPath = Path.Combine(context.Paths.ClaudeDirectory, "settings.json");
+        var userPath = Path.Combine(context.ClaudeDirectory, "settings.json");
         const string existing = """
             {
               // Keep this comment on a semantic no-op.
@@ -74,7 +73,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
     {
         var client = Enum.Parse<AgentClientKind>(clientName);
         using var context = new AgentConfigurationTestContext(output);
-        var userDirectory = client is AgentClientKind.ClaudeCode ? context.Paths.ClaudeDirectory : context.Paths.CopilotDirectory;
+        var userDirectory = client is AgentClientKind.ClaudeCode ? context.ClaudeDirectory : context.CopilotDirectory;
         var path = Path.Combine(userDirectory, "settings.json");
         const string existing = """{"enabledPlugins":{"aspire@aspire-skills":false},"autoUpdate":false}""";
         await AgentConfigurationTestContext.WriteAsync(path, existing).DefaultTimeout();
@@ -97,7 +96,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
     public async Task NativePlugins_BlockMalformedShapesWithoutOverwritingOtherTargets(string existing)
     {
         using var context = new AgentConfigurationTestContext(output);
-        var path = Path.Combine(context.Paths.CopilotDirectory, "settings.json");
+        var path = Path.Combine(context.CopilotDirectory, "settings.json");
         await AgentConfigurationTestContext.WriteAsync(path, existing).DefaultTimeout();
 
         var results = await context.ConfigureNativeAsync(context.Request([AgentClientKind.CopilotApp])).DefaultTimeout();
@@ -111,7 +110,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
     public async Task NativePlugins_DoNotReplaceAConflictingMarketplace()
     {
         using var context = new AgentConfigurationTestContext(output);
-        var path = Path.Combine(context.Paths.CopilotDirectory, "settings.json");
+        var path = Path.Combine(context.CopilotDirectory, "settings.json");
         const string existing = """{"extraKnownMarketplaces":{"aspire-skills":{"source":{"source":"directory","path":"./private-marketplace"}}}}""";
         await AgentConfigurationTestContext.WriteAsync(path, existing).DefaultTimeout();
 
@@ -134,7 +133,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
         Assert.Equal(disabled, await File.ReadAllTextAsync(local).DefaultTimeout());
         File.Delete(local);
 
-        var managed = Path.Combine(context.Paths.ManagedDirectory(copilot: false), "managed-settings.json");
+        var managed = Path.Combine(context.ClaudeManagedDirectory, "managed-settings.json");
         const string policy = """{"strictKnownMarketplaces":[]}""";
         await AgentConfigurationTestContext.WriteAsync(managed, policy).DefaultTimeout();
 
@@ -142,7 +141,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
 
         Assert.All(blocked, result => Assert.Equal(AgentConfigurationStatus.Blocked, result.Status));
         Assert.Equal(policy, await File.ReadAllTextAsync(managed).DefaultTimeout());
-        Assert.False(File.Exists(Path.Combine(context.Paths.ClaudeDirectory, "settings.json")));
+        Assert.False(File.Exists(Path.Combine(context.ClaudeDirectory, "settings.json")));
     }
 
     [Fact]
@@ -163,12 +162,12 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
             new[]
             {
                 Path.Combine(context.Project.FullName, ".mcp.json"),
-                Path.Combine(context.Paths.CopilotDirectory, "mcp-config.json"),
-                context.Paths.ClaudeMcpFile,
+                Path.Combine(context.CopilotDirectory, "mcp-config.json"),
+                context.ClaudeMcpFile,
                 Path.Combine(context.Project.FullName, ".vscode", "mcp.json"),
-                Path.Combine(context.Paths.VsCodeUserDirectory(false), "mcp.json")
-            }.Order(AgentConfigurationPath.Comparer),
-            results.Select(result => result.TargetPath).Order(AgentConfigurationPath.Comparer));
+                Path.Combine(context.VsCodeUserDirectory(false), "mcp.json")
+            }.Order(AgentPath.Comparer),
+            results.Select(result => result.TargetPath).Order(AgentPath.Comparer));
         Assert.Empty(context.SkillInstaller.Requests);
         await Verify(await File.ReadAllTextAsync(shared.TargetPath).DefaultTimeout(), "json");
     }
@@ -177,14 +176,14 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
     public async Task SharedMcpEntry_DoesNotBypassClaudesManagedPolicy()
     {
         using var context = new AgentConfigurationTestContext(output);
-        var managed = Path.Combine(context.Paths.ManagedDirectory(copilot: false), "managed-mcp.json");
+        var managed = Path.Combine(context.ClaudeManagedDirectory, "managed-mcp.json");
         const string policy = """{"mcpServers":{}}""";
         await AgentConfigurationTestContext.WriteAsync(managed, policy).DefaultTimeout();
 
         var results = await context.ConfigureNativeAsync(context.Request([AgentClientKind.CopilotCli, AgentClientKind.ClaudeCode], skills: false, mcp: true)).DefaultTimeout();
 
         Assert.Equal(AgentConfigurationStatus.Blocked, results.Single(result => result.Scope is AgentConfigurationScope.Project).Status);
-        Assert.Equal(AgentConfigurationStatus.Configured, results.Single(result => result.TargetPath == Path.Combine(context.Paths.CopilotDirectory, "mcp-config.json")).Status);
+        Assert.Equal(AgentConfigurationStatus.Configured, results.Single(result => result.TargetPath == Path.Combine(context.CopilotDirectory, "mcp-config.json")).Status);
         Assert.Equal(policy, await File.ReadAllTextAsync(managed).DefaultTimeout());
         Assert.False(File.Exists(Path.Combine(context.Project.FullName, ".mcp.json")));
     }
@@ -193,7 +192,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
     public async Task Mcp_RepairsOnlyTheDeprecatedPrefix()
     {
         using var context = new AgentConfigurationTestContext(output);
-        var path = Path.Combine(context.Paths.CopilotDirectory, "mcp-config.json");
+        var path = Path.Combine(context.CopilotDirectory, "mcp-config.json");
         await AgentConfigurationTestContext.WriteAsync(path, """
             {
               "mcpServers": {
@@ -241,7 +240,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
     public async Task VsCode_UsesDetectedInsidersAndExistingProfile()
     {
         using var context = new AgentConfigurationTestContext(output);
-        var user = context.Paths.VsCodeUserDirectory(insiders: true);
+        var user = context.VsCodeUserDirectory(insiders: true);
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(user, "profiles", "work-profile", "settings.json"), "{}").DefaultTimeout();
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(user, "profiles", "builtin", "settings.json"), "{}").DefaultTimeout();
         var request = context.Request([AgentClientKind.VsCode], skills: false, mcp: true,
@@ -253,7 +252,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
         Assert.All(results, result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
         Assert.True(File.Exists(Path.Combine(user, "mcp.json")));
         Assert.True(File.Exists(Path.Combine(user, "profiles", "work-profile", "mcp.json")));
-        Assert.False(Directory.Exists(context.Paths.VsCodeUserDirectory(insiders: false)));
+        Assert.False(Directory.Exists(context.VsCodeUserDirectory(insiders: false)));
     }
 
     [Theory]
@@ -291,10 +290,10 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
     public async Task Claude_ManagedOnlyAllowlistIsNotOverriddenByAUserAllowlist()
     {
         using var context = new AgentConfigurationTestContext(output);
-        var managed = Path.Combine(context.Paths.ManagedDirectory(copilot: false), "managed-settings.json");
+        var managed = Path.Combine(context.ClaudeManagedDirectory, "managed-settings.json");
         await AgentConfigurationTestContext.WriteAsync(managed,
             """{"allowManagedMcpServersOnly":true,"allowedMcpServers":[{"serverName":"aspire"}]}""").DefaultTimeout();
-        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Paths.ClaudeDirectory, "settings.json"),
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.ClaudeDirectory, "settings.json"),
             """{"allowedMcpServers":[]}""").DefaultTimeout();
 
         var results = await context.ConfigureNativeAsync(context.Request([AgentClientKind.ClaudeCode], skills: false, mcp: true)).DefaultTimeout();

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
-using Aspire.Cli.Agents.Configuration;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
@@ -75,7 +74,7 @@ internal sealed class TelemetryHookInstaller : ITelemetryHookInstaller
     {
         // Skip the write when the content already matches so a running hook isn't disturbed and the
         // file mtime stays stable across repeated `agent init` runs.
-        var physicalPath = AgentConfigurationPath.Resolve(path);
+        var physicalPath = AgentPath.Resolve(path);
         var existing = await ReadExistingAsync(physicalPath, cancellationToken);
         var bytes = s_utf8NoBom.GetBytes(content);
         if (existing is not null && existing.AsSpan().SequenceEqual(bytes))
@@ -94,7 +93,7 @@ internal sealed class TelemetryHookInstaller : ITelemetryHookInstaller
 
         async Task ValidateBeforeCommitAsync(CancellationToken token)
         {
-            if (!AgentConfigurationPath.Comparer.Equals(physicalPath, AgentConfigurationPath.Resolve(path)))
+            if (!AgentPath.Comparer.Equals(physicalPath, AgentPath.Resolve(path)))
             {
                 throw new IOException(AgentConfigurationStrings.ConcurrentChange);
             }

@@ -4,7 +4,7 @@
 using System.Text.Json.Nodes;
 using Aspire.Cli.Resources;
 
-namespace Aspire.Cli.Agents.Configuration;
+namespace Aspire.Cli.Agents;
 
 /// <summary>
 /// Registers the official marketplace without invoking plugin CLIs or changing installation state.

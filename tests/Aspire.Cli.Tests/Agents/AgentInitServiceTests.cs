@@ -4,7 +4,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.Configuration;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
@@ -19,7 +18,7 @@ public class AgentInitServiceTests(ITestOutputHelper output)
     public async Task NoAssets_DoesNotReadConfigOrInvokeAnyInstaller()
     {
         using var context = new AgentConfigurationTestContext(output);
-        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Paths.CopilotDirectory, "settings.json"), "{broken").DefaultTimeout();
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.CopilotDirectory, "settings.json"), "{broken").DefaultTimeout();
 
         var result = await context.Service.ConfigureAsync(
             context.Request([AgentClientKind.CopilotCli], skills: false, detections: [new(AgentClientKind.CopilotCli, null, false)]),
@@ -75,8 +74,8 @@ public class AgentInitServiceTests(ITestOutputHelper output)
         Assert.Equal(AgentConfigurationScope.User, hook.Scope);
         Assert.Equal(1, context.HookInstaller.Calls);
         Assert.Empty(Directory.EnumerateFileSystemEntries(context.Project.FullName));
-        Assert.False(File.Exists(Path.Combine(context.Paths.CopilotDirectory, "settings.json")));
-        Assert.False(Directory.Exists(context.Paths.ClaudeDirectory));
+        Assert.False(File.Exists(Path.Combine(context.CopilotDirectory, "settings.json")));
+        Assert.False(Directory.Exists(context.ClaudeDirectory));
     }
 
     [Fact]
@@ -97,15 +96,15 @@ public class AgentInitServiceTests(ITestOutputHelper output)
         Assert.All(result.Targets.Where(target => target.Asset is AgentAssetKind.TelemetryHooks),
             target => Assert.Equal(AgentConfigurationScope.User, target.Scope));
         Assert.Equal(request.Clients.Order(), result.RegisteredClients.Order());
-        Assert.False(File.Exists(Path.Combine(context.Paths.CopilotDirectory, "config.json")));
-        Assert.False(Directory.Exists(Path.Combine(context.Paths.CopilotDirectory, "installed-plugins")));
+        Assert.False(File.Exists(Path.Combine(context.CopilotDirectory, "config.json")));
+        Assert.False(Directory.Exists(Path.Combine(context.CopilotDirectory, "installed-plugins")));
     }
 
     [Fact]
     public async Task NativeFailures_DoNotPreventIndependentTargetsAndMalformedPolicyStillBlocksHooks()
     {
         using var context = new AgentConfigurationTestContext(output);
-        var path = Path.Combine(context.Paths.CopilotDirectory, "settings.json");
+        var path = Path.Combine(context.CopilotDirectory, "settings.json");
         await AgentConfigurationTestContext.WriteAsync(path, "{broken").DefaultTimeout();
 
         var result = await context.Service.ConfigureAsync(
@@ -130,7 +129,7 @@ public class AgentInitServiceTests(ITestOutputHelper output)
     {
         var client = Enum.Parse<AgentClientKind>(clientName);
         using var context = new AgentConfigurationTestContext(output);
-        var directory = client is AgentClientKind.ClaudeCode ? context.Paths.ClaudeDirectory : context.Paths.CopilotDirectory;
+        var directory = client is AgentClientKind.ClaudeCode ? context.ClaudeDirectory : context.CopilotDirectory;
         var path = Path.Combine(directory, "settings.json");
         await AgentConfigurationTestContext.WriteAsync(path,
             """{"extraKnownMarketplaces":{"aspire-skills":{"source":{"source":"github","repo":"example/custom-skills"}}}}""").DefaultTimeout();
@@ -171,7 +170,7 @@ public class AgentInitServiceTests(ITestOutputHelper output)
             Assert.Equal(AgentConfigurationStatus.Failed, target.Status);
             Assert.NotEmpty(target.Message!);
         });
-        var claudeSettings = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(context.Paths.ClaudeDirectory, "settings.json")).DefaultTimeout())!;
+        var claudeSettings = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(context.ClaudeDirectory, "settings.json")).DefaultTimeout())!;
         Assert.True((bool)claudeSettings["enabledPlugins"]!["aspire@aspire-skills"]!);
         Assert.Null(claudeSettings["hooks"]);
     }
@@ -216,7 +215,7 @@ public class AgentInitServiceTests(ITestOutputHelper output)
     public async Task ClaudeSettingsAndHook_AreMergedAndRemainByteStableOnRepeat()
     {
         using var context = new AgentConfigurationTestContext(output);
-        var path = Path.Combine(context.Paths.ClaudeDirectory, "settings.json");
+        var path = Path.Combine(context.ClaudeDirectory, "settings.json");
         await AgentConfigurationTestContext.WriteAsync(path, """{"model":"preserved","hooks":{"PreToolUse":[]}}""").DefaultTimeout();
         var request = context.Request([AgentClientKind.ClaudeCode],
             detections: [new(AgentClientKind.ClaudeCode, null, false)]);
@@ -269,8 +268,8 @@ public class AgentInitServiceTests(ITestOutputHelper output)
                 Assert.Equal(AgentConfigurationStatus.Configured, claude.Status);
                 Assert.True(File.Exists(claude.TargetPath));
             });
-        Assert.False(File.Exists(Path.Combine(context.Paths.CopilotDirectory, "settings.json")));
-        var claudeSettings = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(context.Paths.ClaudeDirectory, "settings.json")).DefaultTimeout())!.AsObject();
+        Assert.False(File.Exists(Path.Combine(context.CopilotDirectory, "settings.json")));
+        var claudeSettings = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(context.ClaudeDirectory, "settings.json")).DefaultTimeout())!.AsObject();
         Assert.Equal(["hooks"], claudeSettings.Select(property => property.Key));
         Assert.Equal(["opencode.json"], context.Project.EnumerateFileSystemInfos().Select(entry => entry.Name));
     }
@@ -365,7 +364,7 @@ public class AgentInitServiceTests(ITestOutputHelper output)
         Assert.Same(request, Assert.Single(context.SkillInstaller.Requests));
         Assert.Equal(context.SkillInstaller.Results[0], Assert.Single(result.Targets, target => target.Asset is AgentAssetKind.DotnetInspect));
         Assert.False(File.Exists(Path.Combine(context.Project.FullName, "opencode.json")));
-        Assert.False(Directory.Exists(context.Paths.OpenCodeDirectory));
+        Assert.False(Directory.Exists(context.OpenCodeDirectory));
     }
 
     [Theory]
@@ -380,8 +379,8 @@ public class AgentInitServiceTests(ITestOutputHelper output)
         var playwright = new FakePlaywrightCliRunner();
         var playwrightInstaller = new PlaywrightCliInstaller(npm, new FakeNpmProvenanceChecker(), playwright,
             new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
-        var managed = new AgentSkillInstaller(playwrightInstaller, context.ExecutionContext, context.Paths, NullLogger<AgentSkillInstaller>.Instance);
-        var service = new AgentInitService(context.Planner, context.Writer, managed, context.Hooks);
+        var managed = new AgentSkillInstaller(playwrightInstaller, context.ExecutionContext, context.Environment, NullLogger<AgentSkillInstaller>.Instance);
+        var service = new AgentInitService(context.Catalog, context.Writer, managed, context.Hooks, context.ExecutionContext, context.Environment);
         var expectedDirectory = relative.Length == 0 ? context.Home.FullName : Path.Combine(context.Home.FullName, relative);
 
         var result = await service.ConfigureAsync(
@@ -391,10 +390,10 @@ public class AgentInitServiceTests(ITestOutputHelper output)
         Assert.All(result.Targets, target => Assert.Equal(AgentConfigurationStatus.Configured, target.Status));
         var registration = Assert.Single(result.Targets, target => target.Asset is AgentAssetKind.AspireSkills && target.Scope is AgentConfigurationScope.User);
         var skill = Assert.Single(result.Targets, target => target.Asset is AgentAssetKind.DotnetInspect && target.Scope is AgentConfigurationScope.User);
-        Assert.Equal(AgentConfigurationPath.Resolve(Path.Combine(expectedDirectory, "settings.json")),
-            AgentConfigurationPath.Resolve(registration.TargetPath));
-        Assert.Equal(AgentConfigurationPath.Resolve(Path.Combine(expectedDirectory, "skills", "dotnet-inspect")),
-            AgentConfigurationPath.Resolve(skill.TargetPath));
+        Assert.Equal(AgentPath.Resolve(Path.Combine(expectedDirectory, "settings.json")),
+            AgentPath.Resolve(registration.TargetPath));
+        Assert.Equal(AgentPath.Resolve(Path.Combine(expectedDirectory, "skills", "dotnet-inspect")),
+            AgentPath.Resolve(skill.TargetPath));
         Assert.Equal(CommonAgentApplicators.DotnetInspectSkillFileContent,
             await File.ReadAllTextAsync(Path.Combine(skill.TargetPath, "SKILL.md")).DefaultTimeout());
         Assert.Equal([".claude"], context.Project.EnumerateDirectories().Select(directory => directory.Name));

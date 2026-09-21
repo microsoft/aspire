@@ -117,7 +117,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     public async Task Plan_PreservesExistingClaudeHooksAndSettings()
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
-        var path = Path.Combine(context.Paths.ClaudeDirectory, "settings.json");
+        var path = Path.Combine(context.ClaudeDirectory, "settings.json");
         await AgentConfigurationTestContext.WriteAsync(path, """
             {
               "model": "preserved",
@@ -154,7 +154,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     public async Task Plan_BlocksMalformedCopilotHookFileWithoutUndoingNativeRegistration(string existing)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
-        var path = Path.Combine(context.Paths.CopilotDirectory, "hooks", "aspire-telemetry.json");
+        var path = Path.Combine(context.CopilotDirectory, "hooks", "aspire-telemetry.json");
         await AgentConfigurationTestContext.WriteAsync(path, existing).DefaultTimeout();
 
         var result = await context.Service.ConfigureAsync(
@@ -179,7 +179,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         var request = context.Request([AgentClientKind.ClaudeCode],
             detections: [new(AgentClientKind.ClaudeCode, null, false)]);
         await context.ConfigureNativeAsync(request).DefaultTimeout();
-        var path = Path.Combine(context.Paths.ClaudeDirectory, "settings.json");
+        var path = Path.Combine(context.ClaudeDirectory, "settings.json");
         var root = await ReadObjectAsync(path).DefaultTimeout();
         root["hooks"] = JsonNode.Parse(hookSettings)!["hooks"]!.DeepClone();
         var existing = root.ToJsonString();
@@ -212,8 +212,8 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         });
         Assert.Equal(1, context.HookInstaller.Calls);
         Assert.Empty(context.Project.EnumerateFileSystemInfos());
-        Assert.False(File.Exists(Path.Combine(context.Paths.CopilotDirectory, "settings.json")));
-        var claude = await ReadObjectAsync(Path.Combine(context.Paths.ClaudeDirectory, "settings.json")).DefaultTimeout();
+        Assert.False(File.Exists(Path.Combine(context.CopilotDirectory, "settings.json")));
+        var claude = await ReadObjectAsync(Path.Combine(context.ClaudeDirectory, "settings.json")).DefaultTimeout();
         Assert.Equal(["hooks"], claude.Select(property => property.Key));
     }
 
@@ -291,7 +291,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     public async Task Plan_PreservesThirdPartyHooksWithTheSameScriptName()
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
-        var path = Path.Combine(context.Paths.ClaudeDirectory, "settings.json");
+        var path = Path.Combine(context.ClaudeDirectory, "settings.json");
         const string command = "bash /vendor/other-product/track-telemetry.sh";
         await AgentConfigurationTestContext.WriteAsync(path, """
             {
@@ -360,7 +360,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         var request = context.Request([AgentClientKind.ClaudeCode],
             detections: [new(AgentClientKind.ClaudeCode, null, false)]);
         await context.ConfigureNativeAsync(request).DefaultTimeout();
-        var path = Path.Combine(context.Paths.ClaudeDirectory, "settings.json");
+        var path = Path.Combine(context.ClaudeDirectory, "settings.json");
         var root = await ReadObjectAsync(path).DefaultTimeout();
         root["disableAllHooks"] = true;
         var existing = root.ToJsonString();

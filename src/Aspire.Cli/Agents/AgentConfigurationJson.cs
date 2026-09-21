@@ -7,7 +7,7 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 
-namespace Aspire.Cli.Agents.Configuration;
+namespace Aspire.Cli.Agents;
 
 /// <summary>
 /// Shape checks shared by native handlers; unexpected values are never silently replaced.
@@ -84,12 +84,12 @@ internal static class AgentConfigurationJson
         => new(string.Format(CultureInfo.CurrentCulture, AgentConfigurationStrings.UnexpectedShape, key));
 
     public static async Task<IReadOnlyList<JsonObject>> ReadSettingsAsync(
-        AgentConfigurationReadContext context,
+        AgentConfigurationWriter.ReadContext context,
         IEnumerable<string> paths,
         CancellationToken cancellationToken)
     {
         var settings = new List<JsonObject>();
-        foreach (var path in paths.Distinct(AgentConfigurationPath.Comparer))
+        foreach (var path in paths.Distinct(AgentPath.Comparer))
         {
             if (await context.ReadOptionalAsync(path, cancellationToken) is { } root)
             {

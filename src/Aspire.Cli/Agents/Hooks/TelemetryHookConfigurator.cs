@@ -3,7 +3,8 @@
 
 using System.Globalization;
 using System.Text.Json.Nodes;
-using Aspire.Cli.Agents.Configuration;
+using Aspire.Cli.Agents.ClaudeCode;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
@@ -15,10 +16,10 @@ namespace Aspire.Cli.Agents.Hooks;
 internal sealed class TelemetryHookConfigurator(
     ITelemetryHookInstaller installer,
     CliExecutionContext executionContext,
-    AgentConfigurationPaths paths,
+    IEnvironment environment,
     ILogger<TelemetryHookConfigurator> logger) : ITelemetryHookConfigurator
 {
-    private const int HookTimeoutSeconds = 30;
+    internal const int HookTimeoutSeconds = 30;
 
     public IEnumerable<AgentConfigurationTarget> Plan(AgentInitRequest request)
     {
@@ -34,12 +35,12 @@ internal sealed class TelemetryHookConfigurator(
         var copilotClients = detectedClients.Where(client => client is AgentClientKind.CopilotCli or AgentClientKind.CopilotApp).ToArray();
         if (copilotClients.Length > 0)
         {
-            yield return Target(Path.Combine(paths.CopilotDirectory, "hooks", "aspire-telemetry.json"), copilotClients, copilot: true);
+            yield return Target(Path.Combine(CopilotPaths.GetConfigDirectory(executionContext, environment), "hooks", "aspire-telemetry.json"), copilotClients, copilot: true);
         }
 
         if (detectedClients.Contains(AgentClientKind.ClaudeCode))
         {
-            yield return Target(Path.Combine(paths.ClaudeDirectory, "settings.json"), [AgentClientKind.ClaudeCode], copilot: false);
+            yield return Target(Path.Combine(ClaudeCodeAgentConfiguration.GetConfigDirectory(executionContext, environment), "settings.json"), [AgentClientKind.ClaudeCode], copilot: false);
         }
 
         // No VS Code/OpenCode hook schemas are invented. VS Code's supported Copilot-backed
@@ -48,7 +49,10 @@ internal sealed class TelemetryHookConfigurator(
             => new(path, AgentConfigurationScope.User, AgentAssetKind.TelemetryHooks, clients, "hooks:aspire",
                 async (root, context, cancellationToken) =>
                 {
-                    var settings = await AgentConfigurationJson.ReadSettingsAsync(context, paths.PluginSettings(request, copilot), cancellationToken);
+                    var settingsPaths = copilot
+                        ? CopilotPaths.PluginSettings(request, executionContext, environment)
+                        : ClaudeCodeAgentConfiguration.PluginSettings(request, executionContext, environment);
+                    var settings = await AgentConfigurationJson.ReadSettingsAsync(context, settingsPaths, cancellationToken);
                     if (settings.Append(root).Any(config =>
                         AgentConfigurationJson.Boolean(config, "disableAllHooks") is true ||
                         AgentConfigurationJson.Boolean(config, "allowManagedHooksOnly") is true))
@@ -56,26 +60,14 @@ internal sealed class TelemetryHookConfigurator(
                         return AgentConfigurationEdit.Skipped(AgentConfigurationStrings.PolicyBlocked);
                     }
 
-                    // Copilot also reads Claude's repository hooks, never Claude's user
-                    // settings. Avoid adding a second event source to a known project hook.
-                    // https://docs.github.com/en/copilot/reference/hooks-reference
-                    var projectSettings = new[]
-                    {
-                        Path.Combine(request.WorkspaceRoot.FullName, ".claude", "settings.json"),
-                        Path.Combine(request.WorkspaceRoot.FullName, ".claude", "settings.local.json")
-                    }.ToList();
-                    if (copilot)
-                    {
-                        projectSettings.Add(Path.Combine(request.WorkspaceRoot.FullName, ".github", "copilot", "settings.json"));
-                        projectSettings.Add(Path.Combine(request.WorkspaceRoot.FullName, ".github", "copilot", "settings.local.json"));
-                        projectSettings.Add(Path.Combine(request.WorkspaceRoot.FullName, ".github", "hooks", "aspire-telemetry.json"));
-                        projectSettings.Add(Path.Combine(paths.CopilotDirectory, "settings.json"));
-                    }
+                    var projectSettings = copilot
+                        ? CopilotPaths.ExistingHookSettings(request, executionContext, environment)
+                        : ClaudeCodeAgentConfiguration.ProjectSettings(request.WorkspaceRoot);
 
                     foreach (var configPath in projectSettings)
                     {
                         // A project/user alias can point at the same physical Claude file.
-                        if (AgentConfigurationPath.Comparer.Equals(AgentConfigurationPath.Resolve(configPath), AgentConfigurationPath.Resolve(path)))
+                        if (AgentPath.Comparer.Equals(AgentPath.Resolve(configPath), AgentPath.Resolve(path)))
                         {
                             continue;
                         }
@@ -87,7 +79,15 @@ internal sealed class TelemetryHookConfigurator(
                         }
                     }
 
-                    ValidateHooks(root, copilot);
+                    if (copilot)
+                    {
+                        CopilotAgentConfiguration.ValidateHooks(root);
+                    }
+                    else
+                    {
+                        ClaudeCodeAgentConfiguration.ValidateHooks(root);
+                    }
+
                     TelemetryHookScripts scripts;
                     try
                     {
@@ -104,122 +104,15 @@ internal sealed class TelemetryHookConfigurator(
 
                     if (copilot)
                     {
-                        ApplyCopilot(root, scripts);
+                        CopilotAgentConfiguration.ApplyHook(root, scripts, IsAspireHook);
                     }
                     else
                     {
-                        ApplyClaude(root, scripts);
+                        ClaudeCodeAgentConfiguration.ApplyHook(root, scripts, IsAspireHook);
                     }
 
                     return AgentConfigurationEdit.Applied(AgentConfigurationStrings.HookConfigured);
                 });
-    }
-
-    private static void ValidateHooks(JsonObject root, bool copilot)
-    {
-        if (copilot && root.TryGetPropertyValue("version", out var version) &&
-            (version is not JsonValue number || !number.TryGetValue<int>(out var value) || value != 1))
-        {
-            throw AgentConfigurationJson.Shape("version");
-        }
-
-        var hooks = AgentConfigurationJson.OptionalObject(root, "hooks");
-        var key = copilot ? "postToolUse" : "PostToolUse";
-        if (hooks is null || !hooks.TryGetPropertyValue(key, out var entries))
-        {
-            return;
-        }
-
-        if (entries is not JsonArray array || array.Any(entry => entry is not JsonObject))
-        {
-            throw AgentConfigurationJson.Shape($"hooks.{key}");
-        }
-
-        if (!copilot)
-        {
-            foreach (var group in array.OfType<JsonObject>())
-            {
-                if (group["hooks"] is not JsonArray inner || inner.Any(entry => entry is not JsonObject) ||
-                    (group.ContainsKey("matcher") && AgentConfigurationJson.String(group["matcher"]) is null))
-                {
-                    throw AgentConfigurationJson.Shape($"hooks.{key}");
-                }
-            }
-        }
-    }
-
-    private void ApplyCopilot(JsonObject root, TelemetryHookScripts scripts)
-    {
-        root["version"] = 1;
-        var hooks = AgentConfigurationJson.Object(root, "hooks");
-        var entries = hooks["postToolUse"] as JsonArray ?? new JsonArray();
-        if (!hooks.ContainsKey("postToolUse"))
-        {
-            hooks["postToolUse"] = entries;
-        }
-
-        var desired = new JsonObject
-        {
-            ["type"] = "command",
-            ["bash"] = HookCommandFormatter.BuildBashCommand(scripts.ShellScriptPath),
-            ["powershell"] = HookCommandFormatter.BuildPwshCommand(scripts.PowerShellScriptPath),
-            ["timeoutSec"] = HookTimeoutSeconds
-        };
-        var owned = entries.Where(IsAspireHook).ToArray();
-        if (owned.Length == 1 && JsonNode.DeepEquals(owned[0], desired))
-        {
-            return;
-        }
-
-        foreach (var entry in owned)
-        {
-            entries.Remove(entry);
-        }
-
-        entries.Add((JsonNode)desired);
-    }
-
-    private void ApplyClaude(JsonObject root, TelemetryHookScripts scripts)
-    {
-        var hooks = AgentConfigurationJson.Object(root, "hooks");
-        var groups = hooks["PostToolUse"] as JsonArray ?? new JsonArray();
-        if (!hooks.ContainsKey("PostToolUse"))
-        {
-            hooks["PostToolUse"] = groups;
-        }
-
-        // Retain the established exec form and shipped script/event/opt-out contract.
-        // https://code.claude.com/docs/en/hooks#command-hook-fields
-        var desired = new JsonObject
-        {
-            ["type"] = "command",
-            ["command"] = OperatingSystem.IsWindows() ? "pwsh" : "bash",
-            ["args"] = OperatingSystem.IsWindows()
-                ? new JsonArray("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scripts.PowerShellScriptPath)
-                : new JsonArray(scripts.ShellScriptPath),
-            ["timeout"] = HookTimeoutSeconds
-        };
-
-        var owned = groups.OfType<JsonObject>()
-            .SelectMany(group => ((JsonArray)group["hooks"]!).Where(IsAspireHook).Select(hook => (Group: group, Hook: hook)))
-            .ToArray();
-        if (owned.Length == 1 && AgentConfigurationJson.String(owned[0].Group["matcher"]) == "*" &&
-            JsonNode.DeepEquals(owned[0].Hook, desired))
-        {
-            return;
-        }
-
-        foreach (var (group, hook) in owned)
-        {
-            var entries = (JsonArray)group["hooks"]!;
-            entries.Remove(hook);
-            if (entries.Count == 0)
-            {
-                groups.Remove(group);
-            }
-        }
-
-        groups.Add((JsonNode)new JsonObject { ["matcher"] = "*", ["hooks"] = new JsonArray(desired) });
     }
 
     private bool ContainsAspireHook(JsonObject root)
@@ -229,7 +122,7 @@ internal sealed class TelemetryHookConfigurator(
             return false;
         }
 
-        foreach (var key in new[] { "PostToolUse", "postToolUse" })
+        foreach (var key in new[] { ClaudeCodeAgentConfiguration.HookEventName, CopilotAgentConfiguration.HookEventName })
         {
             if (hooks[key] is JsonArray entries && entries.Any(entry => IsAspireHook(entry) ||
                 (entry is JsonObject group && group["hooks"] is JsonArray inner && inner.Any(IsAspireHook))))
