@@ -27,14 +27,13 @@ void main() throws Exception {
             // Mutate a detached connection model; networking output lists stay read-only.
             var connection = infrastructure.createRemotePrivateEndpointConnection();
             var addresses = connection.iPAddresses();
+            var bicep = infrastructure.bicep();
             addresses.add("192.0.2.1");
             addresses.insert(0, "2001:db8::1");
-            addresses.set(1, "192.0.2.2");
+            addresses.set(1, bicep.string("192.0.2.2"));
             var literal = addresses.get(0);
             addresses.set(1, literal);
-            var bicep = infrastructure.bicep();
-            // Index creates an untyped expression rather than a typed BicepValue<string>.
-            var expression = bicep.index(bicep.parseJson(bicep.string("[\"192.0.2.3\"]")), 0);
+            var expression = bicep.concat(new BicepValueProxy[] { bicep.string("192.0.2."), bicep.string("3") });
             addresses.add(expression);
             addresses.insert(1, expression);
             addresses.set(0, addresses.get(3));

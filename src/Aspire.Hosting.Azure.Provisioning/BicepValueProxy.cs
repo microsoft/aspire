@@ -89,7 +89,12 @@ public sealed class BicepValueProxy
         EnsureLiteralType<T>();
         if (_value.Kind == BicepValueKind.Literal)
         {
-            var literalValue = new BicepValue<T>((T)_value.LiteralValue!);
+            // The shared string factory also supplies IP literals. Only parse literals;
+            // expression-backed strings must retain their SDK reference and secure metadata.
+            var literal = typeof(T) == typeof(IPAddress) && _value.LiteralValue is string address
+                ? (T)(object)IPAddress.Parse(address)
+                : (T)_value.LiteralValue!;
+            var literalValue = new BicepValue<T>(literal);
             target.Assign(literalValue);
 
             if (IsSecure && !((IBicepValue)target).IsSecure)
@@ -181,6 +186,11 @@ public sealed class BicepValueProxy
         }
 
         if (targetType.IsAssignableFrom(_valueType))
+        {
+            return;
+        }
+
+        if (targetType == typeof(IPAddress) && _valueType == typeof(string))
         {
             return;
         }

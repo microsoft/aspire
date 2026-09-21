@@ -53,22 +53,21 @@ func main() {
 		// Mutate a detached connection model; networking output lists stay read-only.
 		connection := infrastructure.CreateRemotePrivateEndpointConnection()
 		addresses := connection.IPAddresses()
+		bicep := infrastructure.Bicep()
 		if err := addresses.Add("192.0.2.1"); err != nil {
 			log.Fatalf(aspire.FormatError(err))
 		}
 		if err := addresses.Insert(0, "2001:db8::1"); err != nil {
 			log.Fatalf(aspire.FormatError(err))
 		}
-		if err := addresses.Set(1, "192.0.2.2"); err != nil {
+		if err := addresses.Set(1, bicep.String("192.0.2.2")); err != nil {
 			log.Fatalf(aspire.FormatError(err))
 		}
 		literal := addresses.Get(0)
 		if err := addresses.Set(1, literal); err != nil {
 			log.Fatalf(aspire.FormatError(err))
 		}
-		bicep := infrastructure.Bicep()
-		// Index creates an untyped expression rather than a typed BicepValue<string>.
-		expression := bicep.Index(bicep.ParseJson(bicep.String(`["192.0.2.3"]`)), float64(0))
+		expression := bicep.Concat([]aspire.BicepValueProxy{bicep.String("192.0.2."), bicep.String("3")})
 		if err := addresses.Add(expression); err != nil {
 			log.Fatalf(aspire.FormatError(err))
 		}

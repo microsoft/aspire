@@ -31,14 +31,13 @@ await environment.configureInfrastructure(async infrastructure => {
     // Exercise writable addresses on a detached model, not service output lists.
     const connection = await infrastructure.createRemotePrivateEndpointConnection();
     const addresses = await connection.iPAddresses.get();
+    const bicep = await infrastructure.bicep();
     await addresses.add("192.0.2.1");
     await addresses.insert(0, "2001:db8::1");
-    await addresses.set(1, "192.0.2.2");
+    await addresses.set(1, await bicep.string("192.0.2.2"));
     const literal = await addresses.get(0);
     await addresses.set(1, literal);
-    const bicep = await infrastructure.bicep();
-    // Index creates an untyped expression rather than a typed BicepValue<string>.
-    const expression = await bicep.index(await bicep.parseJson(await bicep.string('["192.0.2.3"]')), 0);
+    const expression = await bicep.concat([await bicep.string("192.0.2."), await bicep.string("3")]);
     await addresses.add(expression);
     await addresses.insert(1, expression);
     await addresses.set(0, await addresses.get(3));

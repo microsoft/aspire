@@ -117,7 +117,7 @@ No-argument root lookups match the callback's Aspire resource Bicep identifier, 
 
 The scope is intentionally bounded. `IncludeContainingAssemblyTypes` does not promise that every SDK member is supported. Unsupported members are explicitly excluded in `AtsTypeMappings.cs`, such as opaque `BinaryData` payloads. The overlays document their exclusions: ContainerService's `CustomCATrustCertificates` and Network/Redis `AdditionalProperties`. These are unavailable through the proxy, not silently converted or dropped values.
 
-IP address lists (`BicepList<IPAddress>`) support IPv4/IPv6 strings and Bicep value handles. Strings are parsed into SDK IP address literals, with invalid input reported as an error. Element getters return Bicep value handles that retain literal, expression, reference, and security metadata and can be reassigned to another IP address collection. SDK read-only output restrictions still apply.
+IP address lists (`BicepList<IPAddress>`) support IPv4/IPv6 strings and Bicep value handles, including string-typed handles from `bicep.string`, `bicep.parameter`, and `bicep.referenceExpression`. Raw strings and string literals in handles are parsed into SDK IP address literals, with invalid input reported as an error. Expressions and references are preserved for deployment-time evaluation, including their security metadata. Element getters return Bicep value handles that retain literal, expression, reference, and security metadata and can be reassigned to another IP address collection. SDK read-only output restrictions still apply.
 
 ## Creating a provisioning proxy integration
 
