@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
@@ -72,15 +71,17 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.RunCommandAsync("export CLAUDE_CONFIG_DIR=\"$PWD/.client-config/claude\"", counter);
 
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json");
-        File.WriteAllText(configPath, """
-            {"mcpServers":{"aspire":{"command":"aspire","args":["mcp","start","--verbose"],"env":{"CUSTOM":"preserved"}},"other":{"command":"other","args":[]}}}
-            """);
+        const string existing = """{"mcpServers":{"aspire":{"command":"aspire","args":["mcp","start","--verbose"],"env":{"CUSTOM":"preserved"}},"other":{"command":"other","args":[]}}}""";
+        File.WriteAllText(configPath, existing);
 
         await auto.RunCommandAsync(
             "aspire agent init --non-interactive --workspace-root . --mcp y --playwright n --dotnet-inspect n --aspire-skills n --clients claude-code",
             counter);
 
-        await Verify(File.ReadAllText(configPath), "json");
+        var expected = JsonNode.Parse(existing)!;
+        expected["mcpServers"]!["aspire"]!["args"] = new JsonArray("agent", "mcp", "--verbose");
+        Assert.True(JsonNode.DeepEquals(expected, JsonNode.Parse(File.ReadAllText(configPath))),
+            "MCP migration should only replace the deprecated command prefix.");
     }
 
     [Fact]
@@ -136,7 +137,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         var projectSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "copilot", "settings.json");
         var userSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".client-config", "copilot", "settings.json");
-        await Verify(ReadNativeSettings(projectSettings, userSettings), "json");
+        AssertNativeSettings(projectSettings, userSettings);
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".vscode", "mcp.json")));
         Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills")));
     }
@@ -169,16 +170,18 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         var userSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".client-config", "copilot", "settings.json");
         var projectTimestamp = File.GetLastWriteTimeUtc(projectSettings);
         var userTimestamp = File.GetLastWriteTimeUtc(userSettings);
-        var firstSettings = ReadNativeSettings(projectSettings, userSettings);
+        var firstProjectSettings = File.ReadAllText(projectSettings);
+        var firstUserSettings = File.ReadAllText(userSettings);
 
         await auto.RunCommandAsync(command, counter);
 
         Assert.Equal(projectTimestamp, File.GetLastWriteTimeUtc(projectSettings));
         Assert.Equal(userTimestamp, File.GetLastWriteTimeUtc(userSettings));
-        Assert.Equal(firstSettings, ReadNativeSettings(projectSettings, userSettings));
+        Assert.Equal(firstProjectSettings, File.ReadAllText(projectSettings));
+        Assert.Equal(firstUserSettings, File.ReadAllText(userSettings));
         Assert.Equal(existingMcp, File.ReadAllText(mcpPath));
         Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills")));
-        await Verify(firstSettings, "json");
+        AssertNativeSettings(projectSettings, userSettings);
     }
 
     [Fact]
@@ -253,7 +256,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         var projectSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "copilot", "settings.json");
         var userSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".client-config", "copilot", "settings.json");
-        await Verify(ReadNativeSettings(projectSettings, userSettings), "json");
+        AssertNativeSettings(projectSettings, userSettings);
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".vscode", "mcp.json")));
         Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills")));
     }
@@ -281,7 +284,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "StarterApp");
         var projectSettings = Path.Combine(projectRoot, ".github", "copilot", "settings.json");
         var userSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".client-config", "copilot", "settings.json");
-        await Verify(ReadNativeSettings(projectSettings, userSettings), "json");
+        AssertNativeSettings(projectSettings, userSettings);
         Assert.False(File.Exists(Path.Combine(projectRoot, ".vscode", "mcp.json")));
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "copilot", "settings.json")));
         Assert.False(Directory.Exists(Path.Combine(projectRoot, ".agents", "skills")));
@@ -311,15 +314,16 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
     }
 
-    private static string ReadNativeSettings(string projectSettings, string userSettings)
+    private static void AssertNativeSettings(string projectSettings, string userSettings)
     {
-        var settings = new JsonObject
+        foreach (var path in new[] { projectSettings, userSettings })
         {
-            ["project"] = JsonNode.Parse(File.ReadAllText(projectSettings)),
-            ["user"] = JsonNode.Parse(File.ReadAllText(userSettings))
-        };
-
-        return settings.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            var settings = Assert.IsType<JsonObject>(JsonNode.Parse(File.ReadAllText(path)));
+            var source = settings["extraKnownMarketplaces"]?["aspire-skills"]?["source"];
+            Assert.Equal("github", source?["source"]?.GetValue<string>());
+            Assert.Equal("microsoft/aspire-skills", source?["repo"]?.GetValue<string>());
+            Assert.True(settings["enabledPlugins"]?["aspire@aspire-skills"]?.GetValue<bool>());
+        }
     }
 
     private static void RequireCurrentAgentInitContract(CliInstallStrategy strategy)

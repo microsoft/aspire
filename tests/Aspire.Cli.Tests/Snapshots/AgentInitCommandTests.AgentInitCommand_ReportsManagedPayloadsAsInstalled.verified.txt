@@ -1,4 +1,0 @@
-﻿[
-  Installed Playwright CLI skill for Claude Code (project): playwright-cli,
-  Installed dotnet-inspect skill for Claude Code (user): dotnet-inspect
-]

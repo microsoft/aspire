@@ -119,8 +119,9 @@ await sequence.ApplyAsync(Terminal);
 
 Unattended tests pass `--clients` explicitly instead of depending on clients
 installed in the container. Native user configuration overrides point at the
-isolated test workspace so both scopes can be inspected. Generated settings are
-covered with Verify snapshots; source registration must not be mistaken for
+isolated test workspace so both scopes can be inspected. These tests assert source
+registration, enablement, placement, and idempotence; unit snapshots cover the
+distinct generated configuration formats. Source registration must not be mistaken for
 client-owned acquisition, trust, or loading. No test fetches an Aspire skills
 bundle or assumes an unpublished OpenCode catalog is available.
 

@@ -35,7 +35,11 @@ public class AgentConfigurationWriterTests(ITestOutputHelper output)
         var results = await context.Writer.ApplyAsync([first, second], CancellationToken.None).DefaultTimeout();
 
         Assert.All(results, result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
-        await Verify(await File.ReadAllTextAsync(path).DefaultTimeout(), "json");
+        var settings = Assert.IsType<JsonObject>(JsonNode.Parse(await File.ReadAllTextAsync(path).DefaultTimeout()));
+        Assert.Equal(["preserved", "first", "second"], settings.Select(property => property.Key));
+        Assert.True(settings["preserved"]!.GetValue<bool>());
+        Assert.Equal(1, settings["first"]!.GetValue<int>());
+        Assert.Equal(2, settings["second"]!.GetValue<int>());
     }
 
     [Fact]

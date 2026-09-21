@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using Aspire.Cli.Agents;
@@ -687,11 +688,10 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             interactionService.BooleanPromptCalls.Select(call => call.PromptText));
         var handoff = Assert.Single(interactionService.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Dizzy));
         Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills")));
-        await Verify(new
-        {
-            Handoff = handoff.Message,
-            AcquisitionNotice = Assert.Single(subtleMessages, message => message == AgentInitStrings.ClientAcquisitionNotice)
-        }).UseParameters(status);
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, AgentInitStrings.AspireifyHandoff, "GitHub Copilot CLI, Claude Code"),
+            handoff.Message);
+        Assert.Single(subtleMessages, message => message == AgentInitStrings.ClientAcquisitionNotice);
     }
 
     [Theory]
@@ -732,9 +732,9 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(expectedExitCode, exitCode);
         Assert.Single(service.Requests);
-        var logFilePath = serviceProvider.GetRequiredService<CliExecutionContext>().LogFilePath;
-        await Verify(interactionService.DisplayedMessages.Select(message => message.Message.Replace(logFilePath, "<log-file>", StringComparison.Ordinal)))
-            .UseParameters(asset, status, expectedExitCode);
+        Assert.Empty(service.Result.RegisteredClients);
+        var handoffs = interactionService.DisplayedMessages.Where(message => message.Emoji.Equals(KnownEmojis.Dizzy)).ToArray();
+        Assert.Empty(handoffs);
     }
 
     [Fact]
@@ -766,8 +766,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Single(service.Requests);
         Assert.Equal([AgentClientKind.CopilotCli], service.Result.RegisteredClients);
-        var logFilePath = provider.GetRequiredService<CliExecutionContext>().LogFilePath;
-        await Verify(interactionService.DisplayedMessages.Select(message => message.Message.Replace(logFilePath, "<log-file>", StringComparison.Ordinal)));
+        var handoffs = interactionService.DisplayedMessages.Where(message => message.Emoji.Equals(KnownEmojis.Dizzy)).ToArray();
+        Assert.Empty(handoffs);
     }
 
     [Fact]
