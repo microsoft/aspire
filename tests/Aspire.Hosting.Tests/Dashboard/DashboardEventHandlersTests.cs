@@ -780,10 +780,8 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         }
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task AddDashboardResource_WithDirectDllPath_CreatesCorrectArguments(bool useManagedDashboard)
+    [Fact]
+    public async Task AddDashboardResource_WithDirectDllPath_CreatesCorrectArguments()
     {
         // Arrange
         var resourceLoggerService = new ResourceLoggerService();
@@ -817,7 +815,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
 
             File.WriteAllText(runtimeConfig, JsonSerializer.Serialize(originalConfig, new JsonSerializerOptions { WriteIndented = true }));
 
-            var dashboardOptions = Options.Create(new DashboardOptions { DashboardPath = dashboardDll, UseManagedDashboard = useManagedDashboard });
+            var dashboardOptions = Options.Create(new DashboardOptions { DashboardPath = dashboardDll });
             var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
 
             var model = new DistributedApplicationModel(new ResourceCollection());
@@ -864,7 +862,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             var dashboardExecutable = Path.Combine(tempDir.FullName, executableName);
             File.WriteAllText(dashboardExecutable, "mock native executable");
 
-            var dashboardOptions = Options.Create(new DashboardOptions { DashboardPath = dashboardExecutable, UseManagedDashboard = false });
+            var dashboardOptions = Options.Create(new DashboardOptions { DashboardPath = dashboardExecutable });
             var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
             var model = new DistributedApplicationModel(new ResourceCollection());
 
@@ -874,82 +872,6 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             var executableResource = Assert.IsType<ExecutableResource>(dashboardResource);
             Assert.Equal(dashboardExecutable, executableResource.Command);
             Assert.Empty(executableResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>());
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
-    }
-
-    [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    public async Task AddDashboardResource_WithBundle_SelectsManagedForwarder(bool useManagedDashboard, bool alreadyManaged)
-    {
-        var tempDir = Directory.CreateTempSubdirectory();
-
-        try
-        {
-            var dashboardDirectory = Directory.CreateDirectory(Path.Combine(tempDir.FullName, "dashboard"));
-            var managedDirectory = Directory.CreateDirectory(Path.Combine(tempDir.FullName, "managed"));
-            var dashboardPath = Path.Combine(dashboardDirectory.FullName, OperatingSystem.IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
-            var managedPath = Path.Combine(managedDirectory.FullName, OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed");
-            File.WriteAllText(dashboardPath, "mock native executable");
-            File.WriteAllText(managedPath, "mock managed executable");
-
-            var dashboardOptions = Options.Create(new DashboardOptions
-            {
-                DashboardPath = alreadyManaged ? managedPath : dashboardPath,
-                UseManagedDashboard = useManagedDashboard
-            });
-            await using var hook = CreateHook(new ResourceLoggerService(), ResourceNotificationServiceTestHelpers.Create(),
-                new ConfigurationBuilder().Build(), dashboardOptions: dashboardOptions);
-            var model = new DistributedApplicationModel(new ResourceCollection());
-
-            await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None);
-
-            var executableResource = Assert.IsType<ExecutableResource>(Assert.Single(model.Resources));
-            var expectedPath = useManagedDashboard || alreadyManaged ? managedPath : dashboardPath;
-            Assert.Equal(expectedPath, executableResource.Command);
-            Assert.Equal(Path.GetDirectoryName(expectedPath), executableResource.WorkingDirectory);
-
-            var args = new List<object>();
-            foreach (var annotation in executableResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>())
-            {
-                await annotation.Callback(new CommandLineArgsCallbackContext(args));
-            }
-
-            Assert.Equal(useManagedDashboard || alreadyManaged ? new object[] { "dashboard" } : [], args);
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task AddDashboardResource_WithManagedDashboardEnabled_RequiresManagedExecutable()
-    {
-        var tempDir = Directory.CreateTempSubdirectory();
-
-        try
-        {
-            var dashboardDirectory = Directory.CreateDirectory(Path.Combine(tempDir.FullName, "dashboard"));
-            var dashboardPath = Path.Combine(dashboardDirectory.FullName, "Aspire.Dashboard");
-            File.WriteAllText(dashboardPath, "mock native executable");
-            var managedPath = Path.Combine(tempDir.FullName, "managed", OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed");
-            var dashboardOptions = Options.Create(new DashboardOptions { DashboardPath = dashboardPath, UseManagedDashboard = true });
-            await using var hook = CreateHook(new ResourceLoggerService(), ResourceNotificationServiceTestHelpers.Create(),
-                new ConfigurationBuilder().Build(), dashboardOptions: dashboardOptions);
-            var model = new DistributedApplicationModel(new ResourceCollection());
-
-            var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
-                hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None));
-
-            Assert.Equal($"AppHost:UseManagedDashboard requires the Aspire managed executable at '{managedPath}'. Reinstall or rebuild the Aspire bundle.", exception.Message);
-            Assert.Empty(model.Resources);
         }
         finally
         {
