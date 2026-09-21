@@ -145,8 +145,8 @@
 }
 
 .terminal-container {
-    /* Use the medium brand purple rather than the brighter dark-theme control focus color. */
-    --terminal-focus-color: #7455dd;
+    /* Blend medium brand purple with the neutral stroke to soften the large focus outline. */
+    --terminal-focus-color: color-mix(in srgb, #7455dd 70%, var(--colorNeutralStroke1));
     position: relative;
     isolation: isolate;
     width: 100%;
