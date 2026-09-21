@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
 
-namespace Aspire.Hosting.Terminals;
+namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// Manages terminals created and owned by the AppHost.
