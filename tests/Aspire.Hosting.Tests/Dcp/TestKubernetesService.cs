@@ -29,6 +29,7 @@ internal sealed class TestKubernetesService : IKubernetesService
     private readonly Func<CustomResource, string, bool?, Stream> _startStream;
     private readonly bool _ignoreDeletes;
     private readonly Action<CustomResource>? _beforeCreate;
+    private readonly Func<CustomResource, CancellationToken, Task>? _beforeCreateAsync;
     private int _nextPort = StartOfAutoPortRange;
     private int _nextResourceUid;
     private int _nextResourceVersion;
@@ -37,7 +38,8 @@ internal sealed class TestKubernetesService : IKubernetesService
         Func<CustomResource, string, Stream>? startStream = null,
         bool ignoreDeletes = false,
         Func<CustomResource, string, bool?, Stream>? startStreamWithFollow = null,
-        Action<CustomResource>? beforeCreate = null)
+        Action<CustomResource>? beforeCreate = null,
+        Func<CustomResource, CancellationToken, Task>? beforeCreateAsync = null)
     {
         _startStream = startStreamWithFollow ??
             (startStream is not null
@@ -45,6 +47,7 @@ internal sealed class TestKubernetesService : IKubernetesService
                 : (obj, logStreamType, follow) => new MemoryStream(Encoding.UTF8.GetBytes($"Logs for {obj.Metadata.Name} ({logStreamType})")));
         _ignoreDeletes = ignoreDeletes;
         _beforeCreate = beforeCreate;
+        _beforeCreateAsync = beforeCreateAsync;
     }
 
     public Task<T> GetAsync<T>(string name, string? namespaceParameter = null, CancellationToken _ = default) where T : CustomResource, IKubernetesStaticMetadata
@@ -68,9 +71,13 @@ internal sealed class TestKubernetesService : IKubernetesService
         return Task.FromResult(res);
     }
 
-    public Task<T> CreateAsync<T>(T obj, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
+    public async Task<T> CreateAsync<T>(T obj, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
         _beforeCreate?.Invoke(obj);
+        if (_beforeCreateAsync is not null)
+        {
+            await _beforeCreateAsync(obj, cancellationToken).ConfigureAwait(false);
+        }
 
         var res = Copy(obj);
 
@@ -124,7 +131,7 @@ internal sealed class TestKubernetesService : IKubernetesService
             }
         }
 
-        return Task.FromResult(res);
+        return res;
     }
 
     /// <summary>

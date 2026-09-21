@@ -249,7 +249,10 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
             }, ct);
 
             // Container creation and executable configuration may both require endpoints expressed within the container network.
-            var endpointContext = new ContainerNetworkEndpointContext(createContainerNetworks, createWorkloadEndpoints, ct);
+            var endpointContext = new ContainerNetworkEndpointContext(
+                createContainerNetworks,
+                createWorkloadEndpoints,
+                _shutdownCancellation.Token);
             _containerNetworkEndpointContextSource.SetResult(endpointContext);
 
             var createExecutables = Task.Run(async () =>

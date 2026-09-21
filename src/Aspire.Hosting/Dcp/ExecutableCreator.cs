@@ -132,7 +132,7 @@ internal sealed class ExecutableCreator(
         var executableResources = _appResources.Get()
             .OfType<RenderedModelResource<Executable>>()
             .Select(executable => executable.ModelResource)
-            .ToHashSet(ReferenceEqualityComparer.Instance);
+            .ToHashSet(new ResourceNameComparer());
         var hasContainerResources = _model.Resources.Any(resource => resource.IsContainer());
 
         foreach (var endpointReference in context.GetReferences<EndpointReference>())
