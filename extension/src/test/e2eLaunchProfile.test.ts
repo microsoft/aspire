@@ -1695,7 +1695,7 @@ builder.Build().Run();
         assert.ok(discoveryConfiguration.includes('restored primary AppHost without stale secondary candidate'));
     });
 
-    test('waits for running AppHost processes to exit before deleting E2E fixture directories', () => {
+    test('waits for running AppHost processes to exit before releasing E2E fixture workspaces', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
         const zeroToRunning = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'zeroToRunning.e2e.test.ts'), 'utf8');
@@ -1746,12 +1746,16 @@ builder.Build().Run();
         const captureFixtureAppHostPids = dynamicDebugConfiguration.indexOf('appHostPidsBeforeStop = fixtureAppHostPaths');
         const stopFixtureAppHosts = dynamicDebugConfiguration.indexOf('...fixtureAppHostPaths.map(appHostPath => () => fs.existsSync(appHostPath) ? stopAppHostIfRunning(appHostPath) : undefined)');
         const waitForFixtureAppHostPids = dynamicDebugConfiguration.indexOf('Promise.all(appHostPidsBeforeStop.map(appHostPid =>');
-        const removeFixtureRoot = dynamicDebugConfiguration.indexOf('removePath(fixtureRoot, { recursive: true, force: true })');
+        const restoreDefaultWorkspace = dynamicDebugConfiguration.indexOf('() => restoreDefaultWorkspaceForCleanup()');
         assert.ok(captureFixtureAppHostPids >= 0);
         assert.ok(stopFixtureAppHosts > captureFixtureAppHostPids);
         assert.ok(dynamicDebugConfiguration.includes("waitForKnownProcessExit(appHostPid, 'a dynamic debug configuration AppHost process', 30000)"));
         assert.ok(waitForFixtureAppHostPids > stopFixtureAppHosts);
-        assert.ok(removeFixtureRoot > waitForFixtureAppHostPids);
+        assert.ok(restoreDefaultWorkspace > waitForFixtureAppHostPids);
+        assert.ok(dynamicDebugConfiguration.includes("fixtureRoot = path.join(runRoot, `.e2e-dynamic-debug-${++fixtureIndex}`);"));
+        assert.ok(dynamicDebugConfiguration.includes("fs.writeFileSync(path.join(fixtureRoot, 'aspire.config.json'), '{}\\n');"));
+        assert.ok(dynamicDebugConfiguration.includes('await restoreWorkspaceFoldersForE2E({ waitForExtensionHostReload: true });'));
+        assert.ok(!dynamicDebugConfiguration.includes('removePath(fixtureRoot, { recursive: true, force: true })'));
         assert.ok(commandPalette.includes('runE2eTeardown'));
         assert.ok(discoveryConfiguration.includes('runE2eTeardown'));
         assert.ok(!commandPalette.includes('throw new AggregateError'));
