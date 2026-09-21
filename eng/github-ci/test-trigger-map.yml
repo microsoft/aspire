@@ -277,6 +277,10 @@ path_rules:
       - tests/Aspire.Dashboard.Tests/Integration/Playwright/NativeAotDashboardTests.cs
     targets: [job:native-dashboard-validation]
     reason: native Dashboard archive production and packaged runtime validation
+  - paths:
+      - eng/scripts/verify-native-dashboard-warnings.ps1
+    targets: [test:Infrastructure.Tests, job:native-dashboard-validation]
+    reason: validates the Native AOT Dashboard publish warning policy
 
   # --- outerloop / e2e test targets: loose paths (production projects in affected_project_rules) --------
   - paths:

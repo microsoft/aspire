@@ -20,13 +20,12 @@
     -->
     <NoWarn>$(NoWarn);BL0016;CS1591;CS8002</NoWarn>
     <!-- JsonSerializerIsReflectionEnabledByDefault causes Native AOT to report IL2026 from the
-          framework-owned JsonOptions.CreateDefaultTypeResolver in Microsoft.AspNetCore.Http.Extensions.
-          UnconditionalSuppressMessage attributes in Dashboard can only target members in Dashboard's
-          own assembly, not this framework method. Native AOT also does not support ILLink's external
-          suppression attribute files, so suppress IL2026 globally here (including other IL2026 reports)
-          until persistent services support source-generated metadata:
-          https://github.com/dotnet/aspnetcore/issues/69325. -->
-        <!-- <NoWarn>$(NoWarn);IL2026</NoWarn> -->
+         framework-owned JsonOptions.CreateDefaultTypeResolver in Microsoft.AspNetCore.Http.Extensions.
+         Keep that warning visible but non-fatal until persistent services support source-generated
+         metadata. CI verifies that it is the only IL2026 produced by the Dashboard publish so new
+         first-party warnings still fail validation:
+         https://github.com/dotnet/aspnetcore/issues/69325. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);IL2026</WarningsNotAsErrors>
     <!-- Keep detailed diagnostics for Dashboard and dependencies not explicitly grouped below. -->
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
     <!-- Only the opted-in dependency assemblies produce these summary diagnostics. -->

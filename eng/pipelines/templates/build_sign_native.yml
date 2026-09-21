@@ -202,18 +202,28 @@ jobs:
               /bl:$(Build.Arcade.LogsPath)PublishManaged.binlog
             displayName: 🟣Prepare aspire-managed
 
-          - script: >-
-              $(Build.SourcesDirectory)/$(dotnetScript)
-              publish
-              $(Build.SourcesDirectory)/src/Aspire.Dashboard/Aspire.Dashboard.csproj
-              -c $(_BuildConfig)
-              -r ${{ targetRid }}
-              /p:PlatformName=${{ targetRid }}
-              /p:GenerateDocumentationFile=false
-              /p:EnforceCodeStyleInBuild=false
-              ${{ parameters.extraBuildArgs }}
-              /bl:$(Build.Arcade.LogsPath)PublishDashboard.binlog
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $buildLog = "$(Build.Arcade.LogsPath)PublishNativeDashboard.log"
+              & "$(Build.SourcesDirectory)/$(dotnetScript)" `
+                publish `
+                "$(Build.SourcesDirectory)/src/Aspire.Dashboard/Aspire.Dashboard.csproj" `
+                -c "$(_BuildConfig)" `
+                -r "${{ targetRid }}" `
+                /p:PlatformName=${{ targetRid }} `
+                /p:GenerateDocumentationFile=false `
+                /p:EnforceCodeStyleInBuild=false `
+                ${{ parameters.extraBuildArgs }} `
+                /bl:$(Build.Arcade.LogsPath)PublishDashboard.binlog 2>&1 | Tee-Object -FilePath $buildLog
+              if ($LASTEXITCODE -ne 0) {
+                exit $LASTEXITCODE
+              }
             displayName: 🟣Prepare Native AOT Dashboard
+
+          - pwsh: >-
+              & "$(Build.SourcesDirectory)/eng/scripts/verify-native-dashboard-warnings.ps1"
+              -BuildLog "$(Build.Arcade.LogsPath)PublishNativeDashboard.log"
+            displayName: 🟣Verify Native AOT Dashboard warnings
 
           # On macOS, ad-hoc codesign aspire-managed with JIT entitlements BEFORE Arcade signing.
           # MicroBuild (MacDeveloperHardenWithNotarization) preserves entitlements from the prior
