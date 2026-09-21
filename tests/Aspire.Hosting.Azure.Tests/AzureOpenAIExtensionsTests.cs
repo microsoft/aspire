@@ -19,7 +19,7 @@ public class AzureOpenAIExtensionsTests(ITestOutputHelper output)
     [InlineData(true, true)]
     public async Task AddAzureOpenAI(bool overrideLocalAuthDefault, bool useObsoleteApis)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         IEnumerable<CognitiveServicesAccountDeployment>? aiDeployments = null;
         var openai = builder.AddAzureOpenAI("openai")
@@ -111,7 +111,7 @@ public class AzureOpenAIExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void WithRoleAssignments_EnumOverload_ValidRoles_DoesNotThrow()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var openai = builder.AddAzureOpenAI("openai");
         var container = builder.AddContainer("myContainer", "nginx");
@@ -125,7 +125,7 @@ public class AzureOpenAIExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void WithRoleAssignments_EnumOverload_SingleRole_DoesNotThrow()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var openai = builder.AddAzureOpenAI("openai");
         var container = builder.AddContainer("myContainer", "nginx");
@@ -139,7 +139,7 @@ public class AzureOpenAIExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void WithRoleAssignments_EnumOverload_InvalidRole_ThrowsArgumentException()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var openai = builder.AddAzureOpenAI("openai");
         var container = builder.AddContainer("myContainer", "nginx");
@@ -154,7 +154,7 @@ public class AzureOpenAIExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void WithRoleAssignments_EnumOverload_MixedValidAndInvalidRoles_ThrowsOnInvalid()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var openai = builder.AddAzureOpenAI("openai");
         var container = builder.AddContainer("myContainer", "nginx");
@@ -169,7 +169,7 @@ public class AzureOpenAIExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void WithRoleAssignments_EnumOverload_DuplicateRoles_DoesNotThrow()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var openai = builder.AddAzureOpenAI("openai");
         var container = builder.AddContainer("myContainer", "nginx");
@@ -183,7 +183,7 @@ public class AzureOpenAIExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void WithRoleAssignments_EnumOverload_AllBuiltInRoles_AreAccepted()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var openai = builder.AddAzureOpenAI("openai");
         var container = builder.AddContainer("myContainer", "nginx");
@@ -207,7 +207,7 @@ public class AzureOpenAIExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void WithRoleAssignments_EnumOverload_EmptyRoles_DoesNotThrow()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var openai = builder.AddAzureOpenAI("openai");
         var container = builder.AddContainer("myContainer", "nginx");
@@ -221,7 +221,7 @@ public class AzureOpenAIExtensionsTests(ITestOutputHelper output)
     [Fact]
     public void WithRoleAssignments_EnumOverload_NullRoles_DoesNotThrow()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         var openai = builder.AddAzureOpenAI("openai");
         var container = builder.AddContainer("myContainer", "nginx");
@@ -250,7 +250,7 @@ public class AzureOpenAIExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task AddAsExistingResource_RespectsExistingAzureResourceAnnotation_ForAzureOpenAIResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
         var existingName = builder.AddParameter("existing-openai-name");
         var existingResourceGroup = builder.AddParameter("existing-openai-rg");
 

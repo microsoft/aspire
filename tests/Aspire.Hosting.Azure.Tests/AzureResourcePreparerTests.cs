@@ -17,7 +17,7 @@ using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureResourcePreparerTests
+public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureRoleAssignmentResourceThrowsWhenOwnerAndIdentityAreInconsistent()
@@ -40,7 +40,7 @@ public class AzureResourcePreparerTests
     [InlineData(DistributedApplicationOperation.Run)]
     public async Task ThrowsExceptionsIfRoleAssignmentUnsupported(DistributedApplicationOperation operation)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(operation);
+        using var builder = TestDistributedApplicationBuilder.Create(operation, testOutputHelper);
 
         var storage = builder.AddAzureStorage("storage");
 
@@ -68,7 +68,7 @@ public class AzureResourcePreparerTests
     [InlineData(false, DistributedApplicationOperation.Publish)]
     public async Task AppliesDefaultRoleAssignmentsInRunModeIfReferenced(bool addContainerAppsInfra, DistributedApplicationOperation operation)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(operation);
+        using var builder = TestDistributedApplicationBuilder.Create(operation, testOutputHelper);
         if (addContainerAppsInfra)
         {
             builder.AddAzureContainerAppEnvironment("env");
@@ -114,7 +114,7 @@ public class AzureResourcePreparerTests
     [InlineData(DistributedApplicationOperation.Publish)]
     public async Task AppliesRoleAssignmentsInRunMode(DistributedApplicationOperation operation)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(operation);
+        using var builder = TestDistributedApplicationBuilder.Create(operation, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var storage = builder.AddAzureStorage("storage");
@@ -163,7 +163,7 @@ public class AzureResourcePreparerTests
     [Fact]
     public async Task DoesNotApplyRoleAssignmentsInRunModeForEmulators()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         builder.AddBicepTemplateString("foo", "");
@@ -185,7 +185,7 @@ public class AzureResourcePreparerTests
     [Fact]
     public async Task FindsAzureReferencesFromArguments()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var storage = builder.AddAzureStorage("storage");
@@ -212,7 +212,7 @@ public class AzureResourcePreparerTests
     [Fact]
     public async Task PublishDeploymentTargetIncludesComputedPrerequisitesInReferences()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureAppServiceEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("vnet");
@@ -248,7 +248,7 @@ public class AzureResourcePreparerTests
     {
         const string inspectRoleAssignmentsStepName = "inspect-keyvault-role-assignments";
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: inspectRoleAssignmentsStepName);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper, step: inspectRoleAssignmentsStepName);
         builder.AddAzureContainerAppEnvironment("env");
 
         var keyVault = builder.AddAzureKeyVault("keyvault");
@@ -305,7 +305,7 @@ public class AzureResourcePreparerTests
     {
         const string inspectRoleAssignmentsStepName = "inspect-signalr-role-assignments";
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: inspectRoleAssignmentsStepName);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper, step: inspectRoleAssignmentsStepName);
         builder.AddAzureContainerAppEnvironment("env");
 
         var signalR = builder.AddAzureSignalR("signalr");
@@ -363,7 +363,7 @@ public class AzureResourcePreparerTests
     [Fact]
     public async Task GlobalRoleAssignmentsAreNotDuplicatedWhenBeforeStartRunsTwice()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var storage = builder.AddAzureStorage("storage");
         var blobs = storage.AddBlobs("blobs");
@@ -387,7 +387,7 @@ public class AzureResourcePreparerTests
     [Fact]
     public async Task NullEnvironmentVariableIsIgnored()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var storage = builder.AddAzureStorage("storage");
@@ -413,7 +413,7 @@ public class AzureResourcePreparerTests
     [Fact]
     public async Task NullCommandLineArgIsIgnored()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var storage = builder.AddAzureStorage("storage");
@@ -440,7 +440,7 @@ public class AzureResourcePreparerTests
     [Fact]
     public async Task CommandLineArgsCallbackContextHasCorrectExecutionContextDuringPublish()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         DistributedApplicationExecutionContext? capturedExecutionContext = null;
@@ -470,7 +470,7 @@ public class AzureResourcePreparerTests
     [Fact]
     public async Task AppliesRoleAssignmentsOnlyToDirectReferences()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var storage = builder.AddAzureStorage("storage");
@@ -502,7 +502,7 @@ public class AzureResourcePreparerTests
     [Fact]
     public async Task ViteAppDoesNotGetManagedIdentity()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var storage = builder.AddAzureStorage("storage");
@@ -541,7 +541,7 @@ public class AzureResourcePreparerTests
     [Fact]
     public async Task ReferenceRoleAssignmentAnnotation_PublishMode_GrantsRolesOnImpliedTargetToConsumer()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var storage = builder.AddAzureStorage("storage");
@@ -569,7 +569,7 @@ public class AzureResourcePreparerTests
     [Fact]
     public async Task ReferenceRoleAssignmentAnnotation_RunMode_AppliesRolesToGlobalRolesResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var storage = builder.AddAzureStorage("storage");
@@ -594,7 +594,7 @@ public class AzureResourcePreparerTests
     [Fact]
     public async Task ReferenceRoleAssignmentAnnotation_ConsumerNotReferencingFrontingResource_GetsNoRole()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var storage = builder.AddAzureStorage("storage");
@@ -618,7 +618,7 @@ public class AzureResourcePreparerTests
     [Fact]
     public async Task ReferenceRoleAssignmentAnnotation_SameTargetFromTwoDependencies_DedupesRoles()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var storage = builder.AddAzureStorage("storage");
@@ -656,7 +656,7 @@ public class AzureResourcePreparerTests
     [Fact]
     public async Task ReferenceRoleAssignmentAnnotation_ConsumerWithExplicitRoleAssignment_DoesNotReintroduceSuppressedDefaults()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var storage = builder.AddAzureStorage("storage");
@@ -699,7 +699,7 @@ public class AzureResourcePreparerTests
     [Fact]
     public async Task ReferenceRoleAssignmentAnnotation_ConsumerWithDirectReference_KeepsDefaultsAndAddsImpliedRole()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var storage = builder.AddAzureStorage("storage");

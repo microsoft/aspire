@@ -26,7 +26,7 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureEnvironmentResourceExtensionsTests
+public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddAzureEnvironment_ShouldAddResourceToBuilder_InPublishMode()
@@ -4959,10 +4959,10 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.Equal(expectedResourceGroup.Resource, resource.ResourceGroupName);
     }
 
-    private static IDistributedApplicationBuilder CreateBuilder(bool isRunMode = false)
+    private IDistributedApplicationBuilder CreateBuilder(bool isRunMode = false)
     {
         var operation = isRunMode ? DistributedApplicationOperation.Run : DistributedApplicationOperation.Publish;
-        return TestDistributedApplicationBuilder.Create(operation);
+        return TestDistributedApplicationBuilder.Create(operation, testOutputHelper);
     }
 
     /// <summary>

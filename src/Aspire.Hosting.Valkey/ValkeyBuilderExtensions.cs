@@ -3,7 +3,6 @@
 
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Valkey;
 using Microsoft.Extensions.DependencyInjection;
 

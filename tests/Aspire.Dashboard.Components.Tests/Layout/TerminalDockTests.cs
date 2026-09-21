@@ -224,7 +224,7 @@ public partial class TerminalDockTests : DashboardTestContext
         Assert.Equal("Press the backtick key (`) to hide this panel.", cut.Find(".terminal-dock-panel-hint").TextContent);
         var helpLink = cut.Find(".terminal-dock-panel a");
         Assert.Equal(Resources.TerminalStrings.TerminalDockMoreInformation, helpLink.TextContent);
-        Assert.Equal("https://aka.ms/aspire/dashboard-terminals", helpLink.GetAttribute("href"));
+        Assert.Equal("https://aka.ms/aspire/dashboard-terminal", helpLink.GetAttribute("href"));
         Assert.Equal("_blank", helpLink.GetAttribute("target"));
         Assert.Equal("noopener noreferrer", helpLink.GetAttribute("rel"));
         Assert.Equal(["Open terminal in a new window", "Hide terminal panel (`)"],

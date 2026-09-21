@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzurePostgresFlexibleServerDatabaseConnectionPropertiesTests
+public class AzurePostgresFlexibleServerDatabaseConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzurePostgresFlexibleServerDatabaseResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var postgres = builder.AddAzurePostgresFlexibleServer("postgres");
         var database = postgres.AddDatabase("database", "mydb");
 
@@ -50,7 +50,7 @@ public class AzurePostgresFlexibleServerDatabaseConnectionPropertiesTests
     [Fact]
     public void AzurePostgresFlexibleServerDatabaseResourceWithPasswordAuthenticationGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var postgres = builder.AddAzurePostgresFlexibleServer("postgres").WithPasswordAuthentication();
         var database = postgres.AddDatabase("database", "mydb");
 

@@ -112,7 +112,7 @@ safe-outputs:
       exclude:
         - CHANGELOG.md
   github-app:
-    app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+    client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
     private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
     owner: "microsoft"
     repositories: ["aspire"]
@@ -137,7 +137,7 @@ tools:
     allowed-repos:
       - microsoft/aspire
     github-app:
-      app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+      client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
       private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
       owner: "microsoft"
       repositories: ["aspire"]

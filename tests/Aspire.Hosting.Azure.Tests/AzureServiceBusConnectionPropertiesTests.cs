@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureServiceBusConnectionPropertiesTests
+public class AzureServiceBusConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureServiceBusResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var serviceBus = builder.AddAzureServiceBus("servicebus");
 
         var properties = ((IResourceWithConnectionString)serviceBus.Resource).GetConnectionProperties().ToArray();
@@ -33,7 +33,7 @@ public class AzureServiceBusConnectionPropertiesTests
     [Fact]
     public void AzureServiceBusResourceGetConnectionPropertiesReturnsConnectionStringForEmulator()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var serviceBus = builder.AddAzureServiceBus("servicebus").RunAsEmulator();
 
         var properties = ((IResourceWithConnectionString)serviceBus.Resource).GetConnectionProperties().ToArray();
