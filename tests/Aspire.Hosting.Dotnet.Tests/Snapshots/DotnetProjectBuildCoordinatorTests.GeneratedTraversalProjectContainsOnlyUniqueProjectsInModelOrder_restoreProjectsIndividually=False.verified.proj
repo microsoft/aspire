@@ -5,12 +5,14 @@
   </ItemGroup>
   <PropertyGroup>
     <RestoreGraphProjectInput>@(ProjectFile-&gt;'%(FullPath)')</RestoreGraphProjectInput>
+    <NuGetRestoreTargets Condition="'$(NuGetRestoreTargets)' == ''">$(MSBuildToolsPath)/NuGet.targets</NuGetRestoreTargets>
   </PropertyGroup>
   <Target Name="Restore">
-    <Message Importance="high" Text="Restoring projects individually because RestoreUseStaticGraphEvaluation is enabled." />
+    <Message Importance="high" Text="Restoring projects individually because RestoreUseStaticGraphEvaluation is enabled." Condition="'$(RestoreUseStaticGraphEvaluation)' == 'true'" />
+    <Message Importance="high" Text="Restoring projects individually because the selected NuGet restore targets are unavailable." Condition="'$(RestoreUseStaticGraphEvaluation)' != 'true' and !Exists('$(NuGetRestoreTargets)')" />
     <MSBuild Projects="@(ProjectFile)" Targets="Restore" BuildInParallel="false" />
   </Target>
-  <Import Project="$(MSBuildToolsPath)/NuGet.targets" Condition="'$(RestoreUseStaticGraphEvaluation)' != 'true'" />
+  <Import Project="$(NuGetRestoreTargets)" Condition="'$(RestoreUseStaticGraphEvaluation)' != 'true' and Exists('$(NuGetRestoreTargets)')" />
   <Target Name="Build">
     <MSBuild Projects="@(ProjectFile)" Targets="Build" BuildInParallel="true" />
   </Target>

@@ -95,10 +95,11 @@ The setting defaults to `false` and is read when the build plan is created. It a
 generated traversal in that AppHost; it is not a resource runtime environment variable. With
 individual restore, each root project's restore runs serially while builds remain parallel.
 
-A traversal also uses the per-project restore path when its top-level MSBuild context enables
-`RestoreUseStaticGraphEvaluation`. NuGet's static restore requires a restore-capable entry project,
-which the generated SDK-less traversal is not. The reason for selecting individual restore is reported in the
-build resource's logs. Restore failures are not retried using another strategy.
+A traversal also uses the per-project restore path when the selected NuGet restore targets are
+unavailable or its top-level MSBuild context enables `RestoreUseStaticGraphEvaluation`. NuGet's
+static restore requires a restore-capable entry project, which the generated SDK-less traversal is
+not. The reason for selecting individual restore is reported in the build resource's logs. Restore
+failures are not retried using another strategy.
 
 Direct builds for file-based apps and project-specific build environments, individual Rebuild
 commands, and publishing are unchanged.

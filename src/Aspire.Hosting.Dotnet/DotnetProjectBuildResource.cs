@@ -68,7 +68,7 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
     }
 
     /// <summary>
-    /// Gets whether the traversal invokes each root project's restore separately.
+    /// Gets whether the AppHost configured the traversal to restore each root project separately.
     /// </summary>
     internal bool RestoreProjectsIndividually
     {
@@ -224,8 +224,12 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
     {
         // NuGet can restore all entry projects in one graph without introducing solution build properties.
         // See https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.Build.Tasks/NuGet.targets.
-        // Import after the per-project restore target so NuGet overrides it only when aggregate restore is selected.
+        // Import after the per-project restore target so NuGet overrides it only when aggregate restore is selected
+        // and the selected NuGet targets are available.
         // Static restore needs a restore-capable entry project, which this SDK-less wrapper is not.
+        //
+        // NuGet documents RestoreGraphProjectInput as a property. The ProjectFile transform intentionally remains
+        // literal during evaluation and expands when NuGet consumes the property inside _LoadRestoreGraphEntryPoints.
         var project = new XDocument(
             new XElement(
                 "Project",
@@ -240,12 +244,18 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
                                 EscapeMsBuildPath(NormalizePath(Path.GetRelativePath(BuildDirectory, projectPath))))))),
                 new XElement(
                     "PropertyGroup",
-                    new XElement("RestoreGraphProjectInput", "@(ProjectFile->'%(FullPath)')")),
+                    new XElement("RestoreGraphProjectInput", "@(ProjectFile->'%(FullPath)')"),
+                    restoreProjectsIndividually ? null : new XElement(
+                        "NuGetRestoreTargets",
+                        new XAttribute("Condition", "'$(NuGetRestoreTargets)' == ''"),
+                        "$(MSBuildToolsPath)/NuGet.targets")),
                 CreateRestoreTarget(restoreProjectsIndividually),
                 restoreProjectsIndividually ? null : new XElement(
                     "Import",
-                    new XAttribute("Project", "$(MSBuildToolsPath)/NuGet.targets"),
-                    new XAttribute("Condition", "'$(RestoreUseStaticGraphEvaluation)' != 'true'")),
+                    new XAttribute("Project", "$(NuGetRestoreTargets)"),
+                    new XAttribute(
+                        "Condition",
+                        "'$(RestoreUseStaticGraphEvaluation)' != 'true' and Exists('$(NuGetRestoreTargets)')")),
                 CreateTraversalTarget("Build", buildInParallel: true)));
 
         using var projectStream = new MemoryStream();
@@ -275,12 +285,31 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
     private static XElement CreateRestoreTarget(bool restoreProjectsIndividually)
     {
         var target = CreateTraversalTarget("Restore", buildInParallel: false);
-        target.AddFirst(new XElement(
-            "Message",
-            new XAttribute("Importance", "high"),
-            new XAttribute("Text", restoreProjectsIndividually
-                ? "Restoring projects individually as configured by the AppHost."
-                : "Restoring projects individually because RestoreUseStaticGraphEvaluation is enabled.")));
+        if (restoreProjectsIndividually)
+        {
+            target.AddFirst(new XElement(
+                "Message",
+                new XAttribute("Importance", "high"),
+                new XAttribute("Text", "Restoring projects individually as configured by the AppHost.")));
+        }
+        else
+        {
+            target.AddFirst(new[]
+            {
+                new XElement(
+                    "Message",
+                    new XAttribute("Importance", "high"),
+                    new XAttribute("Text", "Restoring projects individually because RestoreUseStaticGraphEvaluation is enabled."),
+                    new XAttribute("Condition", "'$(RestoreUseStaticGraphEvaluation)' == 'true'")),
+                new XElement(
+                    "Message",
+                    new XAttribute("Importance", "high"),
+                    new XAttribute("Text", "Restoring projects individually because the selected NuGet restore targets are unavailable."),
+                    new XAttribute(
+                        "Condition",
+                        "'$(RestoreUseStaticGraphEvaluation)' != 'true' and !Exists('$(NuGetRestoreTargets)')")),
+            });
+        }
 
         return target;
     }

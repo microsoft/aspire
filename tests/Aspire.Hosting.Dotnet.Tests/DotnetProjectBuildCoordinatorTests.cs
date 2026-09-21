@@ -507,6 +507,118 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task GeneratedTraversalProjectHonorsNuGetRestoreTargetsOverride()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Service", "Service.csproj");
+        var customTargetsPath = Path.Combine(workspace.Path, "CustomNuGet.targets");
+        File.WriteAllText(customTargetsPath, """
+            <Project>
+              <Target Name="VerifyCustomNuGetRestoreTargets">
+                <Message Importance="high" Text="Custom NuGet restore targets imported." />
+              </Target>
+            </Project>
+            """);
+        using var buildResource = new DotnetProjectBuildResource(
+            "build",
+            workspace.Path,
+            Path.Combine(workspace.Path, "obj", ".aspire", "build"),
+            TimeProvider.System);
+        buildResource.ConfigureTraversalBuild(
+            [projectPath],
+            workspace.Path,
+            buildConfiguration: null,
+            restoreProjectsIndividually: false);
+        var buildProjectPath = await buildResource.WriteBuildProjectAsync(
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        var (completion, process) = ProcessUtil.Run(new ProcessSpec("dotnet")
+        {
+            WorkingDirectory = workspace.Path,
+            ArgumentList =
+            [
+                "msbuild", buildProjectPath,
+                "--nologo",
+                "-target:VerifyCustomNuGetRestoreTargets",
+                $"-property:NuGetRestoreTargets={customTargetsPath}",
+            ],
+            OnOutputData = outputHelper.WriteLine,
+            OnErrorData = outputHelper.WriteLine,
+            ThrowOnNonZeroReturnCode = false,
+            RetainedOutputLineCount = ProcessSpec.DefaultRetainedOutputLineCount,
+        });
+        await using (process)
+        {
+            var result = await completion.WaitAsync(
+                TestConstants.LongTimeoutTimeSpan,
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains(
+                result.ProcessOutput,
+                line => line.Contains("Custom NuGet restore targets imported.", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task GeneratedTraversalProjectFallsBackWhenNuGetRestoreTargetsAreUnavailable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProjectFile(workspace.Path, "Service", """
+            <Project>
+              <Target Name="Restore">
+                <WriteLinesToFile File="$(MSBuildProjectDirectory)/restore-ran.txt" Lines="restore" Overwrite="true" />
+              </Target>
+            </Project>
+            """);
+        using var buildResource = new DotnetProjectBuildResource(
+            "build",
+            workspace.Path,
+            Path.Combine(workspace.Path, "obj", ".aspire", "build"),
+            TimeProvider.System);
+        buildResource.ConfigureTraversalBuild(
+            [projectPath],
+            workspace.Path,
+            buildConfiguration: null,
+            restoreProjectsIndividually: false);
+        var buildProjectPath = await buildResource.WriteBuildProjectAsync(
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        var missingTargetsPath = Path.Combine(workspace.Path, "missing", "NuGet.targets");
+        var (completion, process) = ProcessUtil.Run(new ProcessSpec("dotnet")
+        {
+            WorkingDirectory = workspace.Path,
+            ArgumentList =
+            [
+                "msbuild", buildProjectPath,
+                "--nologo",
+                "-target:Restore",
+                $"-property:NuGetRestoreTargets={missingTargetsPath}",
+            ],
+            OnOutputData = outputHelper.WriteLine,
+            OnErrorData = outputHelper.WriteLine,
+            ThrowOnNonZeroReturnCode = false,
+            RetainedOutputLineCount = ProcessSpec.DefaultRetainedOutputLineCount,
+        });
+        await using (process)
+        {
+            var result = await completion.WaitAsync(
+                TestConstants.LongTimeoutTimeSpan,
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains(
+                result.ProcessOutput,
+                line => line.Contains(
+                    "Restoring projects individually because the selected NuGet restore targets are unavailable.",
+                    StringComparison.Ordinal));
+            Assert.True(File.Exists(Path.Combine(Path.GetDirectoryName(projectPath)!, "restore-ran.txt")));
+        }
+    }
+
+    [Fact]
     public async Task GeneratedTraversalProjectUsesConfiguredAspireStoreBuildDirectory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -577,19 +689,31 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     [InlineData(false)]
     [InlineData(true)]
     [RequiresTools(["dotnet"])]
-    public async Task TraversalRestoreHandlesColdPackagesChangedImportsAndLockedMode(bool restoreProjectsIndividually)
+    public async Task TraversalRestoreUsesProjectNuGetConfigAndHandlesColdPackagesChangedImportsAndLockedMode(
+        bool restoreProjectsIndividually)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectRoot = workspace.CreateDirectory("projects").FullName;
         // A local build-only package exercises restored imports without network access or targeting packs.
-        var feed = workspace.CreateDirectory("feed").FullName;
+        var feed = Directory.CreateDirectory(Path.Combine(projectRoot, "feed")).FullName;
         CreateRestoreTestPackage(feed, "1.0.0");
         CreateRestoreTestPackage(feed, "2.0.0");
-        File.WriteAllText(Path.Combine(workspace.Path, "Directory.Build.props"), """
+        var feedSource = new Uri(feed + Path.DirectorySeparatorChar).AbsoluteUri;
+        // The generated traversal lives outside this directory, so successful restore requires NuGet to
+        // discover configuration from the entry projects instead of the traversal's location.
+        File.WriteAllText(Path.Combine(projectRoot, "nuget.config"), $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="local" value="{{feedSource}}" />
+              </packageSources>
+            </configuration>
+            """);
+        File.WriteAllText(Path.Combine(projectRoot, "Directory.Build.props"), """
             <Project>
               <PropertyGroup>
                 <TargetFramework>net8.0</TargetFramework>
                 <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
-                <RestoreSources>$(MSBuildThisFileDirectory)feed</RestoreSources>
                 <RestorePackagesPath>$(MSBuildThisFileDirectory)packages</RestorePackagesPath>
                 <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
                 <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
@@ -597,7 +721,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
               </PropertyGroup>
             </Project>
             """);
-        var versionsPath = Path.Combine(workspace.Path, "Directory.Packages.props");
+        var versionsPath = Path.Combine(projectRoot, "Directory.Packages.props");
         const string versions = """
             <Project>
               <ItemGroup>
@@ -606,7 +730,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             </Project>
             """;
         File.WriteAllText(versionsPath, versions);
-        var sharedProject = CreateProjectFile(workspace.Path, "Shared", """
+        var sharedProject = CreateProjectFile(projectRoot, "Shared", """
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <TargetFramework />
@@ -632,9 +756,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
               </Target>
             </Project>
             """;
-        var firstProject = CreateProjectFile(workspace.Path, "First", projectContents);
-        var secondProject = CreateProjectFile(workspace.Path, "Second", projectContents);
-        var escapedDirectory = Path.Combine(workspace.Path, "First's Project;100% (test)");
+        var firstProject = CreateProjectFile(projectRoot, "First", projectContents);
+        var secondProject = CreateProjectFile(projectRoot, "Second", projectContents);
+        var escapedDirectory = Path.Combine(projectRoot, "First's Project;100% (test)");
         Directory.Move(Path.GetDirectoryName(firstProject)!, escapedDirectory);
         firstProject = Path.Combine(escapedDirectory, Path.GetFileName(firstProject));
         using var buildResource = new DotnetProjectBuildResource(
@@ -3349,7 +3473,6 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             [
                 "build", path,
                 "--configuration", resource.BuildConfiguration!,
-                "--source", Path.Combine(resource.WorkingDirectory, "feed"),
                 "--nologo",
                 $"-property:RestoreLockedMode={restoreLockedMode}",
             ],
