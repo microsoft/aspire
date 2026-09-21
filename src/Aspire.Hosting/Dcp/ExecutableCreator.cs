@@ -438,12 +438,20 @@ internal sealed class ExecutableCreator(
             DistributedApplicationExecutionContext executionContext,
             CancellationToken cancellationToken = default)
         {
-            await creator.PrepareExecutableConfigurationAsync(
-                context,
-                resource,
-                endpointContext,
-                factory,
-                cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await creator.PrepareExecutableConfigurationAsync(
+                    context,
+                    resource,
+                    endpointContext,
+                    factory,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (FailedToApplyEnvironmentException ex)
+            {
+                resourceLogger.LogError(ex, "{Message}", ex.Message);
+                throw;
+            }
         }
     }
 }

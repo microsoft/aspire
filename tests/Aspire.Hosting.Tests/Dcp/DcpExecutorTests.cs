@@ -9828,6 +9828,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         builder.AddExecutable("healthy", "command", "");
 
         var kubernetesService = new TestKubernetesService();
+        using var resourceLoggerService = new ResourceLoggerService();
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var dcpOptions = new DcpOptions
@@ -9847,15 +9848,16 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             distributedAppModel,
             kubernetesService: kubernetesService,
             dcpOptions: dcpOptions,
+            resourceLoggerService: resourceLoggerService,
             events: events);
         await appExecutor.RunApplicationAsync().DefaultTimeout();
 
         var failure = Assert.Single(failures);
         Assert.Equal(executable.Resource, failure.Resource);
-        Assert.Contains(
+        const string expectedFailureMessage =
             "Resource 'executable' references endpoint 'http' on executable resource 'executable' using the default Aspire container network, " +
-            "but the application does not contain any container resources.",
-            failure.ErrorMessage);
+            "but the application does not contain any container resources.";
+        Assert.Contains(expectedFailureMessage, failure.ErrorMessage);
         Assert.DoesNotContain(
             kubernetesService.CreatedResources.OfType<Executable>(),
             resource => resource.AppModelResourceName == executable.Resource.Name);
@@ -9863,6 +9865,75 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             kubernetesService.CreatedResources.OfType<Executable>(),
             resource => resource.AppModelResourceName == "healthy");
         Assert.Empty(kubernetesService.CreatedResources.OfType<ContainerNetwork>());
+        Assert.Empty(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+
+        var logLines = new List<LogLine>();
+        await foreach (var lines in resourceLoggerService.GetAllAsync(executable.Resource).DefaultTimeout())
+        {
+            logLines.AddRange(lines);
+        }
+
+        Assert.Contains(logLines, line =>
+            line.IsErrorMessage &&
+            line.Content.Contains(expectedFailureMessage, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExecutableContainerNetworkReferenceRequiresTcpEndpoint()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+
+        var executable = builder.AddExecutable("executable", "command", "")
+            .WithEndpoint(
+                name: "udp",
+                targetPort: 1234,
+                port: 5678,
+                isProxied: true,
+                protocol: ProtocolType.Udp);
+        executable.WithEnvironment(
+            "CONTAINER_PORT",
+            executable.GetEndpoint("udp", KnownNetworkIdentifiers.DefaultAspireContainerNetwork).Property(EndpointProperty.Port));
+        builder.AddExecutable("healthy", "command", "");
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var failures = new ConcurrentQueue<OnResourceFailedToStartContext>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failures.Enqueue(context);
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            dcpOptions: dcpOptions,
+            events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var failure = Assert.Single(failures);
+        Assert.Equal(executable.Resource, failure.Resource);
+        Assert.Contains(
+            "Resource 'executable' references endpoint 'udp' on executable resource 'executable' using the default Aspire container network, " +
+            "but the Aspire container tunnel only supports TCP endpoints.",
+            failure.ErrorMessage);
+        Assert.DoesNotContain(
+            kubernetesService.CreatedResources.OfType<Executable>(),
+            resource => resource.AppModelResourceName == executable.Resource.Name);
+        Assert.Single(
+            kubernetesService.CreatedResources.OfType<Executable>(),
+            resource => resource.AppModelResourceName == "healthy");
+        Assert.DoesNotContain(
+            kubernetesService.CreatedResources.OfType<Service>(),
+            service => service.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName));
         Assert.Empty(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
     }
 
