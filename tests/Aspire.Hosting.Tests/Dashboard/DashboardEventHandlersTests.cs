@@ -930,7 +930,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task AddDashboardResource_WithManagedDashboardEnabled_DoesNotRequireManagedExecutable()
+    public async Task AddDashboardResource_WithManagedDashboardEnabled_RequiresManagedExecutable()
     {
         var tempDir = Directory.CreateTempSubdirectory();
 
@@ -945,16 +945,11 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
                 new ConfigurationBuilder().Build(), dashboardOptions: dashboardOptions);
             var model = new DistributedApplicationModel(new ResourceCollection());
 
-            await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None);
+            var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+                hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None));
 
-            var executableResource = Assert.IsType<ExecutableResource>(Assert.Single(model.Resources));
-            Assert.Equal(managedPath, executableResource.Command);
-            Assert.Equal(Path.GetDirectoryName(managedPath), executableResource.WorkingDirectory);
-
-            var args = new List<object>();
-            var annotation = Assert.Single(executableResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>());
-            await annotation.Callback(new CommandLineArgsCallbackContext(args));
-            Assert.Equal(new object[] { "dashboard" }, args);
+            Assert.Equal($"AppHost:UseManagedDashboard requires the Aspire managed executable at '{managedPath}'. Reinstall or rebuild the Aspire bundle.", exception.Message);
+            Assert.Empty(model.Resources);
         }
         finally
         {
