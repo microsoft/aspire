@@ -63,35 +63,55 @@ dotnet-inspect-only setup does not need Aspire usage hooks. Hook failures are
 best-effort warnings with qualified completion output. Preserve the embedded
 scripts' existing events and `ASPIRE_CLI_TELEMETRY_OPTOUT` behavior.
 
-## Delivery gates
+## Telemetry hook maintenance
 
-The Aspire skills archive acquisition, cache, attestation client, providers,
-serialization models, location/skill selectors, and their configuration knobs
-have been removed from the production runtime. Agent setup registers native
-sources instead. The raw embedded archive and metadata are retained **only for
-hook verification and provenance maintenance**, not as a runtime fallback.
+The two embedded hook scripts are synchronized directly from
+`microsoft/aspire-skills`, independently of skill/plugin distribution.
+`Hooks/telemetry-hooks.metadata.json` records their released version, immutable
+main commit, and LF-normalized UTF-8 SHA-512 hashes. Agent setup never fetches the
+scripts at runtime.
 
-- [microsoft/aspire#20246](https://github.com/microsoft/aspire/issues/20246) must
-  decouple hook verification/provenance before deleting those remaining raw
-  inputs or retiring their maintenance/verifier workflow. It does not block
-  removal of the obsolete runtime. Canonical hook scripts and the maintenance
-  source/attestation verifier scripts and workflow remain unchanged.
-- [microsoft/aspire-skills#72](https://github.com/microsoft/aspire-skills/issues/72)
-  must publish and verify the real released-main OpenCode V1/V2 catalogs before
-  shipping that registration path. Registration is offline and does not establish
-  that an endpoint has been published. Do not substitute illustrative URLs or
-  report this publication gate as complete from isolated fixtures.
+The `Update Telemetry Hooks` workflow accepts required `source_commit` and
+`version` inputs through `workflow_dispatch`. It has no daily bundle-refresh
+schedule. The source must be on main's first-parent lineage, and its canonical
+plugin version must match the requested version. A dev input SHA merged through a
+release branch is not the released-main SHA.
 
-Existing user skills and caches are not deleted or migrated into native
-client-owned caches.
+The updater fetches and validates both scripts before publishing either script or
+metadata. Replays are idempotent, and older/divergent sources cannot replace a
+newer synchronization. Serialized workflow runs also check metadata on an
+existing `update-telemetry-hooks` PR branch, so delayed dispatches cannot overwrite
+a newer unmerged update.
 
-`TelemetryHookArchiveReader` is test-only and reads Tar/GZip streams without disk
-extraction. It verifies the full archive SHA-512 against retained metadata before
-reading entries; rejects duplicate, missing, or nonregular expected manifest/hook
-entries; and checks complete hook names, matching commit identities, and both
-manifest and metadata SHA-512 hashes. The installer test also compares installed
-and archived LF-normalized UTF-8 bytes and both per-hook hashes. The updater takes
-its current version from metadata and no longer stamps a runtime installer class.
+`Verify Telemetry Hooks` requires complete metadata and matches the local scripts'
+normalized hashes to both metadata and canonical source at the pinned commit.
+Missing data, malformed provenance, failed fetches, or mismatches fail verification.
+No skill archive or archive attestation is involved.
+
+For a local replay:
+
+```powershell
+.\eng\scripts\update-telemetry-hooks.ps1 -SourceCommit "<released-main-sha>" -Version "<release-version>"
+.\eng\scripts\verify-telemetry-hooks.ps1
+```
+
+The workflow creates a draft PR on `update-telemetry-hooks`, matching the protected
+script branch guard. The branch-name guard is not proof of bot identity; canonical
+source verification remains independent. Deploy this receiver before enabling
+upstream release notifications. The upstream sender and dispatch credentials
+remain tracked by [#20246](https://github.com/microsoft/aspire/issues/20246).
+
+## Delivery gate
+
+The Aspire skills bundle runtime, embedded archive/metadata, and archive
+maintenance have been removed. Existing user skills and caches are not deleted or
+migrated into native client-owned caches.
+
+[microsoft/aspire-skills#72](https://github.com/microsoft/aspire-skills/issues/72)
+must publish and verify the real released-main OpenCode V1/V2 catalogs before
+shipping that registration path. Registration is offline and does not establish
+that an endpoint has been published. Do not substitute illustrative URLs or
+report this publication gate as complete from isolated fixtures.
 
 ## Regression coverage
 
@@ -102,7 +122,7 @@ Copilot CLI detection; explicit empty-detector tests enforce the unattended
 behavior have their own isolated tests.
 
 `AgentCommandTests` exercises the existing Linux-container/Hex1b flow with native
-settings snapshots, explicit unattended selections, idempotency, and the
+source assertions, explicit unattended selections, idempotency, and the
 standalone-only MCP boundary. `NewWithAgentInitTests` retains its network-heavy
 outerloop classification for real Playwright provenance verification. See the
 [E2E guide](../../../tests/Aspire.Cli.EndToEnd.Tests/README.md#agent-setup-coverage).

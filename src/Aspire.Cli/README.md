@@ -143,9 +143,9 @@ The old `--skills` and `--skill-locations` options are no longer accepted.
 The hidden legacy `aspire mcp init` command delegates to the same setup flow and
 shows a deprecation warning.
 
-See [agent setup implementation and delivery gates](Agents/README.md) for native
-target details and the outstanding hook-provenance and OpenCode publication
-prerequisites.
+See [agent setup implementation and delivery gate](Agents/README.md) for native
+target details, hook-only source maintenance, and the outstanding OpenCode
+publication prerequisite.
 
 ## Examples
 

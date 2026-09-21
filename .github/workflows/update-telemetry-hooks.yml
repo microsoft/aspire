@@ -1,0 +1,106 @@
+name: Update Telemetry Hooks
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: "Full immutable commit SHA from released aspire-skills main history."
+        required: true
+        type: string
+      version:
+        description: "Canonical Aspire skills version at the released source commit."
+        required: true
+        type: string
+
+concurrency:
+  group: update-telemetry-hooks
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-and-pr:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'microsoft' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Generate GitHub App Token for hook update
+        id: update-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
+      - name: Update canonical telemetry hooks
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ steps.update-token.outputs.token }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $arguments = @{
+            SourceCommit = $env:SOURCE_COMMIT
+            Version = $env:VERSION
+          }
+
+          # A newer synchronization can already be in an unmerged automation PR.
+          # Compare against its metadata as well as main before replacing that PR.
+          $pendingRef = 'refs/heads/update-telemetry-hooks'
+          $pending = @(& git ls-remote --heads origin $pendingRef)
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not inspect the pending telemetry-hook synchronization branch.'
+          }
+          if ($pending.Count -gt 0) {
+            & git fetch --no-tags --depth=1 origin "${pendingRef}:refs/remotes/origin/update-telemetry-hooks"
+            if ($LASTEXITCODE -ne 0) {
+              throw 'Could not fetch the pending telemetry-hook synchronization branch.'
+            }
+            $metadata = @(& git show 'refs/remotes/origin/update-telemetry-hooks:src/Aspire.Cli/Agents/Hooks/telemetry-hooks.metadata.json')
+            if ($LASTEXITCODE -ne 0) {
+              throw 'The pending synchronization branch is missing valid hook provenance.'
+            }
+            $baseline = Join-Path $env:RUNNER_TEMP 'telemetry-hooks.previous.json'
+            [System.IO.File]::WriteAllText($baseline, ($metadata -join "`n") + "`n", [System.Text.UTF8Encoding]::new($false))
+            $arguments.BaselineMetadataPath = $baseline
+          }
+
+          ./eng/scripts/update-telemetry-hooks.ps1 @arguments
+
+      - name: Restore solution
+        run: ./restore.sh
+
+      - name: Test telemetry hook installer and scripts
+        run: >
+          dotnet test --project tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj
+          --no-launch-profile
+          --
+          --filter-class "*.TelemetryHookInstallerTests"
+          --filter-class "*.TelemetryHookScriptTests"
+          --filter-not-trait "quarantined=true"
+          --filter-not-trait "outerloop=true"
+
+      - name: Generate GitHub App Token for pull request
+        id: pr-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
+      - name: Create or update pull request
+        uses: ./.github/actions/create-pull-request
+        with:
+          token: ${{ steps.pr-token.outputs.token }}
+          branch: update-telemetry-hooks
+          base: main
+          draft: true
+          commit-message: "[Automated] Update telemetry hooks"
+          labels: |
+            area-cli
+            area-engineering-systems
+          title: "[Automated] Update telemetry hooks"
+          body: "Auto-generated update of canonical telemetry hooks and provenance from an immutable released aspire-skills commit."

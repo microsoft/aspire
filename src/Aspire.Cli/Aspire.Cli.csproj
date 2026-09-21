@@ -333,17 +333,11 @@
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-32.png" Link="Mcp\Resources\aspire-32.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-48.png" Link="Mcp\Resources\aspire-48.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-64.png" Link="Mcp\Resources\aspire-64.png" />
-    <!-- Retained only as hook verification/provenance inputs pending
-         https://github.com/microsoft/aspire/issues/20246.
-         Agent setup no longer acquires, caches, or reads this archive. -->
-    <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills-v0.0.2.tgz" LogicalName="aspire-skills.bundle.tgz">
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills.metadata.json" LogicalName="aspire-skills.metadata.json">
+    <EmbeddedResource Include="Agents\Hooks\telemetry-hooks.metadata.json" LogicalName="telemetry-hooks.metadata.json">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
     <!-- Agent PostToolUse telemetry hook scripts. Materialized to ~/.aspire/hooks/ by
-         TelemetryHookInstaller and registered into each detected agent client's user-level
+         TelemetryHookInstaller and registered into each selected agent client's user-level
          config during `aspire agent init`. -->
     <EmbeddedResource Include="Agents\Hooks\track-telemetry.sh" LogicalName="track-telemetry.sh">
       <WithCulture>false</WithCulture>

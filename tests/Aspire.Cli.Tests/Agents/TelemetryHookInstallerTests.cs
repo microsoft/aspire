@@ -2,8 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Aspire.Cli.Agents.Hooks;
-using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -29,11 +30,17 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task EnsureInstalledAsync_MatchesBundledHooksAndMetadata()
+    public async Task EnsureInstalledAsync_MatchesPinnedHookMetadata()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
-        var archive = await TelemetryHookArchiveReader.ReadEmbeddedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+        await using var metadataStream = typeof(Program).Assembly.GetManifestResourceStream("telemetry-hooks.metadata.json")
+            ?? throw new InvalidOperationException("Embedded telemetry hook provenance is missing.");
+        using var metadata = await JsonDocument.ParseAsync(metadataStream, cancellationToken: TestContext.Current.CancellationToken).DefaultTimeout();
+        var root = metadata.RootElement;
+        Assert.Equal("microsoft/aspire-skills", root.GetProperty("repository").GetString());
+        Assert.Matches("^[0-9a-f]{40}$", root.GetProperty("commitSha").GetString()!);
+        Assert.Matches(@"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$", root.GetProperty("version").GetString()!);
 
         var scripts = await CreateInstaller(workspace, home).EnsureInstalledAsync(CancellationToken.None).DefaultTimeout();
         var installedPaths = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -42,17 +49,16 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
             ["track-telemetry.ps1"] = scripts.PowerShellScriptPath
         };
 
-        Assert.Equal(installedPaths.Keys.Order(StringComparer.Ordinal), archive.Hooks.Select(hook => hook.Name).Order(StringComparer.Ordinal));
+        var hashes = root.GetProperty("files");
+        Assert.Equal(installedPaths.Keys.Order(StringComparer.Ordinal), hashes.EnumerateObject().Select(hook => hook.Name).Order(StringComparer.Ordinal));
 
-        foreach (var hook in archive.Hooks)
+        foreach (var (name, path) in installedPaths)
         {
-            var installedBytes = await File.ReadAllBytesAsync(installedPaths[hook.Name]).DefaultTimeout();
-            var installedContent = TelemetryHookArchiveReader.NormalizeHookBytes(installedBytes);
-            Assert.Equal(hook.Content, installedContent);
-
-            var installedHash = Convert.ToHexStringLower(SHA512.HashData(installedContent));
-            Assert.Equal(hook.ManifestSha512, installedHash);
-            Assert.Equal(hook.MetadataSha512, installedHash);
+            var recordedHash = hashes.GetProperty(name).GetString();
+            Assert.Matches("^[0-9a-f]{128}$", recordedHash!);
+            var installedContent = await File.ReadAllTextAsync(path, new UTF8Encoding(false, true)).DefaultTimeout();
+            var installedBytes = Encoding.UTF8.GetBytes(installedContent.ReplaceLineEndings("\n"));
+            Assert.Equal(recordedHash, Convert.ToHexStringLower(SHA512.HashData(installedBytes)));
         }
     }
 
