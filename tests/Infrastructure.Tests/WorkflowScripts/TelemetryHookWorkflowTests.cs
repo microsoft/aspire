@@ -30,6 +30,16 @@ public class TelemetryHookWorkflowTests
     }
 
     [Fact]
+    public void UpdateChecksOutMain()
+    {
+        var checkout = Assert.Single(UpdateSteps(), step =>
+            step.Children.TryGetValue(new YamlScalarNode("uses"), out var uses) &&
+            (uses as YamlScalarNode)?.Value?.StartsWith("actions/checkout@", StringComparison.Ordinal) == true);
+        var inputs = Assert.IsType<YamlMappingNode>(checkout["with"]);
+        Assert.Equal("main", ((YamlScalarNode)inputs["ref"]).Value);
+    }
+
+    [Fact]
     public void UpdateRunsOnlyInstallerAndScriptTests()
     {
         var commands = UpdateSteps()
