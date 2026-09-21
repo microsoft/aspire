@@ -623,8 +623,11 @@ public class Program
         builder.Services.AddTransient<IntegrationListCommand>();
         builder.Services.AddTransient<IntegrationSearchCommand>();
         builder.Services.AddTransient<TerminalCommand>();
+        builder.Services.AddTransient<TerminalResourceResolver>();
         builder.Services.AddTransient<TerminalAttachCommand>();
         builder.Services.AddTransient<TerminalPsCommand>();
+        builder.Services.AddTransient<TerminalTapeCommand>();
+        builder.Services.AddTransient<TerminalTapePlayCommand>();
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();

@@ -68,6 +68,35 @@ project-based resources. Use the Rebuild command after source changes to rebuild
 Endpoints, environment variables, and service discovery are configured from the project's
 `launchSettings.json` and Kestrel configuration, matching `AddProject<T>`.
 
+### Select a launch profile
+
+Configure a .NET service's launch profile independently of the AppHost language:
+
+**C#**
+
+```csharp
+builder.AddDotnetProject("api", "../api/api.csproj",
+    options => options.LaunchProfileName = "https");
+```
+
+**TypeScript**
+
+```typescript
+await builder.addDotnetProject("api", "../api/api.csproj", {
+    launchProfileName: "https"
+});
+```
+
+Omitting the options, or leaving `launchProfileName` null, selects the default profile.
+Set `excludeLaunchProfile: true` to disable profiles; this takes precedence over a supplied
+profile name. Set `excludeKestrelEndpoints: true` to stop deriving model endpoints from Kestrel
+configuration; this does not rewrite or disable the service's own Kestrel configuration.
+The corresponding C# `ProjectResourceOptions` properties have the same behavior.
+
+The plain-data `DotnetProjectOptions` input is specific to the polyglot `addDotnetProject` API.
+It does not change the shared `ProjectResourceOptions` handle used by the legacy polyglot
+`addProject` and `addCSharpApp` APIs.
+
 ### Configure the build environment
 
 Use `WithBuildEnvironment` when an environment variable must affect MSBuild evaluation for a `.csproj`

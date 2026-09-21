@@ -213,6 +213,19 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
         };
     }
 
+    private void ValidateExpressEndpointReference(EndpointReference endpoint)
+    {
+        var environment = _containerAppEnvironmentContext.Environment;
+        if (!environment.IsExpress)
+        {
+            return;
+        }
+
+        // Express constrains this app's own ingress, not the URLs it calls. A reference to an
+        // http:// producer is left alone; only an unreachable private hostname is rejected.
+        environment.ValidatePublicEndpointReference(endpoint);
+    }
+
     private (object, SecretType) ProcessValue(object value, SecretType secretType = SecretType.None, object? parent = null)
     {
         if (value is string s)
@@ -230,6 +243,8 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             {
                 return ProcessValue(crossExpr, secretType, parent);
             }
+
+            ValidateExpressEndpointReference(ep);
 
             var context = ep.Resource == resource
                 ? this
@@ -287,6 +302,13 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
                 epExpr, [_containerAppEnvironmentContext.Environment], out var crossExpr))
             {
                 return ProcessValue(crossExpr, secretType, parent);
+            }
+
+            // Express cannot use a standard environment's private DNS either. Check visibility
+            // before delegating, while the original endpoint metadata is still available.
+            if (epExpr.Property is EndpointProperty.Url or EndpointProperty.Host or EndpointProperty.IPV4Host or EndpointProperty.HostAndPort)
+            {
+                ValidateExpressEndpointReference(epExpr.Endpoint);
             }
 
             var context = epExpr.Endpoint.Resource == resource

@@ -498,6 +498,11 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">패널 방향 전환</target>
         <note />
       </trans-unit>
+      <trans-unit id="HelpDialogToggleTerminalDock">
+        <source>Toggle terminal</source>
+        <target state="new">Toggle terminal</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InteractionButtonCancel">
         <source>Cancel</source>
         <target state="translated">취소</target>

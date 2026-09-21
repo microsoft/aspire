@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureEventHubConnectionPropertiesTests
+public class AzureEventHubConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureEventHubResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var eventHubs = builder.AddAzureEventHubs("eventhubs");
         var eventHub = eventHubs.AddHub("eventhub", "myhub");
 

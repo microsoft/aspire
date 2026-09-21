@@ -42,7 +42,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var worker = builder.AddDotnetProjectForPolyglot(
             "worker",
             workerPath,
-            new ProjectResourceOptions { ExcludeLaunchProfile = true });
+            new DotnetProjectOptions { ExcludeLaunchProfile = true });
 
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
         using var buildResourceScope = buildResource;

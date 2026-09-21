@@ -630,6 +630,20 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
+    [InlineData("src/Aspire.Dashboard/Components/Layout/TerminalDock.razor.js")]
+    [InlineData("src/Aspire.Dashboard/wwwroot/js/app-terminalwindow.js")]
+    [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalWindow.test.mjs")]
+    public void DashboardTerminalScriptInputsSelectInfrastructureTests(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        // Infrastructure executes the scripts in addition to the consumers attributed by the project graph.
+        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+    }
+
+    [Theory]
     [InlineData(".gitattributes")]
     [InlineData("eng/scripts/gha-testreport.ps1")]
     [InlineData("eng/scripts/split-test-projects-for-ci.ps1")]

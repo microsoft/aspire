@@ -36,13 +36,15 @@ dotnet run --project tools/CreateLayout/CreateLayout.csproj -- [options]
 |--------|-------------|
 | `-o, --output <path>` | Output directory for the layout |
 | `-a, --artifacts <path>` | Path to build artifacts directory |
+| `--rid <rid>` | Target runtime identifier: `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `linux-musl-x64`, `osx-x64`, or `osx-arm64` |
+
+Unsupported runtime identifiers, including `win-x86`, are rejected before the output directory is changed.
 
 ### Optional Options
 
 | Option | Description |
 |--------|-------------|
 | `-r, --runtime <path>` | Path to existing .NET runtime to include |
-| `--rid <rid>` | Runtime identifier (default: current platform) |
 | `--bundle-version <ver>` | Version string for the layout |
 | `--download-runtime` | Download .NET and ASP.NET runtimes from Microsoft |
 | `--runtime-version <ver>` | Specific .NET SDK version to download |

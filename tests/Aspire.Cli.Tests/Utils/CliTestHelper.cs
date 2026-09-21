@@ -276,8 +276,11 @@ internal static class CliTestHelper
         services.AddTransient<DescribeCommand>();
         services.AddTransient<LogsCommand>();
         services.AddTransient<TerminalCommand>();
+        services.AddTransient<TerminalResourceResolver>();
         services.AddTransient<TerminalAttachCommand>();
         services.AddTransient<TerminalPsCommand>();
+        services.AddTransient<TerminalTapeCommand>();
+        services.AddTransient<TerminalTapePlayCommand>();
         services.AddTransient<IntegrationPackageSearchService>();
         services.AddTransient<IntegrationCommand>();
         services.AddTransient<IntegrationListCommand>();

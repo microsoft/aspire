@@ -47,6 +47,7 @@ internal static class KnownConfigNames
     public const string TerminalHostParentProcessId = "ASPIRE_TERMINAL_HOST_PARENT_PID";
     public const string TerminalHostParentProcessStartedStable = "ASPIRE_TERMINAL_HOST_PARENT_STARTED_STABLE";
     public const string TerminalHostTelemetryEnabled = "ASPIRE_TERMINAL_HOST_TELEMETRY_ENABLED";
+    public const string TerminalWatchBufferCapacity = "ASPIRE_TERMINAL_WATCH_BUFFER_CAPACITY";
 
     // Identity (PID + start time) of the foreground CLI that spawned a detached `aspire start` /
     // `aspire run --detach` child. The detached child watches this during startup and tears the
@@ -58,6 +59,7 @@ internal static class KnownConfigNames
     public const string CliLogFilePath = "ASPIRE_CLI_LOG_FILE";
     public const string CliRunDetached = "ASPIRE_CLI_RUN_DETACHED";
     public const string CliGenerateHttpsCertificate = "ASPIRE_CLI_GENERATE_HTTPS_CERTIFICATE";
+    public const string CliDevCertsNssDbPaths = "ASPIRE_CLI_DEV_CERTS_NSSDB_PATHS";
     public const string SuppressCliRunHook = "ASPIRE_SUPPRESS_CLI_RUN_HOOK";
     public const string IntegrationLibsPath = "ASPIRE_INTEGRATION_LIBS_PATH";
     public const string IntegrationProbeManifestPath = "ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH";

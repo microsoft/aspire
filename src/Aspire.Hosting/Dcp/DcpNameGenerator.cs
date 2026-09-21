@@ -4,6 +4,8 @@
 #pragma warning disable ASPIREPROJECTS001
 
 using System.Collections.Immutable;
+using System.IO.Hashing;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
@@ -154,6 +156,16 @@ internal sealed class DcpNameGenerator
         // Compute a short hash of the content root path to differentiate between multiple AppHost projects with similar resource names
         var suffix = _configuration["AppHost:Sha256"]!.Substring(0, RandomNameSuffixLength).ToLowerInvariant();
         return suffix;
+    }
+
+    internal static string GetContainerVolumeName(string volumeName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(volumeName);
+
+        // Container runtime volume names can contain characters that are invalid in DCP object names.
+        // Hash the exact physical name so every mount of a shared volume uses the same stable state-store key.
+        var hash = XxHash128.Hash(Encoding.UTF8.GetBytes(volumeName));
+        return $"volume-{Convert.ToHexString(hash).ToLowerInvariant()}";
     }
 
     public static string GetObjectNameForResource(IResource resource, DcpOptions options, string suffix = "")

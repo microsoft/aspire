@@ -53,6 +53,17 @@
                     <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Color="Color.Default"/>
                 </FluentButton>
             }
+            @if (IsTerminalDockEnabled)
+            {
+                <FluentButton Class="header-button"
+                              Appearance="ButtonAppearance.Default" OnClick="@ToggleTerminalDockAsync"
+                              Title="@TerminalLoc[nameof(TerminalStrings.MainLayoutToggleTerminalDock)]" aria-label="@TerminalLoc[nameof(TerminalStrings.MainLayoutToggleTerminalDock)]">
+                    @* WindowConsole only ships at Size20 in this Fluent version, so it is scaled to 24px to line up with
+                       the rest of the header cluster. The Size24 alternatives (WindowDevTools, Code) read as "developer
+                       tools" rather than "terminal". *@
+                    <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="24px" Color="Color.Default"/>
+                </FluentButton>
+            }
             <NotificationsHeaderButton OnClick="@LaunchNotificationsAsync" />
             <FluentButton Class="header-button"
                           Id="@SettingsButtonId"
@@ -124,6 +135,8 @@
             LaunchHelpAsync="@LaunchHelpAsync"
             LaunchAIAgentsAsync="@LaunchAIAgentsAsync"
             IsAgentHelpEnabled="@(Options.CurrentValue.UI.DisableAgentHelp != true)"
+            IsTerminalDockEnabled="@IsTerminalDockEnabled"
+            ToggleTerminalDockAsync="@ToggleTerminalDockAsync"
             LaunchNotificationsAsync="@LaunchNotificationsAsync"
             LaunchSettingsAsync="@LaunchSettingsAsync" />
     }
@@ -147,6 +160,12 @@
     <DashboardDialogProvider/>
     <FluentTooltipProvider />
     <InteractionsProvider />
+    @if (IsTerminalDockEnabled)
+    {
+        @* Removing the dock cancels its selected-run subscription and shortcut. Returning to the live run starts a
+           new subscription rather than reusing the stream chosen for a previous selection. *@
+        <TerminalDock @key="RunSelection.SelectedRun.RunId" @ref="_terminalDock" />
+    }
     <ResourceServiceConnectionProvider />
     <div id="blazor-error-ui">
         @Loc[nameof(Layout.MainLayoutUnhandledErrorMessage)]

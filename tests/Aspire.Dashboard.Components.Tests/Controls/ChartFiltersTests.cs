@@ -92,6 +92,7 @@ public class ChartFiltersTests : DashboardTestContext
         Assert.Contains("aria-label=\"All tags\"", cut.Markup);
         Assert.NotNull(cut.Find(".dimension-popup-container"));
         Assert.All(cut.FindAll(".dimension-popup fluent-field"), field => Assert.Contains("aspire-checkbox", field.ClassList));
+        Assert.Equal("0", cut.Find(".dimension-overflow").GetAttribute("threshold"));
         var overflowItems = cut.FindAll(".dimension-overflow > div:not(.fluent-overflow-more)");
         Assert.Equal("ellipsis", overflowItems[0].GetAttribute("behavior"));
         Assert.Contains("dimension-overflow-ellipsis", overflowItems[0].ClassList);

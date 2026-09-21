@@ -55,6 +55,23 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerNetw
         _containerNetworkEndpointProvisioner = containerNetworkEndpointProvisioner;
     }
 
+    internal IReadOnlyList<ContainerVolume> PrepareContainerVolumes()
+    {
+        var volumeNames = _model.GetContainerResources()
+            .SelectMany(resource => resource.Annotations.OfType<ContainerMountAnnotation>())
+            .Where(mount => mount.Type == ContainerMountType.Volume && !string.IsNullOrEmpty(mount.Source))
+            .Select(mount => mount.Source!)
+            .Distinct(StringComparer.Ordinal);
+
+        var volumes = volumeNames
+            .Select(volumeName => ContainerVolume.Create(DcpNameGenerator.GetContainerVolumeName(volumeName), volumeName))
+            .ToArray();
+
+        _appResources.AddRange(volumes.Select(volume => new AppResource<ContainerVolume>(volume)));
+
+        return volumes;
+    }
+
     public IEnumerable<RenderedModelResource<Container>> PrepareObjects()
     {
         var modelContainerResources = _model.GetContainerResources().ToArray();

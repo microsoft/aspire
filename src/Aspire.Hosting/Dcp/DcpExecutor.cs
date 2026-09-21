@@ -146,6 +146,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         try
         {
             _containerNetworkEndpointProvisioner.PrepareContainerNetwork();
+            var containerVolumes = _containerCreator.PrepareContainerVolumes();
 
             using (var prepareServicesActivity = ProfilingTelemetry.StartDcpPrepareServices(_configuration))
             {
@@ -198,6 +199,18 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
 
             var createContainerNetworks = Task.Run(() => CreateAllDcpObjectsAsync<ContainerNetwork>(ct), ct);
 
+            var createContainerVolumes = Task.Run(async () =>
+            {
+                await CreateDcpObjectsAsync(containerVolumes, ct).ConfigureAwait(false);
+                var observedVolumes = await WaitForStateAsync(
+                    containerVolumes,
+                    volume => volume.Status?.State,
+                    [ContainerVolumeState.Ready],
+                    TimeSpan.FromMinutes(1),
+                    ct).ConfigureAwait(false);
+                EnsureContainerVolumesReady(observedVolumes);
+            }, ct);
+
             var createWorkloadEndpoints = Task.Run(async () =>
             {
                 await Task.WhenAll([getProxyAddresses, createContainerNetworks]).WaitAsync(ct).ConfigureAwait(false);
@@ -248,7 +261,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
 
             var createContainers = Task.Run(async () =>
             {
-                await createWorkloadEndpoints.ConfigureAwait(false);
+                await Task.WhenAll(createWorkloadEndpoints, createContainerVolumes).ConfigureAwait(false);
 
                 await CreateRenderedResourcesAsync(_containerCreator, containers, endpointContext, ct).ConfigureAwait(false);
             }, ct);
@@ -493,6 +506,23 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         {
             activity.SetDcpServiceAllocatedCount(initialServiceCount - stillPending.Count);
         }
+    }
+
+    internal static void EnsureContainerVolumesReady(IEnumerable<ContainerVolume> volumes)
+    {
+        var unreadyVolumes = volumes
+            .Where(volume => !string.Equals(volume.Status?.State, ContainerVolumeState.Ready, StringComparison.Ordinal))
+            .ToArray();
+        if (unreadyVolumes.Length == 0)
+        {
+            return;
+        }
+
+        var details = string.Join(
+            ", ",
+            unreadyVolumes.Select(volume =>
+                $"'{volume.Spec.Name ?? volume.Metadata.Name}': current state is '{volume.Status?.State ?? "(unknown)"}'"));
+        throw new DistributedApplicationException($"One or more container volumes did not become ready: {details}");
     }
 
     // Waits until each provided object reports a state that is in finalStates, or until timeout elapses.
@@ -949,6 +979,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
                 await _executorEvents.PublishAsync(new OnResourceChangedContext(
                     _shutdownCancellation.Token, resourceType, modelResource,
                     r.DcpResourceName, new ResourceStatus(null, null, null),
+                    PreviousState: null,
                     snapshotBuild)
                 ).ConfigureAwait(false);
             }
@@ -967,6 +998,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
                         cancellationToken, resourceType, modelResource,
                         r.DcpResource.Metadata.Name,
                         new ResourceStatus(KnownResourceStates.NotStarted, null, null),
+                        PreviousState: null,
                         s => s with
                         {
                             State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, null)
@@ -987,6 +1019,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
                         cancellationToken, resourceType, modelResource,
                         r.DcpResource.Metadata.Name,
                         new ResourceStatus(KnownResourceStates.NotStarted, null, null),
+                        PreviousState: null,
                         s => s with
                         {
                             State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, null)

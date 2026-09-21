@@ -209,6 +209,13 @@ internal sealed class DashboardServiceData : IDisposable
                         return new InteractionCompletionState { Complete = true, State = request.Notification.Result };
                     case WatchInteractionsRequestUpdate.KindOneofCase.PromptProgress:
                         return new InteractionCompletionState { Complete = true, State = request.PromptProgress.Result };
+                    case WatchInteractionsRequestUpdate.KindOneofCase.PromptTerminal:
+                        if (interaction.InteractionInfo is not Interaction.TerminalInteractionInfo terminal ||
+                            !string.Equals(terminal.TerminalId, request.PromptTerminal.TerminalId, StringComparison.Ordinal))
+                        {
+                            throw new InvalidOperationException("The terminal response must match the interaction's terminal.");
+                        }
+                        return new InteractionCompletionState { Complete = true, State = request.PromptTerminal.Result };
                     case WatchInteractionsRequestUpdate.KindOneofCase.InputsDialog:
                         var inputsInfo = (Interaction.InputsInteractionInfo)interaction.InteractionInfo;
                         var options = (InputsDialogInteractionOptions)interaction.Options;
@@ -388,4 +395,3 @@ internal enum ExecuteCommandResultType
     Failure,
     Canceled
 }
-

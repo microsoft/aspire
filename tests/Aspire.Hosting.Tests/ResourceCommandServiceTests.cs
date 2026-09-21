@@ -6,6 +6,7 @@ using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Tests;
 
@@ -1308,6 +1309,108 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.True(result.Success);
         Assert.NotNull(capturedArguments);
         Assert.Equal("#submit", capturedArguments.GetString("selector"));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task ExecuteCommandAsync_Arguments_IsolateInputStateAcrossInteractions(bool dismissFirst, bool cancelFirst)
+    {
+        using var builder = CreateBuilder();
+
+        // Exercise the real interaction lifecycle with prompting enabled, without starting a dashboard in the test.
+        builder.Services.AddSingleton<InteractionService>(services => new InteractionService(
+            services.GetRequiredService<ILogger<InteractionService>>(),
+            new DistributedApplicationOptions(),
+            services,
+            builder.Configuration,
+            services.GetRequiredService<IInteractionFileUploadStore>()));
+
+        var textDefinition = new InteractionInput
+        {
+            Name = "text",
+            InputType = InputType.Text
+        };
+        var messageDefinition = new InteractionInput
+        {
+            Name = "message",
+            InputType = InputType.Text,
+            Value = "default"
+        };
+        InteractionInputCollection? capturedArguments = null;
+        var executionCount = 0;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(
+            name: "mycommand",
+            displayName: "My command",
+            executeCommand: context =>
+            {
+                capturedArguments = context.Arguments;
+                executionCount++;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions { Arguments = [textDefinition, messageDefinition] });
+
+        await using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+        var interactionService = app.Services.GetRequiredService<InteractionService>();
+        InteractionInput? previousInput = null;
+
+        for (var invocation = 0; invocation < 2; invocation++)
+        {
+            capturedArguments = null;
+            using var cts = new CancellationTokenSource();
+            var resultTask = app.ResourceCommands.ExecuteCommandAsync(
+                "myResource",
+                "mycommand",
+                new ResourceCommandExecutionOptions { NonInteractive = false },
+                cts.Token);
+
+            var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+            var inputs = Assert.IsType<Interaction.InputsInteractionInfo>(interaction.InteractionInfo).Inputs;
+            var input = inputs["text"];
+            Assert.NotSame(textDefinition, input);
+            Assert.NotSame(previousInput, input);
+            Assert.False(input.Disabled);
+            Assert.Equal("default", inputs.GetString("message"));
+
+            input.Disabled = true;
+            inputs["message"].Value = $"invocation-{invocation}";
+            var canceled = invocation == 0 && (dismissFirst || cancelFirst);
+            if (invocation == 0 && cancelFirst)
+            {
+                cts.Cancel();
+            }
+            else
+            {
+                await interactionService.ProcessInteractionFromClientAsync(
+                    interaction.InteractionId,
+                    (_, _, _) => new InteractionCompletionState { Complete = true, State = canceled ? null : inputs },
+                    CancellationToken.None).DefaultTimeout();
+            }
+
+            var result = await resultTask.DefaultTimeout();
+            Assert.Equal(!canceled, result.Success);
+            Assert.Equal(canceled, result.Canceled);
+            if (canceled)
+            {
+                Assert.Null(capturedArguments);
+            }
+            else
+            {
+                Assert.NotNull(capturedArguments);
+                Assert.Same(input, capturedArguments["text"]);
+                Assert.Equal($"invocation-{invocation}", capturedArguments.GetString("message"));
+            }
+
+            Assert.Empty(interactionService.GetCurrentInteractions());
+            Assert.False(textDefinition.Disabled);
+            Assert.Equal("default", messageDefinition.Value);
+            previousInput = input;
+        }
+
+        Assert.Equal(dismissFirst || cancelFirst ? 1 : 2, executionCount);
     }
 
     [Fact]
