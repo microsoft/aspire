@@ -145,6 +145,8 @@
 }
 
 .terminal-container {
+    /* Use the medium brand purple rather than the brighter dark-theme control focus color. */
+    --terminal-focus-color: #7455dd;
     position: relative;
     isolation: isolate;
     width: 100%;
@@ -161,6 +163,11 @@
     inset: 0;
     z-index: 1;
     pointer-events: none;
+}
+
+.terminal-container:focus-within::after {
+    outline: var(--strokeWidthThick) solid var(--terminal-focus-color);
+    outline-offset: calc(-1 * var(--strokeWidthThick));
 }
 
 .terminal-container ::deep ::part(selection-highlight) {
@@ -202,7 +209,17 @@
     cursor: progress;
 }
 
+@media (prefers-contrast: more) {
+    .terminal-container {
+        --terminal-focus-color: var(--colorStrokeFocus1);
+    }
+}
+
 @media (forced-colors: active) {
+    .terminal-container {
+        --terminal-focus-color: Highlight;
+    }
+
     .terminal-container ::deep ::part(selection-highlight) {
         background: Highlight;
         forced-color-adjust: none;

@@ -179,6 +179,9 @@ take resize ownership. Public font-size limits are 8–32 pixels.
 Opening an interactive terminal or activating its view focuses its keyboard input
 once it is ready. Inactive dock panes do not take focus, and an asynchronous mount
 does not take focus back from a control the user selected while it was loading.
+The terminal's inset focus outline uses medium brand purple independently of
+textbox and button focus colors. Increased contrast restores the stronger control
+focus color, and forced-colors mode uses the system highlight color.
 Mouse clicks on the font stepper, Fit button, or a dimensions option return focus
 to terminal input; keyboard activation keeps focus on the control for repeated
 adjustments. Opening the dimensions picker keeps focus until an option is chosen.
