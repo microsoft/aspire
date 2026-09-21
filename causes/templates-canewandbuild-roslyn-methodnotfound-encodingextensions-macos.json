@@ -1,0 +1,20 @@
+{
+  "id": "templates-canewandbuild-roslyn-methodnotfound-encodingextensions-macos",
+  "type": "flaky-test",
+  "title": "Flaky: CanNewAndBuild(aspire-xunit, Net8) fails with Roslyn Method not found EncodingExtensions.TryGetMaxCharCount on macOS",
+  "test_name": "Aspire.Templates.Tests.XUnit_V3_NewUpAndBuildSupportProjectTemplatesTests.CanNewAndBuild(templateName: \"aspire-xunit\", extraTestCreationArgs: \"--xunit-version v3\", sdk: Net8, tfm: Net8, error: null)",
+  "job_name": "Tests / Package tests - macOS (class, Aspire.Templates.Tests, Templates-XUnit_V3_NewUpAndBuildSupportProj... / Templates-XUnit_V3_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+  "error_pattern": "Aspire.Templates.Tests.ToolCommandException :  Expected 0 exit code but got 1: dotnet build ... CSC : error CS1504: Source file '.../AssemblyAttributes.cs' could not be opened -- Method not found: 'Boolean Microsoft.CodeAnalysis.EncodingExtensions.TryGetMaxCharCount(System.Text.Encoding, Int64, Int32 ByRef)'.",
+  "analysis": "This is a Roslyn compiler 'Method not found' error surfacing during a generated template project's build on the macOS runner, indicating a binary version mismatch between the Roslyn compiler and Microsoft.CodeAnalysis assembly loaded on that machine image. This mirrors a previously observed sibling issue (HashAlgorithmToPal Method not found on macOS, issue #18950) which is a known environmental/SDK compatibility problem unrelated to any Aspire template or PR source changes. The PR under analysis (#20279) only modifies DCP executor/orchestrator files, not templates or Roslyn tooling.",
+  "failure_details": "Aspire.Templates.Tests.ToolCommandException :  Expected 0 exit code but got 1: /Users/runner/work/aspire/aspire/artifacts/bin/dotnet-8/dotnet build \"-bl:.../new_build_aspire_xunit_hbkgqzfj_ufj.AppHost-build.binlog\" /p:TreatWarningsAsErrors=true -c Debug /p:AspireUseCliBundle=false\nStandard Output:\n  Determining projects to restore...\n  All projects are up-to-date for restore.\nCSC : error CS1504: Source file '/private/var/folders/.../new_build_aspire_xunit_hbkgqzfj_ufj.AppHost/obj/Debug/net8.0/.NETCoreApp,Version=v8.0.AssemblyAttributes.cs' could not be opened -- Method not found: 'Boolean Microsoft.CodeAnalysis.EncodingExtensions.TryGetMaxCharCount(System.Text.Encoding, Int64, Int32 ByRef)'.\n\nStack Trace:\nat Aspire.Templates.Tests.CommandResult.EnsureExitCode(Int32 expectedExitCode, String messagePrefix, Boolean suppressOutput) in /_/tests/Shared/TemplatesTesting/CommandResult.cs:line 36\n   at Aspire.Templates.Tests.CommandResult.EnsureSuccessful(String messagePrefix, Boolean suppressOutput) in /_/tests/Shared/TemplatesTesting/CommandResult.cs:line 20\n   at Aspire.Templates.Tests.AspireProject.BuildAsync(String[] extraBuildArgs, CancellationToken token, String workingDirectory) in /_/tests/Shared/TemplatesTesting/AspireProject.cs:line 347\n   at Aspire.Templates.Tests.NewUpAndBuildSupportProjectTemplatesBase.CanNewAndBuildActual(String templateName, String extraTestCreationArgs, TestSdk sdk, TestTargetFramework tfm, String error) in /_/tests/Aspire.Templates.Tests/NewUpAndBuildSupportProjectTemplatesTests.cs:line 56",
+  "occurrences": [
+    {
+      "run_id": 35634736322,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35634736322",
+      "job": "Tests / Package tests - macOS (class, Aspire.Templates.Tests, Templates-XUnit_V3_NewUpAndBuildSupportProj... / Templates-XUnit_V3_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
+      "pr_number": 20279,
+      "observed_at": "2026-09-21T18:38:26Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20285"
+}

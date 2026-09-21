@@ -1,0 +1,20 @@
+{
+  "id": "mauibuildqueue-cancelqueuedresource-exceptiontype-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: MauiBuildQueueTests.CancelQueuedResource_CompletesGracefullyAndDoesNotAcquireSemaphore asserts exact exception type but sometimes gets TaskCanceledException instead of OperationCanceledException",
+  "test_name": "Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.CancelQueuedResource_CompletesGracefullyAndDoesNotAcquireSemaphore",
+  "job_name": "Tests / No-package tests (regular, Aspire.Hosting.Maui.Tests, Hosting.Maui, Hosting.Maui, tests/Aspire.Ho... / Hosting.Maui (windows-latest)",
+  "error_pattern": "Assert.IsType() Failure: Value is not the exact type\nExpected: typeof(System.OperationCanceledException)\nActual:   typeof(System.Threading.Tasks.TaskCanceledException)\n   at Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.CancelQueuedResource_CompletesGracefullyAndDoesNotAcquireSemaphore() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs:line 543",
+  "analysis": "TaskCanceledException is a subclass of OperationCanceledException, so which exact type surfaces depends on the non-deterministic timing/path of the cancellation (e.g. whether a Task.Delay or a manual CancellationToken.ThrowIfCancellationRequested triggers it). The test asserts an exact type match via Assert.IsType, making it sensitive to this race. The PR under analysis (#20279) only modifies DCP executor/orchestrator files and does not touch Maui build queue code, so this failure is unrelated to the PR changes.",
+  "failure_details": "Assert.IsType() Failure: Value is not the exact type\nExpected: typeof(System.OperationCanceledException)\nActual:   typeof(System.Threading.Tasks.TaskCanceledException)\n\nStack Trace:\nat Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.CancelQueuedResource_CompletesGracefullyAndDoesNotAcquireSemaphore() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs:line 543\n   at Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.CancelQueuedResource_CompletesGracefullyAndDoesNotAcquireSemaphore() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs:line 552\n--- End of stack trace from previous location ---",
+  "occurrences": [
+    {
+      "run_id": 35634736322,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35634736322",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Maui.Tests, Hosting.Maui, Hosting.Maui, tests/Aspire.Ho... / Hosting.Maui (windows-latest)",
+      "pr_number": 20279,
+      "observed_at": "2026-09-21T18:38:26Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20284"
+}
