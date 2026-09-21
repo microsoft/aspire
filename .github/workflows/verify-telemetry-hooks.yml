@@ -1,0 +1,31 @@
+name: Verify Telemetry Hooks
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/Aspire.Cli/Agents/Hooks/track-telemetry.sh'
+      - 'src/Aspire.Cli/Agents/Hooks/track-telemetry.ps1'
+      - 'src/Aspire.Cli/Agents/Hooks/telemetry-hooks.metadata.json'
+      - 'eng/scripts/verify-telemetry-hooks.ps1'
+      - 'eng/scripts/update-telemetry-hooks.ps1'
+      - 'eng/scripts/telemetry-hooks.common.ps1'
+      - '.github/workflows/verify-telemetry-hooks.yml'
+      - '.github/workflows/update-telemetry-hooks.yml'
+      - '.github/workflows/verify-telemetry-hook-changes.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'microsoft' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Verify canonical telemetry hook provenance
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./eng/scripts/verify-telemetry-hooks.ps1
