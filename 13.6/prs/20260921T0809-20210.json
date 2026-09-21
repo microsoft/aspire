@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "New feature: Firefox NSS certificate database support for CLI dev certs",
+  "mergedAt": "2026-09-21T08:09:33Z",
+  "number": 20210,
+  "runDate": "2026-09-21T12:06:13Z",
+  "status": "included",
+  "title": "Port Firefox NSS certificate support to the CLI"
+}
