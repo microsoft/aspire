@@ -1,0 +1,34 @@
+﻿{
+  "project": {
+    "model": "preserved",
+    "mcp": {
+      "other": {
+        "type": "local",
+        "command": [
+          "other-server"
+        ]
+      },
+      "aspire": {
+        "type": "local",
+        "command": [
+          "aspire",
+          "agent",
+          "mcp"
+        ],
+        "enabled": true
+      }
+    }
+  },
+  "user": {
+    "mcp": {
+      "aspire": {
+        "type": "local",
+        "command": [
+          "aspire",
+          "agent",
+          "mcp"
+        ]
+      }
+    }
+  }
+}

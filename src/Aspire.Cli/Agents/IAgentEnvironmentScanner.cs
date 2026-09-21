@@ -4,15 +4,15 @@
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Interface for scanning and detecting agent environments.
-/// Each scanner can detect one or more agent environments and add applicators to the context.
+/// Discovers one or more agent clients without changing their configuration.
 /// </summary>
 internal interface IAgentEnvironmentScanner
 {
     /// <summary>
-    /// Scans for agent environments and adds any detected applicators to the context.
+    /// Returns read-only evidence of the agent clients found in the scan context.
     /// </summary>
-    /// <param name="context">The scan context to add detected applicators to.</param>
+    /// <param name="context">The directories to scan.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
-    Task ScanAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken);
+    /// <returns>Read-only evidence of the detected agent clients.</returns>
+    Task<IReadOnlyList<AgentClientDetection>> ScanAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken);
 }

@@ -42,59 +42,9 @@
         <target state="new">The Aspire MCP tool name for a tool_invocation event</target>
         <note />
       </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_ArchiveHashVerificationFailed">
-        <source>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</source>
-        <target state="new">Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_GitHubUnavailable">
-        <source>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</source>
-        <target state="new">Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InvalidMetadata">
-        <source>Embedded Aspire skills bundle metadata is invalid: {0}</source>
-        <target state="new">Embedded Aspire skills bundle metadata is invalid: {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MetadataRepositoryMismatch">
-        <source>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</source>
-        <target state="new">Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataAssetName">
-        <source>Embedded Aspire skills metadata must specify a release asset name.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a release asset name.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataSha512">
-        <source>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</source>
-        <target state="new">Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataTag">
-        <source>Embedded Aspire skills metadata must specify a GitHub release tag.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a GitHub release tag.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataVersion">
-        <source>Embedded Aspire skills metadata must specify a version.</source>
-        <target state="new">Embedded Aspire skills metadata must specify a version.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ConfigUpdatesSelectPrompt">
-        <source>The following agent configurations use the deprecated 'mcp start' command. Update them?</source>
-        <target state="translated">Aşağıdaki aracı yapılandırmaları, kullanımdan kaldırılmış olan 'mcp start' komutunu kullanmaktadır. Güncellensin mi?</target>
-        <note />
-      </trans-unit>
       <trans-unit id="DeprecatedConfigFix">
-        <source>Run 'aspire agent init' to update configuration</source>
-        <target state="translated">Yapılandırmayı güncellemek için 'aspire agent init' komutunu çalıştırın.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DeprecatedConfigUpdate_Description">
-        <source>Update {0} config to use new 'agent mcp' command</source>
-        <target state="translated">{0} yapılandırmasını yeni 'agent mcp' komutunu kullanacak şekilde güncelleştirin</target>
+        <source>Run 'aspire agent init --mcp' and select the affected clients to update configuration</source>
+        <target state="needs-review-translation">Yapılandırmayı güncellemek için 'aspire agent init' komutunu çalıştırın.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeprecatedConfigWarning">
@@ -107,18 +57,13 @@
         <target state="needs-review-translation">AI detekli aracı entegrasyonlarınızı yönetin.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_ConfigureMcpServer">
-        <source>Install Aspire MCP server</source>
-        <target state="new">Install Aspire MCP server</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServerPrompt">
-        <source>Configure the Aspire MCP server for detected agent environments?</source>
-        <target state="new">Configure the Aspire MCP server for detected agent environments?</target>
+        <source>Configure the Aspire MCP server for the selected clients?</source>
+        <target state="new">Configure the Aspire MCP server for the selected clients?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">
-        <source>Initialize agent environment configuration for detected agents</source>
+        <source>Configure independent assets for selected agent clients at project and user level</source>
         <target state="needs-review-translation">Tespit edilen aracılar için aracı ortam yapılandırmasını başlatın.</target>
         <note />
       </trans-unit>
@@ -132,24 +77,9 @@
         <target state="new">Installed Playwright CLI.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_InstalledSkillsSummary">
-        <source>Installed Aspire agent skills:</source>
-        <target state="new">Installed Aspire agent skills:</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_InstalledSkillsSummaryLocations">
-        <source>Locations: {0}</source>
-        <target state="new">Locations: {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_InstalledSkillsSummarySkills">
-        <source>Skills: {0}</source>
-        <target state="new">Skills: {0}</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_McpOptionDescription">
-        <source>Configure the Aspire MCP server for detected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</source>
-        <target state="new">Configure the Aspire MCP server for detected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</target>
+        <source>Configure the Aspire MCP server for selected clients (y/n or true/false; default: no)</source>
+        <target state="new">Configure the Aspire MCP server for selected clients (y/n or true/false; default: no)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
@@ -157,49 +87,9 @@
         <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_SkillLocationsOptionDescription">
-        <source>Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'</source>
-        <target state="new">Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_SkillsOptionDescription">
-        <source>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</source>
-        <target state="new">Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">
-        <source>Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</source>
-        <target state="new">Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_TelemetryHookSkippedUnexpectedShape">
-        <source>Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</source>
-        <target state="new">Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_TelemetryHookWriteFailed">
-        <source>Skipped the telemetry hook for {0} because its configuration could not be written.</source>
-        <target state="new">Skipped the telemetry hook for {0} because its configuration could not be written.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_TelemetryHooksInstalled">
-        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
-        <target state="new">Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
         <source>Path to the workspace root directory</source>
         <target state="new">Path to the workspace root directory</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InstallingStatus">
-        <source>Installing Aspire skills...</source>
-        <target state="new">Installing Aspire skills...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InvalidBundle">
-        <source>The Aspire skills bundle is invalid: {0}</source>
-        <target state="new">The Aspire skills bundle is invalid: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToDownload">
@@ -247,99 +137,14 @@
         <target state="new">Provenance verification failed for {0}: {1}</target>
         <note />
       </trans-unit>
-      <trans-unit id="SkillDescription_Aspire">
-        <source>Aspire CLI commands and workflows for distributed apps</source>
-        <target state="new">Aspire CLI commands and workflows for distributed apps</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_AspireDeployment">
-        <source>Aspire deployment target selection, preflight, publish, and deploy workflows</source>
-        <target state="new">Aspire deployment target selection, preflight, publish, and deploy workflows</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_Aspireify">
-        <source>One-time setup: wire up AppHost with discovered projects</source>
-        <target state="new">One-time setup: wire up AppHost with discovered projects</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_DotnetInspect">
-        <source>Query .NET API surfaces across NuGet packages and platform libraries</source>
-        <target state="new">Query .NET API surfaces across NuGet packages and platform libraries</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SkillDescription_PlaywrightCli">
         <source>Browser automation and functional testing</source>
         <target state="new">Browser automation and functional testing</target>
         <note />
       </trans-unit>
-      <trans-unit id="SkillLocation_ClaudeCodeDescription">
-        <source>Required for Claude Code</source>
-        <target state="new">Required for Claude Code</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillLocation_ClaudeCodeName">
-        <source>Claude Code (.claude/skills/)</source>
-        <target state="new">Claude Code (.claude/skills/)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillLocation_GitHubSkillsDescription">
-        <source>Legacy location for GitHub Copilot skills</source>
-        <target state="new">Legacy location for GitHub Copilot skills</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillLocation_GitHubSkillsName">
-        <source>VS Code / GitHub Copilot (.github/skills/)</source>
-        <target state="new">VS Code / GitHub Copilot (.github/skills/)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillLocation_OpenCodeDescription">
-        <source>Legacy location for OpenCode skills</source>
-        <target state="new">Legacy location for OpenCode skills</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillLocation_OpenCodeName">
-        <source>OpenCode (.opencode/skill/)</source>
-        <target state="new">OpenCode (.opencode/skill/)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillLocation_StandardDescription">
-        <source>Supported by VS Code, GitHub Copilot, and OpenCode (also installs at ~/)</source>
-        <target state="new">Supported by VS Code, GitHub Copilot, and OpenCode (also installs at ~/)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillLocation_StandardName">
-        <source>Standard (.agents/skills/)</source>
-        <target state="new">Standard (.agents/skills/)</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_SelectSkillLocations">
-        <source>Where should skill files be installed?</source>
-        <target state="new">Where should skill files be installed?</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_SelectSkills">
-        <source>Which skills should be installed?</source>
-        <target state="new">Which skills should be installed?</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="MalformedConfigFileError">
-        <source>The configuration file '{0}' contains malformed JSON. Please fix the file manually and re-run the command.</source>
-        <target state="translated">'{0}' yapılandırma dosyası hatalı biçimlendirilmiş JSON içeriyor. Lütfen dosyayı el ile düzeltin ve komutu yeniden çalıştırın.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="McpCommand_Description">
         <source>Start the MCP (Model Context Protocol) server</source>
         <target state="needs-review-translation">MCP (Model Bağlam Protokolü) sunucusunu başlat.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkipNoneDescription">
-        <source>None — skip</source>
-        <target state="new">None — skip</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkippedMalformedConfigFile">
-        <source>Skipping update of '{0}'.</source>
-        <target state="translated">'{0}' güncelleştirmesi atlanıyor.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigurationCompletedWithErrors">

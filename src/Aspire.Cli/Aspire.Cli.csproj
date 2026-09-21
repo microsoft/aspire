@@ -215,6 +215,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Update="Resources\AgentConfigurationStrings.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>AgentConfigurationStrings.resx</DependentUpon>
+    </Compile>
+    <Compile Update="Resources\AgentInitStrings.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>AgentInitStrings.resx</DependentUpon>
+    </Compile>
+    <Compile Update="Resources\AgentSkillInstallerStrings.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>AgentSkillInstallerStrings.resx</DependentUpon>
+    </Compile>
     <Compile Update="Resources\InteractionServiceStrings.Designer.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
@@ -318,17 +333,11 @@
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-32.png" Link="Mcp\Resources\aspire-32.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-48.png" Link="Mcp\Resources\aspire-48.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-64.png" Link="Mcp\Resources\aspire-64.png" />
-    <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills-v0.0.2.tgz" LogicalName="aspire-skills.bundle.tgz">
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills.metadata.json" LogicalName="aspire-skills.metadata.json">
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
     <EmbeddedResource Include="Agents\Hooks\telemetry-hooks.metadata.json" LogicalName="telemetry-hooks.metadata.json">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
     <!-- Agent PostToolUse telemetry hook scripts. Materialized to ~/.aspire/hooks/ by
-         TelemetryHookInstaller and registered into each detected agent client's user-level
+         TelemetryHookInstaller and registered into each selected agent client's user-level
          config during `aspire agent init`. -->
     <EmbeddedResource Include="Agents\Hooks\track-telemetry.sh" LogicalName="track-telemetry.sh">
       <WithCulture>false</WithCulture>
@@ -340,6 +349,27 @@
 
 
   <ItemGroup>
+    <EmbeddedResource Update="Resources\AgentConfigurationStrings.resx">
+      <XlfSourceFormat>Resx</XlfSourceFormat>
+      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
+      <SubType>Designer</SubType>
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>AgentConfigurationStrings.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Resources\AgentInitStrings.resx">
+      <XlfSourceFormat>Resx</XlfSourceFormat>
+      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
+      <SubType>Designer</SubType>
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>AgentInitStrings.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Resources\AgentSkillInstallerStrings.resx">
+      <XlfSourceFormat>Resx</XlfSourceFormat>
+      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
+      <SubType>Designer</SubType>
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>AgentSkillInstallerStrings.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
     <EmbeddedResource Update="Resources\InteractionServiceStrings.resx">
       <XlfSourceFormat>Resx</XlfSourceFormat>
       <XlfOutputItem>EmbeddedResource</XlfOutputItem>

@@ -8,8 +8,10 @@ Options:
   --language <language>                                                  The programming language for the AppHost (csharp, typescript)
   --file-based                                                           Create apphost.cs in the current directory, skipping .NET solution discovery. Requires C#.
   --suppress-agent-init                                                  Suppress AI agent environment configuration after project creation
-  --skill-locations <skill-locations>                                    Comma-separated list of skill locations to install (e.g. standard,claudecode,github,opencode), 'all', or 'none'
-  --skills <skills>                                                      Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include playwright-cli,dotnet-inspect. Use 'all' or 'none'
+  --playwright <false|n|true|y>                                          Install Playwright CLI and its skills for the selected clients (y/n or true/false; default: no)
+  --dotnet-inspect <false|n|true|y>                                      Install the dotnet-inspect bootstrap skill for the selected clients (y/n or true/false; default: no)
+  --aspire-skills <false|n|true|y>                                       Register native Aspire skills and supported canvases for the selected clients (y/n or true/false; default: yes)
+  --clients <clients>                                                    Comma-separated clients (copilot-cli,copilot-app,vscode,claude-code,opencode), 'all', or 'none'. Defaults to detected clients
   -?, -h, --help                                                         Show help and usage information
   -l, --log-level <Critical|Debug|Error|Information|None|Trace|Warning>  Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)
   --non-interactive                                                      Run the command in non-interactive mode, disabling all interactive prompts and spinners

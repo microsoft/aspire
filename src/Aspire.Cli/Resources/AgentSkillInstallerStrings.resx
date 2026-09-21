@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="PlaywrightInstallationFailed" xml:space="preserve">
+    <value>Failed to install Playwright CLI or generate its skill files: {0}</value>
+  </data>
+  <data name="PlaywrightLinkedSkillEntry" xml:space="preserve">
+    <value>The generated Playwright CLI skill contains a symbolic link: {0}</value>
+  </data>
+  <data name="PlaywrightMissingSkill" xml:space="preserve">
+    <value>Playwright CLI reported success, but did not generate a non-empty SKILL.md.</value>
+  </data>
+  <data name="PlaywrightNpmRequired" xml:space="preserve">
+    <value>Playwright CLI requires npm, which was not found on PATH. Install npm and run agent init again.</value>
+  </data>
+  <data name="SkillTargetUnresolved" xml:space="preserve">
+    <value>The skill directory could not be resolved. Check for inaccessible paths or broken symbolic links.</value>
+  </data>
+  <data name="SkillFileOutsideTarget" xml:space="preserve">
+    <value>The skill file resolves outside the selected skill directory: {0}</value>
+  </data>
+</root>
