@@ -26,7 +26,7 @@
           suppression attribute files, so suppress IL2026 globally here (including other IL2026 reports)
           until persistent services support source-generated metadata:
           https://github.com/dotnet/aspnetcore/issues/69325. -->
-        <NoWarn>$(NoWarn);IL2026</NoWarn>
+        <!-- <NoWarn>$(NoWarn);IL2026</NoWarn> -->
     <!-- Keep detailed diagnostics for Dashboard and dependencies not explicitly grouped below. -->
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
     <!-- Only the opted-in dependency assemblies produce these summary diagnostics. -->
