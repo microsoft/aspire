@@ -145,8 +145,9 @@
 }
 
 .terminal-container {
-    /* Use muted neutrals to keep the large focus outline from competing with terminal content. */
-    --terminal-focus-color: color-mix(in srgb, var(--colorNeutralForeground3) 60%, var(--colorNeutralStroke1));
+    /* Tint a muted neutral base with brand purple without competing with terminal content. */
+    --terminal-focus-neutral-color: color-mix(in srgb, var(--colorNeutralForeground3) 60%, var(--colorNeutralStroke1));
+    --terminal-focus-color: color-mix(in srgb, #7455dd 25%, var(--terminal-focus-neutral-color));
     position: relative;
     isolation: isolate;
     width: 100%;
