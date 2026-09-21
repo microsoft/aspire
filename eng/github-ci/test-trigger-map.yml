@@ -346,10 +346,11 @@ path_rules:
   - paths:
       - eng/scripts/download-native-archives.ps1
       - eng/scripts/stage-native-cli-tool-packages.ps1
+      - eng/scripts/test-macos-dashboard-signatures.ps1
       - eng/scripts/validate-npm-package-signatures.ps1
       - eng/scripts/validate-npm-release-aliases.ps1
     targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests/PowerShellScripts validates these CLI-archive/npm packaging scripts (DownloadNativeArchivesTests, StageNativeCliToolPackagesTests, ValidateNpmPackageSignaturesTests, ValidateNpmReleaseAliasesTests; ReleasePublishNugetPipelineTests reads validate-npm-release-aliases.ps1); the build jobs that run them are unconditional needs, so the unit verifier is the trigger that must fire
+    reason: Infrastructure.Tests validates these native archive, signing, and npm packaging scripts; the build jobs that run them are unconditional needs, so the unit verifier is the trigger that must fire
   - paths:
       - eng/scripts/aspire-skills-bundle.common.ps1
       - eng/test-retry-patterns.json

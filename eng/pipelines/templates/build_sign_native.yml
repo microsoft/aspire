@@ -300,6 +300,10 @@ jobs:
                   $executable = Join-Path $extractDirectory 'Aspire.Dashboard'
                 }
 
+                if ('${{ parameters.agentOs }}' -eq 'macos' -and '$(_SignType)' -eq 'real') {
+                  & "$(Build.SourcesDirectory)/eng/scripts/test-macos-dashboard-signatures.ps1" -DashboardPath $executable
+                }
+
                 & "$(Build.SourcesDirectory)/eng/scripts/test-native-dashboard.ps1" -DashboardPath $executable
               }
               finally {

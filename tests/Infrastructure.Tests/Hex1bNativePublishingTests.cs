@@ -230,6 +230,17 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     }
 
     [Fact]
+    public void MacOSDashboardSigningIncludesNativeLibraries()
+    {
+        var signingProps = XDocument.Load(Path.Combine(RepoRoot.Path, "eng", "Signing.props"));
+        var dashboardNativeLibraries = Assert.Single(
+            signingProps.Descendants("ItemsToSign"),
+            item => (string?)item.Attribute("Include") == "$(ArtifactsBinDir)Aspire.Dashboard/**/publish/*.dylib");
+
+        Assert.Equal("$([System.OperatingSystem]::IsMacOS())", (string?)dashboardNativeLibraries.Attribute("Condition"));
+    }
+
+    [Fact]
     public async Task MacOSDashboardDebugSymbolsAreRemovedBeforeSigning()
     {
         var pipeline = await File.ReadAllTextAsync(Path.Combine(
@@ -247,6 +258,19 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         Assert.Contains("Aspire.Dashboard.dSYM", pipeline[(removeSymbolsIndex - 500)..removeSymbolsIndex]);
         Assert.Contains("Remove-Item", pipeline[(removeSymbolsIndex - 500)..removeSymbolsIndex]);
         Assert.Contains("eq(parameters.agentOs, 'macos')", pipeline[(removeSymbolsIndex - 500)..removeSymbolsIndex]);
+    }
+
+    [Fact]
+    public async Task MacOSDashboardPackageValidatesNativeLibrarySignaturesBeforeSmokeTest()
+    {
+        var pipeline = await File.ReadAllTextAsync(Path.Combine(
+            RepoRoot.Path, "eng", "pipelines", "templates", "build_sign_native.yml"));
+
+        var signatureValidationIndex = pipeline.IndexOf("test-macos-dashboard-signatures.ps1", StringComparison.Ordinal);
+        var smokeTestIndex = pipeline.IndexOf("test-native-dashboard.ps1", StringComparison.Ordinal);
+
+        Assert.True(signatureValidationIndex >= 0);
+        Assert.True(signatureValidationIndex < smokeTestIndex);
     }
 
     private string CreatePublishProject(string rid, bool singleFile, bool duplicateUnrelatedAsset)

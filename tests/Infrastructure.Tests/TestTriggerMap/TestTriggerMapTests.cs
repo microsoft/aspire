@@ -464,6 +464,10 @@ public sealed class TestTriggerMapTests
             ["test:Infrastructure.Tests"]
         },
         {
+            "eng/scripts/test-macos-dashboard-signatures.ps1",
+            ["test:Infrastructure.Tests"]
+        },
+        {
             "eng/scripts/smoke-installed-cli.ps1",
             ["job:winget-installer"]
         },
