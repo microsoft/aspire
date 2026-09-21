@@ -143,6 +143,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(NotFound))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Pages.Resources))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(StructuredLogs))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(TerminalWindow))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(TraceDetail))]
     [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Traces))]
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "AddRazorComponents and AddInteractiveServerComponents still warn that Blazor does not support trimming. Routed components and MainLayout are explicitly preserved, and circuit serialization uses generated Dashboard and Fluent UI contexts. Remove when Blazor supports trimming: https://aka.ms/aspnet/nativeaot.")]
