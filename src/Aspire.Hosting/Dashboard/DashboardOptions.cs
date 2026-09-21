@@ -10,6 +10,7 @@ namespace Aspire.Hosting.Dashboard;
 internal class DashboardOptions
 {
     public string? DashboardPath { get; set; }
+    public bool UseManagedDashboard { get; set; } = true;
     public string? DashboardUrl { get; set; }
     public string? DashboardToken { get; set; }
     public string? OtlpGrpcEndpointUrl { get; set; }
@@ -36,6 +37,7 @@ internal class ConfigureDefaultDashboardOptions(IConfiguration configuration, IO
     public void Configure(DashboardOptions options)
     {
         options.DashboardPath = dcpOptions.Value.DashboardPath;
+        options.UseManagedDashboard = !bool.TryParse(configuration["AppHost:UseManagedDashboard"], out var useManagedDashboard) || useManagedDashboard;
         options.DashboardUrl = configuration[KnownAspNetCoreConfigNames.Urls];
         options.DashboardToken = configuration["AppHost:BrowserToken"];
 
