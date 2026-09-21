@@ -49,6 +49,7 @@
 *.hs text=auto
 *.json text=auto
 src/Components/**/ConfigurationSchema.json text eol=lf
+src/Aspire.Cli/Agents/Hooks/telemetry-hooks.metadata.json text eol=lf
 
 *.csproj text=auto
 *.vbproj text=auto
