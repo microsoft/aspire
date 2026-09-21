@@ -183,6 +183,30 @@ var result = await interactions.PromptTerminalAsync(
   controls, no duplicate title bar or launch button, and a wider viewport than
   ordinary input dialogs. It uses the PathBase-aware AppHost terminal endpoint.
 
+## Dashboard token throughput diagnostics
+
+With `Aspire.Dashboard.Terminal.TerminalWebSocketProxy` logging enabled at
+`Information`, each browser connection adds a workload filter to its dashboard
+terminal mirror. `Terminal token throughput` logs are emitted every five seconds
+(including idle intervals), plus a final partial interval when the view closes.
+Each sample includes output tokens/second, batches/second, largest batch,
+longest gap between output callbacks, time since the last output callback, input
+token count, and cumulative output token count. Rates use the actual sampling
+interval, so a delayed timer does not inflate throughput.
+
+The connection ID also appears in the HMP client's display name, allowing these
+samples to be correlated with TerminalHost's consumer connection logs. Both UDS
+resource terminals and gRPC AppHost terminals are instrumented. Set the category
+to `Warning` to omit the filter entirely for newly connected views.
+
+The filter counts parsed tokens before application, not bytes, characters or
+rendered frames. It does not log terminal content. Callback gaps include idle
+time, parsing, processing, lock contention and scheduling; **they are not
+tokenization or token-application CPU timings**. Sampling runs separately from
+the output pump, and the filter neither adds a presentation filter nor transforms
+tokens. Compare identical workloads and terminal dimensions when comparing JIT
+and NativeAOT runs. Falling token rates alone do not prove a growing UDS backlog.
+
 ## Process topology
 
 ```text

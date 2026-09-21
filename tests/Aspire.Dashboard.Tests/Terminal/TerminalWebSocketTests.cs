@@ -8,12 +8,43 @@ using System.Text.Json;
 using Aspire.Dashboard.Tests.Shared;
 using Grpc.Core;
 using Hex1b.Input;
+using Microsoft.Extensions.Logging.Testing;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Terminal;
 
 public class TerminalWebSocketTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BrowserView_LogsTokenThroughputOnDisconnect(bool useGrpc)
+    {
+        var sink = new TestSink();
+        var finalSample = new TaskCompletionSource<WriteContext>(TaskCreationOptions.RunContinuationsAsynchronously);
+        sink.MessageLogged += context =>
+        {
+            if (LogTestHelpers.GetValue(context, "IsFinal") is true)
+            {
+                finalSample.TrySetResult(context);
+            }
+        };
+        await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc, testSink: sink);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        using var browser = await host.ConnectBrowserAsync(timeout.Token);
+        var initial = await ReadUntilAsync(browser, _ => true, timeout.Token);
+        var initialBytes = initial.GetProperty("stats").GetProperty("workloadBytes").GetInt64();
+        host.Workload.Write("throughput-marker");
+        await ReadUntilAsync(browser, frame => frame.GetProperty("stats").GetProperty("workloadBytes").GetInt64() > initialBytes, timeout.Token);
+        await browser.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", timeout.Token);
+
+        var sample = await finalSample.Task.WaitAsync(timeout.Token);
+        Assert.NotEmpty(Assert.IsType<string>(LogTestHelpers.GetValue(sample, "ConnectionId")));
+        Assert.True(Assert.IsType<long>(LogTestHelpers.GetValue(sample, "TotalTokens")) > 0);
+        Assert.True(Assert.IsType<double>(LogTestHelpers.GetValue(sample, "Seconds")) > 0);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
