@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
 using Aspire.TestUtilities;
@@ -390,6 +391,32 @@ public class AtsPythonCodeGeneratorTests
     public Task GeneratedNullableReturns_PreserveJsonNullOnWindows()
         => GeneratedNullableReturns_PreserveJsonNull("python");
 
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedCode_PreservesUnicodeWithLegacyStdinEncodingOnUnix()
+        => GeneratedCode_PreservesUnicodeWithLegacyStdinEncoding("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedCode_PreservesUnicodeWithLegacyStdinEncodingOnWindows()
+        => GeneratedCode_PreservesUnicodeWithLegacyStdinEncoding("python");
+
+    private Task GeneratedCode_PreservesUnicodeWithLegacyStdinEncoding(string pythonExecutable)
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
+        return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import sys
+            import aspire_app
+
+            assert sys.stdin.encoding == "cp1252"
+            assert aspire_app.TestConfigs.UnicodeGreeting == "\u4f60\u597d\u3053\u3093\u306b\u3061\u306f"
+            """,
+            standardIoEncoding: "cp1252:surrogateescape");
+    }
+
     private Task GeneratedNullableReturns_PreserveJsonNull(string pythonExecutable)
     {
         var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
@@ -543,16 +570,21 @@ public class AtsPythonCodeGeneratorTests
             """);
     }
 
-    private static async Task ExecuteGeneratedPythonAsync(string pythonExecutable, string module, string script)
+    private static async Task ExecuteGeneratedPythonAsync(string pythonExecutable, string module, string script, string? standardIoEncoding = null)
     {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo(pythonExecutable)
         {
             RedirectStandardInput = true,
+            StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             RedirectStandardError = true,
             RedirectStandardOutput = true,
             UseShellExecute = false
         };
+        if (standardIoEncoding is not null)
+        {
+            process.StartInfo.Environment["PYTHONIOENCODING"] = standardIoEncoding;
+        }
         process.StartInfo.ArgumentList.Add("-c");
         process.StartInfo.ArgumentList.Add(
             """
@@ -561,7 +593,8 @@ public class AtsPythonCodeGeneratorTests
 
             module = types.ModuleType("aspire_app")
             sys.modules["aspire_app"] = module
-            exec(compile(sys.stdin.read(), "aspire_app.py", "exec"), module.__dict__)
+            # Compile source bytes as UTF-8, independent of the platform's stdin text encoding.
+            exec(compile(sys.stdin.buffer.read(), "aspire_app.py", "exec"), module.__dict__)
 
             """ + Environment.NewLine + script);
         process.Start();
