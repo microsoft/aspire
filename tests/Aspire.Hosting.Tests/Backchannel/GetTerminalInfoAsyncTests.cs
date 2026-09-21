@@ -4,7 +4,6 @@
 using System.Net.Sockets;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Diagnostics;
-using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.TerminalHost;
 using Microsoft.AspNetCore.InternalTesting;
