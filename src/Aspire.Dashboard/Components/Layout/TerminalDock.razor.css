@@ -1,5 +1,5 @@
 /* The dock is fixed to the viewport bottom and taken out of layout flow so collapsing it cannot reflow the page.
-   Collapsing translates it fully off-screen instead of hiding it: the element keeps its box dimensions, so xterm's
+   Collapsing translates it fully off-screen instead of hiding it: the element keeps its box dimensions, so the terminal's
    measured cell metrics and column count stay valid and reopening does not need a re-fit or a repaint. */
 .terminal-dock {
     position: fixed;
@@ -11,32 +11,10 @@
     flex-direction: column;
     box-sizing: border-box;
     max-height: 100vh;
-    background-color: #0d1117;
+    background-color: var(--colorNeutralBackground1);
     transition: transform 120ms ease-out;
     --fluent-multi-splitter-bar-size: 5px;
     --fluent-multi-splitter-background-color: var(--colorNeutralStroke2);
-    /* The dock stays dark in both dashboard themes. Pin the Fluent tokens its buttons and icons
-       consume so a light dashboard theme cannot paint dark icons or light controls on the tabstrip. */
-    --colorNeutralForeground1: #c9d1d9;
-    --colorNeutralForeground1Hover: #f0f6fc;
-    --colorNeutralForeground1Pressed: #8b949e;
-    --colorNeutralForeground2: #c9d1d9;
-    --colorNeutralForeground2Hover: #f0f6fc;
-    --colorNeutralForeground2Pressed: #8b949e;
-    --colorNeutralForeground2BrandHover: #58a6ff;
-    --colorNeutralForeground2BrandPressed: #58a6ff;
-    --colorNeutralForeground3: #8b949e;
-    --colorTransparentBackground: transparent;
-    --colorTransparentBackgroundPressed: #30363d;
-    --colorNeutralBackground1: #21262d;
-    --colorNeutralBackground1Hover: #30363d;
-    --colorNeutralBackground1Pressed: #282e33;
-    --colorNeutralBackground2: #21262d;
-    --colorNeutralBackground3: #30363d;
-    --colorNeutralStroke1: #30363d;
-    /* Fluent's purple focus ring is close to unreadable on #0d1117; reuse the dock's own accent instead. */
-    --colorBrandStroke1: #58a6ff;
-    --colorStrokeFocus2: #58a6ff;
 }
 
 .terminal-dock.visible {
@@ -53,7 +31,7 @@
     align-items: center;
     gap: 2px;
     padding: 2px 4px;
-    background-color: #161b22;
+    background-color: var(--colorNeutralBackground2);
     border-top: 1px solid var(--colorNeutralStroke1);
     border-bottom: 1px solid var(--colorNeutralStroke1);
     flex: 0 0 auto;
@@ -111,7 +89,7 @@
     inset: 0;
 }
 
-/* visibility, not display: an inactive pane must keep real dimensions or xterm refits itself to zero columns. */
+/* visibility, not display: an inactive pane must keep real dimensions or the terminal refits itself to zero columns. */
 .terminal-dock-pane.inactive {
     visibility: hidden;
 }
@@ -121,7 +99,7 @@
     inset: 0;
     display: flex;
     container: terminal-dock-panel / size;
-    background-color: #0d1117;
+    background-color: var(--colorNeutralBackground1);
     overflow: auto;
 }
 
@@ -137,14 +115,14 @@
     margin: auto;
     padding: 24px;
     text-align: center;
-    color: #8b949e;
+    color: var(--colorNeutralForeground2);
     font-size: 12px;
     line-height: 1.5;
 }
 
 .terminal-dock-panel-heading {
     margin: 0;
-    color: #c9d1d9;
+    color: var(--colorNeutralForeground1);
     font-size: 14px;
     line-height: 1.5;
     font-weight: 600;
@@ -158,8 +136,7 @@
 }
 
 .terminal-dock-panel-hint {
-    /* Dimmer than the body copy, but not below the 4.5:1 AA floor against #0d1117 (#6e7681 measured 4.12:1). */
-    color: #7d8590;
+    color: var(--colorNeutralForeground2);
 }
 
 /* Respond to the dock's available space, not just the browser viewport. Keep the heading,
@@ -209,7 +186,7 @@
     justify-content: center;
     gap: 12px;
     height: 100%;
-    color: #8b949e;
+    color: var(--colorNeutralForeground2);
     font-size: 13px;
 }
 

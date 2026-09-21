@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const dashboard = new URL("../../../src/Aspire.Dashboard/", import.meta.url);
 const assets = new URL("wwwroot/js/hex1b-web-terminal/", dashboard);
-const { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE } = await import(new URL("dist/index.min.js", assets));
+const { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE, defaultDarkPalette, defaultLightPalette } = await import(new URL("dist/index.min.js", assets));
 const source = await readFile(new URL("Components/Controls/TerminalView.razor.js", dashboard), "utf8");
 // Remap the public browser asset import to its checked-in location for Node,
 // without changing the adapter implementation under test.
@@ -56,7 +56,7 @@ beforeEach(() => {
     setGlobal("document", {
         activeElement: null,
         body: { append() {} },
-        documentElement: {},
+        documentElement: { dataset: { theme: "dark" } },
         createElement: tag => tag === "canvas"
             ? { getContext: () => ({ fillStyle: "" }) }
             : { style: {}, remove() {} },
@@ -121,6 +121,8 @@ beforeEach(() => {
             sizing: { ...options.sizing },
             readOnly: options.readOnly,
             readOnlyCalls: [],
+            colorMode: options.colorMode,
+            colorModeCalls: [],
             scrollbar: options.scrollbar,
             scrollbarCalls: [],
             sizingCalls: [],
@@ -145,6 +147,10 @@ beforeEach(() => {
             setScrollbar(scrollbar) {
                 this.scrollbar = scrollbar;
                 this.scrollbarCalls.push(scrollbar);
+            },
+            setColorMode(colorMode) {
+                this.colorMode = colorMode;
+                this.colorModeCalls.push(colorMode);
             },
             focus() { this.focusCalls++; document.activeElement = this.element; },
             clearSelection() {
@@ -232,11 +238,12 @@ function selectionEvent(attempt, overrides = {}) {
 }
 
 function mount({ visible = true, dotNetRef, options = {} } = {}) {
+    const view = { style: { setProperty(name, value) { this[name] = value; } } };
     const element = Object.assign(new EventTarget(), {
         clientWidth: visible ? 800 : 0,
         clientHeight: visible ? 600 : 0,
         contains: value => value === element || value?.parentElement === element,
-        closest: () => null,
+        closest: selector => selector === ".terminal-view" ? view : null,
     });
     const controls = [];
     const template = { firstElementChild: { cloneNode() {
@@ -262,7 +269,7 @@ function mount({ visible = true, dotNetRef, options = {} } = {}) {
         } },
         { label: "Localized terminal input", ...options, viewId }, template, footer);
     ids.push(id);
-    return { id, element, controls, footer, footerControls, viewId };
+    return { id, element, view, controls, footer, footerControls, viewId };
 }
 
 async function settle() {
@@ -363,8 +370,23 @@ for (const [name, ranges, text, visible] of [
     });
 }
 
-test("theme and contrast changes replace the complete overlay configuration without reconnecting", async () => {
-    const { id } = mount();
+for (const [theme, palette] of [["light", defaultLightPalette], ["dark", defaultDarkPalette]]) {
+    test(`terminal mounts with the built-in ${theme} palette selected by Dashboard`, async () => {
+        document.documentElement.dataset.theme = theme;
+        const { view } = mount();
+        const attempt = attempts[0];
+        assert.equal(attempt.options.colorMode, theme);
+        assert.equal(attempt.options.lightModePalette, undefined, "Use Hex1b's built-in palette");
+        assert.equal(attempt.options.darkModePalette, undefined, "Use Hex1b's built-in palette");
+        assert.equal(view.style["--terminal-background"], palette.background);
+        attempt.resolve();
+        await settle();
+        assert.equal(attempt.client.colorMode, theme);
+    });
+}
+
+test("theme and contrast changes update palettes and replace the complete overlay without reconnecting", async () => {
+    const { id, view } = mount();
     const attempt = attempts[0];
     const initial = attempt.options.scrollbar;
     assert.equal(initial.placement, "overlay");
@@ -374,10 +396,22 @@ test("theme and contrast changes replace the complete overlay configuration with
     assert.deepEqual(themeObservers[0].options, { attributes: true, attributeFilter: ["data-theme"] });
 
     // Include a theme change before the asynchronous mount has returned its handle.
+    document.documentElement.dataset.theme = "light";
     themeObservers[0].callback();
     attempt.resolve();
     await settle();
     assert.notEqual(attempt.client.scrollbar.render, initial.render);
+    assert.equal(attempt.options.colorMode, "dark");
+    assert.equal(attempt.client.colorMode, "light");
+    assert.equal(view.style["--terminal-background"], defaultLightPalette.background);
+    const focusCalls = attempt.client.focusCalls;
+    const selection = attempt.client.selection;
+    for (const [theme, palette] of [["dark", defaultDarkPalette], ["light", defaultLightPalette]]) {
+        document.documentElement.dataset.theme = theme;
+        themeObservers[0].callback();
+        assert.equal(attempt.client.colorMode, theme);
+        assert.equal(view.style["--terminal-background"], palette.background);
+    }
     for (const query of ["(forced-colors: active)", "(prefers-contrast: more)"]) {
         const previous = attempt.client.scrollbar;
         const media = mediaQueries.get(query);
@@ -386,12 +420,33 @@ test("theme and contrast changes replace the complete overlay configuration with
         assert.notEqual(attempt.client.scrollbar.render, previous.render);
         assert.equal(attempt.client.scrollbar.placement, "overlay");
         assert.equal(attempt.client.scrollbar.markers, true);
+        assert.equal(attempt.client.colorMode, "light");
     }
     assert.equal(attempts.length, 1);
     assert.deepEqual(attempt.client.sizingCalls, []);
     assert.equal(attempt.client.selectionClears, 0);
+    assert.equal(attempt.client.selection, selection);
+    assert.equal(attempt.client.focusCalls, focusCalls);
     terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=app&replica=1");
     assert.equal(attempts[1].options.scrollbar, attempt.client.scrollbar);
+    assert.equal(attempts[1].options.colorMode, "light");
+    attempts[1].resolve();
+    await settle();
+    attempts[1].close(1006);
+    retry();
+    assert.equal(attempts[2].options.colorMode, "light");
+});
+
+test("a hidden terminal mounts with the latest Dashboard palette when revealed", () => {
+    const { element, view } = mount({ visible: false });
+    document.documentElement.dataset.theme = "light";
+    themeObservers[0].callback();
+    assert.equal(attempts.length, 0);
+    assert.equal(view.style["--terminal-background"], defaultLightPalette.background);
+    element.clientWidth = 800;
+    element.clientHeight = 600;
+    observers[0].callback();
+    assert.equal(attempts[0].options.colorMode, "light");
 });
 
 test("theme observers and accessibility listeners are released on disposal", async () => {
@@ -401,12 +456,14 @@ test("theme observers and accessibility listeners are released on disposal", asy
     await settle();
     terminal.disposeTerminal(id);
     const calls = attempt.client.scrollbarCalls.length;
+    const colorModeCalls = [...attempt.client.colorModeCalls];
     assert.equal(themeObservers[0].disconnected, true);
     themeObservers[0].callback();
     for (const media of mediaQueries.values()) {
         media.dispatchEvent(new Event("change"));
     }
     assert.equal(attempt.client.scrollbarCalls.length, calls);
+    assert.deepEqual(attempt.client.colorModeCalls, colorModeCalls);
     assert.equal(attempt.client.disposed, true);
 });
 
@@ -1735,13 +1792,13 @@ test("frontend manifest, lockfile, minified bundle and backend use the exact pai
     const lockfile = JSON.parse(await readFile(new URL("package-lock.json", dashboard), "utf8"));
     const bundle = await readFile(new URL("dist/index.min.js", assets), "utf8");
     const version = manifest.dependencies["@hex1b/web-terminal"];
-    assert.equal(version, "0.169.1");
+    assert.equal(version, "0.170.0");
     assert.ok(bundle.startsWith(`// @hex1b/web-terminal ${version}; minified with Terser. See ../LICENSE.\n`));
     assert.equal(lockfile.packages[""].dependencies["@hex1b/web-terminal"], version);
     assert.equal(lockfile.packages["node_modules/@hex1b/web-terminal"].version, version);
 
     // Central package rows have the form:
-    //   <PackageVersion Include="Hex1b" Version="0.169.1" />
+    //   <PackageVersion Include="Hex1b" Version="0.170.0" />
     // Match the exact Include value, not Hex1b.Tool or Hex1b.McpServer;
     // whitespace, attribute order and either XML quote style are allowed.
     const packages = await readFile(new URL("../../Directory.Packages.props", dashboard), "utf8");

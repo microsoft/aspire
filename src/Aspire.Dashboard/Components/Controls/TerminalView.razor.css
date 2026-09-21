@@ -13,7 +13,6 @@
 }
 
 .terminal-frame {
-    --terminal-background: #0d1117;
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -21,8 +20,8 @@
     min-width: 0;
     min-height: 0;
     box-sizing: border-box;
-    background: var(--terminal-background);
-    border: 2px solid #3a4250;
+    background: var(--terminal-background, var(--colorNeutralBackground1));
+    border: 2px solid var(--colorNeutralStroke1);
     border-radius: 6px;
     overflow: hidden;
 }
@@ -104,7 +103,7 @@
 }
 
 .terminal-titlebar {
-    --terminal-titlebar-border-color: #30363d;
+    --terminal-titlebar-border-color: var(--colorNeutralStroke1);
     display: flex;
     align-items: center;
     flex: 0 0 30px;
@@ -112,9 +111,9 @@
     padding: 0 14px;
     padding-inline-end: 8px;
     box-sizing: border-box;
-    background: linear-gradient(180deg, #1a2029 0%, #161b22 100%);
+    background: var(--colorNeutralBackground2);
     border-bottom: 1px solid var(--terminal-titlebar-border-color);
-    color: #8b949e;
+    color: var(--colorNeutralForeground2);
     font: 12px ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
@@ -130,7 +129,7 @@
     flex: 0 0 auto;
     margin-inline-start: 12px;
     padding-inline-start: 12px;
-    border-inline-start: 1px solid #30363d;
+    border-inline-start: 1px solid var(--colorNeutralStroke1);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
@@ -169,11 +168,6 @@
 .terminal-container:focus-within::after {
     outline: var(--strokeWidthThick) solid var(--terminal-focus-color);
     outline-offset: calc(-1 * var(--strokeWidthThick));
-}
-
-.terminal-container ::deep ::part(selection-highlight) {
-    background: var(--colorBrandBackground);
-    opacity: 0.3;
 }
 
 .terminal-view ::deep .terminal-selection-actions {
@@ -219,11 +213,6 @@
 @media (forced-colors: active) {
     .terminal-container {
         --terminal-focus-color: Highlight;
-    }
-
-    .terminal-container ::deep ::part(selection-highlight) {
-        background: Highlight;
-        forced-color-adjust: none;
     }
 }
 

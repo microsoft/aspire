@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-import { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE, InputRoute, createDefaultScrollbarRenderer, renderDefaultScrollbarTooltip } from "../../js/hex1b-web-terminal/dist/index.min.js";
+import { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE, InputRoute, createDefaultScrollbarRenderer, renderDefaultScrollbarTooltip, defaultDarkPalette, defaultLightPalette } from "../../js/hex1b-web-terminal/dist/index.min.js";
 
 const terminals = new Map();
 const rememberedFontSizes = new Map();
@@ -21,7 +21,6 @@ const SIZE_PRESETS = [
 ];
 
 function scrollbarConfiguration(state) {
-    // Read Dashboard colors outside the terminal's intentionally dark scope.
     // Resolve variables/system colors to concrete canvas colors before passing
     // them to the snapshotted built-in painter.
     const probe = document.createElement("span");
@@ -33,7 +32,7 @@ function scrollbarConfiguration(state) {
             return getComputedStyle(probe).color;
         };
         const forced = state.forcedColors.matches;
-        const terminalStyle = getComputedStyle(state.element);
+        const palette = state.colorMode === "light" ? defaultLightPalette : defaultDarkPalette;
         const tooltipStyle = {
             background: color(forced ? "Canvas" : "var(--aspire-popup-background)"),
             color: color(forced ? "CanvasText" : "var(--colorNeutralForeground1)"),
@@ -44,14 +43,13 @@ function scrollbarConfiguration(state) {
             padding: "8px 12px",
         };
         const renderScrollbar = createDefaultScrollbarRenderer({
-            // The overlay belongs to the dark terminal surface, not the page.
-            // Resolve the light thumb in the terminal's dark theme scope, even on a light page.
+            // The overlay shares the terminal palette rather than the surrounding page surface.
             track: {
-                color: forced ? color("Canvas") : terminalStyle.getPropertyValue("--terminal-background").trim(),
+                color: forced ? color("Canvas") : palette.background,
                 opacity: forced || state.moreContrast.matches ? 1 : 0.35,
             },
             thumb: {
-                color: forced ? color("CanvasText") : terminalStyle.getPropertyValue("--colorNeutralForeground1").trim(),
+                color: forced ? color("CanvasText") : palette.foreground,
             },
             markers: {
                 color: color(forced ? "Highlight" : "var(--colorBrandForeground1)"),
@@ -83,10 +81,15 @@ function scrollbarConfiguration(state) {
     }
 }
 
-function updateScrollbar(state) {
+function updateAppearance(state) {
     if (state.disposed) {
         return;
     }
+    // Follow Dashboard's resolved theme, not the OS preference or a local control theme.
+    state.colorMode = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+    const palette = state.colorMode === "light" ? defaultLightPalette : defaultDarkPalette;
+    state.viewElement.style.setProperty("--terminal-background", palette.background);
+    state.client?.setColorMode(state.colorMode);
     state.scrollbar = scrollbarConfiguration(state);
     // setScrollbar replaces, rather than merges, the configuration.
     state.client?.setScrollbar(state.scrollbar);
@@ -489,6 +492,7 @@ async function mountClient(state, generation, controller) {
             label: state.options.label,
             sizing: state.sizing,
             readOnly: state.readOnly,
+            colorMode: state.colorMode,
             scrollbar: state.scrollbar,
             padding: 3,
             onTitleChange(title) {
@@ -575,6 +579,7 @@ async function mountClient(state, generation, controller) {
         state.client = client;
         state.inspectionObserver = configureTerminalChrome(client);
         // Theme/accessibility settings can change while awaiting the first frame.
+        client.setColorMode(state.colorMode);
         client.setScrollbar(state.scrollbar);
         // Selection notifications can precede mount completion, before the handle is available.
         clearInvalidatedSelection(state);
@@ -653,6 +658,7 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         (Number.isFinite(options.initialFontSize) ? clampFontSize(options.initialFontSize) : DEFAULT_FONT_SIZE);
     const state = {
         id, element, wsUrl, dotNetRef, options, selectionTemplate, footer,
+        viewElement: element.closest(".terminal-view"),
         readOnly: !!options.readOnly,
         autoFit: !!options.autoFit,
         client: null,
@@ -684,11 +690,11 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         forcedColors: window.matchMedia("(forced-colors: active)"),
         moreContrast: window.matchMedia("(prefers-contrast: more)"),
     };
-    updateScrollbar(state);
-    state.themeObserver = new MutationObserver(() => updateScrollbar(state));
+    updateAppearance(state);
+    state.themeObserver = new MutationObserver(() => updateAppearance(state));
     state.themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     for (const media of [state.forcedColors, state.moreContrast]) {
-        media.addEventListener("change", () => updateScrollbar(state), { signal: state.listeners.signal });
+        media.addEventListener("change", () => updateAppearance(state), { signal: state.listeners.signal });
     }
     // A programmatically focused scrollbar can remain :focus-visible after a mouse
     // drag. Track modality before Hex1b consumes events, without moving actual focus.

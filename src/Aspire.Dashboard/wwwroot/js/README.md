@@ -18,7 +18,7 @@ If we ever want to show more chart types than those, we'll need to change the bu
 
 ## Hex1b web terminal
 
-`hex1b-web-terminal/` vendors the published `@hex1b/web-terminal` **0.169.1** release,
+`hex1b-web-terminal/` vendors the published `@hex1b/web-terminal` **0.170.0** release,
 paired with the Hex1b, Hex1b.McpServer, and Hex1b.Tool NuGet packages and the
 repository-local `hex1b` tool at the same version. The client and server use the evolving
 HWT1 presentation transport and must be updated together. Do not substitute a
@@ -99,6 +99,26 @@ needed. The dashboard's existing `script-src 'self'` also allows same-origin
 workers through the CSP worker-source fallback; its production
 `default-src 'self'` covers the font and same-origin connections.
 
+### Terminal palettes
+
+The terminal follows the Dashboard's resolved light/dark theme using Hex1b's
+built-in **Hex1b Light** and **Hex1b Dark** palettes. Mounting passes `colorMode`;
+theme changes call `setColorMode` on the existing client, including changes that
+occur while mounting or while a dock pane is hidden. Terminal frames, toolbars,
+dock tabs and detached-window headers follow the same Dashboard theme.
+
+Hex1b preserves default and indexed ANSI colors through the negotiated
+`indexed-v1` HWT extension, so existing content and retained scrollback recolor
+without reconnecting, resizing, clearing selection or taking focus. Explicit RGB
+colors and image pixels remain unchanged. Matching client/server package versions
+are required; legacy RGBA frames cannot be recolored.
+
+Both GPU backends paint opaque selection foreground/background from the active
+palette. The adapter does not tint the transparent selection geometry with CSS.
+Custom Aspire palettes can later be supplied through `lightModePalette` and
+`darkModePalette` at mount and updated through `setPalette`, independently of
+the Dashboard controls and scrollbar styling.
+
 ### Terminal metadata
 
 Workload-reported titles (OSC 0/2), working directories (OSC 7) and progress
@@ -139,14 +159,13 @@ The painter adapter suppresses its additional canvas focus ring after pointer
 release. A scoped shadow-DOM override also hides the track's DOM focus outline
 after pointer input, restoring the upstream `:focus-visible` outline on keyboard
 input without changing actual focus. The modality listeners are removed on disposal.
-The track uses the terminal frame's background at 35% opacity. The thumb uses
-the light foreground token from the terminal's dark theme scope, rather than
-the Dashboard page's foreground, so it remains contrasting in either page theme.
+The track uses the active terminal palette's background at 35% opacity. The thumb
+uses that palette's foreground, so it remains contrasting in either theme.
 Markers use the Dashboard's brand foreground and error tokens at 65% opacity,
 restoring full opacity for increased contrast and forced colors. The track remains
-translucent and dark in the light Dashboard theme; terminal cell colors are not changed.
+translucent in both themes.
 
-Marker and tooltip colors are resolved outside the terminal's dark theme scope. Dashboard theme
+Marker and tooltip colors are resolved in the Dashboard theme. Dashboard theme
 changes and the `forced-colors` and `prefers-contrast` media queries recreate the
 snapshotted painter and replace the complete overlay configuration. Forced
 colors use resolved system colors, and increased contrast makes the track
