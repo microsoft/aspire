@@ -195,8 +195,10 @@ public class ParameterResource : Resource, IExpressionValue
     /// This method follows <see cref="TaskCompletionSource{TResult}.TrySetResult(TResult)"/> semantics and returns
     /// <see langword="false"/> when the parameter has already completed. Required parameters completed with <see langword="null"/>
     /// or an empty string are faulted with <see cref="MissingParameterValueException"/>. Use <see cref="SetValueAsync(string?, CancellationToken)"/>
-    /// when the value should replace an existing value and update dashboard state. Use <c>ParameterProcessor.SetValueAsync</c>
-    /// when the value should also be saved to deployment state.
+    /// when the value should replace an existing value and update dashboard state. To also save the value to user secrets
+    /// in run mode, use <c>ParameterProcessor.SetValueAsync</c> with <c>saveToUserSecrets: true</c>.
+    /// In publish mode, values are saved to deployment state during parameter initialization;
+    /// setting a value does not itself persist it.
     /// </remarks>
     public bool TrySetValue(string? value)
     {
