@@ -257,7 +257,17 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 continue;
             }
 
-            if (File.GetLastWriteTimeUtc(lockPath) > lockCutoff)
+            DateTime lastWriteTimeUtc;
+            try
+            {
+                lastWriteTimeUtc = File.GetLastWriteTimeUtc(lockPath);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+
+            if (lastWriteTimeUtc > lockCutoff)
             {
                 // On Unix, another process can observe a newly created lock file before FileStream has applied its
                 // exclusive lock. Delay cleanup so initialization has ample time to establish ownership.
