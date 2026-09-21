@@ -252,7 +252,9 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
                 new ConsoleLogLine { LineNumber = 2, Text = "api-second" }
             ]);
             await writer.AddConsoleLogsAsync("worker", [
-                new ConsoleLogLine { LineNumber = 1, Text = "worker-first" },
+                new ConsoleLogLine { LineNumber = 1, Text = "worker-first" }
+            ]);
+            await writer.AddConsoleLogsAsync("worker", [
                 new ConsoleLogLine { LineNumber = 2, Text = "worker-second" }
             ]);
         }

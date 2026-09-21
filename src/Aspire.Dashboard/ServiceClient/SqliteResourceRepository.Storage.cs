@@ -106,11 +106,11 @@ public sealed partial class SqliteResourceRepository
     {
         connection.Execute("""
             DELETE FROM console_logs
-            WHERE console_log_id IN (
+            WHERE console_log_id <= (
                 SELECT console_log_id
                 FROM console_logs
-                ORDER BY console_log_id
-                LIMIT MAX((SELECT COUNT(*) FROM console_logs) - @MaxConsoleLogCount, 0)
+                ORDER BY console_log_id DESC
+                LIMIT 1 OFFSET @MaxConsoleLogCount
             );
             """, new { MaxConsoleLogCount = maxConsoleLogCount }, transaction);
     }
