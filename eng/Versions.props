@@ -63,14 +63,14 @@
   </PropertyGroup>
   <!-- .NET 11.0 Package Versions used by project templates -->
   <PropertyGroup Label="Net11Preview">
-    <MicrosoftAspNetCoreAuthenticationCertificateNet11Version>11.0.0-rc.1.26425.128</MicrosoftAspNetCoreAuthenticationCertificateNet11Version>
-    <MicrosoftAspNetCoreAuthenticationOpenIdConnectNet11Version>11.0.0-rc.1.26425.128</MicrosoftAspNetCoreAuthenticationOpenIdConnectNet11Version>
-    <MicrosoftAspNetCoreOpenApiNet11Version>11.0.0-rc.1.26425.128</MicrosoftAspNetCoreOpenApiNet11Version>
-    <MicrosoftAspNetCoreTestHostNet11Version>11.0.0-rc.1.26425.128</MicrosoftAspNetCoreTestHostNet11Version>
-    <MicrosoftExtensionsCachingMemoryNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsCachingMemoryNet11Version>
-    <MicrosoftExtensionsConfigurationBinderNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsConfigurationBinderNet11Version>
-    <MicrosoftExtensionsHttpNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsHttpNet11Version>
-    <MicrosoftExtensionsLoggingNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsLoggingNet11Version>
+    <MicrosoftAspNetCoreAuthenticationCertificateNet11Version>11.0.0-rc.2.26470.103</MicrosoftAspNetCoreAuthenticationCertificateNet11Version>
+    <MicrosoftAspNetCoreAuthenticationOpenIdConnectNet11Version>11.0.0-rc.2.26470.103</MicrosoftAspNetCoreAuthenticationOpenIdConnectNet11Version>
+    <MicrosoftAspNetCoreOpenApiNet11Version>11.0.0-rc.2.26470.103</MicrosoftAspNetCoreOpenApiNet11Version>
+    <MicrosoftAspNetCoreTestHostNet11Version>11.0.0-rc.2.26470.103</MicrosoftAspNetCoreTestHostNet11Version>
+    <MicrosoftExtensionsCachingMemoryNet11Version>11.0.0-rc.2.26470.103</MicrosoftExtensionsCachingMemoryNet11Version>
+    <MicrosoftExtensionsConfigurationBinderNet11Version>11.0.0-rc.2.26470.103</MicrosoftExtensionsConfigurationBinderNet11Version>
+    <MicrosoftExtensionsHttpNet11Version>11.0.0-rc.2.26470.103</MicrosoftExtensionsHttpNet11Version>
+    <MicrosoftExtensionsLoggingNet11Version>11.0.0-rc.2.26470.103</MicrosoftExtensionsLoggingNet11Version>
   </PropertyGroup>
   <!-- .NET 10.0 Package Versions -->
   <PropertyGroup Label="Preview">
