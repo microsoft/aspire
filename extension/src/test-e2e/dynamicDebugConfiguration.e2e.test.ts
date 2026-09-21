@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { isSamePath, readStateFile, waitForExtensionState, waitForNoDebugSessions, waitForRepositoryIdle } from './helpers/assertions';
 import { executeE2eControlCommand, getRunningAppHostPid, removePath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setWorkspaceFoldersForE2E, stopAppHostIfRunning, waitForKnownProcessExit, waitForRunningAppHostPid } from './helpers/fixtures';
-import { getWorkspaceRoot } from './helpers/paths';
+import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { cancelActiveInput, chooseActiveQuickPick, chooseActiveQuickPickAtIndex, executeCommandFromPalette, getActiveQuickPickLabels, openAspireView, waitForEditorTitle } from './helpers/vscode';
 
 // Dynamic launch output is emitted before the selected single-file AppHost finishes its cold build.
@@ -40,9 +40,11 @@ suite('Aspire dynamic debug configuration E2E', function () {
             () => Promise.all(appHostPidsBeforeStop.map(appHostPid =>
                 waitForKnownProcessExit(appHostPid, 'a dynamic debug configuration AppHost process', 30000))),
             () => waitForNoDebugSessions().catch(() => undefined),
-            () => restoreWorkspaceFoldersForE2E(),
             () => executeE2eControlCommand({ name: 'closeAllEditors' }),
+            () => detachFixtureWorkspaceForCleanup(),
             () => removePath(fixtureRoot, { recursive: true, force: true }),
+            () => restoreWorkspaceFoldersForE2E(),
+            () => waitForRepositoryIdle(),
         ], 'Dynamic debug configuration E2E teardown failed.');
     });
 
@@ -191,6 +193,16 @@ builder.Build().Run();
                 stateFile.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, ambiguousSecondAppHostPath)),
             'both ambiguous AppHost candidates',
             120000);
+    }
+
+    async function detachFixtureWorkspaceForCleanup(): Promise<void> {
+        // The default workspace root contains fixtureRoot. Restoring it before deletion makes AppHost
+        // discovery reacquire the fixture; on Windows those discovery handles can keep its directories locked.
+        const cleanupWorkspacePath = path.dirname(getPrimaryAppHostProjectPath());
+        const workspaceFolders = await setWorkspaceFoldersForE2E([{ folderPath: cleanupWorkspacePath }]);
+        assert.strictEqual(workspaceFolders.length, 1);
+        assert.ok(isSamePath(workspaceFolders[0].fileName, cleanupWorkspacePath));
+        await waitForRepositoryIdle();
     }
 
     async function invokeDefaultAspireDebugConfiguration(): Promise<void> {
