@@ -49,8 +49,6 @@ jobs:
           dotnet test --project tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj
           --no-launch-profile
           --
-          --filter-class "*.TelemetryHookArchiveIntegrityTests"
-          --filter-class "*.AgentInitCommandTests"
           --filter-class "*.TelemetryHookInstallerTests"
           --filter-class "*.TelemetryHookScriptTests"
           --filter-not-trait "quarantined=true"

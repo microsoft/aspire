@@ -10,7 +10,7 @@ namespace Infrastructure.Tests;
 public class AspireSkillsBundleMaintenanceTests
 {
     [Fact]
-    public void UpdateWorkflowRunsSurvivingIntegrityAndHookCoverage()
+    public void UpdateWorkflowRunsOnlyTelemetryHookInstallerAndScriptTests()
     {
         var workflow = ReadWorkflow();
         var jobs = Assert.IsType<YamlMappingNode>(workflow["jobs"]);
@@ -29,7 +29,7 @@ public class AspireSkillsBundleMaintenanceTests
             .Cast<Match>().Select(match => match.Groups[1].Value);
 
         Assert.Equal(
-            ["*.TelemetryHookArchiveIntegrityTests", "*.AgentInitCommandTests", "*.TelemetryHookInstallerTests", "*.TelemetryHookScriptTests"],
+            ["*.TelemetryHookInstallerTests", "*.TelemetryHookScriptTests"],
             classes);
         Assert.Equal(["quarantined=true", "outerloop=true"], exclusions);
         Assert.Contains("--no-launch-profile", testCommand, StringComparison.Ordinal);
