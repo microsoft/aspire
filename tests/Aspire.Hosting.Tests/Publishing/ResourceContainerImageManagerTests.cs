@@ -58,7 +58,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var appPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.cs");
+        // File-based apps default to the SDK's framework, whose daily runtime may not have a published container image.
         await File.WriteAllTextAsync(appPath, """
+            #:property TargetFramework=net10.0
             #:property PublishAot=false
 
             Console.WriteLine("file app");

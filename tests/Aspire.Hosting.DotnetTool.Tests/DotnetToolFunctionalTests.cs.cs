@@ -34,8 +34,9 @@ public class DotnetToolFunctionalTests(ITestOutputHelper testOutputHelper)
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(testOutputHelper);
+        // Ignoring feeds does not prevent tool exec from reusing an already cached package.
         var resource = builder
-            .AddDotnetTool("tool", "dotnet-ef")
+            .AddDotnetTool("tool", $"nonexistent-tool-{Guid.NewGuid():N}")
             .WithArgs("--help")
             .WithToolSource("./fake-package-feed")
             .WithToolIgnoreExistingFeeds();
