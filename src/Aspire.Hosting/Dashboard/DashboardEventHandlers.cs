@@ -119,29 +119,6 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         }
 
         var fullyQualifiedDashboardPath = Path.GetFullPath(dashboardPath);
-
-        // Temporary workaround for .NET 11 RC1 on macOS: the managed forwarder's Process.Start
-        // clears inherited SIGUSR1 flags before launching the native Dashboard. Remove after
-        // upgrading to RC2 with https://github.com/dotnet/runtime/issues/132581 fixed.
-        if (dashboardOptions.Value.UseManagedDashboard &&
-            !BundleDiscovery.IsAspireManagedBinary(fullyQualifiedDashboardPath) &&
-            GetManagedDashboardAssemblyPath(fullyQualifiedDashboardPath) is null)
-        {
-            var managedPath = Path.GetFullPath(Path.Combine(
-                Path.GetDirectoryName(fullyQualifiedDashboardPath)!,
-                "..",
-                BundleDiscovery.ManagedDirectoryName,
-                BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)));
-
-            if (!File.Exists(managedPath))
-            {
-                throw new DistributedApplicationException(
-                    $"AppHost:UseManagedDashboard requires the Aspire managed executable at '{managedPath}'. Reinstall or rebuild the Aspire bundle.");
-            }
-
-            fullyQualifiedDashboardPath = managedPath;
-        }
-
         var dashboardWorkingDirectory = Path.GetDirectoryName(fullyQualifiedDashboardPath);
 
         ExecutableResource dashboardResource;
