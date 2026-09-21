@@ -80,7 +80,7 @@ internal static class CopilotAgentConfiguration
                         if (ownServers?.ContainsKey(McpConfiguration.ServerName) is not true &&
                             !McpConfiguration.IsDefaultEntry(servers[McpConfiguration.ServerName]!.AsObject(), commandArray: false))
                         {
-                            return AgentConfigurationEdit.Skipped(AgentConfigurationStrings.ExistingMcpCustomization);
+                            return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_ExistingMcpCustomization);
                         }
                     }
                 }

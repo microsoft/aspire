@@ -25,7 +25,7 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
         var result = await installer.InstallAsync(CancellationToken.None);
 
         Assert.Equal(PlaywrightInstallStatus.Skipped, result.Status);
-        Assert.Equal(AgentSkillInstallerStrings.PlaywrightNpmRequired, result.Message);
+        Assert.Equal(AgentCommandStrings.InitCommand_PlaywrightCliSkipped, result.Message);
         Assert.Empty(result.Files);
         Assert.Equal(0, npmRunner.ResolveCallCount);
         Assert.Equal(0, playwrightRunner.GetVersionCallCount);
@@ -365,7 +365,7 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
         var result = await installer.InstallAsync(CancellationToken.None);
 
         Assert.Equal(PlaywrightInstallStatus.Failed, result.Status);
-        Assert.Equal(AgentSkillInstallerStrings.PlaywrightMissingSkill, result.Message);
+        Assert.Equal(AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles, result.Message);
         Assert.Empty(result.Files);
         Assert.False(Directory.Exists(playwrightRunner.InstallSkillsWorkingDirectory));
     }

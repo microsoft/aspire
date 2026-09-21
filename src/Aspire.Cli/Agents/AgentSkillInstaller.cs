@@ -183,13 +183,13 @@ internal sealed class AgentSkillInstaller(
                     ValidateTargetPath(target);
                     if (!AgentPath.Comparer.Equals(path, ResolveSkillFile(target, file.RelativePath)))
                     {
-                        throw new IOException(AgentConfigurationStrings.ConcurrentChange);
+                        throw new IOException(AgentCommandStrings.Configuration_ConcurrentChange);
                     }
 
                     var current = await ReadExistingAsync(path, token);
                     if (existing is null ? current is not null : current is null || !existing.AsSpan().SequenceEqual(current))
                     {
-                        throw new IOException(AgentConfigurationStrings.ConcurrentChange);
+                        throw new IOException(AgentCommandStrings.Configuration_ConcurrentChange);
                     }
                 }
             }
@@ -211,7 +211,7 @@ internal sealed class AgentSkillInstaller(
         {
             if (!AgentPath.Comparer.Equals(target.Path, AgentPath.Resolve(alias)))
             {
-                throw new IOException(AgentConfigurationStrings.ConcurrentChange);
+                throw new IOException(AgentCommandStrings.Configuration_ConcurrentChange);
             }
         }
     }
@@ -227,7 +227,7 @@ internal sealed class AgentSkillInstaller(
             relativePhysicalPath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
         {
             throw new IOException(string.Format(
-                CultureInfo.CurrentCulture, AgentSkillInstallerStrings.SkillFileOutsideTarget, logicalPath));
+                CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_SkillFileOutsideTarget, logicalPath));
         }
 
         return physicalPath;

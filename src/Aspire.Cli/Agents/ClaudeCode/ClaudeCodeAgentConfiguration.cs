@@ -53,7 +53,7 @@ internal static class ClaudeCodeAgentConfiguration
                 // https://code.claude.com/docs/en/mcp#managed-mcp-configuration
                 if (await context.ReadOptionalAsync(Path.Combine(GetManagedDirectory(executionContext, environment), "managed-mcp.json"), cancellationToken) is not null)
                 {
-                    return AgentConfigurationEdit.Blocked(AgentConfigurationStrings.PolicyBlocked);
+                    return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_PolicyBlocked);
                 }
 
                 var settings = (await AgentConfigurationJson.ReadSettingsAsync(context, PluginSettings(request, executionContext, environment), cancellationToken)).ToList();
@@ -96,7 +96,7 @@ internal static class ClaudeCodeAgentConfiguration
                         if (AgentConfigurationJson.OptionalObject(root, "mcpServers")?.ContainsKey(McpConfiguration.ServerName) is not true &&
                             !McpConfiguration.IsDefaultEntry(servers[McpConfiguration.ServerName]!.AsObject(), commandArray: false))
                         {
-                            return AgentConfigurationEdit.Skipped(AgentConfigurationStrings.ExistingMcpCustomization);
+                            return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_ExistingMcpCustomization);
                         }
                     }
                 }

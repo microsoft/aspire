@@ -95,13 +95,13 @@ internal sealed class TelemetryHookInstaller : ITelemetryHookInstaller
         {
             if (!AgentPath.Comparer.Equals(physicalPath, AgentPath.Resolve(path)))
             {
-                throw new IOException(AgentConfigurationStrings.ConcurrentChange);
+                throw new IOException(AgentCommandStrings.Configuration_ConcurrentChange);
             }
 
             var current = await ReadExistingAsync(physicalPath, token);
             if (existing is null ? current is not null : current is null || !existing.AsSpan().SequenceEqual(current))
             {
-                throw new IOException(AgentConfigurationStrings.ConcurrentChange);
+                throw new IOException(AgentCommandStrings.Configuration_ConcurrentChange);
             }
         }
     }

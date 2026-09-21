@@ -78,12 +78,12 @@ internal static class OpenCodeAgentConfiguration
                     var active = present.Length > 0 ? present[^1] : location.Candidates[0];
                     if (present.GroupBy(Path.GetDirectoryName, AgentPath.Comparer).Any(group => group.Count() > 1))
                     {
-                        return AgentConfigurationEdit.Blocked(AgentConfigurationStrings.OpenCodeMultipleFiles);
+                        return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_OpenCodeMultipleFiles);
                     }
 
                     if (!AgentPath.Comparer.Equals(active, location.Path))
                     {
-                        return AgentConfigurationEdit.Blocked(AgentConfigurationStrings.ConcurrentChange);
+                        return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_ConcurrentChange);
                     }
 
                     var configs = documents.Values.Append(root).ToList();
@@ -93,7 +93,7 @@ internal static class OpenCodeAgentConfiguration
                         configs.Add(inlineConfig);
                         if (inlineConfig.ContainsKey(asset is AgentAssetKind.AspireSkills ? "skills" : "mcp"))
                         {
-                            return AgentConfigurationEdit.Blocked(AgentConfigurationStrings.PolicyBlocked);
+                            return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_PolicyBlocked);
                         }
                     }
 
@@ -107,7 +107,7 @@ internal static class OpenCodeAgentConfiguration
                             // resolution: older clients still support native V1 MCP entries.
                             // https://github.com/microsoft/aspire-skills/pull/69
                             return AgentConfigurationEdit.Blocked(string.Format(CultureInfo.CurrentCulture,
-                                AgentConfigurationStrings.OpenCodeCatalogVersionUnsupported, unsupportedVersion, MinimumV1CatalogVersion));
+                                AgentCommandStrings.Configuration_OpenCodeCatalogVersionUnsupported, unsupportedVersion, MinimumV1CatalogVersion));
                         }
 
                         return ApplySkills(root, configs, schema);
@@ -130,7 +130,7 @@ internal static class OpenCodeAgentConfiguration
                             if (ownServers?.ContainsKey(McpConfiguration.ServerName) is not true &&
                                 !McpConfiguration.IsDefaultEntry(servers[McpConfiguration.ServerName]!.AsObject(), commandArray: true))
                             {
-                                return AgentConfigurationEdit.Skipped(AgentConfigurationStrings.ExistingMcpCustomization);
+                                return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_ExistingMcpCustomization);
                             }
                         }
                     }
@@ -149,7 +149,7 @@ internal static class OpenCodeAgentConfiguration
             {
                 if (version.Number.Major > 2)
                 {
-                    throw new AgentConfigurationException(AgentConfigurationStrings.OpenCodeSchemaConflict);
+                    throw new AgentConfigurationException(AgentCommandStrings.Configuration_OpenCodeSchemaConflict);
                 }
 
                 versions.Add(version.Number.Major < 2 ? 1 : 2);
@@ -182,7 +182,7 @@ internal static class OpenCodeAgentConfiguration
                 {
                     if (mcp.Any(property => property.Key is not ("servers" or "timeout")))
                     {
-                        throw new AgentConfigurationException(AgentConfigurationStrings.OpenCodeSchemaConflict);
+                        throw new AgentConfigurationException(AgentCommandStrings.Configuration_OpenCodeSchemaConflict);
                     }
 
                     if (mcp.ContainsKey("timeout") &&
@@ -205,7 +205,7 @@ internal static class OpenCodeAgentConfiguration
 
         if (versions.Count > 1)
         {
-            throw new AgentConfigurationException(AgentConfigurationStrings.OpenCodeSchemaConflict);
+            throw new AgentConfigurationException(AgentCommandStrings.Configuration_OpenCodeSchemaConflict);
         }
 
         // An explicitly selected, undetected client with no schema evidence uses stable V1.
@@ -294,14 +294,14 @@ internal static class OpenCodeAgentConfiguration
             target.Add((JsonNode?)preferred);
         }
 
-        return AgentConfigurationEdit.Applied(AgentConfigurationStrings.Registered);
+        return AgentConfigurationEdit.Applied(AgentCommandStrings.Configuration_Registered);
     }
 
     private static void CheckCatalogs(JsonArray? sources, int schema)
     {
         if (sources is not null && sources.Any(value => CatalogSchema(AgentConfigurationJson.String(value)) is { } declared && declared != schema))
         {
-            throw new AgentConfigurationException(AgentConfigurationStrings.OpenCodeSchemaConflict);
+            throw new AgentConfigurationException(AgentCommandStrings.Configuration_OpenCodeSchemaConflict);
         }
     }
 
@@ -336,7 +336,7 @@ internal static class OpenCodeAgentConfiguration
 
             if (server.ContainsKey(schema == 1 ? "disabled" : "enabled"))
             {
-                throw new AgentConfigurationException(AgentConfigurationStrings.OpenCodeSchemaConflict);
+                throw new AgentConfigurationException(AgentCommandStrings.Configuration_OpenCodeSchemaConflict);
             }
         }
     }

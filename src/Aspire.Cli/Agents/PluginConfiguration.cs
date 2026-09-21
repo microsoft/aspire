@@ -23,7 +23,7 @@ internal static class PluginConfiguration
             var plugins = AgentConfigurationJson.OptionalObject(config, "enabledPlugins");
             if (plugins is not null && AgentConfigurationJson.Boolean(plugins, PluginName) is false)
             {
-                return AgentConfigurationEdit.Skipped(AgentConfigurationStrings.Disabled);
+                return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_Disabled);
             }
 
             var marketplaces = AgentConfigurationJson.OptionalObject(config, "extraKnownMarketplaces");
@@ -37,7 +37,7 @@ internal static class PluginConfiguration
 
                 if (!IsOfficialSource(source))
                 {
-                    return AgentConfigurationEdit.Blocked(AgentConfigurationStrings.Conflict);
+                    return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_Conflict);
                 }
 
                 // In particular, do not shadow a user's release/commit pin by adding an
@@ -50,7 +50,7 @@ internal static class PluginConfiguration
 
             if (HasMarketplacePolicyConflict(config))
             {
-                return AgentConfigurationEdit.Blocked(AgentConfigurationStrings.PolicyBlocked);
+                return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_PolicyBlocked);
             }
         }
 
@@ -75,7 +75,7 @@ internal static class PluginConfiguration
             targetPlugins[PluginName] = true;
         }
 
-        return AgentConfigurationEdit.Applied(AgentConfigurationStrings.Registered);
+        return AgentConfigurationEdit.Applied(AgentCommandStrings.Configuration_Registered);
     }
 
     private static bool IsOfficialSource(JsonObject source)

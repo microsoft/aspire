@@ -130,7 +130,7 @@ internal sealed class PlaywrightCliInstaller(
             return new PlaywrightInstallResult(
                 PlaywrightInstallStatus.Failed,
                 [],
-                string.Format(CultureInfo.CurrentCulture, AgentSkillInstallerStrings.PlaywrightInstallationFailed, ex.Message));
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_InstallationFailed, ex.Message));
         }
     }
 
@@ -140,7 +140,7 @@ internal sealed class PlaywrightCliInstaller(
         if (!npmRunner.IsAvailable)
         {
             logger.LogDebug("npm is not available on PATH, skipping Playwright CLI installation.");
-            return (PlaywrightInstallStatus.Skipped, AgentSkillInstallerStrings.PlaywrightNpmRequired);
+            return (PlaywrightInstallStatus.Skipped, AgentCommandStrings.InitCommand_PlaywrightCliSkipped);
         }
 
         // Step 1: Resolve the target version from the public npm registry.
@@ -298,7 +298,7 @@ internal sealed class PlaywrightCliInstaller(
             if (!File.Exists(Path.Combine(skillDirectory.FullName, "SKILL.md")))
             {
                 return new PlaywrightInstallResult(
-                    PlaywrightInstallStatus.Failed, [], AgentSkillInstallerStrings.PlaywrightMissingSkill);
+                    PlaywrightInstallStatus.Failed, [], AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles);
             }
 
             // Do not follow generated links outside the owned workspace or omit linked
@@ -334,7 +334,7 @@ internal sealed class PlaywrightCliInstaller(
             if (!files.Any(static file => file.RelativePath == "SKILL.md" && file.Content.Length > 0))
             {
                 return new PlaywrightInstallResult(
-                    PlaywrightInstallStatus.Failed, [], AgentSkillInstallerStrings.PlaywrightMissingSkill);
+                    PlaywrightInstallStatus.Failed, [], AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles);
             }
 
             return new PlaywrightInstallResult(
@@ -353,7 +353,7 @@ internal sealed class PlaywrightCliInstaller(
         if ((entry.Attributes & FileAttributes.ReparsePoint) != 0)
         {
             throw new IOException(string.Format(
-                CultureInfo.CurrentCulture, AgentSkillInstallerStrings.PlaywrightLinkedSkillEntry, entry.FullName));
+                CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_LinkedSkillEntry, entry.FullName));
         }
     }
 

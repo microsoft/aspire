@@ -130,7 +130,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await AcceptDefaultAssetsAsync(auto, includeMcp: true);
         await auto.WaitUntilAsync(
-            s => s.ContainsText("Select clients to configure") && s.ContainsText("[X] VS Code"),
+            s => s.ContainsText("Which agent environments do you want to configure?") && s.ContainsText("[X] VS Code"),
             timeout: TimeSpan.FromSeconds(30), description: "client selection with detected VS Code preselected");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
@@ -301,7 +301,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         }
 
         await auto.WaitUntilAsync(
-            s => s.ContainsText("Install Playwright CLI and its browser automation skill?"),
+            s => s.ContainsText("Install Playwright CLI for browser automation?"),
             timeout: TimeSpan.FromSeconds(30), description: "Playwright asset prompt, default No");
         await auto.EnterAsync();
         await auto.WaitUntilAsync(

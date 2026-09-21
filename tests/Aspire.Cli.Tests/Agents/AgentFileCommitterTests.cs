@@ -167,13 +167,13 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
                 var current = await File.ReadAllBytesAsync(path, token);
                 if (!original.AsSpan().SequenceEqual(current))
                 {
-                    throw new IOException(AgentConfigurationStrings.ConcurrentChange);
+                    throw new IOException(AgentCommandStrings.Configuration_ConcurrentChange);
                 }
             },
             newFileMode: null,
             CancellationToken.None));
 
-        Assert.Equal(AgentConfigurationStrings.ConcurrentChange, error.Message);
+        Assert.Equal(AgentCommandStrings.Configuration_ConcurrentChange, error.Message);
         Assert.Equal("concurrent edit", await File.ReadAllTextAsync(path));
         Assert.Equal(["payload"], workspace.WorkspaceRoot.EnumerateFileSystemInfos().Select(static entry => entry.Name));
     }
@@ -206,7 +206,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
             {
                 if (!AgentPath.Comparer.Equals(physicalPath, AgentPath.Resolve(logicalPath)))
                 {
-                    throw new IOException(AgentConfigurationStrings.ConcurrentChange);
+                    throw new IOException(AgentCommandStrings.Configuration_ConcurrentChange);
                 }
                 return Task.CompletedTask;
             },
@@ -356,7 +356,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
 
         var result = Assert.Single(results);
         Assert.Equal(AgentConfigurationStatus.Blocked, result.Status);
-        Assert.Equal(AgentConfigurationStrings.ConcurrentChange, result.Message);
+        Assert.Equal(AgentCommandStrings.Configuration_ConcurrentChange, result.Message);
         Assert.Equal(original, await File.ReadAllTextAsync(path));
         Assert.Equal(["policy.json", "settings.json"],
             workspace.WorkspaceRoot.EnumerateFileSystemInfos().Select(static entry => entry.Name).Order(StringComparer.Ordinal));

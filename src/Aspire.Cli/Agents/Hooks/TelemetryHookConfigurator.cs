@@ -57,7 +57,7 @@ internal sealed class TelemetryHookConfigurator(
                         AgentConfigurationJson.Boolean(config, "disableAllHooks") is true ||
                         AgentConfigurationJson.Boolean(config, "allowManagedHooksOnly") is true))
                     {
-                        return AgentConfigurationEdit.Skipped(AgentConfigurationStrings.PolicyBlocked);
+                        return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_PolicyBlocked);
                     }
 
                     var projectSettings = copilot
@@ -75,7 +75,7 @@ internal sealed class TelemetryHookConfigurator(
                         if (await context.ReadOptionalAsync(configPath, cancellationToken) is { } config &&
                             ContainsAspireHook(config))
                         {
-                            return AgentConfigurationEdit.Skipped(AgentConfigurationStrings.ExistingProjectHook);
+                            return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_ExistingProjectHook);
                         }
                     }
 
@@ -99,7 +99,7 @@ internal sealed class TelemetryHookConfigurator(
                     {
                         logger.LogDebug(ex, "Could not install the embedded Aspire telemetry hooks.");
                         return new AgentConfigurationEdit(AgentConfigurationStatus.Failed,
-                            string.Format(CultureInfo.CurrentCulture, AgentConfigurationStrings.HookInstallationFailed, ex.Message));
+                            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.Configuration_HookInstallationFailed, ex.Message));
                     }
 
                     if (copilot)
@@ -111,7 +111,7 @@ internal sealed class TelemetryHookConfigurator(
                         ClaudeCodeAgentConfiguration.ApplyHook(root, scripts, IsAspireHook);
                     }
 
-                    return AgentConfigurationEdit.Applied(AgentConfigurationStrings.HookConfigured);
+                    return AgentConfigurationEdit.Applied(AgentCommandStrings.Configuration_HookConfigured);
                 });
     }
 

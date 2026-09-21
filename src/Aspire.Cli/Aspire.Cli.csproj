@@ -215,21 +215,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Update="Resources\AgentConfigurationStrings.Designer.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>AgentConfigurationStrings.resx</DependentUpon>
-    </Compile>
-    <Compile Update="Resources\AgentInitStrings.Designer.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>AgentInitStrings.resx</DependentUpon>
-    </Compile>
-    <Compile Update="Resources\AgentSkillInstallerStrings.Designer.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>AgentSkillInstallerStrings.resx</DependentUpon>
-    </Compile>
     <Compile Update="Resources\InteractionServiceStrings.Designer.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
@@ -349,27 +334,6 @@
 
 
   <ItemGroup>
-    <EmbeddedResource Update="Resources\AgentConfigurationStrings.resx">
-      <XlfSourceFormat>Resx</XlfSourceFormat>
-      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
-      <SubType>Designer</SubType>
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>AgentConfigurationStrings.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-    <EmbeddedResource Update="Resources\AgentInitStrings.resx">
-      <XlfSourceFormat>Resx</XlfSourceFormat>
-      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
-      <SubType>Designer</SubType>
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>AgentInitStrings.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-    <EmbeddedResource Update="Resources\AgentSkillInstallerStrings.resx">
-      <XlfSourceFormat>Resx</XlfSourceFormat>
-      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
-      <SubType>Designer</SubType>
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>AgentSkillInstallerStrings.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
     <EmbeddedResource Update="Resources\InteractionServiceStrings.resx">
       <XlfSourceFormat>Resx</XlfSourceFormat>
       <XlfOutputItem>EmbeddedResource</XlfOutputItem>

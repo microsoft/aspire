@@ -34,7 +34,7 @@ internal sealed class AgentConfigurationWriter(ILogger<AgentConfigurationWriter>
                 {
                     if (!AgentPath.Comparer.Equals((await reader.ReadAsync(alias, cancellationToken)).Path, file.Path))
                     {
-                        throw new AgentConfigurationException(AgentConfigurationStrings.ConcurrentChange);
+                        throw new AgentConfigurationException(AgentCommandStrings.Configuration_ConcurrentChange);
                     }
                 }
 
@@ -62,7 +62,7 @@ internal sealed class AgentConfigurationWriter(ILogger<AgentConfigurationWriter>
                     {
                         logger.LogDebug(ex, "Could not prepare agent configuration at {Path}.", target.Path);
                         pending.Add(target.ToResult(AgentConfigurationStatus.Failed,
-                            string.Format(CultureInfo.CurrentCulture, AgentConfigurationStrings.ReadWriteFailed, ex.Message)));
+                            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.Configuration_ReadWriteFailed, ex.Message)));
                     }
                 }
 
@@ -72,7 +72,7 @@ internal sealed class AgentConfigurationWriter(ILogger<AgentConfigurationWriter>
                 }
                 else if (!await reader.IsCurrentAsync(cancellationToken))
                 {
-                    throw new AgentConfigurationException(AgentConfigurationStrings.ConcurrentChange);
+                    throw new AgentConfigurationException(AgentCommandStrings.Configuration_ConcurrentChange);
                 }
             }
             catch (AgentConfigurationException ex)
@@ -83,7 +83,7 @@ internal sealed class AgentConfigurationWriter(ILogger<AgentConfigurationWriter>
             {
                 logger.LogDebug(ex, "Could not write agent configuration at {Path}.", file.Path);
                 CompleteFailure(file, pending, AgentConfigurationStatus.Failed,
-                    string.Format(CultureInfo.CurrentCulture, AgentConfigurationStrings.ReadWriteFailed, ex.Message), stale: false);
+                    string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.Configuration_ReadWriteFailed, ex.Message), stale: false);
             }
 
             results.AddRange(pending);
@@ -117,7 +117,7 @@ internal sealed class AgentConfigurationWriter(ILogger<AgentConfigurationWriter>
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
                 results.Add(target.ToResult(AgentConfigurationStatus.Failed,
-                    string.Format(CultureInfo.CurrentCulture, AgentConfigurationStrings.ReadWriteFailed, ex.Message)));
+                    string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.Configuration_ReadWriteFailed, ex.Message)));
             }
         }
 
@@ -175,7 +175,7 @@ internal sealed class AgentConfigurationWriter(ILogger<AgentConfigurationWriter>
             {
                 if (!await reader.IsCurrentAsync(token))
                 {
-                    throw new AgentConfigurationException(AgentConfigurationStrings.ConcurrentChange);
+                    throw new AgentConfigurationException(AgentCommandStrings.Configuration_ConcurrentChange);
                 }
             },
             newFileMode: UnixFileMode.UserRead | UnixFileMode.UserWrite,
@@ -222,7 +222,7 @@ internal sealed class AgentConfigurationWriter(ILogger<AgentConfigurationWriter>
             }
             catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
             {
-                throw new AgentConfigurationException(AgentConfigurationStrings.UnsupportedOverride);
+                throw new AgentConfigurationException(AgentCommandStrings.Configuration_UnsupportedOverride);
             }
 
             _aliases[path] = physicalPath;

@@ -683,15 +683,15 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(new AgentAssetSelection(false, false, false, true), request.Assets);
         Assert.Equal(workspace.WorkspaceRoot.FullName, request.WorkspaceRoot.FullName);
         Assert.Equal(
-            [SharedCommandStrings.PromptRunAgentInit, AgentInitStrings.ConfigurePlaywrightPrompt,
-                AgentInitStrings.ConfigureDotnetInspectPrompt, AgentInitStrings.ConfigureAspireSkillsPrompt],
+            [SharedCommandStrings.PromptRunAgentInit, McpCommandStrings.InitCommand_ConfigurePlaywrightPrompt,
+                AgentCommandStrings.InitCommand_ConfigureDotnetInspectPrompt, AgentCommandStrings.InitCommand_ConfigureAspireSkillsPrompt],
             interactionService.BooleanPromptCalls.Select(call => call.PromptText));
         var handoff = Assert.Single(interactionService.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Dizzy));
         Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills")));
         Assert.Equal(
-            string.Format(CultureInfo.CurrentCulture, AgentInitStrings.AspireifyHandoff, "GitHub Copilot CLI, Claude Code"),
+            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_AspireifyHandoff, "GitHub Copilot CLI, Claude Code"),
             handoff.Message);
-        Assert.Single(subtleMessages, message => message == AgentInitStrings.ClientAcquisitionNotice);
+        Assert.Single(subtleMessages, message => message == AgentCommandStrings.InitCommand_ClientAcquisitionNotice);
     }
 
     [Theory]

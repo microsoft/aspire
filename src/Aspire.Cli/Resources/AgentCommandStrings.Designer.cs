@@ -329,5 +329,455 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AgentTelemetryCommand_TimestampDescription", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install Playwright CLI and its skills for the selected clients (y/n or true/false; default: no).
+        /// </summary>
+        internal static string InitCommand_PlaywrightOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_PlaywrightOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install the dotnet-inspect bootstrap skill for the selected clients (y/n or true/false; default: no).
+        /// </summary>
+        internal static string InitCommand_DotnetInspectOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_DotnetInspectOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Register native Aspire skills and supported canvases for the selected clients (y/n or true/false; default: yes).
+        /// </summary>
+        internal static string InitCommand_AspireSkillsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_AspireSkillsOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Comma-separated clients ({0}), '{1}', or '{2}'. Defaults to detected clients.
+        /// </summary>
+        internal static string InitCommand_ClientsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_ClientsOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Invalid value '{1}' for '{0}'. Use y/n or true/false..
+        /// </summary>
+        internal static string InitCommand_InvalidAssetValue {
+            get {
+                return ResourceManager.GetString("InitCommand_InvalidAssetValue", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Invalid client selection '{0}'. Use {1}, '{2}', or '{3}'..
+        /// </summary>
+        internal static string InitCommand_InvalidClients {
+            get {
+                return ResourceManager.GetString("InitCommand_InvalidClients", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install the dotnet-inspect bootstrap skill?.
+        /// </summary>
+        internal static string InitCommand_ConfigureDotnetInspectPrompt {
+            get {
+                return ResourceManager.GetString("InitCommand_ConfigureDotnetInspectPrompt", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Register Aspire skills and supported canvases?.
+        /// </summary>
+        internal static string InitCommand_ConfigureAspireSkillsPrompt {
+            get {
+                return ResourceManager.GetString("InitCommand_ConfigureAspireSkillsPrompt", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No agent assets selected. Existing configuration was left unchanged..
+        /// </summary>
+        internal static string InitCommand_NoAssetsSelected {
+            get {
+                return ResourceManager.GetString("InitCommand_NoAssetsSelected", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No clients selected. Existing configuration was left unchanged..
+        /// </summary>
+        internal static string InitCommand_NoClientsSelected {
+            get {
+                return ResourceManager.GetString("InitCommand_NoClientsSelected", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to project.
+        /// </summary>
+        internal static string InitCommand_ProjectScope {
+            get {
+                return ResourceManager.GetString("InitCommand_ProjectScope", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to user.
+        /// </summary>
+        internal static string InitCommand_UserScope {
+            get {
+                return ResourceManager.GetString("InitCommand_UserScope", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire MCP server.
+        /// </summary>
+        internal static string InitCommand_McpAsset {
+            get {
+                return ResourceManager.GetString("InitCommand_McpAsset", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Playwright CLI skill.
+        /// </summary>
+        internal static string InitCommand_PlaywrightAsset {
+            get {
+                return ResourceManager.GetString("InitCommand_PlaywrightAsset", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to dotnet-inspect skill.
+        /// </summary>
+        internal static string InitCommand_DotnetInspectAsset {
+            get {
+                return ResourceManager.GetString("InitCommand_DotnetInspectAsset", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire source.
+        /// </summary>
+        internal static string InitCommand_AspireSkillsAsset {
+            get {
+                return ResourceManager.GetString("InitCommand_AspireSkillsAsset", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire usage telemetry hooks.
+        /// </summary>
+        internal static string InitCommand_TelemetryHooksAsset {
+            get {
+                return ResourceManager.GetString("InitCommand_TelemetryHooksAsset", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Registered {0} for {1} ({2}): {3}.
+        /// </summary>
+        internal static string InitCommand_RegisteredTarget {
+            get {
+                return ResourceManager.GetString("InitCommand_RegisteredTarget", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Installed {0} for {1} ({2}): {3}.
+        /// </summary>
+        internal static string InitCommand_InstalledTarget {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledTarget", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Configured {0} for {1} ({2}): {3}.
+        /// </summary>
+        internal static string InitCommand_ConfiguredTarget {
+            get {
+                return ResourceManager.GetString("InitCommand_ConfiguredTarget", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Already configured {0} for {1} ({2}): {3}.
+        /// </summary>
+        internal static string InitCommand_UnchangedTarget {
+            get {
+                return ResourceManager.GetString("InitCommand_UnchangedTarget", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Skipped {0} for {1} ({2}): {3}.
+        /// </summary>
+        internal static string InitCommand_SkippedTarget {
+            get {
+                return ResourceManager.GetString("InitCommand_SkippedTarget", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Blocked {0} for {1} ({2}): {3}.
+        /// </summary>
+        internal static string InitCommand_BlockedTarget {
+            get {
+                return ResourceManager.GetString("InitCommand_BlockedTarget", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to configure {0} for {1} ({2}): {3}.
+        /// </summary>
+        internal static string InitCommand_FailedTarget {
+            get {
+                return ResourceManager.GetString("InitCommand_FailedTarget", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The selected clients acquire and load the registered Aspire content. Client trust or activation may still be required; registration does not mean the content is installed or loaded..
+        /// </summary>
+        internal static string InitCommand_ClientAcquisitionNotice {
+            get {
+                return ResourceManager.GetString("InitCommand_ClientAcquisitionNotice", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Agent configuration completed with warnings. Review the skipped or unavailable targets above..
+        /// </summary>
+        internal static string ConfigurationCompletedWithWarnings {
+            get {
+                return ResourceManager.GetString("ConfigurationCompletedWithWarnings", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire AppHost created! Open this project in {0}. After the client acquires the Aspire content, ask it to run the aspireify skill to complete setup..
+        /// </summary>
+        internal static string InitCommand_AspireifyHandoff {
+            get {
+                return ResourceManager.GetString("InitCommand_AspireifyHandoff", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Native source registered. The client owns acquisition, trust, and loading; managed policy and runtime overrides are not fully verifiable offline..
+        /// </summary>
+        internal static string Configuration_Registered {
+            get {
+                return ResourceManager.GetString("Configuration_Registered", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire MCP configuration is present. The client controls trust, policy, and server startup..
+        /// </summary>
+        internal static string Configuration_McpConfigured {
+            get {
+                return ResourceManager.GetString("Configuration_McpConfigured", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to An existing disabled choice was preserved; this entry was not enabled..
+        /// </summary>
+        internal static string Configuration_Disabled {
+            get {
+                return ResourceManager.GetString("Configuration_Disabled", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to An existing Aspire entry has a different source or command; it was not replaced..
+        /// </summary>
+        internal static string Configuration_Conflict {
+            get {
+                return ResourceManager.GetString("Configuration_Conflict", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Existing Aspire MCP settings in another applicable scope were preserved. No default entry was added that could override or broaden those customizations..
+        /// </summary>
+        internal static string Configuration_ExistingMcpCustomization {
+            get {
+                return ResourceManager.GetString("Configuration_ExistingMcpCustomization", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configuration has an unsupported JSON shape at '{0}'; this entry was left unchanged..
+        /// </summary>
+        internal static string Configuration_UnexpectedShape {
+            get {
+                return ResourceManager.GetString("Configuration_UnexpectedShape", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configuration must contain a JSON object; the file was left unchanged..
+        /// </summary>
+        internal static string Configuration_ObjectRequired {
+            get {
+                return ResourceManager.GetString("Configuration_ObjectRequired", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configuration is not valid JSON/JSONC; the file was left unchanged..
+        /// </summary>
+        internal static string Configuration_MalformedJson {
+            get {
+                return ResourceManager.GetString("Configuration_MalformedJson", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not read or write the configuration: {0}.
+        /// </summary>
+        internal static string Configuration_ReadWriteFailed {
+            get {
+                return ResourceManager.GetString("Configuration_ReadWriteFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configuration or one of its overrides changed during setup. Retry after the other writer has finished..
+        /// </summary>
+        internal static string Configuration_ConcurrentChange {
+            get {
+                return ResourceManager.GetString("Configuration_ConcurrentChange", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configuration link '{0}' could not be resolved safely; it was left unchanged..
+        /// </summary>
+        internal static string Configuration_UnsafeLink {
+            get {
+                return ResourceManager.GetString("Configuration_UnsafeLink", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to An existing policy or higher-precedence override controls this entry. It was preserved; review it in the client before enabling Aspire..
+        /// </summary>
+        internal static string Configuration_PolicyBlocked {
+            get {
+                return ResourceManager.GetString("Configuration_PolicyBlocked", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to OpenCode version and configuration evidence do not establish one compatible V1 or V2 schema. Existing files were not converted..
+        /// </summary>
+        internal static string Configuration_OpenCodeSchemaConflict {
+            get {
+                return ResourceManager.GetString("Configuration_OpenCodeSchemaConflict", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The detected OpenCode version ({0}) does not support skills.urls catalogs. Upgrade to OpenCode {1} or later; the catalog configuration was left unchanged..
+        /// </summary>
+        internal static string Configuration_OpenCodeCatalogVersionUnsupported {
+            get {
+                return ResourceManager.GetString("Configuration_OpenCodeCatalogVersionUnsupported", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Multiple OpenCode configuration files apply at this scope. Consolidate them before configuring Aspire..
+        /// </summary>
+        internal static string Configuration_OpenCodeMultipleFiles {
+            get {
+                return ResourceManager.GetString("Configuration_OpenCodeMultipleFiles", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to This client configuration override cannot be resolved safely offline. Configure this target in the client; no guessed path was written..
+        /// </summary>
+        internal static string Configuration_UnsupportedOverride {
+            get {
+                return ResourceManager.GetString("Configuration_UnsupportedOverride", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The user-level Aspire usage hook is configured. Telemetry opt-out settings still apply..
+        /// </summary>
+        internal static string Configuration_HookConfigured {
+            get {
+                return ResourceManager.GetString("Configuration_HookConfigured", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not prepare the embedded usage hook scripts: {0}.
+        /// </summary>
+        internal static string Configuration_HookInstallationFailed {
+            get {
+                return ResourceManager.GetString("Configuration_HookInstallationFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to An existing project-level Aspire usage hook was preserved. No additional user hook was added, to avoid duplicate events..
+        /// </summary>
+        internal static string Configuration_ExistingProjectHook {
+            get {
+                return ResourceManager.GetString("Configuration_ExistingProjectHook", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire MCP configuration is present for this VS Code profile. Session-only --user-data-dir overrides and remote profiles must be configured in VS Code..
+        /// </summary>
+        internal static string Configuration_ProfileLimitations {
+            get {
+                return ResourceManager.GetString("Configuration_ProfileLimitations", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to install Playwright CLI or generate its skill files: {0}.
+        /// </summary>
+        internal static string PlaywrightCliInstaller_InstallationFailed {
+            get {
+                return ResourceManager.GetString("PlaywrightCliInstaller_InstallationFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The generated Playwright CLI skill contains a symbolic link: {0}.
+        /// </summary>
+        internal static string PlaywrightCliInstaller_LinkedSkillEntry {
+            get {
+                return ResourceManager.GetString("PlaywrightCliInstaller_LinkedSkillEntry", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The skill file resolves outside the selected skill directory: {0}.
+        /// </summary>
+        internal static string InitCommand_SkillFileOutsideTarget {
+            get {
+                return ResourceManager.GetString("InitCommand_SkillFileOutsideTarget", resourceCulture);
+            }
+        }
     }
 }

@@ -59,7 +59,7 @@ internal static class AgentPath
     {
         if (depth > 40)
         {
-            throw new AgentConfigurationException(string.Format(CultureInfo.CurrentCulture, AgentConfigurationStrings.UnsafeLink, path));
+            throw new AgentConfigurationException(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.Configuration_UnsafeLink, path));
         }
 
         var fullPath = Path.GetFullPath(path);
@@ -82,7 +82,7 @@ internal static class AgentPath
             var target = info.ResolveLinkTarget(returnFinalTarget: true);
             if (target is null || !target.Exists)
             {
-                throw new AgentConfigurationException(string.Format(CultureInfo.CurrentCulture, AgentConfigurationStrings.UnsafeLink, resolved));
+                throw new AgentConfigurationException(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.Configuration_UnsafeLink, resolved));
             }
 
             resolved = Resolve(target.FullName, depth + 1);

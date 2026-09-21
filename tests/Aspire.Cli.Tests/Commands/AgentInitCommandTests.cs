@@ -219,11 +219,11 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             [
                 AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt,
-                AgentInitStrings.ConfigurePlaywrightPrompt,
-                AgentInitStrings.ConfigureDotnetInspectPrompt,
-                AgentInitStrings.ConfigureAspireSkillsPrompt,
+                McpCommandStrings.InitCommand_ConfigurePlaywrightPrompt,
+                AgentCommandStrings.InitCommand_ConfigureDotnetInspectPrompt,
+                AgentCommandStrings.InitCommand_ConfigureAspireSkillsPrompt,
                 "detect",
-                AgentInitStrings.SelectClients,
+                McpCommandStrings.InitCommand_AgentConfigurationSelectPrompt,
                 "configure"
             ],
             operations);
@@ -383,7 +383,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Empty(detector.Requests);
         Assert.Empty(service.Requests);
-        var expectedError = string.Format(CultureInfo.CurrentCulture, AgentInitStrings.InvalidClients,
+        var expectedError = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InvalidClients,
             clients, "copilot-cli,copilot-app,vscode,claude-code,opencode", "all", "none");
         Assert.Equal(expectedError, Assert.Single(parseResult.Errors).Message);
     }
@@ -525,21 +525,21 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var logFilePath = provider.GetRequiredService<CliExecutionContext>().LogFilePath;
         var targetFormat = status switch
         {
-            "Configured" => AgentInitStrings.RegisteredTarget,
-            "Unchanged" => AgentInitStrings.UnchangedTarget,
-            "Skipped" => AgentInitStrings.SkippedTarget,
-            "Blocked" => AgentInitStrings.BlockedTarget,
-            "Failed" => AgentInitStrings.FailedTarget,
+            "Configured" => AgentCommandStrings.InitCommand_RegisteredTarget,
+            "Unchanged" => AgentCommandStrings.InitCommand_UnchangedTarget,
+            "Skipped" => AgentCommandStrings.InitCommand_SkippedTarget,
+            "Blocked" => AgentCommandStrings.InitCommand_BlockedTarget,
+            "Failed" => AgentCommandStrings.InitCommand_FailedTarget,
             _ => throw new InvalidOperationException($"Unexpected status: {status}")
         };
         var targetMessage = string.Format(CultureInfo.CurrentCulture, targetFormat,
-            AgentInitStrings.AspireSkillsAsset, "GitHub Copilot CLI, GitHub Copilot App",
-            AgentInitStrings.ProjectScope, "project-settings.json");
+            AgentCommandStrings.InitCommand_AspireSkillsAsset, "GitHub Copilot CLI, GitHub Copilot App",
+            AgentCommandStrings.InitCommand_ProjectScope, "project-settings.json");
         string[] expectedMessages = status switch
         {
             "Configured" => [targetMessage],
             "Unchanged" => [],
-            "Skipped" => [targetMessage, AgentInitStrings.ConfigurationCompletedWithWarnings],
+            "Skipped" => [targetMessage, AgentCommandStrings.ConfigurationCompletedWithWarnings],
             _ =>
             [
                 AgentCommandStrings.ConfigurationCompletedWithErrors,
@@ -550,8 +550,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         string[] expectedSuccess = status is "Configured" or "Unchanged" ? [McpCommandStrings.InitCommand_ConfigurationComplete] : [];
         string[] expectedSubtleMessages = status switch
         {
-            "Configured" => ["Native client owns acquisition.", AgentInitStrings.ClientAcquisitionNotice],
-            "Unchanged" => [targetMessage, "Native client owns acquisition.", AgentInitStrings.ClientAcquisitionNotice],
+            "Configured" => ["Native client owns acquisition.", AgentCommandStrings.InitCommand_ClientAcquisitionNotice],
+            "Unchanged" => [targetMessage, "Native client owns acquisition.", AgentCommandStrings.InitCommand_ClientAcquisitionNotice],
             _ => ["Native client owns acquisition."]
         };
         Assert.Equal(expectedMessages, interaction.DisplayedMessages.Select(message => message.Message.Replace(logFilePath, "<log-file>", StringComparison.Ordinal)));
@@ -594,14 +594,14 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(KnownEmojis.Warning, interaction.DisplayedMessages[^1].Emoji);
         Assert.Equal(
         [
-            string.Format(CultureInfo.CurrentCulture, AgentInitStrings.RegisteredTarget,
-                AgentInitStrings.AspireSkillsAsset, "GitHub Copilot CLI", AgentInitStrings.ProjectScope, "project-settings.json"),
-            string.Format(CultureInfo.CurrentCulture, status == "Blocked" ? AgentInitStrings.BlockedTarget : AgentInitStrings.FailedTarget,
-                AgentInitStrings.TelemetryHooksAsset, "GitHub Copilot CLI", AgentInitStrings.UserScope, "user-hooks.json"),
-            AgentInitStrings.ConfigurationCompletedWithWarnings
+            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RegisteredTarget,
+                AgentCommandStrings.InitCommand_AspireSkillsAsset, "GitHub Copilot CLI", AgentCommandStrings.InitCommand_ProjectScope, "project-settings.json"),
+            string.Format(CultureInfo.CurrentCulture, status == "Blocked" ? AgentCommandStrings.InitCommand_BlockedTarget : AgentCommandStrings.InitCommand_FailedTarget,
+                AgentCommandStrings.InitCommand_TelemetryHooksAsset, "GitHub Copilot CLI", AgentCommandStrings.InitCommand_UserScope, "user-hooks.json"),
+            AgentCommandStrings.ConfigurationCompletedWithWarnings
         ],
         interaction.DisplayedMessages.Select(message => message.Message));
-        Assert.Equal(["The hook could not be written.", AgentInitStrings.ClientAcquisitionNotice], subtleMessages);
+        Assert.Equal(["The hook could not be written.", AgentCommandStrings.InitCommand_ClientAcquisitionNotice], subtleMessages);
     }
 
     [Fact]
@@ -633,10 +633,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(
         [
-            string.Format(CultureInfo.CurrentCulture, AgentInitStrings.InstalledTarget,
-                AgentInitStrings.PlaywrightAsset, "Claude Code", AgentInitStrings.ProjectScope, "playwright-cli"),
-            string.Format(CultureInfo.CurrentCulture, AgentInitStrings.InstalledTarget,
-                AgentInitStrings.DotnetInspectAsset, "Claude Code", AgentInitStrings.UserScope, "dotnet-inspect")
+            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledTarget,
+                AgentCommandStrings.InitCommand_PlaywrightAsset, "Claude Code", AgentCommandStrings.InitCommand_ProjectScope, "playwright-cli"),
+            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledTarget,
+                AgentCommandStrings.InitCommand_DotnetInspectAsset, "Claude Code", AgentCommandStrings.InitCommand_UserScope, "dotnet-inspect")
         ],
         interaction.DisplayedMessages.Select(message => message.Message));
     }
@@ -755,8 +755,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(outputRoot.FullName, request.WorkspaceRoot.FullName);
         Assert.False(request.Assets.Mcp);
         Assert.Equal(
-            [SharedCommandStrings.PromptRunAgentInit, AgentInitStrings.ConfigurePlaywrightPrompt,
-                AgentInitStrings.ConfigureDotnetInspectPrompt, AgentInitStrings.ConfigureAspireSkillsPrompt],
+            [SharedCommandStrings.PromptRunAgentInit, McpCommandStrings.InitCommand_ConfigurePlaywrightPrompt,
+                AgentCommandStrings.InitCommand_ConfigureDotnetInspectPrompt, AgentCommandStrings.InitCommand_ConfigureAspireSkillsPrompt],
             interaction.BooleanPromptCalls.Select(call => call.PromptText));
     }
 

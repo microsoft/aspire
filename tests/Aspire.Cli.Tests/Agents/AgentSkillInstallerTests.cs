@@ -588,7 +588,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         Assert.All(results, static result =>
         {
             Assert.Equal(AgentConfigurationStatus.Failed, result.Status);
-            Assert.Equal(AgentSkillInstallerStrings.PlaywrightMissingSkill, result.Message);
+            Assert.Equal(AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles, result.Message);
         });
         Assert.Equal(1, playwrightRunner.InstallSkillsCallCount);
         Assert.Empty(project.EnumerateFileSystemInfos());
@@ -612,7 +612,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         Assert.All(results.Where(static result => result.Asset is AgentAssetKind.Playwright), static result =>
         {
             Assert.Equal(AgentConfigurationStatus.Blocked, result.Status);
-            Assert.Equal(AgentSkillInstallerStrings.PlaywrightNpmRequired, result.Message);
+            Assert.Equal(AgentCommandStrings.InitCommand_PlaywrightCliSkipped, result.Message);
         });
         Assert.All(results.Where(static result => result.Asset is AgentAssetKind.DotnetInspect),
             static result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
@@ -673,7 +673,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         var failure = Assert.Single(results, static result => result.Scope is AgentConfigurationScope.Project);
         Assert.Equal(AgentConfigurationStatus.Failed, failure.Status);
         Assert.Equal([AgentClientKind.CopilotCli, AgentClientKind.ClaudeCode], failure.Clients);
-        Assert.Contains(AgentConfigurationStrings.ConcurrentChange, failure.Message!);
+        Assert.Contains(AgentCommandStrings.Configuration_ConcurrentChange, failure.Message!);
         Assert.All(results.Where(static result => result.Scope is AgentConfigurationScope.User),
             static result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
         foreach (var directory in new[] { shared, redirected })

@@ -35,12 +35,12 @@ internal static class McpConfiguration
             }
 
             servers[ServerName] = server;
-            return AgentConfigurationEdit.Applied(AgentConfigurationStrings.McpConfigured);
+            return AgentConfigurationEdit.Applied(AgentCommandStrings.Configuration_McpConfigured);
         }
 
         if (node is JsonValue disabledValue && disabledValue.TryGetValue<bool>(out var value) && !value)
         {
-            return AgentConfigurationEdit.Skipped(AgentConfigurationStrings.Disabled);
+            return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_Disabled);
         }
 
         if (node is not JsonObject existing)
@@ -51,13 +51,13 @@ internal static class McpConfiguration
         if (AgentConfigurationJson.Boolean(existing, "enabled") is false ||
             AgentConfigurationJson.Boolean(existing, "disabled") is true)
         {
-            return AgentConfigurationEdit.Skipped(AgentConfigurationStrings.Disabled);
+            return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_Disabled);
         }
 
         if (existing.TryGetPropertyValue("type", out var typeNode) &&
             AgentConfigurationJson.String(typeNode) is not ("stdio" or "local"))
         {
-            return AgentConfigurationEdit.Blocked(AgentConfigurationStrings.Conflict);
+            return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_Conflict);
         }
 
         JsonArray arguments;
@@ -68,7 +68,7 @@ internal static class McpConfiguration
                 ?? throw AgentConfigurationJson.Shape("command");
             if (arguments.Count == 0 || !IsAspireExecutable(AgentConfigurationJson.String(arguments[0])))
             {
-                return AgentConfigurationEdit.Blocked(AgentConfigurationStrings.Conflict);
+                return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_Conflict);
             }
 
             offset = 1;
@@ -77,7 +77,7 @@ internal static class McpConfiguration
         {
             if (!IsAspireExecutable(AgentConfigurationJson.String(existing["command"])))
             {
-                return AgentConfigurationEdit.Blocked(AgentConfigurationStrings.Conflict);
+                return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_Conflict);
             }
 
             arguments = AgentConfigurationJson.OptionalStrings(existing, "args")
@@ -98,10 +98,10 @@ internal static class McpConfiguration
                  AgentConfigurationJson.String(arguments[offset]) != "agent" ||
                  AgentConfigurationJson.String(arguments[offset + 1]) != "mcp")
         {
-            return AgentConfigurationEdit.Blocked(AgentConfigurationStrings.Conflict);
+            return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_Conflict);
         }
 
-        return AgentConfigurationEdit.Applied(AgentConfigurationStrings.McpConfigured);
+        return AgentConfigurationEdit.Applied(AgentCommandStrings.Configuration_McpConfigured);
     }
 
     public static AgentConfigurationEdit? CheckPolicy(IEnumerable<JsonObject> settings)
@@ -119,14 +119,14 @@ internal static class McpConfiguration
             {
                 if (AgentConfigurationJson.OptionalStrings(root, key)?.Any(value => AgentConfigurationJson.String(value) == ServerName) is true)
                 {
-                    return AgentConfigurationEdit.Skipped(AgentConfigurationStrings.Disabled);
+                    return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_Disabled);
                 }
             }
 
             if (ReadPolicyEntries(root, "deniedMcpServers") is { } denied &&
                 denied.Any(entry => !IsNameOnlyPolicy(entry) || MatchesName(entry)))
             {
-                return AgentConfigurationEdit.Blocked(AgentConfigurationStrings.PolicyBlocked);
+                return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_PolicyBlocked);
             }
         }
 
@@ -141,7 +141,7 @@ internal static class McpConfiguration
         {
             // Command/URL patterns and dynamic matcher forms cannot be safely evaluated
             // without the client's policy engine. Leave them intact and report the limitation.
-            return AgentConfigurationEdit.Blocked(AgentConfigurationStrings.PolicyBlocked);
+            return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_PolicyBlocked);
         }
 
         return null;

@@ -26,14 +26,14 @@ internal static class AgentConfigurationJson
             }
 
             var root = JsonNode.Parse(content, documentOptions: ConfigurationHelper.ParseOptions) as JsonObject
-                ?? throw new AgentConfigurationException(AgentConfigurationStrings.ObjectRequired);
+                ?? throw new AgentConfigurationException(AgentCommandStrings.Configuration_ObjectRequired);
             Materialize(root);
 
             return root;
         }
         catch (Exception ex) when (ex is JsonException or ArgumentException)
         {
-            throw new AgentConfigurationException(AgentConfigurationStrings.MalformedJson);
+            throw new AgentConfigurationException(AgentCommandStrings.Configuration_MalformedJson);
         }
     }
 
@@ -81,7 +81,7 @@ internal static class AgentConfigurationJson
     }
 
     public static AgentConfigurationException Shape(string key)
-        => new(string.Format(CultureInfo.CurrentCulture, AgentConfigurationStrings.UnexpectedShape, key));
+        => new(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.Configuration_UnexpectedShape, key));
 
     public static async Task<IReadOnlyList<JsonObject>> ReadSettingsAsync(
         AgentConfigurationWriter.ReadContext context,

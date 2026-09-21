@@ -29,9 +29,9 @@ internal sealed class AgentInitCommand : BaseCommand
     };
 
     internal static readonly Option<AgentConfirmation?> s_mcpOption = CreateAssetOption("--mcp", AgentCommandStrings.InitCommand_McpOptionDescription);
-    internal static readonly Option<AgentConfirmation?> s_playwrightOption = CreateAssetOption("--playwright", AgentInitStrings.PlaywrightOptionDescription);
-    internal static readonly Option<AgentConfirmation?> s_dotnetInspectOption = CreateAssetOption("--dotnet-inspect", AgentInitStrings.DotnetInspectOptionDescription);
-    internal static readonly Option<AgentConfirmation?> s_aspireSkillsOption = CreateAssetOption("--aspire-skills", AgentInitStrings.AspireSkillsOptionDescription);
+    internal static readonly Option<AgentConfirmation?> s_playwrightOption = CreateAssetOption("--playwright", AgentCommandStrings.InitCommand_PlaywrightOptionDescription);
+    internal static readonly Option<AgentConfirmation?> s_dotnetInspectOption = CreateAssetOption("--dotnet-inspect", AgentCommandStrings.InitCommand_DotnetInspectOptionDescription);
+    internal static readonly Option<AgentConfirmation?> s_aspireSkillsOption = CreateAssetOption("--aspire-skills", AgentCommandStrings.InitCommand_AspireSkillsOptionDescription);
 
     internal static readonly Option<string?> s_clientsOption = CreateClientsOption();
 
@@ -155,7 +155,7 @@ internal sealed class AgentInitCommand : BaseCommand
                     return AgentConfirmation.No;
                 }
 
-                result.AddError(string.Format(CultureInfo.CurrentCulture, AgentInitStrings.InvalidAssetValue, name, value));
+                result.AddError(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InvalidAssetValue, name, value));
                 return null;
             }
         };
@@ -179,7 +179,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         return new Option<string?>("--clients")
         {
-            Description = string.Format(CultureInfo.InvariantCulture, AgentInitStrings.ClientsOptionDescription,
+            Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_ClientsOptionDescription,
                 supportedClients, ConsoleInteractionService.AllChoice, ConsoleInteractionService.NoneChoice),
             Recursive = true,
             CustomParser = result =>
@@ -200,7 +200,7 @@ internal sealed class AgentInitCommand : BaseCommand
                 if (requestedClients.Length == 0 ||
                     requestedClients.Any(client => !clientIds.Contains(client, StringComparer.OrdinalIgnoreCase)))
                 {
-                    result.AddError(string.Format(CultureInfo.CurrentCulture, AgentInitStrings.InvalidClients,
+                    result.AddError(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InvalidClients,
                         value, supportedClients, ConsoleInteractionService.AllChoice, ConsoleInteractionService.NoneChoice));
                 }
 
@@ -246,22 +246,22 @@ internal sealed class AgentInitCommand : BaseCommand
             binding: bindings.Mcp,
             cancellationToken: cancellationToken);
         var playwright = await InteractionService.PromptConfirmAsync(
-            AgentInitStrings.ConfigurePlaywrightPrompt,
+            McpCommandStrings.InitCommand_ConfigurePlaywrightPrompt,
             binding: bindings.Playwright,
             cancellationToken: cancellationToken);
         var dotnetInspect = await InteractionService.PromptConfirmAsync(
-            AgentInitStrings.ConfigureDotnetInspectPrompt,
+            AgentCommandStrings.InitCommand_ConfigureDotnetInspectPrompt,
             binding: bindings.DotnetInspect,
             cancellationToken: cancellationToken);
         var aspireSkills = await InteractionService.PromptConfirmAsync(
-            AgentInitStrings.ConfigureAspireSkillsPrompt,
+            AgentCommandStrings.InitCommand_ConfigureAspireSkillsPrompt,
             binding: bindings.AspireSkills,
             cancellationToken: cancellationToken);
         var assets = new AgentAssetSelection(mcp, playwright, dotnetInspect, aspireSkills);
 
         if (!assets.HasAssets)
         {
-            InteractionService.DisplaySubtleMessage(AgentInitStrings.NoAssetsSelected);
+            InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoAssetsSelected);
             return new(CliExitCodes.Success, []);
         }
 
@@ -283,7 +283,7 @@ internal sealed class AgentInitCommand : BaseCommand
             ? bindings.Clients
             : bindings.Clients.WithDefault(string.Join(",", defaults.Select(static client => client.Id)));
         var clients = await InteractionService.PromptForSelectionsAsync(
-            AgentInitStrings.SelectClients,
+            McpCommandStrings.InitCommand_AgentConfigurationSelectPrompt,
             _clientCatalog.Clients,
             static client => client.DisplayName,
             preSelected: defaults,
@@ -293,7 +293,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (clients.Count == 0)
         {
-            InteractionService.DisplaySubtleMessage(AgentInitStrings.NoClientsSelected);
+            InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoClientsSelected);
             return new(CliExitCodes.Success, []);
         }
 
@@ -324,25 +324,25 @@ internal sealed class AgentInitCommand : BaseCommand
         foreach (var target in result.Targets)
         {
             var clients = string.Join(", ", target.Clients.Select(client => _clientCatalog.Get(client).DisplayName));
-            var scope = target.Scope is AgentConfigurationScope.Project ? AgentInitStrings.ProjectScope : AgentInitStrings.UserScope;
+            var scope = target.Scope is AgentConfigurationScope.Project ? AgentCommandStrings.InitCommand_ProjectScope : AgentCommandStrings.InitCommand_UserScope;
             var asset = target.Asset switch
             {
-                AgentAssetKind.Mcp => AgentInitStrings.McpAsset,
-                AgentAssetKind.Playwright => AgentInitStrings.PlaywrightAsset,
-                AgentAssetKind.DotnetInspect => AgentInitStrings.DotnetInspectAsset,
-                AgentAssetKind.AspireSkills => AgentInitStrings.AspireSkillsAsset,
-                AgentAssetKind.TelemetryHooks => AgentInitStrings.TelemetryHooksAsset,
+                AgentAssetKind.Mcp => AgentCommandStrings.InitCommand_McpAsset,
+                AgentAssetKind.Playwright => AgentCommandStrings.InitCommand_PlaywrightAsset,
+                AgentAssetKind.DotnetInspect => AgentCommandStrings.InitCommand_DotnetInspectAsset,
+                AgentAssetKind.AspireSkills => AgentCommandStrings.InitCommand_AspireSkillsAsset,
+                AgentAssetKind.TelemetryHooks => AgentCommandStrings.InitCommand_TelemetryHooksAsset,
                 _ => throw new UnreachableException()
             };
             var format = target.Status switch
             {
-                AgentConfigurationStatus.Configured when target.Asset is AgentAssetKind.AspireSkills => AgentInitStrings.RegisteredTarget,
-                AgentConfigurationStatus.Configured when target.Asset is AgentAssetKind.Playwright or AgentAssetKind.DotnetInspect => AgentInitStrings.InstalledTarget,
-                AgentConfigurationStatus.Configured => AgentInitStrings.ConfiguredTarget,
-                AgentConfigurationStatus.Unchanged => AgentInitStrings.UnchangedTarget,
-                AgentConfigurationStatus.Skipped => AgentInitStrings.SkippedTarget,
-                AgentConfigurationStatus.Blocked => AgentInitStrings.BlockedTarget,
-                AgentConfigurationStatus.Failed => AgentInitStrings.FailedTarget,
+                AgentConfigurationStatus.Configured when target.Asset is AgentAssetKind.AspireSkills => AgentCommandStrings.InitCommand_RegisteredTarget,
+                AgentConfigurationStatus.Configured when target.Asset is AgentAssetKind.Playwright or AgentAssetKind.DotnetInspect => AgentCommandStrings.InitCommand_InstalledTarget,
+                AgentConfigurationStatus.Configured => AgentCommandStrings.InitCommand_ConfiguredTarget,
+                AgentConfigurationStatus.Unchanged => AgentCommandStrings.InitCommand_UnchangedTarget,
+                AgentConfigurationStatus.Skipped => AgentCommandStrings.InitCommand_SkippedTarget,
+                AgentConfigurationStatus.Blocked => AgentCommandStrings.InitCommand_BlockedTarget,
+                AgentConfigurationStatus.Failed => AgentCommandStrings.InitCommand_FailedTarget,
                 _ => throw new UnreachableException()
             };
             var message = string.Format(CultureInfo.CurrentCulture, format, asset, clients, scope, target.TargetPath);
@@ -370,13 +370,13 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (result.RegisteredClients.Count > 0)
         {
-            InteractionService.DisplaySubtleMessage(AgentInitStrings.ClientAcquisitionNotice);
+            InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_ClientAcquisitionNotice);
         }
 
         if (result.HasErrors || result.HasWarnings)
         {
             InteractionService.DisplayMessage(KnownEmojis.Warning,
-                result.HasErrors ? AgentCommandStrings.ConfigurationCompletedWithErrors : AgentInitStrings.ConfigurationCompletedWithWarnings);
+                result.HasErrors ? AgentCommandStrings.ConfigurationCompletedWithErrors : AgentCommandStrings.ConfigurationCompletedWithWarnings);
         }
         else
         {

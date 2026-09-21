@@ -59,7 +59,7 @@ internal static class VsCodeAgentConfiguration
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                error = string.Format(CultureInfo.CurrentCulture, AgentConfigurationStrings.ReadWriteFailed, ex.Message);
+                error = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.Configuration_ReadWriteFailed, ex.Message);
             }
 
             if (error is not null)
@@ -86,7 +86,7 @@ internal static class VsCodeAgentConfiguration
                 {
                     var edit = McpConfiguration.Apply(root, "servers", commandArray: false, "stdio");
                     return Task.FromResult(scope is AgentConfigurationScope.User && edit.Status is AgentConfigurationStatus.Configured
-                        ? edit with { Message = AgentConfigurationStrings.ProfileLimitations }
+                        ? edit with { Message = AgentCommandStrings.Configuration_ProfileLimitations }
                         : edit);
                 });
     }

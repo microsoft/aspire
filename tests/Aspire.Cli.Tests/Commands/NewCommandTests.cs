@@ -3242,8 +3242,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(
-            [SharedCommandStrings.PromptRunAgentInit, AgentInitStrings.ConfigurePlaywrightPrompt,
-                AgentInitStrings.ConfigureDotnetInspectPrompt, AgentInitStrings.ConfigureAspireSkillsPrompt],
+            [SharedCommandStrings.PromptRunAgentInit, McpCommandStrings.InitCommand_ConfigurePlaywrightPrompt,
+                AgentCommandStrings.InitCommand_ConfigureDotnetInspectPrompt, AgentCommandStrings.InitCommand_ConfigureAspireSkillsPrompt],
             interactionService.BooleanPromptCalls.Select(call => call.PromptText));
         Assert.Equal([true, false, false, true], interactionService.BooleanPromptCalls.Select(call => call.DefaultValue));
         var service = Assert.IsType<TestAgentInitService>(provider.GetRequiredService<IAgentInitService>());

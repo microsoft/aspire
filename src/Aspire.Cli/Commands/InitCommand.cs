@@ -184,7 +184,7 @@ internal sealed class InitCommand : BaseCommand
             var clients = string.Join(", ", agentInitResult.RegisteredClients.Select(client => catalog.Get(client).DisplayName));
             InteractionService.DisplayEmptyLine();
             InteractionService.DisplayMessage(KnownEmojis.Dizzy,
-                string.Format(CultureInfo.CurrentCulture, AgentInitStrings.AspireifyHandoff, clients));
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_AspireifyHandoff, clients));
         }
 
         return CommandResult.FromExitCode(agentInitResult.ExitCode);

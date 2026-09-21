@@ -208,7 +208,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         {
             Assert.Equal(AgentConfigurationStatus.Configured, result.Status);
             Assert.Equal(AgentConfigurationScope.User, result.Scope);
-            Assert.Equal(AgentConfigurationStrings.HookConfigured, result.Message);
+            Assert.Equal(AgentCommandStrings.Configuration_HookConfigured, result.Message);
         });
         Assert.Equal(1, context.HookInstaller.Calls);
         Assert.Empty(context.Project.EnumerateFileSystemInfos());
@@ -347,7 +347,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
             target => Assert.Equal(AgentConfigurationStatus.Unchanged, target.Status));
         var hook = Assert.Single(result.Targets, target => target.Asset is AgentAssetKind.TelemetryHooks);
         Assert.Equal(AgentConfigurationStatus.Skipped, hook.Status);
-        Assert.Equal(AgentConfigurationStrings.ExistingProjectHook, hook.Message);
+        Assert.Equal(AgentCommandStrings.Configuration_ExistingProjectHook, hook.Message);
         Assert.Equal(0, context.HookInstaller.Calls);
         Assert.Equal(existing, await File.ReadAllTextAsync(projectPath).DefaultTimeout());
         Assert.Null((await ReadObjectAsync(hook.TargetPath).DefaultTimeout())["hooks"]);
@@ -372,7 +372,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
             target => Assert.Equal(AgentConfigurationStatus.Unchanged, target.Status));
         var hook = Assert.Single(result.Targets, target => target.Asset is AgentAssetKind.TelemetryHooks);
         Assert.Equal(AgentConfigurationStatus.Skipped, hook.Status);
-        Assert.Equal(AgentConfigurationStrings.PolicyBlocked, hook.Message);
+        Assert.Equal(AgentCommandStrings.Configuration_PolicyBlocked, hook.Message);
         Assert.Equal(existing, await File.ReadAllTextAsync(path).DefaultTimeout());
         Assert.Equal(0, context.HookInstaller.Calls);
     }
