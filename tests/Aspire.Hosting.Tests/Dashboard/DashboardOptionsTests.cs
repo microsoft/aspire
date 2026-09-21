@@ -12,6 +12,28 @@ namespace Aspire.Hosting.Tests.Dashboard;
 public class DashboardOptionsTests
 {
     [Theory]
+    [InlineData(null, true)]
+    [InlineData("", true)]
+    [InlineData("invalid", true)]
+    [InlineData("false", false)]
+    [InlineData("true", true)]
+    public void UseManagedDashboard_ConfiguredCorrectly(string? configurationValue, bool expectedValue)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            { "AppHost:UseManagedDashboard", configurationValue },
+            { KnownAspNetCoreConfigNames.Environment, "Development" },
+            { KnownAspNetCoreConfigNames.Urls, "http://localhost:8080" },
+            { KnownConfigNames.DashboardOtlpGrpcEndpointUrl, "http://localhost:4317" }
+        });
+
+        using var app = builder.Build();
+        var dashboardOptions = app.Services.GetRequiredService<IOptions<DashboardOptions>>().Value;
+        Assert.Equal(expectedValue, dashboardOptions.UseManagedDashboard);
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
