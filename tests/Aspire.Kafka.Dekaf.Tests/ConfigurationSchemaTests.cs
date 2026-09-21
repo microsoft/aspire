@@ -16,6 +16,8 @@ public class ConfigurationSchemaTests
     [InlineData("Consumer", false)]
     [InlineData("AdminClient", true)]
     [InlineData("AdminClient", false)]
+    [InlineData("SchemaRegistry", true)]
+    [InlineData("SchemaRegistry", false)]
     public void SchemaValidatesAspireSettings(string role, bool valid)
     {
         var schema = JsonSchema.FromFile(Path.Combine(AppContext.BaseDirectory, "ConfigurationSchema.json"),
@@ -27,7 +29,7 @@ public class ConfigurationSchemaTests
                   "Dekaf": {
                     "{{role}}": {
                       "ConnectionString": "localhost:9092",
-                      "DisableMetrics": {{(valid ? "false" : "123")}},
+                      "DisableHealthChecks": {{(valid ? "false" : "123")}},
                       "Config": { "ClientId": "schema-test" },
                       "HealthCheck": { "Timeout": "00:00:02" }
                     }

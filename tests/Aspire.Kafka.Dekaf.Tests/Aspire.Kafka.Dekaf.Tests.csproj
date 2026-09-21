@@ -5,9 +5,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The linked Kafka fixture and component tests already import Xunit explicitly. -->
+    <Using Remove="Xunit" />
     <ProjectReference Include="..\..\src\Components\Aspire.Kafka.Dekaf\Aspire.Kafka.Dekaf.csproj" />
     <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />
     <PackageReference Include="TestContainers.Kafka" />
+    <PackageReference Include="Dekaf.SchemaRegistry.Avro" />
+    <PackageReference Include="Dekaf.SchemaRegistry.Protobuf" />
+    <!-- Dekaf's optional Protobuf serializer requires a newer patch than the repository-wide version. -->
+    <PackageReference Include="Google.Protobuf" VersionOverride="3.36.2" />
+    <PackageReference Include="Verify.XunitV3" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
     <Compile Include="..\Aspire.Confluent.Kafka.Tests\KafkaContainerFixture.cs" Link="KafkaContainerFixture.cs" />
     <Compile Include="$(RepoRoot)src\Aspire.Hosting.Kafka\KafkaContainerImageTags.cs" />

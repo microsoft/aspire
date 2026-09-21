@@ -7,6 +7,7 @@ using Aspire.Kafka.Dekaf;
 [assembly: ConfigurationSchema("Aspire:Kafka:Dekaf:Producer", typeof(KafkaProducerSettings))]
 [assembly: ConfigurationSchema("Aspire:Kafka:Dekaf:Consumer", typeof(KafkaConsumerSettings))]
 [assembly: ConfigurationSchema("Aspire:Kafka:Dekaf:AdminClient", typeof(KafkaAdminClientSettings))]
+[assembly: ConfigurationSchema("Aspire:Kafka:Dekaf:SchemaRegistry", typeof(SchemaRegistrySettings), exclusionPaths: ["Config"])]
 [assembly: LoggingCategories("Dekaf")]
 
 // Native Dekaf options use init-only properties, which the schema generator does not yet

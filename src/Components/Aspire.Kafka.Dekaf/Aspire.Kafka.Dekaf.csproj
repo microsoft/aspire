@@ -5,7 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>true</IsPackable>
     <PackageTags>$(ComponentCommonPackageTags) kafka messaging eventing dekaf</PackageTags>
-    <Description>Dekaf Kafka producers, consumers, and admin clients that integrate with Aspire, including health checks, logging, tracing, and metrics.</Description>
+    <Description>Dekaf Kafka producers, consumers, admin clients, and schema registry clients that integrate with Aspire, including health checks, logging, tracing, and metrics.</Description>
     <!-- Dekaf configuration binding requires reflection; registration APIs carry the corresponding annotations. -->
     <IsAotCompatible>false</IsAotCompatible>
     <EnableConfigurationBindingGenerator>false</EnableConfigurationBindingGenerator>
@@ -21,6 +21,7 @@
   <ItemGroup>
     <PackageReference Include="Dekaf.Extensions.DependencyInjection" />
     <PackageReference Include="Dekaf.Extensions.HealthChecks" />
+    <PackageReference Include="Dekaf.SchemaRegistry" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />

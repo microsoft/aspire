@@ -2,6 +2,8 @@
 
 Registers [Dekaf](https://thomhurst.github.io/Dekaf/) Kafka producers, consumers, and admin clients with dependency injection, logging, health checks, and OpenTelemetry tracing and metrics. Dekaf implements the Kafka protocol in managed .NET code and does not depend on Confluent.Kafka or librdkafka.
 
+Also registers schema registry clients with configuration, keyed dependency injection, and health checks for use with Dekaf's JSON, Avro, and Protobuf serializers.
+
 ## Getting started
 
 This integration requires .NET 10 or later and an Apache Kafka broker. Install the package in the application that sends or receives messages:
@@ -167,6 +169,70 @@ var producer = host.Services.GetRequiredKeyedService<IKafkaProducer<string, stri
 
 The name is both the service key and connection string name. Each keyed registration receives its own health check.
 
+## Schema registries
+
+Register a Dekaf `ISchemaRegistryClient` for a registry implementing the Confluent Schema Registry REST API:
+
+```csharp
+using Dekaf.SchemaRegistry;
+using Microsoft.Extensions.DependencyInjection;
+
+builder.AddDekafSchemaRegistryClient("schema-registry");
+
+const string orderSchema = """
+    {"type":"object","properties":{"Id":{"type":"string"}},"required":["Id"]}
+    """;
+
+builder.AddDekafKafkaProducer<string, Order>("messaging",
+    configureBuilder: (services, producer) => producer.UseJsonSchemaRegistry(
+        services.GetRequiredService<ISchemaRegistryClient>(), orderSchema));
+
+builder.AddDekafKafkaConsumer<string, Order>("messaging",
+    configureBuilder: (services, consumer) => consumer
+        .UseJsonSchemaRegistry(services.GetRequiredService<ISchemaRegistryClient>())
+        .WithGroupId("orders-service")
+        .SubscribeTo("orders"));
+```
+
+Set `ConnectionStrings:schema-registry` to a registry URL, or a comma-separated list of failover URLs. Registry settings bind from `Aspire:Kafka:Dekaf:SchemaRegistry`, followed by its named subsection. The connection string overrides `Config.Url` and `Config.Urls`; `configureSettings` runs last.
+
+```json
+{
+  "ConnectionStrings": {
+    "schema-registry": "https://registry.example.com"
+  },
+  "Aspire": {
+    "Kafka": {
+      "Dekaf": {
+        "SchemaRegistry": {
+          "HealthCheckTimeout": "00:00:05",
+          "Config": {
+            "RequestTimeoutMs": 5000,
+            "MaxCachedSchemas": 1000,
+            "LatestCacheTtlSecs": 60,
+            "NormalizeSchemas": true
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Native `Config` also supports basic authentication, bearer tokens, OAuth, TLS, proxies, and custom headers. Supply credentials through a secret configuration provider, for example `Aspire:Kafka:Dekaf:SchemaRegistry:Config:BasicAuthUserInfo`. For programmatic configuration, assign a new `SchemaRegistryConfig` to `settings.Config`, since native options are init-only. Replacing it replaces all previously bound native options.
+
+Use `AddKeyedDekafSchemaRegistryClient("orders-registry")` for another registry and resolve it with `services.GetRequiredKeyedService<ISchemaRegistryClient>("orders-registry")` in the serializer callbacks. Clients are singletons with shared schema caches, disposed with the host. A `clientFactory` callback receives application services and the bound native configuration for custom HTTP transports or client implementations; the service provider owns the returned client.
+
+JSON schema serialization is included. For Avro or Protobuf, install the matching Dekaf package and use its native helper in the same producer and consumer callbacks:
+
+| Format | Additional package | Namespace | Builder helper |
+| --- | --- | --- | --- |
+| JSON Schema | None | `Dekaf.SchemaRegistry` | `UseJsonSchemaRegistry` |
+| Avro | `Dekaf.SchemaRegistry.Avro` | `Dekaf.SchemaRegistry.Avro` | `UseAvroSchemaRegistry` |
+| Protobuf | `Dekaf.SchemaRegistry.Protobuf` | `Dekaf.SchemaRegistry.Protobuf` | `UseProtobufSchemaRegistry` |
+
+Avro supports `GenericRecord` and generated specific records. Protobuf uses generated message types. Schema registration and subject selection are handled by Dekaf's serializers, with topic-name subjects by default. Native serializer options expose subject naming, registration behavior, and framing. JSON Schema registration does not validate payloads by default; use `Dekaf.SchemaRegistry.Json` and its validation options when validation is required. See [Dekaf schema registry documentation](https://thomhurst.github.io/Dekaf/docs/serialization/schema-registry).
+
 ## Health checks
 
 Health checks are enabled by default and can be disabled with `DisableHealthChecks`:
@@ -176,8 +242,9 @@ Health checks are enabled by default and can be disabled with `DisableHealthChec
 | Producer | `Kafka.Dekaf_producer` | A producer flush checkpoint completes within the timeout. |
 | Consumer | `Kafka.Dekaf_consumer` | Consumer group liveness and lag for assigned partitions. |
 | Admin client | `Kafka.Dekaf_admin` | An active cluster-description request returns at least one broker. |
+| Schema registry | `Kafka.Dekaf_schema_registry` | An authenticated request to list subjects succeeds, including for an empty registry. |
 
-Keyed check names append `_{name}`. Check timeouts default to five seconds and can be configured through `HealthCheck.Timeout`.
+Keyed check names append `_{name}`. Kafka check timeouts default to five seconds and can be configured through `HealthCheck.Timeout`. The schema registry check defaults to 30 seconds, configurable through `HealthCheckTimeout`; it requires permission to list subjects and does not register or modify schemas.
 
 A successful producer flush does **not** prove broker connectivity or successful message delivery. An idle producer can pass its flush check while brokers are unavailable. Register the admin client for active connectivity monitoring and observe produce results for delivery success. Unlike the Confluent integration's health check, these checks do not publish synthetic messages to a health-check topic.
 
@@ -191,8 +258,10 @@ Tracing includes producer spans and consumer spans linked to the producing trace
 
 `DisableTracing` and `DisableMetrics` prevent a registration from subscribing OpenTelemetry to the corresponding source or meter. Dekaf shares one source and meter across all clients, so another enabled registration or an application listener can still collect telemetry from those clients.
 
+Schema registry registration adds a health check but does not subscribe to Kafka's source or meter. Standard `HttpClient` instrumentation, when configured by the application, observes registry HTTP requests.
+
 ## Migrating from Aspire.Confluent.Kafka
 
 Replace the package reference and registration methods with `AddDekafKafkaProducer` and `AddDekafKafkaConsumer`, then inject Dekaf's client interfaces. The `Dekaf` prefix lets both integrations coexist during migration. The connection string and AppHost Kafka resource can remain unchanged.
 
-Update native configuration and serialization callbacks for Dekaf. Compression codecs and schema registry support are available through optional Dekaf packages. Transactions, partition assignment, and other native features remain available through the clients and builder callbacks. Review [Dekaf's migration guide](https://thomhurst.github.io/Dekaf/docs/migrating-from-confluent-kafka), particularly its offset-storage and delivery-semantics differences.
+Update native configuration and serialization callbacks for Dekaf. Compression codecs and additional schema serialization formats are available through optional Dekaf packages. Transactions, partition assignment, and other native features remain available through the clients and builder callbacks. Review [Dekaf's migration guide](https://thomhurst.github.io/Dekaf/docs/migrating-from-confluent-kafka), particularly its offset-storage and delivery-semantics differences.

@@ -110,6 +110,9 @@
     <PackageVersion Include="Dapper" Version="2.1.79" />
     <PackageVersion Include="Dekaf.Extensions.DependencyInjection" Version="1.19.0" />
     <PackageVersion Include="Dekaf.Extensions.HealthChecks" Version="1.19.0" />
+    <PackageVersion Include="Dekaf.SchemaRegistry" Version="1.19.0" />
+    <PackageVersion Include="Dekaf.SchemaRegistry.Avro" Version="1.19.0" />
+    <PackageVersion Include="Dekaf.SchemaRegistry.Protobuf" Version="1.19.0" />
     <!-- axe-core accessibility engine wrapper for Playwright. The MIT-licensed .NET wrapper's
          major.minor tracks the embedded axe-core version, so 4.13.x runs axe-core 4.13.x.
          Test-only dependency; pinned to a version present on the dotnet-public feed mirror. -->

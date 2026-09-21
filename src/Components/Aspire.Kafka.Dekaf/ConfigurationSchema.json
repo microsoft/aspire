@@ -84,6 +84,21 @@
                     }
                   },
                   "description": "Provides settings for a Dekaf Kafka producer."
+                },
+                "SchemaRegistry": {
+                  "type": "object",
+                  "properties": {
+                    "DisableHealthChecks": {
+                      "type": "boolean",
+                      "description": "Gets or sets whether health checks are disabled. The default is false."
+                    },
+                    "HealthCheckTimeout": {
+                      "type": "string",
+                      "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                      "description": "Gets or sets the timeout for listing registry subjects during a health check. The default is 30 seconds."
+                    }
+                  },
+                  "description": "Provides settings for a Dekaf Schema Registry client."
                 }
               }
             }
