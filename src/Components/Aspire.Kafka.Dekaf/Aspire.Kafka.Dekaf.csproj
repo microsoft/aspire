@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Dekaf's dependency injection and health check packages require .NET 10. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageTags>$(ComponentCommonPackageTags) kafka messaging eventing dekaf</PackageTags>
+    <Description>Dekaf Kafka producers, consumers, and admin clients that integrate with Aspire, including health checks, logging, tracing, and metrics.</Description>
+    <!-- Dekaf configuration binding requires reflection; registration APIs carry the corresponding annotations. -->
+    <IsAotCompatible>false</IsAotCompatible>
+    <EnableConfigurationBindingGenerator>false</EnableConfigurationBindingGenerator>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <NoWarn>$(NoWarn);CS8002</NoWarn> <!-- Dekaf packages are not strong-named. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Common\HealthChecksExtensions.cs" Link="HealthChecksExtensions.cs" />
+    <Compile Include="..\Common\ConfigurationSchemaAttributes.cs" Link="ConfigurationSchemaAttributes.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dekaf.Extensions.DependencyInjection" />
+    <PackageReference Include="Dekaf.Extensions.HealthChecks" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+  </ItemGroup>
+
+</Project>

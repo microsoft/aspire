@@ -1,0 +1,95 @@
+{
+  "definitions": {
+    "logLevel": {
+      "properties": {
+        "Dekaf": {
+          "$ref": "#/definitions/logLevelThreshold"
+        }
+      }
+    }
+  },
+  "type": "object",
+  "properties": {
+    "Aspire": {
+      "type": "object",
+      "properties": {
+        "Kafka": {
+          "type": "object",
+          "properties": {
+            "Dekaf": {
+              "type": "object",
+              "properties": {
+                "AdminClient": {
+                  "type": "object",
+                  "properties": {
+                    "ConnectionString": {
+                      "type": "string",
+                      "description": "Gets or sets the comma-separated bootstrap servers."
+                    },
+                    "DisableHealthChecks": {
+                      "type": "boolean",
+                      "description": "Gets or sets whether health checks are disabled. The default is false."
+                    },
+                    "DisableMetrics": {
+                      "type": "boolean",
+                      "description": "Gets or sets whether this registration adds the shared Dekaf meter to OpenTelemetry. The default is false."
+                    },
+                    "DisableTracing": {
+                      "type": "boolean",
+                      "description": "Gets or sets whether this registration adds the shared Dekaf activity source to OpenTelemetry. The default is false."
+                    }
+                  },
+                  "description": "Provides settings for a Dekaf Kafka admin client."
+                },
+                "Consumer": {
+                  "type": "object",
+                  "properties": {
+                    "ConnectionString": {
+                      "type": "string",
+                      "description": "Gets or sets the comma-separated bootstrap servers."
+                    },
+                    "DisableHealthChecks": {
+                      "type": "boolean",
+                      "description": "Gets or sets whether health checks are disabled. The default is false."
+                    },
+                    "DisableMetrics": {
+                      "type": "boolean",
+                      "description": "Gets or sets whether this registration adds the shared Dekaf meter to OpenTelemetry. The default is false."
+                    },
+                    "DisableTracing": {
+                      "type": "boolean",
+                      "description": "Gets or sets whether this registration adds the shared Dekaf activity source to OpenTelemetry. The default is false."
+                    }
+                  },
+                  "description": "Provides settings for a Dekaf Kafka consumer."
+                },
+                "Producer": {
+                  "type": "object",
+                  "properties": {
+                    "ConnectionString": {
+                      "type": "string",
+                      "description": "Gets or sets the comma-separated bootstrap servers."
+                    },
+                    "DisableHealthChecks": {
+                      "type": "boolean",
+                      "description": "Gets or sets whether health checks are disabled. The default is false."
+                    },
+                    "DisableMetrics": {
+                      "type": "boolean",
+                      "description": "Gets or sets whether this registration adds the shared Dekaf meter to OpenTelemetry. The default is false."
+                    },
+                    "DisableTracing": {
+                      "type": "boolean",
+                      "description": "Gets or sets whether this registration adds the shared Dekaf activity source to OpenTelemetry. The default is false."
+                    }
+                  },
+                  "description": "Provides settings for a Dekaf Kafka producer."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

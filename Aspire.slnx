@@ -18,6 +18,7 @@
     <Project Path="src/Components/Aspire.Azure.Storage.Files.DataLake/Aspire.Azure.Storage.Files.DataLake.csproj" />
     <Project Path="src/Components/Aspire.Azure.Storage.Queues/Aspire.Azure.Storage.Queues.csproj" />
     <Project Path="src/Components/Aspire.Confluent.Kafka/Aspire.Confluent.Kafka.csproj" />
+    <Project Path="src/Components/Aspire.Kafka.Dekaf/Aspire.Kafka.Dekaf.csproj" />
     <Project Path="src/Components/Aspire.Keycloak.Authentication/Aspire.Keycloak.Authentication.csproj" />
     <Project Path="src/Components/Aspire.Microsoft.Azure.Cosmos/Aspire.Microsoft.Azure.Cosmos.csproj" />
     <Project Path="src/Components/Aspire.Microsoft.Azure.StackExchangeRedis/Aspire.Microsoft.Azure.StackExchangeRedis.csproj" />
@@ -507,6 +508,7 @@
     <Project Path="tests/Aspire.Azure.Storage.Queues.Tests/Aspire.Azure.Storage.Queues.Tests.csproj" />
     <Project Path="tests/Aspire.Components.Common.TestUtilities/Aspire.Components.Common.TestUtilities.csproj" />
     <Project Path="tests/Aspire.Confluent.Kafka.Tests/Aspire.Confluent.Kafka.Tests.csproj" />
+    <Project Path="tests/Aspire.Kafka.Dekaf.Tests/Aspire.Kafka.Dekaf.Tests.csproj" />
     <Project Path="tests/Aspire.Keycloak.Authentication.Tests/Aspire.Keycloak.Authentication.Tests.csproj" />
     <Project Path="tests/Aspire.Microsoft.Azure.Cosmos.Tests/Aspire.Microsoft.Azure.Cosmos.Tests.csproj" />
     <Project Path="tests/Aspire.Microsoft.Azure.StackExchangeRedis.Tests/Aspire.Microsoft.Azure.StackExchangeRedis.Tests.csproj" />

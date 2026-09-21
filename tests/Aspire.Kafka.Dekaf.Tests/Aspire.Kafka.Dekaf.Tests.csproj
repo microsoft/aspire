@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Components\Aspire.Kafka.Dekaf\Aspire.Kafka.Dekaf.csproj" />
+    <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />
+    <PackageReference Include="TestContainers.Kafka" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
+    <Compile Include="..\Aspire.Confluent.Kafka.Tests\KafkaContainerFixture.cs" Link="KafkaContainerFixture.cs" />
+    <Compile Include="$(RepoRoot)src\Aspire.Hosting.Kafka\KafkaContainerImageTags.cs" />
+    <None Include="$(RepoRoot)src\Components\Aspire.Kafka.Dekaf\ConfigurationSchema.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
