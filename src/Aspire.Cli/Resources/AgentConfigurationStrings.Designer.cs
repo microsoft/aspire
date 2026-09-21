@@ -42,7 +42,6 @@ internal static class AgentConfigurationStrings
     internal static string OpenCodeMultipleFiles => ResourceManager.GetString("OpenCodeMultipleFiles", resourceCulture)!;
     internal static string UnsupportedOverride => ResourceManager.GetString("UnsupportedOverride", resourceCulture)!;
     internal static string HookConfigured => ResourceManager.GetString("HookConfigured", resourceCulture)!;
-    internal static string HookNotApplicable => ResourceManager.GetString("HookNotApplicable", resourceCulture)!;
     internal static string HookInstallationFailed => ResourceManager.GetString("HookInstallationFailed", resourceCulture)!;
     internal static string ExistingProjectHook => ResourceManager.GetString("ExistingProjectHook", resourceCulture)!;
     internal static string ProfileLimitations => ResourceManager.GetString("ProfileLimitations", resourceCulture)!;

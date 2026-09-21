@@ -337,7 +337,7 @@
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
     <!-- Agent PostToolUse telemetry hook scripts. Materialized to ~/.aspire/hooks/ by
-         TelemetryHookInstaller and registered into each selected agent client's user-level
+         TelemetryHookInstaller and registered into each detected agent client's user-level
          config during `aspire agent init`. -->
     <EmbeddedResource Include="Agents\Hooks\track-telemetry.sh" LogicalName="track-telemetry.sh">
       <WithCulture>false</WithCulture>

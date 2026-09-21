@@ -39,8 +39,7 @@ Deprecated MCP prefix repair preserves trailing arguments and environment values
 If an existing scope has customizations such as `--verbose` or custom environment
 variables, an absent counterpart scope is intentionally skipped rather than given
 defaults that could shadow or broaden those settings. This is an advisory warning,
-not a core failure. A successfully repaired project MCP target still qualifies
-the selected supported client for its single user-level usage hook.
+not a core failure.
 
 The shared writer accepts JSONC and trailing commas, validates container shapes,
 reads current settings at application time, preserves unrelated values, and
@@ -56,12 +55,15 @@ isolated workspace, then distribute the complete skill to deduplicated selected
 project/user destinations. dotnet-inspect remains a static bootstrap skill; no
 AppHost or language check is needed to select it.
 
-Usage hooks apply only to selected supported clients with successful or unchanged
-Aspire source/MCP configuration. Copilot CLI/App share one effective user hook;
-there is no invented VS Code or OpenCode hook schema. Playwright-only and
-dotnet-inspect-only setup does not need Aspire usage hooks. Hook failures are
-best-effort warnings with qualified completion output. Preserve the embedded
-scripts' existing events and `ASPIRE_CLI_TELEMETRY_OPTOUT` behavior.
+Usage hooks apply to detected supported clients independently of native client
+selection and Aspire source/MCP configuration outcomes, including during
+Playwright-only or dotnet-inspect-only setup. An explicitly selected undetected
+client does not receive a hook. Copilot CLI/App share one effective user hook;
+there is no invented VS Code or OpenCode hook schema. Disabling all assets or
+selecting no clients still performs no writes. Hook policies and existing hooks
+remain authoritative, and failures are best-effort warnings with qualified
+completion output. Preserve the embedded scripts' existing events and
+`ASPIRE_CLI_TELEMETRY_OPTOUT` behavior.
 
 ## Telemetry hook maintenance
 

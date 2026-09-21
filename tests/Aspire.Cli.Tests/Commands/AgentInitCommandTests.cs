@@ -293,6 +293,32 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(request.Detections);
     }
 
+    [Fact]
+    public async Task AgentInitCommand_ExplicitClients_PreservesUnselectedDetectionsForHooks()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        AgentClientDetection[] detections =
+        [
+            new(AgentClientKind.CopilotCli, "1.0.0", false),
+            new(AgentClientKind.ClaudeCode, "2.1.0", false)
+        ];
+        var service = new TestAgentInitService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector(detections);
+            options.AgentInitServiceFactory = _ => service;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("agent init --clients opencode --non-interactive").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var request = Assert.Single(service.Requests);
+        Assert.Equal([AgentClientKind.OpenCode], request.Clients);
+        Assert.Equal(detections, request.Detections);
+    }
+
     [Theory]
     [InlineData("ALL")]
     [InlineData("copilot-cli,COPILOT-APP,vscode,claude-code,opencode")]

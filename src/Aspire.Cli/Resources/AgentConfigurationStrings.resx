@@ -64,9 +64,6 @@
   <data name="HookConfigured" xml:space="preserve">
     <value>The user-level Aspire usage hook is configured. Telemetry opt-out settings still apply.</value>
   </data>
-  <data name="HookNotApplicable" xml:space="preserve">
-    <value>No selected supported client has a successfully configured Aspire skills or MCP target; no usage hook was added.</value>
-  </data>
   <data name="HookInstallationFailed" xml:space="preserve">
     <value>Could not prepare the embedded usage hook scripts: {0}</value>
   </data>

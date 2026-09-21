@@ -45,7 +45,7 @@ internal sealed class AgentConfigurationWriter(ILogger<AgentConfigurationWriter>
                     var candidate = root.DeepClone().AsObject();
                     try
                     {
-                        var edit = await target.ApplyAsync(candidate, new AgentConfigurationMutationContext(reader, results, pending), cancellationToken);
+                        var edit = await target.ApplyAsync(candidate, reader, cancellationToken);
                         var status = edit.Status;
                         if (status is AgentConfigurationStatus.Configured)
                         {

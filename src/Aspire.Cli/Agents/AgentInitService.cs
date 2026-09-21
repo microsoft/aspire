@@ -24,11 +24,10 @@ internal sealed class AgentInitService(
         }
 
         var results = new List<AgentTargetResult>();
-        if (request.Assets.Mcp || request.Assets.AspireSkills)
-        {
-            var targets = planner.GetTargets(request).Concat(hooks.Plan(request));
-            results.AddRange(await writer.ApplyAsync(targets, cancellationToken));
-        }
+        IEnumerable<AgentConfigurationTarget> nativeTargets = request.Assets.Mcp || request.Assets.AspireSkills
+            ? planner.GetTargets(request)
+            : [];
+        results.AddRange(await writer.ApplyAsync(nativeTargets.Concat(hooks.Plan(request)), cancellationToken));
 
         cancellationToken.ThrowIfCancellationRequested();
         if (request.Assets.Playwright || request.Assets.DotnetInspect)

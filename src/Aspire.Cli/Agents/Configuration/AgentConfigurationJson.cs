@@ -84,7 +84,7 @@ internal static class AgentConfigurationJson
         => new(string.Format(CultureInfo.CurrentCulture, AgentConfigurationStrings.UnexpectedShape, key));
 
     public static async Task<IReadOnlyList<JsonObject>> ReadSettingsAsync(
-        AgentConfigurationMutationContext context,
+        AgentConfigurationReadContext context,
         IEnumerable<string> paths,
         CancellationToken cancellationToken)
     {

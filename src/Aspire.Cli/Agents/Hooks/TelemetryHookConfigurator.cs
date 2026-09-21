@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Cli.Agents.Hooks;
 
 /// <summary>
-/// Contributes one user-level hook per supported native client, sharing Copilot App/CLI targets.
+/// Contributes one user-level hook per detected supported client, sharing Copilot App/CLI targets.
 /// </summary>
 internal sealed class TelemetryHookConfigurator(
     ITelemetryHookInstaller installer,
@@ -22,19 +22,22 @@ internal sealed class TelemetryHookConfigurator(
 
     public IEnumerable<AgentConfigurationTarget> Plan(AgentInitRequest request)
     {
-        if (!request.Assets.AspireSkills && !request.Assets.Mcp)
+        if (!request.Assets.HasAssets || request.Clients.Count == 0)
         {
             yield break;
         }
 
         Task<TelemetryHookScripts>? installation = null;
-        var copilotClients = request.Clients.Where(client => client is AgentClientKind.CopilotCli or AgentClientKind.CopilotApp).Distinct().ToArray();
+        // Hooks instrument detected clients independently of the assets and native client
+        // targets selected for setup. Selecting an undetected client must not create its hook.
+        var detectedClients = request.Detections.Select(detection => detection.Client).Distinct().ToArray();
+        var copilotClients = detectedClients.Where(client => client is AgentClientKind.CopilotCli or AgentClientKind.CopilotApp).ToArray();
         if (copilotClients.Length > 0)
         {
             yield return Target(Path.Combine(paths.CopilotDirectory, "hooks", "aspire-telemetry.json"), copilotClients, copilot: true);
         }
 
-        if (request.Clients.Contains(AgentClientKind.ClaudeCode))
+        if (detectedClients.Contains(AgentClientKind.ClaudeCode))
         {
             yield return Target(Path.Combine(paths.ClaudeDirectory, "settings.json"), [AgentClientKind.ClaudeCode], copilot: false);
         }
@@ -45,11 +48,6 @@ internal sealed class TelemetryHookConfigurator(
             => new(path, AgentConfigurationScope.User, AgentAssetKind.TelemetryHooks, clients, "hooks:aspire",
                 async (root, context, cancellationToken) =>
                 {
-                    if (!clients.Any(context.HasAspireConfiguration))
-                    {
-                        return AgentConfigurationEdit.Skipped(AgentConfigurationStrings.HookNotApplicable);
-                    }
-
                     var settings = await AgentConfigurationJson.ReadSettingsAsync(context, paths.PluginSettings(request, copilot), cancellationToken);
                     if (settings.Append(root).Any(config =>
                         AgentConfigurationJson.Boolean(config, "disableAllHooks") is true ||

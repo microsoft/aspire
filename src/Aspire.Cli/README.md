@@ -128,9 +128,15 @@ Settings merges preserve unrelated values, compatible source pins, and explicit
 disabled choices. JSONC is accepted, but a changed document may be rewritten
 without its comments or original formatting. Semantically unchanged settings
 are not rewritten. Conflicting or malformed core targets are reported separately
-and cause a nonzero exit code; independent targets may still succeed. Usage-hook
-failures are advisory warnings, not unconditional setup success. Existing hooks
-are not removed by an opt-out.
+and cause a nonzero exit code; independent targets may still succeed.
+
+Usage hooks are registered at user level for detected supported clients,
+independently of `--clients` and native registration outcomes. This also applies
+to Playwright-only and dotnet-inspect-only setup. Selecting an undetected client
+does not create its hook. All-assets-off and `--clients none` still perform no
+configuration writes. Hook policies and telemetry opt-out remain respected;
+hook failures are advisory warnings, not unconditional setup success. Existing
+hooks are not removed by an opt-out.
 
 `aspire new` and `aspire init` offer the same non-MCP assets and client choices
 after creating the project, unless `--suppress-agent-init` is specified. They

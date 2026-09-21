@@ -75,8 +75,8 @@ internal sealed class AgentConfigurationPlanner(IEnumerable<IAgentConfigurationH
                 })
                 .OrderBy(target => target.Asset is AgentAssetKind.TelemetryHooks)
                 .ToArray()))
-            // User hook files go last. Claude's user plugin settings and hook share a file:
-            // earlier native results plus that file's pending edits determine hook eligibility.
+            // Keep advisory hook writes after native configuration. Claude's user plugin
+            // settings and hook share a file and are committed together.
             .OrderBy(file => file.Targets.Any(target => target.Asset is AgentAssetKind.TelemetryHooks))
             .ThenBy(file => file.Targets.All(target => target.Asset is AgentAssetKind.TelemetryHooks))
             .ToArray();

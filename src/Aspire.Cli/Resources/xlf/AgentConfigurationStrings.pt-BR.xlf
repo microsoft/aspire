@@ -37,11 +37,6 @@
         <target state="new">Could not prepare the embedded usage hook scripts: {0}</target>
         <note />
       </trans-unit>
-      <trans-unit id="HookNotApplicable">
-        <source>No selected supported client has a successfully configured Aspire skills or MCP target; no usage hook was added.</source>
-        <target state="new">No selected supported client has a successfully configured Aspire skills or MCP target; no usage hook was added.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="MalformedJson">
         <source>The configuration is not valid JSON/JSONC; the file was left unchanged.</source>
         <target state="new">The configuration is not valid JSON/JSONC; the file was left unchanged.</target>
