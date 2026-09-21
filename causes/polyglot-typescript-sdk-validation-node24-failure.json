@@ -2,7 +2,10 @@
   "id": "polyglot-typescript-sdk-validation-node24-failure",
   "type": "infra-failure",
   "title": "Polyglot SDK Validation: TypeScript SDK Validation (Node 24.x) job fails with exit code 1, unrelated to PR-changed files; job logs unavailable for detailed diagnosis",
+  "job_name": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 24.x)",
   "error_pattern": "Process completed with exit code 1. (job logs failed to fetch); downstream 'Polyglot Validation Results / Check validation results' job also fails as a result (exit code 1)",
+  "analysis": "The 'Run TypeScript SDK validation' step failed with a generic 'Process completed with exit code 1' annotation and no retrievable job logs ('Failed to fetch logs for job'), preventing root-cause diagnosis from available data. The PR under test only modifies Aspire.Dashboard console-log APIs and Aspire.Hosting Dcp/Dashboard C# files; it does not touch the polyglot SDK, TypeScript validation scripts, or CLI packaging inputs consumed by this job, so the failure is unrelated to the PR changes. This matches a previously observed recurring pattern for this exact job.",
+  "failure_details": "Job: Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 24.x)\nFailed Steps: Run TypeScript SDK validation\nAnnotation: failure - Process completed with exit code 1.\nJob log fetch: '(Failed to fetch logs for job 106260508654)' - no detailed error output available.\nDownstream: 'Tests / Polyglot SDK Validation / Polyglot Validation Results' job (Check validation results step) also fails with exit code 1 as a direct consequence of this job's failure, since it aggregates results across the polyglot validation matrix.",
   "occurrences": [
     {
       "run_id": 31728585505,
@@ -24,6 +27,13 @@
       "job": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 24.x)",
       "pr_number": 19910,
       "observed_at": "2026-09-04T02:07:22Z"
+    },
+    {
+      "run_id": 35576439465,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35576439465",
+      "job": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 24.x)",
+      "pr_number": 1391,
+      "observed_at": "2026-09-21T08:45:43Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19361"
