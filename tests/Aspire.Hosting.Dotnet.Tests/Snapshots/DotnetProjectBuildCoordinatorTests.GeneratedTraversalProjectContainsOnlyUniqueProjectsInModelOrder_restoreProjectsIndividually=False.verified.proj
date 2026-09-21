@@ -3,9 +3,14 @@
     <ProjectFile Include="First%27s Project/First.csproj" />
     <ProjectFile Include="Second/Second.csproj" />
   </ItemGroup>
+  <PropertyGroup>
+    <RestoreGraphProjectInput>@(ProjectFile-&gt;'%(FullPath)')</RestoreGraphProjectInput>
+  </PropertyGroup>
   <Target Name="Restore">
+    <Message Importance="high" Text="Restoring projects individually because RestoreUseStaticGraphEvaluation is enabled." />
     <MSBuild Projects="@(ProjectFile)" Targets="Restore" BuildInParallel="false" />
   </Target>
+  <Import Project="$(MSBuildToolsPath)/NuGet.targets" Condition="'$(RestoreUseStaticGraphEvaluation)' != 'true'" />
   <Target Name="Build">
     <MSBuild Projects="@(ProjectFile)" Targets="Build" BuildInParallel="true" />
   </Target>

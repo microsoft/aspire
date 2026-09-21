@@ -22,6 +22,7 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
     private readonly Dictionary<string, string> _projectPathsByIdentity = new(StringComparer.Ordinal);
     private readonly DotnetProjectBuildArtifactManager _artifactManager;
     private bool _buildProjectGenerationStarted;
+    private bool _restoreProjectsIndividually;
     private string? _buildConfiguration;
     private string? _directProjectPath;
 
@@ -67,6 +68,20 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
     }
 
     /// <summary>
+    /// Gets whether the traversal invokes each root project's restore separately.
+    /// </summary>
+    internal bool RestoreProjectsIndividually
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _restoreProjectsIndividually;
+            }
+        }
+    }
+
+    /// <summary>
     /// Adds a project to the generated build project and returns the path used by the coordinated build.
     /// </summary>
     public string AddProject(string projectPath)
@@ -99,7 +114,8 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
     internal void ConfigureTraversalBuild(
         IEnumerable<string> projectPaths,
         string workingDirectory,
-        string? buildConfiguration)
+        string? buildConfiguration,
+        bool restoreProjectsIndividually)
     {
         ArgumentNullException.ThrowIfNull(projectPaths);
         ArgumentException.ThrowIfNullOrEmpty(workingDirectory);
@@ -108,6 +124,7 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
         {
             ThrowIfGenerationStarted();
             _buildConfiguration = buildConfiguration;
+            _restoreProjectsIndividually = restoreProjectsIndividually;
             _directProjectPath = null;
             _projectPaths.Clear();
             _projectPathsByIdentity.Clear();
@@ -132,6 +149,7 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
         {
             ThrowIfGenerationStarted();
             _buildConfiguration = buildConfiguration;
+            _restoreProjectsIndividually = false;
             _projectPaths.Clear();
             _projectPathsByIdentity.Clear();
             _directProjectPath = AddProject(projectPath);
@@ -168,15 +186,17 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
     public Task<string> WriteBuildProjectAsync(ILogger logger, CancellationToken cancellationToken)
     {
         IReadOnlyList<string> projectPaths;
+        bool restoreProjectsIndividually;
         lock (_lock)
         {
             _buildProjectGenerationStarted = true;
             projectPaths = [.. _projectPaths];
+            restoreProjectsIndividually = _restoreProjectsIndividually;
         }
 
         // The argument callback already caches successful evaluation for one start attempt. Regenerate here
         // on later attempts so cancellation, transient I/O failures, or cache cleanup cannot poison restarts.
-        return WriteBuildProjectCoreAsync(projectPaths, logger, cancellationToken);
+        return WriteBuildProjectCoreAsync(projectPaths, restoreProjectsIndividually, logger, cancellationToken);
     }
 
     /// <summary>
@@ -198,9 +218,14 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
 
     private async Task<string> WriteBuildProjectCoreAsync(
         IReadOnlyList<string> projectPaths,
+        bool restoreProjectsIndividually,
         ILogger logger,
         CancellationToken cancellationToken)
     {
+        // NuGet can restore all entry projects in one graph without introducing solution build properties.
+        // See https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.Build.Tasks/NuGet.targets.
+        // Import after the per-project restore target so NuGet overrides it only when aggregate restore is selected.
+        // Static restore needs a restore-capable entry project, which this SDK-less wrapper is not.
         var project = new XDocument(
             new XElement(
                 "Project",
@@ -213,7 +238,14 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
                             new XAttribute(
                                 "Include",
                                 EscapeMsBuildPath(NormalizePath(Path.GetRelativePath(BuildDirectory, projectPath))))))),
-                CreateTraversalTarget("Restore", buildInParallel: false),
+                new XElement(
+                    "PropertyGroup",
+                    new XElement("RestoreGraphProjectInput", "@(ProjectFile->'%(FullPath)')")),
+                CreateRestoreTarget(restoreProjectsIndividually),
+                restoreProjectsIndividually ? null : new XElement(
+                    "Import",
+                    new XAttribute("Project", "$(MSBuildToolsPath)/NuGet.targets"),
+                    new XAttribute("Condition", "'$(RestoreUseStaticGraphEvaluation)' != 'true'")),
                 CreateTraversalTarget("Build", buildInParallel: true)));
 
         using var projectStream = new MemoryStream();
@@ -238,6 +270,19 @@ internal sealed class DotnetProjectBuildResource : ExecutableResource, IDisposab
             projectBytes,
             logger,
             cancellationToken).ConfigureAwait(false);
+    }
+
+    private static XElement CreateRestoreTarget(bool restoreProjectsIndividually)
+    {
+        var target = CreateTraversalTarget("Restore", buildInParallel: false);
+        target.AddFirst(new XElement(
+            "Message",
+            new XAttribute("Importance", "high"),
+            new XAttribute("Text", restoreProjectsIndividually
+                ? "Restoring projects individually as configured by the AppHost."
+                : "Restoring projects individually because RestoreUseStaticGraphEvaluation is enabled.")));
+
+        return target;
     }
 
     private static XElement CreateTraversalTarget(string name, bool buildInParallel) =>
