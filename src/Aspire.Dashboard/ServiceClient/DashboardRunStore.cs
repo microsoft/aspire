@@ -264,6 +264,8 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
+                // Permissions can change after enumeration, or a matching lock in the shared temporary root may
+                // belong to another user. Lock cleanup is best effort and must not prevent dashboard startup.
                 continue;
             }
 
