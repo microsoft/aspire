@@ -47,7 +47,7 @@ internal sealed class ContainerNetworkService
 }
 
 /// <summary>
-/// Provisions endpoint representations that make host resources reachable from the default container network.
+/// Provisions endpoints, and starts associated container tunnels, that make host resources reachable from the default container network.
 /// </summary>
 internal sealed partial class ContainerNetworkEndpointProvisioner : IDisposable
 {
