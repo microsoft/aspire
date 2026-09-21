@@ -1,9 +1,12 @@
 {
   "id": "vscode-e2e-launch-profiles-flaky",
   "type": "flaky-test",
-  "title": "Flaky: VS Code extension E2E (Linux/Windows, launch-profiles) shard fails with generic exit code 1, unrelated to PR changes",
-  "test_name": "VS Code extension E2E (launch-profiles)",
-  "error_pattern": "Process completed with exit code 1. (Run extension E2E tests step failed; job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted. Occurs on 'launch-profiles' shard unrelated to PR changes.",
+  "title": "Flaky: VS Code extension E2E (Windows, launch-profiles) shard - Deno AppHost debug session times out, then teardown fails with EBUSY, unrelated to PR changes",
+  "test_name": "Aspire launch profiles E2E debugs a Deno AppHost through the built-in JavaScript debugger",
+  "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, launch-profiles)",
+  "error_pattern": "Timed out after 300000ms waiting for debug AppHost startup. ... debugSessions: [{ appHostPath: DenoAppHost/apphost.mts, startupCompleted: false }] ... AggregateError: Launch profiles E2E teardown failed. 1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-*\\workspace\\DenoAppHost'",
+  "analysis": "The Deno AppHost debug session in the launch-profiles E2E shard never reports startupCompleted within the 5-minute timeout, and the resulting file lock on the workspace temp directory then causes the test's 'after each' teardown hook to fail with EBUSY on Windows. This matches the general pattern of flaky VS Code extension E2E shards (also seen with EBUSY rmdir failures in the dynamic-debug-configuration shard) and is unrelated to the PR, which only modifies Aspire.Dashboard and Aspire.Hosting console-log APIs, not the VS Code extension or Deno AppHost debugging.",
+  "failure_details": "Test: Aspire launch profiles E2E debugs a Deno AppHost through the built-in JavaScript debugger\nError: Timed out after 300000ms waiting for debug AppHost startup.\nLast error: <none>\nLast state: {\n  \"workspaceAppHostName\": \"DenoAppHost/apphost.mts\",\n  \"workspaceAppHostPath\": \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-vpeVyw\\\\workspace\\\\DenoAppHost\\\\apphost.mts\",\n  \"debugSessions\": [\n    {\n      \"appHostPath\": \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-vpeVyw\\\\workspace\\\\DenoAppHost\\\\apphost.mts\",\n      \"startupCompleted\": false\n    }\n  ]\n}\n\nFollowed by teardown failure:\nTest: Aspire launch profiles E2E \"after each\" hook for \"debugs a Deno AppHost through the built-in JavaScript debugger\"\nError: Launch profiles E2E teardown failed.\n1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-vpeVyw\\workspace\\DenoAppHost'\n\nStack Trace:\nAggregateError: Launch profiles E2E teardown failed.\n1. Error: EBUSY: resource busy or locked, rmdir 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-vpeVyw\\workspace\\DenoAppHost'\n    at runE2eTeardown (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:217:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Context.<anonymous> (out\\test-e2e\\test-e2e\\launchProfiles.e2e.test.js:58:9)",
   "occurrences": [
     {
       "run_id": 33811778450,
@@ -25,6 +28,13 @@
       "job": "Tests / No-package tests (regular, Aspire.StackExchange.Redis.Tests, StackExchange.Redis, StackExchange.R... / StackExchange.Redis (windows-latest)",
       "pr_number": 20054,
       "observed_at": "2026-09-11T02:59:16Z"
+    },
+    {
+      "run_id": 35569654952,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35569654952",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, launch-profiles)",
+      "pr_number": 1391,
+      "observed_at": "2026-09-21T07:20:31Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19921"

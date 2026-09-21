@@ -1,0 +1,20 @@
+{
+  "id": "hex1bnativepublishingtests-json-parse-error",
+  "type": "flaky-test",
+  "title": "Flaky: Hex1bNativePublishingTests.NativeAssetsKeepTheirLayoutAndContents fails parsing truncated/corrupted MSBuild JSON item output",
+  "test_name": "Infrastructure.Tests.Hex1bNativePublishingTests.NativeAssetsKeepTheirLayoutAndContents(rid: \"win-x64\", singleFile: True)",
+  "job_name": "Tests / No-package tests (regular, Infrastructure.Tests, Infrastructure, Infrastructure, tests/Infrastruc... / Infrastructure (ubuntu-latest)",
+  "error_pattern": "System.Text.Json.JsonReaderException : 'M' is invalid after a single JSON value. Expected end of data. LineNumber: 209 | BytePositionInLine: 0.\n   at System.Text.Json.JsonDocument.Parse(ReadOnlyMemory`1 json, JsonDocumentOptions options)\n   at Infrastructure.Tests.Hex1bNativePublishingTests.NativeAssetsKeepTheirLayoutAndContents(String rid, Boolean singleFile) in /_/tests/Infrastructure.Tests/Hex1bNativePublishingTests.cs:line 38",
+  "analysis": "The test invokes MSBuild to enumerate native publish items and parses the resulting JSON with System.Text.Json. The parse failure at a specific byte position ('M' after a single JSON value) indicates the captured MSBuild output stream was truncated or had extra content appended, which is an environmental/build-output-capture race rather than a logic defect. The PR under test only modifies Aspire.Dashboard and Aspire.Hosting log-source code and does not touch Hex1b, Infrastructure.Tests, or native publishing/MSBuild item generation.",
+  "failure_details": "Error: System.Text.Json.JsonReaderException : 'M' is invalid after a single JSON value. Expected end of data. LineNumber: 209 | BytePositionInLine: 0.\n\nStack Trace:\nat System.Text.Json.ThrowHelper.ThrowJsonReaderException(Utf8JsonReader& json, ExceptionResource resource, Byte nextByte, ReadOnlySpan`1 bytes)\n   at System.Text.Json.Utf8JsonReader.ConsumeNextToken(Byte marker)\n   at System.Text.Json.Utf8JsonReader.ReadSingleSegment()\n   at System.Text.Json.JsonDocument.Parse(ReadOnlySpan`1 utf8JsonSpan, JsonReaderOptions readerOptions, MetadataDb& database, StackRowStack& stack)\n   at System.Text.Json.JsonDocument.Parse(ReadOnlyMemory`1 utf8Json, JsonReaderOptions readerOptions, Byte[] extraRentedArrayPoolBytes, PooledByteBufferWriter extraPooledByteBufferWriter, Boolean allowDuplicateProperties)\n   at System.Text.Json.JsonDocument.Parse(ReadOnlyMemory`1 json, JsonDocumentOptions options)\n   at Infrastructure.Tests.Hex1bNativePublishingTests.NativeAssetsKeepTheirLayoutAndContents(String rid, Boolean singleFile) in /_/tests/Infrastructure.Tests/Hex1bNativePublishingTests.cs:line 38\n--- End of stack trace from previous location ---\n\nStandard Output (truncated, redacted paths preserved as sample structure):\n{\n  \"Items\": {\n    \"NativeCopyLocalItems\": [\n      {\n        \"Identity\": \".../artifacts/tests/Hex1bNativePublishingTests/.../package/runtimes/win-x64/native/arm64/OpenConsole.exe\",\n        \"DestinationSubPath\": \"arm64/OpenConsole.exe\",\n        \"NuGetPackageId\": \"Hex1b\",\n        ...\n      },\n      {\n        \"Identity\": \".../package/runtimes/win-x64/native/conpty.dll\",\n        ...\n      },\n      {\n        \"Identity\": \".../package/runtimes/win-x64/native/hex1bpty.exe\",\n        ...\n      }\n    ]\n  }\n}\n(JSON stream cut off / malformed at line 209 during parse)",
+  "occurrences": [
+    {
+      "run_id": 35569654952,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35569654952",
+      "job": "Tests / No-package tests (regular, Infrastructure.Tests, Infrastructure, Infrastructure, tests/Infrastruc... / Infrastructure (ubuntu-latest)",
+      "pr_number": 1391,
+      "observed_at": "2026-09-21T07:20:31Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20272"
+}
