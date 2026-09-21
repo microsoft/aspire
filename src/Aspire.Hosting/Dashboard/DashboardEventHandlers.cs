@@ -133,12 +133,6 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                 BundleDiscovery.ManagedDirectoryName,
                 BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)));
 
-            if (!File.Exists(managedPath))
-            {
-                throw new DistributedApplicationException(
-                    $"AppHost:UseManagedDashboard requires the Aspire managed executable at '{managedPath}'. Reinstall or rebuild the Aspire bundle.");
-            }
-
             fullyQualifiedDashboardPath = managedPath;
         }
 
