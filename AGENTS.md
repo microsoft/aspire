@@ -148,6 +148,32 @@ When reviewing pull requests:
   - Use existing internal feeds that already mirror public packages (like dotnet-public, dotnet-eng)
 * The wildcard pattern mappings (`<package pattern="*" />`) in dotnet-public and dotnet-eng feeds typically provide access to commonly-used public packages
 
+### Pinned GitHub Actions and the Actions Allow-List
+
+Third-party actions in `.github/workflows/**` are pinned to immutable commit SHAs
+(`owner/repo[/path]@<sha>`). The repository/enterprise GitHub Actions policy allows only
+specific SHAs, and that allow-list lives in repository/organization settings, outside git.
+A workflow that references a SHA missing from the allow-list fails at runtime with an
+"actions not allowed" error, even though the PR itself builds and reviews cleanly.
+
+When authoring or reviewing any change that modifies a pinned action SHA (including
+bulk regeneration such as gh-aw workflow updates):
+
+* Identify every changed `owner/repo[/path]@<sha>` reference in the diff.
+* Verify each newly introduced SHA is permitted by the repository/enterprise allowed-actions
+  policy. Verify by SHA, not by tag name.
+* Coordinate the allow-list update in repository/organization settings as part of the same
+  change, before merging. The PR cannot make that settings change itself, so the PR
+  description must call out which SHAs an admin needs to add.
+* Treat a changed pin without a confirmed matching allow-list update as a blocking review
+  issue.
+* Do not request allow-list changes when a pin is unchanged, or for first-party
+  `actions/*` actions already covered by policy.
+
+Example: PR #20209 bumped `dotnet/issue-labeler/*` from `46125e85e6a568dc712f358c39f35317366f5eed`
+(v2.0.0) to `160b6b1e1e8d36da09beb34ef1e4806d2c0520a3` (v2.2.0) without the corresponding
+allow-list update, which broke the labeler workflows (issue #20277).
+
 ## Formatting
 
 * Apply code-formatting style defined in `.editorconfig`.
