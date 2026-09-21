@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Grouped into existing entry 'AppHost-owned interactive terminals' — moves the experimental terminal APIs into Aspire.Hosting.ApplicationModel before the feature has shipped",
+  "mergedAt": "2026-09-21T04:52:24Z",
+  "number": 20261,
+  "runDate": "2026-09-21T06:06:46Z",
+  "status": "included",
+  "title": "Move terminal APIs into Aspire.Hosting.ApplicationModel"
+}
