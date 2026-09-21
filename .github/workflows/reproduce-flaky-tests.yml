@@ -37,13 +37,7 @@ jobs:
   reproduce:
     name: "Windows runner #${{ matrix.runner }}"
     needs: [build_packages, build_cli_archive_windows, package_extension]
-    if: >-
-      ${{
-        !cancelled() &&
-        needs.build_packages.result == 'success' &&
-        needs.build_cli_archive_windows.result == 'success' &&
-        needs.package_extension.result == 'success'
-      }}
+    if: ${{ !cancelled() }}
     runs-on: windows-latest
     timeout-minutes: 120
     strategy:
