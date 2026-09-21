@@ -3,7 +3,7 @@
 
 using System.Collections.Immutable;
 
-namespace Aspire.Hosting.Terminals;
+namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// An incremental change or a replacement snapshot for a terminal watcher.

@@ -3,7 +3,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 
-namespace Aspire.Hosting.Terminals;
+namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// Identifies where a terminal is displayed in the dashboard.

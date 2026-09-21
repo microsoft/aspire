@@ -3,7 +3,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 
-namespace Aspire.Hosting.Terminals;
+namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// An Aspire-owned terminal handle for dashboard interaction and automation from AppHost code.

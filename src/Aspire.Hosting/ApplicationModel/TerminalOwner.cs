@@ -3,7 +3,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 
-namespace Aspire.Hosting.Terminals;
+namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// Identifies whether the AppHost or an application resource controls a terminal's workload lifetime.

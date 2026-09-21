@@ -536,10 +536,25 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes('debugSessions: state.state.debugSessions?.map(redactDebugSessionForDiagnostics)'));
         assert.ok(runner.includes('sanitizeDashboardUrlForDiagnostics'));
         assert.ok(runner.includes('redactTextFilesForArtifacts(resultsDir)'));
-        assert.ok(runner.includes('redactTextFilesForArtifacts(storageDiagnosticsDir)'));
+        assert.ok(runner.includes('const redacted = redactSensitiveArtifactText(text);'));
+        assert.ok(runner.includes('fs.writeFileSync(destinationPath, redacted === text ? contents : redacted)'));
         assert.ok(runner.includes('skipAspireLeaseFiles'));
         assert.ok(runner.includes('/login?t=<redacted>'));
         assert.ok(runner.includes('new URL(stripResourceSuffix(url)).origin'));
+    });
+
+    test('uploads prepared diagnostic directories without selecting files again', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const workflow = fs.readFileSync(path.join(extensionRoot, '..', '.github', 'workflows', 'extension-e2e-tests.yml'), 'utf8');
+        const uploadStart = workflow.indexOf('id: upload_e2e_diagnostics');
+        const uploadEnd = workflow.indexOf('- name: Print E2E diagnostics links', uploadStart);
+        assert.ok(uploadStart >= 0 && uploadEnd > uploadStart);
+        const uploadStep = workflow.slice(uploadStart, uploadEnd);
+        // The path: | input lists one unquoted glob per line, e.g. extension/.test-results/**.
+        const patterns = uploadStep.match(/^\s+extension\/[^\s]+$/gm)?.map(line => line.trim()) ?? [];
+        const diagnosticDirectories = ['.test-results', '.test-storage', '.test-workspaces', '.test-recordings'];
+        assert.deepStrictEqual(patterns, diagnosticDirectories.map(directory => `extension/${directory}/**`));
+        assert.match(uploadStep, /^\s+include-hidden-files: true\s*$/m);
     });
 
     test('installs the E2E runner dependencies from the internal npm feed', () => {
@@ -1003,6 +1018,66 @@ builder.Build().Run();
         assert.ok(debugLaunchIndex > projectLoadIndex);
         assert.ok(spec.includes("await waitForReadyMarker(readyMarkerPath, 240000);"));
         assert.ok(spec.includes("await waitForResourceState('e2e-winui', ['Running'], 30000);"));
+    });
+
+    for (const arch of ['x64', 'arm64']) {
+        test(`isolates WinUI design-time intermediates without moving restore assets on ${arch}`, () => {
+            const runner = fs.readFileSync(path.resolve(__dirname, '..', '..', 'scripts', 'run-e2e.js'), 'utf8');
+            const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true);
+            const declaration = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'writeWinUiProject');
+            assert.ok(declaration);
+            const workspaceRoot = path.resolve('winui-fixture');
+            const files = new Map<string, string>();
+            vm.runInNewContext(`${declaration.getText(source)}\nwriteWinUiProject('AspireE2E.WinUI');`, {
+                path,
+                process: { arch },
+                workspaceRoot,
+                csharpFileHeader: '',
+                winUiReadyMarkerPath: path.join(workspaceRoot, 'winui-e2e-ready.txt'),
+                fs: {
+                    mkdirSync: () => undefined,
+                    writeFileSync: (filePath: string, content: string) => files.set(filePath, content),
+                },
+            });
+
+            const project = files.get(path.join(workspaceRoot, 'AspireE2E.WinUI', 'AspireE2E.WinUI.csproj'));
+            assert.ok(project);
+            assert.deepStrictEqual(project.match(/<IntermediateOutputPath\b[^>]*>[^<]*<\/IntermediateOutputPath>/g), [
+                String.raw`<IntermediateOutputPath Condition="'$(DesignTimeBuild)' == 'true'">$(BaseIntermediateOutputPath)design-time\$(Configuration)\</IntermediateOutputPath>`,
+            ]);
+            assert.strictEqual(project.includes('<BaseIntermediateOutputPath'), false);
+            assert.ok(project.includes(`<RuntimeIdentifier>win-${arch}</RuntimeIdentifier>`));
+        });
+    }
+
+    test('waits for WinUI generated definitions in the isolated design-time directory', async () => {
+        const spec = fs.readFileSync(path.resolve(__dirname, '..', '..', 'src', 'test-e2e', 'winUiDebug.e2e.test.ts'), 'utf8');
+        const source = ts.createSourceFile('winUiDebug.e2e.test.ts', spec, ts.ScriptTarget.Latest, true);
+        const declaration = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'waitForCSharpProjectLoad');
+        assert.ok(declaration);
+        const compiled = ts.transpileModule(declaration.getText(source), {
+            compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+        }).outputText;
+        const projectDirectory = path.resolve('winui-fixture', 'AspireE2E.WinUI');
+        const definitions = [
+            path.join(projectDirectory, 'obj', 'Debug', 'App.g.i.cs'),
+            path.join(projectDirectory, 'obj', 'design-time-old', 'Debug', 'App.g.i.cs'),
+            path.join(projectDirectory, '..', 'Other.WinUI', 'obj', 'design-time', 'Debug', 'App.g.i.cs'),
+            path.join(projectDirectory, 'obj', 'design-time', 'Debug', 'App.g.i.cs'),
+        ];
+        let probes = 0;
+        await vm.runInNewContext(`${compiled}\nwaitForCSharpProjectLoad(filePath, 120000);`, {
+            assert,
+            path,
+            filePath: path.join(projectDirectory, 'App.xaml.cs'),
+            fs: { readFileSync: () => 'InitializeComponent();' },
+            executeE2eControlCommand: async () => {
+                assert.ok(probes < definitions.length, 'The isolated design-time definition must complete the probe.');
+                return { result: [{ filePath: definitions[probes++], line: 0 }] };
+            },
+            setTimeout: (callback: () => void) => callback(),
+        });
+        assert.strictEqual(probes, definitions.length);
     });
 
     test('wires structured E2E harness failures into advisory handling', () => {

@@ -6,7 +6,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
-public class PostgreSQLPublicApiTests
+public class PostgreSQLPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     [Obsolete($"This method is obsolete and will be removed in a future version. Use AddAzurePostgresFlexibleServer instead to add an Azure PostgreSQL Flexible Server resource.")]
@@ -56,7 +56,7 @@ public class PostgreSQLPublicApiTests
     [InlineData(true)]
     public void AddAzurePostgresFlexibleServerShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddAzurePostgresFlexibleServer(name);
@@ -84,7 +84,7 @@ public class PostgreSQLPublicApiTests
     [InlineData(true)]
     public void AddDatabaseShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        using var testBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = testBuilder.AddAzurePostgresFlexibleServer("postgre-sql");
         var name = isNull ? null! : string.Empty;
 

@@ -24,7 +24,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task PublicReferencesUseEnvironmentDomainAndPreserveSelfTargetPort()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var enabled = builder.AddParameter("enabled");
         var api = builder.AddProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
@@ -74,7 +74,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task EndpointPropertyExpressionsResolveFromTheEnvironmentDomain()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var api = builder.AddContainer("api", "myimage")
             .WithHttpEndpoint(targetPort: 8080)
@@ -125,7 +125,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [InlineData(EndpointProperty.TlsEnabled, "True")]
     public async Task NonHostPropertiesResolveWithoutMaterializingDeploymentTargets(EndpointProperty property, string expected)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var api = builder.AddContainer("api", "myimage").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
 
@@ -146,7 +146,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [InlineData(EndpointProperty.TlsEnabled)]
     public void InternalEndpointReferencesRequireExplicitPublicIngress(EndpointProperty property)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var api = builder.AddContainer("api", "myimage").WithHttpEndpoint(targetPort: 8080);
 
@@ -165,7 +165,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [InlineData(true)]
     public async Task InternalReferencesIncludingConditionalExpressionsAreRejected(bool conditional)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var api = builder.AddContainer("api", "myimage").WithHttpEndpoint(targetPort: 8080);
         var web = builder.AddContainer("web", "myimage").WithHttpEndpoint(targetPort: 8080);
@@ -199,7 +199,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     public async Task CrossEnvironmentReferencesPublishUsingTheProducerDomain(bool expressConsumer)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper, workspace.Path);
         var reporter = new TestPipelineActivityReporter(outputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
         var consumerEnvironment = builder.AddAzureContainerAppEnvironment("consumer");
@@ -241,7 +241,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task ExpressConsumerUsesPublicStandardEndpoints()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         var standard = builder.AddAzureContainerAppEnvironment("standard");
         var express = builder.AddAzureContainerAppEnvironment("express").AsExpress();
         var api = builder.AddContainer("api", "myimage")
@@ -271,7 +271,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [InlineData(true)]
     public async Task ConsumersAcceptPreservedHttpFromStandardEndpoints(bool expressConsumer)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         var producer = builder.AddAzureContainerAppEnvironment("producer").WithHttpsUpgrade(false);
         var consumer = builder.AddAzureContainerAppEnvironment("consumer");
         if (expressConsumer)
@@ -305,7 +305,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [InlineData(true)]
     public async Task SelfPublicUrlReferencesUseTheEnvironmentDomain(bool environmentExpression)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var api = builder.AddContainer("api", "myimage")
             .WithHttpEndpoint(targetPort: 8080)
@@ -331,7 +331,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task MutualPublicUrlReferencesAreSupported()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var first = builder.AddContainer("first", "myimage").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
         var second = builder.AddContainer("second", "myimage").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
@@ -358,7 +358,7 @@ public class AzureContainerAppExpressEndpointTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task DeploymentSummaryUsesEnvironmentDomainWithoutDashboard()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         var environment = builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var api = builder.AddContainer("api", "myimage").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
         using var app = builder.Build();

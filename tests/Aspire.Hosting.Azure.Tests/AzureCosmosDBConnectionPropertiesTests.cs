@@ -6,7 +6,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureCosmosDBConnectionPropertiesTests
+public class AzureCosmosDBConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureCosmosDBResourceGetConnectionPropertiesReturnsExpectedValues()
@@ -26,7 +26,7 @@ public class AzureCosmosDBConnectionPropertiesTests
     [Fact]
     public void AzureCosmosDBResourceWithAccessKeyAuthenticationGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var cosmos = builder.AddAzureCosmosDB("cosmos").WithAccessKeyAuthentication();
 
         var resource = Assert.Single(builder.Resources.OfType<AzureCosmosDBResource>());
@@ -56,7 +56,7 @@ public class AzureCosmosDBConnectionPropertiesTests
     [InlineData(true)]
     public void AzureCosmosDBResourceEmulatorGetConnectionPropertiesReturnsExpectedValues(bool useClassic)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var cosmos = builder.AddAzureCosmosDB("cosmos");
         cosmos = useClassic ? cosmos.RunAsClassicEmulator() : cosmos.RunAsEmulator();
 

@@ -53,7 +53,7 @@ internal sealed class DashboardServiceHost : IHostedService
         ResourceCommandService resourceCommandService,
         InteractionService interactionService,
         IInteractionFileUploadStore fileUploadStore,
-        Terminals.TerminalService terminalService)
+        TerminalService terminalService)
     {
         _logger = loggerFactory.CreateLogger<DashboardServiceHost>();
 

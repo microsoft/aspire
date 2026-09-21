@@ -6,7 +6,7 @@ using Hex1b.Input;
 
 #pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
 
-namespace Aspire.Hosting.Terminals;
+namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// Represents one terminal keypress, optionally combined with modifiers, for <see cref="AspireTerminal.SendKeyAsync"/>.

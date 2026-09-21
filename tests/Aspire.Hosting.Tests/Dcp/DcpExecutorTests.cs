@@ -2764,6 +2764,119 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResourceWatch_ReportsPreviousStateForChangesRefreshesAndReplacements(bool reportDeletion)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("database", "image");
+        var kubernetesService = new TestKubernetesService();
+        var changes = Channel.CreateUnbounded<OnResourceChangedContext>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.Resource.Name == "database" && context.Status.State is not null)
+            {
+                changes.Writer.TryWrite(context);
+            }
+
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService, events: events);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        await PublishStateAsync(ContainerState.Running, previousState: null);
+        await PublishStateAsync(ContainerState.Exited, ContainerState.Running);
+        await PublishStateAsync(ContainerState.Exited, ContainerState.Exited);
+
+        var endpoint = Endpoint.Create("database-endpoint", "", "database-service");
+        endpoint.Metadata.OwnerReferences = [new V1OwnerReference
+        {
+            ApiVersion = container.ApiVersion,
+            Kind = container.Kind,
+            Name = container.Metadata.Name,
+            Uid = container.Metadata.Uid
+        }];
+        kubernetesService.PushResourceModified(endpoint);
+        await AssertChangeAsync(ContainerState.Exited, ContainerState.Exited);
+
+        await PublishStateAsync(ContainerState.Running, ContainerState.Exited);
+        await PublishStateAsync(ContainerState.Exited, ContainerState.Running);
+
+        if (reportDeletion)
+        {
+            kubernetesService.PushResourceDeleted(container);
+        }
+
+        container.Metadata.Uid = "database-replacement";
+        kubernetesService.PushResourceUnchanged(container, k8s.WatchEventType.Added);
+        await AssertChangeAsync(ContainerState.Exited, previousState: null);
+        await PublishStateAsync(ContainerState.Exited, ContainerState.Exited);
+
+        async Task PublishStateAsync(string state, string? previousState)
+        {
+            container.Status = new ContainerStatus { State = state };
+            kubernetesService.PushResourceModified(container);
+            await AssertChangeAsync(state, previousState);
+        }
+
+        async Task AssertChangeAsync(string state, string? previousState)
+        {
+            var change = await changes.Reader.ReadAsync().AsTask().DefaultTimeout();
+            Assert.Equal(state, change.Status.State);
+            Assert.Equal(previousState, change.PreviousState);
+        }
+    }
+
+    [Fact]
+    public async Task ResourceWatch_PreviousStateIsScopedToReplica()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        AddExecutableWithPrecomputedReplicas(builder);
+        var kubernetesService = new TestKubernetesService();
+        var changes = Channel.CreateUnbounded<OnResourceChangedContext>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.Resource.Name == "program" && context.Status.State is not null)
+            {
+                changes.Writer.TryWrite(context);
+            }
+
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService, events: events);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var executables = GetCreatedExecutablesForResource(kubernetesService, "program");
+        Assert.Equal(2, executables.Count);
+        await PublishStateAsync(executables[0], ExecutableState.Finished, previousState: null);
+        await PublishStateAsync(executables[1], ExecutableState.Finished, previousState: null);
+        await PublishStateAsync(executables[0], ExecutableState.Running, ExecutableState.Finished);
+        await PublishStateAsync(executables[1], ExecutableState.Finished, ExecutableState.Finished);
+        await PublishStateAsync(executables[0], ExecutableState.Finished, ExecutableState.Running);
+
+        async Task PublishStateAsync(Executable executable, string state, string? previousState)
+        {
+            executable.Status = new ExecutableStatus { State = state };
+            kubernetesService.PushResourceModified(executable);
+            var change = await changes.Reader.ReadAsync().AsTask().DefaultTimeout();
+            Assert.Equal(executable.Metadata.Name, change.DcpResourceName);
+            Assert.Equal(state, change.Status.State);
+            Assert.Equal(previousState, change.PreviousState);
+        }
+    }
+
     [Fact]
     public async Task ResourceWatch_ResourceWithoutResourceVersionIsAlwaysProcessed()
     {
