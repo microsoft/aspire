@@ -4,9 +4,9 @@
   "title": "Flaky: VS Code extension E2E (browser-debugger) times out waiting for Blazor page/WASM debug session to become interactive",
   "test_name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone",
   "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
-  "error_pattern": "Failed to apply E2E control revision <timestamp>: Error: Timed out after ~291000ms waiting for pwa-msedge child session for Blazor WASM root '<guid>'. Last error: <none>.",
-  "analysis": "Timeout waiting for the pwa-msedge child debug session to attach to a Blazor WASM root in a Windows E2E environment. This is a timing-sensitive external browser/debugger interaction unrelated to the PR's Python uv.lock dependency bump in unrelated playground projects. Matches a recurring pattern of Blazor browser debugger E2E timeouts in this job.",
-  "failure_details": "Failed to apply E2E control revision 1789776403630: Error: Timed out after 291008ms waiting for pwa-msedge child session for Blazor WASM root 'aa163d02-4d75-4d18-a6f8-17874c8d767c'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"dd771988-4ab4-4c93-9222-fdc019c2f595\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-2rujOn\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":50692,\"platform\":\"browser\",\"isServer\":true},\"stopAtEntry\":false,\"justMyCode\":true,\"requireExactSource\":true,\"enableStepFiltering\":true}}]}",
+  "error_pattern": "Failed to apply E2E control revision <timestamp>: Error: Timed out after ~287544ms waiting for pwa-msedge child session for Blazor WASM root '<guid>'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"<guid>\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",...}]}",
+  "analysis": "The failing test times out waiting for a pwa-msedge child debug session to attach to a Blazor WASM root, which is an intermittent timing issue in the VS Code extension's browser debugger E2E harness (waiting on Edge/WASM startup). The PR under review (#1391) only modifies Aspire.Dashboard console log viewer and Aspire.Hosting log source/resource-service code, with no changes to the VS Code extension or its Blazor WASM debugging support, so the failure is unrelated to the PR's changes. This exact error signature has recurred 25 times previously (issue #19618).",
+  "failure_details": "Failed to apply E2E control revision 1789967584022: Error: Timed out after 287544ms waiting for pwa-msedge child session for Blazor WASM root '1624e57d-656a-4238-959c-ff9ef801ef87'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"fc10327d-79af-4801-997d-0dfc8f76a5e1\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-IpHJQ9\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":49475,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-IpHJQ9\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-IpHJQ9\\\\workspace\\\\StandaloneClient\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-IpHJQ9\\\\workspace\\\\HostedGlobal\\\\HostedGlobal.Client\\\\bin\\\\Debug\\\\net11.0\\\\\"},\"stopAtEntry\":false,\"justMyCode\":true,\"requireExactSource\":true,\"enableStepFiltering\":true,\"logging\":{\"exceptions\":true,\"moduleLoad\":true,\"programOutput\":true,\"browserStdOut\":true}}}]}",
   "occurrences": [
     {
       "run_id": 32704259463,
@@ -182,6 +182,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
       "pr_number": 20244,
       "observed_at": "2026-09-19T00:45:43Z"
+    },
+    {
+      "run_id": 35562512049,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35562512049",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "pr_number": 1391,
+      "observed_at": "2026-09-21T05:32:38Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19618"
