@@ -786,9 +786,14 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
     internal List<NssDb> GetNssDbs(string homeDirectory)
     {
-        var nssDbOverrideSource = _nssDbOverride?.Source ?? NssDbOverrideVariableName;
-        var nssDbOverride = _nssDbOverride?.Value;
-        if (string.IsNullOrEmpty(nssDbOverride))
+        string nssDbOverrideSource;
+        string? nssDbOverride;
+        if (_nssDbOverride is { Value.Length: > 0 } configuredOverride)
+        {
+            nssDbOverrideSource = configuredOverride.Source;
+            nssDbOverride = configuredOverride.Value;
+        }
+        else
         {
             nssDbOverrideSource = NssDbOverrideVariableName;
             nssDbOverride = _environment.GetEnvironmentVariable(NssDbOverrideVariableName);
