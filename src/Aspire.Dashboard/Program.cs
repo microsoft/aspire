@@ -10,7 +10,7 @@ using Aspire.Shared;
 BundleVersionLease? acquiredBundleLease;
 try
 {
-    acquiredBundleLease = BundleVersionLease.TryAcquireFromEnvironment("aspire-dashboard", args.FirstOrDefault());
+    acquiredBundleLease = BundleVersionLease.TryAcquireFromEnvironment("aspire-dashboard");
 }
 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException or ArgumentException or NotSupportedException)
 {
