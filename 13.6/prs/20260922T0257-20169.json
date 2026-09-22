@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Increased default dashboard console log, structured log, and trace retention limits",
+  "mergedAt": "2026-09-22T02:57:36Z",
+  "number": 20169,
+  "runDate": "2026-09-22T06:06:27Z",
+  "status": "included",
+  "title": "Increase dashboard console log, structured log, and trace limits"
+}

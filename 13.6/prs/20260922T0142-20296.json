@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "CI/workflow authorization fix for the deployment-test bot command, no user-facing product impact",
+  "mergedAt": "2026-09-22T01:42:54Z",
+  "number": 20296,
+  "runDate": "2026-09-22T06:06:27Z",
+  "status": "excluded",
+  "title": "Fix /deployment-test authorization for repository writers"
+}

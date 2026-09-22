@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Default console log, structured log, and trace retention limits increased from 10,000 to 100,000 entries, keeping more diagnostic history available during longer runs. The limits remain configurable via `Dashboard:Frontend:MaxConsoleLogCount`, `Dashboard:TelemetryLimits:MaxLogCount`, and `Dashboard:TelemetryLimits:MaxTraceCount`.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "📈",
+  "firstMergedAt": "2026-09-22T02:57:36Z",
+  "lastMergedAt": "2026-09-22T02:57:36Z",
+  "name": "Higher dashboard log and trace retention limits",
+  "owner": "JamesNK",
+  "prs": [
+    20169
+  ]
+}

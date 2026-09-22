@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Test-only fix for a Windows E2E teardown race in the VS Code extension test suite, no user-facing impact",
+  "mergedAt": "2026-09-22T03:38:05Z",
+  "number": 20289,
+  "runDate": "2026-09-22T06:06:27Z",
+  "status": "excluded",
+  "title": "Fix Windows dynamic debug E2E teardown race"
+}
