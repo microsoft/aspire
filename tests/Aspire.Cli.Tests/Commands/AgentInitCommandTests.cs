@@ -402,7 +402,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         });
         using var provider = services.BuildServiceProvider();
 
-        // Exercise an incoming bundle without replacing the production embedded archive before its attested release.
         var installer = provider.GetRequiredService<IAspireSkillsInstaller>();
         var installation = await installer.InstallAsync(TestContext.Current.CancellationToken).DefaultTimeout();
         Assert.NotNull(installation.Bundle);
