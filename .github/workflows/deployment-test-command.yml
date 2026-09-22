@@ -1,6 +1,6 @@
 # Trigger deployment tests from PR comments
 #
-# Usage: Comment `/deployment-test` on a PR
+# Usage: Start a PR comment with `/deployment-test` (trailing content is allowed)
 #
 # This workflow validates the commenter has repository write access and triggers
 # the deployment-tests.yml workflow with the PR context.
@@ -18,10 +18,10 @@ permissions:
 
 jobs:
   deployment-test:
-    # Only run when the comment is exactly /deployment-test on a PR
+    # Only run when the comment starts with /deployment-test on a PR
     if: >-
       ${{
-        github.event.comment.body == '/deployment-test' &&
+        startsWith(github.event.comment.body, '/deployment-test') &&
         github.event.issue.pull_request &&
         github.repository_owner == 'microsoft'
       }}

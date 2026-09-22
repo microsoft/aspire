@@ -10,6 +10,15 @@ namespace Infrastructure.Tests;
 public sealed class DeploymentTestCommandTests(ITestOutputHelper output)
 {
     [Fact]
+    public void CommandTriggerAllowsTrailingContentOnMicrosoftPullRequests()
+    {
+        var condition = Scalar(LoadJob(), "if");
+        Assert.Equal(
+            "${{ startsWith(github.event.comment.body, '/deployment-test') && github.event.issue.pull_request && github.repository_owner == 'microsoft' }}",
+            string.Join(" ", condition.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)));
+    }
+
+    [Fact]
     public void DeploymentStepsRequireRepositoryWriteAccess()
     {
         var steps = LoadSteps();
@@ -50,14 +59,18 @@ public sealed class DeploymentTestCommandTests(ITestOutputHelper output)
 
     private static YamlMappingNode[] LoadSteps()
     {
+        var steps = Assert.IsType<YamlSequenceNode>(LoadJob().Children[new YamlScalarNode("steps")]);
+        return steps.Children.Select(Assert.IsType<YamlMappingNode>).ToArray();
+    }
+
+    private static YamlMappingNode LoadJob()
+    {
         using var reader = File.OpenText(Path.Combine(RepoRoot.Path, ".github", "workflows", "deployment-test-command.yml"));
         var yaml = new YamlStream();
         yaml.Load(reader);
         var root = Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
         var jobs = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("jobs")]);
-        var job = Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode("deployment-test")]);
-        var steps = Assert.IsType<YamlSequenceNode>(job.Children[new YamlScalarNode("steps")]);
-        return steps.Children.Select(Assert.IsType<YamlMappingNode>).ToArray();
+        return Assert.IsType<YamlMappingNode>(jobs.Children[new YamlScalarNode("deployment-test")]);
     }
 
     private static string Scalar(YamlMappingNode node, string key)
