@@ -17,7 +17,7 @@ public sealed class NuGetConfigTests
         Assert.NotNull(root);
         var sources = root.Element("packageSources")!.Elements("add")
             .ToDictionary(element => element.Attribute("key")!.Value, element => element.Attribute("value")!.Value, StringComparer.Ordinal);
-        string[] expectedSources = ["built-local", "dotnet-eng", "dotnet-public", "dotnet10", "dotnet9"];
+        string[] expectedSources = ["built-local", "dotnet-eng", "dotnet-public", "dotnet10", "dotnet11", "dotnet9"];
         Assert.Equal(expectedSources, sources.Keys.Order(StringComparer.Ordinal));
         Assert.Equal("%BUILT_NUGETS_PATH%", sources["built-local"]);
         Assert.All(sources.Where(source => source.Key != "built-local"), source => AssertApprovedSource(source.Value));
@@ -28,6 +28,26 @@ public sealed class NuGetConfigTests
                 StringComparer.Ordinal);
         Assert.Equal(expectedSources, mappings.Keys.Order(StringComparer.Ordinal));
         Assert.All(mappings.Values, patterns => Assert.Equal(["*"], patterns));
+    }
+
+    [Theory]
+    [InlineData("TemplatesTesting/data/nuget8.config")]
+    [InlineData("nuget-with-package-source-mapping.config")]
+    public void TestRestoresUseRepositoryDailyRuntimeFeed(string configPath)
+    {
+        var repositoryConfig = XDocument.Load(Path.Combine(RepoRoot.Path, "NuGet.config")).Root!;
+        var testConfig = XDocument.Load(Path.Combine(RepoRoot.Path, "tests", "Shared", configPath)).Root!;
+        var repositorySource = Assert.Single(repositoryConfig.Element("packageSources")!.Elements("add"),
+            source => (string?)source.Attribute("key") == "dotnet11");
+        var testSource = Assert.Single(testConfig.Element("packageSources")!.Elements("add"),
+            source => (string?)source.Attribute("key") == "dotnet11");
+
+        Assert.Equal((string?)repositorySource.Attribute("value"), (string?)testSource.Attribute("value"));
+        AssertApprovedSource(testSource.Attribute("value")!.Value);
+
+        var mapping = Assert.Single(testConfig.Element("packageSourceMapping")!.Elements("packageSource"),
+            source => (string?)source.Attribute("key") == "dotnet11");
+        Assert.Equal(["*"], mapping.Elements("package").Select(package => (string?)package.Attribute("pattern")));
     }
 
     [Fact]

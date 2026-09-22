@@ -202,6 +202,19 @@ jobs:
               /bl:$(Build.Arcade.LogsPath)PublishManaged.binlog
             displayName: 🟣Prepare aspire-managed
 
+          - script: >-
+              $(Build.SourcesDirectory)/$(dotnetScript)
+              publish
+              $(Build.SourcesDirectory)/src/Aspire.Dashboard/Aspire.Dashboard.csproj
+              -c $(_BuildConfig)
+              -r ${{ targetRid }}
+              /p:PlatformName=${{ targetRid }}
+              /p:GenerateDocumentationFile=false
+              /p:EnforceCodeStyleInBuild=false
+              ${{ parameters.extraBuildArgs }}
+              /bl:$(Build.Arcade.LogsPath)PublishDashboard.binlog
+            displayName: 🟣Prepare Native AOT Dashboard
+
           # On macOS, ad-hoc codesign aspire-managed with JIT entitlements BEFORE Arcade signing.
           # MicroBuild (MacDeveloperHardenWithNotarization) preserves entitlements from the prior
           # ad-hoc signature when re-signing with the real certificate. Without this step,
@@ -214,14 +227,24 @@ jobs:
                 $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
               displayName: 🟣Ad-hoc codesign aspire-managed with JIT entitlements
 
+          # ESRP treats the Dashboard executable path as a discovery pattern and otherwise
+          # finds the adjacent .dSYM DWARF binary with the same name. Dashboard packages do
+          # not ship symbols, so remove the bundle before any signing pass evaluates inputs.
+          - ${{ if and(eq(parameters.codeSign, true), eq(parameters.agentOs, 'macos')) }}:
+            - pwsh: >-
+                Remove-Item
+                -LiteralPath "$(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/${{ targetRid }}/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard.dSYM"
+                -Recurse -Force
+              displayName: 🟣Remove Native AOT Dashboard debug symbols
+
           - ${{ if eq(parameters.codeSign, true) }}:
             - script: >-
                 $(Build.SourcesDirectory)/$(scriptName)
                 -restore -sign
                 ${{ parameters.extraBuildArgs }}
-                -projects $(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj
+                -projects "$(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj"
                 /bl:$(Build.Arcade.LogsPath)SignManaged.binlog
-              displayName: 🟣Sign aspire-managed
+              displayName: 🟣Sign managed executables
               env:
                 SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
@@ -230,9 +253,60 @@ jobs:
           # to the default umask (typically 644). The execute bit must be restored before
           # CreateLayout packs the binary into the bundle archive.
           - ${{ if and(eq(parameters.codeSign, true), ne(parameters.agentOs, 'windows')) }}:
-            - script: >-
+            - script: |
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
-              displayName: 🟣Restore execute permission on aspire-managed
+                chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/${{ targetRid }}/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard
+              displayName: 🟣Restore execute permissions on managed executables
+
+          # Repack the already-published/signed Dashboard without republishing it,
+          # which would replace the signed executable. Common.projitems recreates
+          # the runtime ZIP with Overwrite=true, replacing the pre-signing archive.
+          - script: >-
+              $(Build.SourcesDirectory)/$(dotnetScript)
+              build
+              $(Build.SourcesDirectory)/eng/dashboardpack/Aspire.Dashboard.Sdk.${{ targetRid }}.csproj
+              -c $(_BuildConfig)
+              /p:SkipDashboardPublish=true
+              ${{ parameters.extraBuildArgs }}
+              /bl:$(Build.Arcade.LogsPath)PackDashboard.binlog
+            displayName: 🟣Pack Native AOT Dashboard
+
+          # The native_archives artifact publishes only artifacts/packages. Stage
+          # the Dashboard runtime zip there so Assemble can recover it alongside
+          # the RID-specific Dashboard nupkg.
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $source = "$(Build.SourcesDirectory)/artifacts/DashboardArtifacts/$(_BuildConfig)/${{ targetRid }}/aspire-dashboard-${{ targetRid }}.zip"
+              $destination = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/DashboardArtifacts/${{ targetRid }}"
+              New-Item -ItemType Directory -Force -Path $destination | Out-Null
+              Copy-Item -LiteralPath $source -Destination $destination -Force
+            displayName: 🟣Stage Native AOT Dashboard artifact
+
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $archive = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/DashboardArtifacts/${{ targetRid }}/aspire-dashboard-${{ targetRid }}.zip"
+              $extractDirectory = Join-Path "$(Agent.TempDirectory)" "aspire-dashboard-${{ targetRid }}-$([guid]::NewGuid().ToString('N'))"
+              New-Item -ItemType Directory -Path $extractDirectory | Out-Null
+              try {
+                if ('${{ parameters.agentOs }}' -eq 'windows') {
+                  Expand-Archive -LiteralPath $archive -DestinationPath $extractDirectory
+                  $executable = Join-Path $extractDirectory 'Aspire.Dashboard.exe'
+                }
+                else {
+                  & unzip -q $archive -d $extractDirectory
+                  if ($LASTEXITCODE -ne 0) {
+                    throw "Failed to extract Native AOT Dashboard archive '$archive'."
+                  }
+                  $executable = Join-Path $extractDirectory 'Aspire.Dashboard'
+                }
+
+                & "$(Build.SourcesDirectory)/eng/scripts/test-native-dashboard.ps1" -DashboardPath $executable
+              }
+              finally {
+                Remove-Item -LiteralPath $extractDirectory -Recurse -Force -ErrorAction SilentlyContinue
+              }
+            displayName: 🟣Smoke test packaged Native AOT Dashboard (${{ targetRid }})
+            condition: and(succeeded(), eq(variables['Agent.OSArchitecture'], variables['_ridAgentArch']), not(contains('${{ targetRid }}', 'musl')))
 
           - task: NodeTool@0
             displayName: 🟣Install node.js

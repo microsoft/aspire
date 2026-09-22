@@ -248,7 +248,7 @@ internal static class TerminalWebSocketProxy
         var workload = new Hmp1WorkloadAdapter(new Hmp1ClientOptions
         {
             StreamFactory = _ => Task.FromResult(upstream),
-            DisplayName = "Aspire dashboard"
+            DisplayName = $"Aspire dashboard {connectionId}"
         });
         await using var workloadLifetime = workload.ConfigureAwait(false);
 
@@ -283,7 +283,7 @@ internal static class TerminalWebSocketProxy
         logger.LogDebug("Terminal view opened ({ConnectionId}).", connectionId);
         try
         {
-            await BridgeAsync(socket, workload, upstream, session, logger, context.RequestAborted).ConfigureAwait(false);
+            await BridgeAsync(socket, workload, upstream, session, logger, connectionId, context.RequestAborted).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -305,7 +305,7 @@ internal static class TerminalWebSocketProxy
     }
 
     private static async Task BridgeAsync(WebSocket socket, Hmp1WorkloadAdapter workload, Stream upstream,
-        TerminalViewSession? session, ILogger logger, CancellationToken cancellationToken)
+        TerminalViewSession? session, ILogger logger, string connectionId, CancellationToken cancellationToken)
     {
         // The remote producer owns geometry, primary role and graphics checkpoints.
         // This mirror belongs only to this browser; disposing it releases the HMP
@@ -316,15 +316,21 @@ internal static class TerminalWebSocketProxy
             IsReadOnly = session?.ReadOnly == true || upstream is GrpcTerminalClientStream { TerminalEnded: true } || !workload.IsConnected
         };
         await using var presentationLifetime = presentation.ConfigureAwait(false);
-        var terminal = Hex1bTerminal.CreateBuilder()
+        var throughput = new TerminalThroughputFilter(logger, connectionId, TimeProvider.System);
+        await using var throughputLifetime = throughput.ConfigureAwait(false);
+        var builder = Hex1bTerminal.CreateBuilder()
             .WithWorkload(workload)
             .WithPresentation(presentation)
             // HMP preserves soft wraps but does not negotiate reflow policy. Match the
             // AppHost/TerminalHost producer so this replica also reflows retained history.
             // https://github.com/mitchdenny/hex1b/blob/093b67b/docs/web-terminal.md#shell-reflow-configuration
             .WithReflow(GhosttyReflowStrategy.Instance)
-            .WithScrollback(10000)
-            .Build();
+            .WithScrollback(10000);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            builder.AddWorkloadFilter(throughput);
+        }
+        var terminal = builder.Build();
         await using var terminalLifetime = terminal.ConfigureAwait(false);
         await PumpViewAsync(socket, presentation, workload, upstream, session, logger, cancellationToken).ConfigureAwait(false);
     }

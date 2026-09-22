@@ -20,7 +20,7 @@ internal sealed class AspireExportIgnoreAttribute : Attribute
 [AspireExportIgnore(Reason = "Internal IConfiguration helper — use the dedicated ATS configuration exports instead.")]
 internal static class IConfigurationExtensions
 {
-#if !CLI
+#if !CLI && !ASPIRE_DASHBOARD
     public static T GetValue<T>(this IConfiguration configuration, string primaryKey, string secondaryKey, T defaultValue)
     {
         var primaryValue = configuration.GetValue(typeof(T), primaryKey, null);

@@ -22,6 +22,11 @@
     <WarningsNotAsErrors Condition="'$(TreatNuGetAuditWarningsAsErrors)' != 'true'">$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Optimized AOT publishing skips the Build step that copies XML documentation to bin,
+         but publishing still reads FinalDocFile from bin. Keep the full build until the SDK
+         supports publishing documentation directly from obj:
+         https://github.com/dotnet/dotnet/blob/68f63657247e6ddb48a93cae3dfc05776dec8838/src/sdk/src/Tasks/Microsoft.NET.Build.Tasks/targets/Microsoft.NET.Publish.targets -->
+    <UseOptimizedPublish>false</UseOptimizedPublish>
     <SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>
     <DebugType>embedded</DebugType>
     <DebugSymbols>true</DebugSymbols>
@@ -58,7 +63,7 @@
 
     <!-- TODO: Need to figure out we can automatically detect target framework here. This property
                is specified to support dashboard path metadata generation on the inner loop. -->
-    <AspireDashboardDir>$(MSBuildThisFileDirectory)/artifacts/bin/Aspire.Dashboard/$(Configuration)/net8.0/</AspireDashboardDir>
+    <AspireDashboardDir>$(MSBuildThisFileDirectory)/artifacts/bin/Aspire.Dashboard/$(Configuration)/net11.0/</AspireDashboardDir>
     <AspireTerminalHostDir>$(MSBuildThisFileDirectory)/artifacts/bin/Aspire.TerminalHost/$(Configuration)/net8.0/</AspireTerminalHostDir>
   </PropertyGroup>
 

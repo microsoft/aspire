@@ -15,6 +15,7 @@ using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Reflow;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Testing;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Shared;
@@ -30,7 +31,7 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
     private int _includeHmpExit;
     private readonly TaskCompletionSource _endedObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    public TerminalTestHost(ITestOutputHelper output, bool requireAuthentication, bool useGrpc = false)
+    public TerminalTestHost(ITestOutputHelper output, bool requireAuthentication, bool useGrpc = false, ITestSink? testSink = null)
     {
         _useGrpc = useGrpc;
         _app = IntegrationTestHelpers.CreateDashboardWebApplication(output,
@@ -46,7 +47,8 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
             {
                 builder.Services.AddSingleton<ITerminalConnectionResolver>(this);
                 builder.Services.AddSingleton<IDashboardClient>(new TestDashboardClient(attachTerminal: AttachTerminalAsync));
-            });
+            },
+            testSink: testSink);
     }
 
     public Hex1bAppWorkloadAdapter Workload => _producer.Workload;
