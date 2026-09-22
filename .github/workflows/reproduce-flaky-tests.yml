@@ -1,421 +1,567 @@
-# Reproduces flaky tests by running them repeatedly across multiple OS runners.
-#
-# HOW TO USE:
-# 1. Edit the CONFIGURATION section below with the test you want to reproduce
-# 2. Push to your branch
-# 3. Trigger: gh workflow run reproduce-flaky-tests.yml --repo microsoft/aspire --ref <your-branch>
-# 4. Check the results across OSes and runners
-#
-# The configuration is designed to be edited by agents (Copilot, etc.)
-# who modify the env vars below and push to trigger a run.
-
+# TEMPORARY investigation for #20103. DO NOT MERGE.
+# Dispatch this existing workflow from the investigation branch only. The tested
+# checkout and all four build artifacts are pinned to the original failing push.
+# Product code, test assertions, timeouts, skips, and retries remain unchanged.
 name: Reproduce Flaky Tests
 
 on:
   workflow_dispatch: {}
 
-# ============================================================
-# CONFIGURATION — Edit these values to customize the test run
-# ============================================================
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: issue-20103-repro-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
-  # Test project shortname (maps to tests/Aspire.{name}.Tests/ or tests/{name}.Tests/)
-  # Examples: Hosting, Core, Dashboard, Components.Common, Cli.EndToEnd
-  TEST_PROJECT: "Hosting"
+  SOURCE_RUN_ID: '35383851199'
+  TESTED_SOURCE_SHA: '95a720c0f40cec0e967fa7a08cd5f17b012da095'
+  EXPECTED_DCP_COMMIT: 'b9830ac8d11bd85d866ccbaf65783462f6f25742'
+  ITERATIONS_PER_RUNNER: '10'
+  NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
 
-  # Test filter arguments passed to dotnet test (after the -- separator).
-  # Use quotes around wildcard patterns to prevent shell glob expansion.
-  # Examples:
-  #   --filter-method "*.TestMethodName"
-  #   --filter-class "*.TestClassName"
-  #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
-
-  # Target operating systems (comma-separated)
-  # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest,windows-latest"
-
-  # Number of parallel runners per OS
-  # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
-  RUNNERS_PER_OS: "3"
-
-  # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "3"
+defaults:
+  run:
+    shell: pwsh
 
 jobs:
-
-  setup:
-    name: Generate matrix
+  verify_source:
+    name: Verify historical source and artifacts
     runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.generate.outputs.matrix }}
-      is_cli_e2e: ${{ steps.detect_cli_e2e.outputs.is_cli_e2e }}
+    timeout-minutes: 10
     steps:
-      - name: Validate configuration
-        shell: bash
-        run: |
-          ERRORS=0
-
-          # Validate RUNNERS_PER_OS is a positive integer
-          if ! [[ "${{ env.RUNNERS_PER_OS }}" =~ ^[1-9][0-9]*$ ]]; then
-            echo "::error::RUNNERS_PER_OS must be a positive integer, got '${{ env.RUNNERS_PER_OS }}'"
-            ERRORS=1
-          fi
-
-          # Validate ITERATIONS_PER_RUNNER is a positive integer
-          if ! [[ "${{ env.ITERATIONS_PER_RUNNER }}" =~ ^[1-9][0-9]*$ ]]; then
-            echo "::error::ITERATIONS_PER_RUNNER must be a positive integer, got '${{ env.ITERATIONS_PER_RUNNER }}'"
-            ERRORS=1
-          fi
-
-          # Validate TARGET_OSES is not empty and contains only known runners
-          if [[ -z "${{ env.TARGET_OSES }}" ]]; then
-            echo "::error::TARGET_OSES must not be empty"
-            ERRORS=1
-          else
-            IFS=',' read -ra CHECK_OSES <<< "${{ env.TARGET_OSES }}"
-            for os in "${CHECK_OSES[@]}"; do
-              os=$(echo "$os" | xargs)
-              if [[ "$os" != "ubuntu-latest" && "$os" != "windows-latest" && "$os" != "macos-latest" ]]; then
-                echo "::error::Unknown OS in TARGET_OSES: '$os'. Allowed: ubuntu-latest, windows-latest, macos-latest"
-                ERRORS=1
-              fi
-            done
-          fi
-
-          # Validate TEST_FILTER is not the placeholder
-          if [[ "${{ env.TEST_FILTER }}" == *"YourTestMethodName"* ]]; then
-            echo "::error::TEST_FILTER still contains the placeholder 'YourTestMethodName'. Configure it with the actual test to reproduce."
-            ERRORS=1
-          fi
-
-          if [[ $ERRORS -ne 0 ]]; then exit 1; fi
-
-      - name: Detect CLI E2E project
-        id: detect_cli_e2e
-        shell: bash
-        run: |
-          if [ "${{ env.TEST_PROJECT }}" = "Cli.EndToEnd" ]; then
-            echo "is_cli_e2e=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_cli_e2e=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Generate runner matrix
-        id: generate
-        shell: bash
-        run: |
-          IFS=',' read -ra OSES <<< "${{ env.TARGET_OSES }}"
-          RUNNERS=${{ env.RUNNERS_PER_OS }}
-
-          ENTRIES=""
-          for os in "${OSES[@]}"; do
-            os=$(echo "$os" | xargs)
-            for i in $(seq 1 "$RUNNERS"); do
-              if [ -n "$ENTRIES" ]; then ENTRIES="$ENTRIES,"; fi
-              ENTRIES="${ENTRIES}{\"os\":\"${os}\",\"index\":${i}}"
-            done
-          done
-
-          MATRIX="{\"include\":[${ENTRIES}]}"
-          echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
-
-          TOTAL=$(echo "$ENTRIES" | tr ',' '\n' | wc -l)
-          echo "Generated matrix: $TOTAL runners across ${#OSES[@]} OS(es)"
-          echo "Each runner will execute ${{ env.ITERATIONS_PER_RUNNER }} iterations"
-          echo "Total test executions: $(( TOTAL * ${{ env.ITERATIONS_PER_RUNNER }} ))"
-
-  build_cli_e2e_image:
-    name: Build CLI E2E Docker image
-    needs: setup
-    if: ${{ needs.setup.outputs.is_cli_e2e == 'true' }}
-    uses: ./.github/workflows/build-cli-e2e-image.yml
-
-  reproduce:
-    name: "${{ matrix.os }} #${{ matrix.index }}"
-    needs: [setup, build_cli_e2e_image]
-    if: >-
-      ${{
-        !cancelled() &&
-        needs.setup.result == 'success' &&
-        (needs.build_cli_e2e_image.result == 'success' || needs.build_cli_e2e_image.result == 'skipped')
-      }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
-    env:
-      DOTNET_ROOT: ${{ github.workspace }}/.dotnet
-
-    steps:
-      - name: Setup vars (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          echo "DOTNET_SCRIPT=./dotnet.sh" >> $GITHUB_ENV
-          echo "BUILD_SCRIPT=./build.sh" >> $GITHUB_ENV
-          echo "${{ github.workspace }}/.dotnet" >> $GITHUB_PATH
-
-      - name: Setup vars (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          echo "DOTNET_SCRIPT=.\dotnet.cmd" >> $env:GITHUB_ENV
-          echo "BUILD_SCRIPT=.\build.cmd" >> $env:GITHUB_ENV
-          echo "${{ github.workspace }}\.dotnet" >> $env:GITHUB_PATH
-
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Trust HTTPS development certificate (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          EXIT_CODE=0
-          ${{ env.DOTNET_SCRIPT }} dev-certs https --trust || EXIT_CODE=$?
-          if [ $EXIT_CODE -ne 0 ] && [ $EXIT_CODE -ne 4 ]; then
-            echo "dev-certs https --trust failed with exit code $EXIT_CODE"
-            exit $EXIT_CODE
-          fi
+      - name: Validate provenance
         env:
-          WSL_INTEROP: ""
-
-      - name: Verify Docker is running (Linux)
-        if: runner.os == 'Linux'
-        run: docker info
-
-      - name: Download prebuilt CLI E2E Docker image
-        if: ${{ needs.setup.outputs.is_cli_e2e == 'true' && runner.os == 'Linux' }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: cli-e2e-dotnet-image
-          path: ${{ github.workspace }}/cli-e2e-image
-
-      - name: Download prebuilt CLI E2E Java Docker image
-        if: ${{ needs.setup.outputs.is_cli_e2e == 'true' && runner.os == 'Linux' }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: cli-e2e-polyglot-java-image
-          path: ${{ github.workspace }}/cli-e2e-image
-
-      - name: Download prebuilt CLI E2E polyglot Docker image
-        if: ${{ needs.setup.outputs.is_cli_e2e == 'true' && runner.os == 'Linux' }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: cli-e2e-polyglot-image
-          path: ${{ github.workspace }}/cli-e2e-image
-
-      - name: Load prebuilt CLI E2E Docker image
-        if: ${{ needs.setup.outputs.is_cli_e2e == 'true' && runner.os == 'Linux' }}
-        shell: bash
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_SHA: ${{ github.sha }}
         run: |
-          set -euo pipefail
-          eng/scripts/load-cli-e2e-images.sh \
-            --image-dir "${{ github.workspace }}/cli-e2e-image" \
-            --require-dotnet true \
-            --require-polyglot true \
-            --require-java true
-
-      - name: Unlock macOS keychain
-        if: runner.os == 'macOS'
-        uses: ./.github/actions/unlock-macos-keychain
-
-      - name: Compute test project path
-        shell: pwsh
-        run: |
-          $testShortName = "${{ env.TEST_PROJECT }}"
-          $projectPath1 = "${{ github.workspace }}/tests/$testShortName.Tests/$testShortName.Tests.csproj"
-          $projectPath2 = "${{ github.workspace }}/tests/Aspire.$testShortName.Tests/Aspire.$testShortName.Tests.csproj"
-
-          if (Test-Path -Path $projectPath1) {
-              $projectPath = $projectPath1
-          } elseif (Test-Path -Path $projectPath2) {
-              $projectPath = $projectPath2
-          } else {
-              Write-Error "No test project found for shortname '$testShortName'. Looked at: $projectPath1, $projectPath2"
-              exit 1
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if ($env:GITHUB_REF -ne 'refs/heads/ellahathaway-vs-code-e2e-flakiness-269') {
+            throw 'Temporary investigation workflow must not run on another branch.'
           }
-
-          echo "TEST_PROJECT_PATH=$projectPath" >> $env:GITHUB_ENV
-          Write-Host "Resolved test project: $projectPath"
-
-      - name: Build test project
-        run: >
-          ${{ env.BUILD_SCRIPT }}
-          -restore -ci -build
-          -projects ${{ env.TEST_PROJECT_PATH }}
-          /p:InstallBrowsersForPlaywright=false
-          /p:RunQuarantinedTests=true
-
-      - name: Run test iterations (Linux/macOS)
-        if: runner.os != 'Windows'
-        env:
-          ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
-          NUGET_PACKAGES: ${{ github.workspace }}/.packages
-          TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # Skip default quarantine/outerloop exclusion filters so the target test can run
-          SkipDefaultTestFilters: true
-        run: |
-          PASS=0
-          FAIL=0
-          ITERATIONS=${{ env.ITERATIONS_PER_RUNNER }}
-
-          for i in $(seq 1 "$ITERATIONS"); do
-            echo "::group::Iteration $i/$ITERATIONS"
-
-            # Cleanup between iterations
-            rm -rf "${{ github.workspace }}/testresults" 2>/dev/null || true
-            pgrep -lf "dcp" 2>/dev/null | grep -E "\bdcp(\.exe|ctl)?\b" | awk '{print $1}' | while read pid; do
-              kill -9 "$pid" 2>/dev/null || true
-            done
-            sleep 1
-
-            # Run test (capture output for zero-test detection)
-            ITER_OUTPUT="${{ github.workspace }}/iter-output-$i.log"
-            set +e  # Disable errexit so pipefail doesn't abort before PIPESTATUS capture
-            ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" \
-              --no-restore \
-              --no-build \
-              -- \
-              --timeout 10m \
-              --results-directory "${{ github.workspace }}/testresults" \
-              ${{ env.TEST_FILTER }} \
-              2>&1 | tee "$ITER_OUTPUT"
-            RESULT=${PIPESTATUS[0]}
-            set -e
-
-            # Detect zero-test runs (--ignore-exit-code 8 in Testing.props masks exit code 8)
-            if [ "$RESULT" -eq 0 ]; then
-              if ! grep -qiE "total:\s*[1-9]" "$ITER_OUTPUT" 2>/dev/null; then
-                echo "::error::Iteration $i: Zero tests executed. Verify TEST_FILTER and quarantine settings."
-                RESULT=8
-              fi
-            fi
-            rm -f "$ITER_OUTPUT"
-
-            if [ "$RESULT" -eq 0 ]; then
-              echo "✅ Iteration $i: PASS"
-              PASS=$((PASS + 1))
-            else
-              echo "❌ Iteration $i: FAIL (exit $RESULT)"
-              FAIL=$((FAIL + 1))
-              mkdir -p "${{ github.workspace }}/all-results/failure-$i"
-              cp -r "${{ github.workspace }}/testresults/"* "${{ github.workspace }}/all-results/failure-$i/" 2>/dev/null || true
-            fi
-
-            echo "::endgroup::"
-          done
-
-          echo ""
-          echo "========================================"
-          echo "Summary for runner #${{ matrix.index }} on ${{ matrix.os }}"
-          echo "  Passed: $PASS / $ITERATIONS"
-          echo "  Failed: $FAIL / $ITERATIONS"
-          echo "========================================"
-
-          if [ "$FAIL" -gt 0 ]; then exit 1; fi
-
-      - name: Run test iterations (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        env:
-          ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
-          NUGET_PACKAGES: ${{ github.workspace }}/.packages
-          TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # Skip default quarantine/outerloop exclusion filters so the target test can run
-          SkipDefaultTestFilters: true
-        run: |
-          $pass = 0
-          $fail = 0
-          $iterations = [int]"${{ env.ITERATIONS_PER_RUNNER }}"
-
-          for ($i = 1; $i -le $iterations; $i++) {
-            Write-Host "::group::Iteration $i/$iterations"
-
-            # Cleanup between iterations
-            Remove-Item -Recurse -Force "${{ github.workspace }}/testresults" -ErrorAction SilentlyContinue
-            Get-Process | Where-Object { $_.ProcessName -match '^dcp' } | Stop-Process -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 1
-
-            # Run test (capture output for zero-test detection)
-            $iterOutput = Join-Path "${{ github.workspace }}" "iter-output-$i.log"
-            & ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" `
-              --no-restore `
-              --no-build `
-              -- `
-              --timeout 10m `
-              --results-directory "${{ github.workspace }}/testresults" `
-              ${{ env.TEST_FILTER }} *> $iterOutput
-            $result = $LASTEXITCODE
-            Get-Content $iterOutput
-
-            # Detect zero-test runs (--ignore-exit-code 8 in Testing.props masks exit code 8)
-            if ($result -eq 0) {
-              $content = Get-Content $iterOutput -Raw -ErrorAction SilentlyContinue
-              if (-not ($content -match '(?i)total:\s*[1-9]')) {
-                Write-Host "::error::Iteration ${i}: Zero tests executed. Verify TEST_FILTER and quarantine settings."
-                $result = 8
-              }
-            }
-            Remove-Item $iterOutput -ErrorAction SilentlyContinue
-
-            if ($result -eq 0) {
-              Write-Host "✅ Iteration ${i}: PASS"
-              $pass++
-            } else {
-              Write-Host "❌ Iteration ${i}: FAIL (exit $result)"
-              $fail++
-              $dest = "${{ github.workspace }}/all-results/failure-$i"
-              New-Item -ItemType Directory -Path $dest -Force | Out-Null
-              Copy-Item -Recurse "${{ github.workspace }}/testresults/*" $dest -ErrorAction SilentlyContinue
-            }
-
-            Write-Host "::endgroup::"
+          New-Item -ItemType Directory -Path provenance | Out-Null
+          $run = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:SOURCE_RUN_ID" | ConvertFrom-Json
+          if ($run.event -ne 'push' -or $run.head_branch -ne 'main' -or
+              $run.head_sha -cne $env:TESTED_SOURCE_SHA -or $run.run_attempt -ne 1 -or
+              $run.status -ne 'completed') {
+            throw 'Source run does not match the pinned original main push.'
           }
+          $pages = gh api --paginate --slurp "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:SOURCE_RUN_ID/artifacts?per_page=100" | ConvertFrom-Json
+          $artifacts = @($pages | ForEach-Object { $_.artifacts })
+          $expected = [ordered]@{
+            'aspire-extension' = [long]10563691425
+            'cli-native-archives-win-x64' = [long]10563941021
+            'built-nugets' = [long]10563680586
+            'built-nugets-for-win-x64' = [long]10563461815
+          }
+          $selected = foreach ($name in $expected.Keys) {
+            $found = @($artifacts | Where-Object name -CEQ $name)
+            if ($found.Count -ne 1 -or $found[0].id -ne $expected[$name] -or
+                $found[0].expired -or $found[0].size_in_bytes -le 0 -or
+                $found[0].workflow_run.id -ne [long]$env:SOURCE_RUN_ID -or
+                $found[0].workflow_run.head_sha -cne $env:TESTED_SOURCE_SHA) {
+              throw "Artifact '$name' is missing, expired, ambiguous, or from another revision. Do not substitute another build."
+            }
+            $found[0]
+          }
+          [ordered]@{
+            workflowSha = $env:WORKFLOW_SHA
+            testedSourceSha = $env:TESTED_SOURCE_SHA
+            sourceRunId = $env:SOURCE_RUN_ID
+            sourceEvent = $run.event
+            sourceAttempt = $run.run_attempt
+            artifacts = @($selected)
+          } | ConvertTo-Json -Depth 10 | Set-Content provenance/source.json -Encoding utf8
+          Write-Host "Verified source $env:TESTED_SOURCE_SHA and all four immutable artifacts."
 
-          Write-Host ""
-          Write-Host "========================================"
-          Write-Host "Summary for runner #${{ matrix.index }} on ${{ matrix.os }}"
-          Write-Host "  Passed: $pass / $iterations"
-          Write-Host "  Failed: $fail / $iterations"
-          Write-Host "========================================"
-
-          if ($fail -gt 0) { exit 1 }
-
-      - name: Upload failure logs
-        if: failure()
+      - name: Upload provenance
+        if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: failures-${{ matrix.os }}-${{ matrix.index }}
-          path: all-results/
-          if-no-files-found: ignore
+          name: tree-actions-repro-provenance-attempt${{ github.run_attempt }}
+          path: provenance
+          if-no-files-found: error
+
+  reproduce:
+    name: Windows x64 tree-actions runner ${{ matrix.index }}
+    needs: verify_source
+    runs-on: windows-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        index: [1, 2, 3]
+    env:
+      REPRO_RUNNER_INDEX: ${{ matrix.index }}
+      WORKFLOW_SHA: ${{ github.sha }}
+      ASPIRE_EXTENSION_E2E_SHARD: tree-actions
+      ASPIRE_EXTENSION_E2E_SPEC: out/test-e2e/test-e2e/treeActions.e2e.test.js
+      ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS: 'false'
+      ASPIRE_EXTENSION_E2E_RECORDING_MODE: 'off'
+    steps:
+      - name: Checkout immutable tested source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ env.TESTED_SOURCE_SHA }}
+          persist-credentials: false
+
+      - name: Initialize evidence directory
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sha = (git rev-parse HEAD).Trim()
+          if ($sha -cne $env:TESTED_SOURCE_SHA -or $env:RUNNER_ARCH -ne 'X64') {
+            throw 'The tested commit or runner architecture is wrong.'
+          }
+          $root = Join-Path $env:GITHUB_WORKSPACE "repro-results/runner-$env:REPRO_RUNNER_INDEX"
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          "REPRO_RESULTS_ROOT=$root" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          [ordered]@{
+            workflowSha = $env:WORKFLOW_SHA
+            testedSourceSha = $sha
+            sourceRunId = $env:SOURCE_RUN_ID
+            runId = $env:GITHUB_RUN_ID
+            runAttempt = $env:GITHUB_RUN_ATTEMPT
+            runnerIndex = $env:REPRO_RUNNER_INDEX
+            runnerArchitecture = $env:RUNNER_ARCH
+            imageOS = $env:ImageOS
+            imageVersion = $env:ImageVersion
+          } | ConvertTo-Json | Set-Content (Join-Path $root environment.json) -Encoding utf8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22.x'
+
+      - name: Install pinned Corepack
+        working-directory: extension
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $env:COREPACK_HOME = Join-Path $env:RUNNER_TEMP 'corepack'
+          "COREPACK_HOME=$env:COREPACK_HOME" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          $version = (Get-Content scripts/corepack-version.txt -Raw).Trim()
+          npm install --global --force --registry "$env:NPM_REGISTRY" "corepack@$version"
+          $npmGlobalBin = (npm prefix --global).Trim()
+          $env:PATH = "$npmGlobalBin$([IO.Path]::PathSeparator)$env:PATH"
+          $npmGlobalBin | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
+          if ((corepack --version).Trim() -ne $version) { throw 'Corepack version mismatch.' }
+          corepack enable
+          node scripts/prepareCorepackYarn.mjs
+          corepack yarn --version
+
+      - name: Setup baseline .NET SDK
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+
+      - name: Download E2E-enabled VSIX
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: '10563691425'
+          path: extension/out
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Download original Windows x64 CLI
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: '10563941021'
+          path: artifacts/cli-archive
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Download original NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: '10563680586'
+          path: artifacts/nugets
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Download original Windows x64 NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: '10563461815'
+          path: artifacts/nugets-rid
+          run-id: ${{ env.SOURCE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Install locked extension dependencies
+        working-directory: extension
+        run: |
+          $ErrorActionPreference = 'Stop'
+          node scripts/validate-lockfile-registry.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            corepack yarn install --frozen-lockfile --non-interactive
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            $code = $LASTEXITCODE
+            if ($attempt -eq 3) { throw "Dependency installation failed with exit $code." }
+            Start-Sleep -Seconds ($attempt * 30)
+          }
+
+      - name: Prepare and verify original CLI, DCP, and package hive
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $archives = @(Get-ChildItem artifacts/cli-archive -Recurse -File -Filter 'aspire-cli-win-x64*.zip')
+          if ($archives.Count -ne 1) { throw 'Expected exactly one Windows x64 CLI archive.' }
+          $bundle = Join-Path $env:GITHUB_WORKSPACE 'artifacts/bundle/win-x64'
+          Expand-Archive -LiteralPath $archives[0].FullName -DestinationPath $bundle
+          $clis = @(Get-ChildItem $bundle -Recurse -File -Filter aspire.exe)
+          if ($clis.Count -ne 1) { throw 'Expected exactly one CLI executable.' }
+          $cli = $clis[0].FullName
+          & $cli setup
+          $installRoot = Split-Path (Split-Path $cli -Parent) -Parent
+          $dcps = @(Get-ChildItem $installRoot -Recurse -File -Filter dcp.exe)
+          if ($dcps.Count -ne 1) { throw 'CLI setup did not produce exactly one DCP executable.' }
+          $dcpVersion = & $dcps[0].FullName version | ConvertFrom-Json
+          if ($dcpVersion.version -ne '0.26.2' -or $dcpVersion.commitHash -cne $env:EXPECTED_DCP_COMMIT) {
+            throw 'DCP does not match the failing baseline.'
+          }
+          $cliVersion = (& $cli --version | Out-String).Trim()
+          if ($cliVersion -cne '13.6.0-ci') { throw "Unexpected baseline CLI version: $cliVersion" }
+          $shipping = Join-Path $env:GITHUB_WORKSPACE 'artifacts/nugets'
+          $appHostPackages = @(Get-ChildItem $shipping -Recurse -File -Filter 'Aspire.Hosting.AppHost.13.6.0-ci.nupkg')
+          if ($appHostPackages.Count -ne 1) { throw 'The original AppHost package is missing or ambiguous.' }
+          $hive = Join-Path $HOME '.aspire/hives/daily/packages'
+          New-Item -ItemType Directory -Path $hive -Force | Out-Null
+          Get-ChildItem $shipping -Recurse -File -Filter '*.nupkg' | Copy-Item -Destination $hive -Force
+          $ridPackages = @(Get-ChildItem artifacts/nugets-rid -Recurse -File -Filter '*.nupkg')
+          if ($ridPackages.Count -eq 0) { throw 'RID-specific NuGet packages are missing.' }
+          $ridPackages | Copy-Item -Destination $hive -Force
+          $vsixes = @(Get-ChildItem extension/out -Recurse -File -Filter '*.vsix')
+          if ($vsixes.Count -ne 1) { throw 'Expected the single E2E-enabled VSIX artifact.' }
+          @(
+            "ASPIRE_DCP_PATH=$($dcps[0].Directory.FullName)"
+            "ASPIRE_CLI_PACKAGES=$hive"
+            "ASPIRE_EXTENSION_E2E_CLI_PATH=$cli"
+            'ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION=13.6.0-ci'
+            "ASPIRE_EXTENSION_E2E_VSIX=$($vsixes[0].FullName)"
+          ) | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          [ordered]@{
+            cliVersion = $cliVersion
+            dcp = $dcpVersion
+            sdkVersion = (dotnet --version | Out-String).Trim()
+            nodeVersion = (node --version | Out-String).Trim()
+            appHostPackage = $appHostPackages[0].Name
+            vsixName = $vsixes[0].Name
+          } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $env:REPRO_RESULTS_ROOT versions.json) -Encoding utf8
+
+      - name: Compile unchanged E2E tests
+        working-directory: extension
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          corepack yarn compile
+          corepack yarn compile-e2e
+          if (-not (Test-Path -LiteralPath $env:ASPIRE_EXTENSION_E2E_SPEC)) { throw 'Compiled tree-actions spec is missing.' }
+          git diff --exit-code $env:TESTED_SOURCE_SHA -- src/test-e2e src/testing scripts/run-e2e.js .mocharc.e2e.js package.json yarn.lock
+
+      - name: Run and preserve ten complete shard iterations
+        id: iterations
+        working-directory: extension
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $expected = @(
+            'Aspire tree action command E2E routes all AppHost actions to the exact secondary AppHost and owning CLI target'
+            'Aspire tree action command E2E uses the legacy pipeline input fallback for trimmed, invalid, and canceled input'
+            'Aspire tree action command E2E lets the current CLI select and execute run and debug pipeline steps with exact final args'
+            'Aspire tree action command E2E does not duplicate an AppHost launch while the same AppHost is reserved'
+            'Aspire tree action command E2E keeps one durable operation per AppHost while a deploy session is in flight'
+            'Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers'
+          )
+          function Protect-RunnerLog([string]$text) {
+            # Match the unchanged harness's redaction for this wrapper-owned log.
+            # Examples: /login?t=<token>, JSON "token":"...", and RPC setup tokens.
+            $text = $text -replace '(?i)/login\?t=[^"''\s<>\\)]+', '/login?t=<redacted>'
+            $text = $text -replace '(?i)([?&]t=)[^"''\s<>\\)&]+', '$1<redacted>'
+            $text = $text -replace '(?i)(Setting up RPC server with token: )[^\r\n]+', '$1<redacted>'
+            return $text -replace '(?i)(token["'']?\s*[:=]\s*["'']?)[A-Za-z0-9+/=._-]{16,}', '$1<redacted>'
+          }
+          function Get-IterationOutcome($mocha, $exitCode, $logs, $nativePresent, $evidenceSafe, $cleanupSafe) {
+            if (-not $evidenceSafe) { return 'evidence-failure' }
+            if ($null -eq $mocha) { return 'no-mocha' }
+            foreach ($field in @('tests', 'passes', 'failures', 'pending')) {
+              if ($null -eq $mocha.$field -or $null -eq $mocha.stats.$field) { return 'invalid-mocha' }
+              if (@($mocha.$field).Count -ne $mocha.stats.$field) { return 'invalid-mocha' }
+            }
+            # The reporter emits fullTitle/currentRetry for each completed test and
+            # err.message for a failing test or hook; hooks may abort the suite early.
+            $targetFailure = @($mocha.failures | Where-Object {
+              $_.fullTitle -ceq $expected[-1] -and
+              $_.err.message -match 'Timed out after 10000ms waiting for E2E control revision'
+            }).Count -gt 0
+            if ($targetFailure -and $logs -match "restart.*exited with code 16" -and
+                $logs -match 'Failed to stop process tree' -and $logs -match 'context deadline exceeded') {
+              return 'matching-restart-signature'
+            }
+            if ($mocha.stats.failures -gt 0) { return 'test-or-hook-failure' }
+            if ($exitCode -ne 0) { return 'runner-failure' }
+            $titles = @($mocha.passes | ForEach-Object fullTitle)
+            $executed = @($mocha.tests | ForEach-Object fullTitle)
+            if (-not $mocha.stats.end -or $mocha.stats.tests -ne 6 -or $mocha.stats.passes -ne 6 -or
+                $mocha.stats.pending -ne 0 -or @($titles | Select-Object -Unique).Count -ne 6 -or
+                @($executed | Select-Object -Unique).Count -ne 6 -or
+                @(Compare-Object $expected $titles -CaseSensitive).Count -ne 0 -or
+                @(Compare-Object $expected $executed -CaseSensitive).Count -ne 0 -or
+                @($mocha.tests | Where-Object { $null -eq $_.currentRetry -or $_.currentRetry -ne 0 }).Count -gt 0) {
+              return 'incomplete-or-retried-suite'
+            }
+            if (-not $nativePresent) { return 'missing-native-diagnostics' }
+            if (-not $cleanupSafe) { return 'cleanup-failure' }
+            return 'passed'
+          }
+          function Assert-Outcome($actual, $expectedOutcome) {
+            if ($actual -cne $expectedOutcome) { throw "Result parser expected '$expectedOutcome', got '$actual'." }
+          }
+          $cases = @($expected | ForEach-Object { [pscustomobject]@{ fullTitle = $_; currentRetry = 0 } })
+          $good = [pscustomobject]@{
+            stats = [pscustomobject]@{ tests = 6; passes = 6; failures = 0; pending = 0; end = 'complete' }
+            tests = $cases; passes = $cases; failures = @(); pending = @()
+          }
+          Assert-Outcome (Get-IterationOutcome $good 0 '' $true $true $true) 'passed'
+          Assert-Outcome (Get-IterationOutcome $null 1 '' $false $true $true) 'no-mocha'
+          Assert-Outcome (Get-IterationOutcome $good 0 '' $false $true $true) 'missing-native-diagnostics'
+          Assert-Outcome (Get-IterationOutcome $good 0 '' $true $false $true) 'evidence-failure'
+          Assert-Outcome (Get-IterationOutcome $good 0 '' $true $true $false) 'cleanup-failure'
+          $failure = $good | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+          $failure.passes = @($failure.passes | Select-Object -First 5)
+          $failure.stats.passes = 5
+          $failure.stats.failures = 1
+          $failure.failures = @([pscustomobject]@{
+            fullTitle = $expected[-1]
+            err = [pscustomobject]@{ message = 'Timed out after 10000ms waiting for E2E control revision 123.' }
+          })
+          $signature = "Command 'restart' exited with code 16. Failed to stop process tree: context deadline exceeded."
+          Assert-Outcome (Get-IterationOutcome $failure 1 $signature $true $true $true) 'matching-restart-signature'
+          $failure.failures[0].fullTitle = 'An unrelated after each hook'
+          Assert-Outcome (Get-IterationOutcome $failure 1 $signature $true $true $true) 'test-or-hook-failure'
+          $incomplete = $good | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+          $incomplete.tests = @($incomplete.tests | Select-Object -First 5)
+          $incomplete.stats.tests = 5
+          Assert-Outcome (Get-IterationOutcome $incomplete 0 '' $true $true $true) 'incomplete-or-retried-suite'
+          Assert-Outcome (Protect-RunnerLog 'http://localhost/login?t=abcdef1234567890') 'http://localhost/login?t=<redacted>'
+          Assert-Outcome (Protect-RunnerLog '{"token":"abcdef1234567890"}') '{"token":"<redacted>"}'
+          Write-Host 'Eight result-accounting and two redaction checks passed; no E2E invocations used.'
+
+          $diagnostics = @('.test-results', '.test-storage', '.test-workspaces', '.test-recordings')
+          $canContinue = $true
+          for ($iteration = 1; $iteration -le [int]$env:ITERATIONS_PER_RUNNER; $iteration++) {
+            $destination = Join-Path $env:REPRO_RESULTS_ROOT ('iteration-{0:d2}' -f $iteration)
+            New-Item -ItemType Directory -Path $destination | Out-Null
+            $resultPath = Join-Path $destination result.json
+            $logPath = Join-Path $destination runner.log
+            $result = [ordered]@{
+              iteration = $iteration; sourceSha = $env:TESTED_SOURCE_SHA
+              startedUtc = [DateTime]::UtcNow.ToString('o'); finishedUtc = $null
+              outcome = 'not-run'; runnerExitCode = $null; stats = $null
+              nativeLogCount = 0; errors = @()
+            }
+            $result | ConvertTo-Json -Depth 10 | Set-Content $resultPath -Encoding utf8
+            if (-not $canContinue) {
+              $result.outcome = 'not-run-after-unsafe-cleanup-or-archive'
+              $result.finishedUtc = [DateTime]::UtcNow.ToString('o')
+              $result | ConvertTo-Json -Depth 10 | Set-Content $resultPath -Encoding utf8
+              continue
+            }
+            Write-Host "::group::Tree-actions iteration $iteration/$env:ITERATIONS_PER_RUNNER"
+            $evidenceSafe = $true
+            $cleanupSafe = $true
+            $mocha = $null
+            try {
+              if (Test-Path '.test-results/e2e/tree-actions/mocha.json') {
+                throw 'Unarchived results exist; refusing to let the harness overwrite evidence.'
+              }
+              # This folder is under the unchanged runner's redacted results tree.
+              # Archive it before prepareRunDirectories clears that tree next time.
+              $env:DCP_DIAGNOSTICS_LOG_LEVEL = 'debug'
+              $env:DCP_DIAGNOSTICS_LOG_FOLDER = Join-Path (Get-Location) '.test-results/e2e/tree-actions/native-dcp'
+              $result.outcome = 'running'
+              $result | ConvertTo-Json -Depth 10 | Set-Content $resultPath -Encoding utf8
+              node scripts/run-e2e.js *> $logPath
+              $result.runnerExitCode = $LASTEXITCODE
+              $result | ConvertTo-Json -Depth 10 | Set-Content $resultPath -Encoding utf8
+            }
+            catch {
+              $result.errors += ($_ | Out-String)
+              $canContinue = $false
+            }
+            if (Test-Path -LiteralPath $logPath) {
+              $output = Get-Content -LiteralPath $logPath -Raw
+              $redacted = Protect-RunnerLog $output
+              if ($redacted -cne $output) {
+                Set-Content -LiteralPath $logPath -Value $redacted -NoNewline -Encoding utf8
+              }
+              if ($output -match 'One or more E2E cleanup steps failed:|Failed to stop Aspire E2E AppHost during cleanup:|Aspire E2E AppHost cleanup exited with code|Warning: unable to remove locked E2E path') {
+                $cleanupSafe = $false
+                $canContinue = $false
+              }
+              Write-Host "Runner exit: $($result.runnerExitCode). Full output is retained in the iteration artifact."
+            }
+            foreach ($relative in $diagnostics) {
+              try {
+                if (Test-Path -LiteralPath $relative) {
+                  $archive = Join-Path $destination "extension/$relative"
+                  New-Item -ItemType Directory -Path (Split-Path $archive -Parent) -Force | Out-Null
+                  Move-Item -LiteralPath $relative -Destination $archive
+                }
+              }
+              catch {
+                $evidenceSafe = $false
+                $canContinue = $false
+                $result.errors += "Archive $relative failed: $($_ | Out-String)"
+              }
+            }
+            try {
+              $mochaPath = Join-Path $destination 'extension/.test-results/e2e/tree-actions/mocha.json'
+              if (Test-Path -LiteralPath $mochaPath) {
+                $mocha = Get-Content -LiteralPath $mochaPath -Raw | ConvertFrom-Json
+                $result.stats = $mocha.stats
+              }
+              $nativeDirectory = Join-Path $destination 'extension/.test-results/e2e/tree-actions/native-dcp'
+              if (Test-Path -LiteralPath $nativeDirectory) {
+                $result.nativeLogCount = @(Get-ChildItem $nativeDirectory -Recurse -File -Filter '*.log').Count
+              }
+              $logs = @(Get-ChildItem $destination -Recurse -File -Filter '*.log')
+              $signatureText = if ($logs.Count -gt 0) {
+                ($logs | Select-String -Pattern 'restart.*exited with code 16|Failed to stop process tree|context deadline exceeded' | ForEach-Object Line) -join "`n"
+              } else { '' }
+              $result.outcome = Get-IterationOutcome $mocha $result.runnerExitCode $signatureText ($result.nativeLogCount -gt 0) $evidenceSafe $cleanupSafe
+              if ($result.outcome -in @('no-mocha', 'invalid-mocha', 'missing-native-diagnostics') -or $result.nativeLogCount -eq 0) {
+                # More attempts cannot diagnose the native stall without its logs.
+                $canContinue = $false
+              }
+            }
+            catch {
+              $result.outcome = 'diagnostic-or-result-parse-failure'
+              $result.errors += ($_ | Out-String)
+              $canContinue = $false
+            }
+            $result.finishedUtc = [DateTime]::UtcNow.ToString('o')
+            $result | ConvertTo-Json -Depth 10 | Set-Content $resultPath -Encoding utf8
+            Write-Host ($result | ConvertTo-Json -Depth 10)
+            Write-Host '::endgroup::'
+          }
+          # Test failures are persisted data here, not suppressed successes.
+          # The following always-run summary and final aggregation enforce failure.
+          exit 0
+
+      - name: Write runner summary
+        if: always()
+        env:
+          ITERATION_STEP_OUTCOME: ${{ steps.iterations.outcome }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:GITHUB_WORKSPACE "repro-results/runner-$env:REPRO_RUNNER_INDEX"
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          $results = @(foreach ($i in 1..([int]$env:ITERATIONS_PER_RUNNER)) {
+            $file = Join-Path $root ('iteration-{0:d2}/result.json' -f $i)
+            if (Test-Path -LiteralPath $file) {
+              Get-Content $file -Raw | ConvertFrom-Json
+            } else {
+              [pscustomobject]@{ iteration = $i; outcome = 'not-run-setup-or-interruption'; runnerExitCode = $null }
+            }
+          })
+          [ordered]@{
+            runnerIndex = [int]$env:REPRO_RUNNER_INDEX
+            workflowSha = $env:WORKFLOW_SHA
+            sourceRunId = $env:SOURCE_RUN_ID
+            sourceSha = $env:TESTED_SOURCE_SHA
+            iterationStepOutcome = $env:ITERATION_STEP_OUTCOME
+            iterations = $results
+          } | ConvertTo-Json -Depth 15 | Set-Content (Join-Path $root summary.json) -Encoding utf8
+          $results | Select-Object iteration,outcome,runnerExitCode,nativeLogCount | Format-Table
+          if ($env:ITERATION_STEP_OUTCOME -ne 'success' -or @($results | Where-Object outcome -NE 'passed').Count -gt 0) {
+            throw 'At least one requested iteration did not pass completely; inspect its preserved evidence.'
+          }
+
+      - name: Upload every iteration and any unarchived evidence
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: tree-actions-repro-runner-${{ matrix.index }}-attempt${{ github.run_attempt }}
+          path: |
+            repro-results/
+            extension/.test-results/
+            extension/.test-storage/
+            extension/.test-workspaces/
+            extension/.test-recordings/
+          include-hidden-files: true
+          if-no-files-found: error
 
   results:
+    name: Account for all 30 requested invocations
+    needs: [verify_source, reproduce]
     if: always()
     runs-on: ubuntu-latest
-    name: Reproduce Results
-    needs: [reproduce]
+    timeout-minutes: 10
     steps:
-      - name: Summary
-        shell: bash
+      - name: Download runner evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: tree-actions-repro-runner-*-attempt${{ github.run_attempt }}
+          path: evidence
+          merge-multiple: false
+
+      - name: Aggregate exact runner and iteration identities
+        if: always()
+        env:
+          SOURCE_RESULT: ${{ needs.verify_source.result }}
+          REPRODUCE_RESULT: ${{ needs.reproduce.result }}
         run: |
-          echo "## Reproduce Flaky Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Test Project | \`${{ env.TEST_PROJECT }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Filter | \`${{ env.TEST_FILTER }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| OSes | ${{ env.TARGET_OSES }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Runners per OS | ${{ env.RUNNERS_PER_OS }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Iterations per runner | ${{ env.ITERATIONS_PER_RUNNER }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          $ErrorActionPreference = 'Stop'
+          $summaries = if (Test-Path evidence) {
+            @(Get-ChildItem evidence -Recurse -File -Filter summary.json | Where-Object {
+              $_.Directory.Name -cmatch '^runner-[123]$'
+            } | ForEach-Object {
+              Get-Content $_.FullName -Raw | ConvertFrom-Json
+            })
+          } else { @() }
+          $rows = @(foreach ($runner in 1..3) {
+            $matching = @($summaries | Where-Object runnerIndex -EQ $runner)
+            foreach ($iteration in 1..10) {
+              $outcome = 'missing-or-invalid-runner-evidence'
+              if ($matching.Count -eq 1 -and $matching[0].sourceSha -ceq $env:TESTED_SOURCE_SHA -and
+                  $matching[0].sourceRunId -eq $env:SOURCE_RUN_ID -and
+                  $matching[0].workflowSha -ceq $env:GITHUB_SHA -and @($matching[0].iterations).Count -eq 10) {
+                $items = @($matching[0].iterations | Where-Object iteration -EQ $iteration)
+                if ($items.Count -eq 1) { $outcome = $items[0].outcome }
+              }
+              [pscustomobject]@{ runner = $runner; iteration = $iteration; outcome = $outcome }
+            }
+          })
+          $rows | ConvertTo-Json | Set-Content aggregate.json -Encoding utf8
+          $passed = @($rows | Where-Object outcome -EQ 'passed').Count
+          $matchingFailures = @($rows | Where-Object outcome -EQ 'matching-restart-signature').Count
+          @(
+            '# Windows tree-actions historical reproduction'
+            "Source: $env:TESTED_SOURCE_SHA; artifacts: run $env:SOURCE_RUN_ID."
+            'Requested: 3 Windows x64 runners, 10 full six-test shard invocations each.'
+            "Complete passing invocations: $passed/30."
+            "Matching restart-signature candidates: $matchingFailures. Correlate native process identity and timing before confirming the root cause."
+            'Setup, hook, missing evidence, cancellation, and cleanup failures are not successful executions or confirmed reproductions.'
+            'A green batch does not establish that the historical intermittent failure is fixed.'
+            ''
+            '| Runner | Iteration | Outcome |'
+            '|---|---|---|'
+            ($rows | ForEach-Object { "| $($_.runner) | $($_.iteration) | $($_.outcome) |" })
+          ) | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          $rows | Format-Table
+          if ($env:SOURCE_RESULT -ne 'success' -or $env:REPRODUCE_RESULT -ne 'success' -or
+              $summaries.Count -ne 3 -or $passed -ne 30) {
+            throw 'Not all 30 requested invocations passed; preserved evidence distinguishes reproduction from infrastructure failures.'
+          }
 
-          if [ "${{ needs.reproduce.result }}" = "success" ]; then
-            echo "### ✅ All iterations passed on all runners" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.reproduce.result }}" = "failure" ]; then
-            echo "### ❌ Some runners reported failures" >> $GITHUB_STEP_SUMMARY
-            echo "Check individual job logs and uploaded failure artifacts for details." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### ⚠️ Reproduce job was ${{ needs.reproduce.result }}" >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Fail if reproduce did not succeed
-        if: ${{ needs.reproduce.result != 'success' }}
-        run: exit 1
+      - name: Upload aggregate accounting
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: tree-actions-repro-accounting-attempt${{ github.run_attempt }}
+          path: aggregate.json
+          if-no-files-found: error
