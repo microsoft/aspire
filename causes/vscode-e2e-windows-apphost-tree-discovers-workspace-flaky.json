@@ -1,0 +1,16 @@
+{
+  "id": "vscode-e2e-windows-apphost-tree-discovers-workspace-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E (Windows, apphost-tree) 'discovers the workspace AppHost' test observes transient 'Deploy AppHost' tree label instead of settled csproj name",
+  "test_name": "Aspire AppHost tree E2E discovers the workspace AppHost and renders it in the Aspire view",
+  "error_pattern": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'Deploy AppHost'\n- 'AspireE2E.AppHost.csproj'\n\n    at Context.<anonymous> (out\\test-e2e\\test-e2e\\appHostTree.e2e.test.js:67:16)",
+  "occurrences": [
+    {
+      "run_id": 35790784864,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35790784864",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
+      "pr_number": 0,
+      "observed_at": "2026-09-22T23:46:50Z"
+    }
+  ]
+}
