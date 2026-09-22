@@ -88,7 +88,7 @@ internal sealed class NewCommand : BaseCommand
         Options.Add(s_sourceOption);
         Options.Add(s_versionOption);
         Options.Add(s_suppressAgentInitOption);
-        AgentInitCommand.AddOptions(this, includeMcp: false, includeWorkspaceRoot: false);
+        _agentInitCommand.AddOptions(this, includeMcp: false, includeWorkspaceRoot: false);
 
         // Customize description based on whether staging channel is enabled
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(services.Features, configuration)
@@ -600,7 +600,7 @@ internal sealed class NewCommand : BaseCommand
             templateResult.ExitCode,
             workspaceRoot,
             agentInitBinding,
-            AgentInitCommand.CreateBindings(parseResult, includeMcp: false),
+            _agentInitCommand.CreateBindings(parseResult, includeMcp: false),
             cancellationToken);
 
         if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))

@@ -7,6 +7,7 @@ using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Agents.VsCode;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -33,12 +34,13 @@ internal sealed class AgentConfigurationTestContext : IDisposable
         // the fixture rather than depending on policies installed on the test machine.
         Environment = TestEnvironment.CreateWindows(_variables);
         ExecutionContext = TestExecutionContextHelper.CreateExecutionContext(Project, homeDirectory: Home);
-        Catalog = new AgentClientCatalog();
+        CliRunner = new TestAgentCliRunner();
+        Catalog = CliRunner.CreateCatalog(ExecutionContext, Environment);
         Writer = new AgentConfigurationWriter(NullLogger<AgentConfigurationWriter>.Instance);
         HookInstaller = new TestAgentConfigurationHookInstaller(ExecutionContext);
         Hooks = new TelemetryHookConfigurator(HookInstaller, ExecutionContext, Environment, NullLogger<TelemetryHookConfigurator>.Instance);
         SkillInstaller = new TestAgentConfigurationSkillInstaller();
-        Service = new AgentInitService(Catalog, Writer, SkillInstaller, Hooks, ExecutionContext, Environment);
+        Service = new AgentInitService(Writer, SkillInstaller, Hooks);
     }
 
     public TemporaryWorkspace Workspace { get; }
@@ -47,11 +49,17 @@ internal sealed class AgentConfigurationTestContext : IDisposable
     public TestEnvironment Environment { get; }
     public CliExecutionContext ExecutionContext { get; }
     public AgentClientCatalog Catalog { get; }
+    public AgentClient CopilotCli => Catalog.Clients.Single(client => client.Id == "copilot-cli");
+    public AgentClient CopilotApp => Catalog.Clients.Single(client => client.Id == "copilot-app");
+    public AgentClient VsCode => Catalog.Clients.Single(client => client.Id == "vscode");
+    public AgentClient ClaudeCode => Catalog.Clients.Single(client => client.Id == "claude-code");
+    public AgentClient OpenCode => Catalog.Clients.Single(client => client.Id == "opencode");
+    public TestAgentCliRunner CliRunner { get; }
     public string CopilotDirectory => CopilotPaths.GetConfigDirectory(ExecutionContext, Environment);
-    public string ClaudeDirectory => ClaudeCodeAgentConfiguration.GetConfigDirectory(ExecutionContext, Environment);
-    public string ClaudeMcpFile => ClaudeCodeAgentConfiguration.GetMcpFile(ExecutionContext, Environment);
-    public string ClaudeManagedDirectory => ClaudeCodeAgentConfiguration.GetManagedDirectory(ExecutionContext, Environment);
-    public string OpenCodeDirectory => OpenCodeAgentConfiguration.GetConfigDirectory(ExecutionContext, Environment);
+    public string ClaudeDirectory => ClaudeCodeAgentEnvironmentScanner.GetConfigDirectory(ExecutionContext, Environment);
+    public string ClaudeMcpFile => ClaudeCodeAgentEnvironmentScanner.GetMcpFile(ExecutionContext, Environment);
+    public string ClaudeManagedDirectory => ClaudeCodeAgentEnvironmentScanner.GetManagedDirectory(ExecutionContext, Environment);
+    public string OpenCodeDirectory => OpenCodeAgentEnvironmentScanner.GetConfigDirectory(ExecutionContext, Environment);
     public AgentConfigurationWriter Writer { get; }
     public TestAgentConfigurationHookInstaller HookInstaller { get; }
     public TestAgentConfigurationSkillInstaller SkillInstaller { get; }
@@ -60,10 +68,10 @@ internal sealed class AgentConfigurationTestContext : IDisposable
 
     public void SetVariable(string name, string value) => _variables[name] = value;
 
-    public string VsCodeUserDirectory(bool insiders) => VsCodeAgentConfiguration.GetUserDirectory(insiders, ExecutionContext, Environment);
+    public string VsCodeUserDirectory(bool insiders) => VsCodeAgentEnvironmentScanner.GetUserDirectory(insiders, ExecutionContext, Environment);
 
     public AgentInitRequest Request(
-        IReadOnlyList<AgentClientKind> clients,
+        IReadOnlyList<AgentClient> clients,
         bool skills = true,
         bool mcp = false,
         bool playwright = false,
@@ -72,7 +80,7 @@ internal sealed class AgentConfigurationTestContext : IDisposable
         => new(Project, new AgentAssetSelection(mcp, playwright, dotnetInspect, skills), clients, detections ?? []);
 
     public Task<IReadOnlyList<AgentTargetResult>> ConfigureNativeAsync(AgentInitRequest request, CancellationToken cancellationToken = default)
-        => Writer.ApplyAsync(Catalog.GetTargets(request, ExecutionContext, Environment), cancellationToken);
+        => Writer.ApplyAsync(request.Clients.Select(client => client.Environment).Distinct().SelectMany(environment => environment.GetTargets(request)), cancellationToken);
 
     public static async Task WriteAsync(string path, string content)
     {

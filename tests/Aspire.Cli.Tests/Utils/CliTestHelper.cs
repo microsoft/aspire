@@ -171,8 +171,8 @@ internal static class CliTestHelper
         services.AddSingleton<NuGetPackagePrefetcher>();
         services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<NuGetPackagePrefetcher>());
         services.AddSingleton(options.AuxiliaryBackchannelMonitorFactory);
-        services.AddSingleton(options.AgentEnvironmentDetectorFactory);
-        services.AddSingleton<AgentClientCatalog>();
+        services.AddSingleton(options.AgentEnvironmentFactory);
+        services.AddSingleton(sp => new AgentClientCatalog(new TestAgentClients(sp.GetRequiredService<IAgentClientEnvironment>()).All));
         services.AddSingleton(options.AgentInitServiceFactory);
         services.AddSingleton(options.GitRepositoryFactory);
         services.AddSingleton(options.NpmRunnerFactory);
@@ -669,11 +669,11 @@ internal sealed class CliServiceCollectionTestOptions
         return new TestAuxiliaryBackchannelMonitor();
     };
 
-    public Func<IServiceProvider, IAgentEnvironmentDetector> AgentEnvironmentDetectorFactory { get; set; } = (IServiceProvider serviceProvider) =>
+    public Func<IServiceProvider, IAgentClientEnvironment> AgentEnvironmentFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
         // Chained new/init tests get a deterministic client without probing the host.
         // Tests for the unattended --clients requirement explicitly supply an empty detector.
-        return new TestAgentEnvironmentDetector(new AgentClientDetection(AgentClientKind.CopilotCli, Version: null, IsInsiders: false));
+        return new TestAgentClientEnvironment(new AgentClientDetection(TestAgentClients.Default.CopilotCli, Version: null, IsInsiders: false));
     };
 
     public Func<IServiceProvider, IAgentInitService> AgentInitServiceFactory { get; set; } = _ => new TestAgentInitService();

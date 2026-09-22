@@ -111,7 +111,7 @@ public class AgentConfigurationWriterTests(ITestOutputHelper output)
         var policyPath = Path.Combine(context.Project.FullName, "policy.json");
         await AgentConfigurationTestContext.WriteAsync(policyPath, "{}").DefaultTimeout();
         var target = new AgentConfigurationTarget(path, AgentConfigurationScope.Project, AgentAssetKind.AspireSkills,
-            [AgentClientKind.ClaudeCode], "plugin", async (root, mutation, cancellationToken) =>
+            [TestAgentClients.Default.ClaudeCode], "plugin", async (root, mutation, cancellationToken) =>
             {
                 await mutation.ReadOptionalAsync(policyPath, cancellationToken);
                 root["plugin"] = true;
@@ -189,14 +189,14 @@ public class AgentConfigurationWriterTests(ITestOutputHelper output)
         await AgentConfigurationTestContext.WriteAsync(path, "{}").DefaultTimeout();
         TestSymlinkHelper.TryCreateSymlink(link, path, isDirectory: false);
         var originalLink = new FileInfo(link).LinkTarget;
-        var alias = AddValue(link) with { Clients = [AgentClientKind.CopilotApp], Scope = AgentConfigurationScope.User };
+        var alias = AddValue(link) with { Clients = [TestAgentClients.Default.CopilotApp], Scope = AgentConfigurationScope.User };
 
         var results = await context.Writer.ApplyAsync([AddValue(path), alias], CancellationToken.None).DefaultTimeout();
 
         var result = Assert.Single(results);
         Assert.Equal(AgentConfigurationStatus.Configured, result.Status);
         Assert.Equal(AgentConfigurationScope.User, result.Scope);
-        Assert.Equal([AgentClientKind.CopilotCli, AgentClientKind.CopilotApp], result.Clients);
+        Assert.Equal([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp], result.Clients);
         Assert.Equal(originalLink, new FileInfo(link).LinkTarget);
         Assert.Equal(await File.ReadAllTextAsync(path).DefaultTimeout(), await File.ReadAllTextAsync(link).DefaultTimeout());
     }
@@ -274,6 +274,6 @@ public class AgentConfigurationWriterTests(ITestOutputHelper output)
         });
 
     private static AgentConfigurationTarget Target(string path, string entry, Func<JsonObject, CancellationToken, Task<AgentConfigurationEdit>> apply)
-        => new(path, AgentConfigurationScope.Project, AgentAssetKind.AspireSkills, [AgentClientKind.CopilotCli], entry,
+        => new(path, AgentConfigurationScope.Project, AgentAssetKind.AspireSkills, [TestAgentClients.Default.CopilotCli], entry,
             (root, _, cancellationToken) => apply(root, cancellationToken));
 }

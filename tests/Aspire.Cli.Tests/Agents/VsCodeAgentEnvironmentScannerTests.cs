@@ -23,12 +23,13 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         var configDirectory = inParent ? workspace.WorkspaceRoot : workingDirectory;
         configDirectory.CreateSubdirectory(".vscode");
         var runner = new TestAgentCliRunner();
-        var scanner = CreateScanner(runner, workspace.CreateExecutionContext(), new TestEnvironment());
-        var context = CreateScanContext(workingDirectory, workspace.WorkspaceRoot);
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext(), new TestEnvironment());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workingDirectory, workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(AgentClientKind.VsCode, null, false)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.VsCode, null, false)], detections);
         Assert.Equal(["code", "code-insiders"], runner.Commands);
     }
 
@@ -45,19 +46,20 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
             VsCodeVersion = stableInstalled ? new SemVersion(1, 100, 0) : null,
             VsCodeInsidersVersion = insidersInstalled ? SemVersion.Parse("1.101.0-insider", SemVersionStyles.Strict) : null
         };
-        var scanner = CreateScanner(runner, workspace.CreateExecutionContext(), new TestEnvironment());
-        var context = CreateScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext(), new TestEnvironment());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         var expected = new List<AgentClientDetection>();
         if (stableInstalled)
         {
-            expected.Add(new(AgentClientKind.VsCode, "1.100.0", false));
+            expected.Add(new(clients.VsCode, "1.100.0", false));
         }
         if (insidersInstalled)
         {
-            expected.Add(new(AgentClientKind.VsCode, "1.101.0-insider", true));
+            expected.Add(new(clients.VsCode, "1.101.0-insider", true));
         }
         Assert.Equal<AgentClientDetection>(expected, detections);
         Assert.Equal(["code", "code-insiders"], runner.Commands);
@@ -65,10 +67,10 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         var list = Assert.IsAssignableFrom<IList<AgentClientDetection>>(detections);
         Assert.True(list.IsReadOnly);
-        Assert.Throws<NotSupportedException>(() => list.Add(new(AgentClientKind.CopilotCli, null, false)));
+        Assert.Throws<NotSupportedException>(() => list.Add(new(clients.CopilotCli, null, false)));
         if (detections.Count > 0)
         {
-            Assert.Throws<NotSupportedException>(() => list[0] = new(AgentClientKind.CopilotCli, null, false));
+            Assert.Throws<NotSupportedException>(() => list[0] = new(clients.CopilotCli, null, false));
         }
     }
 
@@ -81,12 +83,13 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         {
             VsCodeInsidersVersion = SemVersion.Parse("1.101.0-insider", SemVersionStyles.Strict)
         };
-        var scanner = CreateScanner(runner, workspace.CreateExecutionContext(), new TestEnvironment());
-        var context = CreateScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext(), new TestEnvironment());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(AgentClientKind.VsCode, "1.101.0-insider", true)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.VsCode, "1.101.0-insider", true)], detections);
     }
 
     [Theory]
@@ -111,12 +114,13 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
             ["TERM_PROGRAM"] = "vscode",
             ["TERM_PROGRAM_VERSION"] = terminalVersion
         });
-        var scanner = CreateScanner(runner, workspace.CreateExecutionContext(), environment);
-        var context = CreateScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext(), environment);
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(AgentClientKind.VsCode, expectedVersion, isInsiders)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.VsCode, expectedVersion, isInsiders)], detections);
         Assert.Empty(runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
     }
@@ -130,12 +134,13 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         workspace.CreateDirectory(".vscode");
         var repositoryRoot = workspace.CreateDirectory("repo");
         var workingDirectory = repositoryRoot.CreateSubdirectory("src");
-        var scanner = CreateScanner(new TestAgentCliRunner(), workspace.CreateExecutionContext(), new TestEnvironment());
-        var context = CreateScanContext(
+        var agent = CreateAgent(new TestAgentCliRunner(), workspace.CreateExecutionContext(), new TestEnvironment());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(
             workingDirectory,
             trailingSeparator ? new DirectoryInfo(repositoryRoot.FullName + Path.DirectorySeparatorChar) : repositoryRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         Assert.Empty(detections);
     }
@@ -148,10 +153,11 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         homeDirectory.CreateSubdirectory(".vscode");
         var workingDirectory = homeDirectory.CreateSubdirectory("project");
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(workingDirectory, homeDirectory: homeDirectory);
-        var scanner = CreateScanner(new TestAgentCliRunner(), executionContext, new TestEnvironment());
-        var context = CreateScanContext(workingDirectory, homeDirectory);
+        var agent = CreateAgent(new TestAgentCliRunner(), executionContext, new TestEnvironment());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workingDirectory, homeDirectory);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         Assert.Empty(detections);
     }
@@ -172,13 +178,14 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         {
             repositoryRoot.CreateSubdirectory(".vscode");
         }
-        var scanner = CreateScanner(new TestAgentCliRunner(), workspace.CreateExecutionContext(), new TestEnvironment());
-        var context = CreateScanContext(workingDirectory, repositoryRoot);
+        var agent = CreateAgent(new TestAgentCliRunner(), workspace.CreateExecutionContext(), new TestEnvironment());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workingDirectory, repositoryRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal<AgentClientDetection>(
-            hasTargetConfiguration ? [new(AgentClientKind.VsCode, null, false)] : [],
+            hasTargetConfiguration ? [new(clients.VsCode, null, false)] : [],
             detections);
     }
 
@@ -189,12 +196,13 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         var repositoryRoot = workspace.CreateDirectory("repo");
         repositoryRoot.CreateSubdirectory(".vscode");
         var workingDirectory = workspace.CreateDirectory("outside");
-        var scanner = CreateScanner(new TestAgentCliRunner(), workspace.CreateExecutionContext(), new TestEnvironment());
-        var context = CreateScanContext(workingDirectory, repositoryRoot);
+        var agent = CreateAgent(new TestAgentCliRunner(), workspace.CreateExecutionContext(), new TestEnvironment());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workingDirectory, repositoryRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(AgentClientKind.VsCode, null, false)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.VsCode, null, false)], detections);
     }
 
     [Theory]
@@ -212,12 +220,13 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         File.SetLastWriteTimeUtc(configPath, new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         var lastWriteTime = File.GetLastWriteTimeUtc(configPath);
         var entries = Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order().ToArray();
-        var scanner = CreateScanner(new TestAgentCliRunner(), workspace.CreateExecutionContext(), new TestEnvironment());
-        var context = CreateScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var agent = CreateAgent(new TestAgentCliRunner(), workspace.CreateExecutionContext(), new TestEnvironment());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(AgentClientKind.VsCode, null, false)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.VsCode, null, false)], detections);
         Assert.Equal(content, await File.ReadAllTextAsync(configPath));
         Assert.Equal(lastWriteTime, File.GetLastWriteTimeUtc(configPath));
         Assert.Equal(entries, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order());
@@ -228,11 +237,12 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var runner = new TestAgentCliRunner();
-        var scanner = CreateScanner(runner, workspace.CreateExecutionContext(), new TestEnvironment());
-        var context = CreateScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext(), new TestEnvironment());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => scanner.ScanAsync(context, new CancellationToken(canceled: true))).DefaultTimeout();
+            () => agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, new CancellationToken(canceled: true))).DefaultTimeout();
 
         Assert.Empty(runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
@@ -251,25 +261,22 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
                 return Task.FromResult<SemVersion?>(new SemVersion(1, 100, 0));
             }
         };
-        var scanner = CreateScanner(runner, workspace.CreateExecutionContext(), new TestEnvironment());
-        var context = CreateScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext(), new TestEnvironment());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => scanner.ScanAsync(context, cancellationSource.Token)).DefaultTimeout();
+            () => agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, cancellationSource.Token)).DefaultTimeout();
 
         Assert.Equal(["code"], runner.Commands);
     }
 
-    private static VsCodeAgentEnvironmentScanner CreateScanner(
+    private static VsCodeAgentEnvironmentScanner CreateAgent(
         TestAgentCliRunner runner,
         CliExecutionContext executionContext,
         TestEnvironment environment)
         => new(runner, executionContext, environment, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
 
-    private static AgentEnvironmentScanContext CreateScanContext(DirectoryInfo workingDirectory, DirectoryInfo repositoryRoot)
-        => new()
-        {
-            WorkingDirectory = workingDirectory,
-            RepositoryRoot = repositoryRoot
-        };
+    private static (DirectoryInfo WorkingDirectory, DirectoryInfo WorkspaceRoot) CreateScanDirectories(DirectoryInfo workingDirectory, DirectoryInfo repositoryRoot)
+        => (workingDirectory, repositoryRoot);
 }

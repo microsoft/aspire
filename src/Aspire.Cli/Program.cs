@@ -552,14 +552,13 @@ public class Program
         builder.Services.AddSingleton<ITelemetryHookConfigurator, TelemetryHookConfigurator>();
         builder.Services.AddSingleton<IAgentInitService, AgentInitService>();
 
-        // Agent environment detection.
-        builder.Services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();
+        // One implementation per agent supplies both discovery and configuration.
         builder.Services.AddSingleton<ICopilotCliRunner, CopilotCliRunner>();
         builder.Services.AddSingleton<ICopilotAppInstallationDetector, CopilotAppInstallationDetector>();
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, VsCodeAgentEnvironmentScanner>());
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, CopilotAgentEnvironmentScanner>());
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, OpenCodeAgentEnvironmentScanner>());
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, ClaudeCodeAgentEnvironmentScanner>());
+        builder.Services.AddSingleton<CopilotAgentEnvironmentScanner>();
+        builder.Services.AddSingleton<VsCodeAgentEnvironmentScanner>();
+        builder.Services.AddSingleton<ClaudeCodeAgentEnvironmentScanner>();
+        builder.Services.AddSingleton<OpenCodeAgentEnvironmentScanner>();
 
         // Template factories.
         builder.Services.AddSingleton<TemplateNuGetConfigService>();

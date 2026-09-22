@@ -6,11 +6,22 @@ client evidence; it does not register applicators, migrate settings, or install
 tools. See the [CLI usage guide](../README.md#ai-agent-setup) for the flags and
 defaults.
 
-Like the template provider's definitions, `AgentClientCatalog` collects client
-metadata and callbacks without doing I/O. Copilot, Claude Code, VS Code, and
-OpenCode own their definitions, native paths, configuration rules, and hook
-formats in their respective namespaces. The catalog dispatches selected native
-configuration; hook targeting remains detection-based.
+`AgentClient` is an immutable record containing the client ID, display name, and
+`IAgentClientEnvironment` implementation. `AgentClientCatalog` constructs the
+entries and exposes a read-only `Clients` list. The record is declared alongside
+the catalog, with no static instances, client-kind enum, or descriptor mapping.
+
+The catalog does no discovery, configuration, or I/O. `AgentInitCommand` groups its
+entries by environment and invokes read-only scans, passing the matching entries,
+working directory, and workspace root directly. There is no separate detector
+wrapper. After selection, `AgentInitService` uses each selected client's
+`Environment` to request edits, including for clients that were not detected.
+
+Each `*AgentEnvironmentScanner` owns both discovery and native configuration in
+its client namespace. Copilot CLI/App share one scanner, invoked once per phase.
+The environment interface has no client list, and scanners do not repeat selection
+dispatch. The shared writer applies their edits; hook targeting remains
+detection-based.
 
 ## Native configuration
 
@@ -95,7 +106,7 @@ add a minimum release version or legacy bundle fallback to hook maintenance.
 
 ## Regression coverage
 
-Command tests inject `TestAgentInitService` and the shared detector fake rather
+Command tests inject `TestAgentInitService` and the shared environment fake rather
 than touching host settings. Shared CLI test defaults represent one deterministic
 Copilot CLI detection; explicit empty-detector tests enforce the unattended
 `--clients` requirement. Client definitions, safe merges, managed payloads, and hook

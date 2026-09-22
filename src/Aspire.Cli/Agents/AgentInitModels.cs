@@ -28,7 +28,7 @@ internal sealed record AgentAssetSelection(bool Mcp, bool Playwright, bool Dotne
 /// <summary>
 /// Read-only evidence that a client is present.
 /// </summary>
-internal sealed record AgentClientDetection(AgentClientKind Client, string? Version, bool IsInsiders);
+internal sealed record AgentClientDetection(AgentClient Client, string? Version, bool IsInsiders);
 
 /// <summary>
 /// Resolved inputs for configuring selected clients.
@@ -36,7 +36,7 @@ internal sealed record AgentClientDetection(AgentClientKind Client, string? Vers
 internal sealed record AgentInitRequest(
     DirectoryInfo WorkspaceRoot,
     AgentAssetSelection Assets,
-    IReadOnlyList<AgentClientKind> Clients,
+    IReadOnlyList<AgentClient> Clients,
     IReadOnlyList<AgentClientDetection> Detections);
 
 internal enum AgentConfigurationScope
@@ -59,7 +59,7 @@ internal enum AgentConfigurationStatus
 /// </summary>
 internal sealed record AgentTargetResult(
     AgentAssetKind Asset,
-    IReadOnlyList<AgentClientKind> Clients,
+    IReadOnlyList<AgentClient> Clients,
     string TargetPath,
     AgentConfigurationScope Scope,
     AgentConfigurationStatus Status,
@@ -72,7 +72,7 @@ internal sealed record AgentConfigurationTarget(
     string Path,
     AgentConfigurationScope Scope,
     AgentAssetKind Asset,
-    IReadOnlyList<AgentClientKind> Clients,
+    IReadOnlyList<AgentClient> Clients,
     string Entry,
     Func<JsonObject, AgentConfigurationWriter.ReadContext, CancellationToken, Task<AgentConfigurationEdit>> ApplyAsync)
 {
@@ -107,7 +107,7 @@ internal sealed record AgentInitResult(IReadOnlyList<AgentTargetResult> Targets)
     public bool HasWarnings => Targets.Any(static target =>
         target.Status is AgentConfigurationStatus.Skipped or AgentConfigurationStatus.Blocked or AgentConfigurationStatus.Failed);
 
-    public IReadOnlyList<AgentClientKind> RegisteredClients => Targets
+    public IReadOnlyList<AgentClient> RegisteredClients => Targets
         .Where(static target => target.Asset is AgentAssetKind.AspireSkills &&
             target.Status is AgentConfigurationStatus.Configured or AgentConfigurationStatus.Unchanged)
         .SelectMany(static target => target.Clients)

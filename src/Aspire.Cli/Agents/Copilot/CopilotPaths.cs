@@ -35,7 +35,7 @@ internal static class CopilotPaths
         // Copilot reads Claude's project settings, never Claude's user settings.
         // https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference
         yield return Path.Combine(GetConfigDirectory(executionContext, environment), "settings.json");
-        foreach (var path in ClaudeCodeAgentConfiguration.ProjectSettings(request.WorkspaceRoot))
+        foreach (var path in ClaudeCodeAgentEnvironmentScanner.ProjectSettings(request.WorkspaceRoot))
         {
             yield return path;
         }
@@ -59,7 +59,7 @@ internal static class CopilotPaths
     {
         // Cross-tool repository hooks must not be duplicated by a new user hook.
         // https://docs.github.com/en/copilot/reference/hooks-reference
-        foreach (var path in ClaudeCodeAgentConfiguration.ProjectSettings(request.WorkspaceRoot))
+        foreach (var path in ClaudeCodeAgentEnvironmentScanner.ProjectSettings(request.WorkspaceRoot))
         {
             yield return path;
         }

@@ -29,19 +29,20 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         {
             ["AI_AGENT"] = appInstalled ? "github_copilot_app_agent" : null
         });
-        var scanner = CreateScanner(workspace, runner, environment);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
+        var agent = CreateAgent(workspace, runner, environment);
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         var expected = new List<AgentClientDetection>();
         if (appInstalled)
         {
-            expected.Add(new(AgentClientKind.CopilotApp, null, false));
+            expected.Add(new(clients.CopilotApp, null, false));
         }
         if (cliInstalled)
         {
-            expected.Add(new(AgentClientKind.CopilotCli, "1.2.3", false));
+            expected.Add(new(clients.CopilotCli, "1.2.3", false));
         }
         Assert.Equal<AgentClientDetection>(expected, detections);
         Assert.Equal(["copilot"], runner.Commands);
@@ -49,10 +50,10 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         var list = Assert.IsAssignableFrom<IList<AgentClientDetection>>(detections);
         Assert.True(list.IsReadOnly);
-        Assert.Throws<NotSupportedException>(() => list.Add(new(AgentClientKind.ClaudeCode, null, false)));
+        Assert.Throws<NotSupportedException>(() => list.Add(new(clients.ClaudeCode, null, false)));
         if (detections.Count > 0)
         {
-            Assert.Throws<NotSupportedException>(() => list[0] = new(AgentClientKind.ClaudeCode, null, false));
+            Assert.Throws<NotSupportedException>(() => list[0] = new(clients.ClaudeCode, null, false));
         }
     }
 
@@ -75,15 +76,16 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
             ["TERM_PROGRAM_VERSION"] = "1.100.0",
             ["AI_AGENT"] = appInstalled ? "github_copilot_app_agent" : null
         });
-        var scanner = CreateScanner(workspace, runner, environment);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
+        var agent = CreateAgent(workspace, runner, environment);
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal<AgentClientDetection>(
             appInstalled
-                ? [new(AgentClientKind.CopilotApp, null, false), new(AgentClientKind.CopilotCli, null, false)]
-                : [new(AgentClientKind.CopilotCli, null, false)],
+                ? [new(clients.CopilotApp, null, false), new(clients.CopilotCli, null, false)]
+                : [new(clients.CopilotCli, null, false)],
             detections);
         Assert.Empty(runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
@@ -97,12 +99,13 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         {
             CopilotVersion = SemVersion.Parse("1.2.3-preview.1+build.2", SemVersionStyles.Strict)
         };
-        var scanner = CreateScanner(workspace, runner, TestEnvironment.CreateWindows());
-        var context = CreateScanContext(workspace.WorkspaceRoot);
+        var agent = CreateAgent(workspace, runner, TestEnvironment.CreateWindows());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(AgentClientKind.CopilotCli, "1.2.3-preview.1+build.2", false)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.CopilotCli, "1.2.3-preview.1+build.2", false)], detections);
     }
 
     [Theory]
@@ -125,12 +128,13 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         {
             ["COPILOT_HOME"] = configDirectory.FullName
         });
-        var scanner = CreateScanner(workspace, runner, environment);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
+        var agent = CreateAgent(workspace, runner, environment);
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(AgentClientKind.CopilotCli, "1.0.0", false)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.CopilotCli, "1.0.0", false)], detections);
         Assert.Equal(content, await File.ReadAllTextAsync(configPath));
         Assert.Equal(lastWriteTime, File.GetLastWriteTimeUtc(configPath));
         Assert.Equal(entries, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order());
@@ -141,30 +145,28 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var runner = new TestAgentCliRunner();
-        var scanner = CreateScanner(workspace, runner, TestEnvironment.CreateWindows());
-        var context = CreateScanContext(workspace.WorkspaceRoot);
+        var agent = CreateAgent(workspace, runner, TestEnvironment.CreateWindows());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => scanner.ScanAsync(context, new CancellationToken(canceled: true))).DefaultTimeout();
+            () => agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, new CancellationToken(canceled: true))).DefaultTimeout();
 
         Assert.Empty(runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
     }
 
-    private static CopilotAgentEnvironmentScanner CreateScanner(
+    private static CopilotAgentEnvironmentScanner CreateAgent(
         TemporaryWorkspace workspace,
         TestAgentCliRunner runner,
         TestEnvironment environment)
         => new(
             runner,
             new CopilotAppInstallationDetector(environment, workspace.CreateExecutionContext()),
+            workspace.CreateExecutionContext(),
             environment,
             NullLogger<CopilotAgentEnvironmentScanner>.Instance);
 
-    private static AgentEnvironmentScanContext CreateScanContext(DirectoryInfo directory)
-        => new()
-        {
-            WorkingDirectory = directory,
-            RepositoryRoot = directory
-        };
+    private static (DirectoryInfo WorkingDirectory, DirectoryInfo WorkspaceRoot) CreateScanDirectories(DirectoryInfo directory)
+        => (directory, directory);
 }

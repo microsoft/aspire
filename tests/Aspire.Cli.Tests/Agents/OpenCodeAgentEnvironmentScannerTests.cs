@@ -4,6 +4,7 @@
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
@@ -36,12 +37,13 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
         var lastWriteTime = File.GetLastWriteTimeUtc(configPath);
         var entries = Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order().ToArray();
         var runner = new TestAgentCliRunner();
-        var scanner = CreateScanner(runner);
-        var context = CreateScanContext(workingDirectory, workspace.WorkspaceRoot);
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workingDirectory, workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(AgentClientKind.OpenCode, null, false)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.OpenCode, null, false)], detections);
         Assert.Equal(["opencode"], runner.Commands);
         Assert.Equal("{}", await File.ReadAllTextAsync(configPath));
         Assert.Equal(lastWriteTime, File.GetLastWriteTimeUtc(configPath));
@@ -63,17 +65,18 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
         }
         var entries = Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order().ToArray();
         var runner = new TestAgentCliRunner { OpenCodeVersion = SemVersion.Parse(version, SemVersionStyles.Strict) };
-        var scanner = CreateScanner(runner);
-        var context = CreateScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(AgentClientKind.OpenCode, version, false)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.OpenCode, version, false)], detections);
         Assert.Equal(["opencode"], runner.Commands);
         Assert.Equal(entries, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order());
         var list = Assert.IsAssignableFrom<IList<AgentClientDetection>>(detections);
         Assert.True(list.IsReadOnly);
-        Assert.Throws<NotSupportedException>(() => list[0] = new(AgentClientKind.CopilotCli, null, false));
+        Assert.Throws<NotSupportedException>(() => list[0] = new(clients.CopilotCli, null, false));
         Assert.Throws<NotSupportedException>(list.Clear);
     }
 
@@ -82,17 +85,18 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var runner = new TestAgentCliRunner();
-        var scanner = CreateScanner(runner);
-        var context = CreateScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         Assert.Empty(detections);
         Assert.Equal(["opencode"], runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
         var collection = Assert.IsAssignableFrom<ICollection<AgentClientDetection>>(detections);
         Assert.True(collection.IsReadOnly);
-        Assert.Throws<NotSupportedException>(() => collection.Add(new(AgentClientKind.OpenCode, null, false)));
+        Assert.Throws<NotSupportedException>(() => collection.Add(new(clients.OpenCode, null, false)));
     }
 
     [Theory]
@@ -108,10 +112,11 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
         }
         var entries = Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order().ToArray();
         var runner = new TestAgentCliRunner();
-        var scanner = CreateScanner(runner);
-        var context = CreateScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         Assert.Empty(detections);
         Assert.Equal(["opencode"], runner.Commands);
@@ -137,12 +142,13 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
         var repositoryRoot = workspace.CreateDirectory("repo");
         var workingDirectory = repositoryRoot.CreateSubdirectory("src");
         var entries = Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order().ToArray();
-        var scanner = CreateScanner(new TestAgentCliRunner());
-        var context = CreateScanContext(
+        var agent = CreateAgent(new TestAgentCliRunner(), workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(
             workingDirectory,
             trailingSeparator ? new DirectoryInfo(repositoryRoot.FullName + Path.DirectorySeparatorChar) : repositoryRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         Assert.Empty(detections);
         Assert.Equal("{}", await File.ReadAllTextAsync(configPath));
@@ -186,13 +192,14 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
         }
         var lastWriteTimes = configPaths.ToDictionary(static path => path, File.GetLastWriteTimeUtc);
         var entries = Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order().ToArray();
-        var scanner = CreateScanner(new TestAgentCliRunner());
-        var context = CreateScanContext(workingDirectory, repositoryRoot);
+        var agent = CreateAgent(new TestAgentCliRunner(), workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workingDirectory, repositoryRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal<AgentClientDetection>(
-            hasTargetConfiguration ? [new(AgentClientKind.OpenCode, null, false)] : [],
+            hasTargetConfiguration ? [new(clients.OpenCode, null, false)] : [],
             detections);
         Assert.Equal(entries, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order());
         foreach (var (configPath, lastWriteTime) in lastWriteTimes)
@@ -211,12 +218,13 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
         var repositoryRoot = workspace.CreateDirectory("repo");
         await File.WriteAllTextAsync(Path.Combine(repositoryRoot.FullName, fileName), "{}");
         var workingDirectory = workspace.CreateDirectory("outside");
-        var scanner = CreateScanner(new TestAgentCliRunner());
-        var context = CreateScanContext(workingDirectory, repositoryRoot);
+        var agent = CreateAgent(new TestAgentCliRunner(), workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workingDirectory, repositoryRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(AgentClientKind.OpenCode, null, false)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.OpenCode, null, false)], detections);
     }
 
     [Theory]
@@ -234,12 +242,13 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
         await File.WriteAllTextAsync(configPath, content);
         File.SetLastWriteTimeUtc(configPath, new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         var lastWriteTime = File.GetLastWriteTimeUtc(configPath);
-        var scanner = CreateScanner(new TestAgentCliRunner());
-        var context = CreateScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var agent = CreateAgent(new TestAgentCliRunner(), workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(AgentClientKind.OpenCode, null, false)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.OpenCode, null, false)], detections);
         Assert.Equal(content, await File.ReadAllTextAsync(configPath));
         Assert.Equal(lastWriteTime, File.GetLastWriteTimeUtc(configPath));
         Assert.Equal([configPath], Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories));
@@ -250,23 +259,20 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var runner = new TestAgentCliRunner();
-        var scanner = CreateScanner(runner);
-        var context = CreateScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => scanner.ScanAsync(context, new CancellationToken(canceled: true))).DefaultTimeout();
+            () => agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, new CancellationToken(canceled: true))).DefaultTimeout();
 
         Assert.Empty(runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
     }
 
-    private static OpenCodeAgentEnvironmentScanner CreateScanner(TestAgentCliRunner runner)
-        => new(runner, NullLogger<OpenCodeAgentEnvironmentScanner>.Instance);
+    private static OpenCodeAgentEnvironmentScanner CreateAgent(TestAgentCliRunner runner, CliExecutionContext executionContext)
+        => new(runner, executionContext, new TestEnvironment(), NullLogger<OpenCodeAgentEnvironmentScanner>.Instance);
 
-    private static AgentEnvironmentScanContext CreateScanContext(DirectoryInfo workingDirectory, DirectoryInfo repositoryRoot)
-        => new()
-        {
-            WorkingDirectory = workingDirectory,
-            RepositoryRoot = repositoryRoot
-        };
+    private static (DirectoryInfo WorkingDirectory, DirectoryInfo WorkspaceRoot) CreateScanDirectories(DirectoryInfo workingDirectory, DirectoryInfo repositoryRoot)
+        => (workingDirectory, repositoryRoot);
 }

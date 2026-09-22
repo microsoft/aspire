@@ -23,7 +23,7 @@ public class McpInitCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.AgentInitServiceFactory = _ => service;
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector();
+            options.AgentEnvironmentFactory = _ => new TestAgentClientEnvironment();
         });
         using var provider = services.BuildServiceProvider();
 
@@ -35,7 +35,7 @@ public class McpInitCommandTests(ITestOutputHelper outputHelper)
         var request = Assert.Single(service.Requests);
         Assert.Equal(selectedRoot.FullName, request.WorkspaceRoot.FullName);
         Assert.Equal(new AgentAssetSelection(true, false, true, false), request.Assets);
-        Assert.Equal([AgentClientKind.CopilotApp, AgentClientKind.ClaudeCode], request.Clients);
+        Assert.Equal(["copilot-app", "claude-code"], request.Clients.Select(client => client.Id));
         Assert.Empty(request.Detections);
     }
 
@@ -49,7 +49,7 @@ public class McpInitCommandTests(ITestOutputHelper outputHelper)
         {
             Result = new(
             [
-                new(AgentAssetKind.Mcp, [AgentClientKind.ClaudeCode],
+                new(AgentAssetKind.Mcp, [TestAgentClients.Default.ClaudeCode],
                     ".mcp.json", AgentConfigurationScope.Project, AgentConfigurationStatus.Blocked, "Existing MCP configuration is disabled.")
             ])
         };

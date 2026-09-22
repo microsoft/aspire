@@ -128,7 +128,7 @@ internal sealed class AgentSkillInstaller(
         return targets.Values.ToArray();
     }
 
-    private string GetSkillBaseDirectory(AgentClientKind client, AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
+    private string GetSkillBaseDirectory(AgentClient client, AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
     {
         // These clients natively discover both project and home .agents/skills directories.
         // COPILOT_HOME and OPENCODE_CONFIG_DIR relocate their own configuration, not this
@@ -136,18 +136,18 @@ internal sealed class AgentSkillInstaller(
         // https://docs.github.com/en/copilot/concepts/agents/about-agent-skills
         // https://code.visualstudio.com/docs/agent-customization/agent-skills
         // https://opencode.ai/docs/skills/
-        if (client is AgentClientKind.CopilotCli or AgentClientKind.CopilotApp or AgentClientKind.VsCode or AgentClientKind.OpenCode)
+        if (client.Id is "copilot-cli" or "copilot-app" or "vscode" or "opencode")
         {
             var root = scope is AgentConfigurationScope.Project ? workspaceRoot.FullName : executionContext.HomeDirectory.FullName;
             return Path.Combine(root, ".agents", "skills");
         }
 
-        if (client is not AgentClientKind.ClaudeCode)
+        if (client.Id != "claude-code")
         {
             throw new ArgumentOutOfRangeException(nameof(client), client, null);
         }
 
-        return ClaudeCodeAgentConfiguration.GetSkillDirectory(workspaceRoot, scope, executionContext, environment);
+        return ClaudeCodeAgentEnvironmentScanner.GetSkillDirectory(workspaceRoot, scope, executionContext, environment);
     }
 
     private async Task<AgentTargetResult> InstallFilesAsync(SkillTarget target, IReadOnlyList<AgentSkillFile> files, CancellationToken cancellationToken)
@@ -261,7 +261,7 @@ internal sealed class AgentSkillInstaller(
 
     private sealed record SkillTarget(
         AgentAssetKind Asset,
-        List<AgentClientKind> Clients,
+        List<AgentClient> Clients,
         string Path,
         AgentConfigurationScope Scope,
         HashSet<string> Aliases,

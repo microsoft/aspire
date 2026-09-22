@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Agents.VsCode;
+using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
 
 namespace Aspire.Cli.Tests.TestServices;
@@ -21,6 +23,13 @@ internal sealed class TestAgentCliRunner : ICopilotCliRunner, IClaudeCodeCliRunn
     public SemVersion? VsCodeInsidersVersion { get; init; }
     public IReadOnlyList<string> Commands => _commands.ToArray();
     public Func<string, CancellationToken, Task<SemVersion?>>? GetVersionAsyncCallback { get; init; }
+
+    public AgentClientCatalog CreateCatalog(CliExecutionContext executionContext, IEnvironment environment)
+        => new(
+            new CopilotAgentEnvironmentScanner(this, new CopilotAppInstallationDetector(environment, executionContext), executionContext, environment, NullLogger<CopilotAgentEnvironmentScanner>.Instance),
+            new VsCodeAgentEnvironmentScanner(this, executionContext, environment, NullLogger<VsCodeAgentEnvironmentScanner>.Instance),
+            new ClaudeCodeAgentEnvironmentScanner(this, executionContext, environment, NullLogger<ClaudeCodeAgentEnvironmentScanner>.Instance),
+            new OpenCodeAgentEnvironmentScanner(this, executionContext, environment, NullLogger<OpenCodeAgentEnvironmentScanner>.Instance));
 
     Task<SemVersion?> ICopilotCliRunner.GetVersionAsync(CancellationToken cancellationToken)
         => GetVersionAsync("copilot", CopilotVersion, cancellationToken);

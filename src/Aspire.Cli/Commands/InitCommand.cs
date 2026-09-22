@@ -5,7 +5,6 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Aspire.Cli.Agents;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -111,7 +110,7 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(_languageOption);
         Options.Add(_fileBasedOption);
         Options.Add(NewCommand.s_suppressAgentInitOption);
-        AgentInitCommand.AddOptions(this, includeMcp: false, includeWorkspaceRoot: false);
+        _agentInitCommand.AddOptions(this, includeMcp: false, includeWorkspaceRoot: false);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -174,14 +173,13 @@ internal sealed class InitCommand : BaseCommand
             CliExitCodes.Success,
             workspaceRoot,
             agentInitBinding,
-            AgentInitCommand.CreateBindings(parseResult, includeMcp: false),
+            _agentInitCommand.CreateBindings(parseResult, includeMcp: false),
             cancellationToken);
 
         if (agentInitResult.ExitCode == CliExitCodes.Success &&
             agentInitResult.RegisteredClients.Count > 0)
         {
-            var catalog = new AgentClientCatalog();
-            var clients = string.Join(", ", agentInitResult.RegisteredClients.Select(client => catalog.Get(client).DisplayName));
+            var clients = string.Join(", ", agentInitResult.RegisteredClients.Select(client => client.DisplayName));
             InteractionService.DisplayEmptyLine();
             InteractionService.DisplayMessage(KnownEmojis.Dizzy,
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_AspireifyHandoff, clients));

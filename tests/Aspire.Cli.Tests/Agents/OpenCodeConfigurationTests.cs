@@ -15,7 +15,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
     public async Task FreshUndetectedClient_UsesStableV1CatalogAndMcp()
     {
         using var context = new AgentConfigurationTestContext(output);
-        var request = context.Request([AgentClientKind.OpenCode], mcp: true);
+        var request = context.Request([context.OpenCode], mcp: true);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -32,8 +32,8 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
     public async Task DetectedV2_UsesArrayCatalogAndNestedMcpServers()
     {
         using var context = new AgentConfigurationTestContext(output);
-        var request = context.Request([AgentClientKind.OpenCode], mcp: true,
-            detections: [new(AgentClientKind.OpenCode, "opencode v2.0.0-preview.1", false)]);
+        var request = context.Request([context.OpenCode], mcp: true,
+            detections: [new(context.OpenCode, "opencode v2.0.0-preview.1", false)]);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -48,14 +48,14 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
         using var context = new AgentConfigurationTestContext(output);
         var path = Path.Combine(context.Project.FullName, ".opencode", "opencode.jsonc");
         await AgentConfigurationTestContext.WriteAsync(path, """{"model":"preserved","skills":["./team-skills"],}""").DefaultTimeout();
-        var request = context.Request([AgentClientKind.OpenCode], mcp: true);
+        var request = context.Request([context.OpenCode], mcp: true);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
         var root = JsonNode.Parse(await File.ReadAllTextAsync(path).DefaultTimeout())!;
 
         Assert.All(results, result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
         Assert.Equal("preserved", (string?)root["model"]);
-        Assert.Equal(["./team-skills", OpenCodeAgentConfiguration.V2Catalog], root["skills"]!.AsArray().Select(value => (string)value!));
+        Assert.Equal(["./team-skills", OpenCodeAgentEnvironmentScanner.V2Catalog], root["skills"]!.AsArray().Select(value => (string)value!));
         Assert.Equal(["aspire"], root["mcp"]!["servers"]!.AsObject().Select(property => property.Key));
         Assert.False(File.Exists(Path.Combine(context.Project.FullName, "opencode.json")));
         await Verify(await File.ReadAllTextAsync(path).DefaultTimeout(), "json");
@@ -69,7 +69,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
         const string existing = """{"skills":{"paths":["./private-skills"],"urls":["https://raw.githubusercontent.com/microsoft/aspire-skills/v0.0.3/opencode/v1/"]},"autoupdate":false}""";
         await AgentConfigurationTestContext.WriteAsync(path, existing).DefaultTimeout();
 
-        var results = await context.ConfigureNativeAsync(context.Request([AgentClientKind.OpenCode])).DefaultTimeout();
+        var results = await context.ConfigureNativeAsync(context.Request([context.OpenCode])).DefaultTimeout();
 
         Assert.Equal(AgentConfigurationStatus.Unchanged, results.Single(result => result.Scope is AgentConfigurationScope.User).Status);
         Assert.Equal(existing, await File.ReadAllTextAsync(path).DefaultTimeout());
@@ -90,8 +90,8 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
         using var context = new AgentConfigurationTestContext(output);
         var path = Path.Combine(context.Project.FullName, "opencode.json");
         await AgentConfigurationTestContext.WriteAsync(path, existing).DefaultTimeout();
-        var request = context.Request([AgentClientKind.OpenCode], mcp: true,
-            detections: version is null ? [] : [new(AgentClientKind.OpenCode, version, false)]);
+        var request = context.Request([context.OpenCode], mcp: true,
+            detections: version is null ? [] : [new(context.OpenCode, version, false)]);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -111,7 +111,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
         await AgentConfigurationTestContext.WriteAsync(projectPath, project).DefaultTimeout();
         await AgentConfigurationTestContext.WriteAsync(userPath, user).DefaultTimeout();
 
-        var results = await context.ConfigureNativeAsync(context.Request([AgentClientKind.OpenCode], mcp: true)).DefaultTimeout();
+        var results = await context.ConfigureNativeAsync(context.Request([context.OpenCode], mcp: true)).DefaultTimeout();
 
         Assert.All(results, result => Assert.Equal(AgentConfigurationStatus.Blocked, result.Status));
         Assert.Equal(project, await File.ReadAllTextAsync(projectPath).DefaultTimeout());
@@ -130,7 +130,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
         var path = Path.Combine(context.Project.FullName, "opencode.json");
         await AgentConfigurationTestContext.WriteAsync(path, existing).DefaultTimeout();
 
-        var results = await context.ConfigureNativeAsync(context.Request([AgentClientKind.OpenCode], mcp: true)).DefaultTimeout();
+        var results = await context.ConfigureNativeAsync(context.Request([context.OpenCode], mcp: true)).DefaultTimeout();
 
         Assert.All(results, result => Assert.Equal(AgentConfigurationStatus.Blocked, result.Status));
         Assert.Equal(existing, await File.ReadAllTextAsync(path).DefaultTimeout());
@@ -145,7 +145,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
         var path = Path.Combine(context.OpenCodeDirectory, "opencode.json");
         await AgentConfigurationTestContext.WriteAsync(path, existing).DefaultTimeout();
 
-        var results = await context.ConfigureNativeAsync(context.Request([AgentClientKind.OpenCode], skills: false, mcp: true)).DefaultTimeout();
+        var results = await context.ConfigureNativeAsync(context.Request([context.OpenCode], skills: false, mcp: true)).DefaultTimeout();
 
         Assert.All(results, result => Assert.Equal(AgentConfigurationStatus.Skipped, result.Status));
         Assert.Equal(existing, await File.ReadAllTextAsync(path).DefaultTimeout());
@@ -161,7 +161,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
         await AgentConfigurationTestContext.WriteAsync(json, "{}").DefaultTimeout();
         await AgentConfigurationTestContext.WriteAsync(jsonc, "{/* preserved */}").DefaultTimeout();
 
-        var results = await context.ConfigureNativeAsync(context.Request([AgentClientKind.OpenCode])).DefaultTimeout();
+        var results = await context.ConfigureNativeAsync(context.Request([context.OpenCode])).DefaultTimeout();
 
         Assert.Equal(AgentConfigurationStatus.Blocked, results.Single(result => result.Scope is AgentConfigurationScope.Project).Status);
         Assert.Equal(AgentConfigurationStatus.Configured, results.Single(result => result.Scope is AgentConfigurationScope.User).Status);
@@ -175,7 +175,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
         using var context = new AgentConfigurationTestContext(output);
         var path = Path.Combine(context.Project.FullName, "opencode.json");
         context.SetVariable("OPENCODE_CONFIG", path);
-        var request = context.Request([AgentClientKind.OpenCode], mcp: true);
+        var request = context.Request([context.OpenCode], mcp: true);
 
         var first = await context.ConfigureNativeAsync(request).DefaultTimeout();
         File.SetLastWriteTimeUtc(path, new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
@@ -197,7 +197,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
         using var context = new AgentConfigurationTestContext(output);
         context.SetVariable("OPENCODE_CONFIG_CONTENT", """{"skills":[]}""");
 
-        var results = await context.ConfigureNativeAsync(context.Request([AgentClientKind.OpenCode])).DefaultTimeout();
+        var results = await context.ConfigureNativeAsync(context.Request([context.OpenCode])).DefaultTimeout();
 
         Assert.All(results, result => Assert.Equal(AgentConfigurationStatus.Blocked, result.Status));
         Assert.Empty(Directory.EnumerateFiles(context.Project.FullName));
@@ -222,7 +222,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
             }
             """).DefaultTimeout();
 
-        var results = await context.ConfigureNativeAsync(context.Request([AgentClientKind.OpenCode], skills: false, mcp: true)).DefaultTimeout();
+        var results = await context.ConfigureNativeAsync(context.Request([context.OpenCode], skills: false, mcp: true)).DefaultTimeout();
 
         Assert.Equal(AgentConfigurationStatus.Configured, results.Single(result => result.Scope is AgentConfigurationScope.Project).Status);
         Assert.Equal(AgentConfigurationStatus.Skipped, results.Single(result => result.Scope is AgentConfigurationScope.User).Status);
@@ -243,8 +243,8 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
         const string existing = """{"mcp":{"aspire":{"type":"local","command":["aspire","agent","mcp"]}}}""";
         await AgentConfigurationTestContext.WriteAsync(project, existing).DefaultTimeout();
         await AgentConfigurationTestContext.WriteAsync(user, existing).DefaultTimeout();
-        var request = context.Request([AgentClientKind.OpenCode], mcp: true,
-            detections: [new(AgentClientKind.OpenCode, version, false)]);
+        var request = context.Request([context.OpenCode], mcp: true,
+            detections: [new(context.OpenCode, version, false)]);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -270,8 +270,8 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
     public async Task SupportedV1_RegistersCatalogAtAndAboveTheCapabilityBoundary(string version)
     {
         using var context = new AgentConfigurationTestContext(output);
-        var request = context.Request([AgentClientKind.OpenCode],
-            detections: [new(AgentClientKind.OpenCode, version, false)]);
+        var request = context.Request([context.OpenCode],
+            detections: [new(context.OpenCode, version, false)]);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -299,8 +299,8 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
               }
             }
             """).DefaultTimeout();
-        var request = context.Request([AgentClientKind.OpenCode], mcp: true,
-            detections: [new(AgentClientKind.OpenCode, "1.18.30", false)]);
+        var request = context.Request([context.OpenCode], mcp: true,
+            detections: [new(context.OpenCode, "1.18.30", false)]);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -320,8 +320,8 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
     public async Task OlderV1_McpOnlyDoesNotFailTheCatalogCapabilityCheck()
     {
         using var context = new AgentConfigurationTestContext(output);
-        var request = context.Request([AgentClientKind.OpenCode], skills: false, mcp: true,
-            detections: [new(AgentClientKind.OpenCode, "1.18.30", false)]);
+        var request = context.Request([context.OpenCode], skills: false, mcp: true,
+            detections: [new(context.OpenCode, "1.18.30", false)]);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
 

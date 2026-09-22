@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Agents;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -78,6 +79,26 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
 
         Assert.NotNull(reader);
         Assert.IsType<IdentityChannelReader>(reader);
+    }
+
+    [Fact]
+    public async Task BuildApplication_RegistersClientCatalogWithSharedScanners()
+    {
+        using var host = await BuildHostAsync();
+        var catalog = host.Services.GetRequiredService<AgentClientCatalog>();
+        IAgentClientEnvironment[] environments =
+        [
+            host.Services.GetRequiredService<Aspire.Cli.Agents.Copilot.CopilotAgentEnvironmentScanner>(),
+            host.Services.GetRequiredService<Aspire.Cli.Agents.VsCode.VsCodeAgentEnvironmentScanner>(),
+            host.Services.GetRequiredService<Aspire.Cli.Agents.ClaudeCode.ClaudeCodeAgentEnvironmentScanner>(),
+            host.Services.GetRequiredService<Aspire.Cli.Agents.OpenCode.OpenCodeAgentEnvironmentScanner>()
+        ];
+
+        Assert.Equal(4, environments.Length);
+        Assert.Equal(
+            ["copilot-cli", "copilot-app", "vscode", "claude-code", "opencode"],
+            catalog.Clients.Select(client => client.Id));
+        Assert.Equal(environments, catalog.Clients.Select(client => client.Environment).Distinct());
     }
 
     [Fact]

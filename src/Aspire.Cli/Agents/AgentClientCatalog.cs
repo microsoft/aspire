@@ -9,38 +9,38 @@ using Aspire.Cli.Agents.VsCode;
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Collects client-owned definitions without probing installations or reading configuration.
+/// Associates client identities with their environment implementations without probing or configuring them.
 /// </summary>
 internal sealed class AgentClientCatalog
 {
-    public IReadOnlyList<AgentClientDescriptor> Clients { get; } = Array.AsReadOnly<AgentClientDescriptor>(
-    [
-        .. CopilotAgentConfiguration.GetClients(),
-        VsCodeAgentConfiguration.Client,
-        ClaudeCodeAgentConfiguration.Client,
-        OpenCodeAgentConfiguration.Client
-    ]);
+    public AgentClientCatalog(
+        CopilotAgentEnvironmentScanner copilot,
+        VsCodeAgentEnvironmentScanner vsCode,
+        ClaudeCodeAgentEnvironmentScanner claudeCode,
+        OpenCodeAgentEnvironmentScanner openCode)
+        : this(
+        [
+            new(CopilotAgentEnvironmentScanner.CliClientId, "GitHub Copilot CLI", copilot),
+            new(CopilotAgentEnvironmentScanner.AppClientId, "GitHub Copilot App", copilot),
+            new(VsCodeAgentEnvironmentScanner.ClientId, "VS Code", vsCode),
+            new(ClaudeCodeAgentEnvironmentScanner.ClientId, "Claude Code", claudeCode),
+            new(OpenCodeAgentEnvironmentScanner.ClientId, "OpenCode", openCode)
+        ])
+    {
+    }
 
-    public AgentClientDescriptor Get(AgentClientKind client) => Clients.Single(descriptor => descriptor.Kind == client);
+    internal AgentClientCatalog(IEnumerable<AgentClient> clients)
+    {
+        Clients = Array.AsReadOnly(clients.ToArray());
+    }
 
-    public IEnumerable<AgentConfigurationTarget> GetTargets(
-        AgentInitRequest request,
-        CliExecutionContext executionContext,
-        IEnvironment environment)
-        => Clients.Where(client => request.Clients.Contains(client.Kind))
-            // Copilot App/CLI share the same callback as well as physical configuration.
-            .Select(client => client.GetTargets).Distinct()
-            .SelectMany(getTargets => getTargets(request, executionContext, environment));
+    public IReadOnlyList<AgentClient> Clients { get; }
 }
 
 /// <summary>
-/// A client's selection metadata and native configuration callback.
+/// An immutable client identity shared by discovery, selection, and configuration.
 /// </summary>
-internal sealed record AgentClientDescriptor(
-    AgentClientKind Kind,
-    string Id,
-    string DisplayName,
-    Func<AgentInitRequest, CliExecutionContext, IEnvironment, IEnumerable<AgentConfigurationTarget>> GetTargets)
+internal sealed record AgentClient(string Id, string DisplayName, IAgentClientEnvironment Environment)
 {
     public override string ToString() => Id;
 }

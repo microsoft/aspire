@@ -18,7 +18,6 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class AgentInitCommand : BaseCommand
 {
-    private readonly IAgentEnvironmentDetector _agentEnvironmentDetector;
     private readonly AgentClientCatalog _clientCatalog;
     private readonly IAgentInitService _agentInitService;
     private readonly IGitRepository _gitRepository;
@@ -33,25 +32,24 @@ internal sealed class AgentInitCommand : BaseCommand
     internal static readonly Option<AgentConfirmation?> s_dotnetInspectOption = CreateAssetOption("--dotnet-inspect", AgentCommandStrings.InitCommand_DotnetInspectOptionDescription);
     internal static readonly Option<AgentConfirmation?> s_aspireSkillsOption = CreateAssetOption("--aspire-skills", AgentCommandStrings.InitCommand_AspireSkillsOptionDescription);
 
-    internal static readonly Option<string?> s_clientsOption = CreateClientsOption();
+    private readonly Option<string?> _clientsOption;
 
     public AgentInitCommand(
-        IAgentEnvironmentDetector agentEnvironmentDetector,
         AgentClientCatalog clientCatalog,
         IAgentInitService agentInitService,
         IGitRepository gitRepository,
         CommonCommandServices services)
         : base("init", AgentCommandStrings.InitCommand_Description, services)
     {
-        _agentEnvironmentDetector = agentEnvironmentDetector;
         _clientCatalog = clientCatalog;
         _agentInitService = agentInitService;
         _gitRepository = gitRepository;
+        _clientsOption = CreateClientsOption();
 
         AddOptions(this, includeMcp: true, includeWorkspaceRoot: true);
     }
 
-    internal static void AddOptions(Command command, bool includeMcp, bool includeWorkspaceRoot)
+    internal void AddOptions(Command command, bool includeMcp, bool includeWorkspaceRoot)
     {
         if (includeWorkspaceRoot)
         {
@@ -66,15 +64,15 @@ internal sealed class AgentInitCommand : BaseCommand
         command.Options.Add(s_playwrightOption);
         command.Options.Add(s_dotnetInspectOption);
         command.Options.Add(s_aspireSkillsOption);
-        command.Options.Add(s_clientsOption);
+        command.Options.Add(_clientsOption);
     }
 
-    internal static AgentInitPromptBindings CreateBindings(ParseResult parseResult, bool includeMcp) => new(
+    internal AgentInitPromptBindings CreateBindings(ParseResult parseResult, bool includeMcp) => new(
         includeMcp ? CreateAssetBinding(parseResult, s_mcpOption, defaultValue: false) : null,
         CreateAssetBinding(parseResult, s_playwrightOption, defaultValue: false),
         CreateAssetBinding(parseResult, s_dotnetInspectOption, defaultValue: false),
         CreateAssetBinding(parseResult, s_aspireSkillsOption, defaultValue: true),
-        PromptBinding.Create(parseResult, s_clientsOption));
+        PromptBinding.Create(parseResult, _clientsOption));
 
     internal Task<CommandResult> ExecuteCommandAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
@@ -172,9 +170,9 @@ internal sealed class AgentInitCommand : BaseCommand
         return option;
     }
 
-    private static Option<string?> CreateClientsOption()
+    private Option<string?> CreateClientsOption()
     {
-        var clientIds = new AgentClientCatalog().Clients.Select(static client => client.Id).ToArray();
+        var clientIds = _clientCatalog.Clients.Select(static client => client.Id).ToArray();
         var supportedClients = string.Join(",", clientIds);
 
         return new Option<string?>("--clients")
@@ -265,18 +263,25 @@ internal sealed class AgentInitCommand : BaseCommand
             return new(CliExitCodes.Success, []);
         }
 
-        var context = new AgentEnvironmentScanContext
-        {
-            WorkingDirectory = ExecutionContext.WorkingDirectory,
-            RepositoryRoot = workspaceRoot
-        };
         var detections = await InteractionService.ShowStatusAsync(
             McpCommandStrings.InitCommand_DetectingAgentEnvironments,
-            () => _agentEnvironmentDetector.DetectAsync(context, cancellationToken),
+            async () =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var found = new List<AgentClientDetection>();
+                foreach (var clients in _clientCatalog.Clients.GroupBy(client => client.Environment))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    found.AddRange(await clients.Key.ScanAsync(clients.ToArray(), ExecutionContext.WorkingDirectory, workspaceRoot, cancellationToken));
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                return Array.AsReadOnly(found.Distinct().ToArray());
+            },
             emoji: KnownEmojis.Robot);
 
         var detectedClients = detections.Select(static detection => detection.Client).ToHashSet();
-        var defaults = _clientCatalog.Clients.Where(client => detectedClients.Contains(client.Kind)).ToArray();
+        var defaults = _clientCatalog.Clients.Where(detectedClients.Contains).ToArray();
         // No default is intentionally different from "none": unattended setup must ask
         // for --clients when detection cannot supply a choice.
         var clientsBinding = defaults.Length == 0
@@ -305,7 +310,7 @@ internal sealed class AgentInitCommand : BaseCommand
         activity?.SetTag("aspire.agent.aspire_skills", aspireSkills);
 
         var result = await _agentInitService.ConfigureAsync(
-            new AgentInitRequest(workspaceRoot, assets, clients.Select(static client => client.Kind).Distinct().ToArray(), detections),
+            new AgentInitRequest(workspaceRoot, assets, clients.Distinct().ToArray(), detections),
             cancellationToken);
 
         DisplayResults(result);
@@ -323,7 +328,7 @@ internal sealed class AgentInitCommand : BaseCommand
     {
         foreach (var target in result.Targets)
         {
-            var clients = string.Join(", ", target.Clients.Select(client => _clientCatalog.Get(client).DisplayName));
+            var clients = string.Join(", ", target.Clients.Select(client => client.DisplayName));
             var scope = target.Scope is AgentConfigurationScope.Project ? AgentCommandStrings.InitCommand_ProjectScope : AgentCommandStrings.InitCommand_UserScope;
             var asset = target.Asset switch
             {
@@ -392,7 +397,7 @@ internal sealed record AgentInitPromptBindings(
     PromptBinding<bool> AspireSkills,
     PromptBinding<string?> Clients);
 
-internal readonly record struct AgentInitExecutionResult(int ExitCode, IReadOnlyList<AgentClientKind> RegisteredClients);
+internal readonly record struct AgentInitExecutionResult(int ExitCode, IReadOnlyList<AgentClient> RegisteredClients);
 
 internal enum AgentConfirmation
 {

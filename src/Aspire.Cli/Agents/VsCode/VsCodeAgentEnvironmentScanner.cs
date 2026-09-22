@@ -1,45 +1,33 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using Aspire.Cli.Agents.Copilot;
+using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Agents.VsCode;
 
 /// <summary>
-/// Discovers VS Code from its terminal, project configuration, or installed CLIs.
+/// Discovers VS Code and configures native workspace/user MCP and shared Copilot plugin settings.
 /// </summary>
-internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
+internal sealed class VsCodeAgentEnvironmentScanner(
+    IVsCodeCliRunner vsCodeCliRunner,
+    CliExecutionContext executionContext,
+    IEnvironment environment,
+    ILogger<VsCodeAgentEnvironmentScanner> logger) : IAgentClientEnvironment
 {
-    private readonly IVsCodeCliRunner _vsCodeCliRunner;
-    private readonly CliExecutionContext _executionContext;
-    private readonly IEnvironment _environment;
-    private readonly ILogger<VsCodeAgentEnvironmentScanner> _logger;
-
-    public VsCodeAgentEnvironmentScanner(
-        IVsCodeCliRunner vsCodeCliRunner,
-        CliExecutionContext executionContext,
-        IEnvironment environment,
-        ILogger<VsCodeAgentEnvironmentScanner> logger)
-    {
-        ArgumentNullException.ThrowIfNull(vsCodeCliRunner);
-        ArgumentNullException.ThrowIfNull(executionContext);
-        ArgumentNullException.ThrowIfNull(environment);
-        ArgumentNullException.ThrowIfNull(logger);
-        _vsCodeCliRunner = vsCodeCliRunner;
-        _executionContext = executionContext;
-        _environment = environment;
-        _logger = logger;
-    }
-
+    internal const string ClientId = "vscode";
     /// <inheritdoc />
-    public async Task<IReadOnlyList<AgentClientDetection>> ScanAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<AgentClientDetection>> ScanAsync(IReadOnlyList<AgentClient> clients, DirectoryInfo workingDirectory, DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _logger.LogDebug("Starting VS Code environment scan in directory: {WorkingDirectory}", context.WorkingDirectory.FullName);
+        var client = clients.Single(client => client.Id == ClientId);
+        logger.LogDebug("Starting VS Code environment scan in directory: {WorkingDirectory}", workingDirectory.FullName);
 
-        if (_environment.GetEnvironmentVariable("TERM_PROGRAM") == "vscode")
+        if (environment.GetEnvironmentVariable("TERM_PROGRAM") == "vscode")
         {
-            var version = _environment.GetEnvironmentVariable("TERM_PROGRAM_VERSION")?.Trim();
+            var version = environment.GetEnvironmentVariable("TERM_PROGRAM_VERSION")?.Trim();
             if (string.IsNullOrEmpty(version))
             {
                 version = null;
@@ -49,25 +37,25 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
             // Retain that evidence without invoking another editor process from its terminal.
             return Array.AsReadOnly<AgentClientDetection>(
             [
-                new(AgentClientKind.VsCode, version, IsInsiders: version?.Contains("-insider", StringComparison.OrdinalIgnoreCase) == true)
+                new(client, version, IsInsiders: version?.Contains("-insider", StringComparison.OrdinalIgnoreCase) == true)
             ]);
         }
 
         var detections = new List<AgentClientDetection>();
         foreach (var useInsiders in new[] { false, true })
         {
-            var version = await _vsCodeCliRunner.GetVersionAsync(new VsCodeRunOptions { UseInsiders = useInsiders }, cancellationToken).ConfigureAwait(false);
+            var version = await vsCodeCliRunner.GetVersionAsync(new VsCodeRunOptions { UseInsiders = useInsiders }, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             if (version is not null)
             {
-                _logger.LogDebug("Detected VS Code version: {Version}, Insiders: {IsInsiders}", version, useInsiders);
-                detections.Add(new AgentClientDetection(AgentClientKind.VsCode, version.ToString(), IsInsiders: useInsiders));
+                logger.LogDebug("Detected VS Code version: {Version}, Insiders: {IsInsiders}", version, useInsiders);
+                detections.Add(new AgentClientDetection(client, version.ToString(), IsInsiders: useInsiders));
             }
         }
 
-        if (detections.Count == 0 && HasProjectConfiguration(context.WorkingDirectory, context.RepositoryRoot))
+        if (detections.Count == 0 && HasProjectConfiguration(workingDirectory, workspaceRoot))
         {
-            detections.Add(new AgentClientDetection(AgentClientKind.VsCode, Version: null, IsInsiders: false));
+            detections.Add(new AgentClientDetection(client, Version: null, IsInsiders: false));
         }
 
         return detections.AsReadOnly();
@@ -86,7 +74,7 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
         for (var currentDirectory = startDirectory; currentDirectory is not null; currentDirectory = currentDirectory.Parent)
         {
             // The home .vscode directory holds user extensions rather than workspace settings.
-            if (Path.GetRelativePath(_executionContext.HomeDirectory.FullName, currentDirectory.FullName) != "." &&
+            if (Path.GetRelativePath(executionContext.HomeDirectory.FullName, currentDirectory.FullName) != "." &&
                 Directory.Exists(Path.Combine(currentDirectory.FullName, ".vscode")))
             {
                 return true;
@@ -99,5 +87,117 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
         }
 
         return false;
+    }
+
+    public IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request)
+    {
+        var client = request.Clients.Single(client => client.Environment == this);
+        // The supported Copilot-backed runtime shares plugin registration, not MCP files.
+        // A selected Copilot frontend already contributes the shared plugin targets.
+        if (!request.Clients.Any(client => client.Environment is CopilotAgentEnvironmentScanner))
+        {
+            foreach (var target in CopilotAgentEnvironmentScanner.GetPluginTargets(request, executionContext, environment))
+            {
+                yield return target;
+            }
+        }
+
+        if (!request.Assets.Mcp)
+        {
+            yield break;
+        }
+
+        yield return Target(Path.Combine(request.WorkspaceRoot.FullName, ".vscode", "mcp.json"), AgentConfigurationScope.Project);
+
+        var editions = request.Detections.Where(detection => detection.Client.Environment is VsCodeAgentEnvironmentScanner)
+            .Select(detection => detection.IsInsiders).Distinct().DefaultIfEmpty(false);
+        foreach (var insiders in editions)
+        {
+            var userDirectory = GetUserDirectory(insiders, executionContext, environment);
+            yield return Target(Path.Combine(userDirectory, "mcp.json"), AgentConfigurationScope.User);
+
+            // Existing profiles have independent mcp.json resources. Never invent a profile
+            // or inspect client-owned storage to guess a --profile/--user-data-dir session.
+            // https://code.visualstudio.com/docs/agent-customization/mcp-servers
+            // https://github.com/microsoft/vscode/blob/main/src/vs/platform/userDataProfile/common/userDataProfile.ts
+            var profileDirectory = Path.Combine(userDirectory, "profiles");
+            string[] profiles = [];
+            string? error = null;
+            try
+            {
+                if (Directory.Exists(profileDirectory))
+                {
+                    profiles = Directory.GetDirectories(profileDirectory);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                error = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.Configuration_ReadWriteFailed, ex.Message);
+            }
+
+            if (error is not null)
+            {
+                yield return new AgentConfigurationTarget(profileDirectory, AgentConfigurationScope.User, AgentAssetKind.Mcp,
+                    [client], "profiles:unavailable",
+                    (_, _, _) => Task.FromResult(new AgentConfigurationEdit(AgentConfigurationStatus.Failed, error)));
+            }
+
+            foreach (var profile in profiles.Order(AgentPath.Comparer))
+            {
+                // The reserved system-profile directory is not a user-selected profile.
+                if (Path.GetFileName(profile) != "builtin" &&
+                    (File.Exists(Path.Combine(profile, "settings.json")) || File.Exists(Path.Combine(profile, "mcp.json"))))
+                {
+                    yield return Target(Path.Combine(profile, "mcp.json"), AgentConfigurationScope.User);
+                }
+            }
+        }
+
+        AgentConfigurationTarget Target(string path, AgentConfigurationScope scope)
+            => new(path, scope, AgentAssetKind.Mcp, [client], "servers:aspire",
+                (root, _, _) =>
+                {
+                    var edit = McpConfiguration.Apply(root, "servers", commandArray: false, "stdio");
+                    return Task.FromResult(scope is AgentConfigurationScope.User && edit.Status is AgentConfigurationStatus.Configured
+                        ? edit with { Message = AgentCommandStrings.Configuration_ProfileLimitations }
+                        : edit);
+                });
+    }
+
+    public static string GetUserDirectory(bool insiders, CliExecutionContext executionContext, IEnvironment environment)
+    {
+        // Follow VS Code's portable, appdata, and original-working-directory overrides.
+        // https://github.com/microsoft/vscode/blob/main/src/vs/platform/environment/node/userDataPath.ts
+        if (Override("VSCODE_PORTABLE") is { } portable)
+        {
+            return Path.Combine(portable, "user-data", "User");
+        }
+
+        var home = executionContext.HomeDirectory.FullName;
+        var appData = Override("VSCODE_APPDATA");
+        if (appData is null)
+        {
+            appData = environment.IsWindows()
+                ? AgentPath.GetOverride("APPDATA", executionContext, environment) ?? Path.Combine(home, "AppData", "Roaming")
+                : environment.IsMacOS()
+                    ? Path.Combine(home, "Library", "Application Support")
+                    : AgentPath.GetOverride("XDG_CONFIG_HOME", executionContext, environment) ?? Path.Combine(home, ".config");
+        }
+
+        var product = environment.GetEnvironmentVariable("VSCODE_DEV") is { Length: > 0 } ? "code-oss-dev"
+            : insiders ? "Code - Insiders" : "Code";
+
+        return Path.Combine(appData, product, "User");
+
+        string? Override(string variable)
+        {
+            if (environment.GetEnvironmentVariable(variable) is not { Length: > 0 } value)
+            {
+                return null;
+            }
+
+            var workingDirectory = AgentPath.GetOverride("VSCODE_CWD", executionContext, environment) ?? executionContext.WorkingDirectory.FullName;
+            return AgentPath.Expand(value, executionContext.HomeDirectory.FullName, workingDirectory);
+        }
     }
 }

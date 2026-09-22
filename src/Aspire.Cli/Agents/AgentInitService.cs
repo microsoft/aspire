@@ -9,12 +9,9 @@ namespace Aspire.Cli.Agents;
 /// Orchestrates offline native registration and the independently selected CLI-managed tool skills.
 /// </summary>
 internal sealed class AgentInitService(
-    AgentClientCatalog catalog,
     AgentConfigurationWriter writer,
     IAgentSkillInstaller skillInstaller,
-    ITelemetryHookConfigurator hooks,
-    CliExecutionContext executionContext,
-    IEnvironment environment) : IAgentInitService
+    ITelemetryHookConfigurator hooks) : IAgentInitService
 {
     public async Task<AgentInitResult> ConfigureAsync(AgentInitRequest request, CancellationToken cancellationToken)
     {
@@ -26,7 +23,7 @@ internal sealed class AgentInitService(
 
         var results = new List<AgentTargetResult>();
         IEnumerable<AgentConfigurationTarget> nativeTargets = request.Assets.Mcp || request.Assets.AspireSkills
-            ? catalog.GetTargets(request, executionContext, environment)
+            ? request.Clients.Select(client => client.Environment).Distinct().SelectMany(environment => environment.GetTargets(request))
             : [];
         results.AddRange(await writer.ApplyAsync(nativeTargets.Concat(hooks.Plan(request)), cancellationToken));
 

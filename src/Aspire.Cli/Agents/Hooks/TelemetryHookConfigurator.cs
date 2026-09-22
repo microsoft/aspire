@@ -32,26 +32,26 @@ internal sealed class TelemetryHookConfigurator(
         // Hooks instrument detected clients independently of the assets and native client
         // targets selected for setup. Selecting an undetected client must not create its hook.
         var detectedClients = request.Detections.Select(detection => detection.Client).Distinct().ToArray();
-        var copilotClients = detectedClients.Where(client => client is AgentClientKind.CopilotCli or AgentClientKind.CopilotApp).ToArray();
+        var copilotClients = detectedClients.Where(client => client.Environment is CopilotAgentEnvironmentScanner).ToArray();
         if (copilotClients.Length > 0)
         {
             yield return Target(Path.Combine(CopilotPaths.GetConfigDirectory(executionContext, environment), "hooks", "aspire-telemetry.json"), copilotClients, copilot: true);
         }
 
-        if (detectedClients.Contains(AgentClientKind.ClaudeCode))
+        if (detectedClients.SingleOrDefault(client => client.Environment is ClaudeCodeAgentEnvironmentScanner) is { } claude)
         {
-            yield return Target(Path.Combine(ClaudeCodeAgentConfiguration.GetConfigDirectory(executionContext, environment), "settings.json"), [AgentClientKind.ClaudeCode], copilot: false);
+            yield return Target(Path.Combine(ClaudeCodeAgentEnvironmentScanner.GetConfigDirectory(executionContext, environment), "settings.json"), [claude], copilot: false);
         }
 
         // No VS Code/OpenCode hook schemas are invented. VS Code's supported Copilot-backed
         // runtime shares plugin registration, which is distinct from a verified hook target.
-        AgentConfigurationTarget Target(string path, IReadOnlyList<AgentClientKind> clients, bool copilot)
+        AgentConfigurationTarget Target(string path, IReadOnlyList<AgentClient> clients, bool copilot)
             => new(path, AgentConfigurationScope.User, AgentAssetKind.TelemetryHooks, clients, "hooks:aspire",
                 async (root, context, cancellationToken) =>
                 {
                     var settingsPaths = copilot
                         ? CopilotPaths.PluginSettings(request, executionContext, environment)
-                        : ClaudeCodeAgentConfiguration.PluginSettings(request, executionContext, environment);
+                        : ClaudeCodeAgentEnvironmentScanner.PluginSettings(request, executionContext, environment);
                     var settings = await AgentConfigurationJson.ReadSettingsAsync(context, settingsPaths, cancellationToken);
                     if (settings.Append(root).Any(config =>
                         AgentConfigurationJson.Boolean(config, "disableAllHooks") is true ||
@@ -62,7 +62,7 @@ internal sealed class TelemetryHookConfigurator(
 
                     var projectSettings = copilot
                         ? CopilotPaths.ExistingHookSettings(request, executionContext, environment)
-                        : ClaudeCodeAgentConfiguration.ProjectSettings(request.WorkspaceRoot);
+                        : ClaudeCodeAgentEnvironmentScanner.ProjectSettings(request.WorkspaceRoot);
 
                     foreach (var configPath in projectSettings)
                     {
@@ -81,11 +81,11 @@ internal sealed class TelemetryHookConfigurator(
 
                     if (copilot)
                     {
-                        CopilotAgentConfiguration.ValidateHooks(root);
+                        CopilotAgentEnvironmentScanner.ValidateHooks(root);
                     }
                     else
                     {
-                        ClaudeCodeAgentConfiguration.ValidateHooks(root);
+                        ClaudeCodeAgentEnvironmentScanner.ValidateHooks(root);
                     }
 
                     TelemetryHookScripts scripts;
@@ -104,11 +104,11 @@ internal sealed class TelemetryHookConfigurator(
 
                     if (copilot)
                     {
-                        CopilotAgentConfiguration.ApplyHook(root, scripts, IsAspireHook);
+                        CopilotAgentEnvironmentScanner.ApplyHook(root, scripts, IsAspireHook);
                     }
                     else
                     {
-                        ClaudeCodeAgentConfiguration.ApplyHook(root, scripts, IsAspireHook);
+                        ClaudeCodeAgentEnvironmentScanner.ApplyHook(root, scripts, IsAspireHook);
                     }
 
                     return AgentConfigurationEdit.Applied(AgentCommandStrings.Configuration_HookConfigured);
@@ -122,7 +122,7 @@ internal sealed class TelemetryHookConfigurator(
             return false;
         }
 
-        foreach (var key in new[] { ClaudeCodeAgentConfiguration.HookEventName, CopilotAgentConfiguration.HookEventName })
+        foreach (var key in new[] { ClaudeCodeAgentEnvironmentScanner.HookEventName, CopilotAgentEnvironmentScanner.HookEventName })
         {
             if (hooks[key] is JsonArray entries && entries.Any(entry => IsAspireHook(entry) ||
                 (entry is JsonObject group && group["hooks"] is JsonArray inner && inner.Any(IsAspireHook))))

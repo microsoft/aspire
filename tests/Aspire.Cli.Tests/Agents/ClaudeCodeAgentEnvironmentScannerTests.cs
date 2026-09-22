@@ -32,12 +32,13 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
             configDirectory.CreateSubdirectory(".claude");
         }
         var runner = new TestAgentCliRunner();
-        var scanner = CreateScanner(runner, workspace.CreateExecutionContext());
-        var context = CreateScanContext(workingDirectory, workspace.WorkspaceRoot);
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workingDirectory, workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(AgentClientKind.ClaudeCode, null, false)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.ClaudeCode, null, false)], detections);
         Assert.Equal(["claude"], runner.Commands);
     }
 
@@ -53,16 +54,17 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         }
         var entries = Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order().ToArray();
         var runner = new TestAgentCliRunner { ClaudeCodeVersion = new SemVersion(2, 1, 0) };
-        var scanner = CreateScanner(runner, workspace.CreateExecutionContext());
-        var context = CreateScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(AgentClientKind.ClaudeCode, "2.1.0", false)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.ClaudeCode, "2.1.0", false)], detections);
         Assert.Equal(entries, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order());
         var list = Assert.IsAssignableFrom<IList<AgentClientDetection>>(detections);
         Assert.True(list.IsReadOnly);
-        Assert.Throws<NotSupportedException>(() => list[0] = new(AgentClientKind.CopilotCli, null, false));
+        Assert.Throws<NotSupportedException>(() => list[0] = new(clients.CopilotCli, null, false));
         Assert.Throws<NotSupportedException>(list.Clear);
     }
 
@@ -71,17 +73,18 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var runner = new TestAgentCliRunner();
-        var scanner = CreateScanner(runner, workspace.CreateExecutionContext());
-        var context = CreateScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         Assert.Empty(detections);
         Assert.Equal(["claude"], runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
         var collection = Assert.IsAssignableFrom<ICollection<AgentClientDetection>>(detections);
         Assert.True(collection.IsReadOnly);
-        Assert.Throws<NotSupportedException>(() => collection.Add(new(AgentClientKind.ClaudeCode, null, false)));
+        Assert.Throws<NotSupportedException>(() => collection.Add(new(clients.ClaudeCode, null, false)));
     }
 
     [Theory]
@@ -93,12 +96,13 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         workspace.CreateDirectory(".claude");
         var repositoryRoot = workspace.CreateDirectory("repo");
         var workingDirectory = repositoryRoot.CreateSubdirectory("src");
-        var scanner = CreateScanner(new TestAgentCliRunner(), workspace.CreateExecutionContext());
-        var context = CreateScanContext(
+        var agent = CreateAgent(new TestAgentCliRunner(), workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(
             workingDirectory,
             trailingSeparator ? new DirectoryInfo(repositoryRoot.FullName + Path.DirectorySeparatorChar) : repositoryRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         Assert.Empty(detections);
     }
@@ -111,10 +115,11 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         homeDirectory.CreateSubdirectory(".claude");
         var workingDirectory = homeDirectory.CreateSubdirectory("project");
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(workingDirectory, homeDirectory: homeDirectory);
-        var scanner = CreateScanner(new TestAgentCliRunner(), executionContext);
-        var context = CreateScanContext(workingDirectory, homeDirectory);
+        var agent = CreateAgent(new TestAgentCliRunner(), executionContext);
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workingDirectory, homeDirectory);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         Assert.Empty(detections);
     }
@@ -135,13 +140,14 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         {
             repositoryRoot.CreateSubdirectory(".claude");
         }
-        var scanner = CreateScanner(new TestAgentCliRunner(), workspace.CreateExecutionContext());
-        var context = CreateScanContext(workingDirectory, repositoryRoot);
+        var agent = CreateAgent(new TestAgentCliRunner(), workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workingDirectory, repositoryRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal<AgentClientDetection>(
-            hasTargetConfiguration ? [new(AgentClientKind.ClaudeCode, null, false)] : [],
+            hasTargetConfiguration ? [new(clients.ClaudeCode, null, false)] : [],
             detections);
     }
 
@@ -152,12 +158,13 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         var repositoryRoot = workspace.CreateDirectory("repo");
         repositoryRoot.CreateSubdirectory(".claude");
         var workingDirectory = workspace.CreateDirectory("outside");
-        var scanner = CreateScanner(new TestAgentCliRunner(), workspace.CreateExecutionContext());
-        var context = CreateScanContext(workingDirectory, repositoryRoot);
+        var agent = CreateAgent(new TestAgentCliRunner(), workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workingDirectory, repositoryRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(AgentClientKind.ClaudeCode, null, false)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.ClaudeCode, null, false)], detections);
     }
 
     [Theory]
@@ -173,12 +180,13 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         await File.WriteAllTextAsync(configPath, content);
         File.SetLastWriteTimeUtc(configPath, new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         var lastWriteTime = File.GetLastWriteTimeUtc(configPath);
-        var scanner = CreateScanner(new TestAgentCliRunner(), workspace.CreateExecutionContext());
-        var context = CreateScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var agent = CreateAgent(new TestAgentCliRunner(), workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(AgentClientKind.ClaudeCode, null, false)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.ClaudeCode, null, false)], detections);
         Assert.Equal(content, await File.ReadAllTextAsync(configPath));
         Assert.Equal(lastWriteTime, File.GetLastWriteTimeUtc(configPath));
         Assert.Equal([configPath], Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories));
@@ -189,23 +197,20 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var runner = new TestAgentCliRunner();
-        var scanner = CreateScanner(runner, workspace.CreateExecutionContext());
-        var context = CreateScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext());
+        var clients = new TestAgentClients(agent);
+        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => scanner.ScanAsync(context, new CancellationToken(canceled: true))).DefaultTimeout();
+            () => agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, new CancellationToken(canceled: true))).DefaultTimeout();
 
         Assert.Empty(runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
     }
 
-    private static ClaudeCodeAgentEnvironmentScanner CreateScanner(TestAgentCliRunner runner, CliExecutionContext executionContext)
-        => new(runner, executionContext, NullLogger<ClaudeCodeAgentEnvironmentScanner>.Instance);
+    private static ClaudeCodeAgentEnvironmentScanner CreateAgent(TestAgentCliRunner runner, CliExecutionContext executionContext)
+        => new(runner, executionContext, new TestEnvironment(), NullLogger<ClaudeCodeAgentEnvironmentScanner>.Instance);
 
-    private static AgentEnvironmentScanContext CreateScanContext(DirectoryInfo workingDirectory, DirectoryInfo repositoryRoot)
-        => new()
-        {
-            WorkingDirectory = workingDirectory,
-            RepositoryRoot = repositoryRoot
-        };
+    private static (DirectoryInfo WorkingDirectory, DirectoryInfo WorkspaceRoot) CreateScanDirectories(DirectoryInfo workingDirectory, DirectoryInfo repositoryRoot)
+        => (workingDirectory, repositoryRoot);
 }

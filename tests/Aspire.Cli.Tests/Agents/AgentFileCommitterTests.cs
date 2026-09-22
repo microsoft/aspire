@@ -341,7 +341,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
             path,
             AgentConfigurationScope.Project,
             AgentAssetKind.Mcp,
-            [AgentClientKind.CopilotCli],
+            [TestAgentClients.Default.CopilotCli],
             "test",
             async (root, context, token) =>
             {
@@ -371,7 +371,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
             path,
             AgentConfigurationScope.Project,
             AgentAssetKind.Mcp,
-            [AgentClientKind.CopilotCli],
+            [TestAgentClients.Default.CopilotCli],
             "test",
             (root, _, _) =>
             {

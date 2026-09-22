@@ -46,7 +46,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             var parseResult = command.Parse($"agent init {option.Name}{suffix}");
 
             Assert.Empty(parseResult.Errors);
-            var (wasProvided, value) = GetAssetBinding(parseResult, option).Resolve();
+            var (wasProvided, value) = GetAssetBinding(provider, parseResult, option).Resolve();
             Assert.True(wasProvided);
             Assert.Equal(expected, value);
         }
@@ -60,7 +60,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = provider.GetRequiredService<RootCommand>().Parse("agent init");
 
         Assert.Empty(parseResult.Errors);
-        Assert.All(AssetOptions, option => Assert.False(GetAssetBinding(parseResult, option).Resolve().WasProvided));
+        Assert.All(AssetOptions, option => Assert.False(GetAssetBinding(provider, parseResult, option).Resolve().WasProvided));
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             var parseResult = command.Parse($"agent init {option.Name} --non-interactive");
 
             Assert.Empty(parseResult.Errors);
-            var (wasProvided, value) = GetAssetBinding(parseResult, option).Resolve();
+            var (wasProvided, value) = GetAssetBinding(provider, parseResult, option).Resolve();
             Assert.True(wasProvided);
             Assert.True(value);
             Assert.True(parseResult.GetValue(RootCommand.NonInteractiveOption));
@@ -100,7 +100,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
             Assert.Empty(parseResult.Errors);
             Assert.Equal(expected, parseResult.GetValue(option));
-            Assert.True(GetAssetBinding(parseResult, AgentInitCommand.s_mcpOption).Resolve().Value);
+            Assert.True(GetAssetBinding(provider, parseResult, AgentInitCommand.s_mcpOption).Resolve().Value);
         }
     }
 
@@ -147,7 +147,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var detector = Assert.IsType<TestAgentEnvironmentDetector>(provider.GetRequiredService<IAgentEnvironmentDetector>());
+        var detector = Assert.IsType<TestAgentClientEnvironment>(provider.GetRequiredService<IAgentClientEnvironment>());
         var service = Assert.IsType<TestAgentInitService>(provider.GetRequiredService<IAgentInitService>());
         var parseResult = command.Parse($"agent init {arguments}");
 
@@ -155,7 +155,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.NotEqual(CliExitCodes.Success, exitCode);
-        Assert.Empty(detector.Requests);
+        Assert.Empty(detector.Calls);
         Assert.Empty(service.Requests);
     }
 
@@ -189,12 +189,12 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             PromptForSelectionsCallback = (prompt, choices, formatter, _) =>
             {
                 operations.Add(prompt);
-                var clients = choices.Cast<AgentClientDescriptor>().ToArray();
+                var clients = choices.Cast<AgentClient>().ToArray();
                 Assert.Equal(["copilot-cli", "copilot-app", "vscode", "claude-code", "opencode"], clients.Select(client => client.Id));
                 Assert.Equal(
                     ["GitHub Copilot CLI", "GitHub Copilot App", "VS Code", "Claude Code", "OpenCode"],
                     clients.Select(client => formatter(client)));
-                return [clients.Single(client => client.Kind is AgentClientKind.ClaudeCode)];
+                return [clients.Single(client => client.Id == "claude-code")];
             }
         };
         var service = new TestAgentInitService
@@ -208,7 +208,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interaction;
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector();
+            options.AgentEnvironmentFactory = _ => new TestAgentClientEnvironment();
             options.AgentInitServiceFactory = _ => service;
         });
         using var provider = services.BuildServiceProvider();
@@ -230,7 +230,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal([false, false, false, true], interaction.BooleanPromptCalls.Select(call => call.DefaultValue));
         var request = Assert.Single(service.Requests);
         Assert.Equal(new AgentAssetSelection(false, false, false, true), request.Assets);
-        Assert.Equal([AgentClientKind.ClaudeCode], request.Clients);
+        Assert.Equal(["claude-code"], request.Clients.Select(client => client.Id));
         Assert.Empty(request.Detections);
     }
 
@@ -242,14 +242,14 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         AgentClientDetection[] detections =
         [
-            new(AgentClientKind.ClaudeCode, "2.1.0", IsInsiders: false),
-            new(AgentClientKind.CopilotApp, Version: null, IsInsiders: false),
-            new(AgentClientKind.ClaudeCode, "2.1.0", IsInsiders: false)
+            new(TestAgentClients.Default.ClaudeCode, "2.1.0", IsInsiders: false),
+            new(TestAgentClients.Default.CopilotApp, Version: null, IsInsiders: false),
+            new(TestAgentClients.Default.ClaudeCode, "2.1.0", IsInsiders: false)
         ];
         var service = new TestAgentInitService();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector(detections);
+            options.AgentEnvironmentFactory = _ => new TestAgentClientEnvironment(detections);
             options.AgentInitServiceFactory = _ => service;
             if (interactive)
             {
@@ -262,24 +262,28 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         var request = Assert.Single(service.Requests);
-        Assert.Equal([AgentClientKind.CopilotApp, AgentClientKind.ClaudeCode], request.Clients);
-        Assert.Equal(detections, request.Detections);
+        Assert.Equal(["copilot-app", "claude-code"], request.Clients.Select(client => client.Id));
+        Assert.Equal(
+            detections.Distinct().Select(detection => (detection.Client.Id, detection.Version, detection.IsInsiders)),
+            request.Detections.Select(detection => (detection.Client.Id, detection.Version, detection.IsInsiders)));
+        Assert.All(request.Detections, detection =>
+            Assert.Same(provider.GetRequiredService<AgentClientCatalog>().Clients.Single(client => client.Id == detection.Client.Id), detection.Client));
         Assert.Equal(new AgentAssetSelection(false, false, false, true), request.Assets);
     }
 
     [Theory]
-    [InlineData("COPILOT-CLI", "CopilotCli")]
-    [InlineData("copilot-app", "CopilotApp")]
-    [InlineData("VsCoDe", "VsCode")]
-    [InlineData("CLAUDE-CODE", "ClaudeCode")]
-    [InlineData("OpenCode", "OpenCode")]
-    public async Task AgentInitCommand_ExplicitClient_CanSelectUndetectedClient(string clientId, string expectedKind)
+    [InlineData("COPILOT-CLI", "copilot-cli")]
+    [InlineData("copilot-app", "copilot-app")]
+    [InlineData("VsCoDe", "vscode")]
+    [InlineData("CLAUDE-CODE", "claude-code")]
+    [InlineData("OpenCode", "opencode")]
+    public async Task AgentInitCommand_ExplicitClient_CanSelectUndetectedClient(string clientId, string expectedId)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var service = new TestAgentInitService();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector();
+            options.AgentEnvironmentFactory = _ => new TestAgentClientEnvironment();
             options.AgentInitServiceFactory = _ => service;
         });
         using var provider = services.BuildServiceProvider();
@@ -289,7 +293,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         var request = Assert.Single(service.Requests);
-        Assert.Equal(Enum.Parse<AgentClientKind>(expectedKind), Assert.Single(request.Clients));
+        Assert.Equal(expectedId, Assert.Single(request.Clients).Id);
         Assert.Empty(request.Detections);
     }
 
@@ -299,13 +303,13 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         AgentClientDetection[] detections =
         [
-            new(AgentClientKind.CopilotCli, "1.0.0", false),
-            new(AgentClientKind.ClaudeCode, "2.1.0", false)
+            new(TestAgentClients.Default.CopilotCli, "1.0.0", false),
+            new(TestAgentClients.Default.ClaudeCode, "2.1.0", false)
         ];
         var service = new TestAgentInitService();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector(detections);
+            options.AgentEnvironmentFactory = _ => new TestAgentClientEnvironment(detections);
             options.AgentInitServiceFactory = _ => service;
         });
         using var provider = services.BuildServiceProvider();
@@ -315,8 +319,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         var request = Assert.Single(service.Requests);
-        Assert.Equal([AgentClientKind.OpenCode], request.Clients);
-        Assert.Equal(detections, request.Detections);
+        Assert.Equal(["opencode"], request.Clients.Select(client => client.Id));
+        Assert.Equal(
+            detections.Select(detection => (detection.Client.Id, detection.Version, detection.IsInsiders)),
+            request.Detections.Select(detection => (detection.Client.Id, detection.Version, detection.IsInsiders)));
     }
 
     [Theory]
@@ -335,8 +341,124 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         var request = Assert.Single(service.Requests);
         Assert.Equal(
-            [AgentClientKind.CopilotCli, AgentClientKind.CopilotApp, AgentClientKind.VsCode, AgentClientKind.ClaudeCode, AgentClientKind.OpenCode],
-            request.Clients);
+            ["copilot-cli", "copilot-app", "vscode", "claude-code", "opencode"],
+            request.Clients.Select(client => client.Id));
+        Assert.All(request.Clients, client =>
+            Assert.Same(provider.GetRequiredService<AgentClientCatalog>().Clients.Single(entry => entry.Id == client.Id), client));
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_ScansSharedEnvironmentsOnceAndCopiesDistinctEvidence()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cancellation = new CancellationTokenSource();
+        var workingDirectory = workspace.CreateDirectory("nested");
+        var originalEvidence = new List<AgentClientDetection>();
+        var copilot = new TestAgentClientEnvironment
+        {
+            ScanAsyncCallback = (clients, _, _, _) =>
+            {
+                var cli = clients.Single(client => client.Id == "copilot-cli");
+                var app = clients.Single(client => client.Id == "copilot-app");
+                originalEvidence.AddRange([new(cli, "1.0.0", false), new(app, null, false), new(cli, "1.0.0", false)]);
+                return Task.FromResult<IReadOnlyList<AgentClientDetection>>(originalEvidence);
+            }
+        };
+        var vsCode = new TestAgentClientEnvironment
+        {
+            ScanAsyncCallback = (clients, _, _, _) => Task.FromResult<IReadOnlyList<AgentClientDetection>>(
+                [new(clients[0], "1.100.0", false), new(clients[0], "1.101.0-insider", true)])
+        };
+        var catalog = new AgentClientCatalog(
+        [
+            new("copilot-cli", "GitHub Copilot CLI", copilot),
+            new("copilot-app", "GitHub Copilot App", copilot),
+            new("vscode", "VS Code", vsCode)
+        ]);
+        var service = new TestAgentInitService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.WorkingDirectory = workingDirectory;
+            options.AgentInitServiceFactory = _ => service;
+            options.GitRepositoryFactory = _ => new TestGitRepository
+            {
+                GetRootAsyncCallback = _ => Task.FromResult<DirectoryInfo?>(workspace.WorkspaceRoot)
+            };
+        });
+        services.AddSingleton(catalog);
+        using var provider = services.BuildServiceProvider();
+        var parseResult = provider.GetRequiredService<RootCommand>().Parse("agent init --clients all");
+
+        await provider.GetRequiredService<AgentInitCommand>().ExecuteCommandAsync(parseResult, cancellation.Token).DefaultTimeout();
+
+        var request = Assert.Single(service.Requests);
+        Assert.Equal(catalog.Clients, request.Clients);
+        Assert.Equal(
+            [("copilot-cli", "1.0.0", false), ("copilot-app", null, false), ("vscode", "1.100.0", false), ("vscode", "1.101.0-insider", true)],
+            request.Detections.Select(detection => (detection.Client.Id, detection.Version, detection.IsInsiders)));
+        Assert.All(request.Detections, detection =>
+            Assert.Same(catalog.Clients.Single(client => client.Id == detection.Client.Id), detection.Client));
+        foreach (var environment in new[] { copilot, vsCode })
+        {
+            var call = Assert.Single(environment.Calls);
+            Assert.Same(workingDirectory, call.WorkingDirectory);
+            Assert.Equal(workspace.WorkspaceRoot.FullName, call.WorkspaceRoot.FullName);
+            Assert.Equal(cancellation.Token, call.CancellationToken);
+            Assert.All(call.Clients, client => Assert.Same(environment, client.Environment));
+        }
+        originalEvidence.Clear();
+        Assert.Equal(4, request.Detections.Count);
+        var snapshot = Assert.IsAssignableFrom<IList<AgentClientDetection>>(request.Detections);
+        Assert.True(snapshot.IsReadOnly);
+        Assert.Throws<NotSupportedException>(snapshot.Clear);
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_CancellationDuringScan_DoesNotInvokeRemainingEnvironmentOrConfigure()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cancellation = new CancellationTokenSource();
+        var first = new TestAgentClientEnvironment
+        {
+            ScanAsyncCallback = (_, _, _, _) =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult<IReadOnlyList<AgentClientDetection>>([]);
+            }
+        };
+        var second = new TestAgentClientEnvironment();
+        var service = new TestAgentInitService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options => options.AgentInitServiceFactory = _ => service);
+        services.AddSingleton(new AgentClientCatalog([new("first", "First", first), new("second", "Second", second)]));
+        using var provider = services.BuildServiceProvider();
+        var parseResult = provider.GetRequiredService<RootCommand>().Parse("agent init --clients all");
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            provider.GetRequiredService<AgentInitCommand>().ExecuteCommandAsync(parseResult, cancellation.Token)).DefaultTimeout();
+
+        Assert.Single(first.Calls);
+        Assert.Empty(second.Calls);
+        Assert.Empty(service.Requests);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AgentInitCommand_CancelledBeforeScan_DoesNotProbeOrConfigure(bool registerEnvironment)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var environment = new TestAgentClientEnvironment();
+        var service = new TestAgentInitService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options => options.AgentInitServiceFactory = _ => service);
+        services.AddSingleton(new AgentClientCatalog(registerEnvironment ? [new("test", "Test", environment)] : []));
+        using var provider = services.BuildServiceProvider();
+        var parseResult = provider.GetRequiredService<RootCommand>().Parse("agent init --clients none");
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            provider.GetRequiredService<AgentInitCommand>().ExecuteCommandAsync(parseResult, new CancellationToken(canceled: true))).DefaultTimeout();
+
+        Assert.Empty(environment.Calls);
+        Assert.Empty(service.Requests);
     }
 
     [Fact]
@@ -347,7 +469,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var service = new TestAgentInitService();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector();
+            options.AgentEnvironmentFactory = _ => new TestAgentClientEnvironment();
             options.AgentInitServiceFactory = _ => service;
             options.ErrorTextWriter = error;
             options.DisableAnsi = true;
@@ -374,14 +496,14 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             options.AgentInitServiceFactory = _ => service;
         });
         using var provider = services.BuildServiceProvider();
-        var detector = Assert.IsType<TestAgentEnvironmentDetector>(provider.GetRequiredService<IAgentEnvironmentDetector>());
+        var detector = Assert.IsType<TestAgentClientEnvironment>(provider.GetRequiredService<IAgentClientEnvironment>());
         var parseResult = provider.GetRequiredService<RootCommand>().Parse($"agent init --mcp y --clients {clients}");
 
         Assert.NotEmpty(parseResult.Errors);
         var exitCode = await parseResult.InvokeAsync(new InvocationConfiguration { Output = TextWriter.Null, Error = TextWriter.Null }).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
-        Assert.Empty(detector.Requests);
+        Assert.Empty(detector.Calls);
         Assert.Empty(service.Requests);
         var expectedError = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InvalidClients,
             clients, "copilot-cli,copilot-app,vscode,claude-code,opencode", "all", "none");
@@ -400,7 +522,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         const string existingSkill = "User-managed Aspire skill";
         await File.WriteAllTextAsync(skillPath, existingSkill);
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
-        var detector = Assert.IsType<TestAgentEnvironmentDetector>(provider.GetRequiredService<IAgentEnvironmentDetector>());
+        var detector = Assert.IsType<TestAgentClientEnvironment>(provider.GetRequiredService<IAgentClientEnvironment>());
         var service = Assert.IsType<TestAgentInitService>(provider.GetRequiredService<IAgentInitService>());
 
         var exitCode = await provider.GetRequiredService<RootCommand>()
@@ -408,7 +530,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             .InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Empty(detector.Requests);
+        Assert.Empty(detector.Calls);
         Assert.Empty(service.Requests);
         Assert.Equal(existingMcp, await File.ReadAllTextAsync(mcpPath));
         Assert.Equal(existingSkill, await File.ReadAllTextAsync(skillPath));
@@ -448,7 +570,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             "explicit" => explicitDirectory,
             _ => workingDirectory
         };
-        var detector = new TestAgentEnvironmentDetector();
+        var detector = new TestAgentClientEnvironment();
         var service = new TestAgentInitService();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -457,7 +579,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             {
                 GetRootAsyncCallback = _ => Task.FromResult(rootSource == "working" ? null : workingDirectory.Parent)
             };
-            options.AgentEnvironmentDetectorFactory = _ => detector;
+            options.AgentEnvironmentFactory = _ => detector;
             options.AgentInitServiceFactory = _ => service;
         });
         using var provider = services.BuildServiceProvider();
@@ -468,8 +590,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(expectedRoot.FullName, Assert.Single(service.Requests).WorkspaceRoot.FullName);
-        var scan = Assert.Single(detector.Requests);
-        Assert.Equal(expectedRoot.FullName, scan.RepositoryRoot.FullName);
+        var scan = Assert.Single(detector.Calls);
+        Assert.Equal(expectedRoot.FullName, scan.WorkspaceRoot.FullName);
         Assert.Equal(workingDirectory.FullName, scan.WorkingDirectory.FullName);
     }
 
@@ -505,7 +627,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         {
             Result = new(
             [
-                new(AgentAssetKind.AspireSkills, [AgentClientKind.CopilotCli, AgentClientKind.CopilotApp],
+                new(AgentAssetKind.AspireSkills, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp],
                     "project-settings.json", AgentConfigurationScope.Project,
                     Enum.Parse<AgentConfigurationStatus>(status), "Native client owns acquisition.")
             ])
@@ -513,8 +635,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interaction;
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector(
-                new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.CopilotApp, null, false));
+            options.AgentEnvironmentFactory = _ => new TestAgentClientEnvironment(
+                new(TestAgentClients.Default.CopilotCli, null, false), new(TestAgentClients.Default.CopilotApp, null, false));
             options.AgentInitServiceFactory = _ => service;
         });
         using var provider = services.BuildServiceProvider();
@@ -572,9 +694,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         {
             Result = new(
             [
-                new(AgentAssetKind.AspireSkills, [AgentClientKind.CopilotCli],
+                new(AgentAssetKind.AspireSkills, [TestAgentClients.Default.CopilotCli],
                     "project-settings.json", AgentConfigurationScope.Project, AgentConfigurationStatus.Configured, null),
-                new(AgentAssetKind.TelemetryHooks, [AgentClientKind.CopilotCli],
+                new(AgentAssetKind.TelemetryHooks, [TestAgentClients.Default.CopilotCli],
                     "user-hooks.json", AgentConfigurationScope.User,
                     Enum.Parse<AgentConfigurationStatus>(status), "The hook could not be written.")
             ])
@@ -613,16 +735,16 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         {
             Result = new(
             [
-                new(AgentAssetKind.Playwright, [AgentClientKind.ClaudeCode],
+                new(AgentAssetKind.Playwright, [TestAgentClients.Default.ClaudeCode],
                     "playwright-cli", AgentConfigurationScope.Project, AgentConfigurationStatus.Configured, null),
-                new(AgentAssetKind.DotnetInspect, [AgentClientKind.ClaudeCode],
+                new(AgentAssetKind.DotnetInspect, [TestAgentClients.Default.ClaudeCode],
                     "dotnet-inspect", AgentConfigurationScope.User, AgentConfigurationStatus.Configured, null)
             ])
         };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interaction;
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector(new AgentClientDetection(AgentClientKind.ClaudeCode, null, false));
+            options.AgentEnvironmentFactory = _ => new TestAgentClientEnvironment(new AgentClientDetection(TestAgentClients.Default.ClaudeCode, null, false));
             options.AgentInitServiceFactory = _ => service;
         });
         using var provider = services.BuildServiceProvider();
@@ -699,16 +821,16 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options => options.InteractionServiceFactory = _ => interaction);
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<AgentInitCommand>();
-        var detector = Assert.IsType<TestAgentEnvironmentDetector>(provider.GetRequiredService<IAgentEnvironmentDetector>());
+        var detector = Assert.IsType<TestAgentClientEnvironment>(provider.GetRequiredService<IAgentClientEnvironment>());
         var service = Assert.IsType<TestAgentInitService>(provider.GetRequiredService<IAgentInitService>());
 
         var result = await command.PromptAndChainAsync(
             interaction, previousExitCode, workspace.WorkspaceRoot, PromptBinding.CreateDefault(acceptSetup),
-            AgentInitCommand.CreateBindings(command.Parse("init"), includeMcp: true), TestContext.Current.CancellationToken).DefaultTimeout();
+            command.CreateBindings(command.Parse("init"), includeMcp: true), TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.Equal(previousExitCode, result.ExitCode);
         Assert.Empty(result.RegisteredClients);
-        Assert.Empty(detector.Requests);
+        Assert.Empty(detector.Calls);
         Assert.Empty(service.Requests);
         Assert.Equal(previousExitCode == CliExitCodes.Success ? 1 : 0, interaction.BooleanPromptCalls.Count);
     }
@@ -726,13 +848,13 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         {
             Result = new(
             [
-                new(AgentAssetKind.AspireSkills, [AgentClientKind.CopilotCli],
+                new(AgentAssetKind.AspireSkills, [TestAgentClients.Default.CopilotCli],
                     "project-settings.json", AgentConfigurationScope.Project, AgentConfigurationStatus.Configured, null),
-                new(AgentAssetKind.AspireSkills, [AgentClientKind.CopilotCli, AgentClientKind.ClaudeCode],
+                new(AgentAssetKind.AspireSkills, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode],
                     "user-settings.json", AgentConfigurationScope.User, AgentConfigurationStatus.Unchanged, null),
-                new(AgentAssetKind.AspireSkills, [AgentClientKind.OpenCode],
+                new(AgentAssetKind.AspireSkills, [TestAgentClients.Default.OpenCode],
                     "opencode.json", AgentConfigurationScope.Project, AgentConfigurationStatus.Blocked, "Catalog unavailable."),
-                new(AgentAssetKind.Playwright, [AgentClientKind.VsCode],
+                new(AgentAssetKind.Playwright, [TestAgentClients.Default.VsCode],
                     "playwright-cli", AgentConfigurationScope.Project, AgentConfigurationStatus.Configured, null)
             ])
         };
@@ -747,10 +869,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         var result = await command.PromptAndChainAsync(
             interaction, CliExitCodes.Success, outputRoot, PromptBinding.CreateDefault(true),
-            AgentInitCommand.CreateBindings(parseResult, includeMcp: true), TestContext.Current.CancellationToken).DefaultTimeout();
+            command.CreateBindings(parseResult, includeMcp: true), TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, result.ExitCode);
-        Assert.Equal([AgentClientKind.CopilotCli, AgentClientKind.ClaudeCode], result.RegisteredClients);
+        Assert.Equal([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode], result.RegisteredClients);
         var request = Assert.Single(service.Requests);
         Assert.Equal(outputRoot.FullName, request.WorkspaceRoot.FullName);
         Assert.False(request.Assets.Mcp);
@@ -760,9 +882,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             interaction.BooleanPromptCalls.Select(call => call.PromptText));
     }
 
-    private static PromptBinding<bool> GetAssetBinding(ParseResult parseResult, Option option)
+    private static PromptBinding<bool> GetAssetBinding(IServiceProvider provider, ParseResult parseResult, Option option)
     {
-        var bindings = AgentInitCommand.CreateBindings(parseResult, includeMcp: true);
+        var bindings = provider.GetRequiredService<AgentInitCommand>().CreateBindings(parseResult, includeMcp: true);
 
         return option.Name switch
         {
