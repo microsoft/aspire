@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ko" original="../Columns.resx">
     <body>
+      <trans-unit id="HiddenResourceIconTooltip">
+        <source>This resource is hidden by default. It's only shown because "Show hidden resources" is turned on.</source>
+        <target state="new">This resource is hidden by default. It's only shown because "Show hidden resources" is turned on.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PersistentContainerIconTooltip">
         <source>This container is persistent and won't be stopped when the app host is shut down.</source>
         <target state="translated">이 컨테이너는 영구적이며 앱 호스트가 종료될 때 중지되지 않습니다.</target>
