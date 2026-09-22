@@ -1,0 +1,219 @@
+{
+  "run_id": 35761965051,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/35761965051",
+  "run_scope": "main",
+  "analyzed_at": "2026-09-22T19:22:16Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20294,
+    "title": "Improve Project V2 builds with unified restore",
+    "author": "karolz-ms",
+    "state": "closed",
+    "head_branch": "dev/karolz/project-v2-faster-restore",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20294",
+    "merged_at": "2026-09-22T17:37:52Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "f5313e89e246081b400aa4b867e06997b50824d5",
+    "failed_sha": "d6bd440a74f3445fcc7a26b1ea055d7967cd0b0e",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "42706295b8b4703524724a739094bea2b9c0bd8b",
+        "message": "Update dotnet/extensions dependencies to 10.10.0 and OpenAI to 2.13.0 (#20242) # Description Brings the OpenAI-related dependencies used by `src/Components/Aspire.OpenAI` up to date. | Package | Before | After | |---|---|---| | `Microsoft.Extensions.AI` | 10.9.0 | **10.10.0** | | `Microsoft.Extensions.AI.OpenAI` | 10.9.0 | **10.10.0** | | `Microsoft.Extensions.Http.Resilience` | 10.9.0 | **10.10.0** | | `Microsoft.Extensions.DependencyInjection.AutoActivation` | 10.9.0 | **10.10.0** | | `Microso",
+        "html_url": "https://github.com/microsoft/aspire/commit/42706295b8b4703524724a739094bea2b9c0bd8b",
+        "pull_request": {
+          "number": 20242,
+          "title": "Update dotnet/extensions dependencies to 10.10.0 and OpenAI to 2.13.0",
+          "url": "https://github.com/microsoft/aspire/pull/20242",
+          "merged_at": "2026-09-21T15:54:38Z"
+        }
+      },
+      {
+        "sha": "32e2ee88790499aea0bf3b0fb1c837b3ce58005a",
+        "message": "[auto-sec] Consolidate aspire dependency security remediations (75 alerts) (#20032) ## [auto-sec] aspire dependency security consolidation Canonical `automated-security` remediation PR for **microsoft/aspire**. Converges the repo's open Dependabot alerts into a single change set. **No application source changes** — only lockfiles plus minimal, same-major `overrides` / `resolutions`. ### Alerts addressed Clears **74 of 75 open Dependabot alerts** (all npm ecosystem): 2 critical, 28 high, 44 moder",
+        "html_url": "https://github.com/microsoft/aspire/commit/32e2ee88790499aea0bf3b0fb1c837b3ce58005a",
+        "pull_request": {
+          "number": 20032,
+          "title": "[auto-sec] Consolidate aspire dependency security remediations (75 alerts)",
+          "url": "https://github.com/microsoft/aspire/pull/20032",
+          "merged_at": "2026-09-21T16:20:42Z"
+        }
+      },
+      {
+        "sha": "2e90e5e9f0a6ad2aac07a70849b50efac4f753ad",
+        "message": "Isolate WinUI E2E design-time build outputs (#20116) Keep Roslyn XAML inputs, generated code, and saved state separate from Aspire's real build while preserving NuGet restore assets and normal outputs. Require the E2E definition probe to resolve the isolated generated source. Related to #19935. Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>",
+        "html_url": "https://github.com/microsoft/aspire/commit/2e90e5e9f0a6ad2aac07a70849b50efac4f753ad",
+        "pull_request": {
+          "number": 20116,
+          "title": "Isolate WinUI E2E design-time build outputs",
+          "url": "https://github.com/microsoft/aspire/pull/20116",
+          "merged_at": "2026-09-21T17:23:08Z"
+        }
+      },
+      {
+        "sha": "31c97a72be40c69ad7aab7c5258c2a11d6eda1fa",
+        "message": "Collect VS Code E2E diagnostics from explicit inputs (#20127) ## Description Related to the diagnostics-copy failure in #19935. This is independent of the WinUI build-race fix in #20116. E2E tests could pass but still fail CI when diagnostics collection tried to copy live Dashboard or cache lock files. A failed copy also prevented other useful logs from being collected. This change: - Collects intended logs, settings, AppHost metadata, screenshots, and fixture sources instead of runtime caches a",
+        "html_url": "https://github.com/microsoft/aspire/commit/31c97a72be40c69ad7aab7c5258c2a11d6eda1fa",
+        "pull_request": {
+          "number": 20127,
+          "title": "Collect VS Code E2E diagnostics from explicit inputs",
+          "url": "https://github.com/microsoft/aspire/pull/20127",
+          "merged_at": "2026-09-21T17:38:20Z"
+        }
+      },
+      {
+        "sha": "32db91d3d5f8cffee2d7cc1ed0485e9ff699ce06",
+        "message": "Fix duplicate resource stopped events during restart (#20279) ## Description Prevent duplicate `OnResourceStopped` callbacks when a handler initiates a restart. Restart preparation can change the published resource snapshot to `Waiting` or `Starting` while DCP still reports the same terminal state. Comparing against that snapshot incorrectly treats a later notification as another stop. Carry `PreviousState` on `OnResourceChangedContext`, using the DCP watcher's existing resource cache. `Applicat",
+        "html_url": "https://github.com/microsoft/aspire/commit/32db91d3d5f8cffee2d7cc1ed0485e9ff699ce06",
+        "pull_request": {
+          "number": 20279,
+          "title": "Fix duplicate resource stopped events during restart",
+          "url": "https://github.com/microsoft/aspire/pull/20279",
+          "merged_at": "2026-09-21T17:52:10Z"
+        }
+      },
+      {
+        "sha": "49df7b816f2b8360bdab756cabcd6c12655b72db",
+        "message": "fix(team-app): Watch Aspire 1P’s Proxima repository (#20192) ## Description The retired GitHub.com EMU repository default has been removed. First-party Aspire access now uses the `msft.ghe.com` Proxima account, which defaults to `coreai/aspire-1p`. GitHub.com accounts retain the standard public Aspire repository defaults, and explicit repository preferences remain unchanged. The informational GitOps proof-of-presence rule applies to the Proxima repository. Validation: ```text node --test .github",
+        "html_url": "https://github.com/microsoft/aspire/commit/49df7b816f2b8360bdab756cabcd6c12655b72db",
+        "pull_request": {
+          "number": 20192,
+          "title": "fix(team-app): Watch Aspire 1P’s Proxima repository",
+          "url": "https://github.com/microsoft/aspire/pull/20192",
+          "merged_at": "2026-09-21T20:13:06Z"
+        }
+      },
+      {
+        "sha": "a5b0e96dcc1837fc449c2129df00019a1e05ef3d",
+        "message": "Avoid racing dashboard lock initialization (#20223)",
+        "html_url": "https://github.com/microsoft/aspire/commit/a5b0e96dcc1837fc449c2129df00019a1e05ef3d",
+        "pull_request": {
+          "number": 20223,
+          "title": "Avoid racing dashboard lock initialization",
+          "url": "https://github.com/microsoft/aspire/pull/20223",
+          "merged_at": "2026-09-21T23:36:21Z"
+        }
+      },
+      {
+        "sha": "dd45714d2db3088f06159b352b8d412c9df40d6d",
+        "message": "Support executable references to container-network endpoints (#20214) ## Description Projects and executables can reference endpoints as seen from Aspire's default container network, but those references previously had no allocation producer. A self-reference or reference to another executable could therefore wait indefinitely while resolving resource configuration. This change detects explicit `DefaultAspireContainerNetwork` endpoint references after executable arguments and environment variabl",
+        "html_url": "https://github.com/microsoft/aspire/commit/dd45714d2db3088f06159b352b8d412c9df40d6d",
+        "pull_request": {
+          "number": 20214,
+          "title": "Support executable references to container-network endpoints",
+          "url": "https://github.com/microsoft/aspire/pull/20214",
+          "merged_at": "2026-09-21T23:48:47Z"
+        }
+      },
+      {
+        "sha": "c1561f9637dac669f0cef234067c65a3a04d1de7",
+        "message": "Fix /deployment-test authorization for repository writers (#20296) ## Description Repository writers can be incorrectly denied `/deployment-test` because the default repository-scoped `GITHUB_TOKEN` cannot reliably read private Microsoft organization memberships. The membership lookup returns 404 and the workflow reports that the commenter is not an organization member. Authorize the commenter using `repos.getCollaboratorPermissionLevel`, following the existing `/backport` pattern. Allow `write`",
+        "html_url": "https://github.com/microsoft/aspire/commit/c1561f9637dac669f0cef234067c65a3a04d1de7",
+        "pull_request": {
+          "number": 20296,
+          "title": "Fix /deployment-test authorization for repository writers",
+          "url": "https://github.com/microsoft/aspire/pull/20296",
+          "merged_at": "2026-09-22T01:42:54Z"
+        }
+      },
+      {
+        "sha": "45651ce2d1e650c6050283bc22308b1524b891fa",
+        "message": "Increase dashboard console log, structured log, and trace limits (#20169)",
+        "html_url": "https://github.com/microsoft/aspire/commit/45651ce2d1e650c6050283bc22308b1524b891fa",
+        "pull_request": {
+          "number": 20169,
+          "title": "Increase dashboard console log, structured log, and trace limits",
+          "url": "https://github.com/microsoft/aspire/pull/20169",
+          "merged_at": "2026-09-22T02:57:36Z"
+        }
+      },
+      {
+        "sha": "aa54810007e25788344a94fd99820f884451b78c",
+        "message": "Fix Windows dynamic debug E2E teardown race (#20289) ## Description The VS Code extension's `dynamic-debug-configuration` E2E shard could pass its test body and then fail its `afterEach` hook on Windows with `EBUSY` while deleting the fixture directory. AppHost discovery processes can outlive repository disposal and retain handles under the active workspace, so synchronously deleting those fixtures inside the running VS Code session was unsafe. This change: - Creates a unique dynamic-debug fixtu",
+        "html_url": "https://github.com/microsoft/aspire/commit/aa54810007e25788344a94fd99820f884451b78c",
+        "pull_request": {
+          "number": 20289,
+          "title": "Fix Windows dynamic debug E2E teardown race",
+          "url": "https://github.com/microsoft/aspire/pull/20289",
+          "merged_at": "2026-09-22T03:38:05Z"
+        }
+      },
+      {
+        "sha": "8223af3388354b3bb91768199df8ef7021942ea9",
+        "message": "[main] Update dependencies from microsoft/dcp (#20300)",
+        "html_url": "https://github.com/microsoft/aspire/commit/8223af3388354b3bb91768199df8ef7021942ea9",
+        "pull_request": {
+          "number": 20300,
+          "title": "[main] Update dependencies from microsoft/dcp",
+          "url": "https://github.com/microsoft/aspire/pull/20300",
+          "merged_at": "2026-09-22T05:50:31Z"
+        }
+      },
+      {
+        "sha": "acd827322437be2b79b84b4542cf5bb3b8a34d99",
+        "message": "Complete Azure provisioning SDK integration coverage (#20131) ## Description Add **12 opt-in Azure Provisioning SDK integrations** for polyglot AppHosts, extending the bounded, experimental proxy model introduced by #19675. That parent has merged; this PR targets `main`. ### Changes - Add proxies for AppConfiguration, AppContainers, AppService, Cdn, ContainerService, Kusto, Network, PrivateDns, PostgreSql, Redis, RedisEnterprise, and SignalR, with project/packaging registration and package docum",
+        "html_url": "https://github.com/microsoft/aspire/commit/acd827322437be2b79b84b4542cf5bb3b8a34d99",
+        "pull_request": {
+          "number": 20131,
+          "title": "Complete Azure provisioning SDK integration coverage",
+          "url": "https://github.com/microsoft/aspire/pull/20131",
+          "merged_at": "2026-09-22T16:45:43Z"
+        }
+      },
+      {
+        "sha": "b5a7d79165f23287cc4423a49aca143ce74b0527",
+        "message": "Clarify beta version deployment strategy in comments (#20303) Updated comment to clarify versioning strategy.",
+        "html_url": "https://github.com/microsoft/aspire/commit/b5a7d79165f23287cc4423a49aca143ce74b0527",
+        "pull_request": {
+          "number": 20303,
+          "title": "Clarify beta version deployment strategy in comments",
+          "url": "https://github.com/microsoft/aspire/pull/20303",
+          "merged_at": "2026-09-22T17:02:53Z"
+        }
+      },
+      {
+        "sha": "d6bd440a74f3445fcc7a26b1ea055d7967cd0b0e",
+        "message": "Improve Project V2 builds with unified restore (#20294) ## Description Project V2's coordinated builds currently restore each root project separately, repeating restore work for overlapping dependency graphs. Restore compatible project groups in one NuGet graph before the existing parallel build, following [Chet Husk's suggestion](https://github.com/microsoft/aspire/issues/19944#issuecomment-5546146177). The generated SDK-less traversal supplies `RestoreGraphProjectInput` to the selected SDK's N",
+        "html_url": "https://github.com/microsoft/aspire/commit/d6bd440a74f3445fcc7a26b1ea055d7967cd0b0e",
+        "pull_request": {
+          "number": 20294,
+          "title": "Improve Project V2 builds with unified restore",
+          "url": "https://github.com/microsoft/aspire/pull/20294",
+          "merged_at": "2026-09-22T17:37:52Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Azure.AI.OpenAI.Tests, Azure.AI.OpenAI, Azure.AI.OpenAI, tests/... / Azure.AI.OpenAI (windows-latest)",
+      "id": 106878188853,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/35761965051/job/106878188853",
+      "classification": "main-repository-breakage",
+      "reason": "Deterministic assertion failure: ConformanceTests.LoggerFactoryIsUsedByRegisteredClient(registerAfterLoggerFactory: True, useKey: True) expects an 'Azure.Identity' logger category but it is absent on the net8.0 target, while net9.0/net10.0 pass. Not a known infra pattern; test itself was not modified in this range.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Azure.AI.OpenAI.Tests.ConformanceTests.LoggerFactoryIsUsedByRegisteredClient(registerAfterLoggerFactory: True, useKey: True)",
+      "job": "Tests / No-package tests (regular, Aspire.Azure.AI.OpenAI.Tests, Azure.AI.OpenAI, Azure.AI.OpenAI, tests/... / Azure.AI.OpenAI (windows-latest)",
+      "error": "Assert.Contains() Failure: Item not found in collection\nCollection: [\"Microsoft.Extensions.AI.OpenTelemetryChatClient\", \"Microsoft.Hosting.Lifetime\", \"Microsoft.Extensions.Hosting.Internal.Host\", \"Microsoft.Extensions.Hosting.Internal.ApplicationL\"···]\nNot found:  \"Azure.Identity\"",
+      "stack_trace": "at Aspire.Components.ConformanceTests.ConformanceTests`2.LoggerFactoryIsUsedByRegisteredClient(Boolean registerAfterLoggerFactory, Boolean useKey) in /_/tests/Aspire.Components.Common.TestUtilities/ConformanceTests.cs:line 373\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\n   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)",
+      "standard_output": "=== Logged Categories ===\n  - Microsoft.Extensions.AI.OpenTelemetryChatClient\n  - Microsoft.Extensions.Hosting.Internal.ApplicationLifetime\n  - Microsoft.Extensions.Hosting.Internal.Host\n  - Microsoft.Hosting.Lifetime\n\n=== Required Categories ===\n  ✗ Azure.Identity",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Deterministic assertion failure only on net8.0 target within a fully-attributable main candidate range; most plausible cause is the dependency bump in #20242 (Microsoft.Extensions.AI/OpenAI 10.10.0) changing which categories are logged by the registered AI client, though not confirmed to a single PR with certainty."
+    }
+  ],
+  "causes": [
+    "azure-openai-conformance-loggerfactory-azureidentity-missing"
+  ]
+}

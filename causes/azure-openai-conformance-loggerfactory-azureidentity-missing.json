@@ -1,0 +1,15 @@
+{
+  "id": "azure-openai-conformance-loggerfactory-azureidentity-missing",
+  "type": "main-repository-breakage",
+  "title": "Aspire.Azure.AI.OpenAI ConformanceTests.LoggerFactoryIsUsedByRegisteredClient no longer logs Azure.Identity category",
+  "error_pattern": "Assert.Contains() Failure: Item not found in collection\nCollection: [\"Microsoft.Extensions.AI.OpenTelemetryChatClient\", \"Microsoft.Hosting.Lifetime\", \"Microsoft.Extensions.Hosting.Internal.Host\", \"Microsoft.Extensions.Hosting.Internal.ApplicationL\"...]\nNot found: \"Azure.Identity\"\n   at Aspire.Components.ConformanceTests.ConformanceTests`2.LoggerFactoryIsUsedByRegisteredClient in ConformanceTests.cs:373",
+  "occurrences": [
+    {
+      "run_id": 35761965051,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35761965051",
+      "job": "Tests / No-package tests (regular, Aspire.Azure.AI.OpenAI.Tests, Azure.AI.OpenAI, Azure.AI.OpenAI, tests/... / Azure.AI.OpenAI (windows-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-09-22T19:22:16Z"
+    }
+  ]
+}
