@@ -18,7 +18,7 @@ This directory contains code vendored from the ASP.NET Core repository's shared 
 - Replaced `new X509Certificate2(...)` with `X509CertificateLoader.LoadPkcs12FromFile(...)` (fixes SYSLIB0057)
 - Adapted .NET 11 `Process.Run` and `StandardOutputHandle` usage to `CertificateProcessRunner`, which concurrently drains redirected output on .NET 10
 - Retained support for both the HRESULT and raw Win32 error-code forms of Windows trust cancellation
-- Added `ASPIRE_CLI_DEV_CERTS_NSSDB_PATHS` as an Aspire-first alias for `DOTNET_DEV_CERTS_NSSDB_PATHS`
+- Added Aspire CLI configuration for NSS database overrides. `certificates.nssDbPaths` takes precedence over the `ASPIRE_CLI_DEV_CERTS_NSSDB_PATHS` compatibility alias, which takes precedence over the upstream `DOTNET_DEV_CERTS_NSSDB_PATHS` environment variable.
 
 ## Updating
 

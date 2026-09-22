@@ -31,6 +31,7 @@ namespace Aspire.Cli.Configuration;
 ///     "llmsTxtUrl": "https://aspire.dev/llms-full.txt",
 ///     "api": { "sitemapUrl": "https://aspire.dev/sitemap-0.xml" }
 ///   },
+///   "certificates": { "nssDbPaths": "firefox=/path/to/profile" },
 ///   "features": { "polyglotSupportEnabled": true },
 ///   "profiles": {
 ///     "default": {
@@ -107,6 +108,13 @@ internal sealed class AspireConfigFile
     [JsonPropertyName("docs")]
     [Description("Documentation source overrides for aspire docs and aspire docs api. Leave these unset to use the built-in aspire.dev sources.")]
     public AspireConfigDocs? Docs { get; set; }
+
+    /// <summary>
+    /// Developer certificate configuration.
+    /// </summary>
+    [JsonPropertyName("certificates")]
+    [Description("Developer certificate configuration.")]
+    public AspireConfigCertificates? Certificates { get; set; }
 
     /// <summary>
     /// Launch profiles (ports, env vars). Replaces apphost.run.json.
@@ -475,6 +483,19 @@ internal sealed class AspireConfigDocs
     [JsonPropertyName("api")]
     [Description("Optional API reference source overrides consumed by aspire docs api. Leave these unset to use the built-in aspire.dev API sources.")]
     public AspireConfigApiDocs? Api { get; set; }
+}
+
+/// <summary>
+/// Developer certificate configuration within aspire.config.json.
+/// </summary>
+internal sealed class AspireConfigCertificates
+{
+    /// <summary>
+    /// Optional NSS database path overrides used for browser certificate trust on Unix.
+    /// </summary>
+    [JsonPropertyName("nssDbPaths")]
+    [Description("NSS database paths used for browser certificate trust on Unix. Separate paths with the platform path separator and optionally prefix each path with \"firefox=\" or \"chromium=\".")]
+    public string? NssDbPaths { get; set; }
 }
 
 /// <summary>

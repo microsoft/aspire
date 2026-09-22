@@ -121,6 +121,16 @@ aspire docs api search "RunAsEmulator" --language csharp
 aspire docs search "redis"
 ```
 
+## Browser certificate trust configuration
+
+On Unix, the NSS databases used to trust the Aspire development certificate can be configured locally or in the user-level Aspire configuration:
+
+```bash
+aspire config set --global certificates.nssDbPaths "firefox=/path/to/firefox/profile:chromium=/path/to/chromium/nssdb"
+```
+
+The `certificates.nssDbPaths` setting takes precedence over the `ASPIRE_CLI_DEV_CERTS_NSSDB_PATHS` environment variable. When neither Aspire-specific override has a value, the CLI preserves the upstream `DOTNET_DEV_CERTS_NSSDB_PATHS` behavior.
+
 ## Additional documentation
 
 * [CLI output formats](../../docs/specs/cli-output-formats.md)

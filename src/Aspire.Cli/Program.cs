@@ -463,7 +463,18 @@ public class Program
         builder.Services.AddTransient<OrphanedAppHostCollector>();
 
         // Register certificate tool runner - uses native CertificateManager directly (no subprocess needed)
-        builder.Services.AddSingleton(sp => CertificateManager.Create(sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>(), sp.GetRequiredService<IEnvironment>()));
+        builder.Services.AddSingleton(sp =>
+        {
+            var environment = sp.GetRequiredService<IEnvironment>();
+            var nssDbOverride = CertificateConfiguration.ResolveNssDbOverride(
+                sp.GetRequiredService<IConfiguration>(),
+                environment);
+
+            return CertificateManager.Create(
+                sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>(),
+                environment,
+                nssDbOverride);
+        });
         builder.Services.AddSingleton<ICertificateToolRunner, NativeCertificateToolRunner>();
 
         builder.Services.AddTransient<IDotNetCliRunner, DotNetCliRunner>();

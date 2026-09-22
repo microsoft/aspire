@@ -10,7 +10,6 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using Aspire.Cli;
 using Aspire.Cli.Certificates;
-using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
@@ -44,15 +43,21 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
     private HashSet<string>? _availableCommands;
     private readonly IEnvironment _environment;
+    private readonly CertificateConfiguration.NssDbOverride? _nssDbOverride;
     private readonly Action<ProcessStartInfo> _configureCertUtilStartInfo = static _ => { };
 
-    public UnixCertificateManager(ILogger logger, IEnvironment environment) : base(logger)
+    public UnixCertificateManager(ILogger logger, IEnvironment environment, CertificateConfiguration.NssDbOverride? nssDbOverride) : base(logger)
     {
         _environment = environment;
+        _nssDbOverride = nssDbOverride;
     }
 
-    internal UnixCertificateManager(ILogger logger, IEnvironment environment, Action<ProcessStartInfo> configureCertUtilStartInfo)
-        : this(logger, environment)
+    internal UnixCertificateManager(
+        ILogger logger,
+        IEnvironment environment,
+        CertificateConfiguration.NssDbOverride? nssDbOverride,
+        Action<ProcessStartInfo> configureCertUtilStartInfo)
+        : this(logger, environment, nssDbOverride)
     {
         _configureCertUtilStartInfo = configureCertUtilStartInfo;
     }
@@ -61,6 +66,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         : base(subject, version)
     {
         _environment = new Aspire.Cli.HostEnvironment();
+        _nssDbOverride = null;
     }
 
     public override TrustLevel GetTrustLevel(X509Certificate2 certificate)
@@ -780,19 +786,19 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
     internal List<NssDb> GetNssDbs(string homeDirectory)
     {
-        var nssDbOverrideVariableName = KnownConfigNames.CliDevCertsNssDbPaths;
-        var nssDbOverride = _environment.GetEnvironmentVariable(nssDbOverrideVariableName);
+        var nssDbOverrideSource = _nssDbOverride?.Source ?? NssDbOverrideVariableName;
+        var nssDbOverride = _nssDbOverride?.Value;
         if (string.IsNullOrEmpty(nssDbOverride))
         {
-            nssDbOverrideVariableName = NssDbOverrideVariableName;
-            nssDbOverride = _environment.GetEnvironmentVariable(nssDbOverrideVariableName);
+            nssDbOverrideSource = NssDbOverrideVariableName;
+            nssDbOverride = _environment.GetEnvironmentVariable(NssDbOverrideVariableName);
         }
 
         return NssDb.Resolve(
             homeDirectory,
             _environment.GetEnvironmentVariable(XdgConfigHomeVariableName),
             nssDbOverride,
-            nssDbOverrideVariableName,
+            nssDbOverrideSource,
             this);
     }
 
