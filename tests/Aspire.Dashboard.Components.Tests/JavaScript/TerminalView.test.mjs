@@ -46,12 +46,19 @@ beforeEach(() => {
     serial = 0;
     themeObservers = [];
     mediaQueries = new Map();
-    setGlobal("window", { isSecureContext: true, matchMedia(query) {
+    const storage = new Map();
+    setGlobal("localStorage", {
+        getItem: key => storage.get(key) ?? null,
+        setItem: (key, value) => storage.set(key, value),
+        removeItem: key => storage.delete(key),
+        clear: () => storage.clear(),
+    });
+    setGlobal("window", Object.assign(new EventTarget(), { isSecureContext: true, matchMedia(query) {
         if (!mediaQueries.has(query)) {
             mediaQueries.set(query, Object.assign(new EventTarget(), { matches: false }));
         }
         return mediaQueries.get(query);
-    } });
+    } }));
     setGlobal("navigator", { gpu: {} });
     setGlobal("document", {
         activeElement: null,
@@ -416,6 +423,99 @@ test("chromatic ANSI text meets contrast targets on both Aspire backgrounds", ()
                 `ANSI ${index} on ${palette.background} has contrast ${contrast}`);
         }
     }
+});
+
+for (const [preference, pageTheme] of [["dark", "light"], ["light", "dark"]]) {
+    test(`saved ${preference} palette overrides ${pageTheme} Dashboard on mount and theme changes`, async () => {
+        terminal.setTerminalPalette(preference);
+        assert.equal(localStorage.getItem("Aspire.TerminalPalette"), JSON.stringify(preference));
+        assert.equal(terminal.getTerminalPalette(), preference);
+        document.documentElement.dataset.theme = pageTheme;
+        mount();
+        const attempt = attempts[0];
+        assert.equal(attempt.options.colorMode, preference);
+        attempt.resolve();
+        await settle();
+        for (const theme of ["light", "dark"]) {
+            document.documentElement.dataset.theme = theme;
+            themeObservers[0].callback();
+            assert.equal(attempt.client.colorMode, preference);
+        }
+    });
+}
+
+test("palette override updates every view including pending and hidden mounts without disrupting input", async () => {
+    const first = mount();
+    const pending = mount();
+    const hidden = mount({ visible: false });
+    attempts[0].resolve();
+    await settle();
+    const client = attempts[0].client;
+    const focus = client.focusCalls;
+    const selection = client.selection;
+    terminal.setTerminalPalette("light");
+    attempts[1].resolve();
+    await settle();
+    assert.equal(client.colorMode, "light");
+    assert.equal(attempts[1].client.colorMode, "light");
+    assert.equal(hidden.view.style["--terminal-background"], attempts[0].options.lightModePalette.background);
+    assert.equal(client.focusCalls, focus);
+    assert.equal(client.selection, selection);
+    assert.equal(client.selectionClears, 0);
+    assert.deepEqual(client.sizingCalls, []);
+    assert.equal(attempts.length, 2);
+    terminal.setTerminalPalette("dashboard");
+    assert.equal(client.colorMode, "dark");
+    terminal.reconnectTerminal(first.id, "wss://dashboard/api/terminal?resource=app&replica=1");
+    assert.equal(attempts[2].options.colorMode, "dark");
+    assert.equal(document.documentElement.dataset.theme, "dark");
+});
+
+test("cross-window storage changes and cleared preferences update palettes and stop after disposal", async () => {
+    const { id } = mount();
+    attempts[0].resolve();
+    await settle();
+    const client = attempts[0].client;
+    const changed = (key, storageArea = localStorage) => {
+        const event = new Event("storage");
+        Object.assign(event, { key, storageArea });
+        window.dispatchEvent(event);
+    };
+    localStorage.setItem("Aspire.TerminalPalette", '"light"');
+    changed("another-setting");
+    changed("Aspire.TerminalPalette", {});
+    assert.equal(client.colorMode, "dark");
+    changed("Aspire.TerminalPalette");
+    assert.equal(client.colorMode, "light");
+    localStorage.clear();
+    changed(null);
+    assert.equal(client.colorMode, "dark");
+    terminal.disposeTerminal(id);
+    const calls = [...client.colorModeCalls];
+    localStorage.setItem("Aspire.TerminalPalette", '"light"');
+    changed("Aspire.TerminalPalette");
+    terminal.setTerminalPalette("dark");
+    assert.deepEqual(client.colorModeCalls, calls);
+});
+
+test("unavailable or corrupt palette storage logs a warning and follows Dashboard", () => {
+    for (const value of ["invalid-json", '"unknown"', "null", "1"]) {
+        localStorage.setItem("Aspire.TerminalPalette", value);
+        assert.equal(terminal.getTerminalPalette(), "dashboard");
+    }
+    mock.method(localStorage, "getItem", () => { throw new Error("Storage disabled"); });
+    assert.equal(terminal.getTerminalPalette(), "dashboard");
+    assert.equal(console.warn.mock.calls.length, 5);
+});
+
+test("failed or invalid palette writes do not change the mounted palette", async () => {
+    mount();
+    attempts[0].resolve();
+    await settle();
+    assert.throws(() => terminal.setTerminalPalette("invalid"), TypeError);
+    mock.method(localStorage, "setItem", () => { throw new Error("Storage disabled"); });
+    assert.throws(() => terminal.setTerminalPalette("light"), /Storage disabled/);
+    assert.equal(attempts[0].client.colorMode, "dark");
 });
 
 test("theme and contrast changes update palettes and replace the complete overlay without reconnecting", async () => {

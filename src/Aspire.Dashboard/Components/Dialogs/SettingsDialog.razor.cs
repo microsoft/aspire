@@ -6,15 +6,21 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
-public partial class SettingsDialog : IDisposable
+public partial class SettingsDialog : IAsyncDisposable
 {
     private string? _currentSetting;
     private List<CultureInfo> _languageOptions = null!;
     private CultureInfo? _selectedUiCulture;
     private TimeFormat _timeFormat;
+    private string? _terminalPalette = "dashboard";
+    private string _savedTerminalPalette = "dashboard";
+    private IJSObjectReference? _terminalModule;
+    private bool _terminalPaletteSaveFailed;
+    private bool _disposed;
 
     private IDisposable? _themeChangedSubscription;
 
@@ -35,6 +41,56 @@ public partial class SettingsDialog : IDisposable
 
     [Inject]
     public required ILocalStorage LocalStorage { get; init; }
+
+    [Inject]
+    public required IJSRuntime JS { get; init; }
+
+    [Inject]
+    public required ILogger<SettingsDialog> Logger { get; init; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var moduleUri = new Uri(new Uri(NavigationManager.BaseUri), "Components/Controls/TerminalView.razor.js");
+            var module = await JS.InvokeAsync<IJSObjectReference>("import", moduleUri.PathAndQuery);
+            var preference = await module.InvokeAsync<string>("getTerminalPalette");
+            if (_disposed)
+            {
+                await JSInteropHelpers.SafeDisposeAsync(module);
+                return;
+            }
+            _terminalModule = module;
+            _savedTerminalPalette = preference;
+            _terminalPalette = _savedTerminalPalette;
+            if (!_disposed)
+            {
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task TerminalPaletteChangedAsync()
+    {
+        // Fluent can transiently clear the binding while switching radio options.
+        if (_terminalPalette is null || _terminalModule is null)
+        {
+            return;
+        }
+        var preference = _terminalPalette;
+        try
+        {
+            await _terminalModule.InvokeVoidAsync("setTerminalPalette", preference);
+            _savedTerminalPalette = preference;
+            _terminalPaletteSaveFailed = false;
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "Could not save terminal palette preference.");
+            _terminalPalette = _savedTerminalPalette;
+            _terminalPaletteSaveFailed = true;
+        }
+    }
 
     protected override void OnInitialized()
     {
@@ -121,8 +177,10 @@ public partial class SettingsDialog : IDisposable
         _ => format.ToString()
     };
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
+        _disposed = true;
         _themeChangedSubscription?.Dispose();
+        await JSInteropHelpers.SafeDisposeAsync(_terminalModule);
     }
 }

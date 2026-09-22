@@ -1216,6 +1216,33 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogTheme", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Terminal palette.
+        /// </summary>
+        public static string SettingsDialogTerminalPalette {
+            get {
+                return ResourceManager.GetString("SettingsDialogTerminalPalette", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Follow Dashboard.
+        /// </summary>
+        public static string SettingsDialogTerminalPaletteFollow {
+            get {
+                return ResourceManager.GetString("SettingsDialogTerminalPaletteFollow", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Unable to save the terminal palette. Check that browser storage is available and try again.
+        /// </summary>
+        public static string SettingsDialogTerminalPaletteSaveFailed {
+            get {
+                return ResourceManager.GetString("SettingsDialogTerminalPaletteSaveFailed", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Time format.

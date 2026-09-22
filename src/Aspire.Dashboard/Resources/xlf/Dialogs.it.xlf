@@ -688,6 +688,21 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Vai alla documentazione sull'utilizzo della telemetria</target>
         <note />
       </trans-unit>
+      <trans-unit id="SettingsDialogTerminalPalette">
+        <source>Terminal palette</source>
+        <target state="new">Terminal palette</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogTerminalPaletteFollow">
+        <source>Follow Dashboard</source>
+        <target state="new">Follow Dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogTerminalPaletteSaveFailed">
+        <source>Unable to save the terminal palette. Check that browser storage is available and try again.</source>
+        <target state="new">Unable to save the terminal palette. Check that browser storage is available and try again.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SettingsDialogTheme">
         <source>Theme</source>
         <target state="translated">Tema</target>

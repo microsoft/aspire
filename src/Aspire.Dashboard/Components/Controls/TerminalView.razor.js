@@ -7,6 +7,7 @@ const terminals = new Map();
 const rememberedFontSizes = new Map();
 let nextId = 1;
 const DEFAULT_FONT_SIZE = 13;
+const TERMINAL_PALETTE_STORAGE_KEY = "Aspire.TerminalPalette";
 // Retain Hex1b's neutral slots and selection colors. Chromatic slots increase OKLCH chroma
 // by up to 25% (dark) / 10% (light), reducing chroma at the sRGB boundary rather than clipping.
 // Lightness is adjusted where necessary for >=5:1 normal / >=6:1 bright text on these backgrounds.
@@ -101,12 +102,44 @@ function scrollbarConfiguration(state) {
     }
 }
 
+export function getTerminalPalette() {
+    try {
+        const stored = localStorage.getItem(TERMINAL_PALETTE_STORAGE_KEY);
+        if (stored === null) {
+            return "dashboard";
+        }
+        // This non-sensitive browser preference is stored as JSON, e.g. "dark".
+        const value = JSON.parse(stored);
+        if (value === "dashboard" || value === "dark" || value === "light") {
+            return value;
+        }
+        console.warn("Invalid Dashboard terminal palette preference; following Dashboard theme.");
+    } catch (error) {
+        console.warn("Could not read Dashboard terminal palette preference; following Dashboard theme.", error);
+    }
+    return "dashboard";
+}
+
+export function setTerminalPalette(value) {
+    if (value !== "dashboard" && value !== "dark" && value !== "light") {
+        throw new TypeError("Invalid terminal palette preference.");
+    }
+    // Persist before applying so a failed write can be reported by Settings without a false success.
+    localStorage.setItem(TERMINAL_PALETTE_STORAGE_KEY, JSON.stringify(value));
+    for (const state of terminals.values()) {
+        updateAppearance(state);
+    }
+}
+
 function updateAppearance(state) {
     if (state.disposed) {
         return;
     }
-    // Follow Dashboard's resolved theme, not the OS preference or a local control theme.
-    state.colorMode = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+    // "dashboard" follows the resolved page theme, not the OS preference or a local control theme.
+    const preference = getTerminalPalette();
+    state.colorMode = preference === "dashboard"
+        ? (document.documentElement.dataset.theme === "light" ? "light" : "dark")
+        : preference;
     const palette = state.colorMode === "light" ? lightPalette : darkPalette;
     state.viewElement.style.setProperty("--terminal-background", palette.background);
     state.client?.setColorMode(state.colorMode);
@@ -715,6 +748,12 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
     updateAppearance(state);
     state.themeObserver = new MutationObserver(() => updateAppearance(state));
     state.themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    // Other windows (including detached terminals) receive storage events; the writer updates its views above.
+    window.addEventListener("storage", event => {
+        if (event.storageArea === localStorage && (event.key === TERMINAL_PALETTE_STORAGE_KEY || event.key === null)) {
+            updateAppearance(state);
+        }
+    }, { signal: state.listeners.signal });
     for (const media of [state.forcedColors, state.moreContrast]) {
         media.addEventListener("change", () => updateAppearance(state), { signal: state.listeners.signal });
     }
