@@ -580,19 +580,27 @@ jobs:
           Azure__Location: westus3
           GH_TOKEN: ${{ github.token }}
         run: |
-          # --ignore-exit-code 8: MTP returns exit code 8 ("zero tests ran") when the single
-          # matrix test is dynamically skipped (e.g. on a transient Azure regional-capacity error),
-          # which would otherwise be treated as a failure below. Treating 8 as success — the repo
-          # convention baked into MtpBaseArgs (eng/Testing.targets) — keeps a skipped deploy green.
+          # MTP returns exit code 8 ("zero tests ran") when the single matrix test is dynamically
+          # skipped — e.g. the opt-in Connector Namespace scenario
+          # (ASPIRE_DEPLOYMENT_TEST_ENABLE_CONNECTOR_NAMESPACE=false) or a transient Azure
+          # regional-capacity skip — so 8 must be treated as success to keep a skipped deploy green.
+          # The MTP `--ignore-exit-code 8` flag cannot do that here: it only remaps the exit code of
+          # the test module itself, while `dotnet test` computes its own exit code from the
+          # aggregated run and still reports 8. So the exit code is classified explicitly instead.
+          set +e
           ./dotnet.sh test --project tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj \
             -c Release \
             --results-directory ${{ github.workspace }}/testresults \
             -- \
             --report-trx --report-trx-filename "${{ matrix.shortname }}.trx" \
             --filter-not-trait "quarantined=true" \
-            --ignore-exit-code 8 \
-            ${{ matrix.extraTestArgs }} \
-            || echo "test_failed=true" >> $GITHUB_OUTPUT
+            ${{ matrix.extraTestArgs }}
+          test_exit_code=$?
+          set -e
+          echo "Test run exit code: $test_exit_code"
+          if [ "$test_exit_code" -ne 0 ] && [ "$test_exit_code" -ne 8 ]; then
+            echo "test_failed=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Collect Aspire CLI logs
         if: always()

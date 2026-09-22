@@ -53,7 +53,7 @@ overrides declared in an individual test project are reflected in the final argu
 
 | Arg | Purpose |
 |-----|---------|
-| `--ignore-exit-code 8` | Don't fail the test run when zero tests match filters ([MTP exit codes](https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-exit-codes)) |
+| `--ignore-exit-code 8` | Don't fail the test run when zero tests match filters ([MTP exit codes](https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-exit-codes)). This only remaps the exit code of the test module itself: `dotnet test` computes its own exit code from the aggregated run and still reports 8, so a caller that must treat "zero tests ran" as success has to classify the exit code itself. |
 | `--crashdump` | Collect crash dumps on test host crash |
 | `--hangdump` | Enable hang detection and hang dump handling |
 | `--hangdump-type none` | Disable hang dump file creation; hang detection and timeout handling still occur, but no dump file is generated |
