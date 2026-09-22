@@ -365,10 +365,10 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 
     private static void ProjectPortableConnectionStringAliases(IResource target, Dictionary<string, object> environmentVariables)
     {
-        foreach (var reference in target.Annotations.OfType<ConnectionStringReferenceAnnotation>())
+        foreach (var reference in target.Annotations.OfType<ConnectionStringReference>())
         {
-            var names = reference.EnvironmentVariableNames;
-            if (string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
+            if (reference.EnvironmentVariableNames is not { } names ||
+                string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
                 !environmentVariables.ContainsKey(names.PortableName))
             {
                 continue;
@@ -422,7 +422,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                 case ReferenceExpression referenceExpression:
                     return await ResolveReferenceExpressionAsync(referenceExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
                 case ConnectionStringReference connectionStringReference:
-                    var connectionString = await ResolveReferenceExpressionAsync(connectionStringReference.Resource.ConnectionStringExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+                    var connectionString = await ResolveReferenceExpressionAsync(connectionStringReference.ConnectionStringExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
                     if (string.IsNullOrEmpty(connectionString) && !connectionStringReference.Optional)
                     {
                         throw new DistributedApplicationException($"The connection string for the resource '{connectionStringReference.Resource.Name}' is not available.");

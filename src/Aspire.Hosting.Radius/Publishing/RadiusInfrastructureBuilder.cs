@@ -3097,7 +3097,7 @@ internal sealed class RadiusInfrastructureBuilder
     /// prefixes that <c>WithReference</c>'s connection-property splat used for it.
     /// </summary>
     /// <remarks>
-    /// Use the logical name recorded by <see cref="ConnectionStringReferenceAnnotation"/>, not the
+    /// Use the logical name recorded by <see cref="ConnectionStringReference"/>, not the
     /// projected physical alias: <c>db__primary</c> splats to <c>DB__PRIMARY_*</c> even though its
     /// portable connection-string alias is <c>ConnectionStrings__db_primary</c>.
     /// <para>
@@ -3122,9 +3122,12 @@ internal sealed class RadiusInfrastructureBuilder
             }
         }
 
-        foreach (var reference in resource.Annotations.OfType<ConnectionStringReferenceAnnotation>())
+        foreach (var reference in resource.Annotations.OfType<ConnectionStringReference>())
         {
-            Add(reference.Source, reference.EnvironmentVariableNames.LogicalName);
+            if (reference.EnvironmentVariableNames is { } names)
+            {
+                Add(reference.Resource, names.LogicalName);
+            }
         }
 
         return prefixes;
@@ -3775,10 +3778,10 @@ internal sealed class RadiusInfrastructureBuilder
 
     private static void ProjectPortableConnectionStringAliases(IResource resource, Dictionary<string, object> environmentVariables)
     {
-        foreach (var reference in resource.Annotations.OfType<ConnectionStringReferenceAnnotation>())
+        foreach (var reference in resource.Annotations.OfType<ConnectionStringReference>())
         {
-            var names = reference.EnvironmentVariableNames;
-            if (string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
+            if (reference.EnvironmentVariableNames is not { } names ||
+                string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
                 !environmentVariables.ContainsKey(names.PortableName))
             {
                 continue;
@@ -4164,7 +4167,7 @@ internal sealed class RadiusInfrastructureBuilder
                 // context is canonicalized to the parent — otherwise `ConnectionStrings__appdb`
                 // would report the server's own password as an unrelated use.
                 RecordConnectionStringConsumption(connectionStringReference.Resource, owner);
-                await ResolveEnvPartsAsync(connectionStringReference.Resource.ConnectionStringExpression, owner, parts, ResolveToParent(connectionStringReference.Resource), allowRecipeSubstitutions).ConfigureAwait(false);
+                await ResolveEnvPartsAsync(connectionStringReference.ConnectionStringExpression, owner, parts, ResolveToParent(connectionStringReference.Resource), allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case IResourceWithConnectionString resourceWithConnectionString:
                 RecordConnectionStringConsumption(resourceWithConnectionString, owner);
@@ -4551,7 +4554,7 @@ internal sealed class RadiusInfrastructureBuilder
                 return false;
 
             case ConnectionStringReference connectionStringReference:
-                return IsDeploymentSubstituted(connectionStringReference.Resource.ConnectionStringExpression, visited);
+                return IsDeploymentSubstituted(connectionStringReference.ConnectionStringExpression, visited);
 
             case IResourceWithConnectionString resourceWithConnectionString:
                 return IsDeploymentSubstituted(resourceWithConnectionString.ConnectionStringExpression, visited);

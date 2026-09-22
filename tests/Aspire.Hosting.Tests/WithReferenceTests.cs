@@ -803,6 +803,17 @@ public class WithReferenceTests
         var project = builder.AddProject<ProjectB>("project")
             .WithReference(resource, connectionName: "my--db");
 
+        var reference = Assert.Single(project.Resource.Annotations.OfType<ConnectionStringReference>());
+        Assert.Same(resource.Resource, reference.Resource);
+        var context = new EnvironmentCallbackContext(builder.ExecutionContext, project.Resource);
+        foreach (var callback in project.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>())
+        {
+            await callback.Callback(context);
+        }
+
+        Assert.Same(reference, context.EnvironmentVariables["ConnectionStrings__my--db"]);
+        Assert.Same(reference, context.EnvironmentVariables["ConnectionStrings__my_db"]);
+
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             project.Resource,
             DistributedApplicationOperation.Run,
@@ -825,6 +836,62 @@ public class WithReferenceTests
                 Assert.Equal("ConnectionStrings__my_db", entry.Key);
                 Assert.Equal("Host=localhost", entry.Value);
             });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StandaloneConnectionStringReferencePreservesValueBehavior(bool optional)
+    {
+        var resource = new TestResource("my-db");
+        var reference = new ConnectionStringReference(resource, optional);
+        var provider = (IValueProvider)reference;
+
+#pragma warning disable ASPIRECONNECTIONSTRINGS001
+        Assert.Null(reference.EnvironmentVariableNames);
+#pragma warning restore ASPIRECONNECTIONSTRINGS001
+        Assert.Same(resource, reference.Resource);
+        Assert.Same(resource, Assert.Single(((IValueWithReferences)reference).References));
+        Assert.Equal(optional, reference.Optional);
+        Assert.Equal("{my-db.connectionString}", ((IManifestExpressionProvider)reference).ValueExpression);
+
+        // The original context-free overload delegates to the resource, even for required references.
+        Assert.Null(await provider.GetValueAsync(CancellationToken.None));
+        if (optional)
+        {
+            Assert.Null(await provider.GetValueAsync(new ValueProviderContext(), CancellationToken.None));
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+                await provider.GetValueAsync(new ValueProviderContext(), CancellationToken.None));
+            Assert.Equal("The connection string for the resource 'my-db' is not available.", exception.Message);
+        }
+
+        resource.ConnectionString = "Host=after";
+        Assert.Equal("Host=after", await provider.GetValueAsync(CancellationToken.None));
+        Assert.Equal("Host=after", await provider.GetValueAsync(new ValueProviderContext(), CancellationToken.None));
+        Assert.Equal("Host=after", await reference.ConnectionStringExpression.GetValueAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task StandaloneConnectionStringAnnotationDoesNotReserveGeneratedAliases()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var standalone = builder.AddResource(new TestResource("my-db") { ConnectionString = "Host=standalone" });
+        var generated = builder.AddResource(new TestResource("generated") { ConnectionString = "Host=generated" });
+        var project = builder.AddProject<ProjectB>("project")
+            .WithAnnotation(new ConnectionStringReference(standalone.Resource, optional: false))
+            .WithReference(generated, connectionName: "my_db");
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            project.Resource,
+            DistributedApplicationOperation.Run,
+            TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal(
+            [new KeyValuePair<string, string>("ConnectionStrings__my_db", "Host=generated")],
+            config.Where(static entry => entry.Key.StartsWith("ConnectionStrings__", StringComparison.Ordinal)));
     }
 
     [Fact]

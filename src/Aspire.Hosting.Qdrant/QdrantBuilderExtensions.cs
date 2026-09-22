@@ -186,11 +186,12 @@ public static class QdrantBuilderExtensions
                 isExplicit: true)
             : ConnectionStringEnvironmentVariableNames.Create(resource, httpLogicalName);
         var httpConnectionStringExpression = qdrantResource.Resource.HttpConnectionStringExpression;
-        var httpReferenceAnnotation = new ConnectionStringReferenceAnnotation(
+        var httpReference = new ConnectionStringReference(
             resource,
-            httpConnectionStringNames,
             optional: false,
-            nameof(QdrantServerResource.HttpConnectionStringExpression));
+            httpConnectionStringNames,
+            nameof(QdrantServerResource.HttpConnectionStringExpression),
+            httpConnectionStringExpression);
 
         // Determine what to inject based on the annotation on the destination resource
         var injectionAnnotation = builder.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var annotation) ? annotation : null;
@@ -198,8 +199,8 @@ public static class QdrantBuilderExtensions
 
         if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
         {
-            ValidateConnectionStringReference(builder.Resource, httpReferenceAnnotation);
-            builder.Resource.Annotations.Add(httpReferenceAnnotation);
+            ResourceBuilderExtensions.ValidateConnectionStringReference(builder.Resource, httpReference);
+            builder.Resource.Annotations.Add(httpReference);
 
             builder.WithEnvironment(context =>
             {
@@ -207,42 +208,16 @@ public static class QdrantBuilderExtensions
                 context.EnvironmentVariables[connectionStringNames.OriginalName] = qdrantResource.Resource.ConnectionStringExpression;
 
                 // HTTP endpoint
-                context.EnvironmentVariables[httpConnectionStringNames.OriginalName] = httpConnectionStringExpression;
+                context.EnvironmentVariables[httpConnectionStringNames.OriginalName] = httpReference;
 
                 if (!string.Equals(httpConnectionStringNames.OriginalName, httpConnectionStringNames.PortableName, StringComparison.OrdinalIgnoreCase))
                 {
-                    context.EnvironmentVariables[httpConnectionStringNames.PortableName] = httpConnectionStringExpression;
+                    context.EnvironmentVariables[httpConnectionStringNames.PortableName] = httpReference;
                 }
             });
         }
 
         return builder;
-    }
-
-    private static void ValidateConnectionStringReference(IResource destination, ConnectionStringReferenceAnnotation candidate)
-    {
-        foreach (var existing in destination.Annotations.OfType<ConnectionStringReferenceAnnotation>())
-        {
-            if (ReferenceEquals(existing.Source, candidate.Source) &&
-                existing.Optional == candidate.Optional &&
-                string.Equals(existing.ValueName, candidate.ValueName, StringComparison.Ordinal) &&
-                existing.EnvironmentVariableNames == candidate.EnvironmentVariableNames)
-            {
-                continue;
-            }
-
-            var conflictingName = existing.EnvironmentVariableNames.GetPhysicalNames()
-                .Intersect(candidate.EnvironmentVariableNames.GetPhysicalNames(), StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault();
-
-            if (conflictingName is not null)
-            {
-                throw new DistributedApplicationException(
-                    $"Connection-string references '{existing.EnvironmentVariableNames.LogicalName}' and " +
-                    $"'{candidate.EnvironmentVariableNames.LogicalName}' on resource '{destination.Name}' both use " +
-                    $"the environment variable '{conflictingName}'. Use unique connectionName values when calling WithReference.");
-            }
-        }
     }
 
     private static QdrantClient CreateQdrantClient(string? connectionString)

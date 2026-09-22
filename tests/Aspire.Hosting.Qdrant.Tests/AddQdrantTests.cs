@@ -192,10 +192,11 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
 
 #pragma warning disable ASPIRECONNECTIONSTRINGS001
         Assert.Collection(
-            projectA.Resource.Annotations.OfType<ConnectionStringReferenceAnnotation>(),
+            projectA.Resource.Annotations.OfType<ConnectionStringReference>(),
             reference =>
             {
-                Assert.Same(qdrant.Resource, reference.Source);
+                Assert.Same(qdrant.Resource, reference.Resource);
+                Assert.Equal(nameof(QdrantServerResource.ConnectionStringExpression), reference.ValueName);
                 Assert.Equal(
                     new ConnectionStringEnvironmentVariableNames(
                         "my-qdrant",
@@ -206,7 +207,8 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
             },
             reference =>
             {
-                Assert.Same(qdrant.Resource, reference.Source);
+                Assert.Same(qdrant.Resource, reference.Resource);
+                Assert.Equal(nameof(QdrantServerResource.HttpConnectionStringExpression), reference.ValueName);
                 Assert.Equal(
                     new ConnectionStringEnvironmentVariableNames(
                         "my-qdrant_http",
@@ -216,6 +218,13 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
                     reference.EnvironmentVariableNames);
             });
 #pragma warning restore ASPIRECONNECTIONSTRINGS001
+
+        var httpReference = projectA.Resource.Annotations.OfType<ConnectionStringReference>().Last();
+        Assert.Equal("Endpoint=http://localhost:6333;Key=pass",
+            await ((IValueProvider)httpReference).GetValueAsync(CancellationToken.None));
+        Assert.Equal("Endpoint=http://localhost:6333;Key=pass",
+            await ((IValueProvider)httpReference).GetValueAsync(new ValueProviderContext(), CancellationToken.None));
+        Assert.Same(qdrant.Resource, ((IValueWithReferences)httpReference).References.First());
 
         // Call environment variable callbacks.
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectA.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
@@ -288,6 +297,25 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
             "Connection-string references 'search_http' and 'search_http' on resource 'consumer' both use the environment variable " +
             "'ConnectionStrings__search_http'. Use unique connectionName values when calling WithReference.",
             exception.Message);
+    }
+
+    [Fact]
+    public async Task RepeatedReferencesPreserveDistinctConnectionExpressions()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var qdrant = builder.AddQdrant("my-qdrant");
+        var consumer = builder.AddContainer("consumer", "fake")
+            .WithReference(qdrant)
+            .WithReference(qdrant);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            consumer.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
+        var connectionStrings = config
+            .Where(static entry => entry.Key.StartsWith("ConnectionStrings__", StringComparison.Ordinal))
+            .OrderBy(static entry => entry.Key, StringComparer.Ordinal)
+            .ToDictionary();
+
+        await Verify(connectionStrings);
     }
 
     [Fact]

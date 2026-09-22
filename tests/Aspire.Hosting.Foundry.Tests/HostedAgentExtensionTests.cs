@@ -671,6 +671,63 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
+    public async Task GetResolvedEnvironmentVariables_PreservesStandaloneConnectionStringNames()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        var reference = new ConnectionStringReference(connection.Resource, optional: false);
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithAnnotation(reference)
+            .WithEnvironment("ConnectionStrings__my-db", reference)
+            .WithEnvironment("ConnectionStrings__my_db", "Host=manual");
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["ConnectionStrings__my-db"] = "Host=example",
+                ["ConnectionStrings__my_db"] = "Host=manual"
+            },
+            envVars);
+    }
+
+    [Fact]
+    public async Task GetResolvedEnvironmentVariables_ResolvesSelectedConnectionStringExpression()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=primary"));
+#pragma warning disable ASPIRECONNECTIONSTRINGS001
+        var names = ConnectionStringEnvironmentVariableNames.Create(connection.Resource, "my-db-http");
+        var reference = new ConnectionStringReference(
+            connection.Resource, optional: false, names, "HttpConnectionStringExpression",
+            ReferenceExpression.Create($"Host=http"));
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithAnnotation(reference)
+            .WithEnvironment(names.OriginalName, reference)
+            .WithEnvironment(names.PortableName, reference);
+#pragma warning restore ASPIRECONNECTIONSTRINGS001
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(
+            new Dictionary<string, string> { ["ConnectionStrings__my_db_http"] = "Host=http" },
+            envVars);
+    }
+
+    [Fact]
     public void GetAgentEndpointProtocols_MapsContainerProtocolsToEndpointProtocols()
     {
         var endpointProtocols = AzureHostedAgentResource.GetAgentEndpointProtocols(

@@ -1125,23 +1125,24 @@ public static class ResourceBuilderExtensions
         builder.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var injectionAnnotation);
         var flags = injectionAnnotation?.Flags ?? ReferenceEnvironmentInjectionFlags.All;
         var environmentVariableNames = ConnectionStringEnvironmentVariableNames.Create(resource, connectionName);
+        ConnectionStringReference? connectionStringReference = null;
 
         if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
         {
-            var referenceAnnotation = new ConnectionStringReferenceAnnotation(
+            connectionStringReference = new ConnectionStringReference(
                 resource,
-                environmentVariableNames,
                 optional,
-                nameof(IResourceWithConnectionString.ConnectionStringExpression));
-            ValidateConnectionStringReference(builder.Resource, referenceAnnotation);
-            builder.Resource.Annotations.Add(referenceAnnotation);
+                environmentVariableNames,
+                nameof(IResourceWithConnectionString.ConnectionStringExpression),
+                connectionStringExpression: null);
+            ValidateConnectionStringReference(builder.Resource, connectionStringReference);
+            builder.Resource.Annotations.Add(connectionStringReference);
         }
 
         return builder.WithEnvironment(context =>
         {
-            if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
+            if (connectionStringReference is not null)
             {
-                var connectionStringReference = new ConnectionStringReference(resource, optional);
                 context.EnvironmentVariables[environmentVariableNames.OriginalName] = connectionStringReference;
 
                 if (!string.Equals(environmentVariableNames.OriginalName, environmentVariableNames.PortableName, StringComparison.OrdinalIgnoreCase))
@@ -1171,34 +1172,40 @@ public static class ResourceBuilderExtensions
         });
     }
 
-    private static void ValidateConnectionStringReference(IResource destination, ConnectionStringReferenceAnnotation candidate)
+    internal static void ValidateConnectionStringReference(IResource destination, ConnectionStringReference candidate)
     {
-        foreach (var existing in destination.Annotations.OfType<ConnectionStringReferenceAnnotation>())
+        if (candidate.EnvironmentVariableNames is not { } candidateNames)
         {
-            if (IsEquivalentConnectionStringReference(existing, candidate))
+            return;
+        }
+
+        foreach (var existing in destination.Annotations.OfType<ConnectionStringReference>())
+        {
+            if (existing.EnvironmentVariableNames is not { } existingNames ||
+                IsEquivalentConnectionStringReference(existing, candidate))
             {
                 continue;
             }
 
-            var conflictingName = existing.EnvironmentVariableNames.GetPhysicalNames()
-                .Intersect(candidate.EnvironmentVariableNames.GetPhysicalNames(), StringComparer.OrdinalIgnoreCase)
+            var conflictingName = existingNames.GetPhysicalNames()
+                .Intersect(candidateNames.GetPhysicalNames(), StringComparer.OrdinalIgnoreCase)
                 .FirstOrDefault();
 
             if (conflictingName is not null)
             {
                 throw new DistributedApplicationException(
-                    $"Connection-string references '{existing.EnvironmentVariableNames.LogicalName}' and " +
-                    $"'{candidate.EnvironmentVariableNames.LogicalName}' on resource '{destination.Name}' both use " +
+                    $"Connection-string references '{existingNames.LogicalName}' and " +
+                    $"'{candidateNames.LogicalName}' on resource '{destination.Name}' both use " +
                     $"the environment variable '{conflictingName}'. Use unique connectionName values when calling WithReference.");
             }
         }
     }
 
     private static bool IsEquivalentConnectionStringReference(
-        ConnectionStringReferenceAnnotation left,
-        ConnectionStringReferenceAnnotation right)
+        ConnectionStringReference left,
+        ConnectionStringReference right)
     {
-        return ReferenceEquals(left.Source, right.Source) &&
+        return ReferenceEquals(left.Resource, right.Resource) &&
             string.Equals(left.ValueName, right.ValueName, StringComparison.Ordinal) &&
             left.EnvironmentVariableNames == right.EnvironmentVariableNames;
     }

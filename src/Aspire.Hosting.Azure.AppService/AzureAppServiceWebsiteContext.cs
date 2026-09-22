@@ -81,8 +81,9 @@ internal sealed class AzureAppServiceWebsiteContext(
     private void ProjectPortableConnectionStringAliases()
     {
         var aliases = resource.Annotations
-            .OfType<ConnectionStringReferenceAnnotation>()
+            .OfType<ConnectionStringReference>()
             .Select(static annotation => annotation.EnvironmentVariableNames)
+            .OfType<ConnectionStringEnvironmentVariableNames>()
             .Where(static names =>
                 !names.IsExplicit &&
                 !string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase))
@@ -223,7 +224,7 @@ internal sealed class AzureAppServiceWebsiteContext(
 
         if (value is ConnectionStringReference cs)
         {
-            return ProcessValue(cs.Resource.ConnectionStringExpression, secretType, parent, isSlot);
+            return ProcessValue(cs.ConnectionStringExpression, secretType, parent, isSlot);
         }
 
         if (value is IResourceWithConnectionString csrs)

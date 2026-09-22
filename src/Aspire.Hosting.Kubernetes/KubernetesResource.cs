@@ -442,10 +442,10 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     private void RemoveGeneratedOriginalConnectionStringAliases(Dictionary<string, object> environmentVariables)
     {
-        foreach (var reference in resource.Annotations.OfType<ConnectionStringReferenceAnnotation>())
+        foreach (var reference in resource.Annotations.OfType<ConnectionStringReference>())
         {
-            var names = reference.EnvironmentVariableNames;
-            if (string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
+            if (reference.EnvironmentVariableNames is not { } names ||
+                string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
                 !environmentVariables.ContainsKey(names.PortableName))
             {
                 continue;
@@ -580,7 +580,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             if (value is ConnectionStringReference cs)
             {
-                value = cs.Resource.ConnectionStringExpression;
+                value = cs.ConnectionStringExpression;
                 continue;
             }
 
@@ -877,7 +877,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             EndpointReference => false,
             EndpointReferenceExpression => false,
             ParameterResource => false,
-            ConnectionStringReference cs => IsUnresolvedAtPublishTime(cs.Resource.ConnectionStringExpression),
+            ConnectionStringReference cs => IsUnresolvedAtPublishTime(cs.ConnectionStringExpression),
             IResourceWithConnectionString csrs => IsUnresolvedAtPublishTime(csrs.ConnectionStringExpression),
             ReferenceExpression expr => expr.ValueProviders.Any(IsUnresolvedAtPublishTime),
             // Any other IManifestExpressionProvider that also implements IValueProvider
