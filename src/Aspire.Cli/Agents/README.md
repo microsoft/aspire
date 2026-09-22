@@ -3,8 +3,7 @@
 `AgentInitCommand` resolves workspace, independent asset choices, and logical
 client selections before calling `IAgentInitService`. Discovery returns immutable
 client evidence; it does not register applicators, migrate settings, or install
-tools. See the [CLI usage guide](../README.md#ai-agent-setup) for the flags and
-defaults.
+tools. Run `aspire agent init --help` for the flags and defaults.
 
 `AgentClient` is an immutable record containing the client ID, display name, and
 `IAgentClientEnvironment` implementation. `AgentClientCatalog` constructs the
