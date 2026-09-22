@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "User-facing bug fix: avoids a race that could cause the dashboard to fail to start",
+  "mergedAt": "2026-09-21T23:36:21Z",
+  "number": 20223,
+  "runDate": "2026-09-22T00:07:16Z",
+  "status": "included",
+  "title": "Avoid racing dashboard lock initialization"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Executables and projects can now reference endpoints on Aspire's default container network, so a self-reference or reference to another executable no longer waits indefinitely for an allocation that was never produced. Use `GetEndpoint(name, KnownNetworkIdentifiers.DefaultAspireContainerNetwork)` to resolve the container-network address for an endpoint.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-09-21T23:48:47Z",
+  "lastMergedAt": "2026-09-21T23:48:47Z",
+  "name": "Executable references to container-network endpoints",
+  "owner": "danegsta",
+  "prs": [
+    20214
+  ]
+}

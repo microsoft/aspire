@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Dependency version bump (dotnet/extensions, OpenAI)",
+  "mergedAt": "2026-09-21T15:54:38Z",
+  "number": 20242,
+  "runDate": "2026-09-22T00:07:16Z",
+  "status": "excluded",
+  "title": "Update dotnet/extensions dependencies to 10.10.0 and OpenAI to 2.13.0"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a race on Unix where parallel dashboard processes could delete a lock file another dashboard had just created, causing it to fail to start with an IOException. Only unheld lock files at least a day old are now cleaned up.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-09-21T23:36:21Z",
+  "lastMergedAt": "2026-09-21T23:36:21Z",
+  "name": "Fixed dashboard startup race on lock file cleanup",
+  "owner": "JamesNK",
+  "prs": [
+    20223
+  ]
+}

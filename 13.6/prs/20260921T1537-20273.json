@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot-authored automated dependency data update, not app/copilot-swe-agent or a backport",
+  "mergedAt": "2026-09-21T15:37:49Z",
+  "number": 20273,
+  "runDate": "2026-09-22T00:07:16Z",
+  "status": "excluded",
+  "title": "[Automated] Update Microsoft Foundry Models"
+}

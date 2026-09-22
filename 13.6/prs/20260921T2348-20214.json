@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "New user-facing capability: executables can reference container-network endpoints",
+  "mergedAt": "2026-09-21T23:48:47Z",
+  "number": 20214,
+  "runDate": "2026-09-22T00:07:16Z",
+  "status": "included",
+  "title": "Support executable references to container-network endpoints"
+}

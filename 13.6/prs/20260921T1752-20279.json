@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "User-facing bug fix: prevents duplicate OnResourceStopped callbacks during restart",
+  "mergedAt": "2026-09-21T17:52:10Z",
+  "number": 20279,
+  "runDate": "2026-09-22T00:07:16Z",
+  "status": "included",
+  "title": "Fix duplicate resource stopped events during restart"
+}

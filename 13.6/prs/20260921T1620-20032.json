@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Automated npm lockfile security remediation, no application source changes",
+  "mergedAt": "2026-09-21T16:20:42Z",
+  "number": 20032,
+  "runDate": "2026-09-22T00:07:16Z",
+  "status": "excluded",
+  "title": "[auto-sec] Consolidate aspire dependency security remediations (75 alerts)"
+}

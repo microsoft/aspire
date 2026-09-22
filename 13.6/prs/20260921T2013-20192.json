@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Internal repository GitOps configuration change, no user impact",
+  "mergedAt": "2026-09-21T20:13:06Z",
+  "number": 20192,
+  "runDate": "2026-09-22T00:07:16Z",
+  "status": "excluded",
+  "title": "fix(team-app): Watch Aspire 1P's Proxima repository"
+}
