@@ -108,13 +108,13 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
     [Theory]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    [InlineData("Light", "fluent-text-input", "control")]
-    [InlineData("Light", "fluent-number-input", "control")]
-    [InlineData("Light", "fluent-text-area", "control")]
-    [InlineData("Dark", "fluent-text-input", "control")]
-    [InlineData("Dark", "fluent-number-input", "control")]
-    [InlineData("Dark", "fluent-text-area", "control")]
-    public async Task FluentDelegatedInput_ShowsVisibleFocusIndicator(string theme, string controlName, string partName)
+    [InlineData("Light", "fluent-text-input", "text", "root")]
+    [InlineData("Light", "fluent-text-input", "number", "root")]
+    [InlineData("Light", "fluent-textarea", null, "root")]
+    [InlineData("Dark", "fluent-text-input", "text", "root")]
+    [InlineData("Dark", "fluent-text-input", "number", "root")]
+    [InlineData("Dark", "fluent-textarea", null, "root")]
+    public async Task FluentDelegatedInput_ShowsVisibleFocusIndicator(string theme, string controlName, string? inputType, string partName)
     {
         var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
 
@@ -137,16 +137,18 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
         await page.EvaluateAsync(
             """
-            async controlName => {
-                await customElements.whenDefined(controlName);
-                const control = document.createElement(controlName);
+            async options => {
+                await customElements.whenDefined(options.controlName);
+                const control = document.createElement(options.controlName);
                 control.id = 'delegated-focus-probe';
                 control.style.cssText = 'position:fixed;left:-99999px;top:0;';
+                if (options.inputType) {
+                    control.setAttribute('type', options.inputType);
+                }
                 document.body.appendChild(control);
-                await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
             }
             """,
-            controlName).DefaultTimeout();
+            new { controlName, inputType }).DefaultTimeout();
         var control = page.Locator("#delegated-focus-probe");
 
         await AssertVisibleFocusIndicatorAsync(control, partName);
@@ -230,12 +232,10 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         // The settings button lives in the top header on every page (MainLayout.SettingsButtonId).
         await page.Locator("#dashboard-settings-button").ClickAsync();
 
-        // The settings panel is a right-aligned fluent-dialog with a fixed id (MainLayout.SettingsDialogId).
-        // Wait on a light-DOM descendant rather than the <fluent-dialog> host: Fluent projects the dialog
-        // body through a slot, so the custom-element host carries no layout box and never satisfies
-        // Playwright's visibility check even once the panel is fully open. .input-container wraps each
-        // settings group in SettingsDialog.razor and is a reliable "content has rendered" signal.
-        await Assertions.Expect(page.Locator("fluent-dialog#SettingsDialog .input-container").First).ToBeVisibleAsync();
+        // Fluent v5 projects the dialog body outside the custom-element host's descendant tree.
+        // The role is carried by the native <dialog> in shadow DOM and becomes visible only after
+        // the panel has opened, so it is the stable readiness signal across Fluent DOM revisions.
+        await Assertions.Expect(page.GetByRole(AriaRole.Dialog)).ToBeVisibleAsync();
     }
 
     private static async Task OpenAddFilterDialogAsync(IPage page)
@@ -245,9 +245,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         // regardless of test culture rather than hard-coding the English text.
         await page.Locator($"fluent-button[aria-label='{StructuredFiltering.AddFilter}']").ClickAsync();
 
-        // FilterDialog opens as a right-aligned panel with no id, so wait for its distinctive
-        // .filter-button-container (see FilterDialog.razor) to confirm the dialog body has rendered.
-        await Assertions.Expect(page.Locator("fluent-dialog .filter-button-container")).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Dialog)).ToBeVisibleAsync();
     }
 
     /// <summary>
@@ -346,7 +344,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         }
         else
         {
-            await Assertions.Expect(page.Locator("main")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator("main.custom-body-content")).ToBeVisibleAsync();
         }
 
         await WaitForPageContentAsync(page, relativeUrl);
@@ -423,7 +421,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
                 // metrics/rendering are stable for the scan (the dashboard ships a custom body font).
                 await document.fonts.ready;
             }
-            """).DefaultTimeout();
+            """).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
     private static Task WaitForPageContentAsync(IPage page, string relativeUrl)
@@ -511,7 +509,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
     {
         var focusJson = await host.EvaluateAsync<string>(
             """
-            (element, partName) => {
+            async (element, partName) => {
                 const focusTarget = element.shadowRoot?.querySelector(
                     'input, textarea, [role="combobox"], [tabindex]:not([tabindex="-1"])');
                 if (!focusTarget) {
@@ -529,13 +527,19 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
                         `No ${partName} part found for ${element.localName}. Available parts: ${availableParts}.`);
                 }
 
-                const style = getComputedStyle(part);
+                // Chromium suspends requestAnimationFrame for background pages when theory rows run
+                // concurrently. Timers still advance, so wait past Fluent's underline transition.
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                const style = getComputedStyle(part, '::after');
+                const transform = style.transform;
+                const indicatorScale = transform === 'none' ? 1 : new DOMMatrixReadOnly(transform).a;
                 return JSON.stringify({
                     focusWithin: element.matches(':focus-within'),
                     focusVisible: element.matches(':focus-visible'),
-                    outlineStyle: style.outlineStyle,
-                    outlineWidth: Number.parseFloat(style.outlineWidth),
-                    outlineColor: style.outlineColor
+                    borderWidth: Number.parseFloat(style.borderBottomWidth),
+                    borderColor: style.borderBottomColor,
+                    indicatorScale: indicatorScale
                 });
             }
             """,
@@ -543,16 +547,16 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
         using var focus = JsonDocument.Parse(focusJson);
         var root = focus.RootElement;
-        var outlineStyle = root.GetProperty("outlineStyle").GetString();
-        var outlineWidth = root.GetProperty("outlineWidth").GetDouble();
-        var outlineColor = root.GetProperty("outlineColor").GetString();
-        var hasOpaqueOutline = !string.Equals(outlineColor, "transparent", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(outlineColor, "rgba(0, 0, 0, 0)", StringComparison.OrdinalIgnoreCase);
+        var borderWidth = root.GetProperty("borderWidth").GetDouble();
+        var borderColor = root.GetProperty("borderColor").GetString();
+        var indicatorScale = root.GetProperty("indicatorScale").GetDouble();
+        var hasOpaqueBorder = !string.Equals(borderColor, "transparent", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(borderColor, "rgba(0, 0, 0, 0)", StringComparison.OrdinalIgnoreCase);
 
         Assert.True(root.GetProperty("focusWithin").GetBoolean(), $"Expected {await host.EvaluateAsync<string>("element => element.localName")} to contain delegated focus.");
         Assert.True(
-            !string.Equals(outlineStyle, "none", StringComparison.Ordinal) && outlineWidth >= 2 && hasOpaqueOutline,
-            $"Expected a visible focus outline on the {partName} part, but got style '{outlineStyle}', width {outlineWidth}px, color {outlineColor}, host :focus-visible={root.GetProperty("focusVisible").GetBoolean()}.");
+            borderWidth >= 2 && hasOpaqueBorder && indicatorScale >= 0.99,
+            $"Expected a visible focus indicator on the {partName} part, but got border width {borderWidth}px, color {borderColor}, scale {indicatorScale}, host :focus-visible={root.GetProperty("focusVisible").GetBoolean()}.");
     }
 
     private static async Task<((int R, int G, int B) Foreground, (int R, int G, int B) Background)> ReadFluentControlColorsAsync(ILocator host)
@@ -575,12 +579,9 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
                     throw new Error('unparseable color: ' + s);
                 }
 
-                const control = element.shadowRoot?.querySelector('[part~="control"]');
-                if (!control) {
-                    throw new Error(`No control part found for ${element.localName}.`);
-                }
-
-                const style = getComputedStyle(control);
+                // Fluent v5 applies the button palette directly to the custom-element host. Its
+                // previous shadow control part no longer exists, while slotted text inherits these colors.
+                const style = getComputedStyle(element);
                 const foreground = parseRgb(style.color);
                 const background = parseRgb(style.backgroundColor);
                 return JSON.stringify({
@@ -696,7 +697,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
                     await readSurface(
                         'text visualizer',
                         dialog,
-                        () => dialog.shadowRoot?.querySelector('[part~="control"]'),
+                        () => dialog.shadowRoot?.querySelector('[part~="dialog"]'),
                         visualizerLine),
                     await readSurface('rendered markdown', markdown, () => codeBlock, markdownCode)
                 ]

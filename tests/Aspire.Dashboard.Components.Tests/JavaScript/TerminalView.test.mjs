@@ -209,7 +209,9 @@ function mount({ visible = true, dotNetRef, options = {} } = {}) {
         } },
         { label: "Localized terminal input", ...options, viewId }, template, footer);
     ids.push(id);
-    return { id, element, controls, footer, footerControls, viewId };
+    return {
+        id, element, controls, footer, footerControls, viewId,
+    };
 }
 
 async function settle() {

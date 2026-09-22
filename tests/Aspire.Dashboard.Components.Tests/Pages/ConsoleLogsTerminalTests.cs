@@ -698,7 +698,7 @@ public partial class ConsoleLogsTests
             Assert.Contains("replica=0", initUrl);
             Assert.Equal("Decrease font size", labels.GetProperty("decreaseFontSize").GetString());
             Assert.Equal("Increase font size", labels.GetProperty("increaseFontSize").GetString());
-            Assert.Equal("Terminal dimensions", labels.GetProperty("terminalDimensions").GetString());
+            Assert.Equal("Terminal dimensions", cut.Find("fluent-dropdown").GetAttribute("placeholder"));
             Assert.Equal("Fit", labels.GetProperty("fit").GetString());
             Assert.Equal("F6: Focus terminal controls", labels.GetProperty("focusControlsHint").GetString());
             Assert.Equal(1, reconnect.Arguments[0]);
