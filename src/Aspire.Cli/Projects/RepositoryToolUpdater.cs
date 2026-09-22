@@ -155,6 +155,21 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
         return new RepositoryToolsUpdateStep(displayText, () => ApplyUpdatesAsync(updates, cancellationToken));
     }
 
+    /// <summary>
+    /// Displays restore/install guidance for the given repository CLI manifests.
+    /// </summary>
+    public void DisplayRestoreGuidance(IReadOnlyList<RepositoryToolManifest> manifests)
+    {
+        if (manifests.Any(manifest => !manifest.IsNpm))
+        {
+            interactionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.RestoreRepositoryDotNetTool);
+        }
+        if (manifests.Any(manifest => manifest.IsNpm))
+        {
+            interactionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.RestoreRepositoryNpmTool);
+        }
+    }
+
     private async Task ApplyUpdatesAsync(
         IReadOnlyList<(RepositoryToolManifest Manifest, RepositoryToolReference Reference, string Version)> updates,
         CancellationToken cancellationToken)
@@ -213,14 +228,7 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
         }
 
         interactionService.DisplaySuccess(UpdateCommandStrings.RepositoryToolsUpdated);
-        if (changedManifests.Any(manifest => !manifest.IsNpm))
-        {
-            interactionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.RestoreRepositoryDotNetTool);
-        }
-        if (changedManifests.Any(manifest => manifest.IsNpm))
-        {
-            interactionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.RestoreRepositoryNpmTool);
-        }
+        DisplayRestoreGuidance(changedManifests);
     }
 
     private async Task<string> GetTargetVersionAsync(RepositoryToolManifest manifest, PackageChannel channel, CancellationToken cancellationToken)

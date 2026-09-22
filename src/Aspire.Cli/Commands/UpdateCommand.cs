@@ -623,6 +623,10 @@ internal sealed class UpdateCommand : BaseCommand
                 // Continue the project update without asking to change the same CLI pins again.
                 return (null, true);
             }
+            if (toolUpdateResult == RepositoryToolUpdateResult.NoChanges)
+            {
+                _repositoryToolUpdater.DisplayRestoreGuidance(toolManifests);
+            }
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
             return (CommandResult.Success(), false);
         }

@@ -71,12 +71,14 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(true, true, false)]
-    [InlineData(false, true, false)]
-    [InlineData(true, false, false)]
-    [InlineData(false, false, false)]
-    [InlineData(false, false, true)]
-    public async Task Update_NewerGuestSdkRequiresRestoringRepositoryToolWithoutReplacingExecutable(bool hasDownloadUrl, bool hasDownloader, bool pinsAlreadyCurrent)
+    [InlineData(true, true, false, "both")]
+    [InlineData(false, true, false, "both")]
+    [InlineData(true, false, false, "both")]
+    [InlineData(false, false, false, "both")]
+    [InlineData(false, false, true, "both")]
+    [InlineData(false, false, true, "dotnet")]
+    [InlineData(false, false, true, "npm")]
+    public async Task Update_NewerGuestSdkRequiresRestoringRepositoryToolWithoutReplacingExecutable(bool hasDownloadUrl, bool hasDownloader, bool pinsAlreadyCurrent, string manifestKind)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (dotnetManifest, npmManifest) = await CreateManifestsAsync(workspace.WorkspaceRoot);
@@ -88,6 +90,28 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
             var npm = JsonNode.Parse(await File.ReadAllTextAsync(npmManifest))!;
             npm["devDependencies"]![RepositoryToolUpdater.NpmPackageId] = "^99.0.0";
             await File.WriteAllTextAsync(npmManifest, npm.ToJsonString());
+        }
+        var expectedGuidance = new List<string>();
+        if (manifestKind is "both" or "dotnet")
+        {
+            expectedGuidance.Add(UpdateCommandStrings.RestoreRepositoryDotNetTool);
+        }
+        else
+        {
+            File.Delete(dotnetManifest);
+        }
+        if (manifestKind is "both" or "npm")
+        {
+            expectedGuidance.Add(UpdateCommandStrings.RestoreRepositoryNpmTool);
+        }
+        else
+        {
+            File.Delete(npmManifest);
+        }
+        var originals = new Dictionary<string, byte[]>();
+        foreach (var path in new[] { dotnetManifest, npmManifest }.Where(File.Exists))
+        {
+            originals.Add(path, await File.ReadAllBytesAsync(path));
         }
         var appHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         await File.WriteAllTextAsync(appHost.FullName, "// test apphost");
@@ -137,7 +161,23 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, result);
         Assert.False(projectUpdated);
-        Assert.Equal("99.0.0", JsonNode.Parse(await File.ReadAllTextAsync(dotnetManifest))!["tools"]!["aspire.cli"]!["version"]!.GetValue<string>());
+        if (pinsAlreadyCurrent)
+        {
+            foreach (var (path, original) in originals)
+            {
+                Assert.Equal(original, await File.ReadAllBytesAsync(path));
+            }
+            Assert.Empty(interaction.DisplayedSuccess);
+        }
+        else
+        {
+            Assert.Equal("99.0.0", JsonNode.Parse(await File.ReadAllTextAsync(dotnetManifest))!["tools"]!["aspire.cli"]!["version"]!.GetValue<string>());
+            Assert.Equal("^99.0.0", JsonNode.Parse(await File.ReadAllTextAsync(npmManifest))!["devDependencies"]![RepositoryToolUpdater.NpmPackageId]!.GetValue<string>());
+            Assert.Equal(UpdateCommandStrings.RepositoryToolsUpdated, Assert.Single(interaction.DisplayedSuccess));
+        }
+        Assert.Equal(expectedGuidance, interaction.DisplayedMessages
+            .Where(message => message.Message == UpdateCommandStrings.RestoreRepositoryDotNetTool || message.Message == UpdateCommandStrings.RestoreRepositoryNpmTool)
+            .Select(message => message.Message));
         Assert.Contains(interaction.DisplayedMessages, message => message.Message == UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
         Assert.Empty(interaction.BooleanPromptCalls);
     }
