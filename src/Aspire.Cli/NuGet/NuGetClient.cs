@@ -1,18 +1,19 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
+using System.Text;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
-using System.Collections.Immutable;
 using NuGet.Commands;
-using NuGet.Credentials;
-using NuGet.LibraryModel;
-using NuGet.ProjectModel;
 using NuGet.Configuration;
+using NuGet.Credentials;
 using NuGet.Frameworks;
+using NuGet.LibraryModel;
 using NuGet.Packaging.Signing;
+using NuGet.ProjectModel;
 using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.RuntimeModel;
@@ -23,6 +24,15 @@ using NuGetLogMessage = NuGet.Common.ILogMessage;
 
 namespace Aspire.Cli.NuGet;
 
+/// <summary>
+/// Runs the NuGet operations that the <c>aspire-managed nuget</c> helper used to run out of process.
+/// </summary>
+/// <remarks>
+/// Each operation mirrors one helper subcommand (<c>restore</c>, <c>manifest</c>, and <c>search</c>) so bundled CLIs
+/// keep the same restore results, search results, and failure text. Failures are reported as
+/// <see cref="NuGetOperationException"/>, whose <see cref="NuGetOperationException.Output"/> is the text the helper
+/// wrote to stderr.
+/// </remarks>
 internal interface INuGetClient
 {
     Task RestoreAsync(
@@ -44,10 +54,8 @@ internal interface INuGetClient
 
     Task<IReadOnlyList<NuGetSearchResult>> SearchAsync(
         string query,
-        bool exactMatch,
         bool prerelease,
         int take,
-        bool useCache,
         IReadOnlyList<string> explicitSources,
         string? nugetConfigPath,
         string workingDirectory,
@@ -60,6 +68,21 @@ internal sealed record NuGetSearchResult(
     string Source,
     IReadOnlyList<string> AllVersions);
 
+/// <summary>
+/// Reports a failed in-process NuGet operation.
+/// </summary>
+/// <param name="output">The diagnostic text the <c>aspire-managed nuget</c> helper would have written to stderr.</param>
+/// <param name="innerException">The exception that caused the failure, if any.</param>
+internal sealed class NuGetOperationException(string output, Exception? innerException = null)
+    : Exception("NuGet operation failed.", innerException)
+{
+    /// <summary>
+    /// Gets the text the helper would have written to stderr. Callers surface it exactly as they surfaced the
+    /// helper's stderr, so user-visible failure messages are unchanged.
+    /// </summary>
+    public string Output { get; } = output;
+}
+
 internal sealed class NuGetClient(
     IFeatures features,
     IEnvironment environment,
@@ -67,9 +90,12 @@ internal sealed class NuGetClient(
 {
     private const string NuGetOrgUrl = "https://api.nuget.org/v3/index.json";
     private const string RuntimeIdentifierGraphResourceName = "Aspire.Cli.RuntimeIdentifierGraph.json";
-    private readonly NuGetLogger _nuGetLogger = new(logger);
     private static readonly Lock s_credentialServiceLock = new();
     private static bool s_credentialServiceInitialized;
+
+    // Output the helper never produced -- credential provider and trust store diagnostics -- only goes to the debug
+    // log. Keeping it out of each operation's captured output keeps failure messages identical to the helper's.
+    private readonly DiagnosticNuGetLogger _diagnosticLogger = new(logger);
 
     public async Task RestoreAsync(
         IReadOnlyList<(string Id, string Version)> packages,
@@ -82,59 +108,78 @@ internal sealed class NuGetClient(
         CancellationToken cancellationToken)
     {
         InitializeCredentialService();
-        Directory.CreateDirectory(outputPath);
+        var output = new NuGetOperationOutput(logger);
 
-        // Restore is delegated to NuGet's RestoreRunner so the CLI resolves packages exactly the way
-        // the aspire-managed helper did. Reimplementing the graph walk here previously diverged from
-        // NuGet on RID-specific dependencies, placeholder assets, and version selection.
-        var machineWideSettings = new XPlatMachineWideSetting();
-        var settings = Settings.LoadDefaultSettings(workingDirectory, nugetConfigPath, machineWideSettings);
-
-        var packageSources = ResolvePackageSources(settings, sources);
-        var targetFramework = NuGetFramework.Parse(framework);
-        var packageSpec = BuildPackageSpec(
-            packages,
-            targetFramework,
-            runtimeIdentifier,
-            outputPath,
-            packageSources,
-            settings);
-
-        var dgSpec = new DependencyGraphSpec();
-        dgSpec.AddProject(packageSpec);
-        dgSpec.AddRestore(packageSpec.RestoreMetadata.ProjectUniqueName);
-
-        var providerCache = new RestoreCommandProvidersCache();
-        var dgProvider = new DependencyGraphSpecRequestProvider(providerCache, dgSpec, settings);
-
-        NuGetSignatureVerificationEnabler.ApplyToCurrentProcess(features, environment);
-        NativeAotNuGetTrustStore.Initialize(_nuGetLogger, environment);
-
-        using var cacheContext = new SourceCacheContext();
-        var restoreArgs = new RestoreArgs
+        // The helper received DOTNET_NUGET_SIGNATURE_VERIFICATION only in its own environment. NuGet reads it from the
+        // process environment, so it has to be set here, but only for the duration of the restore.
+        using var signatureVerification = NuGetSignatureVerificationEnabler.ApplyToCurrentProcess(features, environment);
+        try
         {
-            CacheContext = cacheContext,
-            Log = _nuGetLogger,
-            PreLoadedRequestProviders = [dgProvider],
-            DisableParallel = Environment.ProcessorCount == 1,
-            AllowNoOp = false,
-            MachineWideSettings = machineWideSettings,
-        };
+            Directory.CreateDirectory(outputPath);
 
-        var results = await RestoreRunner.RunAsync(restoreArgs, cancellationToken).ConfigureAwait(false);
-        var summary = results.Count > 0 ? results[0] : null;
+            // Restore is delegated to NuGet's RestoreRunner so the CLI resolves packages exactly the way
+            // the aspire-managed helper did. Reimplementing the graph walk here previously diverged from
+            // NuGet on RID-specific dependencies, placeholder assets, and version selection.
+            var machineWideSettings = new XPlatMachineWideSetting();
+            var settings = Settings.LoadDefaultSettings(workingDirectory, nugetConfigPath, machineWideSettings);
 
-        if (summary is null)
-        {
-            throw new InvalidOperationException("NuGet restore returned no results.");
+            var packageSources = ResolvePackageSources(settings, sources);
+            var targetFramework = NuGetFramework.Parse(framework);
+            var packageSpec = BuildPackageSpec(
+                packages,
+                targetFramework,
+                runtimeIdentifier,
+                outputPath,
+                packageSources,
+                settings);
+
+            var dgSpec = new DependencyGraphSpec();
+            dgSpec.AddProject(packageSpec);
+            dgSpec.AddRestore(packageSpec.RestoreMetadata.ProjectUniqueName);
+
+            var providerCache = new RestoreCommandProvidersCache();
+            var dgProvider = new DependencyGraphSpecRequestProvider(providerCache, dgSpec, settings);
+
+            using var cacheContext = new SourceCacheContext();
+            var restoreArgs = new RestoreArgs
+            {
+                CacheContext = cacheContext,
+                Log = output,
+                PreLoadedRequestProviders = [dgProvider],
+                DisableParallel = Environment.ProcessorCount == 1,
+                AllowNoOp = false,
+                MachineWideSettings = machineWideSettings,
+            };
+
+            NativeAotNuGetTrustStore.Initialize(output, _diagnosticLogger, environment);
+
+            var results = await RestoreRunner.RunAsync(restoreArgs, cancellationToken).ConfigureAwait(false);
+            var summary = results.Count > 0 ? results[0] : null;
+
+            if (summary is null)
+            {
+                output.WriteLine("Error: Restore returned no results");
+                throw new NuGetOperationException(output.Text);
+            }
+
+            if (!summary.Success)
+            {
+                var errors = string.Join(
+                    Environment.NewLine,
+                    summary.Errors?.Select(error => error.Message) ?? ["Unknown error"]);
+                output.WriteLine($"Error: Restore failed: {errors}");
+                throw new NuGetOperationException(output.Text);
+            }
         }
-
-        if (!summary.Success)
+        catch (Exception ex) when (ex is not OperationCanceledException and not NuGetOperationException)
         {
-            var errors = string.Join(
-                Environment.NewLine,
-                summary.Errors?.Select(error => error.Message) ?? ["Unknown error"]);
-            throw new InvalidOperationException($"NuGet restore failed: {errors}");
+            output.WriteLine($"Error: {ex.Message}");
+            if (output.Verbose)
+            {
+                output.WriteLine(ex.ToString());
+            }
+
+            throw new NuGetOperationException(output.Text, ex);
         }
     }
 
@@ -234,132 +279,143 @@ internal sealed class NuGetClient(
         string? runtimeIdentifier,
         CancellationToken cancellationToken)
     {
-        // Asset selection is delegated to NuGet's own restore output. The assets file already
-        // records which assemblies, resources, and native libraries apply to this target, so the
-        // manifest reflects NuGet's RID fallback, `_._` placeholder, and locale semantics instead
-        // of a reimplementation of them.
-        var resolution = NuGetPackageAssetResolver.Resolve(assetsFilePath, framework, runtimeIdentifier);
-
-        var managedAssemblies = new List<IntegrationPackageManagedAssembly>();
-        var nativeLibraries = new List<IntegrationPackageNativeLibrary>();
-
-        foreach (var asset in resolution.Assets)
+        var output = new NuGetOperationOutput(logger);
+        try
         {
-            if (asset.IsManagedAssembly)
+            // Asset selection is delegated to NuGet's own restore output. The assets file already
+            // records which assemblies, resources, and native libraries apply to this target, so the
+            // manifest reflects NuGet's RID fallback, `_._` placeholder, and locale semantics instead
+            // of a reimplementation of them.
+            var resolution = NuGetPackageAssetResolver.Resolve(
+                assetsFilePath,
+                framework,
+                runtimeIdentifier,
+                output.Verbose ? output.WriteDiagnostic : null);
+
+            var managedAssemblies = new List<IntegrationPackageManagedAssembly>();
+            var nativeLibraries = new List<IntegrationPackageNativeLibrary>();
+
+            foreach (var asset in resolution.Assets)
             {
-                managedAssemblies.Add(new IntegrationPackageManagedAssembly
+                if (asset.IsManagedAssembly)
                 {
-                    PackageId = asset.PackageId,
-                    PackageVersion = asset.PackageVersion,
-                    Name = Path.GetFileNameWithoutExtension(asset.RelativePath),
-                    Culture = asset.Culture,
-                    Path = asset.SourcePath
-                });
+                    managedAssemblies.Add(new IntegrationPackageManagedAssembly
+                    {
+                        PackageId = asset.PackageId,
+                        PackageVersion = asset.PackageVersion,
+                        Name = Path.GetFileNameWithoutExtension(asset.RelativePath),
+                        Culture = asset.Culture,
+                        Path = asset.SourcePath
+                    });
+                }
+
+                if (asset.IsNativeLibrary)
+                {
+                    nativeLibraries.Add(new IntegrationPackageNativeLibrary
+                    {
+                        FileName = Path.GetFileName(asset.RelativePath),
+                        Path = asset.SourcePath
+                    });
+                }
             }
 
-            if (asset.IsNativeLibrary)
+            var outputDirectory = Path.GetDirectoryName(outputPath);
+            if (!string.IsNullOrEmpty(outputDirectory))
             {
-                nativeLibraries.Add(new IntegrationPackageNativeLibrary
-                {
-                    FileName = Path.GetFileName(asset.RelativePath),
-                    Path = asset.SourcePath
-                });
+                Directory.CreateDirectory(outputDirectory);
             }
-        }
 
-        var outputDirectory = Path.GetDirectoryName(outputPath);
-        if (!string.IsNullOrEmpty(outputDirectory))
+            var manifest = IntegrationPackageProbeManifest.Create(managedAssemblies, nativeLibraries);
+            await IntegrationPackageProbeManifest.WriteAsync(outputPath, manifest, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            Directory.CreateDirectory(outputDirectory);
-        }
+            output.WriteLine($"Error: {ex.Message}");
+            if (output.Verbose)
+            {
+                output.WriteLine(ex.StackTrace ?? string.Empty);
+            }
 
-        var manifest = IntegrationPackageProbeManifest.Create(managedAssemblies, nativeLibraries);
-        await IntegrationPackageProbeManifest.WriteAsync(outputPath, manifest, cancellationToken).ConfigureAwait(false);
+            throw new NuGetOperationException(output.Text, ex);
+        }
     }
 
     public async Task<IReadOnlyList<NuGetSearchResult>> SearchAsync(
         string query,
-        bool exactMatch,
         bool prerelease,
         int take,
-        bool useCache,
         IReadOnlyList<string> explicitSources,
         string? nugetConfigPath,
         string workingDirectory,
         CancellationToken cancellationToken)
     {
         InitializeCredentialService();
-        var settings = LoadSettings(nugetConfigPath, workingDirectory);
-        var packageSources = LoadPackageSources(settings, explicitSources);
-        var sourceSearches = packageSources.Select(source => SearchSourceSafelyAsync(
-            source,
-            query,
-            exactMatch,
-            prerelease,
-            take,
-            useCache,
-            cancellationToken));
-
-        var sourceResults = await Task.WhenAll(sourceSearches).ConfigureAwait(false);
-        var results = sourceResults.SelectMany(result => result.Packages).ToArray();
-
-        if (exactMatch)
+        var output = new NuGetOperationOutput(logger);
+        try
         {
-            return results
-                .OrderBy(package => package.Id, StringComparer.OrdinalIgnoreCase)
-                .ThenByDescending(package => NuGetVersion.Parse(package.Version))
+            var settings = LoadSettings(nugetConfigPath, workingDirectory);
+            var packageSources = LoadPackageSources(settings, explicitSources, output);
+            var searchFilter = new global::NuGet.Protocol.Core.Types.SearchFilter(prerelease);
+
+            var searchResults = await Task.WhenAll(packageSources.Select(source => SearchSourceSafelyAsync(
+                source,
+                query,
+                searchFilter,
+                take,
+                output,
+                cancellationToken))).ConfigureAwait(false);
+
+            // Shape the results exactly as the helper did, including its comparers. Versions are compared as strings
+            // rather than as NuGet versions because that is what decided which source's entry survived deduplication.
+            return searchResults
+                .SelectMany(packages => packages)
+                .GroupBy(package => package.Id, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.OrderByDescending(package => package.Version).First())
+                .OrderBy(package => package.Id)
+                .Take(take)
                 .ToArray();
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            output.WriteLine($"Error: {ex.Message}");
+            if (output.Verbose)
+            {
+                output.WriteLine(ex.StackTrace ?? string.Empty);
+            }
 
-        return results
-            .GroupBy(package => package.Id, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.OrderByDescending(package => NuGetVersion.Parse(package.Version)).First())
-            .OrderBy(package => package.Id, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+            throw new NuGetOperationException(output.Text, ex);
+        }
     }
 
-    private async Task<NuGetSourceSearchResult> SearchSourceSafelyAsync(
+    private static async Task<IReadOnlyList<NuGetSearchResult>> SearchSourceSafelyAsync(
         PackageSource source,
         string query,
-        bool exactMatch,
-        bool prerelease,
+        global::NuGet.Protocol.Core.Types.SearchFilter filter,
         int take,
-        bool useCache,
+        NuGetOperationOutput output,
         CancellationToken cancellationToken)
     {
         try
         {
-            var packages = exactMatch
-                ? await GetPackageMetadataAsync(source, query, prerelease, useCache, cancellationToken).ConfigureAwait(false)
-                : await SearchSourceAsync(
-                    source,
-                    query,
-                    new global::NuGet.Protocol.Core.Types.SearchFilter(prerelease),
-                    take,
-                    cancellationToken).ConfigureAwait(false);
-            return new(packages, PackageSourceRedactor.RedactForDisplay(source.Source));
+            return await SearchSourceAsync(source, query, filter, take, output, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            var displaySource = PackageSourceRedactor.RedactForDisplay(source.Source);
-
-            // Only the exception type is logged. NuGet protocol failures format the feed URL into
-            // their own message -- often a derived resource URL rather than the configured source
-            // string -- so logging the exception would leak UserInfo/SAS credentials into
-            // ~/.aspire/logs, which users routinely attach to bug reports.
-            logger.LogWarning(
-                "Failed to search NuGet package source '{PackageSource}': {ExceptionType}",
-                displaySource,
-                ex.GetType().Name);
-            return new([], displaySource);
+            // Like the helper, report the failed source and keep the results from the others. The helper wrote the
+            // exception message, but NuGet protocol failures format the feed URL into it -- often a derived resource
+            // URL rather than the configured source -- which would leak UserInfo/SAS credentials into ~/.aspire/logs.
+            output.WriteLine($"Warning: Failed to search {PackageSourceRedactor.RedactForDisplay(source.Name)}: {ex.GetType().Name}");
+            return [];
         }
     }
 
     private void InitializeCredentialService()
     {
+        // Credential providers are a deliberate addition over the aspire-managed helper, which never set up NuGet's
+        // credential service and so could only authenticate with credentials stored in nuget.config.
         if (s_credentialServiceInitialized)
         {
-            DefaultCredentialServiceUtility.UpdateCredentialServiceDelegatingLogger(_nuGetLogger);
+            DefaultCredentialServiceUtility.UpdateCredentialServiceDelegatingLogger(_diagnosticLogger);
             return;
         }
 
@@ -367,21 +423,22 @@ internal sealed class NuGetClient(
         {
             if (!s_credentialServiceInitialized)
             {
-                DefaultCredentialServiceUtility.SetupDefaultCredentialService(_nuGetLogger, nonInteractive: true);
+                DefaultCredentialServiceUtility.SetupDefaultCredentialService(_diagnosticLogger, nonInteractive: true);
                 s_credentialServiceInitialized = true;
             }
             else
             {
-                DefaultCredentialServiceUtility.UpdateCredentialServiceDelegatingLogger(_nuGetLogger);
+                DefaultCredentialServiceUtility.UpdateCredentialServiceDelegatingLogger(_diagnosticLogger);
             }
         }
     }
 
-    private async Task<IReadOnlyList<NuGetSearchResult>> SearchSourceAsync(
+    private static async Task<IReadOnlyList<NuGetSearchResult>> SearchSourceAsync(
         PackageSource source,
         string query,
         global::NuGet.Protocol.Core.Types.SearchFilter filter,
         int take,
+        INuGetLogger nuGetLogger,
         CancellationToken cancellationToken)
     {
         var repository = Repository.Factory.GetCoreV3(source);
@@ -391,87 +448,33 @@ internal sealed class NuGetClient(
             return [];
         }
 
+        // The helper requested a single page starting at the first result; it never paged further.
+        var results = await searchResource.SearchAsync(
+            query,
+            filter,
+            skip: 0,
+            take,
+            nuGetLogger,
+            cancellationToken).ConfigureAwait(false);
+
         var packages = new List<NuGetSearchResult>();
-        var skip = 0;
-        while (true)
+        foreach (var result in results)
         {
-            var results = (await searchResource.SearchAsync(
-                query,
-                filter,
-                skip,
-                take,
-                _nuGetLogger,
-                cancellationToken).ConfigureAwait(false)).ToArray();
-
-            foreach (var result in results)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var versions = await result.GetVersionsAsync().ConfigureAwait(false);
-                packages.Add(new NuGetSearchResult(
-                    result.Identity.Id,
-                    result.Identity.Version.ToString(),
-                    source.Source,
-                    versions?.Select(version => version.Version.ToString()).ToArray() ?? []));
-            }
-
-            if (results.Length < take)
-            {
-                break;
-            }
-
-            skip += take;
+            var versions = await result.GetVersionsAsync().ConfigureAwait(false);
+            packages.Add(new NuGetSearchResult(
+                result.Identity.Id,
+                result.Identity.Version.ToString(),
+                source.Source,
+                versions?.Select(version => version.Version.ToString()).ToArray() ?? []));
         }
 
         return packages;
     }
 
-    private async Task<IReadOnlyList<NuGetSearchResult>> GetPackageMetadataAsync(
-        PackageSource source,
-        string packageId,
-        bool prerelease,
-        bool useCache,
-        CancellationToken cancellationToken)
-    {
-        var repository = Repository.Factory.GetCoreV3(source);
-        var metadataResource = await repository.GetResourceAsync<PackageMetadataResource>(cancellationToken).ConfigureAwait(false);
-        if (metadataResource is null)
-        {
-            return [];
-        }
-
-        using var cacheContext = new SourceCacheContext
-        {
-            NoCache = !useCache,
-            DirectDownload = !useCache
-        };
-        var metadata = (await metadataResource.GetMetadataAsync(
-            packageId,
-            prerelease,
-            includeUnlisted: false,
-            cacheContext,
-            _nuGetLogger,
-            cancellationToken).ConfigureAwait(false)).ToArray();
-        if (metadata.Length == 0)
-        {
-            return [];
-        }
-
-        var latest = metadata
-            .OrderByDescending(package => package.Identity.Version)
-            .First();
-        return
-        [
-            new NuGetSearchResult(
-                latest.Identity.Id,
-                latest.Identity.Version.ToString(),
-                source.Source,
-                metadata.Select(package => package.Identity.Version.ToString()).ToArray())
-        ];
-    }
-
     private static ISettings LoadSettings(string? nugetConfigPath, string workingDirectory)
     {
-        if (!string.IsNullOrEmpty(nugetConfigPath))
+        // A config path that does not exist falls back to normal discovery, as it did in the helper.
+        if (!string.IsNullOrEmpty(nugetConfigPath) && File.Exists(nugetConfigPath))
         {
             return Settings.LoadSpecificSettings(
                 Path.GetDirectoryName(nugetConfigPath)!,
@@ -483,21 +486,22 @@ internal sealed class NuGetClient(
 
     private static List<PackageSource> LoadPackageSources(
         ISettings settings,
-        IReadOnlyList<string> explicitSources)
+        IReadOnlyList<string> explicitSources,
+        NuGetOperationOutput output)
     {
-        if (explicitSources.Count > 0)
-        {
-            return explicitSources.Select(source => new PackageSource(source)).ToList();
-        }
+        var sources = explicitSources.Select(source => new PackageSource(source)).ToList();
 
-        var sources = new PackageSourceProvider(settings)
-            .LoadPackageSources()
-            .Where(source => source.IsEnabled)
-            .ToList();
+        if (sources.Count == 0)
+        {
+            sources.AddRange(new PackageSourceProvider(settings)
+                .LoadPackageSources()
+                .Where(source => source.IsEnabled));
+        }
 
         if (sources.Count == 0)
         {
             sources.Add(new PackageSource(NuGetOrgUrl, "nuget.org"));
+            output.WriteLine("Note: No package sources configured, using nuget.org as fallback.");
         }
 
         return sources;
@@ -528,24 +532,73 @@ internal sealed class NuGetClient(
         return sources;
     }
 
-    private sealed record NuGetSourceSearchResult(
-        IReadOnlyList<NuGetSearchResult> Packages,
-        string Source);
-
-    private sealed class NuGetLogger(ILogger logger) : INuGetLogger
+    /// <summary>
+    /// Records one operation's output the way the aspire-managed helper wrote it to stderr.
+    /// </summary>
+    /// <remarks>
+    /// The helper's stderr was the only diagnostic channel back to the CLI: the CLI logged it and put it into the
+    /// exception message when the operation failed. This buffers the same text for <see cref="NuGetOperationException"/>
+    /// and also streams each entry to the debug log, where the CLI logged successful operations' stderr.
+    /// </remarks>
+    private sealed class NuGetOperationOutput(ILogger logger) : INuGetLogger
     {
+        private readonly Lock _lock = new();
+        private readonly StringBuilder _text = new();
+
+        /// <summary>
+        /// Gets whether the helper would have run with <c>--verbose</c>. The CLI passed that flag exactly when its
+        /// logger had debug logging enabled.
+        /// </summary>
+        public bool Verbose { get; } = logger.IsEnabled(LogLevel.Debug);
+
+        public string Text
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _text.ToString();
+                }
+            }
+        }
+
+        public void WriteLine(string text)
+        {
+            // The CLI read the helper's stderr line by line and re-joined it with AppendLine, which normalized any
+            // line breaks embedded in a message to Environment.NewLine. Split the same way so the text matches.
+            lock (_lock)
+            {
+                foreach (var line in text.ReplaceLineEndings("\n").Split('\n'))
+                {
+                    _text.AppendLine(line);
+                }
+            }
+
+            logger.LogDebug("{Message}", text);
+        }
+
+        /// <summary>
+        /// Logs text the helper wrote to stdout. The CLI only surfaced stdout when an operation failed, so it goes to
+        /// the debug log without becoming part of <see cref="Text"/>.
+        /// </summary>
+        public void WriteDiagnostic(string text) => logger.LogDebug("{Message}", text);
+
         public void Log(NuGetLogLevel level, string data)
         {
-            // Mirror the bundled aspire-managed helper, which only forwarded NuGet's sub-warning
-            // diagnostics when the CLI passed --verbose, and decided that with this same
-            // IsEnabled(Debug) check. Keeping the predicate identical preserves the previous
-            // behavior in every log configuration rather than only the default one.
-            if (level < NuGetLogLevel.Warning && !logger.IsEnabled(LogLevel.Debug))
+            // Same filtering and prefixes as the helper's NuGet logger.
+            if (!Verbose && level < NuGetLogLevel.Warning)
             {
                 return;
             }
 
-            logger.Log(MapLogLevel(level), "{Message}", data);
+            var prefix = level switch
+            {
+                NuGetLogLevel.Error => "ERROR: ",
+                NuGetLogLevel.Warning => "WARNING: ",
+                _ => ""
+            };
+
+            WriteLine($"{prefix}{data}");
         }
 
         public void Log(NuGetLogMessage message) => Log(message.Level, message.Message);
@@ -569,15 +622,35 @@ internal sealed class NuGetClient(
         public void LogMinimal(string data) => Log(NuGetLogLevel.Minimal, data);
         public void LogVerbose(string data) => Log(NuGetLogLevel.Verbose, data);
         public void LogWarning(string data) => Log(NuGetLogLevel.Warning, data);
+    }
 
-        private static LogLevel MapLogLevel(NuGetLogLevel level) => level switch
+    /// <summary>
+    /// Sends NuGet output that has no helper equivalent to the debug log only.
+    /// </summary>
+    private sealed class DiagnosticNuGetLogger(ILogger logger) : INuGetLogger
+    {
+        public void Log(NuGetLogLevel level, string data) => logger.LogDebug("{Message}", data);
+        public void Log(NuGetLogMessage message) => Log(message.Level, message.Message);
+
+        public Task LogAsync(NuGetLogLevel level, string data)
         {
-            NuGetLogLevel.Debug or NuGetLogLevel.Verbose => LogLevel.Debug,
-            NuGetLogLevel.Information or NuGetLogLevel.Minimal => LogLevel.Information,
-            NuGetLogLevel.Warning => LogLevel.Warning,
-            NuGetLogLevel.Error => LogLevel.Error,
-            _ => LogLevel.None
-        };
+            Log(level, data);
+            return Task.CompletedTask;
+        }
+
+        public Task LogAsync(NuGetLogMessage message)
+        {
+            Log(message);
+            return Task.CompletedTask;
+        }
+
+        public void LogDebug(string data) => Log(NuGetLogLevel.Debug, data);
+        public void LogError(string data) => Log(NuGetLogLevel.Error, data);
+        public void LogInformation(string data) => Log(NuGetLogLevel.Information, data);
+        public void LogInformationSummary(string data) => Log(NuGetLogLevel.Information, data);
+        public void LogMinimal(string data) => Log(NuGetLogLevel.Minimal, data);
+        public void LogVerbose(string data) => Log(NuGetLogLevel.Verbose, data);
+        public void LogWarning(string data) => Log(NuGetLogLevel.Warning, data);
     }
 
     private static class NativeAotNuGetTrustStore
@@ -585,7 +658,7 @@ internal sealed class NuGetClient(
         private static readonly object s_lock = new();
         private static bool s_initialized;
 
-        public static void Initialize(INuGetLogger logger, IEnvironment environment)
+        public static void Initialize(NuGetOperationOutput output, INuGetLogger diagnosticLogger, IEnvironment environment)
         {
             if (s_initialized ||
                 !environment.IsLinux() ||
@@ -603,25 +676,49 @@ internal sealed class NuGetClient(
                     return;
                 }
 
-                var previousSdkRoot = AppContext.GetData("Microsoft.DotNet.Sdk.Root");
-                var rootDirectory = Directory.CreateTempSubdirectory("aspire-nuget-trust-");
                 try
                 {
-                    var trustedRootsDirectory = Directory.CreateDirectory(
-                        Path.Combine(rootDirectory.FullName, "trustedroots"));
-                    WriteResource("codesignctl.pem", trustedRootsDirectory.FullName);
-                    WriteResource("timestampctl.pem", trustedRootsDirectory.FullName);
-
-                    // NuGet resolves its fallback trust bundles under Microsoft.DotNet.Sdk.Root.
-                    // Point it at the securely extracted embedded SDK bundles only while the factories initialize.
-                    AppContext.SetData("Microsoft.DotNet.Sdk.Root", rootDirectory.FullName);
-                    X509TrustStore.InitializeForDotNetSdk(logger);
+                    InitializeFromEmbeddedResources(diagnosticLogger);
                     s_initialized = true;
                 }
-                finally
+                catch (Exception ex)
                 {
-                    AppContext.SetData("Microsoft.DotNet.Sdk.Root", previousSdkRoot);
+                    // Like the helper, report the failure but let the restore continue. NuGet can still succeed when
+                    // these packages do not need verification or the system provides its own certificate bundles.
+                    output.WriteLine($"WARNING: Failed to initialize NuGet trust store from embedded certificates: {ex}");
+                }
+            }
+        }
+
+        private static void InitializeFromEmbeddedResources(INuGetLogger diagnosticLogger)
+        {
+            var previousSdkRoot = AppContext.GetData("Microsoft.DotNet.Sdk.Root");
+            var rootDirectory = Directory.CreateTempSubdirectory("aspire-nuget-trust-");
+            try
+            {
+                var trustedRootsDirectory = Directory.CreateDirectory(
+                    Path.Combine(rootDirectory.FullName, "trustedroots"));
+                WriteResource("codesignctl.pem", trustedRootsDirectory.FullName);
+                WriteResource("timestampctl.pem", trustedRootsDirectory.FullName);
+
+                // NuGet resolves its fallback trust bundles under Microsoft.DotNet.Sdk.Root.
+                // Point it at the securely extracted embedded SDK bundles only while the factories initialize.
+                AppContext.SetData("Microsoft.DotNet.Sdk.Root", rootDirectory.FullName);
+                X509TrustStore.InitializeForDotNetSdk(diagnosticLogger);
+            }
+            finally
+            {
+                AppContext.SetData("Microsoft.DotNet.Sdk.Root", previousSdkRoot);
+
+                // The factories hold the certificates they loaded, so a directory that cannot be removed is only a
+                // leftover temp file and must not undo a successful initialization.
+                try
+                {
                     rootDirectory.Delete(recursive: true);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    diagnosticLogger.LogDebug($"Failed to delete temporary trust store directory '{rootDirectory.FullName}': {ex.Message}");
                 }
             }
         }

@@ -71,7 +71,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ComputePackageHash_PreservesSourceOrder()
+    public void ComputePackageHash_IgnoresSourceOrder()
     {
         var packageList = new List<(string Id, string Version)>
         {
@@ -89,7 +89,47 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             runtimeIdentifier: null,
             sources: ["https://example.com/feed-b/index.json", "https://example.com/feed-a/index.json"]);
 
-        Assert.NotEqual(resultA, resultB);
+        Assert.Equal(resultA, resultB);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_RestoreFailureReportsHelperOutput()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var output = "ERROR: NU1101: Unable to find package Missing.Package." + Environment.NewLine +
+            "Error: Restore failed: NU1101: Unable to find package Missing.Package." + Environment.NewLine;
+        var nuGetClient = new FakeNuGetClient
+        {
+            RestoreCallback = (_, _, _, _, _, _, _, _) => throw new NuGetOperationException(output)
+        };
+        var service = CreateService(nuGetClient);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.RestorePackagesAsync(
+            [("Missing.Package", "1.0.0")],
+            workingDirectory: appHostDirectory.FullName));
+
+        Assert.Equal($"Package restore failed: {output}", exception.Message);
+        Assert.Equal(0, nuGetClient.WriteManifestCallCount);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_ManifestFailureReportsHelperOutput()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var output = "Error: Assets file not found." + Environment.NewLine;
+        var nuGetClient = new FakeNuGetClient
+        {
+            WriteManifestCallback = (_, _, _, _, _) => throw new NuGetOperationException(output)
+        };
+        var service = CreateService(nuGetClient);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: appHostDirectory.FullName));
+
+        Assert.Equal($"Manifest creation failed: {output}", exception.Message);
     }
 
     [Fact]
@@ -104,7 +144,8 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         var packageHash = BundleNuGetService.ComputePackageHash(
             packageList,
             "net10.0",
-            runtimeIdentifier: null);
+            runtimeIdentifier: null,
+            Environment.ProcessPath);
         var manifestPath = Path.Combine(
             workspace.WorkspaceRoot.FullName,
             ".aspire",

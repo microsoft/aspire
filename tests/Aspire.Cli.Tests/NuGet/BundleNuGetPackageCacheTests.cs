@@ -1,12 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
-using Aspire.Cli.Telemetry;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.NuGet;
@@ -23,7 +25,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
             {
                 return new FakeNuGetClient
                 {
-                    SearchCallback = (_, _, _, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
+                    SearchCallback = (_, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
                     [
                         new("CommunityToolkit.Aspire.Hosting.Foo", "9.4.0-xyz", "nuget.org", ["9.4.0-xyz"]),
                         new("Aspire.Cli", "9.4.0-preview", "nuget.org", ["9.4.0-preview"])
@@ -53,7 +55,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
             {
                 return new FakeNuGetClient
                 {
-                    SearchCallback = (_, _, _, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
+                    SearchCallback = (_, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
                     [
                         new("Aspire.Hosting.Redis", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("Aspire.Hosting.Dapr", "9.4.0", "nuget.org", ["9.4.0"]),
@@ -92,7 +94,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
             {
                 return new FakeNuGetClient
                 {
-                    SearchCallback = (_, _, _, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
+                    SearchCallback = (_, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
                     [
                         new("Aspire.Hosting.Redis", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("Aspire.Hosting.Dapr", "9.4.0", "nuget.org", ["9.4.0"]),
@@ -128,7 +130,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
             {
                 return new FakeNuGetClient
                 {
-                    SearchCallback = (_, _, _, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
+                    SearchCallback = (_, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
                     [
                         new("Aspire.Hosting.Redis", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("Aspire.Hosting.Dapr", "9.4.0", "nuget.org", ["9.4.0"]),
@@ -169,7 +171,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
             {
                 return new FakeNuGetClient
                 {
-                    SearchCallback = (_, _, _, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
+                    SearchCallback = (_, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
                     [
                         new("aspire.hosting.dapr", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("ASPIRE.HOSTING.DAPR", "9.4.0", "nuget.org", ["9.4.0"]),
@@ -201,7 +203,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
             {
                 return new FakeNuGetClient
                 {
-                    SearchCallback = (_, _, _, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
+                    SearchCallback = (_, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
                     [
                         new("Aspire.Hosting.Redis", "13.4.0", "nuget.org", ["13.4.0"]),
                         new("Aspire.Hosting.Integration.Analyzers", "13.4.0", "nuget.org", ["13.4.0"]),
@@ -223,11 +225,10 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetPackageVersionsAsync_UsesExactMatchSearch()
+    public async Task GetPackageVersionsAsync_ExpandsVersionsOfExactIdMatch()
     {
-        int observedTake = -1;
-        bool? observedExactMatch = null;
-        bool? observedUseCache = null;
+        string? observedQuery = null;
+        var observedTake = -1;
 
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
@@ -236,20 +237,17 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
             {
                 return new FakeNuGetClient
                 {
-                    SearchCallback = (query, exactMatch, _, take, useCache, _, _, _, _) =>
+                    SearchCallback = (query, _, take, _, _, _, _) =>
                     {
+                        observedQuery = query;
                         observedTake = take;
-                        observedExactMatch = exactMatch;
-                        observedUseCache = useCache;
-                        return Task.FromResult<IReadOnlyList<NuGetSearchResult>>(query switch
-                        {
-                            "Aspire.Hosting.Redis" =>
-                            [
-                                new("Aspire.Hosting.Redis", "13.3.0", "nuget.org", ["13.3.0", "13.2.0"]),
-                                new("Aspire.Hosting.Redis", "14.0.0", "private-feed", ["14.0.0"])
-                            ],
-                            _ => []
-                        });
+
+                        // An ordinary search also returns packages whose IDs only start with the query.
+                        return Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
+                        [
+                            new("Aspire.Hosting.Redis", "13.3.0", "nuget.org", ["13.3.0", "13.2.0"]),
+                            new("Aspire.Hosting.Redis.Extras", "14.0.0", "nuget.org", ["14.0.0"])
+                        ]);
                     }
                 };
             };
@@ -258,34 +256,62 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var nuGetPackageCache = CreateCache(provider);
-        var packages = (await nuGetPackageCache.GetPackageVersionsAsync(
+        var packages = await nuGetPackageCache.GetPackageVersionsAsync(
             workspace.WorkspaceRoot,
             "Aspire.Hosting.Redis",
             prerelease: false,
             nugetConfigFile: null,
             useCache: true,
-            CancellationToken.None)).OrderBy(package => package.Version).ToArray();
+            CancellationToken.None);
 
+        Assert.Equal("Aspire.Hosting.Redis", observedQuery);
         Assert.Equal(1000, observedTake);
-        Assert.True(observedExactMatch);
-        Assert.True(observedUseCache);
         Assert.Collection(
             packages,
             package =>
             {
-                Assert.Equal("13.2.0", package.Version);
-                Assert.Equal("nuget.org", package.Source);
-            },
-            package =>
-            {
+                Assert.Equal("Aspire.Hosting.Redis", package.Id);
                 Assert.Equal("13.3.0", package.Version);
                 Assert.Equal("nuget.org", package.Source);
             },
             package =>
             {
-                Assert.Equal("14.0.0", package.Version);
-                Assert.Equal("private-feed", package.Source);
+                Assert.Equal("Aspire.Hosting.Redis", package.Id);
+                Assert.Equal("13.2.0", package.Version);
+                Assert.Equal("nuget.org", package.Source);
             });
+    }
+
+    [Fact]
+    public async Task GetPackageVersionsAsync_MatchesPackageIdCaseSensitively()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
+        {
+            configure.NuGetClientFactory = _ =>
+            {
+                return new FakeNuGetClient
+                {
+                    SearchCallback = (_, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
+                    [
+                        new("aspire.hosting.redis", "13.3.0", "nuget.org", ["13.3.0"])
+                    ])
+                };
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var nuGetPackageCache = CreateCache(provider);
+        var packages = await nuGetPackageCache.GetPackageVersionsAsync(
+            workspace.WorkspaceRoot,
+            "Aspire.Hosting.Redis",
+            prerelease: false,
+            nugetConfigFile: null,
+            useCache: true,
+            CancellationToken.None);
+
+        Assert.Empty(packages);
     }
 
     [Fact]
@@ -298,7 +324,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
             {
                 return new FakeNuGetClient
                 {
-                    SearchCallback = (_, _, _, _, _, _, _, _, _) =>
+                    SearchCallback = (_, _, _, _, _, _, _) =>
                         Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
                         [
                             new("Aspire.Hosting.Dapr", "13.4.0", "nuget.org", ["13.4.0"])
@@ -322,17 +348,17 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task SearchFailureIsWrappedInNuGetPackageCacheException()
+    public async Task SearchFailureReportsHelperExitCodeMessage()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var expectedException = new IOException("Search failed.");
+        var expectedException = new NuGetOperationException("Error: Search failed." + Environment.NewLine);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
             configure.NuGetClientFactory = _ =>
             {
                 return new FakeNuGetClient
                 {
-                    SearchCallback = (_, _, _, _, _, _, _, _, _) => throw expectedException
+                    SearchCallback = (_, _, _, _, _, _, _) => throw expectedException
                 };
             };
         });
@@ -349,6 +375,9 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
                 useCache: true,
                 CancellationToken.None));
 
+        Assert.Equal(
+            string.Format(CultureInfo.CurrentCulture, ErrorStrings.FailedToSearchForPackages, 1),
+            exception.Message);
         Assert.Same(expectedException, exception.InnerException);
     }
 
@@ -364,7 +393,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
             {
                 return new FakeNuGetClient
                 {
-                    SearchCallback = (_, _, _, _, _, _, _, _, cancellationToken) =>
+                    SearchCallback = (_, _, _, _, _, _, cancellationToken) =>
                         Task.FromCanceled<IReadOnlyList<NuGetSearchResult>>(cancellationToken)
                 };
             };
@@ -386,6 +415,6 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
     private static INuGetPackageCache CreateCache(IServiceProvider provider) =>
         new BundleNuGetPackageCache(
             provider.GetRequiredService<INuGetClient>(),
-            provider.GetRequiredService<AspireCliTelemetry>(),
+            NullLogger<BundleNuGetPackageCache>.Instance,
             provider.GetRequiredService<IFeatures>());
 }

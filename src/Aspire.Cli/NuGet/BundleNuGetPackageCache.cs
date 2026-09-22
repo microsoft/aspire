@@ -1,21 +1,25 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.Configuration;
-using Aspire.Cli.Telemetry;
+using Aspire.Cli.Resources;
+using Microsoft.Extensions.Logging;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.NuGet;
 
 /// <summary>
-/// NuGet package cache implementation for bundled CLIs, which cannot rely on a .NET SDK.
+/// NuGet package cache implementation for bundled CLIs, which cannot rely on the .NET SDK's
+/// <c>dotnet package search</c> command.
 /// </summary>
 internal sealed class BundleNuGetPackageCache(
     INuGetClient nuGetClient,
-    AspireCliTelemetry telemetry,
+    ILogger<BundleNuGetPackageCache> logger,
     IFeatures features) : INuGetPackageCache
 {
-    private const int SearchPageSize = 1000;
+    // The aspire-managed helper was always invoked with --take 1000.
+    private const int SearchTake = 1000;
 
     public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(
         DirectoryInfo workingDirectory,
@@ -26,28 +30,27 @@ internal sealed class BundleNuGetPackageCache(
         var packages = await SearchAsync(
             workingDirectory,
             "Aspire.ProjectTemplates",
-            exactMatch: false,
             prerelease,
             nugetConfigFile,
-            useCache: true,
             cancellationToken).ConfigureAwait(false);
+
         return packages.Where(package => package.Id.Equals("Aspire.ProjectTemplates", StringComparison.OrdinalIgnoreCase));
     }
 
-    public Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(
+    public async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(
         DirectoryInfo workingDirectory,
         bool prerelease,
         FileInfo? nugetConfigFile,
         CancellationToken cancellationToken)
     {
-        return GetPackagesAsync(
+        var packages = await SearchAsync(
             workingDirectory,
             "Aspire.Hosting",
-            filter: null,
             prerelease,
             nugetConfigFile,
-            useCache: true,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
+
+        return FilterPackages(packages, filter: null);
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(
@@ -59,11 +62,10 @@ internal sealed class BundleNuGetPackageCache(
         var packages = await SearchAsync(
             workingDirectory,
             "Aspire.Cli",
-            exactMatch: false,
             prerelease,
             nugetConfigFile,
-            useCache: false,
             cancellationToken).ConfigureAwait(false);
+
         return packages.Where(package => package.Id.Equals("Aspire.Cli", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -79,11 +81,10 @@ internal sealed class BundleNuGetPackageCache(
         var packages = await SearchAsync(
             workingDirectory,
             packageId,
-            exactMatch: false,
             prerelease,
             nugetConfigFile,
-            useCache,
             cancellationToken).ConfigureAwait(false);
+
         return FilterPackages(packages, filter);
     }
 
@@ -98,75 +99,74 @@ internal sealed class BundleNuGetPackageCache(
         var results = await SearchClientAsync(
             workingDirectory,
             exactPackageId,
-            exactMatch: true,
             prerelease,
             nugetConfigFile,
-            useCache,
             cancellationToken).ConfigureAwait(false);
-        var packages = results
-            .Where(package => package.Id.Equals(exactPackageId, StringComparison.OrdinalIgnoreCase))
-            .SelectMany(package => package.AllVersions.Select(version => new NuGetPackage
-            {
-                Id = package.Id,
-                Version = version,
-                Source = package.Source
-            }))
-            .DistinctBy(package => package.Version, StringComparer.OrdinalIgnoreCase);
-        return packages;
+
+        // The helper had no exact-match mode. The CLI ran an ordinary search for the package ID and expanded the
+        // versions of the one result whose ID matched it exactly, including its casing.
+        var exactMatch = results.FirstOrDefault(package => package.Id.Equals(exactPackageId, StringComparison.Ordinal));
+        if (exactMatch is null)
+        {
+            return [];
+        }
+
+        return exactMatch.AllVersions.Select(version => new NuGetPackage
+        {
+            Id = exactMatch.Id,
+            Version = version,
+            Source = exactMatch.Source
+        }).ToList();
     }
 
-    private async Task<IEnumerable<NuGetPackage>> SearchAsync(
+    private async Task<List<NuGetPackage>> SearchAsync(
         DirectoryInfo workingDirectory,
         string query,
-        bool exactMatch,
         bool prerelease,
         FileInfo? nugetConfigFile,
-        bool useCache,
         CancellationToken cancellationToken)
     {
-        using var activity = telemetry.StartDiagnosticActivity();
         var results = await SearchClientAsync(
             workingDirectory,
             query,
-            exactMatch,
             prerelease,
             nugetConfigFile,
-            useCache,
             cancellationToken).ConfigureAwait(false);
+
         return results.Select(package => new NuGetPackage
         {
             Id = package.Id,
             Version = package.Version,
             Source = package.Source
-        });
+        }).ToList();
     }
 
     private async Task<IReadOnlyList<NuGetSearchResult>> SearchClientAsync(
         DirectoryInfo workingDirectory,
         string query,
-        bool exactMatch,
         bool prerelease,
         FileInfo? nugetConfigFile,
-        bool useCache,
         CancellationToken cancellationToken)
     {
         try
         {
             return await nuGetClient.SearchAsync(
                 query,
-                exactMatch,
                 prerelease,
-                SearchPageSize,
-                useCache,
+                SearchTake,
                 explicitSources: [],
                 nugetConfigFile?.FullName,
                 workingDirectory.FullName,
                 cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (NuGetOperationException ex)
         {
+            logger.LogError("NuGet search failed");
+            logger.LogError("NuGet search stderr: {Error}", ex.Output);
+
+            // The helper exited with code 1 for every search failure, and this is the message the CLI reported for it.
             throw new NuGetPackageCacheException(
-                $"Package search failed ({ex.GetType().Name}).",
+                string.Format(CultureInfo.CurrentCulture, ErrorStrings.FailedToSearchForPackages, 1),
                 ex);
         }
     }

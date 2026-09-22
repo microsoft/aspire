@@ -13,6 +13,10 @@ internal static class NuGetSignatureVerificationEnabler
 {
     internal const string DotNetNuGetSignatureVerification = "DOTNET_NUGET_SIGNATURE_VERIFICATION";
 
+    private static readonly Lock s_currentProcessLock = new();
+    private static int s_currentProcessScopeCount;
+    private static string? s_previousCurrentProcessValue;
+
     /// <summary>
     /// Applies NuGet signature verification environment variables to the given dictionary.
     /// On Linux, sets DOTNET_NUGET_SIGNATURE_VERIFICATION to "true" unless the user
@@ -40,16 +44,54 @@ internal static class NuGetSignatureVerificationEnabler
     }
 
     /// <summary>
-    /// Applies NuGet signature verification to the current process before the in-process NuGet client initializes.
+    /// Applies NuGet signature verification to the current process until the returned scope is disposed.
     /// </summary>
-    public static void ApplyToCurrentProcess(IFeatures features, IEnvironment environment)
+    /// <remarks>
+    /// The aspire-managed helper received this variable only in its own environment. The in-process client needs it
+    /// in the CLI's environment because NuGet reads it from there, so it is set for the duration of each operation and
+    /// the previous value is restored when the last overlapping scope ends. Otherwise it would leak into every process
+    /// the CLI starts afterwards.
+    /// </remarks>
+    public static IDisposable ApplyToCurrentProcess(IFeatures features, IEnvironment environment)
     {
-        var environmentVariables = new Dictionary<string, string>();
-        Apply(environmentVariables, features, environment);
-
-        if (environmentVariables.TryGetValue(DotNetNuGetSignatureVerification, out var value))
+        lock (s_currentProcessLock)
         {
-            Environment.SetEnvironmentVariable(DotNetNuGetSignatureVerification, value);
+            if (s_currentProcessScopeCount++ == 0)
+            {
+                s_previousCurrentProcessValue = Environment.GetEnvironmentVariable(DotNetNuGetSignatureVerification);
+
+                var environmentVariables = new Dictionary<string, string>();
+                Apply(environmentVariables, features, environment);
+
+                if (environmentVariables.TryGetValue(DotNetNuGetSignatureVerification, out var value))
+                {
+                    Environment.SetEnvironmentVariable(DotNetNuGetSignatureVerification, value);
+                }
+            }
+        }
+
+        return new CurrentProcessScope();
+    }
+
+    private sealed class CurrentProcessScope : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+
+            lock (s_currentProcessLock)
+            {
+                if (--s_currentProcessScopeCount == 0)
+                {
+                    Environment.SetEnvironmentVariable(DotNetNuGetSignatureVerification, s_previousCurrentProcessValue);
+                    s_previousCurrentProcessValue = null;
+                }
+            }
         }
     }
 }

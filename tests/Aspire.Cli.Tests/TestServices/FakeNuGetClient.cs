@@ -31,9 +31,7 @@ internal sealed class FakeNuGetClient : INuGetClient
     public Func<
         string,
         bool,
-        bool,
         int,
-        bool,
         IReadOnlyList<string>,
         string?,
         string,
@@ -88,10 +86,8 @@ internal sealed class FakeNuGetClient : INuGetClient
 
     public Task<IReadOnlyList<NuGetSearchResult>> SearchAsync(
         string query,
-        bool exactMatch,
         bool prerelease,
         int take,
-        bool useCache,
         IReadOnlyList<string> explicitSources,
         string? nugetConfigPath,
         string workingDirectory,
@@ -100,10 +96,8 @@ internal sealed class FakeNuGetClient : INuGetClient
         SearchCallCount++;
         return SearchCallback?.Invoke(
             query,
-            exactMatch,
             prerelease,
             take,
-            useCache,
             explicitSources,
             nugetConfigPath,
             workingDirectory,

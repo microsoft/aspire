@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.IO.Hashing;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Utils;
@@ -72,12 +71,16 @@ internal sealed class BundleNuGetService : INuGetService
             throw new ArgumentException("At least one package is required", nameof(packages));
         }
 
-        var sourceList = sources?.ToArray() ?? [];
+        var sourceList = sources?.ToArray();
+
+        // The restore is now performed by this process, so it is the tool whose changes must invalidate cached
+        // manifests, just as the aspire-managed binary's size and timestamp did before.
         var packageHash = ComputePackageHash(
             packageList,
             targetFramework,
             runtimeIdentifier,
-            sources: sourceList);
+            Environment.ProcessPath,
+            sourceList);
         var restoreCacheDirectory = GetPackageRestoreCacheDirectory(workingDirectory);
         var restoreDirectory = Path.Combine(restoreCacheDirectory, packageHash);
         var objectDirectory = Path.Combine(restoreDirectory, "obj");
@@ -97,24 +100,44 @@ internal sealed class BundleNuGetService : INuGetService
         Directory.CreateDirectory(objectDirectory);
         _logger.LogDebug("Restoring {Count} integration packages in-process", packageList.Count);
 
-        await _nuGetClient.RestoreAsync(
-            packageList,
-            targetFramework,
-            runtimeIdentifier,
-            objectDirectory,
-            sourceList,
-            nugetConfigPath,
-            workingDirectory,
-            ct).ConfigureAwait(false);
+        // Failures keep the helper-era messages, which embed what the helper wrote to stderr, because
+        // PrebuiltAppHostServer shows exception messages to users.
+        try
+        {
+            await _nuGetClient.RestoreAsync(
+                packageList,
+                targetFramework,
+                runtimeIdentifier,
+                objectDirectory,
+                sourceList ?? [],
+                nugetConfigPath,
+                workingDirectory,
+                ct).ConfigureAwait(false);
+        }
+        catch (NuGetOperationException ex)
+        {
+            _logger.LogError("Package restore failed");
+            _logger.LogError("Package restore stderr: {Error}", ex.Output);
+            throw new InvalidOperationException($"Package restore failed: {ex.Output}", ex);
+        }
 
         // The manifest is built from the assets file the restore just wrote, so asset selection
         // comes from NuGet rather than from a second walk over the package folders.
-        await _nuGetClient.WriteManifestAsync(
-            Path.Combine(objectDirectory, LockFileFormat.AssetsFileName),
-            manifestPath,
-            targetFramework,
-            runtimeIdentifier,
-            ct).ConfigureAwait(false);
+        try
+        {
+            await _nuGetClient.WriteManifestAsync(
+                Path.Combine(objectDirectory, LockFileFormat.AssetsFileName),
+                manifestPath,
+                targetFramework,
+                runtimeIdentifier,
+                ct).ConfigureAwait(false);
+        }
+        catch (NuGetOperationException ex)
+        {
+            _logger.LogError("Manifest creation failed");
+            _logger.LogError("Manifest creation stderr: {Error}", ex.Output);
+            throw new InvalidOperationException($"Manifest creation failed: {ex.Output}", ex);
+        }
 
         _logger.LogDebug("Package manifest created at {Path}", manifestPath);
         return manifestPath;
@@ -138,46 +161,42 @@ internal sealed class BundleNuGetService : INuGetService
         List<(string Id, string Version)> packages,
         string tfm,
         string? runtimeIdentifier,
-        string? managedPath = null,
+        string? toolPath = null,
         IEnumerable<string>? sources = null)
     {
-        var content = string.Join(
-            ";",
-            packages.OrderBy(package => package.Id, StringComparer.OrdinalIgnoreCase)
-                .Select(package => $"{package.Id}:{package.Version}"));
+        // Same inputs and ordering as the helper-era key, so the same restores share a cache entry. In particular,
+        // sources are sorted: their order does not change what NuGet restores.
+        var content = string.Join(";", packages.OrderBy(package => package.Id).Select(package => $"{package.Id}:{package.Version}"));
         content += $";tfm:{tfm}";
         content += $";rid:{runtimeIdentifier ?? "<none>"}";
-        content += $";client:{GetClientFingerprint(managedPath)}";
-
-        if (sources?.ToArray() is { Length: > 0 } sourceList)
+        content += $";tool:{GetToolFingerprint(toolPath)}";
+        if (sources is not null)
         {
-            content += $";sources:{string.Join("|", sourceList)}";
+            content += $";sources:{string.Join("|", sources.OrderBy(source => source, StringComparer.OrdinalIgnoreCase))}";
         }
 
         var hash = XxHash3.HashToUInt64(Encoding.UTF8.GetBytes(content));
         return hash.ToString("X16", System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    private static string GetClientFingerprint(string? explicitPath)
+    private static string GetToolFingerprint(string? toolPath)
     {
-        if (!string.IsNullOrEmpty(explicitPath))
+        if (string.IsNullOrEmpty(toolPath))
         {
-            try
-            {
-                var fileInfo = new FileInfo(explicitPath);
-                return fileInfo.Exists
-                    ? $"{fileInfo.Length}|{fileInfo.LastWriteTimeUtc.Ticks}"
-                    : "<missing>";
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
-            {
-                return "<error>";
-            }
+            return "<none>";
         }
 
-        return typeof(BundleNuGetService).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-            .InformationalVersion ?? "<unknown>";
+        try
+        {
+            var fileInfo = new FileInfo(toolPath);
+            return fileInfo.Exists
+                ? $"{fileInfo.Length}|{fileInfo.LastWriteTimeUtc.Ticks}"
+                : "<missing>";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            return "<error>";
+        }
     }
 
     private static string GetPackageRestoreCacheDirectory(string workingDirectory)

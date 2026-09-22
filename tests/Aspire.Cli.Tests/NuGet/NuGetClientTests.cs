@@ -17,7 +17,7 @@ namespace Aspire.Cli.Tests.NuGet;
 public class NuGetClientTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public async Task SearchAsync_ReturnsResultsFromAllPages()
+    public async Task SearchAsync_ReturnsOnlyTheFirstPage()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var feedDirectory = workspace.CreateDirectory("feed");
@@ -29,25 +29,21 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             new TestEnvironment(),
             NullLogger<NuGetClient>.Instance);
 
+        // The aspire-managed helper requested one page per source and never paged further.
         var results = await client.SearchAsync(
             "Aspire.Test.Package",
-            exactMatch: false,
             prerelease: false,
             take: 1,
-            useCache: false,
             [feedDirectory.FullName],
             nugetConfigPath: null,
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken);
 
-        Assert.Collection(
-            results,
-            package => Assert.Equal("Aspire.Test.Package.One", package.Id),
-            package => Assert.Equal("Aspire.Test.Package.Two", package.Id));
+        Assert.Single(results);
     }
 
     [Fact]
-    public async Task SearchAsync_ExactMatchReturnsAllVersions()
+    public async Task SearchAsync_KeepsOneEntryPerPackageAcrossSources()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var firstFeedDirectory = workspace.CreateDirectory("first-feed");
@@ -62,31 +58,85 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
 
         var results = await client.SearchAsync(
             "Aspire.Test.Package",
-            exactMatch: true,
             prerelease: false,
-            take: 1,
-            useCache: false,
+            take: 1000,
             [firstFeedDirectory.FullName, secondFeedDirectory.FullName],
             nugetConfigPath: null,
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken);
 
-        Assert.Collection(
-            results,
-            package =>
-            {
-                Assert.Equal("Aspire.Test.Package", package.Id);
-                Assert.Equal("2.0.0", package.Version);
-                Assert.Equal(secondFeedDirectory.FullName, package.Source);
-                Assert.Equal(["2.0.0"], package.AllVersions);
-            },
-            package =>
-            {
-                Assert.Equal("Aspire.Test.Package", package.Id);
-                Assert.Equal("1.0.0", package.Version);
-                Assert.Equal(firstFeedDirectory.FullName, package.Source);
-                Assert.Equal(["1.0.0"], package.AllVersions);
-            });
+        // Only the winning source's entry survives, so its versions are not merged with the other source's.
+        var package = Assert.Single(results);
+        Assert.Equal("Aspire.Test.Package", package.Id);
+        Assert.Equal("2.0.0", package.Version);
+        Assert.Equal(secondFeedDirectory.FullName, package.Source);
+        Assert.Equal(["2.0.0"], package.AllVersions);
+    }
+
+    [Fact]
+    public async Task SearchAsync_ComparesVersionsAsStringsAcrossSources()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var firstFeedDirectory = workspace.CreateDirectory("first-feed");
+        var secondFeedDirectory = workspace.CreateDirectory("second-feed");
+        CreatePackage(firstFeedDirectory.FullName, "Aspire.Test.Package", version: "9.0.0");
+        CreatePackage(secondFeedDirectory.FullName, "Aspire.Test.Package", version: "10.0.0");
+
+        var client = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<NuGetClient>.Instance);
+
+        var results = await client.SearchAsync(
+            "Aspire.Test.Package",
+            prerelease: false,
+            take: 1000,
+            [firstFeedDirectory.FullName, secondFeedDirectory.FullName],
+            nugetConfigPath: null,
+            workspace.WorkspaceRoot.FullName,
+            TestContext.Current.CancellationToken);
+
+        // The aspire-managed helper picked the entry with the highest version *string*, so "9.0.0" wins over
+        // "10.0.0". This pins that behavior so a change to it is a deliberate decision rather than a side effect.
+        var package = Assert.Single(results);
+        Assert.Equal("9.0.0", package.Version);
+        Assert.Equal(firstFeedDirectory.FullName, package.Source);
+    }
+
+    [Fact]
+    public async Task SearchAsync_FallsBackToDiscoveryWhenConfigFileIsMissing()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feedDirectory = workspace.CreateDirectory("feed");
+        CreatePackage(feedDirectory.FullName, "Aspire.Test.Package");
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config"),
+            $"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="local" value="{feedDirectory.FullName}" />
+              </packageSources>
+            </configuration>
+            """);
+
+        var client = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<NuGetClient>.Instance);
+
+        var results = await client.SearchAsync(
+            "Aspire.Test.Package",
+            prerelease: false,
+            take: 1000,
+            [],
+            nugetConfigPath: Path.Combine(workspace.WorkspaceRoot.FullName, "missing", "nuget.config"),
+            workspace.WorkspaceRoot.FullName,
+            TestContext.Current.CancellationToken);
+
+        var package = Assert.Single(results);
+        Assert.Equal("Aspire.Test.Package", package.Id);
+        Assert.Equal(feedDirectory.FullName, package.Source);
     }
 
     [Fact]
@@ -103,10 +153,8 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
 
         var results = await client.SearchAsync(
             "Aspire.Test.Package",
-            exactMatch: false,
             prerelease: false,
             take: 100,
-            useCache: false,
             ["https://127.0.0.1:1/v3/index.json", feedDirectory.FullName],
             nugetConfigPath: null,
             workspace.WorkspaceRoot.FullName,
@@ -114,6 +162,51 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
 
         var package = Assert.Single(results);
         Assert.Equal("Aspire.Test.Package", package.Id);
+    }
+
+    [Fact]
+    public async Task RestoreAsync_FailureReportsHelperOutput()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feedDirectory = workspace.CreateDirectory("feed");
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        var restoreDirectory = workspace.CreateDirectory("restore");
+        var packageId = $"Aspire.Test.Missing.{Guid.NewGuid():N}";
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        File.WriteAllText(
+            nugetConfigPath,
+            $"""
+            <configuration>
+              <config>
+                <add key="globalPackagesFolder" value="{packagesDirectory.FullName}" />
+              </config>
+              <packageSources>
+                <clear />
+                <add key="local" value="{feedDirectory.FullName}" />
+              </packageSources>
+            </configuration>
+            """);
+
+        var client = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<NuGetClient>.Instance);
+
+        var exception = await Assert.ThrowsAsync<NuGetOperationException>(() => client.RestoreAsync(
+            [(packageId, "[1.0.0]")],
+            "net10.0",
+            runtimeIdentifier: null,
+            restoreDirectory.FullName,
+            [],
+            nugetConfigPath,
+            workspace.WorkspaceRoot.FullName,
+            TestContext.Current.CancellationToken));
+
+        // Without debug logging the helper wrote only NuGet's warnings and errors, prefixed the way its logger
+        // prefixed them, followed by its own summary of the failed restore.
+        var lines = exception.Output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        Assert.Contains(lines, line => line.StartsWith("ERROR: ", StringComparison.Ordinal) && line.Contains(packageId, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(lines, line => line.StartsWith("Error: Restore failed: ", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -490,7 +583,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             new TestEnvironment(),
             NullLogger<NuGetClient>.Instance);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.RestoreAsync(
+        var exception = await Assert.ThrowsAsync<NuGetOperationException>(() => client.RestoreAsync(
             [(packageId, "1.0.0")],
             "net10.0",
             runtimeIdentifier: null,
@@ -500,8 +593,8 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             workspace.WorkspaceRoot.FullName,
             TestContext.Current.CancellationToken));
 
-        Assert.Contains(packageId, exception.Message, StringComparison.Ordinal);
-        Assert.Contains("PackageSourceMapping", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(packageId, exception.Output, StringComparison.Ordinal);
+        Assert.Contains("PackageSourceMapping", exception.Output, StringComparison.Ordinal);
     }
 
     [Fact]
