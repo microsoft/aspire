@@ -18,12 +18,12 @@
          in BackchannelJsonSerializerContext.cs. Suppress until MCP graduates these types. -->
     <NoWarn>$(NoWarn);CS1591;MCPEXP001</NoWarn>
     <PublishAot>true</PublishAot>
-    <IlcGenerateMstatFile>true</IlcGenerateMstatFile>
-    <IlcGenerateDgmlFile>true</IlcGenerateDgmlFile>
     <!-- Sigstore and Tuf packages are not strong-named. Aspire.Cli is an executable tool,
          not a library referenced by strong-named assemblies, so this is safe. -->
     <SignAssembly>false</SignAssembly>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <!-- Ignore the single warn files marked below to suppress their known warnings. -->
+    <NoWarn>$(NoWarn);IL2104;IL3053</NoWarn>
     <OptimizationPreference>Size</OptimizationPreference>
     <DefineConstants>$(DefineConstants);CLI</DefineConstants>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
@@ -103,8 +103,32 @@
     <RuntimeHostConfigurationOption Include="NuGet.UseSystemTextJsonDeserialization"
                                     Value="true"
                                     Trim="true" />
+
+    <!-- These can be removed once NuGet completely removes its dependencies on Newtonsoft.Json - https://github.com/NuGet/NuGet.Client/pull/7601 -->
+    <RuntimeHostConfigurationOption Include="Newtonsoft.Json.Linq.JToken.SerializationIsSupported"
+                                    Value="false" 
+                                    Trim="true" />
+    <RuntimeHostConfigurationOption Include="Newtonsoft.Json.Linq.JToken.ComponentModelIsSupported"
+                                    Value="false"
+                                    Trim="true" />
+    <RuntimeHostConfigurationOption Include="Newtonsoft.Json.Linq.JToken.DynamicIsSupported"
+                                    Value="false"
+                                    Trim="true" />
   </ItemGroup>
 
+    <Target Name="ConfigureTrimming"
+          BeforeTargets="PrepareForILLink">
+    <!-- Single warn the following assemblies (produces IL2104 and IL3053), which have known warnings, so the warnings can be suppressed. -->
+    <!-- These can be removed once NuGet completely removes its dependencies on Newtonsoft.Json - https://github.com/NuGet/NuGet.Client/pull/7601 -->
+    <ItemGroup>
+      <ManagedAssemblyToLink Condition="'%(Filename)' == 'Microsoft.CSharp'">
+        <TrimmerSingleWarn>true</TrimmerSingleWarn>
+      </ManagedAssemblyToLink>
+      <ManagedAssemblyToLink Condition="'%(Filename)' == 'System.Linq.Expressions'">
+        <TrimmerSingleWarn>true</TrimmerSingleWarn>
+      </ManagedAssemblyToLink>
+    </ItemGroup>
+  </Target>
 
   <!-- NuGet's Linux signature verification probes trustedroots under the SDK root.
        The NativeAOT CLI extracts these embedded SDK roots only while initializing NuGet's trust store. -->
@@ -140,11 +164,11 @@
     <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="Tuf" />
     <PackageReference Include="ModelContextProtocol" />
-    <PackageReference Include="NuGet.Commands" VersionOverride="7.12.0-zlocal.65534" />
-    <PackageReference Include="NuGet.ProjectModel" VersionOverride="7.12.0-zlocal.65534" />
-    <PackageReference Include="NuGet.Credentials" VersionOverride="7.12.0-zlocal.65534" />
-    <PackageReference Include="NuGet.Protocol" VersionOverride="7.12.0-zlocal.65534" />
-    <PackageReference Include="NuGet.Resolver" VersionOverride="7.12.0-zlocal.65534" />
+    <PackageReference Include="NuGet.Commands" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.ProjectModel" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.Credentials" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.Protocol" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.Resolver" VersionOverride="$(NuGetPackageVersionForCli)" />
   </ItemGroup>
 
   <ItemGroup>

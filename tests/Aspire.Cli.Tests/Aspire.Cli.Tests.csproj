@@ -45,11 +45,11 @@
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="ModelContextProtocol" />
-    <PackageReference Include="NuGet.Commands" VersionOverride="7.12.0-zlocal.65534" />
-    <PackageReference Include="NuGet.ProjectModel" VersionOverride="7.12.0-zlocal.65534" />
-    <PackageReference Include="NuGet.Credentials" VersionOverride="7.12.0-zlocal.65534" />
-    <PackageReference Include="NuGet.Protocol" VersionOverride="7.12.0-zlocal.65534" />
-    <PackageReference Include="NuGet.Resolver" VersionOverride="7.12.0-zlocal.65534" />
+    <PackageReference Include="NuGet.Commands" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.ProjectModel" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.Credentials" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.Protocol" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.Resolver" VersionOverride="$(NuGetPackageVersionForCli)" />
     <PackageReference Include="StreamJsonRpc" VersionOverride="$(StreamJsonRpcPackageVersionForCli)" />
     <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
