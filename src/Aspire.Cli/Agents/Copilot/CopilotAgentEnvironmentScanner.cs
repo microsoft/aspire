@@ -151,7 +151,7 @@ internal sealed class CopilotAgentEnvironmentScanner(
 
         AgentConfigurationTarget Target(string path, AgentConfigurationScope scope)
             => new(path, scope, AgentAssetKind.AspireSkills, clients, "plugins:aspire", async (root, context, cancellationToken) =>
-                PluginConfiguration.Apply(root, await AgentConfigurationJson.ReadSettingsAsync(
+                AspireSkillsPluginConfiguration.Apply(root, await AgentConfigurationJson.ReadSettingsAsync(
                     context, CopilotPaths.PluginSettings(request, executionContext, environment), cancellationToken)));
     }
 

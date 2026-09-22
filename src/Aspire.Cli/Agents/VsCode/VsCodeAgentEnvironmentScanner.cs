@@ -18,6 +18,7 @@ internal sealed class VsCodeAgentEnvironmentScanner(
     ILogger<VsCodeAgentEnvironmentScanner> logger) : IAgentClientEnvironment
 {
     internal const string ClientId = "vscode";
+
     /// <inheritdoc />
     public async Task<IReadOnlyList<AgentClientDetection>> ScanAsync(IReadOnlyList<AgentClient> clients, DirectoryInfo workingDirectory, DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
     {
@@ -25,40 +26,41 @@ internal sealed class VsCodeAgentEnvironmentScanner(
         var client = clients.Single(client => client.Id == ClientId);
         logger.LogDebug("Starting VS Code environment scan in directory: {WorkingDirectory}", workingDirectory.FullName);
 
-        if (environment.GetEnvironmentVariable("TERM_PROGRAM") == "vscode")
+        var hasProjectConfiguration = HasProjectConfiguration(workingDirectory, workspaceRoot);
+        var isVsCodeTerminal = environment.GetEnvironmentVariable("TERM_PROGRAM") == "vscode";
+        if (hasProjectConfiguration || isVsCodeTerminal)
         {
-            var version = environment.GetEnvironmentVariable("TERM_PROGRAM_VERSION")?.Trim();
+            var version = isVsCodeTerminal ? environment.GetEnvironmentVariable("TERM_PROGRAM_VERSION")?.Trim() : null;
             if (string.IsNullOrEmpty(version))
             {
                 version = null;
             }
 
             // VS Code exposes e.g. "1.110.0" or "1.111.0-insider" in TERM_PROGRAM_VERSION.
-            // Retain that evidence without invoking another editor process from its terminal.
+            // Retain that evidence for native user paths even when a project marker avoids CLI probes.
             return Array.AsReadOnly<AgentClientDetection>(
             [
                 new(client, version, IsInsiders: version?.Contains("-insider", StringComparison.OrdinalIgnoreCase) == true)
             ]);
         }
 
-        var detections = new List<AgentClientDetection>();
-        foreach (var useInsiders in new[] { false, true })
+        var vsCodeVersion = await vsCodeCliRunner.GetVersionAsync(new VsCodeRunOptions { UseInsiders = false }, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (vsCodeVersion is not null)
         {
-            var version = await vsCodeCliRunner.GetVersionAsync(new VsCodeRunOptions { UseInsiders = useInsiders }, cancellationToken).ConfigureAwait(false);
-            cancellationToken.ThrowIfCancellationRequested();
-            if (version is not null)
-            {
-                logger.LogDebug("Detected VS Code version: {Version}, Insiders: {IsInsiders}", version, useInsiders);
-                detections.Add(new AgentClientDetection(client, version.ToString(), IsInsiders: useInsiders));
-            }
+            logger.LogDebug("Found VS Code stable version: {Version}", vsCodeVersion);
+            return Array.AsReadOnly<AgentClientDetection>([new(client, vsCodeVersion.ToString(), IsInsiders: false)]);
         }
 
-        if (detections.Count == 0 && HasProjectConfiguration(workingDirectory, workspaceRoot))
+        var vsCodeInsidersVersion = await vsCodeCliRunner.GetVersionAsync(new VsCodeRunOptions { UseInsiders = true }, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (vsCodeInsidersVersion is not null)
         {
-            detections.Add(new AgentClientDetection(client, Version: null, IsInsiders: false));
+            logger.LogDebug("Found VS Code Insiders version: {Version}", vsCodeInsidersVersion);
+            return Array.AsReadOnly<AgentClientDetection>([new(client, vsCodeInsidersVersion.ToString(), IsInsiders: true)]);
         }
 
-        return detections.AsReadOnly();
+        return Array.AsReadOnly<AgentClientDetection>([]);
     }
 
     private bool HasProjectConfiguration(DirectoryInfo startDirectory, DirectoryInfo repositoryRoot)

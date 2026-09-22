@@ -4,6 +4,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.DotnetInspect;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
@@ -394,7 +395,7 @@ public class AgentInitServiceTests(ITestOutputHelper output)
             AgentPath.Resolve(registration.TargetPath));
         Assert.Equal(AgentPath.Resolve(Path.Combine(expectedDirectory, "skills", "dotnet-inspect")),
             AgentPath.Resolve(skill.TargetPath));
-        Assert.Equal(CommonAgentApplicators.DotnetInspectSkillFileContent,
+        Assert.Equal(DotnetInspectSkill.Content,
             await File.ReadAllTextAsync(Path.Combine(skill.TargetPath, "SKILL.md")).DefaultTimeout());
         Assert.Equal([".claude"], context.Project.EnumerateDirectories().Select(directory => directory.Name));
         Assert.Equal(0, npm.ResolveCallCount);

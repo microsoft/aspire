@@ -6,13 +6,13 @@ namespace Aspire.Cli.Agents;
 /// <summary>
 /// Stages and atomically publishes one file after the caller validates its original inputs.
 /// </summary>
-internal static class AgentFileCommitter
+internal static class AgentFileWriter
 {
-    public static async Task CommitAsync(
+    public static async Task WriteAsync(
         string physicalPath,
         bool destinationExists,
         Func<Stream, CancellationToken, Task> writeContent,
-        Func<CancellationToken, Task> validateBeforeCommit,
+        Func<CancellationToken, Task> validateBeforePublish,
         UnixFileMode? newFileMode,
         CancellationToken cancellationToken)
     {
@@ -55,7 +55,7 @@ internal static class AgentFileCommitter
 
             // The caller owns byte snapshots, logical-link evidence and any additional
             // read-only inputs (for example native policy files). Recheck after staging.
-            await validateBeforeCommit(cancellationToken);
+            await validateBeforePublish(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
             if (destinationExists)

@@ -22,7 +22,10 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         var workingDirectory = workspace.CreateDirectory("project");
         var configDirectory = inParent ? workspace.WorkspaceRoot : workingDirectory;
         configDirectory.CreateSubdirectory(".vscode");
-        var runner = new TestAgentCliRunner();
+        var runner = new TestAgentCliRunner
+        {
+            GetVersionAsyncCallback = (_, _) => throw new InvalidOperationException("Project evidence must avoid CLI probes.")
+        };
         var agent = CreateAgent(runner, workspace.CreateExecutionContext(), new TestEnvironment());
         var clients = new TestAgentClients(agent);
         var directories = CreateScanDirectories(workingDirectory, workspace.WorkspaceRoot);
@@ -30,7 +33,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal<AgentClientDetection>([new(clients.VsCode, null, false)], detections);
-        Assert.Equal(["code", "code-insiders"], runner.Commands);
+        Assert.Empty(runner.Commands);
     }
 
     [Theory]
@@ -38,7 +41,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task ScanAsync_RecordsInstalledStableAndInsidersVersions(bool stableInstalled, bool insidersInstalled)
+    public async Task ScanAsync_UsesStableBeforeFallingBackToInsiders(bool stableInstalled, bool insidersInstalled)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var runner = new TestAgentCliRunner
@@ -57,12 +60,12 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         {
             expected.Add(new(clients.VsCode, "1.100.0", false));
         }
-        if (insidersInstalled)
+        else if (insidersInstalled)
         {
             expected.Add(new(clients.VsCode, "1.101.0-insider", true));
         }
         Assert.Equal<AgentClientDetection>(expected, detections);
-        Assert.Equal(["code", "code-insiders"], runner.Commands);
+        Assert.Equal(stableInstalled ? ["code"] : ["code", "code-insiders"], runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
 
         var list = Assert.IsAssignableFrom<IList<AgentClientDetection>>(detections);
@@ -75,7 +78,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ScanAsync_WithProjectConfigurationAndInsiders_PreservesInsidersEvidence()
+    public async Task ScanAsync_WithProjectConfiguration_DoesNotProbeInstalledEditions()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         workspace.CreateDirectory(".vscode");
@@ -89,7 +92,8 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(clients.VsCode, "1.101.0-insider", true)], detections);
+        Assert.Equal<AgentClientDetection>([new(clients.VsCode, null, false)], detections);
+        Assert.Empty(runner.Commands);
     }
 
     [Theory]
@@ -123,6 +127,29 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         Assert.Equal<AgentClientDetection>([new(clients.VsCode, expectedVersion, isInsiders)], detections);
         Assert.Empty(runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
+    }
+
+    [Fact]
+    public async Task ScanAsync_WithProjectConfigurationInInsidersTerminal_PreservesNativeUserEditionWithoutProbing()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        workspace.CreateDirectory(".vscode");
+        var runner = new TestAgentCliRunner
+        {
+            GetVersionAsyncCallback = (_, _) => throw new InvalidOperationException("Project evidence must avoid CLI probes.")
+        };
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["TERM_PROGRAM"] = "vscode",
+            ["TERM_PROGRAM_VERSION"] = "1.101.0-insider"
+        });
+        var agent = CreateAgent(runner, workspace.CreateExecutionContext(), environment);
+        var clients = new TestAgentClients(agent);
+
+        var detections = await agent.ScanAsync(clients.All, workspace.WorkspaceRoot, workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal<AgentClientDetection>([new(clients.VsCode, "1.101.0-insider", true)], detections);
+        Assert.Empty(runner.Commands);
     }
 
     [Theory]

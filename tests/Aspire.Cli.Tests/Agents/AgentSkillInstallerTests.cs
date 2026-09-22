@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.DotnetInspect;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Resources;
@@ -77,7 +78,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal([nativeDirectory], home.EnumerateDirectories().Select(static directory => directory.Name));
         foreach (var result in results)
         {
-            Assert.Equal(CommonAgentApplicators.DotnetInspectSkillFileContent,
+            Assert.Equal(DotnetInspectSkill.Content,
                 await File.ReadAllTextAsync(Path.Combine(result.TargetPath, "SKILL.md")));
         }
         Assert.Equal(0, npmRunner.ResolveCallCount);
@@ -704,7 +705,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         var result = Assert.Single(results);
         Assert.Equal(AgentConfigurationStatus.Configured, result.Status);
         Assert.Equal(Canonical(physicalSkill.FullName), result.TargetPath);
-        Assert.Equal(CommonAgentApplicators.DotnetInspectSkillFileContent, await File.ReadAllTextAsync(Path.Combine(physicalSkill.FullName, "SKILL.md")));
+        Assert.Equal(DotnetInspectSkill.Content, await File.ReadAllTextAsync(Path.Combine(physicalSkill.FullName, "SKILL.md")));
         Assert.All(new[] { project, home }, static root =>
             Assert.NotNull(new DirectoryInfo(Path.Combine(root.FullName, ".agents", "skills", "dotnet-inspect")).LinkTarget));
     }
@@ -747,7 +748,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
         Assert.All(results, static result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
-        Assert.Equal(CommonAgentApplicators.DotnetInspectSkillFileContent, await File.ReadAllTextAsync(physicalPath));
+        Assert.Equal(DotnetInspectSkill.Content, await File.ReadAllTextAsync(physicalPath));
         Assert.NotNull(new FileInfo(link).LinkTarget);
         Assert.Equal(["SKILL.md", "content.md"], Directory.EnumerateFileSystemEntries(skill.FullName).Select(Path.GetFileName).Order(StringComparer.Ordinal));
     }
@@ -808,7 +809,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
         Assert.All(results, static result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
-        Assert.Equal(CommonAgentApplicators.DotnetInspectSkillFileContent, await File.ReadAllTextAsync(path));
+        Assert.Equal(DotnetInspectSkill.Content, await File.ReadAllTextAsync(path));
         Assert.Equal(mode, File.GetUnixFileMode(path));
         Assert.Equal(["SKILL.md"], skill.EnumerateFileSystemInfos().Select(static entry => entry.Name));
     }

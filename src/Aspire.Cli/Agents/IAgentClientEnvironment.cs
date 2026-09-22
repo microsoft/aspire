@@ -23,3 +23,8 @@ internal interface IAgentClientEnvironment
     /// </summary>
     IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request);
 }
+
+/// <summary>
+/// Read-only evidence that a client is present.
+/// </summary>
+internal sealed record AgentClientDetection(AgentClient Client, string? Version, bool IsInsiders);

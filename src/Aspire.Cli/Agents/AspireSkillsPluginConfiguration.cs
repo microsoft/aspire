@@ -9,7 +9,7 @@ namespace Aspire.Cli.Agents;
 /// <summary>
 /// Registers the official marketplace without invoking plugin CLIs or changing installation state.
 /// </summary>
-internal static class PluginConfiguration
+internal static class AspireSkillsPluginConfiguration
 {
     internal const string MarketplaceName = "aspire-skills";
     internal const string PluginName = "aspire@aspire-skills";

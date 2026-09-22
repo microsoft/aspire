@@ -9,12 +9,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Agents;
 
-public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
+public class AgentFileWriterTests(ITestOutputHelper outputHelper)
 {
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task CommitAsync_ValidatesClosedStagingFileBeforePublication(bool destinationExists)
+    public async Task WriteAsync_ValidatesClosedStagingFileBeforePublication(bool destinationExists)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var path = Path.Combine(workspace.Path, "payload");
@@ -25,7 +25,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
         string? stagingPath = null;
         var validations = 0;
 
-        await AgentFileCommitter.CommitAsync(
+        await AgentFileWriter.WriteAsync(
             path,
             destinationExists,
             async (stream, token) =>
@@ -59,7 +59,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CommitAsync_CancelledBeforeStaging_DoesNotCreateDirectories()
+    public async Task WriteAsync_CancelledBeforeStaging_DoesNotCreateDirectories()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var cancellation = new CancellationTokenSource();
@@ -67,7 +67,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
         var path = Path.Combine(workspace.Path, "missing", "payload");
         var writes = 0;
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AgentFileCommitter.CommitAsync(
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AgentFileWriter.WriteAsync(
             path,
             destinationExists: false,
             (_, _) =>
@@ -86,7 +86,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task CommitAsync_CancelledBeforeReplacement_PreservesOriginalAndCleansStaging(bool duringWrite)
+    public async Task WriteAsync_CancelledBeforeReplacement_PreservesOriginalAndCleansStaging(bool duringWrite)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var cancellation = new CancellationTokenSource();
@@ -94,7 +94,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(path, "working content");
         var originalTimestamp = File.GetLastWriteTimeUtc(path);
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AgentFileCommitter.CommitAsync(
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AgentFileWriter.WriteAsync(
             path,
             destinationExists: true,
             async (stream, token) =>
@@ -119,7 +119,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CommitAsync_ContentWriteFailure_PreservesOriginalAndOtherStagingFiles()
+    public async Task WriteAsync_ContentWriteFailure_PreservesOriginalAndOtherStagingFiles()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var path = Path.Combine(workspace.Path, "payload");
@@ -127,7 +127,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
         var unownedPath = Path.Combine(workspace.Path, ".payload.aspire-other.tmp");
         await File.WriteAllTextAsync(unownedPath, "another invocation");
 
-        var error = await Assert.ThrowsAsync<IOException>(() => AgentFileCommitter.CommitAsync(
+        var error = await Assert.ThrowsAsync<IOException>(() => AgentFileWriter.WriteAsync(
             path,
             destinationExists: true,
             async (stream, token) =>
@@ -147,14 +147,14 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CommitAsync_ConcurrentModification_IsValidatedAfterStaging()
+    public async Task WriteAsync_ConcurrentModification_IsValidatedAfterStaging()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var path = Path.Combine(workspace.Path, "payload");
         await File.WriteAllTextAsync(path, "original");
         var original = await File.ReadAllBytesAsync(path);
 
-        var error = await Assert.ThrowsAsync<IOException>(() => AgentFileCommitter.CommitAsync(
+        var error = await Assert.ThrowsAsync<IOException>(() => AgentFileWriter.WriteAsync(
             path,
             destinationExists: true,
             async (stream, token) =>
@@ -179,7 +179,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CommitAsync_RepointedLink_IsValidatedBeforeReplacement()
+    public async Task WriteAsync_RepointedLink_IsValidatedBeforeReplacement()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var original = workspace.CreateDirectory("original");
@@ -193,7 +193,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
         var logicalPath = Path.Combine(link, "payload");
         var physicalPath = AgentPath.Resolve(logicalPath);
 
-        await Assert.ThrowsAsync<IOException>(() => AgentFileCommitter.CommitAsync(
+        await Assert.ThrowsAsync<IOException>(() => AgentFileWriter.WriteAsync(
             physicalPath,
             destinationExists: true,
             async (stream, token) =>
@@ -220,12 +220,12 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CommitAsync_NewDestinationAppearsAfterValidation_DoesNotOverwriteIt()
+    public async Task WriteAsync_NewDestinationAppearsAfterValidation_DoesNotOverwriteIt()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var path = Path.Combine(workspace.Path, "payload");
 
-        await Assert.ThrowsAsync<IOException>(() => AgentFileCommitter.CommitAsync(
+        await Assert.ThrowsAsync<IOException>(() => AgentFileWriter.WriteAsync(
             path,
             destinationExists: false,
             (stream, token) => stream.WriteAsync("our content"u8.ToArray(), token).AsTask(),
@@ -238,14 +238,14 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CommitAsync_ReplacementFails_DoesNotRemoveDestinationDirectory()
+    public async Task WriteAsync_ReplacementFails_DoesNotRemoveDestinationDirectory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var destination = workspace.CreateDirectory("payload");
         var marker = Path.Combine(destination.FullName, "user-file");
         await File.WriteAllTextAsync(marker, "keep");
 
-        var error = await Record.ExceptionAsync(() => AgentFileCommitter.CommitAsync(
+        var error = await Record.ExceptionAsync(() => AgentFileWriter.WriteAsync(
             destination.FullName,
             destinationExists: true,
             (stream, token) => stream.WriteAsync("replacement"u8.ToArray(), token).AsTask(),
@@ -259,14 +259,14 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CommitAsync_CleanupFailure_IsNotReportedAsSuccessOrRecursivelyDeleted()
+    public async Task WriteAsync_CleanupFailure_IsNotReportedAsSuccessOrRecursivelyDeleted()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var path = Path.Combine(workspace.Path, "payload");
         await File.WriteAllTextAsync(path, "working content");
         string? stagingPath = null;
 
-        var error = await Record.ExceptionAsync(() => AgentFileCommitter.CommitAsync(
+        var error = await Record.ExceptionAsync(() => AgentFileWriter.WriteAsync(
             path,
             destinationExists: true,
             async (stream, token) =>
@@ -289,7 +289,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CommitAsync_Replacement_PreservesUnixPermissionsIncludingUmaskFilteredBits()
+    public async Task WriteAsync_Replacement_PreservesUnixPermissionsIncludingUmaskFilteredBits()
     {
         if (OperatingSystem.IsWindows())
         {
@@ -305,7 +305,7 @@ public class AgentFileCommitterTests(ITestOutputHelper outputHelper)
         File.SetUnixFileMode(path, mode);
         string? stagingPath = null;
 
-        await AgentFileCommitter.CommitAsync(
+        await AgentFileWriter.WriteAsync(
             path,
             destinationExists: true,
             async (stream, token) =>

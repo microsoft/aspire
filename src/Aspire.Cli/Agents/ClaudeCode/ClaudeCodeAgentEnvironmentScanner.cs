@@ -89,7 +89,7 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner(
 
         AgentConfigurationTarget PluginTarget(string path, AgentConfigurationScope scope)
             => new(path, scope, AgentAssetKind.AspireSkills, [client], "plugins:aspire", async (root, context, cancellationToken) =>
-                PluginConfiguration.Apply(root, await AgentConfigurationJson.ReadSettingsAsync(context, PluginSettings(request, executionContext, environment), cancellationToken)));
+                AspireSkillsPluginConfiguration.Apply(root, await AgentConfigurationJson.ReadSettingsAsync(context, PluginSettings(request, executionContext, environment), cancellationToken)));
 
         AgentConfigurationTarget McpTarget(string path, AgentConfigurationScope scope)
             => new(path, scope, AgentAssetKind.Mcp, [client], "mcpServers:aspire", async (root, context, cancellationToken) =>

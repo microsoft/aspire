@@ -79,19 +79,19 @@ internal sealed class TelemetryHookInstaller : ITelemetryHookInstaller
         var bytes = s_utf8NoBom.GetBytes(content);
         if (existing is not null && existing.AsSpan().SequenceEqual(bytes))
         {
-            await ValidateBeforeCommitAsync(cancellationToken);
+            await ValidateBeforePublishAsync(cancellationToken);
             return;
         }
 
-        await AgentFileCommitter.CommitAsync(
+        await AgentFileWriter.WriteAsync(
             physicalPath,
             destinationExists: existing is not null,
             (stream, token) => stream.WriteAsync(bytes, token).AsTask(),
-            ValidateBeforeCommitAsync,
+            ValidateBeforePublishAsync,
             newFileMode: null,
             cancellationToken);
 
-        async Task ValidateBeforeCommitAsync(CancellationToken token)
+        async Task ValidateBeforePublishAsync(CancellationToken token)
         {
             if (!AgentPath.Comparer.Equals(physicalPath, AgentPath.Resolve(path)))
             {

@@ -1,25 +1,28 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Agents;
+using System.Text;
+using Aspire.Cli.Agents.DotnetInspect;
 
 namespace Aspire.Cli.Tests.Agents;
 
-public class CommonAgentApplicatorsTests
+public class DotnetInspectSkillTests
 {
     private const int MaxSkillDescriptionLength = 1024;
 
     [Fact]
     public async Task DotnetInspectBootstrapMatchesSnapshot()
     {
-        await Verify(CommonAgentApplicators.DotnetInspectSkillFileContent, "md");
+        var file = Assert.Single(DotnetInspectSkill.CreateFiles());
+        Assert.Equal("SKILL.md", file.RelativePath);
+        await Verify(Encoding.UTF8.GetString(file.Content), "md");
     }
 
     [Fact]
     public void DotnetInspectBootstrapFrontmatterFitsAgentHostLimits()
     {
-        var content = CommonAgentApplicators.DotnetInspectSkillFileContent;
-        Assert.Equal(CommonAgentApplicators.DotnetInspectSkillName, GetFrontmatterValue(content, "name"));
+        var content = DotnetInspectSkill.Content;
+        Assert.Equal(DotnetInspectSkill.Name, GetFrontmatterValue(content, "name"));
         var description = GetFrontmatterValue(content, "description");
 
         Assert.NotNull(description);

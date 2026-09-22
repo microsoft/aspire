@@ -1,23 +1,25 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-namespace Aspire.Cli.Agents;
+using System.Text;
+
+namespace Aspire.Cli.Agents.DotnetInspect;
 
 /// <summary>
 /// Contains the CLI-managed dotnet-inspect bootstrap.
 /// </summary>
-internal static class CommonAgentApplicators
+internal static class DotnetInspectSkill
 {
     /// <summary>
     /// The name of the dotnet-inspect skill.
     /// </summary>
-    internal const string DotnetInspectSkillName = "dotnet-inspect";
+    internal const string Name = "dotnet-inspect";
 
     /// <summary>
     /// Gets the content for the dotnet-inspect skill file.
     /// See: <a href="https://github.com/richlander/dotnet-inspect/blob/main/skills/dotnet-inspect/SKILL.md">dotnet-inspect skill file</a>.
     /// </summary>
-    internal const string DotnetInspectSkillFileContent =
+    internal const string Content =
         """
         ---
         name: dotnet-inspect
@@ -53,4 +55,9 @@ internal static class CommonAgentApplicators
 
         After `find`, reuse the package, library, or platform scope it reports. Quote generic type names such as `'List<T>'`; use `<T>`, not `<>`.
         """;
+
+    // The skill invokes the version-matched guide through dnx; creating this payload
+    // does not require an AppHost or install the dotnet-inspect tool.
+    public static IReadOnlyList<AgentSkillFile> CreateFiles()
+        => [new("SKILL.md", Encoding.UTF8.GetBytes(Content))];
 }

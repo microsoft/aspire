@@ -2,13 +2,21 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Text;
 using Aspire.Cli.Agents.ClaudeCode;
+using Aspire.Cli.Agents.DotnetInspect;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Agents;
+
+/// <summary>
+/// Installs only the CLI-managed Playwright and dotnet-inspect skill payloads.
+/// </summary>
+internal interface IAgentSkillInstaller
+{
+    Task<IReadOnlyList<AgentTargetResult>> InstallAsync(AgentInitRequest request, CancellationToken cancellationToken);
+}
 
 /// <summary>
 /// Installs CLI-managed tool skills at the selected clients' shared project and user locations.
@@ -52,11 +60,9 @@ internal sealed class AgentSkillInstaller(
             }
         }
 
-        // This bootstrap intentionally has no AppHost/language dependency and never installs
-        // the dotnet-inspect binary. The skill invokes the matching guide through dnx on demand.
         if (request.Assets.DotnetInspect)
         {
-            AgentSkillFile[] files = [new("SKILL.md", Encoding.UTF8.GetBytes(CommonAgentApplicators.DotnetInspectSkillFileContent))];
+            var files = DotnetInspectSkill.CreateFiles();
             foreach (var target in targets.Where(static target => target.Asset is AgentAssetKind.DotnetInspect && target.Error is null))
             {
                 results.Add(await InstallFilesAsync(target, files, cancellationToken));
@@ -165,20 +171,20 @@ internal sealed class AgentSkillInstaller(
                 var existing = await ReadExistingAsync(path, cancellationToken);
                 if (existing is not null && existing.AsSpan().SequenceEqual(file.Content))
                 {
-                    await ValidateBeforeCommitAsync(cancellationToken);
+                    await ValidateBeforePublishAsync(cancellationToken);
                     continue;
                 }
 
-                await AgentFileCommitter.CommitAsync(
+                await AgentFileWriter.WriteAsync(
                     path,
                     destinationExists: existing is not null,
                     (stream, token) => stream.WriteAsync(file.Content, token).AsTask(),
-                    ValidateBeforeCommitAsync,
+                    ValidateBeforePublishAsync,
                     newFileMode: null,
                     cancellationToken);
                 changed = true;
 
-                async Task ValidateBeforeCommitAsync(CancellationToken token)
+                async Task ValidateBeforePublishAsync(CancellationToken token)
                 {
                     ValidateTargetPath(target);
                     if (!AgentPath.Comparer.Equals(path, ResolveSkillFile(target, file.RelativePath)))
@@ -252,7 +258,7 @@ internal sealed class AgentSkillInstaller(
     private static string GetSkillName(AgentAssetKind asset) => asset switch
     {
         AgentAssetKind.Playwright => PlaywrightCliInstaller.PlaywrightCliSkillName,
-        AgentAssetKind.DotnetInspect => CommonAgentApplicators.DotnetInspectSkillName,
+        AgentAssetKind.DotnetInspect => DotnetInspectSkill.Name,
         _ => throw new ArgumentOutOfRangeException(nameof(asset), asset, null)
     };
 

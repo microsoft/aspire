@@ -6,6 +6,14 @@ using Aspire.Cli.Agents.Hooks;
 namespace Aspire.Cli.Agents;
 
 /// <summary>
+/// Configures selected assets and deduplicated native client targets.
+/// </summary>
+internal interface IAgentInitService
+{
+    Task<AgentInitResult> ConfigureAsync(AgentInitRequest request, CancellationToken cancellationToken);
+}
+
+/// <summary>
 /// Orchestrates offline native registration and the independently selected CLI-managed tool skills.
 /// </summary>
 internal sealed class AgentInitService(

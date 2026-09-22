@@ -167,7 +167,7 @@ internal sealed class AgentConfigurationWriter(ILogger<AgentConfigurationWriter>
         ReadContext reader,
         CancellationToken cancellationToken)
     {
-        await AgentFileCommitter.CommitAsync(
+        await AgentFileWriter.WriteAsync(
             document.Path,
             destinationExists: document.Bytes is not null,
             (stream, token) => JsonSerializer.SerializeAsync(stream, root, JsonSourceGenerationContext.Default.JsonObject, token),
@@ -284,3 +284,33 @@ internal sealed class AgentConfigurationWriter(ILogger<AgentConfigurationWriter>
 
     private sealed record ConfigurationFile(string Path, IReadOnlyList<string> Aliases, IReadOnlyList<AgentConfigurationTarget> Targets);
 }
+
+/// <summary>
+/// An edit to one named entry in a native settings file.
+/// </summary>
+internal sealed record AgentConfigurationTarget(
+    string Path,
+    AgentConfigurationScope Scope,
+    AgentAssetKind Asset,
+    IReadOnlyList<AgentClient> Clients,
+    string Entry,
+    Func<JsonObject, AgentConfigurationWriter.ReadContext, CancellationToken, Task<AgentConfigurationEdit>> ApplyAsync)
+{
+    public AgentTargetResult ToResult(AgentConfigurationStatus status, string message)
+        => new(Asset, Clients, Path, Scope, status, message);
+}
+
+/// <summary>
+/// The outcome of an in-memory edit; the writer determines whether anything changed.
+/// </summary>
+internal sealed record AgentConfigurationEdit(AgentConfigurationStatus Status, string Message)
+{
+    public static AgentConfigurationEdit Applied(string message) => new(AgentConfigurationStatus.Configured, message);
+    public static AgentConfigurationEdit Skipped(string message) => new(AgentConfigurationStatus.Skipped, message);
+    public static AgentConfigurationEdit Blocked(string message) => new(AgentConfigurationStatus.Blocked, message);
+}
+
+/// <summary>
+/// A configuration conflict that must leave the affected entry untouched.
+/// </summary>
+internal sealed class AgentConfigurationException(string message) : Exception(message);
