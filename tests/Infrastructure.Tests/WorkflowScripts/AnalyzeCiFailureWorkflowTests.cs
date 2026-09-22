@@ -4727,6 +4727,24 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Empty(result.Reruns);
     }
 
+    [Theory]
+    [InlineData("[456,456]")]
+    [InlineData("[0]")]
+    [RequiresTools(["node"])]
+    public async Task RerunRejectsInvalidCauseJobIds(string jobIds)
+    {
+        await WriteRerunFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            $$"""{"id":"nuget-timeout","type":"infra-failure","job_ids":{{jobIds}}}""");
+
+        var result = await RunRerunScriptAsync();
+
+        Assert.Equal(
+            ["Rerun cause attribution is invalid: Cause 'nuget-timeout' must contain non-empty unique positive numeric job_ids."],
+            result.Failed);
+        Assert.Empty(result.Reruns);
+    }
+
     [Fact]
     [RequiresTools(["node"])]
     public async Task RerunRejectsWhenCauseJobIdsDoNotCoverEveryTrustedFailedJob()

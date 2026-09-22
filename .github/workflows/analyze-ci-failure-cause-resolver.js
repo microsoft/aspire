@@ -1003,8 +1003,10 @@ function validateCauseJobAttribution(analysis, causes, trustedFailedJobs) {
     for (const cause of causes) {
         if (!Array.isArray(cause?.job_ids) ||
             cause.job_ids.length === 0 ||
-            !cause.job_ids.every(Number.isInteger)) {
-            throw new Error(`Cause '${cause?.id ?? ''}' must contain non-empty numeric job_ids.`);
+            !cause.job_ids.every(jobId => Number.isInteger(jobId) && jobId > 0) ||
+            new Set(cause.job_ids).size !== cause.job_ids.length) {
+            throw new Error(
+                `Cause '${cause?.id ?? ''}' must contain non-empty unique positive numeric job_ids.`);
         }
 
         for (const jobId of cause.job_ids) {

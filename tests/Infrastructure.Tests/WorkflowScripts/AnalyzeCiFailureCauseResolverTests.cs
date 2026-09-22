@@ -2889,6 +2889,45 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
         Assert.Contains("Tracked failed jobs are missing cause references: 2", result.Output, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(0)]
+    [RequiresTools(["node"])]
+    public async Task RerunAttributionRejectsInvalidJobIds(params int[] jobIds)
+    {
+        CommandResult result = await ExecuteHarnessAsync(
+            new
+            {
+                analysis = new
+                {
+                    failed_jobs = new[]
+                    {
+                        new { id = 1, classification = "transient-infra" }
+                    }
+                },
+                causes = new[]
+                {
+                    new
+                    {
+                        id = "infra-cause",
+                        type = "infra-failure",
+                        job_ids = jobIds
+                    }
+                },
+                trustedFailedJobs = new[]
+                {
+                    new { id = 1, name = "Build / Linux" }
+                }
+            },
+            "validateCauseJobAttribution");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "must contain non-empty unique positive numeric job_ids",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
     [Fact]
     [RequiresTools(["node"])]
     public async Task RejectsCauseTypesAssignedToIncompatibleJobClassifications()
