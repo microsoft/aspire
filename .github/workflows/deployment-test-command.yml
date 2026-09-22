@@ -1,6 +1,6 @@
 # Trigger deployment tests from PR comments
 #
-# Usage: Start a PR comment with `/deployment-test` (trailing content is allowed)
+# Usage: Start a PR comment with `/deployment-test` (trailing content must be separated by whitespace)
 #
 # This workflow validates the commenter has repository write access and triggers
 # the deployment-tests.yml workflow with the PR context.
@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   deployment-test:
-    # Only run when the comment starts with /deployment-test on a PR
+    # Prefilter command candidates; the script below enforces the command-token boundary.
     if: >-
       ${{
         startsWith(github.event.comment.body, '/deployment-test') &&
@@ -28,11 +28,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check repository write access
+      - name: Check command and repository write access
         id: check_permission
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
+            // Accept "/deployment-test" or "/deployment-test\r\n..." (also spaces/tabs),
+            // but not longer tokens such as "/deployment-testing" or "/deployment-test-disabled".
+            // Match case-insensitively like the GitHub Actions startsWith prefilter.
+            if (!/^\/deployment-test(?:\s|$)/i.test(context.payload.comment.body)) {
+              core.info('Ignoring comment without a /deployment-test command token.');
+              core.setOutput('has_write_access', 'false');
+              return;
+            }
+
             const commenter = context.payload.comment.user.login;
             const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
               owner: context.repo.owner,

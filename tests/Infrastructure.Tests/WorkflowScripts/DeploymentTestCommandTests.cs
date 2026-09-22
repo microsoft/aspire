@@ -10,7 +10,7 @@ namespace Infrastructure.Tests;
 public sealed class DeploymentTestCommandTests(ITestOutputHelper output)
 {
     [Fact]
-    public void CommandTriggerAllowsTrailingContentOnMicrosoftPullRequests()
+    public void CommandPrefilterSelectsCandidatesOnMicrosoftPullRequests()
     {
         var condition = Scalar(LoadJob(), "if");
         Assert.Equal(
@@ -43,6 +43,29 @@ public sealed class DeploymentTestCommandTests(ITestOutputHelper output)
     [InlineData("error-500")]
     [RequiresTools(["node"])]
     public async Task PermissionCheckOnlyAllowsRepositoryWriters(string scenario)
+        => await RunPermissionCheckAsync(scenario, "/deployment-test", validCommand: true);
+
+    [Theory]
+    [InlineData("/deployment-test", true)]
+    [InlineData("/deployment-test ", true)]
+    [InlineData("/deployment-test arguments", true)]
+    [InlineData("/deployment-test\n", true)]
+    [InlineData("/deployment-test\r", true)]
+    [InlineData("/deployment-test\r\nMore text", true)]
+    [InlineData("/deployment-test\targuments", true)]
+    [InlineData("/DEPLOYMENT-TEST\nMore text", true)]
+    [InlineData("/deployment-testing", false)]
+    [InlineData("/deployment-test-disabled", false)]
+    [InlineData("/deployment-test/extra", false)]
+    [InlineData("/deployment-test.", false)]
+    [InlineData(" /deployment-test", false)]
+    [InlineData("Please run /deployment-test", false)]
+    [InlineData("", false)]
+    [RequiresTools(["node"])]
+    public async Task CommandRequiresEndOfTextOrWhitespace(string body, bool validCommand)
+        => await RunPermissionCheckAsync("write", body, validCommand);
+
+    private async Task RunPermissionCheckAsync(string scenario, string body, bool validCommand)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var options = Assert.IsType<YamlMappingNode>(LoadSteps()[0].Children[new YamlScalarNode("with")]);
@@ -53,7 +76,9 @@ public sealed class DeploymentTestCommandTests(ITestOutputHelper output)
         var result = await node.ExecuteScriptAsync(
             Path.Combine(RepoRoot.Path, "tests", "Infrastructure.Tests", "WorkflowScripts", "deployment-test-command.harness.mjs"),
             scriptPath,
-            scenario);
+            scenario,
+            body,
+            validCommand ? "true" : "false");
         Assert.True(result.ExitCode == 0, result.Output);
     }
 

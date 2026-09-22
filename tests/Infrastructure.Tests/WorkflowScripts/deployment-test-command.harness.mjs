@@ -7,6 +7,8 @@ import { runInNewContext } from 'node:vm';
 
 const source = readFileSync(process.argv[2], 'utf8');
 const scenario = process.argv[3];
+const body = process.argv[4];
+const validCommand = process.argv[5] === 'true';
 const allowed = ['write', 'admin', 'maintain'].includes(scenario);
 const apiError = scenario.startsWith('error-')
     ? Object.assign(new Error('Permission lookup failed'), { status: Number(scenario.slice(6)) })
@@ -18,7 +20,7 @@ let lookups = 0;
 const context = {
     repo: { owner: 'microsoft', repo: 'aspire' },
     issue: { number: 42 },
-    payload: { comment: { user: { login: 'contributor' } } },
+    payload: { comment: { body, user: { login: 'contributor' } } },
     actor: 'different-user'
 };
 const github = {
@@ -55,7 +57,12 @@ const core = {
 };
 const run = () => runInNewContext(`(async () => { ${source}\n })()`, { github, context, core });
 
-if (apiError) {
+if (!validCommand) {
+    await run();
+    assert.deepEqual(outputs, { has_write_access: 'false' });
+    assert.deepEqual(failures, []);
+    assert.deepEqual(comments, []);
+} else if (apiError) {
     await assert.rejects(run, error => error === apiError);
     assert.deepEqual(outputs, {});
     assert.deepEqual(failures, []);
@@ -68,4 +75,4 @@ if (apiError) {
         '@contributor The `/deployment-test` command requires write access to this repository for security reasons (it deploys to real Azure infrastructure).'
     ]);
 }
-assert.equal(lookups, 1);
+assert.equal(lookups, validCommand ? 1 : 0);
