@@ -42,6 +42,11 @@ internal sealed class UpdatePackagesContext
     /// Enables non-interactive selection via CLI options (e.g. <c>--nuget-config-dir</c>).
     /// </summary>
     public required Interaction.PromptBinding<string?> NuGetConfigDirBinding { get; init; }
+
+    /// <summary>
+    /// Gets additional file edits to include in the project's confirmation and apply phase.
+    /// </summary>
+    public IReadOnlyList<UpdateStep> AdditionalUpdateSteps { get; init; } = [];
 }
 
 /// <summary>

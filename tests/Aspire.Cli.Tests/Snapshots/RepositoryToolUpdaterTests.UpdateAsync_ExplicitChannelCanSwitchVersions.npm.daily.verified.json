@@ -1,0 +1,6 @@
+﻿{
+  "name": "app",
+  "dependencies": {
+    "@microsoft/aspire-cli": "13.5.0-preview.1"
+  }
+}
