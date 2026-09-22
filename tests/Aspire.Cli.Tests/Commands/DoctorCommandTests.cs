@@ -623,6 +623,37 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DoctorCommand_Json_NpmUpdateFailureReturnsPromptWarning()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var npmScope = NpmInstallDetection.UseEnvironmentForTesting(CreateNpmInstallEnvironment());
+
+        using var doc = await RunDoctorJsonAsync(workspace, options =>
+        {
+            options.NpmRunnerFactory = _ => new FakeNpmRunner
+            {
+                LatestVersionFailure = new TimeoutException("Timed out after 10 seconds while resolving @microsoft/aspire-cli@latest through npm.")
+            };
+        });
+
+        var cliVersionCheck = GetCheckByName(doc, AspireVersionCheck.CliVersionCheckName);
+        Assert.Equal("warning", cliVersionCheck.GetProperty("status").GetString());
+        Assert.Contains(
+            "Timed out after 10 seconds while resolving @microsoft/aspire-cli@latest through npm.",
+            cliVersionCheck.GetProperty("details").GetString());
+    }
+
+    private static IReadOnlyDictionary<string, string?> CreateNpmInstallEnvironment()
+    {
+        return new Dictionary<string, string?>
+        {
+            [NpmInstallDetection.PackageEnvironmentVariableName] = NpmInstallDetection.ExpectedPackageName,
+            [NpmInstallDetection.PackageVersionEnvironmentVariableName] = "13.0.0",
+            [NpmInstallDetection.PackageRidEnvironmentVariableName] = "linux-x64"
+        };
+    }
+
+    [Fact]
     public async Task DoctorCommand_Json_IncludesDiscoveredInstallations()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
