@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using Aspire.Shared.TerminalHost;
@@ -19,6 +21,13 @@ public sealed class TerminalHostAppTestsCollection;
 [Collection(nameof(TerminalHostAppTestsCollection))]
 public class TerminalHostAppTests(ITestOutputHelper outputHelper)
 {
+    private TemporaryWorkspace CreateSocketWorkspace()
+    {
+        // The default workspace includes the assembly name and "Workspace" segments,
+        // which can exceed macOS's 104-byte UDS path limit before the socket name is added.
+        return new TemporaryWorkspace(outputHelper, Directory.CreateTempSubdirectory());
+    }
+
     /// <summary>
     /// Builds a single-replica argument set for the host. Each terminal host process
     /// serves exactly one replica, so the AppHost (and these tests) just hand it one
@@ -29,7 +38,7 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
         int? columns = null,
         int? rows = null)
     {
-        var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspace = CreateSocketWorkspace();
         var dcpDir = Path.Combine(workspace.Path, "dcp");
         var hostDir = Path.Combine(workspace.Path, "host");
         var ctrlDir = Path.Combine(workspace.Path, "ctl");
@@ -688,7 +697,7 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConsumerListenerBindFailureIsReportedBeforeTerminalStarts()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = CreateSocketWorkspace();
         var parentFile = Path.Combine(workspace.Path, "not-a-directory");
         await File.WriteAllTextAsync(parentFile, "");
         await using var presentation = new Hmp1PresentationAdapter();
@@ -703,7 +712,7 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConsumerListenerWaitsForAcceptedClientHandshakeDuringTeardown()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = CreateSocketWorkspace();
         var socketPath = Path.Combine(workspace.Path, "consumer.sock");
         await using var presentation = new Hmp1PresentationAdapter();
         var callbackStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1149,117 +1158,188 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ControlSocketIsRestrictedToOwningUser()
     {
-        // Skipped on Windows because UnixFileMode is not supported there; the
-        // listener intentionally no-ops on Windows for the same reason.
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         var (args, workspace, control) = BuildArgs();
         using var disp = workspace;
+        MakeSocketDirectoryPermissive(control);
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
-        using var hostCts = new CancellationTokenSource();
-        var hostTask = app.RunAsync(hostCts.Token);
+        await using var listener = new TerminalHostControlListener(
+            control, new TerminalHostControlRpcTarget(app), NullLogger.Instance);
+        await listener.StartAsync();
 
-        try
-        {
-            await WaitForFileAsync(control, TimeSpan.FromSeconds(10));
+        AssertSocketIsRestrictedToOwningUser(control);
+        using var rpc = await OpenControlRpcAsync(control);
+        var info = await rpc.InvokeAsync<TerminalHostInfoResponse>(
+            TerminalHostControlProtocol.GetInfoMethod).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(TerminalHostControlProtocol.ProtocolVersion, info.ProtocolVersion);
+    }
 
-            // CSWSH/local-DoS defense: the control socket must be 0600 (UserRead|
-            // UserWrite). Anything broader allows a local user to dial it and call
-            // ShutdownAsync (no auth) or GetSessionAsync (leaks peer DisplayNames).
-            var mode = File.GetUnixFileMode(control);
-            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, mode);
-        }
-        finally
+    [Fact]
+    public async Task ProducerSocketIsRestrictedToOwningUserAcrossRebinds()
+    {
+        var (args, workspace, _) = BuildArgs();
+        using var disp = workspace;
+
+        for (var cycle = 0; cycle < 2; cycle++)
         {
-            app.RequestShutdown();
-            hostCts.Cancel();
-            await hostTask.WaitAsync(TimeSpan.FromSeconds(10));
+            File.Delete(args.ProducerUdsPath);
+            MakeSocketDirectoryPermissive(args.ProducerUdsPath);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var acceptTask = TerminalReplica.AcceptProducerAsync(args.ProducerUdsPath, cts.Token);
+
+            try
+            {
+                // AcceptProducerAsync binds and restricts the socket synchronously before
+                // awaiting a client; do not poll permissions and hide an asynchronous chmod race.
+                AssertSocketIsRestrictedToOwningUser(args.ProducerUdsPath);
+                using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+                await socket.ConnectAsync(new UnixDomainSocketEndPoint(args.ProducerUdsPath), cts.Token);
+                await using var producer = new NetworkStream(socket, ownsSocket: false);
+                await using var accepted = await acceptTask;
+                await producer.WriteAsync(new byte[] { 42 }, cts.Token);
+                var received = new byte[1];
+                await accepted.ReadExactlyAsync(received, cts.Token);
+                Assert.Equal(42, received[0]);
+            }
+            finally
+            {
+                await cts.CancelAsync();
+                try
+                {
+                    await acceptTask;
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            }
         }
     }
 
     [Fact]
-    public async Task ProducerAndConsumerSocketsAreRestrictedToOwningUser()
+    public async Task ConsumerSocketIsRestrictedToOwningUser()
     {
-        // Defense-in-depth (the parent ~/.aspire/trmnl/ dir is already 0700, but per-file
-        // 0600 matches what the control socket does and protects in case the dir's perms
-        // somehow get relaxed by a future change). The chmod is applied by
-        // TerminalReplica.ApplyRestrictiveSocketPermissionsAsync after Hex1b binds.
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         var (args, workspace, _) = BuildArgs();
         using var disp = workspace;
+        MakeSocketDirectoryPermissive(args.ConsumerUdsPath);
+        await using var presentation = new Hmp1PresentationAdapter();
+        var connected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        presentation.OnClientConnected = (_, _) =>
+        {
+            connected.TrySetResult();
+            return Task.CompletedTask;
+        };
 
-        await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
-        using var hostCts = new CancellationTokenSource();
-        var hostTask = app.RunAsync(hostCts.Token);
+        using var listener = new Hmp1UdsServerListenerFilter(
+            args.ConsumerUdsPath,
+            presentation,
+            NullLogger<Hmp1UdsServerListenerFilter>.Instance,
+            ex => connected.TrySetException(ex));
+        AssertSocketIsRestrictedToOwningUser(args.ConsumerUdsPath);
+        await listener.OnSessionStartAsync(80, 24, DateTimeOffset.UtcNow);
 
         try
         {
-            // The producer socket is bound as soon as RunAsync starts; the consumer
-            // socket is bound once Hex1bTerminal's HMP1 server initialises (also during
-            // RunAsync). The post-bind chmod helper polls for file existence and is
-            // best-effort, so we allow up to a few seconds.
-            await WaitForFileAsync(args.ProducerUdsPath, TimeSpan.FromSeconds(10));
-            await WaitForFileAsync(args.ConsumerUdsPath, TimeSpan.FromSeconds(10));
-
-            await WaitForUnixFileModeAsync(
-                args.ProducerUdsPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite,
-                TimeSpan.FromSeconds(5));
-            await WaitForUnixFileModeAsync(
-                args.ConsumerUdsPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite,
-                TimeSpan.FromSeconds(5));
+            await using var consumer = await TestHmp1Consumer.ConnectAsync(
+                args.ConsumerUdsPath, TimeSpan.FromSeconds(10));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await consumer.SendClientHelloAsync("owner", "secondary", cts.Token);
+            await connected.Task.WaitAsync(cts.Token);
         }
         finally
         {
-            app.RequestShutdown();
-            hostCts.Cancel();
-            await hostTask.WaitAsync(TimeSpan.FromSeconds(10));
+            await listener.OnSessionEndAsync(TimeSpan.Zero).AsTask().WaitAsync(TimeSpan.FromSeconds(10));
         }
     }
 
-    private static async Task WaitForUnixFileModeAsync(string path, UnixFileMode expected, TimeSpan timeout)
+    [Fact]
+    public async Task ProducerListenerBindFailureIsReported()
     {
-        // Callers MUST guard this with !OperatingSystem.IsWindows(); the early-return
-        // here is purely so the analyzer accepts File.GetUnixFileMode below.
+        using var workspace = CreateSocketWorkspace();
+        var parentFile = Path.Combine(workspace.Path, "not-a-directory");
+        await File.WriteAllTextAsync(parentFile, "");
+
+        await Assert.ThrowsAsync<IOException>(() => TerminalReplica.AcceptProducerAsync(
+            Path.Combine(parentFile, "producer.sock"), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ProducerListenerCanBeReboundAfterCancellation()
+    {
+        var (args, workspace, _) = BuildArgs();
+        using var disp = workspace;
+
+        for (var cycle = 0; cycle < 2; cycle++)
+        {
+            File.Delete(args.ProducerUdsPath);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var acceptTask = TerminalReplica.AcceptProducerAsync(args.ProducerUdsPath, cts.Token);
+            try
+            {
+                AssertSocketIsRestrictedToOwningUser(args.ProducerUdsPath);
+            }
+            finally
+            {
+                await cts.CancelAsync();
+            }
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => acceptTask);
+        }
+    }
+
+    private static void MakeSocketDirectoryPermissive(string socketPath)
+    {
+        var path = Path.GetDirectoryName(socketPath)!;
         if (OperatingSystem.IsWindows())
         {
+            var directory = new DirectoryInfo(path);
+            var security = directory.GetAccessControl();
+            security.AddAccessRule(new FileSystemAccessRule(
+                new SecurityIdentifier(WellKnownSidType.WorldSid, null),
+                FileSystemRights.FullControl,
+                InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+                PropagationFlags.None,
+                AccessControlType.Allow));
+            directory.SetAccessControl(security);
             return;
         }
 
-        // The chmod is applied from a background task in TerminalReplica after the
-        // socket binds (Hex1b binds lazily inside RunAsync), so the window between
-        // "file exists" and "file has 0600 perms" is observable from the outside.
-        // Poll briefly until we see the expected mode.
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        UnixFileMode last = default;
-        while (sw.Elapsed < timeout)
-        {
-            try
-            {
-                last = File.GetUnixFileMode(path);
-                if (last == expected)
-                {
-                    return;
-                }
-            }
-            catch (FileNotFoundException)
-            {
-                // Socket recycled mid-poll.
-            }
-            await Task.Delay(50);
-        }
+        File.SetUnixFileMode(path,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
+    }
 
-        throw new TimeoutException(
-            $"Expected '{path}' to have mode {expected} within {timeout.TotalSeconds:F1}s; last observed {last}.");
+    private static void AssertSocketIsRestrictedToOwningUser(string socketPath)
+    {
+        var directoryPath = Path.GetDirectoryName(socketPath)!;
+        if (OperatingSystem.IsWindows())
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            var directorySecurity = new DirectoryInfo(directoryPath).GetAccessControl();
+            Assert.True(directorySecurity.AreAccessRulesProtected);
+            Assert.Equal(identity.User, directorySecurity.GetOwner(typeof(SecurityIdentifier)));
+            FileSystemSecurity[] descriptors =
+            [
+                directorySecurity,
+                new FileInfo(socketPath).GetAccessControl()
+            ];
+            foreach (var security in descriptors)
+            {
+                var rule = Assert.Single(security.GetAccessRules(true, true, typeof(SecurityIdentifier))
+                    .Cast<FileSystemAccessRule>());
+                Assert.Equal(identity.User, rule.IdentityReference);
+                Assert.Equal(AccessControlType.Allow, rule.AccessControlType);
+                Assert.Equal(FileSystemRights.FullControl, rule.FileSystemRights);
+            }
+        }
+        else
+        {
+            Assert.Equal(
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+                File.GetUnixFileMode(directoryPath));
+            Assert.Equal(
+                UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                File.GetUnixFileMode(socketPath));
+        }
     }
 
     private static async Task WaitForFileAsync(string path, TimeSpan timeout)

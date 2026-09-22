@@ -347,7 +347,7 @@ internal static class CliPathHelper
         var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var socketPath = BackchannelConstants.ComputeCliSocketPath(homeDirectory, socketPrefix);
         var socketDirectory = Path.GetDirectoryName(socketPath)!;
-        Directory.CreateDirectory(socketDirectory);
+        SocketPermissionHelper.CreateDirectory(socketDirectory);
 
         if (Interlocked.CompareExchange(ref s_socketDirectorySwept, 1, 0) == 0)
         {

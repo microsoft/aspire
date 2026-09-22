@@ -431,6 +431,14 @@ public class WithTerminalTests : IAsyncLifetime
     [Fact]
     public async Task WithTerminalWritesMetadataSidecarWithExpectedShape()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(_terminalDirectory,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
+        }
+
         // The sidecar lets external tools (CLI `aspire terminal ps`, dashboard) discover
         // live terminals by listing ~/.aspire/trmnl/*.metadata.json. The on-disk schema
         // must match TerminalHostMetadata exactly — older readers refuse unknown schemas.
@@ -481,6 +489,8 @@ public class WithTerminalTests : IAsyncLifetime
 
             if (!OperatingSystem.IsWindows())
             {
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+                    File.GetUnixFileMode(_terminalDirectory));
                 // 0600 — defense-in-depth; parent dir is already 0700.
                 var mode = File.GetUnixFileMode(host.Layout.MetadataPath);
                 Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, mode);
