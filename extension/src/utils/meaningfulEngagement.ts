@@ -40,6 +40,7 @@ export class MeaningfulEngagementReporter implements vscode.Disposable {
     private _disposed = false;
     private _contextGeneration = 0;
     private _contextTask: Promise<void> = Promise.resolve();
+    private readonly _contextChanged = new vscode.EventEmitter<void>();
     private _context: AppHostTelemetryContext = {
         apphost_present: undefined,
         apphost_languages: 'unknown',
@@ -89,6 +90,8 @@ export class MeaningfulEngagementReporter implements vscode.Disposable {
         }
         this._disposed = true;
         this._contextGeneration++;
+        this._contextChanged.fire();
+        this._contextChanged.dispose();
         this._disposables.forEach(d => d.dispose());
         setCommonTelemetryProperties({
             apphost_present: undefined,
@@ -116,6 +119,7 @@ export class MeaningfulEngagementReporter implements vscode.Disposable {
         this._contextTask = complete && hasCandidates
             ? this._updateTargetVersions(snapshot.candidates, generation)
             : Promise.resolve();
+        this._contextChanged.fire();
         if (hasCandidates) {
             void this._tryFire('apphost_detected');
         }
@@ -140,6 +144,29 @@ export class MeaningfulEngagementReporter implements vscode.Disposable {
         }
     }
 
+    private async _waitForCurrentContext(): Promise<void> {
+        while (!this._disposed) {
+            const generation = this._contextGeneration;
+            let subscription: vscode.Disposable | undefined;
+            const contextChanged = new Promise<void>(resolve => {
+                subscription = this._contextChanged.event(resolve);
+            });
+
+            try {
+                // A superseded filesystem lookup may never finish. Wake on context changes
+                // or disposal instead of keeping engagement attached to that obsolete work.
+                await Promise.race([this._contextTask, contextChanged]);
+            }
+            finally {
+                subscription?.dispose();
+            }
+
+            if (generation === this._contextGeneration) {
+                return;
+            }
+        }
+    }
+
     private async _tryFire(trigger: EngagementTrigger): Promise<void> {
         if (this._fired || this._disposed) {
             return;
@@ -148,7 +175,7 @@ export class MeaningfulEngagementReporter implements vscode.Disposable {
 
         // Wait only for metadata already being read, never for another CLI discovery.
         // If discovery changes in the meantime, report the latest conservative context.
-        await this._contextTask;
+        await this._waitForCurrentContext();
         if (this._disposed) {
             return;
         }

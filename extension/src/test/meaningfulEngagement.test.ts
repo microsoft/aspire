@@ -344,14 +344,20 @@ suite('MeaningfulEngagementReporter', () => {
 
             fixture.repository.refresh();
             await waitFor(() => getCommonTelemetryProperties().apphost_target_versions === '13.6.0');
-            olderVersion.resolve('13.4.6');
-            await waitFor(() => fake.events.length === 1);
+            await new Promise<void>(resolve => setImmediate(resolve));
 
+            assert.strictEqual(fake.events.length, 1, 'Engagement must not wait for the superseded lookup');
             assert.strictEqual(getCommonTelemetryProperties().apphost_target_versions, '13.6.0');
             assert.strictEqual(fake.events[0].properties?.apphost_target_versions, '13.6.0');
+
+            olderVersion.resolve('13.4.6');
+            await new Promise<void>(resolve => setImmediate(resolve));
+            assert.strictEqual(fake.events.length, 1);
+            assert.strictEqual(getCommonTelemetryProperties().apphost_target_versions, '13.6.0');
         }
         finally {
             fixture.dispose();
+            olderVersion.resolve('13.4.6');
         }
     });
 
