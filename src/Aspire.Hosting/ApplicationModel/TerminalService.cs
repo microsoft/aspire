@@ -6,6 +6,7 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using Aspire.Hosting.Utils;
 using Hex1b;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -128,6 +129,8 @@ public sealed class TerminalService : IAsyncDisposable
         var environment = options.EnvironmentVariables.Count > 0
             ? new Dictionary<string, string>(options.EnvironmentVariables, StringComparer.Ordinal)
             : null;
+
+        Hex1bPtySocketHelper.Configure();
 
         return Hex1bTerminal.CreateBuilder()
             .WithPtyProcess(process =>

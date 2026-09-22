@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
+using Aspire.Shared;
 using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.Logging;
 using StreamJsonRpc;
@@ -53,7 +54,7 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
         var dir = Path.GetDirectoryName(_socketPath);
         if (!string.IsNullOrEmpty(dir))
         {
-            Directory.CreateDirectory(dir);
+            SocketPermissionHelper.CreateDirectory(dir);
         }
 
         if (File.Exists(_socketPath))
@@ -71,20 +72,7 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         try
         {
-            socket.Bind(new UnixDomainSocketEndPoint(_socketPath));
-
-            // Restrict the control socket to the owning user (0600). Without this, file
-            // permissions are governed solely by the inherited umask — on developer
-            // machines that's frequently 002/022, leaving the socket world- or
-            // group-accessible. Any local user who can traverse to the path could then
-            // dial and invoke ShutdownAsync (no auth) or GetSessionAsync (leaks peer
-            // DisplayNames). Skipped on Windows (UDS is supported but SetUnixFileMode
-            // is not, and Windows access control on the socket file follows ACLs from
-            // the temp directory, which is per-user by default).
-            if (!OperatingSystem.IsWindows())
-            {
-                File.SetUnixFileMode(_socketPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            }
+            SocketPermissionHelper.Bind(socket, _socketPath);
 
             // Backlog of 16 is well above the documented "single AppHost client"
             // contract. The AppHost only ever maintains one healthy session, but it

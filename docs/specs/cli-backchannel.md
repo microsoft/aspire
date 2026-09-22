@@ -2,6 +2,33 @@
 
 This document describes the design philosophy and patterns for the CLI-to-AppHost RPC communication channel.
 
+## Local socket permissions
+
+Filesystem-backed sockets use `SocketPermissionHelper` from `src/Shared`. Before binding,
+the listener creates or repairs its dedicated parent directory to be owner-only. On Linux
+and macOS, directories use `0700` (including the execute bit needed for traversal), and
+socket files use `0600` before the listener starts accepting connections. New directories
+are created with restrictive permissions rather than relying on the process umask.
+
+On Windows, socket directories use a protected DACL granting the current user full control,
+with inheritance for child directories and socket files. Unix mode APIs are not called.
+The remote AppHost uses a named pipe on Windows instead, with a current-user-only pipe ACL.
+
+Permission errors prevent listener startup; there is no fallback to a permissive endpoint.
+Socket paths must use dedicated directories, not shared locations such as the system temp
+directory itself. These permissions isolate OS users, not processes running as the same user,
+and do not protect against privileged administrators.
+
+Process-backed AppHost terminals (both docked and interaction prompts) also configure
+Hex1b's Windows PTY helper socket directory before creating the deferred workload. Aspire
+secures `%USERPROFILE%\.aspire\pty` and sets `HEX1B_PTY_SHIM_SOCKET_DIR` in the AppHost's
+process environment. An existing override is preserved, normalized to an absolute path,
+and secured with the same helper; unsafe directories or permission failures prevent
+terminal creation. Hex1b may additionally grant Windows SYSTEM access to this directory.
+The override remains set for the process lifetime because Hex1b reads it at PTY startup,
+not when the process-options callback runs. Setting only the child process environment
+would not control this socket. Linux and macOS use direct PTYs and need no such override.
+
 ## Philosophy
 
 The auxiliary backchannel exists because the CLI and AppHost are **separately versioned components** that need to communicate reliably across version boundaries. Users may run:

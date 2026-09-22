@@ -9,6 +9,7 @@ using System.Security.Principal;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.Hosting.RemoteHost.Language;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -82,14 +83,12 @@ internal sealed class JsonRpcServer : BackgroundService
         // Create pipe security that only allows the current user to connect
         // This is equivalent to the Unix socket permission (owner read/write only)
         var pipeSecurity = new PipeSecurity();
-        var currentUser = WindowsIdentity.GetCurrent().User;
-        if (currentUser != null)
-        {
-            pipeSecurity.AddAccessRule(new PipeAccessRule(
-                currentUser,
-                PipeAccessRights.FullControl,
-                AccessControlType.Allow));
-        }
+        using var identity = WindowsIdentity.GetCurrent();
+        var currentUser = identity.User ?? throw new UnauthorizedAccessException("The current Windows user has no security identifier.");
+        pipeSecurity.AddAccessRule(new PipeAccessRule(
+            currentUser,
+            PipeAccessRights.FullControl,
+            AccessControlType.Allow));
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -137,29 +136,16 @@ internal sealed class JsonRpcServer : BackgroundService
     {
         _logger.LogInformation("Starting JsonRpc server on Unix domain socket: {SocketPath}", _socketPath);
 
+        SocketPermissionHelper.CreateDirectory(Path.GetDirectoryName(_socketPath)!);
+
         // Delete existing socket file if it exists
         if (File.Exists(_socketPath))
         {
             File.Delete(_socketPath);
         }
 
-        // Ensure the directory exists
-        var directory = Path.GetDirectoryName(_socketPath);
-        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        var endpoint = new UnixDomainSocketEndPoint(_socketPath);
         _listenSocket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-        _listenSocket.Bind(endpoint);
-
-        // M3: Set restrictive permissions on socket file (owner read/write only)
-        // This prevents other users on the system from connecting to the socket
-        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-        {
-            File.SetUnixFileMode(_socketPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
+        SocketPermissionHelper.Bind(_listenSocket, _socketPath);
 
         _listenSocket.Listen(10);
         listenActivity.AddJsonRpcServerListening();
@@ -309,8 +295,8 @@ internal sealed class JsonRpcServer : BackgroundService
 
             _listenSocket?.Dispose();
 
-            // Clean up socket file
-            if (File.Exists(_socketPath))
+            // Only a filesystem listener that passed directory validation can own a socket file.
+            if (_listenSocket is not null && File.Exists(_socketPath))
             {
                 try
                 {
