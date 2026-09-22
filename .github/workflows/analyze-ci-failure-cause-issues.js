@@ -423,6 +423,9 @@ async function readStoredCauseFamily(memoryCausesDirectory, cause) {
                 occurrencesByRunId.set(occurrence.run_id, {
                     ...existing,
                     issue_published: true,
+                    ...(typeof occurrence.issue_published_url === 'string'
+                        ? { issue_published_url: occurrence.issue_published_url }
+                        : {}),
                 });
             }
         }
@@ -441,7 +444,12 @@ function storedOccurrenceCount(storedOccurrences) {
         : undefined;
 }
 
-function isOccurrencePublished(body, storedOccurrences, runId) {
+function isOccurrencePublished(
+    body,
+    storedOccurrences,
+    runId,
+    issueUrl,
+    allowLegacyPublicationEvidence) {
     if (hasOccurrence(body, runId)) {
         return true;
     }
@@ -451,7 +459,13 @@ function isOccurrencePublished(body, storedOccurrences, runId) {
         return false;
     }
     if (storedOccurrence.issue_published === true) {
-        return true;
+        if (typeof storedOccurrence.issue_published_url === 'string') {
+            return storedOccurrence.issue_published_url === issueUrl;
+        }
+        return allowLegacyPublicationEvidence;
+    }
+    if (!allowLegacyPublicationEvidence) {
+        return false;
     }
 
     try {
@@ -493,7 +507,11 @@ async function persistIssuePublication(
     if (publishedRunId !== undefined && Array.isArray(storedCause.occurrences)) {
         persistedCause.occurrences = storedCause.occurrences.map(occurrence =>
             occurrence.run_id === publishedRunId
-                ? { ...occurrence, issue_published: true }
+                ? {
+                    ...occurrence,
+                    issue_published: true,
+                    issue_published_url: issueUrl,
+                }
                 : occurrence);
     }
 
@@ -556,6 +574,7 @@ async function publishCauseIssue(
             `Cause issue body exceeds the ${MAX_ISSUE_BODY_BYTES}-byte publication budget. Skipping issue creation.`);
         return undefined;
     }
+    const allowLegacyPublicationEvidence = matchingIssues.length === 1;
 
     let occurrenceAlreadyPublished = false;
     let canReconcileDuplicates = true;
@@ -577,7 +596,14 @@ async function publishCauseIssue(
                 return [];
             }
             let updatedBody = issue.body;
-            if (isOccurrencePublished(issue.body, storedOccurrences, run.runId)) {
+            const canonicalIssueUrl =
+                `https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issue.number}`;
+            if (isOccurrencePublished(
+                issue.body,
+                storedOccurrences,
+                run.runId,
+                canonicalIssueUrl,
+                allowLegacyPublicationEvidence)) {
                 occurrenceAlreadyPublished = true;
             } else {
                 try {
@@ -632,7 +658,12 @@ async function publishCauseIssue(
             action.type === 'update' &&
             action.issueNumber === result.number &&
             typeof action.body === 'string' &&
-            isOccurrencePublished(action.body, storedOccurrences, run.runId));
+            isOccurrencePublished(
+                action.body,
+                storedOccurrences,
+                run.runId,
+                issueUrl,
+                false));
     await persistIssuePublication(
         storedCausePath,
         cause,
