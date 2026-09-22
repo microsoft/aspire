@@ -1,0 +1,13 @@
+<Directives>
+  <Application>
+    <!-- Workaround for https://github.com/dotnet/aspnetcore/issues/69432. These roots prevent a background
+         exception each time a Task-returning JS interop method is called. Remove this workaround once the
+         underlying issue is fixed in Blazor. -->
+    <Assembly Name="Microsoft.JSInterop">
+      <Type Name="Microsoft.JSInterop.Infrastructure.TaskGenericsUtil+TaskResultGetter`1[[System.Threading.Tasks.VoidTaskResult, System.Private.CoreLib]]" Dynamic="Required All" />
+    </Assembly>
+    <Assembly Name="System.Text.Json">
+      <Type Name="System.Text.Json.Serialization.Converters.ObjectDefaultConverter`1[[System.Threading.Tasks.VoidTaskResult, System.Private.CoreLib]]" Dynamic="Required All" />
+    </Assembly>
+  </Application>
+</Directives>

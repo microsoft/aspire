@@ -13,7 +13,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Update integrations in the Aspire project</value>
+    <value>Update integrations and repository Aspire CLI references</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
     <value>The path to the Aspire AppHost project file or a directory to search</value>
@@ -218,5 +218,36 @@
   </data>
   <data name="MigrationApplyFailedWarning" xml:space="preserve">
     <value>The project packages were updated, but applying migrations failed. Run 'aspire update --migrate' again to retry.</value>
+  </data>
+  <data name="RepositoryToolUpdateFormat" xml:space="preserve">
+    <value>{0}: [bold yellow]{1}[/] [bold green]{2}[/] to [bold green]{3}[/]</value>
+    <comment>{0} = manifest path, {1} = package ID, {2} = current version, {3} = new version. Values are markup-escaped.</comment>
+  </data>
+  <data name="RepositoryToolsUpToDate" xml:space="preserve">
+    <value>Repository Aspire CLI references are up to date.</value>
+  </data>
+  <data name="UpdateRepositoryTools" xml:space="preserve">
+    <value>Update repository Aspire CLI references</value>
+  </data>
+  <data name="RepositoryToolsUpdated" xml:space="preserve">
+    <value>Repository Aspire CLI references updated. The running CLI was not replaced.</value>
+  </data>
+  <data name="RestoreRepositoryDotNetTool" xml:space="preserve">
+    <value>Run 'dotnet tool restore' in the repository to use the updated .NET tool. Ensure its NuGet configuration includes the selected channel's feed.</value>
+  </data>
+  <data name="RestoreRepositoryNpmTool" xml:space="preserve">
+    <value>Lockfiles were not changed. Run your package manager's install command (for example, 'npm install') to refresh the lockfile and use the updated npm tool.</value>
+  </data>
+  <data name="UnsupportedToolVersionFormat" xml:space="preserve">
+    <value>Skipping the Aspire CLI reference in '{0}': '{1}' is not an exact version or a simple ^/~ version range.</value>
+  </data>
+  <data name="ToolManifestChangedFormat" xml:space="preserve">
+    <value>The tool manifest '{0}' changed during update. Run 'aspire update' again.</value>
+  </data>
+  <data name="FailedResolveNpmToolFormat" xml:space="preserve">
+    <value>Could not resolve @microsoft/aspire-cli@{0} from npm. Check that npm is available and this version is published. Repository tool manifests were not changed.</value>
+  </data>
+  <data name="FailedReadToolManifestFormat" xml:space="preserve">
+    <value>Failed to read tool manifest '{0}': {1}</value>
   </data>
 </root>

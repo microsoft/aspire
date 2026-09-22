@@ -19,7 +19,7 @@ internal sealed class DefaultResourceGroupResource(ResourceGroupResource resourc
 
     public IArmDeploymentCollection GetArmDeployments()
     {
-        return new DefaultArmDeploymentCollection(ResourcesDeploymentsExtensions.GetArmDeployments(resourceGroupResource));
+        return new DefaultArmDeploymentCollection(resourceGroupResource.GetArmDeployments());
     }
 
     public Task<ArmOperation> DeleteAsync(WaitUntil waitUntil, CancellationToken cancellationToken = default) =>

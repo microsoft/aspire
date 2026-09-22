@@ -8,12 +8,12 @@ using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureSqlDeploymentScriptTests
+public class AzureSqlDeploymentScriptTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task SqlWithPrivateEndpoint_AutoCreatesBothSubnetAndStorage()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -33,7 +33,7 @@ public class AzureSqlDeploymentScriptTests
     [Fact]
     public async Task SqlWithPrivateEndpoint_ExplicitSubnet_AutoCreatesStorage()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -55,7 +55,7 @@ public class AzureSqlDeploymentScriptTests
     [Fact]
     public async Task SqlWithPrivateEndpoint_ExplicitStorage_AutoCreatesSubnet()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -78,7 +78,7 @@ public class AzureSqlDeploymentScriptTests
     [Fact]
     public async Task SqlWithPrivateEndpoint_BothExplicitSubnetAndStorage()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -103,7 +103,7 @@ public class AzureSqlDeploymentScriptTests
     [Fact]
     public async Task SqlWithPrivateEndpoint_StorageBeforePrivateEndpoint()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -127,7 +127,7 @@ public class AzureSqlDeploymentScriptTests
     [Fact]
     public async Task SqlWithPrivateEndpoint_SubnetBeforePrivateEndpoint()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -151,7 +151,7 @@ public class AzureSqlDeploymentScriptTests
     [Fact]
     public async Task SqlWithPrivateEndpoint_ClearDefaultRoleAssignments_RemovesDeploymentScriptInfra()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -172,7 +172,7 @@ public class AzureSqlDeploymentScriptTests
     [Fact]
     public async Task SqlWithPrivateEndpoint_UserDelegatedAdminScriptSubnet_KeepsSingleAciDelegation()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");

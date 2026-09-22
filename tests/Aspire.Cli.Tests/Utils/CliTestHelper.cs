@@ -169,6 +169,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.BannerServiceFactory);
         services.AddSingleton<FallbackProjectParser>();
         services.AddSingleton(options.ProjectUpdaterFactory);
+        services.AddSingleton<RepositoryToolUpdater>();
         services.AddSingleton<NuGetPackagePrefetcher>();
         services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<NuGetPackagePrefetcher>());
         services.AddSingleton(options.AuxiliaryBackchannelMonitorFactory);
@@ -276,8 +277,11 @@ internal static class CliTestHelper
         services.AddTransient<DescribeCommand>();
         services.AddTransient<LogsCommand>();
         services.AddTransient<TerminalCommand>();
+        services.AddTransient<TerminalResourceResolver>();
         services.AddTransient<TerminalAttachCommand>();
         services.AddTransient<TerminalPsCommand>();
+        services.AddTransient<TerminalTapeCommand>();
+        services.AddTransient<TerminalTapePlayCommand>();
         services.AddTransient<IntegrationPackageSearchService>();
         services.AddTransient<IntegrationCommand>();
         services.AddTransient<IntegrationListCommand>();

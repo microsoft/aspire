@@ -1524,7 +1524,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         var explicitChannelName = context.Channel.ShouldPersistChannelName() ? context.Channel.Name : null;
         var explicitChannelChanged = explicitChannelName is not null && !string.Equals(config.Channel, explicitChannelName, StringComparisons.CliInputOrOutput);
 
-        if (updates.Count == 0 && newSdkVersion is null)
+        var hasProjectUpdates = updates.Count > 0 || newSdkVersion is not null;
+        if (!hasProjectUpdates && context.AdditionalUpdateSteps.Count == 0)
         {
             if (explicitChannelChanged)
             {
@@ -1545,6 +1546,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         foreach (var (packageId, currentVersion, newVersion) in updates)
         {
             _interactionService.DisplayMessage(KnownEmojis.Package, $"[bold yellow]{packageId.EscapeMarkup()}[/] [bold green]{currentVersion.EscapeMarkup()}[/] to [bold green]{newVersion.EscapeMarkup()}[/]", allowMarkup: true);
+        }
+        foreach (var step in context.AdditionalUpdateSteps)
+        {
+            _interactionService.DisplayMessage(KnownEmojis.Package, step.GetFormattedDisplayText(), allowMarkup: true);
         }
         _interactionService.DisplayEmptyLine();
 
@@ -1572,30 +1577,45 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             config.AddOrUpdatePackage(packageId, newVersion);
         }
-        // Rebuild and regenerate SDK code with updated packages
-        _interactionService.DisplayEmptyLine();
-        var regenerateResult = await _interactionService.ShowStatusAsync(
-            UpdateCommandStrings.RegeneratingSdkCode,
-            async () =>
-            {
-                var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, cancellationToken: cancellationToken);
-
-                if (!regenerateSuccess)
-                {
-                    return new UpdatePackagesResult { UpdatesApplied = false };
-                }
-
-                return new UpdatePackagesResult { UpdatesApplied = true };
-            });
-
-        if (!regenerateResult.UpdatesApplied)
+        if (hasProjectUpdates)
         {
-            return regenerateResult;
+            // Regeneration also installs guest dependencies. Complete it before saving
+            // config or editing CLI pins so failure leaves both update plans unapplied.
+            _interactionService.DisplayEmptyLine();
+            var regenerateResult = await _interactionService.ShowStatusAsync(
+                UpdateCommandStrings.RegeneratingSdkCode,
+                async () =>
+                {
+                    var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, cancellationToken: cancellationToken);
+
+                    if (!regenerateSuccess)
+                    {
+                        return new UpdatePackagesResult { UpdatesApplied = false };
+                    }
+
+                    return new UpdatePackagesResult { UpdatesApplied = true };
+                });
+
+            if (!regenerateResult.UpdatesApplied)
+            {
+                return regenerateResult;
+            }
         }
 
-        SaveConfiguration(config, directory);
+        if (hasProjectUpdates || explicitChannelChanged)
+        {
+            SaveConfiguration(config, directory);
+        }
 
-        _interactionService.DisplayMessage(KnownEmojis.Package, UpdateCommandStrings.RegeneratedSdkCode);
+        foreach (var step in context.AdditionalUpdateSteps)
+        {
+            await step.Callback();
+        }
+
+        if (hasProjectUpdates)
+        {
+            _interactionService.DisplayMessage(KnownEmojis.Package, UpdateCommandStrings.RegeneratedSdkCode);
+        }
 
         _interactionService.DisplayEmptyLine();
         _interactionService.DisplaySuccess(UpdateCommandStrings.UpdateSuccessfulMessage);

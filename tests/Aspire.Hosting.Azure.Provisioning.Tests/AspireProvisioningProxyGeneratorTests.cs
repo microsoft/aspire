@@ -251,6 +251,15 @@ public class AspireProvisioningProxyGeneratorTests
     }
 
     [Fact]
+    public void NullableObliviousConstructorParametersGenerateCompilableFactoryMethods()
+    {
+        var result = ProvisioningGeneratorTest.Run(NullableObliviousConstructorSource);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics());
+    }
+
+    [Fact]
     public void ArgumentsParameterRenamingAvoidsSignatureCollisions()
     {
         var result = ProvisioningGeneratorTest.Run(ParameterNameCollisionSource);
@@ -622,6 +631,41 @@ public class AspireProvisioningProxyGeneratorTests
                 }
 
                 public ChildModel? Child { get; set; }
+            }
+        }
+        """;
+
+    private const string NullableObliviousConstructorSource = """
+        [assembly: Aspire.Hosting.Azure.Provisioning.GenerateAspireProvisioningProxy(
+            typeof(Test.Provisioning.NullableObliviousResource))]
+
+        """ + CommonSource + """
+
+        #nullable disable
+        namespace Test.Provisioning
+        {
+            public sealed class NullableObliviousResource : Azure.Provisioning.Primitives.ProvisionableResource
+            {
+                public NullableObliviousResource(string bicepIdentifier, string resourceVersion = null)
+                    : base(bicepIdentifier)
+                {
+                }
+            }
+        }
+
+        #nullable enable
+        #pragma warning disable ASPIREAZUREPROVISIONING001
+        namespace Test.Consumers
+        {
+            public static class FactoryConsumer
+            {
+                public static void Create(Aspire.Hosting.Azure.AzureResourceInfrastructure infrastructure)
+                {
+                    ProvisioningGeneratorTests.Generated.AzureResourceInfrastructureProvisioningExtensions
+                        .AddNullableObliviousResource(infrastructure, "defaultVersion");
+                    ProvisioningGeneratorTests.Generated.AzureResourceInfrastructureProvisioningExtensions
+                        .AddNullableObliviousResource(infrastructure, "nullVersion", null);
+                }
             }
         }
         """;
@@ -1089,8 +1133,21 @@ public class AspireProvisioningProxyGeneratorTests
 
         namespace Azure.Provisioning
         {
-            public abstract class BicepValue
+            public enum BicepValueKind
             {
+                Unset,
+                Literal,
+                Expression
+            }
+
+            public interface IBicepValue
+            {
+                BicepValueKind Kind { get; }
+            }
+
+            public abstract class BicepValue : IBicepValue
+            {
+                public BicepValueKind Kind => BicepValueKind.Literal;
             }
 
             public sealed class BicepValue<T> : BicepValue

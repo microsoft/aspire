@@ -175,10 +175,10 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     internal bool AreAllStatesVisible => PageViewModel.ResourceStatesToVisibility.Values.All(value => value);
     internal bool AreAllHealthStatesVisible => PageViewModel.ResourceHealthStatusesToVisibility.Values.All(value => value);
 
-    private readonly GridSort<ResourceGridViewModel> _nameSort = GridSort<ResourceGridViewModel>.ByAscending(p => p.Resource, ResourceViewModelNameComparer.Instance);
-    private readonly GridSort<ResourceGridViewModel> _stateSort = GridSort<ResourceGridViewModel>.ByAscending(p => p.Resource.State).ThenAscending(p => p.Resource, ResourceViewModelNameComparer.Instance);
-    private readonly GridSort<ResourceGridViewModel> _startTimeSort = GridSort<ResourceGridViewModel>.ByDescending(p => p.Resource.StartTimeStamp).ThenAscending(p => p.Resource, ResourceViewModelNameComparer.Instance);
-    private readonly GridSort<ResourceGridViewModel> _typeSort = GridSort<ResourceGridViewModel>.ByAscending(p => p.Resource.ResourceType).ThenAscending(p => p.Resource, ResourceViewModelNameComparer.Instance);
+    private readonly EnumerableGridSort<ResourceGridViewModel> _nameSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
+    private readonly EnumerableGridSort<ResourceGridViewModel> _stateSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource.State).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
+    private readonly EnumerableGridSort<ResourceGridViewModel> _startTimeSort = EnumerableGridSort<ResourceGridViewModel>.ByDescending(item => item.Resource.StartTimeStamp).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
+    private readonly EnumerableGridSort<ResourceGridViewModel> _typeSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource.ResourceType).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
 
     protected override async Task OnInitializedAsync()
     {
@@ -361,13 +361,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // Check to see whether max item count should be set on every render.
-        // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<ResourceGridViewModel>.TrySetMaxItemCount(_dataGrid, 10_000))
-        {
-            StateHasChanged();
-        }
-
         if (firstRender)
         {
             var initialFocusElementId = PageViewModel.SelectedViewKind == ResourceViewKind.Graph ? GraphContainerId : ScrollContainerId;
@@ -385,20 +378,15 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             // Before any awaits, set a flag to indicate the graph is initialized. This prevents the graph being initialized multiple times.
             _graphInitialized = true;
 
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/app-resourcegraph.js");
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["js/app-resourcegraph.js"]}");
 
             _resourcesInteropReference = DotNetObjectReference.Create(new ResourcesInterop(this));
 
             // Static icons used by the graph that aren't tied to a specific resource. Converted to raw
             // SVG path data here (the same way resource/state icons are) so the JS can render them.
-            var graphIcons = new
-            {
-                menu = new
-                {
-                    path = ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.Settings()),
-                    labelFormat = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value
-                }
-            };
+            var graphIcons = new GraphIconsDto(new GraphMenuIconDto(
+                Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.Settings()),
+                LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value));
 
             await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
             await UpdateResourceGraphResourcesAsync();
@@ -457,13 +445,12 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         // Get filtered and ordered resources.
         var filteredResources = GetFilteredResources()
-            .Select(r => new ResourceGridViewModel { Resource = r })
-            .AsQueryable();
+            .Select(r => new ResourceGridViewModel { Resource = r });
         filteredResources = request.SortByColumn is null
             ? filteredResources
                 .OrderBy(p => p.Resource.ResourceType)
                 .ThenBy(p => p.Resource, ResourceViewModelNameComparer.Instance)
-            : request.ApplySorting(filteredResources);
+            : EnumerableGridItemsProvider.ApplySorting(filteredResources, request);
 
         // Rearrange resources based on parent information.
         // This must happen after resources are ordered so nested resources are in the right order.
@@ -473,15 +460,13 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             .ToList();
 
         // Paging visible resources.
-        var query = orderedResources
-            .Skip(request.StartIndex)
-            .Take(request.Count ?? DashboardUIHelpers.DefaultDataGridResultCount)
-            .ToList();
+        var result = EnumerableGridItemsProvider.GetPage(orderedResources,
+            request with { Count = request.Count ?? DashboardUIHelpers.DefaultDataGridResultCount });
 
         _totalItemsCount = orderedResources.Count;
-        _totalItemsFooter.UpdateDisplayedCount(query.Count);
+        _totalItemsFooter.UpdateDisplayedCount(result.Items.Count);
 
-        return ValueTask.FromResult(GridItemsProviderResult.From(query, orderedResources.Count));
+        return ValueTask.FromResult(result);
     }
 
     private Task OnDataGridSortChangedAsync(DataGridSortEventArgs<ResourceGridViewModel> _)

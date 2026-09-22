@@ -4,7 +4,7 @@
     var orderedValues = GetOrderedValues(Filter.Values).ToList();
 }
 
-<FluentOverflow TItem="DimensionValueViewModel" Items="@orderedValues" Class="dimension-overflow" MaxRenderedItems="@MaxRenderedOverflowItems">
+<FluentOverflow TItem="DimensionValueViewModel" Items="@orderedValues" Class="dimension-overflow" MaxRenderedItems="@MaxRenderedOverflowItems" Threshold="0">
     <ItemTemplate Context="item">
         @{
             var isFirstItem = ReferenceEquals(item, orderedValues[0]);

@@ -19,7 +19,7 @@
     <!-- Don't generate web.config or include IIS hosting -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
 
-    <!-- CreateLayout copies only the managed executable, so native dependencies must be embedded in the single file. -->
+    <!-- Native libraries are embedded except for Hex1b's Windows PTY sidecars, which CreateLayout copies together. -->
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 
@@ -34,7 +34,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Aspire.Dashboard\Aspire.Dashboard.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.RemoteHost\Aspire.Hosting.RemoteHost.csproj" />
     <ProjectReference Include="..\Aspire.TerminalHost\Aspire.TerminalHost.csproj" />
   </ItemGroup>
@@ -45,10 +44,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Preview package warning suppressions do not flow through the Aspire.Dashboard project reference.
-      Exclude compile/runtime assets so this direct reference doesn't displace the Dashboard's runtime asset
-      from the single-file publish. -->
-    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" PrivateAssets="all" ExcludeAssets="compile;runtime" NoWarn="NU3018;NU3027;NU3042" Condition="'$(MicrosoftFluentUIAspNetCoreComponentsIsPreview)' == 'true'" />
     <PackageReference Include="NuGet.Commands" />
     <PackageReference Include="NuGet.Protocol" />
     <PackageReference Include="NuGet.Resolver" />
@@ -85,7 +80,7 @@
 
   <Target Name="ValidateSingleFilePublishConfiguration" BeforeTargets="PrepareForPublish">
     <Error Condition="'$(PublishSingleFile)' == 'true' and '$(IncludeNativeLibrariesForSelfExtract)' != 'true'"
-           Text="Aspire.Managed single-file publishing must embed native libraries because CreateLayout copies only the managed executable." />
+           Text="Aspire.Managed single-file publishing must embed native libraries other than the explicitly copied Windows PTY sidecars." />
   </Target>
 
 </Project>

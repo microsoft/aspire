@@ -9,6 +9,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.Azure;
+using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
 using Aspire.TypeSystem;
@@ -1658,6 +1659,21 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_WithAzureContainerAppExpress_EmitsTypeScriptMethod()
+    {
+        var result = AtsCapabilityScanner.ScanAssemblies(LoadAzureAssemblies());
+
+        var capability = Assert.Single(result.Capabilities, c => c.CapabilityId == "Aspire.Hosting.Azure.AppContainers/asExpress");
+        Assert.Equal(GetAtsTypeId(typeof(AzureContainerAppEnvironmentResource)), capability.TargetTypeId);
+        Assert.True(capability.ReturnsBuilder);
+        Assert.Empty(capability.Parameters);
+
+        var files = _generator.GenerateDistributedApplication(result.ToAtsContext());
+
+        Assert.Contains("asExpress(): AzureContainerAppEnvironmentResourcePromise;", files["aspire.mts"]);
+    }
+
+    [Fact]
     public void Scanner_AzureExistingResourceScopes_ExposeTypeScriptCapabilities()
     {
         var capabilities = ScanCapabilitiesFromAzureAssemblies();
@@ -2204,6 +2220,59 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     // ===== DTO Generation Tests =====
+
+    [Fact]
+    public async Task Generate_DotnetProjectOptions_UsesDtoWithoutChangingLegacyOptions()
+    {
+        var context = AtsCapabilityScanner.ScanAssemblies(
+            [typeof(DistributedApplication).Assembly, typeof(DotnetProjectHostingExtensions).Assembly]).ToAtsContext();
+        var addDotnetProject = Assert.Single(context.Capabilities, capability => capability.CapabilityId == "Aspire.Hosting.Dotnet/addDotnetProject");
+        var options = Assert.Single(addDotnetProject.Parameters, parameter => parameter.Name == "options");
+
+        Assert.NotNull(options.Type);
+        Assert.Equal(AtsTypeCategory.Dto, options.Type.Category);
+        Assert.Equal("Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetProjectOptions", options.Type.TypeId);
+        var dto = Assert.Single(context.DtoTypes, dto => dto.TypeId == options.Type.TypeId);
+        Assert.Equal(
+            ["ExcludeKestrelEndpoints", "ExcludeLaunchProfile", "LaunchProfileName"],
+            dto.Properties.Select(property => property.Name).Order(StringComparer.Ordinal));
+        Assert.All(dto.Properties, property => Assert.True(property.IsOptional));
+
+        var legacyTypeId = AtsTypeMapping.DeriveTypeId(typeof(ProjectResourceOptions));
+        Assert.Single(context.HandleTypes, type => type.AtsTypeId == legacyTypeId);
+        var addCSharpApp = Assert.Single(context.Capabilities, capability => capability.CapabilityId == "Aspire.Hosting/addCSharpApp");
+        var legacyOptions = Assert.Single(addCSharpApp.Parameters, parameter => parameter.Name == "options");
+        Assert.NotNull(legacyOptions.Type);
+        Assert.Equal(AtsTypeCategory.Handle, legacyOptions.Type.Category);
+        Assert.Equal(legacyTypeId, legacyOptions.Type.TypeId);
+
+        var code = _generator.GenerateDistributedApplication(context)["aspire.mts"];
+        var builderMethods = code.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(line => line.EndsWith(';') &&
+                (line.StartsWith("addDotnetProject(", StringComparison.Ordinal) ||
+                 line.StartsWith("addCSharpApp(", StringComparison.Ordinal) ||
+                 line.StartsWith("addProject(", StringComparison.Ordinal)))
+            .Distinct()
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(3, builderMethods.Length);
+
+        await Verify(new
+        {
+            ProjectV2Options = GetInterface("DotnetProjectOptions"),
+            LegacyOptions = GetInterface(nameof(ProjectResourceOptions)),
+            LegacyAddOptions = GetInterface("AddProjectOptions"),
+            BuilderMethods = builderMethods
+        });
+
+        string GetInterface(string name)
+        {
+            var match = Regex.Match(code, $@"^export interface {Regex.Escape(name)} \{{.*?^\}}", RegexOptions.Multiline | RegexOptions.Singleline);
+            Assert.True(match.Success, $"Generated interface '{name}' was not found.");
+
+            return match.Value;
+        }
+    }
 
     [Fact]
     public void Scanner_AspireDtoType_IsDiscovered()

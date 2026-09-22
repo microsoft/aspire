@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureSqlDatabaseConnectionPropertiesTests
+public class AzureSqlDatabaseConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureSqlServerResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sqlServer = builder.AddAzureSqlServer("sql");
 
         var resource = Assert.Single(builder.Resources.OfType<AzureSqlServerResource>());
@@ -44,7 +44,7 @@ public class AzureSqlDatabaseConnectionPropertiesTests
     [Fact]
     public void AzureSqlDatabaseResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sqlServer = builder.AddAzureSqlServer("sql");
         var database = sqlServer.AddDatabase("database", "mydb");
 
@@ -83,7 +83,7 @@ public class AzureSqlDatabaseConnectionPropertiesTests
     [Fact]
     public void AzureSqlServerResourceWithRunAsContainerGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sqlServer = builder.AddAzureSqlServer("sql");
         sqlServer.RunAsContainer(c =>
         {
@@ -133,7 +133,7 @@ public class AzureSqlDatabaseConnectionPropertiesTests
     [Fact]
     public void AzureSqlDatabaseResourceWithRunAsContainerGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sqlServer = builder.AddAzureSqlServer("sql");
         var database = sqlServer.AddDatabase("database", "mydb");
         sqlServer.RunAsContainer(c =>

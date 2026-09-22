@@ -672,10 +672,25 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             WriteLine($"/** {enumType.Name} enum. */");
             WriteLine($"enum {enumName} implements WireValueEnum {{");
             var members = Enum.GetNames(enumType.ClrType);
+            var reservedNames = members.Select(ToUpperSnakeCase).ToHashSet(StringComparer.Ordinal);
+            var usedNames = new HashSet<string>(StringComparer.Ordinal);
             for (var i = 0; i < members.Length; i++)
             {
                 var member = members[i];
                 var memberName = ToUpperSnakeCase(member);
+                if (!usedNames.Add(memberName))
+                {
+                    // AAD and Aad both become AAD. Preserve wire values and reserve natural names
+                    // such as AAD2 before allocating numeric suffixes, as with generated class names.
+                    var baseName = memberName;
+                    var counter = 1;
+                    do
+                    {
+                        counter++;
+                        memberName = $"{baseName}{counter}";
+                    }
+                    while (reservedNames.Contains(memberName) || !usedNames.Add(memberName));
+                }
                 var suffix = i < members.Length - 1 ? "," : ";";
                 WriteLine($"    {memberName}(\"{member}\"){suffix}");
             }

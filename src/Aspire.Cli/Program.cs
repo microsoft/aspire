@@ -437,6 +437,7 @@ public class Program
         builder.Services.AddSingleton<IScaffoldingService, ScaffoldingService>();
         builder.Services.AddSingleton<FallbackProjectParser>();
         builder.Services.AddSingleton<IProjectUpdater, ProjectUpdater>();
+        builder.Services.AddSingleton<RepositoryToolUpdater>();
         builder.Services.AddSingleton<INewCommandPrompter, NewCommandPrompter>();
         builder.Services.AddSingleton<ITemplateVersionPrompter>(sp => (ITemplateVersionPrompter)sp.GetRequiredService<INewCommandPrompter>());
         builder.Services.AddSingleton<IAddCommandPrompter, AddCommandPrompter>();
@@ -623,8 +624,11 @@ public class Program
         builder.Services.AddTransient<IntegrationListCommand>();
         builder.Services.AddTransient<IntegrationSearchCommand>();
         builder.Services.AddTransient<TerminalCommand>();
+        builder.Services.AddTransient<TerminalResourceResolver>();
         builder.Services.AddTransient<TerminalAttachCommand>();
         builder.Services.AddTransient<TerminalPsCommand>();
+        builder.Services.AddTransient<TerminalTapeCommand>();
+        builder.Services.AddTransient<TerminalTapePlayCommand>();
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();

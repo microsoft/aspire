@@ -57,8 +57,8 @@ internal sealed class SkillBundleFile
     public string? Sha512 { get; init; }
 
     // Lowercase hex SHA-256 of the file contents, accepted only for bundles published before the SHA-512
-    // switch — notably the attestation-verified v0.0.1 snapshot currently embedded in the CLI, whose bytes
-    // cannot be re-hashed without breaking their published attestation. When both are present SHA-512 wins;
+    // switch — notably the attestation-verified v0.0.1 release, whose bytes cannot be re-hashed without
+    // breaking its published attestation. When both are present SHA-512 wins;
     // an optional `sha256-` SRI-style prefix is tolerated. New/remote bundles emit `Sha512` and this is null.
     public string? Sha256 { get; init; }
 }

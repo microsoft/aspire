@@ -1104,7 +1104,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     {
         if (!SupportsTerminalsV1)
         {
-            return new ListTerminalsResponse { Terminals = Array.Empty<TerminalSummary>() };
+            return new ListTerminalsResponse { ResourceTerminals = [], AppHostTerminals = [] };
         }
 
         var rpc = EnsureConnected();
@@ -1118,7 +1118,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             [request],
             cancellationToken).ConfigureAwait(false);
 
-        _logger?.LogDebug("ListTerminals returned {Count} terminal-enabled resource(s).", response.Terminals.Length);
+        _logger?.LogDebug("ListTerminals returned {Count} terminal-enabled resource(s).", response.ResourceTerminals.Length);
 
         return response;
     }

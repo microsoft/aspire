@@ -1,5 +1,47 @@
 # GitHub Workflows
 
+## Agentic workflow maintenance
+
+Agentic workflows are authored in `.github/workflows/*.md`. Upgrade the active
+compiler to the latest stable release and inspect its suggested migrations before
+recompiling:
+
+```shell
+gh extension upgrade aw
+gh aw version
+gh aw fix
+gh aw compile --force-refresh-action-pins
+gh aw compile
+```
+
+`gh aw fix` is a dry run unless `--write` is supplied. Its write mode also refreshes
+authoring agents and skills; apply source migrations deliberately rather than
+adding unrelated scaffolding. Keep the pinned `setup-cli` action and its `version`
+input in `copilot-setup-steps.yml` aligned with the compiler used to generate the
+workflows.
+
+Commit the generated `.lock.yml` files and `.github/aw/actions-lock.json` alongside
+their source changes. `agentics-maintenance-microsoft-aspire.dev.yml` is generated
+by the same full compilation despite not having a `.lock.yml` suffix. Do not edit
+generated workflows manually. The second compilation should produce no further
+changes.
+
+Explicit action versions in Markdown survive recompilation, so update deprecated
+inputs and action runtimes in the sources, not just the generated YAML. The
+`client-id` input to `actions/create-github-app-token` replaces `app-id`; the
+existing `ASPIRE_BOT_APP_ID` secret remains the identity source.
+
+The compiler's diagnostic `agent` artifact does not include arbitrary files from
+`/tmp/gh-aw/agent/`. Workflows that publish custom agent files must upload a named
+artifact in `post-steps`, allowlist only the required paths, and download it in the
+consuming safe-output job. CI analysis and milestone changelogs use this pattern;
+their canonical safe-output JSON remains compiler-managed.
+
+`locker.yml` still uses the archived `microsoft/vscode-github-triage-actions`
+Node 20 action. There is no supported Node 24 upgrade for that dependency;
+replacing it requires a separate migration of its authentication and locking
+behavior, rather than merely changing an action pin.
+
 ## Main to Release 14.0 Synchronization
 
 `sync-main-to-release-14.yml` keeps the advance `release/14.0` integration branch

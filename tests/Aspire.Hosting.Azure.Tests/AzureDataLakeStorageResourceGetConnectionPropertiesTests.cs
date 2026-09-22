@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureDataLakeStorageResourceGetConnectionPropertiesTests
+public class AzureDataLakeStorageResourceGetConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureDataLakeStorageResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var storage = builder.AddAzureStorage("storage");
         _ = storage.AddDataLake("data-lake");
 
@@ -26,7 +26,7 @@ public class AzureDataLakeStorageResourceGetConnectionPropertiesTests
     [Fact]
     public void AzureDataLakeStorageResourceGetConnectionPropertiesThrowsForEmulator()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var storage = builder.AddAzureStorage("storage").RunAsEmulator();
         _ = storage.AddDataLake("data-lake");
 

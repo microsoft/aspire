@@ -15,6 +15,27 @@ namespace Aspire.Dashboard.Components.Tests.Dialogs;
 
 public class FilterDialogTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(1023, true)]
+    [InlineData(1024, true)]
+    [InlineData(1025, false)]
+    public async Task Validate_StringFilter_EnforcesMaximumLength(int length, bool isValid)
+    {
+        SetupFilterDialogServices();
+
+        var cut = RenderComponent<FilterDialog>(builder => builder.Add(component => component.Content,
+            CreateContent(new FieldTelemetryFilter
+            {
+                Field = KnownTraceFields.NameField,
+                Condition = FilterCondition.Contains,
+                Value = new string('a', length)
+            })));
+
+        await cut.InvokeAsync(async () => Assert.Equal(isValid, await cut.Instance.EditContext.ValidateAsync()));
+        var messages = cut.Instance.EditContext.GetValidationMessages();
+        Assert.Equal(isValid ? [] : new[] { string.Format(System.Globalization.CultureInfo.CurrentCulture, Aspire.Dashboard.Resources.Dialogs.FieldTooLong, nameof(FilterDialogFormModel.Value), 1024) }, messages);
+    }
+
     [Fact]
     public void Render_DurationFilter_UsesNumericInputAndNumericConditions()
     {
