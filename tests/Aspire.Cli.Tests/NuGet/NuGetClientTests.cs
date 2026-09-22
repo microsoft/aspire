@@ -116,32 +116,6 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task SearchAsync_ThrowsRedactedErrorWhenAllSourcesFail()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var client = new NuGetClient(
-            new TestFeatures(),
-            new TestEnvironment(),
-            NullLogger<NuGetClient>.Instance);
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.SearchAsync(
-            "Aspire.Test.Package",
-            exactMatch: false,
-            prerelease: false,
-            take: 100,
-            useCache: false,
-            ["https://user:secret@127.0.0.1:1/v3/index.json?token=secret"],
-            nugetConfigPath: null,
-            workspace.WorkspaceRoot.FullName,
-            TestContext.Current.CancellationToken));
-
-        Assert.Contains("https://***@127.0.0.1:1/v3/index.json", exception.Message);
-        Assert.DoesNotContain("user", exception.Message);
-        Assert.DoesNotContain("secret", exception.Message);
-        Assert.DoesNotContain("token", exception.Message);
-    }
-
-    [Fact]
     public async Task RestoreAndWriteManifestAsync_UsesLocalPackageRuntimeAssets()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

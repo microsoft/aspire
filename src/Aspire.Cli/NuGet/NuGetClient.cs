@@ -302,13 +302,6 @@ internal sealed class NuGetClient(
 
         var sourceResults = await Task.WhenAll(sourceSearches).ConfigureAwait(false);
         var results = sourceResults.SelectMany(result => result.Packages).ToArray();
-        var failures = sourceResults.Where(result => result.Exception is not null).ToArray();
-        if (results.Length == 0 && failures.Length > 0)
-        {
-            throw new InvalidOperationException(
-                $"Failed to search NuGet package source(s): {string.Join(", ", failures.Select(result => result.Source))}.",
-                new AggregateException(failures.Select(result => result.Exception!)));
-        }
 
         if (exactMatch)
         {
@@ -344,7 +337,7 @@ internal sealed class NuGetClient(
                     new global::NuGet.Protocol.Core.Types.SearchFilter(prerelease),
                     take,
                     cancellationToken).ConfigureAwait(false);
-            return new(packages, PackageSourceRedactor.RedactForDisplay(source.Source), Exception: null);
+            return new(packages, PackageSourceRedactor.RedactForDisplay(source.Source));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -353,13 +346,12 @@ internal sealed class NuGetClient(
             // Only the exception type is logged. NuGet protocol failures format the feed URL into
             // their own message -- often a derived resource URL rather than the configured source
             // string -- so logging the exception would leak UserInfo/SAS credentials into
-            // ~/.aspire/logs, which users routinely attach to bug reports. A total search failure
-            // still surfaces through the error thrown by SearchAsync, so nothing fails silently.
+            // ~/.aspire/logs, which users routinely attach to bug reports.
             logger.LogWarning(
                 "Failed to search NuGet package source '{PackageSource}': {ExceptionType}",
                 displaySource,
                 ex.GetType().Name);
-            return new([], displaySource, ex);
+            return new([], displaySource);
         }
     }
 
@@ -535,14 +527,27 @@ internal sealed class NuGetClient(
 
         return sources;
     }
+
     private sealed record NuGetSourceSearchResult(
         IReadOnlyList<NuGetSearchResult> Packages,
-        string Source,
-        Exception? Exception);
+        string Source);
 
     private sealed class NuGetLogger(ILogger logger) : INuGetLogger
     {
-        public void Log(NuGetLogLevel level, string data) => logger.Log(MapLogLevel(level), "{Message}", data);
+        public void Log(NuGetLogLevel level, string data)
+        {
+            // Mirror the bundled aspire-managed helper, which only forwarded NuGet's sub-warning
+            // diagnostics when the CLI passed --verbose, and decided that with this same
+            // IsEnabled(Debug) check. Keeping the predicate identical preserves the previous
+            // behavior in every log configuration rather than only the default one.
+            if (level < NuGetLogLevel.Warning && !logger.IsEnabled(LogLevel.Debug))
+            {
+                return;
+            }
+
+            logger.Log(MapLogLevel(level), "{Message}", data);
+        }
+
         public void Log(NuGetLogMessage message) => Log(message.Level, message.Message);
 
         public Task LogAsync(NuGetLogLevel level, string data)

@@ -71,47 +71,6 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RestorePackagesAsync_UsesDistinctCachePathsForDifferentNuGetConfigurations()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var appHostDirectory = workspace.CreateDirectory("apphost");
-        var firstPackagesDirectory = workspace.CreateDirectory("first-packages");
-        var secondPackagesDirectory = workspace.CreateDirectory("second-packages");
-        var firstNuGetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "first.nuget.config");
-        var secondNuGetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "second.nuget.config");
-        File.WriteAllText(
-            firstNuGetConfigPath,
-            $"""
-            <configuration>
-              <config>
-                <add key="globalPackagesFolder" value="{firstPackagesDirectory.FullName}" />
-              </config>
-            </configuration>
-            """);
-        File.WriteAllText(
-            secondNuGetConfigPath,
-            $"""
-            <configuration>
-              <config>
-                <add key="globalPackagesFolder" value="{secondPackagesDirectory.FullName}" />
-              </config>
-            </configuration>
-            """);
-        var service = CreateService(new FakeNuGetClient());
-
-        var resultA = await service.RestorePackagesAsync(
-            [("Aspire.Hosting.JavaScript", "9.4.0")],
-            workingDirectory: appHostDirectory.FullName,
-            nugetConfigPath: firstNuGetConfigPath);
-        var resultB = await service.RestorePackagesAsync(
-            [("Aspire.Hosting.JavaScript", "9.4.0")],
-            workingDirectory: appHostDirectory.FullName,
-            nugetConfigPath: secondNuGetConfigPath);
-
-        Assert.NotEqual(resultA, resultB);
-    }
-
-    [Fact]
     public void ComputePackageHash_PreservesSourceOrder()
     {
         var packageList = new List<(string Id, string Version)>
@@ -142,15 +101,10 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         {
             ("Aspire.Hosting.JavaScript", "9.4.0")
         };
-        var settingsFingerprint = await BundleNuGetService.ComputeSettingsFingerprintAsync(
-            nugetConfigPath: null,
-            workingDirectory: appHostDirectory.FullName,
-            cancellationToken: TestContext.Current.CancellationToken);
         var packageHash = BundleNuGetService.ComputePackageHash(
             packageList,
             "net10.0",
-            runtimeIdentifier: null,
-            settingsFingerprint: settingsFingerprint);
+            runtimeIdentifier: null);
         var manifestPath = Path.Combine(
             workspace.WorkspaceRoot.FullName,
             ".aspire",
