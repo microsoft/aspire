@@ -293,6 +293,21 @@ public sealed class DcpLogParserTests
     }
 
     [Fact]
+    public void FormatSystemLog_AdditionalFields_AreIncluded()
+    {
+        var message = "Starting process...\t{\"Executable\": \"/foo-pwrqgpew\", \"Reconciliation\": 4, \"Cmd\": \"bla\", \"Args\": []}";
+
+        var formatted = DcpLogParser.FormatSystemLog(
+            message,
+            [
+                new("WorkingDirectory", "/app"),
+                new("LaunchMode", "Process")
+            ]);
+
+        Assert.Equal("[sys] Starting process...: Cmd = bla, Args = [], WorkingDirectory = /app, LaunchMode = Process", formatted);
+    }
+
+    [Fact]
     public void FormatSystemLog_FailedToStartWithError_FormatsCorrectly()
     {
         // Arrange
@@ -303,6 +318,20 @@ public sealed class DcpLogParserTests
 
         // Assert
         Assert.Equal("[sys] Failed to start process: Cmd = bla, Args = [], Error = exec: \"bla\": executable file not found in $PATH", formatted);
+    }
+
+    [Fact]
+    public void FormatSystemLog_FailedToStartWithoutCwd_UsesWorkingDirectoryFromExecutableSpec()
+    {
+        var message = "Failed to start process\t{\"Executable\": \"/foo-pwrqgpew\", \"Reconciliation\": 4, \"Cmd\": \"bla\", \"Args\": [], \"error\": \"fork/exec bla: The directory name is invalid.\"}";
+
+        var formatted = DcpLogParser.FormatSystemLog(
+            message,
+            [new("WorkingDirectory", @"S:\does\not\exist")]);
+
+        Assert.Equal(
+            @"[sys] Failed to start process: Cmd = bla, Args = [], WorkingDirectory = S:\does\not\exist, Error = fork/exec bla: The directory name is invalid.",
+            formatted);
     }
 
     [Fact]

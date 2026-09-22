@@ -156,8 +156,9 @@ internal static class DcpLogParser
     /// Formats a system-level log message by parsing JSON metadata and applying the [sys] prefix format.
     /// </summary>
     /// <param name="message">The raw message which may contain a text portion and JSON metadata.</param>
+    /// <param name="additionalFields">Additional fields to append to the formatted message.</param>
     /// <returns>The formatted message with [sys] prefix and human-readable format.</returns>
-    public static string FormatSystemLog(string message)
+    public static string FormatSystemLog(string message, IReadOnlyList<KeyValuePair<string, string?>>? additionalFields = null)
     {
         const string SystemLogPrefix = "[sys] ";
 
@@ -188,15 +189,22 @@ internal static class DcpLogParser
                 sb.Append(textPart);
             }
 
-            // Extract and add JSON fields in a loop
-            var fields = new (string Name, string? Value)[]
+            // Process failures are emitted as:
+            //   Failed to start a process\t{"Cmd":"pwsh","Args":[],"error":"..."}
+            var fields = new List<KeyValuePair<string, string?>>
             {
-                ("Cmd", root.TryGetProperty("Cmd", out var cmdProp) ? cmdProp.GetString() : null),
-                ("Args", root.TryGetProperty("Args", out var argsProp) ? argsProp.ToString() : null),
-                ("ContainerName", root.TryGetProperty("ContainerName", out var containerNameProp) ? containerNameProp.GetString() : null),
-                ("ContainerId", root.TryGetProperty("ContainerID", out var containerIdProp) ? containerIdProp.GetString() : null),
-                ("Error", root.TryGetProperty("error", out var errorProp) ? errorProp.GetString() : null)
+                new("Cmd", root.TryGetProperty("Cmd", out var cmdProp) ? cmdProp.GetString() : null),
+                new("Args", root.TryGetProperty("Args", out var argsProp) ? argsProp.ToString() : null),
+                new("ContainerName", root.TryGetProperty("ContainerName", out var containerNameProp) ? containerNameProp.GetString() : null),
+                new("ContainerId", root.TryGetProperty("ContainerID", out var containerIdProp) ? containerIdProp.GetString() : null)
             };
+
+            if (additionalFields is not null)
+            {
+                fields.AddRange(additionalFields);
+            }
+
+            fields.Add(new("Error", root.TryGetProperty("error", out var errorProp) ? errorProp.GetString() : null));
 
             var hasAddedField = false;
             foreach (var (name, value) in fields)
