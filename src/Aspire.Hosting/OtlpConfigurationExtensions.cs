@@ -292,6 +292,16 @@ public static class OtlpConfigurationExtensions
             return null;
         }
 
+        if (dashboardResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _))
+        {
+            // The dashboard is present in the model (so its start command works) but won't auto-start, so its
+            // endpoints are never allocated. Referencing them here would leave the dictionary holding an
+            // EndpointReference whose value never resolves, hanging any evaluation of this resource's environment
+            // variables. Fall back to the static configuration-based endpoint instead, as if the dashboard were
+            // absent from the model.
+            return null;
+        }
+
         var grpcEndpoint = dashboardResource.GetEndpoint(KnownEndpointNames.OtlpGrpcEndpointName);
         var httpEndpoint = dashboardResource.GetEndpoint(KnownEndpointNames.OtlpHttpEndpointName);
 
