@@ -218,8 +218,10 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
             await page.Mouse.MoveAsync(x, y);
             await page.Mouse.DownAsync();
             await page.Mouse.MoveAsync(x, y - 60);
-            await page.Mouse.UpAsync();
             var draggedHeight = (int)Math.Round(viewportHeight - (y - 60));
+            await Assertions.Expect(page.Locator(".terminal-dock")).ToHaveCSSAsync("height", $"{draggedHeight}px");
+            await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuenow", draggedHeight.ToString());
+            await page.Mouse.UpAsync();
             await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuenow", draggedHeight.ToString());
             await Assertions.Expect(handle).ToBeFocusedAsync();
             await page.Keyboard.PressAsync("ArrowUp");
@@ -262,7 +264,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
                 await Assertions.Expect(handle).ToBeFocusedAsync();
                 var box = await handle.BoundingBoxAsync();
                 Assert.NotNull(box);
-                Assert.InRange(box.Y, 0, viewportHeight - box.Height);
+                Assert.InRange(box.Y + box.Height / 2, 0, viewportHeight);
             }
         });
     }

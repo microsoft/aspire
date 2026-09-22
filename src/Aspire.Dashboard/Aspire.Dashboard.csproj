@@ -88,6 +88,9 @@
   </Target>
 
   <ItemGroup>
+    <!-- Workaround for https://github.com/dotnet/aspnetcore/issues/69432. -->
+    <RdXmlFile Include="rd.xml" />
+
     <!-- Build service and client types. Integration tests use the client types to call OTLP services. -->
     <Protobuf Include="Otlp\**\*.proto">
       <ProtoRoot>Otlp</ProtoRoot>

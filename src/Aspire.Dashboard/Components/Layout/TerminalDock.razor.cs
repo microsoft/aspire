@@ -221,7 +221,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     }
 
     /// <summary>
-    /// Updates the dock height after pointer or keyboard resizing, or a viewport size change.
+    /// Updates the dock height during pointer resizing, after keyboard resizing, or after a viewport size change.
     /// </summary>
     /// <param name="heightPx">The requested dock height in CSS pixels.</param>
     /// <param name="viewportHeightPx">The browser viewport height in CSS pixels.</param>

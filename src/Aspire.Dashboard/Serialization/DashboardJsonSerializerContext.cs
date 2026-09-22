@@ -22,6 +22,7 @@ namespace Aspire.Dashboard.Serialization;
 [JsonSerializable(typeof(TerminalViewOptions))]
 [JsonSerializable(typeof(TerminalToolbarState))]
 [JsonSerializable(typeof(TerminalSizePreset[]))]
+[JsonSerializable(typeof(AspireKeyboardShortcut))]
 [JsonSerializable(typeof(KeyCode[]))]
 [JsonSerializable(typeof(ConsoleLogsFilters))]
 [JsonSerializable(typeof(ConsoleLogs.ConsoleLogConsoleSettings))]

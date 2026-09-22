@@ -51,6 +51,7 @@ public class DashboardJsonSerializerContextTests
     [InlineData(typeof(TerminalViewOptions))]
     [InlineData(typeof(TerminalToolbarState))]
     [InlineData(typeof(TerminalSizePreset[]))]
+    [InlineData(typeof(AspireKeyboardShortcut))]
     public void TerminalInteropType_UsesGeneratedMetadata(Type interopType)
     {
         Assert.NotNull(DashboardJsonSerializerContext.Default.GetTypeInfo(interopType));
