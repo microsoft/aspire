@@ -25,7 +25,7 @@
       "type": "object",
       "properties": {
         "nssDbPaths": {
-          "description": "NSS database paths used for browser certificate trust on Linux. Separate paths with the platform path separator and optionally prefix each path with \"firefox=\" or \"chromium=\".",
+          "description": "NSS database paths used for browser certificate trust on Linux. Separate paths with the platform path separator. Prefix a path with \"firefox=\" or \"chromium=\" to apply the trust settings expected by that browser family.",
           "type": "string"
         }
       },
