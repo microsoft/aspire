@@ -63,13 +63,15 @@ public sealed class AgenticWorkflowTests
         Assert.Equal("download-analysis", Scalar(download, "id"));
         Assert.Equal("${{ runner.temp }}/ci-analysis-output", Scalar(Mapping(download, "with"), "path"));
 
+        var validation = Step(root, "Validate analysis scope");
+        Assert.Equal("${{ steps.download-analysis.outputs.download-path }}", Scalar(Mapping(validation, "env"), "ANALYSIS_DIR"));
+        Assert.Contains("analyze-ci-failure-validation.sh", Scalar(validation, "run"), StringComparison.Ordinal);
+
         var publish = Step(root, "Publish analysis data and comment on PR");
         Assert.Equal("${{ steps.download-analysis.outputs.download-path }}", Scalar(Mapping(publish, "env"), "ANALYSIS_DIR"));
         var script = Scalar(publish, "run");
         Assert.Contains("ANALYSIS_FILE=\"$ANALYSIS_DIR/analysis-result.json\"", script, StringComparison.Ordinal);
         Assert.Contains("CAUSES_DIR=\"$ANALYSIS_DIR/causes\"", script, StringComparison.Ordinal);
-        Assert.Contains("node .github/workflows/analyze-ci-failure.js redact \"$ANALYSIS_FILE\"", script, StringComparison.Ordinal);
-        Assert.Contains("node .github/workflows/analyze-ci-failure.js redact \"$CAUSE_FILE\"", script, StringComparison.Ordinal);
         AssertUploadOrdering(root, extension, upload, download, publish);
     }
 
