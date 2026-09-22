@@ -397,7 +397,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                 case ReferenceExpression referenceExpression:
                     return await ResolveReferenceExpressionAsync(referenceExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
                 case ConnectionStringReference connectionStringReference:
-                    var connectionString = await ResolveReferenceExpressionAsync(connectionStringReference.Resource.ConnectionStringExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+                    var connectionString = await ResolveReferenceExpressionAsync(connectionStringReference.Provider.ConnectionStringExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
                     if (string.IsNullOrEmpty(connectionString) && !connectionStringReference.Optional)
                     {
                         throw new DistributedApplicationException($"The connection string for the resource '{connectionStringReference.Resource.Name}' is not available.");
@@ -405,7 +405,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 
                     return connectionString;
                 case IResourceWithConnectionString connectionStringResource and not ParameterResource:
-                    return await ResolveReferenceExpressionAsync(connectionStringResource.ConnectionStringExpression, context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
+                    return await ResolveReferenceExpressionAsync(connectionStringResource.GetConnectionStringExpression(), context, hostedAgent, resource, environmentVariableName, cancellationToken).ConfigureAwait(false);
             }
         }
 

@@ -24,7 +24,9 @@ public static class ConnectionPropertiesExtensions
 
         var dict = new Dictionary<string, ReferenceExpression>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var kv in source.GetConnectionProperties())
+        var provider = source.GetEffectiveCapability<IResourceWithConnectionString>() ?? source;
+
+        foreach (var kv in provider.GetConnectionProperties())
         {
             dict[kv.Key] = kv.Value;
         }

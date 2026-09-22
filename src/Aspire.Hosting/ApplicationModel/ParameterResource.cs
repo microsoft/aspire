@@ -122,11 +122,16 @@ public class ParameterResource : Resource, IExpressionValue
     /// <summary>
     /// Gets the value of the parameter asynchronously, waiting if necessary for the value to be set.
     /// </summary>
-    public ValueTask<string?> GetValueAsync(ValueProviderContext _, CancellationToken cancellationToken)
+    public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken)
     {
         // It might look like this does not provide any additional functionality over GetValueAsync,
         // but we need to ensure that types derived from ParameterResource implement IValueProvider.GetValueAsync(ValueProviderContext, CancellationToken)
         // using WaitForValueTcs, and not via an interface default implementation.
+        if (Secret)
+        {
+            context.MarkValueAsSensitive();
+        }
+
         return GetValueAsync(cancellationToken);
     }
 

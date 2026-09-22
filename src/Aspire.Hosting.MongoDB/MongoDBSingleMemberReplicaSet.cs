@@ -53,7 +53,7 @@ internal static class MongoDBSingleMemberReplicaSet
 
                     try
                     {
-                        var connectionString = await resource.ConnectionStringExpression.GetValueAsync(timeout.Token).ConfigureAwait(false)
+                        var connectionString = await resource.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(timeout.Token).ConfigureAwait(false)
                             ?? throw new DistributedApplicationException($"The connection string for MongoDB resource '{resource.Name}' is unavailable.");
                         var settings = MongoClientSettings.FromConnectionString(connectionString);
                         settings.ServerSelectionTimeout = TimeSpan.FromSeconds(2);

@@ -77,7 +77,7 @@ public static class OpenAIExtensions
             {
                 // Connection string resolution is dependent on parameters being resolved
                 // We use this to wait for the parameters to be resolved before we can compute the connection string.
-                var cs = await r.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                var cs = await r.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false);
 
                 // Publish the update with the connection string value and the state as running.
                 // This will allow health checks to start running.
@@ -125,7 +125,7 @@ public static class OpenAIExtensions
             .WithParentRelationship(builder)
             .OnInitializeResource(async (r, evt, ct) =>
             {
-                var cs = await r.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                var cs = await r.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false);
 
                 await evt.Notifications.PublishUpdateAsync(r, s => s with
                 {
@@ -228,7 +228,7 @@ public static class OpenAIExtensions
 
                     var resource = builder.Resource;
 
-                    return healthCheck = new OpenAIModelHealthCheck(httpClient, async () => await resource.ConnectionStringExpression.GetValueAsync(default).ConfigureAwait(false));
+                    return healthCheck = new OpenAIModelHealthCheck(httpClient, async () => await resource.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(default).ConfigureAwait(false));
                 },
                 failureStatus: default,
                 tags: default,

@@ -190,12 +190,12 @@ internal sealed class AzureAppServiceWebsiteContext(
 
         if (value is ConnectionStringReference cs)
         {
-            return ProcessValue(cs.Resource.ConnectionStringExpression, secretType, parent, isSlot);
+            return ProcessValue(cs.Provider.ConnectionStringExpression, secretType, parent, isSlot);
         }
 
         if (value is IResourceWithConnectionString csrs)
         {
-            return ProcessValue(csrs.ConnectionStringExpression, secretType, parent, isSlot);
+            return ProcessValue(csrs.GetConnectionStringExpression(), secretType, parent, isSlot);
         }
 
         if (value is BicepOutputReference output)

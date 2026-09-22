@@ -169,7 +169,7 @@ public class AzurePostgresFlexibleServerResource(string name, Action<AzureResour
     /// Gets the connection template for the manifest for the Azure Postgres Flexible Server.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression =>
-        InnerResource?.ConnectionStringExpression ??
+        InnerResource?.GetConnectionStringExpression() ??
             (UsePasswordAuthentication ?
                 ReferenceExpression.Create($"{ConnectionStringSecretOutput}") :
                 ReferenceExpression.Create($"{ConnectionStringOutput}"));
@@ -292,7 +292,7 @@ public class AzurePostgresFlexibleServerResource(string name, Action<AzureResour
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
         var properties = IsContainer
-            ? ((IResourceWithConnectionString)InnerResource).GetConnectionProperties()
+            ? InnerResource.GetEffectiveCapability<IResourceWithConnectionString>()!.GetConnectionProperties()
             : new Dictionary<string, ReferenceExpression>(
                 [
                     new("Host", Host),

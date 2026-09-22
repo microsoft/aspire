@@ -57,7 +57,7 @@ public class AzureBlobStorageContainerResource(string name, string blobContainer
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
-        foreach (var property in ((IResourceWithConnectionString)Parent).GetConnectionProperties())
+        foreach (var property in Parent.GetEffectiveCapability<IResourceWithConnectionString>()!.GetConnectionProperties())
         {
             yield return property;
         }

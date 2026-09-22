@@ -34,7 +34,7 @@ public class AzureSqlDatabaseResource(string name, string databaseName, AzureSql
     /// Gets the connection string expression for the Azure SQL database.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression =>
-        ReferenceExpression.Create($"{Parent};Database={DatabaseName}");
+        ReferenceExpression.Create($"{new ConnectionStringReference(Parent, optional: true)};Database={DatabaseName}");
 
     /// <summary>
     /// Gets the database name.

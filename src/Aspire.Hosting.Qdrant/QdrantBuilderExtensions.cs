@@ -53,7 +53,7 @@ public static class QdrantBuilderExtensions
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(qdrant, async (@event, ct) =>
         {
-            var connectionString = await qdrant.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false)
+            var connectionString = await qdrant.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false)
             ?? throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{qdrant.Name}' resource but the connection string was null.");
 
             qdrantClient = CreateQdrantClient(connectionString);
@@ -168,9 +168,8 @@ public static class QdrantBuilderExtensions
         ResourceBuilderExtensions.WithReference(builder, qdrantResource, connectionName);
 
         var resource = (IResourceWithConnectionString)qdrantResource.Resource;
+        var connectionStringReference = new ConnectionStringReference(resource, optional: false);
         connectionName ??= resource.Name;
-
-        var connectionStringName = resource.ConnectionStringEnvironmentVariable ?? $"ConnectionStrings__{connectionName}";
 
         // Determine what to inject based on the annotation on the destination resource
         var injectionAnnotation = builder.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var annotation) ? annotation : null;
@@ -180,8 +179,10 @@ public static class QdrantBuilderExtensions
         {
             builder.WithEnvironment(context =>
             {
+                var connectionStringName = connectionStringReference.Provider.ConnectionStringEnvironmentVariable ?? $"ConnectionStrings__{connectionName}";
+
                 // primary endpoint (gRPC)
-                context.EnvironmentVariables[$"{connectionStringName}"] = qdrantResource.Resource.ConnectionStringExpression;
+                context.EnvironmentVariables[$"{connectionStringName}"] = connectionStringReference;
 
                 // HTTP endpoint
                 context.EnvironmentVariables[$"{connectionStringName}_{QdrantServerResource.HttpEndpointName}"] = qdrantResource.Resource.HttpConnectionStringExpression;

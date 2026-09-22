@@ -23,7 +23,10 @@ public partial class AppHostAnalyzer
                 out var connectionStringResource) ||
             !wellKnownTypes.TryGet(
                 WellKnownTypeData.WellKnownType.Aspire_Hosting_ApplicationModel_ResourceExtensions,
-                out var resourceExtensions))
+                out var resourceExtensions) ||
+            !wellKnownTypes.TryGet(
+                WellKnownTypeData.WellKnownType.Aspire_Hosting_ApplicationModel_ConnectionStringReference,
+                out var connectionStringReference))
         {
             return;
         }
@@ -40,7 +43,7 @@ public partial class AppHostAnalyzer
 
         var propertyReference = (IPropertyReferenceOperation)context.Operation;
         if (!ImplementsInterfaceProperty(propertyReference.Property, connectionStringExpression) ||
-            IsExplicitlyResolved(propertyReference.Instance, resourceExtensions))
+            IsExplicitlyResolved(propertyReference.Instance, resourceExtensions, connectionStringReference))
         {
             return;
         }
@@ -79,7 +82,8 @@ public partial class AppHostAnalyzer
 
     private static bool IsExplicitlyResolved(
         IOperation? instance,
-        INamedTypeSymbol resourceExtensions)
+        INamedTypeSymbol resourceExtensions,
+        INamedTypeSymbol connectionStringReference)
     {
         while (instance is IConversionOperation conversion)
         {
@@ -91,10 +95,20 @@ public partial class AppHostAnalyzer
             return IsResolverInvocation(invocation, resourceExtensions);
         }
 
+        if (instance is IPropertyReferenceOperation propertyReference &&
+            propertyReference.Property.Name == "Provider" &&
+            SymbolEqualityComparer.Default.Equals(
+                propertyReference.Property.ContainingType,
+                connectionStringReference))
+        {
+            return true;
+        }
+
         return instance is ILocalReferenceOperation localReference &&
             IsLocalInitializedByResolver(
                 localReference,
-                resourceExtensions);
+                resourceExtensions,
+                connectionStringReference);
     }
 
     private static bool IsResolverInvocation(
@@ -112,7 +126,8 @@ public partial class AppHostAnalyzer
 
     private static bool IsLocalInitializedByResolver(
         ILocalReferenceOperation localReference,
-        INamedTypeSymbol resourceExtensions)
+        INamedTypeSymbol resourceExtensions,
+        INamedTypeSymbol connectionStringReference)
     {
         var operationBlock = GetOperationBlock(localReference);
         var declarator = FindVariableDeclarator(operationBlock, localReference.Local);
@@ -121,7 +136,7 @@ public partial class AppHostAnalyzer
             return false;
         }
 
-        if (!IsExplicitlyResolved(initializer, resourceExtensions))
+        if (!IsExplicitlyResolved(initializer, resourceExtensions, connectionStringReference))
         {
             return false;
         }

@@ -98,7 +98,7 @@ public static class MongoDBBuilderExtensions
             })
             .OnConnectionStringAvailable(async (resource, @event, ct) =>
             {
-                connectionString = await resource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false)
+                connectionString = await resource.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false)
                     ?? throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{resource.Name}' resource but the connection string was null.");
             })
             .WithHealthCheck(healthCheckKey)
@@ -193,7 +193,7 @@ public static class MongoDBBuilderExtensions
 
         builder.ApplicationBuilder.Eventing.Subscribe<ConnectionStringAvailableEvent>(mongoDBDatabase, async (@event, ct) =>
         {
-            connectionString = await mongoDBDatabase.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+            connectionString = await mongoDBDatabase.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false);
 
             if (connectionString == null)
             {

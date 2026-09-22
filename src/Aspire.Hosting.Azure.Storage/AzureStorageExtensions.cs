@@ -525,7 +525,7 @@ public static class AzureStorageExtensions
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (containerResource, @event, ct) =>
             {
-                connectionString = await resource.Parent.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                connectionString = await resource.Parent.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false);
             });
     }
 
@@ -578,7 +578,7 @@ public static class AzureStorageExtensions
         string? connectionString = null;
         builder.OnConnectionStringAvailable(async (blobStorage, @event, ct) =>
         {
-            connectionString = await blobStorage.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+            connectionString = await blobStorage.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false);
         });
 
         var healthCheckKey = $"{resource.Name}_check";
@@ -689,7 +689,7 @@ public static class AzureStorageExtensions
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (containerResource, @event, ct) =>
             {
-                connectionString = await resource.Parent.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                connectionString = await resource.Parent.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false);
             });
     }
 
@@ -831,7 +831,7 @@ public static class AzureStorageExtensions
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (blobs, @event, ct) =>
             {
-                connectionString = await resource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                connectionString = await resource.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false);
             });
     }
 
@@ -873,7 +873,7 @@ public static class AzureStorageExtensions
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (queues, @event, ct) =>
             {
-                connectionString = await resource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                connectionString = await resource.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false);
             });
     }
 

@@ -89,7 +89,7 @@ public static class RedisBuilderExtensions
 
         builder.ApplicationBuilder.Eventing.Subscribe<ConnectionStringAvailableEvent>(redis, async (@event, ct) =>
         {
-            connectionString = await redis.GetConnectionStringAsync(ct).ConfigureAwait(false);
+            connectionString = await redis.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false);
 
             if (connectionString == null)
             {

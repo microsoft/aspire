@@ -115,7 +115,7 @@ public static class GarnetBuilderExtensions
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(garnet, async (@event, ct) =>
         {
-            connectionString = await garnet.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+            connectionString = await garnet.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false);
 
             if (connectionString == null)
             {

@@ -66,7 +66,7 @@ public class PostgresServerResource : ContainerResource, IResourceWithConnection
         {
             if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
             {
-                return connectionStringAnnotation.Resource.ConnectionStringExpression;
+                return connectionStringAnnotation.Resource.GetConnectionStringExpression();
             }
 
             return ConnectionString;
@@ -82,7 +82,7 @@ public class PostgresServerResource : ContainerResource, IResourceWithConnection
     {
         if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
         {
-            return connectionStringAnnotation.Resource.GetConnectionStringAsync(cancellationToken);
+            return connectionStringAnnotation.Resource.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(cancellationToken);
         }
 
         return ConnectionStringExpression.GetValueAsync(cancellationToken);

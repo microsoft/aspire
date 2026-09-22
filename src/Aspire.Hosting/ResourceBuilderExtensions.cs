@@ -1111,6 +1111,7 @@ public static class ResourceBuilderExtensions
 
         var resource = source.Resource;
         connectionName ??= resource.Name;
+        var connectionStringReference = new ConnectionStringReference(resource, optional);
 
         builder.WithReferenceRelationship(resource);
 
@@ -1120,10 +1121,12 @@ public static class ResourceBuilderExtensions
 
         return builder.WithEnvironment(context =>
         {
+            var connectionStringProvider = connectionStringReference.Provider;
+
             if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
             {
-                var connectionStringName = resource.ConnectionStringEnvironmentVariable ?? $"{ConnectionStringEnvironmentName}{connectionName}";
-                context.EnvironmentVariables[connectionStringName] = new ConnectionStringReference(resource, optional);
+                var connectionStringName = connectionStringProvider.ConnectionStringEnvironmentVariable ?? $"{ConnectionStringEnvironmentName}{connectionName}";
+                context.EnvironmentVariables[connectionStringName] = connectionStringReference;
             }
 
             if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionProperties))
@@ -1134,7 +1137,7 @@ public static class ResourceBuilderExtensions
                     _ => $"{EnvironmentVariableNameEncoder.Encode(connectionName).ToUpperInvariant()}_"
                 };
 
-                SplatConnectionProperties(resource, prefix, context);
+                SplatConnectionProperties(connectionStringProvider, prefix, context);
 
                 if (resource.TryGetAnnotationsOfType<ConnectionPropertyAnnotation>(out var connectionPropertyAnnotations))
                 {
@@ -1168,7 +1171,9 @@ public static class ResourceBuilderExtensions
     [AspireExport]
     public static ReferenceExpression GetConnectionProperty(this IResourceWithConnectionString resource, string key)
     {
-        foreach (var connectionProperty in resource.GetConnectionProperties())
+        var provider = resource.GetEffectiveCapability<IResourceWithConnectionString>() ?? resource;
+
+        foreach (var connectionProperty in provider.GetConnectionProperties())
         {
             if (string.Equals(connectionProperty.Key, key, StringComparison.OrdinalIgnoreCase))
             {

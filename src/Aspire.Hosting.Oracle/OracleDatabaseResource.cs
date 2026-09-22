@@ -28,7 +28,7 @@ public class OracleDatabaseResource(string name, string databaseName, OracleData
     /// Gets the connection string expression for the Oracle Database.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression =>
-       ReferenceExpression.Create($"{Parent}/{DatabaseName}");
+       ReferenceExpression.Create($"{new ConnectionStringReference(Parent, optional: true)}/{DatabaseName}");
 
     /// <summary>
     /// Gets the connection URI expression for the Oracle database.

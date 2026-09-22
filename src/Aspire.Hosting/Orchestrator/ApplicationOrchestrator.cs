@@ -86,7 +86,7 @@ internal sealed class ApplicationOrchestrator
 
         if (resourceWithConnectionString is not null)
         {
-            var connectionString = await resourceWithConnectionString.GetConnectionStringAsync(token).ConfigureAwait(false);
+            var connectionString = await resourceWithConnectionString.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(token).ConfigureAwait(false);
             var connectionProperties = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
             foreach (var property in resourceWithConnectionString.GetConnectionProperties())
             {

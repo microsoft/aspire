@@ -63,7 +63,7 @@ public static class NatsBuilderExtensions
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(nats, async (@event, ct) =>
         {
-            var connectionString = await nats.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false)
+            var connectionString = await nats.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false)
             ?? throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{nats.Name}' resource but the connection string was null.");
 
             var options = NatsOpts.Default with

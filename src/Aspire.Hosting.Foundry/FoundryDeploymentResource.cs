@@ -103,8 +103,8 @@ public class FoundryDeploymentResource : Resource, IResourceWithParent<FoundryRe
     /// Gets the connection string expression for the Microsoft Foundry resource with model/deployment information.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression => Parent.IsEmulator
-        ? ReferenceExpression.Create($"{Parent};Model={LocalModelId ?? ModelName}")
-        : ReferenceExpression.Create($"{Parent};Deployment={DeploymentName}");
+        ? ReferenceExpression.Create($"{new ConnectionStringReference(Parent, optional: true)};Model={LocalModelId ?? ModelName}")
+        : ReferenceExpression.Create($"{new ConnectionStringReference(Parent, optional: true)};Deployment={DeploymentName}");
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {

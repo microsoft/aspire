@@ -31,7 +31,7 @@ public class MilvusDatabaseResource(string name, string databaseName, MilvusServ
     /// Format: <c>Endpoint={uri};Key={token};Database={DatabaseName}</c>.
     /// </remarks>
     public ReferenceExpression ConnectionStringExpression =>
-       ReferenceExpression.Create($"{Parent};Database={DatabaseName}");
+       ReferenceExpression.Create($"{new ConnectionStringReference(Parent, optional: true)};Database={DatabaseName}");
 
     /// <summary>
     /// Gets the database name.

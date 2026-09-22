@@ -50,7 +50,7 @@ public class AzureKustoReadWriteDatabaseResource : Resource, IResourceWithParent
                 InitialCatalog = DatabaseName
             };
 
-            return ReferenceExpression.Create($"{Parent};{connectionStringBuilder.ToString()}");
+            return ReferenceExpression.Create($"{new ConnectionStringReference(Parent, optional: true)};{connectionStringBuilder.ToString()}");
         }
     }
 
@@ -72,7 +72,7 @@ public class AzureKustoReadWriteDatabaseResource : Resource, IResourceWithParent
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
-        foreach (var property in ((IResourceWithConnectionString)Parent).GetConnectionProperties())
+        foreach (var property in Parent.GetEffectiveCapability<IResourceWithConnectionString>()!.GetConnectionProperties())
         {
             yield return property;
         }

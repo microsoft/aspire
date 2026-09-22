@@ -18,7 +18,8 @@ public interface IResourceWithConnectionString : IResource, IExpressionValue, IV
 
     string IManifestExpressionProvider.ValueExpression => $"{{{Name}.connectionString}}";
 
-    ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken) => GetConnectionStringAsync(cancellationToken);
+    ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken) =>
+        GetConnectionStringAsync(cancellationToken);
 
     ValueTask<string?> IValueProvider.GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
         ConnectionStringExpression.GetValueAsync(context, cancellationToken);
@@ -33,7 +34,7 @@ public interface IResourceWithConnectionString : IResource, IExpressionValue, IV
     /// </summary>
     public string? ConnectionStringEnvironmentVariable => null;
 
-    IEnumerable<object> IValueWithReferences.References => [ConnectionStringExpression];
+    IEnumerable<object> IValueWithReferences.References => [new ConnectionStringReference(this, optional: true)];
 
     /// <summary>
     /// Retrieves a collection of connection property name and value pairs associated with the current context.

@@ -107,7 +107,7 @@ public class RedisResource(string name) : ContainerResource(name), IResourceWith
         {
             if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
             {
-                return connectionStringAnnotation.Resource.ConnectionStringExpression;
+                return connectionStringAnnotation.Resource.GetConnectionStringExpression();
             }
 
             return BuildConnectionString();
@@ -123,7 +123,7 @@ public class RedisResource(string name) : ContainerResource(name), IResourceWith
     {
         if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
         {
-            return connectionStringAnnotation.Resource.GetConnectionStringAsync(cancellationToken);
+            return connectionStringAnnotation.Resource.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(cancellationToken);
         }
 
         return BuildConnectionString().GetValueAsync(cancellationToken);

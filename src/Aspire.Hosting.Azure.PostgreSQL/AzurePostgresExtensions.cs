@@ -279,7 +279,7 @@ public static class AzurePostgresExtensions
             database.Resource,
             async (@event, ct) =>
             {
-                connectionString = await database.Resource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                connectionString = await database.Resource.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false);
 
                 if (connectionString is null)
                 {

@@ -270,8 +270,8 @@ public sealed class AzurePublishingContext(
         {
             BicepOutputReference b => GetOutputs(moduleMap[b.Resource], b.Name),
             ParameterResource p => ParameterLookup[p],
-            ConnectionStringReference r => Eval(r.Resource.ConnectionStringExpression),
-            IResourceWithConnectionString cs => Eval(cs.ConnectionStringExpression),
+            ConnectionStringReference r => Eval(r.Provider.ConnectionStringExpression),
+            IResourceWithConnectionString cs => Eval(cs.GetConnectionStringExpression()),
             ReferenceExpression { IsConditional: true } re => EvalConditionalExpr(re),
             ReferenceExpression re => EvalExpr(re),
             string s => s,

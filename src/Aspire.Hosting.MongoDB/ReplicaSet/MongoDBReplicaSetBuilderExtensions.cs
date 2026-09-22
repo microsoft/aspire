@@ -126,7 +126,7 @@ public static class MongoDBReplicaSetBuilderExtensions
                     await evt.Eventing.PublishAsync(new BeforeResourceStartedEvent(resource, evt.Services), ct)
                         .ConfigureAwait(false);
 
-                    connectionString = await rsResource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                    connectionString = await rsResource.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false);
 
                     await evt.Eventing.PublishAsync(new ConnectionStringAvailableEvent(resource, evt.Services), ct)
                         .ConfigureAwait(false);
@@ -146,7 +146,7 @@ public static class MongoDBReplicaSetBuilderExtensions
 
                     var memberConnections = await Task.WhenAll(membersList.Select(async member => new MemberConnection(
                         member,
-                        await member.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false)
+                        await member.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false)
                             ?? throw new DistributedApplicationException($"The connection string of MongoDB replica set member '{member.Name}' could not be resolved.")
                     ))).ConfigureAwait(false);
                     var initialPrimary = memberConnections[0];

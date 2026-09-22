@@ -37,7 +37,7 @@ public class PostgresDatabaseResource(string name, string databaseName, Postgres
                 ["Database"] = DatabaseName
             };
 
-            return ReferenceExpression.Create($"{Parent};{connectionStringBuilder.ToString()}");
+            return ReferenceExpression.Create($"{new ConnectionStringReference(Parent, optional: true)};{connectionStringBuilder.ToString()}");
         }
     }
     /// <summary>

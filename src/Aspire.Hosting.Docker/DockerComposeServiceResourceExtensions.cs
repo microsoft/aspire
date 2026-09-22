@@ -35,13 +35,13 @@ internal static class DockerComposeServiceResourceExtensions
 
             if (value is ConnectionStringReference cs)
             {
-                value = cs.Resource.ConnectionStringExpression;
+                value = cs.Provider.ConnectionStringExpression;
                 continue;
             }
 
             if (value is IResourceWithConnectionString csrs)
             {
-                value = csrs.ConnectionStringExpression;
+                value = csrs.GetConnectionStringExpression();
                 continue;
             }
 

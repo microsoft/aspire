@@ -21,7 +21,7 @@ public sealed class DurableTaskHubResource(string name, DurableTaskSchedulerReso
     /// <summary>
     /// Gets the connection string expression composed of the scheduler connection string and the TaskHub name.
     /// </summary>
-    public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"{Parent.ConnectionStringExpression};TaskHub={TaskHubName}");
+    public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"{new ConnectionStringReference(Parent, optional: true)};TaskHub={TaskHubName}");
 
     /// <summary>
     /// Gets the parent durable task scheduler resource that provides the base connection string.
@@ -37,7 +37,7 @@ public sealed class DurableTaskHubResource(string name, DurableTaskSchedulerReso
     void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(IDictionary<string, object> target, string connectionName)
     {
         // Injected to support Azure Functions listener initialization via the DTS storage provider.
-        target["DURABLE_TASK_SCHEDULER_CONNECTION_STRING"] = Parent.ConnectionStringExpression;
+        target["DURABLE_TASK_SCHEDULER_CONNECTION_STRING"] = new ConnectionStringReference(Parent, optional: false);
         target["TASKHUB_NAME"] = TaskHubName;
     }
 

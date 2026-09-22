@@ -62,7 +62,7 @@ public class AzureRedisCacheResource(string name, Action<AzureResourceInfrastruc
     /// Gets the connection string template for the manifest for the Azure Cache for Redis resource.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression =>
-        InnerResource?.ConnectionStringExpression ??
+        InnerResource?.GetConnectionStringExpression() ??
             (UseAccessKeyAuthentication ?
                 ReferenceExpression.Create($"{ConnectionStringSecretOutput}") :
                 ReferenceExpression.Create($"{ConnectionStringOutput}"));

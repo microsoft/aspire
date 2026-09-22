@@ -104,7 +104,7 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
         {
             if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
             {
-                return connectionStringAnnotation.Resource.ConnectionStringExpression;
+                return connectionStringAnnotation.Resource.GetConnectionStringExpression();
             }
 
             return ConnectionString;
@@ -120,7 +120,7 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
     {
         if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
         {
-            return connectionStringAnnotation.Resource.GetConnectionStringAsync(cancellationToken);
+            return connectionStringAnnotation.Resource.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(cancellationToken);
         }
 
         return ConnectionString.GetValueAsync(cancellationToken);

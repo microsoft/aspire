@@ -129,7 +129,7 @@ public static class ValkeyBuilderExtensions
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(valkey, async (@event, ct) =>
         {
-            connectionString = await valkey.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+            connectionString = await valkey.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false);
 
             if (connectionString is null)
             {

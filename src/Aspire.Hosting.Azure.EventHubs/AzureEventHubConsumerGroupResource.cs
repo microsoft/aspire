@@ -71,7 +71,7 @@ public class AzureEventHubConsumerGroupResource(string name, string consumerGrou
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
-        foreach (var property in ((IResourceWithConnectionString)Parent).GetConnectionProperties())
+        foreach (var property in Parent.GetEffectiveCapability<IResourceWithConnectionString>()!.GetConnectionProperties())
         {
             yield return property;
         }

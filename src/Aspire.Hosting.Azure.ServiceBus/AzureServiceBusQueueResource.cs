@@ -212,7 +212,7 @@ public class AzureServiceBusQueueResource(string name, string queueName, AzureSe
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
-        foreach (var property in ((IResourceWithConnectionString)Parent).GetConnectionProperties())
+        foreach (var property in Parent.GetEffectiveCapability<IResourceWithConnectionString>()!.GetConnectionProperties())
         {
             yield return property;
         }

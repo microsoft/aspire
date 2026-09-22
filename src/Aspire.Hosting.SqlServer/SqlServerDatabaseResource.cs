@@ -36,7 +36,7 @@ public class SqlServerDatabaseResource(string name, string databaseName, SqlServ
                 ["Database"] = DatabaseName
             };
 
-            return ReferenceExpression.Create($"{Parent};{connectionStringBuilder.ToString()}");
+            return ReferenceExpression.Create($"{new ConnectionStringReference(Parent, optional: true)};{connectionStringBuilder.ToString()}");
         }
     }
 

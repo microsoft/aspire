@@ -40,7 +40,7 @@ public class OpenAIModelResource : Resource, IResourceWithParent<OpenAIResource>
     /// Gets the connection string expression for the OpenAI Model resource.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression =>
-        ReferenceExpression.Create($"{Parent};Model={Model}");
+        ReferenceExpression.Create($"{new ConnectionStringReference(Parent, optional: true)};Model={Model}");
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
         Parent.CombineProperties([

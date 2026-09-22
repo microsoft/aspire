@@ -15,8 +15,7 @@ var db = builder.AddMongoDB("mongo")
         await Task.Delay(TimeSpan.FromSeconds(10), ct);
 
         // Seed the database with some data
-        //var cs = await db.Resource.ConnectionStringExpression.GetValueAsync(ct);
-        var cs = await db.ConnectionStringExpression.GetValueAsync(ct);
+        var cs = await db.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct);
         using var client = new MongoClient(cs);
 
         const string collectionName = "entries";

@@ -47,20 +47,16 @@ internal class ExpressionResolver(CancellationToken cancellationToken)
 
     async Task<ResolvedValue> EvalValueProvider(IValueProvider vp, ValueProviderContext context)
     {
+        var isSensitive = false;
+        using var _ = context.TrackSensitiveValues(() => isSensitive = true);
         var value = await vp.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
-        if (vp is ParameterResource pr)
-        {
-            return new ResolvedValue(value, pr.Secret);
-        }
-        return new ResolvedValue(value, false);
+
+        return new ResolvedValue(value, isSensitive || vp is ParameterResource { Secret: true });
     }
 
     async Task<ResolvedValue> ResolveConnectionStringReferenceAsync(ConnectionStringReference cs, ValueProviderContext context)
     {
-        // We are substituting our own logic for ConnectionStringReference's GetValueAsync.
-        // However, ConnectionStringReference#GetValueAsync will throw if the connection string is not optional but is not present.
-        // so we need to do the same here.
-        var value = await ResolveInternalAsync(cs.Resource.ConnectionStringExpression, context).ConfigureAwait(false);
+        var value = await EvalValueProvider(cs, context).ConfigureAwait(false);
 
         // Throw if the connection string is required but not present
         if (string.IsNullOrEmpty(value.Value) && !cs.Optional)
@@ -79,7 +75,8 @@ internal class ExpressionResolver(CancellationToken cancellationToken)
         return value switch
         {
             ConnectionStringReference cs => await ResolveConnectionStringReferenceAsync(cs, context).ConfigureAwait(false),
-            IResourceWithConnectionString cs and not ConnectionStringParameterResource => await ResolveInternalAsync(cs.ConnectionStringExpression, context).ConfigureAwait(false),
+            IResourceWithConnectionString cs and not ConnectionStringParameterResource =>
+                await ResolveConnectionStringReferenceAsync(new ConnectionStringReference(cs, optional: true), context).ConfigureAwait(false),
             ReferenceExpression ex => await EvalExpressionAsync(ex, context).ConfigureAwait(false),
             IValueProvider vp => await EvalValueProvider(vp, context).ConfigureAwait(false),
             _ => throw new NotImplementedException()

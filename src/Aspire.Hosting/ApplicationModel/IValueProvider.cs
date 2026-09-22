@@ -8,6 +8,31 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 public class ValueProviderContext
 {
+    // Value providers return only strings, so nested providers use this callback to preserve secret metadata
+    // for the resolver without changing the public IValueProvider contract.
+    private readonly AsyncLocal<Action?> _sensitiveValueEncountered = new();
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ValueProviderContext"/> class.
+    /// </summary>
+    public ValueProviderContext()
+    {
+    }
+
+    internal IDisposable TrackSensitiveValues(Action sensitiveValueEncountered)
+    {
+        var previous = _sensitiveValueEncountered.Value;
+        _sensitiveValueEncountered.Value = previous is null
+            ? sensitiveValueEncountered
+            : () =>
+            {
+                sensitiveValueEncountered();
+                previous();
+            };
+
+        return new SensitiveValueTrackingScope(_sensitiveValueEncountered, previous);
+    }
+
     /// <summary>
     /// The execution context for the distributed application.
     /// </summary>
@@ -22,6 +47,15 @@ public class ValueProviderContext
     /// The identifier of the network that serves as the context for value resolution.
     /// </summary>
     public NetworkIdentifier? Network { get; init; }
+
+    internal void MarkValueAsSensitive() => _sensitiveValueEncountered.Value?.Invoke();
+
+    private sealed class SensitiveValueTrackingScope(
+        AsyncLocal<Action?> sensitiveValueEncountered,
+        Action? previous) : IDisposable
+    {
+        public void Dispose() => sensitiveValueEncountered.Value = previous;
+    }
 }
 
 /// <summary>

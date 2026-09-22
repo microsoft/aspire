@@ -81,7 +81,7 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
     /// Gets the connection string template for the manifest for the Azure Managed Redis resource.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression =>
-        InnerResource?.ConnectionStringExpression ??
+        InnerResource?.GetConnectionStringExpression() ??
             (UseAccessKeyAuthentication ?
                 ReferenceExpression.Create($"{ConnectionStringSecretOutput}") :
                 ReferenceExpression.Create($"{ConnectionStringOutput}"));
@@ -236,7 +236,7 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
     {
         if (InnerResource is not null)
         {
-            foreach (var property in ((IResourceWithConnectionString)InnerResource).GetConnectionProperties())
+            foreach (var property in InnerResource.GetEffectiveCapability<IResourceWithConnectionString>()!.GetConnectionProperties())
             {
                 yield return property;
             }

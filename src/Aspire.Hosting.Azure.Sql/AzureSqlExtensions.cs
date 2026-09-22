@@ -237,7 +237,7 @@ public static class AzureSqlExtensions
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (resource, @event, ct) =>
             {
-                connectionString = await resource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                connectionString = await resource.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false);
 
                 if (connectionString is null)
                 {

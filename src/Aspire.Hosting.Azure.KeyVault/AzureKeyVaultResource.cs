@@ -65,7 +65,7 @@ public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructu
         {
             if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
             {
-                return connectionStringAnnotation.Resource.ConnectionStringExpression;
+                return connectionStringAnnotation.Resource.GetConnectionStringExpression();
             }
 
             return IsEmulator ?
@@ -83,7 +83,7 @@ public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructu
     {
         if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
         {
-            return connectionStringAnnotation.Resource.GetConnectionStringAsync(cancellationToken);
+            return connectionStringAnnotation.Resource.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(cancellationToken);
         }
 
         return ConnectionStringExpression.GetValueAsync(cancellationToken);

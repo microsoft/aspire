@@ -1193,7 +1193,7 @@ internal static class AzureSandboxContainerDeployment
                         connectionString,
                         new HashSet<string>(GetOutboundHttpHosts(connectionString), StringComparer.OrdinalIgnoreCase));
                 case IResourceWithConnectionString connectionStringResource:
-                    value = connectionStringResource.ConnectionStringExpression;
+                    value = connectionStringResource.GetConnectionStringExpression();
                     continue;
                 case EndpointReference endpointReference
                     when TryResolveEndpointReferenceValue(endpointReference, currentComputeEnvironment, out var endpointExpression):

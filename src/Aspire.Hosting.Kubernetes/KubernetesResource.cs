@@ -556,13 +556,13 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             if (value is ConnectionStringReference cs)
             {
-                value = cs.Resource.ConnectionStringExpression;
+                value = cs.Provider.ConnectionStringExpression;
                 continue;
             }
 
             if (value is IResourceWithConnectionString csrs)
             {
-                value = csrs.ConnectionStringExpression;
+                value = csrs.GetConnectionStringExpression();
                 continue;
             }
 
@@ -853,8 +853,8 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             EndpointReference => false,
             EndpointReferenceExpression => false,
             ParameterResource => false,
-            ConnectionStringReference cs => IsUnresolvedAtPublishTime(cs.Resource.ConnectionStringExpression),
-            IResourceWithConnectionString csrs => IsUnresolvedAtPublishTime(csrs.ConnectionStringExpression),
+            ConnectionStringReference cs => IsUnresolvedAtPublishTime(cs.Provider.ConnectionStringExpression),
+            IResourceWithConnectionString csrs => IsUnresolvedAtPublishTime(csrs.GetConnectionStringExpression()),
             ReferenceExpression expr => expr.ValueProviders.Any(IsUnresolvedAtPublishTime),
             // Any other IManifestExpressionProvider that also implements IValueProvider
             // is a deferred source (e.g., BicepOutputReference)

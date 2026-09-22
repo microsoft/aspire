@@ -3068,7 +3068,8 @@ internal sealed class RadiusInfrastructureBuilder
                     continue;
                 }
 
-                foreach (var (propertyName, connectionProperty) in withConnectionString.GetConnectionProperties())
+                var connectionStringProvider = withConnectionString.GetEffectiveCapability<IResourceWithConnectionString>() ?? withConnectionString;
+                foreach (var (propertyName, connectionProperty) in connectionStringProvider.GetConnectionProperties())
                 {
                     if (KeyMatchesSplattedProperty(key, propertyName, prefixes) &&
                         string.Equals(connectionProperty.ValueExpression, valueExpression, StringComparison.Ordinal))
@@ -3312,7 +3313,8 @@ internal sealed class RadiusInfrastructureBuilder
 
     private static ReferenceExpression? FindConnectionProperty(IResourceWithConnectionString resource, string key)
     {
-        foreach (var property in resource.GetConnectionProperties())
+        var provider = resource.GetEffectiveCapability<IResourceWithConnectionString>() ?? resource;
+        foreach (var property in provider.GetConnectionProperties())
         {
             if (string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
             {
@@ -4147,11 +4149,11 @@ internal sealed class RadiusInfrastructureBuilder
                 // context is canonicalized to the parent — otherwise `ConnectionStrings__appdb`
                 // would report the server's own password as an unrelated use.
                 RecordConnectionStringConsumption(connectionStringReference.Resource, owner);
-                await ResolveEnvPartsAsync(connectionStringReference.Resource.ConnectionStringExpression, owner, parts, ResolveToParent(connectionStringReference.Resource), allowRecipeSubstitutions).ConfigureAwait(false);
+                await ResolveEnvPartsAsync(connectionStringReference.Provider.ConnectionStringExpression, owner, parts, ResolveToParent(connectionStringReference.Resource), allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case IResourceWithConnectionString resourceWithConnectionString:
                 RecordConnectionStringConsumption(resourceWithConnectionString, owner);
-                await ResolveEnvPartsAsync(resourceWithConnectionString.ConnectionStringExpression, owner, parts, ResolveToParent(resourceWithConnectionString), allowRecipeSubstitutions).ConfigureAwait(false);
+                await ResolveEnvPartsAsync(resourceWithConnectionString.GetConnectionStringExpression(), owner, parts, ResolveToParent(resourceWithConnectionString), allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case ReferenceExpression referenceExpression:
                 RecordConnectionStringExpressionConsumption(referenceExpression, owner);
@@ -4534,10 +4536,10 @@ internal sealed class RadiusInfrastructureBuilder
                 return false;
 
             case ConnectionStringReference connectionStringReference:
-                return IsDeploymentSubstituted(connectionStringReference.Resource.ConnectionStringExpression, visited);
+                return IsDeploymentSubstituted(connectionStringReference.Provider.ConnectionStringExpression, visited);
 
             case IResourceWithConnectionString resourceWithConnectionString:
-                return IsDeploymentSubstituted(resourceWithConnectionString.ConnectionStringExpression, visited);
+                return IsDeploymentSubstituted(resourceWithConnectionString.GetConnectionStringExpression(), visited);
 
             case IFormattable:
                 return false;

@@ -1255,6 +1255,104 @@ public class ResourceProjectionTests
     }
 
     [Fact]
+    public async Task ConnectionStringReferencesResolveTheirProviderLazily()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var resource = builder.AddResource(new ConnectionStringOwnerResource("db"));
+        var effectiveReference = new ConnectionStringReference(resource.Resource, optional: false);
+        var ownerReference = new ConnectionStringReference(
+            resource.Resource,
+            optional: false,
+            ConnectionStringReferenceResolution.PreferOwner);
+        var effectiveValueProvider = resource.Resource.GetValueProvider<IResourceWithConnectionString>();
+        var ownerValueProvider = resource.Resource.GetValueProvider<IResourceWithConnectionString>(preferOwner: true);
+
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => ConnectionStringProjection.CreateProjection(resource.Resource),
+            container => container.WithImage("contoso/db", "1.0"));
+
+        var projection = Assert.IsType<ConnectionStringProjection>(resource.Resource.AsContainer());
+
+        Assert.Same(projection, effectiveReference.Provider);
+        Assert.Same(resource.Resource, ownerReference.Provider);
+        Assert.Equal("Host=projection", await ((IValueProvider)effectiveReference).GetValueAsync());
+        Assert.Equal("Host=owner", await ((IValueProvider)ownerReference).GetValueAsync());
+        Assert.Equal("Host=projection", await effectiveValueProvider.GetValueAsync());
+        Assert.Equal("Host=owner", await ownerValueProvider.GetValueAsync());
+    }
+
+    [Fact]
+    public async Task ConnectionStringReferencesEvaluateTheSelectedValueProvider()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var resource = builder.AddResource(new ConnectionStringOwnerResource("db"));
+        var reference = new ConnectionStringReference(resource.Resource, optional: false);
+        var valueProvider = resource.Resource.GetValueProvider<IResourceWithConnectionString>();
+
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => new CustomValueProviderConnectionStringProjection(resource.Resource),
+            container => container.WithImage("contoso/db", "1.0"));
+
+        var resolved = await ExpressionResolver.ResolveAsync(reference, new ValueProviderContext(), CancellationToken.None);
+
+        Assert.Equal("Host=projection-provider", await ((IValueProvider)reference).GetValueAsync());
+        Assert.Equal("Host=projection-provider", await valueProvider.GetValueAsync());
+        Assert.Equal("Host=projection-provider-context", resolved.Value);
+    }
+
+    [Fact]
+    public async Task WithReferenceUsesOneEffectiveConnectionStringProvider()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var resource = builder.AddResource(new ConnectionStringOwnerResource("db"));
+        var consumer = builder.AddContainer("consumer", "contoso/consumer")
+            .WithReference(resource);
+
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Run,
+            () => ConnectionStringProjection.CreateProjection(resource.Resource),
+            container => container.WithImage("contoso/db", "1.0"));
+
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            consumer.Resource,
+            DistributedApplicationOperation.Run,
+            TestServiceProvider.Instance);
+
+        Assert.Equal("Host=projection", environment["PROJECTION_CONNECTION"]);
+        Assert.Equal("projection", environment["DB_PROVIDER"]);
+        Assert.DoesNotContain("OWNER_CONNECTION", environment);
+    }
+
+    [Fact]
+    public async Task ConnectionStringReferenceDependenciesUseOwnerIdentityAndSelectedProviderReferences()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var dependency = builder.AddResource(new ConnectionStringOwnerResource("dependency"));
+        var resource = builder.AddResource(new ConnectionStringOwnerResource("db"));
+        var consumer = builder.AddContainer("consumer", "contoso/consumer")
+            .WithReference(resource);
+
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Run,
+            () => new DependentConnectionStringProjection(resource.Resource, dependency.Resource),
+            container => container.WithImage("contoso/db", "1.0"));
+
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var dependencies = await consumer.Resource.GetResourceDependenciesAsync(executionContext);
+        var projection = Assert.IsAssignableFrom<IResource>(resource.Resource.AsContainer());
+
+        Assert.Contains(resource.Resource, dependencies);
+        Assert.Contains(dependency.Resource, dependencies);
+        Assert.DoesNotContain(projection, dependencies);
+    }
+
+    [Fact]
     public void EffectiveCapabilitiesFallBackAndReturnNullWhenUnavailable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -1308,7 +1406,38 @@ public class ResourceProjectionTests
         public ReferenceExpression ConnectionStringExpression =>
             ReferenceExpression.Create($"Host=projection");
 
+        public string? ConnectionStringEnvironmentVariable => "PROJECTION_CONNECTION";
+
+        public IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties()
+        {
+            yield return new("Provider", ReferenceExpression.Create($"projection"));
+        }
+
         public static ConnectionStringProjection CreateProjection(ConnectionStringOwnerResource owner) => new(owner);
+    }
+
+    private sealed class DependentConnectionStringProjection(
+        ConnectionStringOwnerResource owner,
+        IResourceWithConnectionString dependency)
+        : ContainerResource(owner.Name), IResourceWithConnectionString
+    {
+        public override ResourceAnnotationCollection Annotations => owner.Annotations;
+
+        public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"{dependency}");
+    }
+
+    private sealed class CustomValueProviderConnectionStringProjection(ConnectionStringOwnerResource owner)
+        : ContainerResource(owner.Name), IResourceWithConnectionString
+    {
+        public override ResourceAnnotationCollection Annotations => owner.Annotations;
+
+        public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"Host=projection-expression");
+
+        ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken) =>
+            ValueTask.FromResult<string?>("Host=projection-provider");
+
+        ValueTask<string?> IValueProvider.GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+            ValueTask.FromResult<string?>("Host=projection-provider-context");
     }
 
     private sealed class ConnectionStringOnlyProjection(PlainOwnerResource owner)
@@ -1369,6 +1498,13 @@ public class ResourceProjectionTests
     {
         public ReferenceExpression ConnectionStringExpression =>
             ReferenceExpression.Create($"Host=owner");
+
+        public string? ConnectionStringEnvironmentVariable => "OWNER_CONNECTION";
+
+        public IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties()
+        {
+            yield return new("Provider", ReferenceExpression.Create($"owner"));
+        }
     }
 
     private sealed record SingletonAnnotation(string Value) : IResourceAnnotation;

@@ -131,7 +131,7 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
             ReferenceExpression? result = null;
             if (!_createdWithInnerResource)
             {
-                result = InnerResource?.ConnectionStringExpression;
+                result = InnerResource?.GetConnectionStringExpression();
             }
 
             return result ??
@@ -514,7 +514,7 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
     {
         if (IsContainer)
         {
-            return ((IResourceWithConnectionString)InnerResource).GetConnectionProperties();
+            return InnerResource.GetEffectiveCapability<IResourceWithConnectionString>()!.GetConnectionProperties();
         }
 
         var result = new Dictionary<string, ReferenceExpression>(

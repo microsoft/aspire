@@ -57,7 +57,7 @@ public class AzureQueueStorageQueueResource(string name, string queueName, Azure
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
-        foreach (var property in ((IResourceWithConnectionString)Parent).GetConnectionProperties())
+        foreach (var property in Parent.GetEffectiveCapability<IResourceWithConnectionString>()!.GetConnectionProperties())
         {
             yield return property;
         }

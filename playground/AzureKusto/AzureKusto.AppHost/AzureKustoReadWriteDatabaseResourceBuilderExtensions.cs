@@ -34,7 +34,7 @@ internal static class AzureKustoReadWriteDatabaseResourceBuilderExtensions
                 return;
             }
 
-            var connectionString = await dbResource.ConnectionStringExpression.GetValueAsync(ct);
+            var connectionString = await dbResource.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct);
             var kcsb = new KustoConnectionStringBuilder(connectionString);
 
             using var admin = KustoClientFactory.CreateCslAdminProvider(kcsb);

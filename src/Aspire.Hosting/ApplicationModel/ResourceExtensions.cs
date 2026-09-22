@@ -80,6 +80,33 @@ public static class ResourceExtensions
     }
 
     /// <summary>
+    /// Gets a value provider that resolves a capability from a resource or its selected projection.
+    /// </summary>
+    /// <typeparam name="TCapability">The resource capability that supplies the value.</typeparam>
+    /// <param name="resource">The resource whose capability value is resolved.</param>
+    /// <param name="preferOwner">
+    /// <see langword="true"/> to prefer the canonical owner's capability implementation;
+    /// otherwise, prefer the effective projection.
+    /// </param>
+    /// <returns>A value provider that selects the capability provider when the value is evaluated.</returns>
+    /// <remarks>
+    /// The returned provider performs selection lazily so projections registered after this method is called are honored.
+    /// The non-preferred resource view remains a fallback.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="resource"/> is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when neither the resource owner nor its effective projection implements <typeparamref name="TCapability"/>.
+    /// </exception>
+    [AspireExportIgnore(Reason = "Projection-aware .NET resource capability resolution is not part of the ATS surface.")]
+    public static IValueProvider GetValueProvider<TCapability>(this IResource resource, bool preferOwner = false)
+        where TCapability : class, IResource, IValueProvider
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        return new EffectiveCapabilityValueProvider<TCapability>(resource, preferOwner);
+    }
+
+    /// <summary>
     /// Gets the connection-string expression supplied by a resource or its selected projection.
     /// </summary>
     /// <param name="resource">The resource whose connection-string expression is resolved.</param>
@@ -2038,4 +2065,22 @@ public static class ResourceExtensions
         _ => resource.GetType().Name
     };
 #pragma warning restore ASPIREDOTNETTOOL
+
+    private sealed class EffectiveCapabilityValueProvider<TCapability>(
+        IResource resource,
+        bool preferOwner) : IValueProvider, IValueWithReferences
+        where TCapability : class, IResource, IValueProvider
+    {
+        private TCapability Provider =>
+            resource.GetEffectiveCapability<TCapability>(preferOwner) ??
+            throw new InvalidOperationException($"Resource '{resource.Name}' does not provide the '{typeof(TCapability).Name}' value capability.");
+
+        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default) =>
+            Provider.GetValueAsync(cancellationToken);
+
+        public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default) =>
+            Provider.GetValueAsync(context, cancellationToken);
+
+        public IEnumerable<object> References => [resource.GetOwnerOrSelf(), Provider];
+    }
 }

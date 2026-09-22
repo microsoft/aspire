@@ -125,7 +125,7 @@ public static class AzureKustoBuilderExtensions
         KustoConnectionStringBuilder? kcsb = null;
         resourceBuilder.OnConnectionStringAvailable(async (db, evt, ct) =>
         {
-            var connectionString = await db.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false) ??
+            var connectionString = await db.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false) ??
             throw new DistributedApplicationException($"ConnectionStringAvailableEvent published for resource '{db.Name}', but the connection string was null.");
 
             kcsb = GetConnectionStringBuilder(builder.Resource, connectionString);
@@ -232,7 +232,7 @@ public static class AzureKustoBuilderExtensions
         KustoConnectionStringBuilder? kcsb = null;
         resourceBuilder.OnConnectionStringAvailable(async (resource, evt, ct) =>
         {
-            var connectionString = await resource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false) ??
+            var connectionString = await resource.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(ct).ConfigureAwait(false) ??
             throw new DistributedApplicationException($"ConnectionStringAvailableEvent published for resource '{resource.Name}', but the connection string was null.");
 
             kcsb = GetConnectionStringBuilder(resource, connectionString);
@@ -371,9 +371,7 @@ public static class AzureKustoBuilderExtensions
 
         static async Task<ExecuteCommandResult> OnOpenInKustoExplorerDesktop(IResourceBuilder<AzureKustoClusterResource> resourceBuilder, ExecuteCommandContext context)
         {
-            var connectionString = await resourceBuilder
-                .Resource
-                .ConnectionStringExpression
+            var connectionString = await resourceBuilder.Resource.GetValueProvider<IResourceWithConnectionString>()
                 .GetValueAsync(context.CancellationToken)
                 .ConfigureAwait(false) ??
                 throw new DistributedApplicationException($"Connection string for Kusto resource '{resourceBuilder.Resource.Name}' is not set.");
@@ -386,9 +384,7 @@ public static class AzureKustoBuilderExtensions
 
         static async Task<ExecuteCommandResult> OnOpenInKustoExplorerWeb(IResourceBuilder<AzureKustoClusterResource> resourceBuilder, ExecuteCommandContext context)
         {
-            var connectionString = await resourceBuilder
-                .Resource
-                .ConnectionStringExpression
+            var connectionString = await resourceBuilder.Resource.GetValueProvider<IResourceWithConnectionString>()
                 .GetValueAsync(context.CancellationToken)
                 .ConfigureAwait(false) ??
                 throw new DistributedApplicationException($"Connection string for Kusto resource '{resourceBuilder.Resource.Name}' is not set.");

@@ -123,6 +123,26 @@ public class ConnectionStringExpressionAnalyzerTests
     }
 
     [Fact]
+    public async Task ConnectionStringReferenceProviderAccessReportsNoDiagnostic()
+    {
+        var test = AnalyzerTest.Create<AppHostAnalyzer>("""
+            using Aspire.Hosting.ApplicationModel;
+
+            static ReferenceExpression GetExpression(ConnectionStringReference reference)
+                => reference.Provider.ConnectionStringExpression;
+
+            static ReferenceExpression GetExpressionFromLocal(ConnectionStringReference reference)
+            {
+                var provider = reference.Provider;
+                return provider.ConnectionStringExpression;
+            }
+            """,
+            []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
     public async Task ReassignedProjectionAwareLocalReportsDiagnostic()
     {
         var diagnostic = AppHostAnalyzer.Diagnostics.s_connectionStringExpressionMustBeResolved;

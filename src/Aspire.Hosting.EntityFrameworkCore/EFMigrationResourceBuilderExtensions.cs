@@ -347,7 +347,7 @@ public static class EFMigrationResourceBuilderExtensions
         builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((@event, _) =>
         {
             var connectionStringResource = GetSingleConnectionStringResource(migrationResource);
-            var envVar = connectionStringResource.ConnectionStringEnvironmentVariable
+            var envVar = new ConnectionStringReference(connectionStringResource, optional: false).Provider.ConnectionStringEnvironmentVariable
                 ?? ConnectionStringEnvVarPrefix + connectionStringResource.Name;
 
             migrationResource.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
@@ -533,7 +533,7 @@ public static class EFMigrationResourceBuilderExtensions
     {
         var primary = GetSingleConnectionStringResource(migrationResource);
 
-        var envVarName = primary.ConnectionStringEnvironmentVariable
+        var envVarName = new ConnectionStringReference(primary, optional: false).Provider.ConnectionStringEnvironmentVariable
             ?? ConnectionStringEnvVarPrefix + primary.Name;
 
         var baseImage = ResolveBaseImage(migrationResource);

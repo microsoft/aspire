@@ -179,7 +179,7 @@ public static class DistributedApplicationHostingTestingExtensions
             throw new ArgumentException(string.Format(CultureInfo.InvariantCulture, Properties.Resources.ResourceDoesNotExposeConnectionStringExceptionMessage, resourceName), nameof(resourceName));
         }
 
-        return resourceWithConnectionString.GetConnectionStringAsync(cancellationToken);
+        return resourceWithConnectionString.GetValueProvider<IResourceWithConnectionString>().GetValueAsync(cancellationToken);
     }
 
     /// <summary>

@@ -53,7 +53,7 @@ public class ValkeyResource(string name) : ContainerResource(name), IResourceWit
         {
             if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
             {
-                return connectionStringAnnotation.Resource.ConnectionStringExpression;
+                return connectionStringAnnotation.Resource.GetConnectionStringExpression();
             }
 
             return BuildConnectionString();
