@@ -2,11 +2,11 @@
   "id": "vscode-extension-e2e-blazordebugger-timeout-linux",
   "type": "flaky-test",
   "title": "Flaky: VS Code extension Blazor browser debugger E2E tests fail with websocket proxy launch failure and WASM root session timeouts on Linux",
-  "test_name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone / hosted-global / hosted-per-page",
+  "test_name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for hosted-global / hosted-per-page",
   "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
-  "error_pattern": "Error: Blazor debugger launch failed: ... \"Unable to launch browser: \\\"Could not open ws://localhost:43999/_framework/debug/ws-proxy?browser=ws%3A%2F%2F127.0.0.1...\\\"\"; and Error: Timed out after ~299600ms waiting for Blazor WASM root session for resource 'hosted-global'/'hosted-per-page'. Last error: <none>.",
-  "analysis": "The failure is a timeout waiting for the Blazor WASM managed debugger to attach a root session during the VS Code extension's E2E test harness. This is an environment/timing issue in the debugger-launch pipeline (websocket proxy connectivity, browser launch race), not something explainable by the PR's changes, which are confined to Aspire.Hosting DCP/executable/container-network provisioning code with no touches to the VS Code extension or its debugger E2E infrastructure. Matches a previously tracked recurring flaky cause (issue #20184).",
-  "failure_details": "Test: Aspire Blazor browser debugger E2E hits a managed breakpoint for hosted-global\nError: Failed to apply E2E control revision 1790036658200: Error: Timed out after 299643ms waiting for Blazor WASM root session for resource 'hosted-global'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"3b1b06b3-6a97-47d0-a355-ffaa1dc852db\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",...,\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":35825,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"/tmp/aev-zZMr5M/workspace/StandaloneClient/bin/Debug/net11.0/;/tmp/aev-zZMr5M/workspace/HostedPerPage/HostedPerPage.Client/bin/Debug/net11.0/;/tmp/aev-zZMr5M/workspace/HostedGlobal/HostedGlobal.Client/bin/Debug/net11.0/\"}, ...}]}\n\nTest: Aspire Blazor browser debugger E2E hits a managed breakpoint for hosted-per-page\nError: Failed to apply E2E control revision 1790036658203: Error: Timed out after 299670ms waiting for Blazor WASM root session for resource 'hosted-per-page'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"db078b7e-5ac3-46f1-8f24-c08a0cdd285e\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",...}]}",
+  "error_pattern": "Error: Timed out after ~299600ms waiting for Blazor WASM root session for resource 'hosted-global'/'hosted-per-page'. Last error: <none>.",
+  "analysis": "Both hosted-global and hosted-per-page Blazor browser debugger E2E tests timed out (~299s) waiting for the WASM root debug session, matching a previously recorded recurring flaky pattern for this shard on Linux (issue #20184). The PR only modifies dynamic-debug and Windows teardown E2E test files, unrelated to the Blazor browser-debugger shard.",
+  "failure_details": "Aspire Blazor browser debugger E2E hits a managed breakpoint for hosted-global:\nFailed to apply E2E control revision 1790049233027: Error: Timed out after 299583ms waiting for Blazor WASM root session for resource 'hosted-global'. Last error: <none>.\n\nAspire Blazor browser debugger E2E hits a managed breakpoint for hosted-per-page:\nFailed to apply E2E control revision 1790049233030: Error: Timed out after 299720ms waiting for Blazor WASM root session for resource 'hosted-per-page'. Last error: <none>.",
   "occurrences": [
     {
       "run_id": 35132956836,
@@ -21,6 +21,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
       "pr_number": 20214,
       "observed_at": "2026-09-22T00:50:18Z"
+    },
+    {
+      "run_id": 35683878838,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35683878838",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
+      "pr_number": 20289,
+      "observed_at": "2026-09-22T04:17:26Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20184"

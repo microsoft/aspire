@@ -4,8 +4,8 @@
   "title": "Flaky: VS Code extension unit tests job fails intermittently on Windows with generic exit code 1 and no retrievable logs",
   "job_name": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
   "error_pattern": "Process completed with exit code 1. (Job logs unavailable: 'Failed to fetch logs for job'). No TRX test failures extracted.",
-  "analysis": "Job fails with a generic 'Process completed with exit code 1' annotation and job logs could not be fetched. This matches a previously identified recurring flaky pattern for this job (issue #19270) that has occurred on unrelated PRs. The current PR only modifies extension/src/server/interactionService.ts and related CLI backchannel/interaction service code, not the extension unit test harness or infrastructure.",
-  "failure_details": "**failure**: Process completed with exit code 1.\nLogs: 1:(Failed to fetch logs for job 104023633787)\nNo TRX test failures were extracted for this job.",
+  "analysis": "The job failed with a generic exit code 1 annotation and job logs were unavailable ('Failed to fetch logs for job'). No specific test failures were extracted from TRX artifacts. This matches a previously recorded recurring flaky pattern for this job (issue #19270), and the PR only modifies extension E2E test files unrelated to unit test infrastructure.",
+  "failure_details": "Annotations: Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows) (106606877615)\n- failure: Process completed with exit code 1.\nLogs: (Failed to fetch logs for job 106606877615)",
   "occurrences": [
     {
       "run_id": 31556011348,
@@ -27,6 +27,13 @@
       "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
       "pr_number": 19996,
       "observed_at": "2026-09-14T15:27:45Z"
+    },
+    {
+      "run_id": 35683878838,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35683878838",
+      "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "pr_number": 20289,
+      "observed_at": "2026-09-22T04:17:26Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19270"
