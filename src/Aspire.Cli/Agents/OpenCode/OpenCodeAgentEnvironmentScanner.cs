@@ -12,6 +12,10 @@ namespace Aspire.Cli.Agents.OpenCode;
 /// <summary>
 /// Discovers OpenCode and configures native catalogs and MCP entries with one coherent schema across scopes.
 /// </summary>
+/// <param name="openCodeCliRunner">The OpenCode CLI runner for checking if OpenCode is installed.</param>
+/// <param name="executionContext">The CLI execution context for resolving workspace and user configuration paths.</param>
+/// <param name="environment">The environment abstraction for reading environment variables.</param>
+/// <param name="logger">The logger for diagnostic output.</param>
 internal sealed class OpenCodeAgentEnvironmentScanner(
     IOpenCodeCliRunner openCodeCliRunner,
     CliExecutionContext executionContext,
@@ -52,12 +56,18 @@ internal sealed class OpenCodeAgentEnvironmentScanner(
         return Array.AsReadOnly<AgentClientDetection>([]);
     }
 
+    /// <summary>
+    /// Checks for OpenCode configuration files within the workspace boundary.
+    /// </summary>
+    /// <param name="startDirectory">The directory to start searching from.</param>
+    /// <param name="repositoryRoot">The workspace root to use as the boundary for searches.</param>
     private static bool HasProjectConfiguration(DirectoryInfo startDirectory, DirectoryInfo repositoryRoot)
         // V2 also loads configuration inside .opencode; a skills-only directory is insufficient.
         // https://opencode.ai/v2/docs/config#locations
         => AgentPath.ProjectDirectories(startDirectory, repositoryRoot).Any(directory =>
             ConfigFiles(directory.FullName).Concat(ConfigFiles(Path.Combine(directory.FullName, ".opencode"))).Any(File.Exists));
 
+    /// <inheritdoc />
     public IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request)
     {
         var client = request.Clients.Single(client => client.Environment == this);

@@ -11,6 +11,10 @@ namespace Aspire.Cli.Agents.ClaudeCode;
 /// <summary>
 /// Discovers Claude Code and supplies its native plugin, MCP, and hook configuration.
 /// </summary>
+/// <param name="claudeCodeCliRunner">The Claude Code CLI runner for checking if Claude Code is installed.</param>
+/// <param name="executionContext">The CLI execution context for resolving workspace and user configuration paths.</param>
+/// <param name="environment">The environment abstraction for reading environment variables.</param>
+/// <param name="logger">The logger for diagnostic output.</param>
 internal sealed class ClaudeCodeAgentEnvironmentScanner(
     IClaudeCodeCliRunner claudeCodeCliRunner,
     CliExecutionContext executionContext,
@@ -42,13 +46,18 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner(
         return Array.AsReadOnly<AgentClientDetection>([]);
     }
 
+    /// <summary>
+    /// Checks for .claude or .mcp.json within the workspace boundary, excluding user-level home configuration.
+    /// </summary>
+    /// <param name="startDirectory">The directory to start searching from.</param>
+    /// <param name="repositoryRoot">The workspace root to use as the boundary for searches.</param>
     private bool HasProjectConfiguration(DirectoryInfo startDirectory, DirectoryInfo repositoryRoot)
-        // Home settings alone are not evidence of project usage.
         => AgentPath.ProjectDirectories(startDirectory, repositoryRoot).Any(directory =>
             Path.GetRelativePath(executionContext.HomeDirectory.FullName, directory.FullName) != "." &&
             (Directory.Exists(Path.Combine(directory.FullName, ".claude")) ||
              File.Exists(Path.Combine(directory.FullName, ".mcp.json"))));
 
+    /// <inheritdoc />
     public IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request)
     {
         var client = request.Clients.Single(client => client.Environment == this);

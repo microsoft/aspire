@@ -11,6 +11,10 @@ namespace Aspire.Cli.Agents.VsCode;
 /// <summary>
 /// Discovers VS Code and configures native workspace/user MCP and shared Copilot plugin settings.
 /// </summary>
+/// <param name="vsCodeCliRunner">The VS Code CLI runner for checking if VS Code is installed.</param>
+/// <param name="executionContext">The CLI execution context for resolving workspace and user configuration paths.</param>
+/// <param name="environment">The environment abstraction for reading environment variables.</param>
+/// <param name="logger">The logger for diagnostic output.</param>
 internal sealed class VsCodeAgentEnvironmentScanner(
     IVsCodeCliRunner vsCodeCliRunner,
     CliExecutionContext executionContext,
@@ -63,12 +67,17 @@ internal sealed class VsCodeAgentEnvironmentScanner(
         return Array.AsReadOnly<AgentClientDetection>([]);
     }
 
+    /// <summary>
+    /// Checks for .vscode within the workspace boundary, excluding the home directory used for extensions.
+    /// </summary>
+    /// <param name="startDirectory">The directory to start searching from.</param>
+    /// <param name="repositoryRoot">The workspace root to use as the boundary for searches.</param>
     private bool HasProjectConfiguration(DirectoryInfo startDirectory, DirectoryInfo repositoryRoot)
-        // The home .vscode directory holds extensions, not workspace settings.
         => AgentPath.ProjectDirectories(startDirectory, repositoryRoot).Any(directory =>
             Path.GetRelativePath(executionContext.HomeDirectory.FullName, directory.FullName) != "." &&
             Directory.Exists(Path.Combine(directory.FullName, ".vscode")));
 
+    /// <inheritdoc />
     public IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request)
     {
         var client = request.Clients.Single(client => client.Environment == this);

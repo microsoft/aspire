@@ -12,6 +12,11 @@ namespace Aspire.Cli.Agents.Copilot;
 /// <summary>
 /// Discovers and configures Copilot CLI/App, including plugin settings shared with the supported VS Code Agent Host.
 /// </summary>
+/// <param name="copilotCliRunner">The Copilot CLI runner for checking if Copilot CLI is installed.</param>
+/// <param name="copilotAppInstallationDetector">The detector for checking if the Copilot App is installed.</param>
+/// <param name="executionContext">The CLI execution context for resolving workspace and user configuration paths.</param>
+/// <param name="environment">The environment abstraction for reading environment variables.</param>
+/// <param name="logger">The logger for diagnostic output.</param>
 internal sealed class CopilotAgentEnvironmentScanner(
     ICopilotCliRunner copilotCliRunner,
     ICopilotAppInstallationDetector copilotAppInstallationDetector,
@@ -57,6 +62,7 @@ internal sealed class CopilotAgentEnvironmentScanner(
         return detections.AsReadOnly();
     }
 
+    /// <inheritdoc />
     public IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request)
     {
         foreach (var target in GetPluginTargets(request, executionContext, environment))
