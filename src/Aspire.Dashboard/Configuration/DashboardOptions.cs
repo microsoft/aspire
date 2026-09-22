@@ -11,6 +11,8 @@ namespace Aspire.Dashboard.Configuration;
 
 public sealed class DashboardOptions
 {
+    internal const string DefaultApplicationName = "Aspire";
+
     public string? ApplicationName { get; set; }
     public OtlpOptions Otlp { get; set; } = new();
     public ApiOptions Api { get; set; } = new();
@@ -20,6 +22,9 @@ public sealed class DashboardOptions
     public DebugSessionOptions DebugSession { get; set; } = new();
     public UIOptions UI { get; set; } = new();
     public DashboardDataOptions Data { get; set; } = new();
+
+    internal string GetApplicationNameOrDefault() =>
+        string.IsNullOrWhiteSpace(ApplicationName) ? DefaultApplicationName : ApplicationName;
 }
 
 public sealed class DashboardDataOptions

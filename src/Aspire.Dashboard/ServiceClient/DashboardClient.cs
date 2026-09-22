@@ -846,8 +846,7 @@ internal sealed class DashboardClient : IDashboardClient
     public string ApplicationName
     {
         get => _applicationName
-            ?? _dashboardOptions.ApplicationName
-            ?? "Aspire";
+            ?? _dashboardOptions.GetApplicationNameOrDefault();
     }
 
     public string? MinRequiredVersion => _minRequiredVersion;
