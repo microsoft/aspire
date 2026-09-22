@@ -13,7 +13,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
     public async Task Copilot_RegistersOneSharedSourcePerScope()
     {
         using var context = new AgentConfigurationTestContext(output);
-        AgentClient[] clients = [context.CopilotCli, context.CopilotApp, context.VsCode];
+        AgentClient[] clients = [context.Copilot];
 
         var results = await context.ConfigureNativeAsync(context.Request(clients)).DefaultTimeout();
 
@@ -67,8 +67,8 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData("copilot-cli")]
-    [InlineData("claude-code")]
+    [InlineData("copilot")]
+    [InlineData("claude")]
     public async Task NativePlugins_DoNotOverrideAnExplicitGlobalDisable(string clientName)
     {
         using var context = new AgentConfigurationTestContext(output);
@@ -99,7 +99,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
         var path = Path.Combine(context.CopilotDirectory, "settings.json");
         await AgentConfigurationTestContext.WriteAsync(path, existing).DefaultTimeout();
 
-        var results = await context.ConfigureNativeAsync(context.Request([context.CopilotApp])).DefaultTimeout();
+        var results = await context.ConfigureNativeAsync(context.Request([context.Copilot])).DefaultTimeout();
 
         Assert.All(results, result => Assert.Equal(AgentConfigurationStatus.Blocked, result.Status));
         Assert.Equal(existing, await File.ReadAllTextAsync(path).DefaultTimeout());
@@ -114,7 +114,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
         const string existing = """{"extraKnownMarketplaces":{"aspire-skills":{"source":{"source":"directory","path":"./private-marketplace"}}}}""";
         await AgentConfigurationTestContext.WriteAsync(path, existing).DefaultTimeout();
 
-        var results = await context.ConfigureNativeAsync(context.Request([context.CopilotCli])).DefaultTimeout();
+        var results = await context.ConfigureNativeAsync(context.Request([context.Copilot])).DefaultTimeout();
 
         Assert.All(results, result => Assert.Equal(AgentConfigurationStatus.Blocked, result.Status));
         Assert.Equal(existing, await File.ReadAllTextAsync(path).DefaultTimeout());
@@ -149,7 +149,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
     {
         using var context = new AgentConfigurationTestContext(output);
         var request = context.Request(
-            [context.CopilotCli, context.CopilotApp, context.ClaudeCode, context.VsCode],
+            [context.Copilot, context.ClaudeCode, context.VsCode],
             skills: false, mcp: true);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
@@ -157,7 +157,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
         Assert.Equal(5, results.Count);
         Assert.All(results, result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
         var shared = results.Single(result => result.TargetPath == Path.Combine(context.Project.FullName, ".mcp.json"));
-        Assert.Equal([context.CopilotCli, context.CopilotApp, context.ClaudeCode], shared.Clients);
+        Assert.Equal([context.Copilot, context.ClaudeCode], shared.Clients);
         Assert.Equal(
             new[]
             {
@@ -180,7 +180,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
         const string policy = """{"mcpServers":{}}""";
         await AgentConfigurationTestContext.WriteAsync(managed, policy).DefaultTimeout();
 
-        var results = await context.ConfigureNativeAsync(context.Request([context.CopilotCli, context.ClaudeCode], skills: false, mcp: true)).DefaultTimeout();
+        var results = await context.ConfigureNativeAsync(context.Request([context.Copilot, context.ClaudeCode], skills: false, mcp: true)).DefaultTimeout();
 
         Assert.Equal(AgentConfigurationStatus.Blocked, results.Single(result => result.Scope is AgentConfigurationScope.Project).Status);
         Assert.Equal(AgentConfigurationStatus.Configured, results.Single(result => result.TargetPath == Path.Combine(context.CopilotDirectory, "mcp-config.json")).Status);
@@ -208,7 +208,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
             }
             """).DefaultTimeout();
 
-        var result = await context.ConfigureNativeAsync(context.Request([context.CopilotCli], skills: false, mcp: true)).DefaultTimeout();
+        var result = await context.ConfigureNativeAsync(context.Request([context.Copilot], skills: false, mcp: true)).DefaultTimeout();
 
         Assert.Equal(AgentConfigurationStatus.Configured, result.Single(target => target.Scope is AgentConfigurationScope.User).Status);
         Assert.Equal(AgentConfigurationStatus.Skipped, result.Single(target => target.Scope is AgentConfigurationScope.Project).Status);
@@ -276,7 +276,7 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
     {
         using var context = new AgentConfigurationTestContext(output);
         context.SetVariable("COPILOT_HOME", Path.Combine(context.Project.FullName, ".github", "copilot"));
-        var request = context.Request([context.CopilotCli, context.CopilotApp]);
+        var request = context.Request([context.Copilot]);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
         var repeated = await context.ConfigureNativeAsync(request).DefaultTimeout();
@@ -284,6 +284,131 @@ public class NativeAgentConfigurationTests(ITestOutputHelper output)
         Assert.Equal(AgentConfigurationStatus.Configured, Assert.Single(results).Status);
         Assert.Equal(AgentConfigurationScope.User, results[0].Scope);
         Assert.Equal(AgentConfigurationStatus.Unchanged, Assert.Single(repeated).Status);
+    }
+
+    [Fact]
+    public async Task VsCode_RegistersRecommendationsAndItsOwnUserMarketplace()
+    {
+        using var context = new AgentConfigurationTestContext(output);
+        var path = Path.Combine(context.VsCodeUserDirectory(false), "settings.json");
+        await AgentConfigurationTestContext.WriteAsync(path,
+            """{"editor.fontSize":14,"chat.plugins.marketplaces":["example/tools"],"chat.pluginLocations":{"/custom-plugin":false}}""").DefaultTimeout();
+        var request = context.Request([context.VsCode]);
+
+        var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
+        var contents = await File.ReadAllTextAsync(path).DefaultTimeout();
+        File.SetLastWriteTimeUtc(path, new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        var timestamp = File.GetLastWriteTimeUtc(path);
+        var repeated = await context.ConfigureNativeAsync(request).DefaultTimeout();
+
+        Assert.Equal(2, results.Count);
+        Assert.All(results, result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
+        Assert.All(repeated, result => Assert.Equal(AgentConfigurationStatus.Unchanged, result.Status));
+        Assert.Equal(contents, await File.ReadAllTextAsync(path).DefaultTimeout());
+        Assert.Equal(timestamp, File.GetLastWriteTimeUtc(path));
+        Assert.False(Directory.Exists(context.CopilotDirectory));
+        Assert.False(Directory.Exists(context.ClaudeDirectory));
+        var recommendation = JsonNode.Parse(await File.ReadAllTextAsync(
+            Path.Combine(context.Project.FullName, ".github", "copilot", "settings.json")).DefaultTimeout())!;
+        Assert.Equal("microsoft/aspire-skills", recommendation["extraKnownMarketplaces"]!["aspire-skills"]!["source"]!["repo"]!.GetValue<string>());
+        Assert.True(recommendation["enabledPlugins"]!["aspire@aspire-skills"]!.GetValue<bool>());
+        await Verify(contents, "json");
+    }
+
+    [Fact]
+    public async Task VsCodeAndCopilot_ShareOnlyTheWorkspaceRecommendation()
+    {
+        using var context = new AgentConfigurationTestContext(output);
+
+        var results = await context.ConfigureNativeAsync(context.Request([context.Copilot, context.VsCode])).DefaultTimeout();
+
+        Assert.Equal(3, results.Count);
+        Assert.All(results, result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
+        var project = Assert.Single(results, result => result.Scope is AgentConfigurationScope.Project);
+        Assert.Equal([context.Copilot, context.VsCode], project.Clients);
+        Assert.Equal(
+            new[] { Path.Combine(context.CopilotDirectory, "settings.json"), Path.Combine(context.VsCodeUserDirectory(false), "settings.json") }.Order(),
+            results.Where(result => result.Scope is AgentConfigurationScope.User).Select(result => result.TargetPath).Order());
+    }
+
+    [Theory]
+    [InlineData("""{"chat.plugins.enabled":false}""", "Skipped")]
+    [InlineData("""{"chat.plugins.strictMarketplaces":true}""", "Blocked")]
+    [InlineData("""{"chat.plugins.enabledPlugins":{"aspire@aspire-skills":false}}""", "Blocked")]
+    [InlineData("""{"chat.plugins.enabledPlugins":[]}""", "Blocked")]
+    [InlineData("{broken", "Blocked")]
+    public async Task VsCode_PreservesDisabledOrManagedNativeSettings(string content, string status)
+    {
+        using var context = new AgentConfigurationTestContext(output);
+        var path = Path.Combine(context.VsCodeUserDirectory(false), "settings.json");
+        await AgentConfigurationTestContext.WriteAsync(path, content).DefaultTimeout();
+
+        var results = await context.ConfigureNativeAsync(context.Request([context.VsCode])).DefaultTimeout();
+
+        Assert.Equal(2, results.Count);
+        Assert.All(results, result => Assert.Equal(Enum.Parse<AgentConfigurationStatus>(status), result.Status));
+        Assert.Equal(content, await File.ReadAllTextAsync(path).DefaultTimeout());
+        Assert.Empty(context.Project.EnumerateFileSystemInfos());
+        Assert.False(Directory.Exists(context.CopilotDirectory));
+    }
+
+    [Theory]
+    [InlineData("microsoft/aspire-skills#v0.0.2")]
+    [InlineData("https://github.com/microsoft/aspire-skills.git")]
+    [InlineData("git@github.com:microsoft/aspire-skills.git")]
+    public async Task VsCode_PreservesExistingNativeMarketplaceSources(string marketplace)
+    {
+        using var context = new AgentConfigurationTestContext(output);
+        var path = Path.Combine(context.VsCodeUserDirectory(false), "settings.json");
+        var content = $$"""{"chat.plugins.marketplaces":["example/tools","{{marketplace}}"]}""";
+        await AgentConfigurationTestContext.WriteAsync(path, content).DefaultTimeout();
+
+        var results = await context.ConfigureNativeAsync(context.Request([context.VsCode])).DefaultTimeout();
+
+        Assert.Equal(AgentConfigurationStatus.Unchanged, results.Single(result => result.Scope is AgentConfigurationScope.User).Status);
+        Assert.Equal(content, await File.ReadAllTextAsync(path).DefaultTimeout());
+        Assert.Equal(marketplace.Contains('#') ? AgentConfigurationStatus.Skipped : AgentConfigurationStatus.Configured,
+            results.Single(result => result.Scope is AgentConfigurationScope.Project).Status);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task VsCode_RespectsClaudeWorkspacePinsAndDisabledRecommendations(bool disabled)
+    {
+        using var context = new AgentConfigurationTestContext(output);
+        var path = Path.Combine(context.Project.FullName, ".claude", "settings.json");
+        var content = $$$$"""{"extraKnownMarketplaces":{"aspire-skills":{"source":{"source":"github","repo":"microsoft/aspire-skills","ref":"v0.0.2"}}},"enabledPlugins":{"aspire@aspire-skills":{{{{(!disabled).ToString().ToLowerInvariant()}}}}}}""";
+        await AgentConfigurationTestContext.WriteAsync(path, content).DefaultTimeout();
+
+        var results = await context.ConfigureNativeAsync(context.Request([context.VsCode])).DefaultTimeout();
+
+        Assert.Equal(content, await File.ReadAllTextAsync(path).DefaultTimeout());
+        Assert.Equal(disabled ? AgentConfigurationStatus.Skipped : AgentConfigurationStatus.Configured,
+            results.Single(result => result.Scope is AgentConfigurationScope.Project).Status);
+        Assert.Equal(AgentConfigurationStatus.Skipped, results.Single(result => result.Scope is AgentConfigurationScope.User).Status);
+        Assert.False(File.Exists(Path.Combine(context.VsCodeUserDirectory(false), "settings.json")));
+        Assert.False(Directory.Exists(context.CopilotDirectory));
+    }
+
+    [Fact]
+    public async Task VsCode_RegistersMarketplacesForInsidersProfilesWithoutChangingTheirActivation()
+    {
+        using var context = new AgentConfigurationTestContext(output);
+        var user = context.VsCodeUserDirectory(true);
+        var profile = Path.Combine(user, "profiles", "work-profile", "settings.json");
+        await AgentConfigurationTestContext.WriteAsync(profile, """{"chat.pluginLocations":{"/disabled-plugin":false}}""").DefaultTimeout();
+
+        var results = await context.ConfigureNativeAsync(context.Request([context.VsCode],
+            detections: [new(context.VsCode, "1.120.0-insider", true)])).DefaultTimeout();
+
+        Assert.Equal(3, results.Count);
+        Assert.All(results, result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(profile).DefaultTimeout())!;
+        Assert.Equal(["microsoft/aspire-skills"], settings["chat.plugins.marketplaces"]!.AsArray().Select(value => value!.GetValue<string>()));
+        Assert.False(settings["chat.pluginLocations"]!["/disabled-plugin"]!.GetValue<bool>());
+        Assert.False(Directory.Exists(context.VsCodeUserDirectory(false)));
+        Assert.False(Directory.Exists(context.CopilotDirectory));
     }
 
     [Fact]

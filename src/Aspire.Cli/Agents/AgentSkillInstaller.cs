@@ -141,13 +141,13 @@ internal sealed class AgentSkillInstaller(
         // https://docs.github.com/en/copilot/concepts/agents/about-agent-skills
         // https://code.visualstudio.com/docs/agent-customization/agent-skills
         // https://opencode.ai/docs/skills/
-        if (client.Id is "copilot-cli" or "copilot-app" or "vscode" or "opencode")
+        if (client.Id is Copilot.CopilotAgentEnvironmentScanner.ClientId or VsCode.VsCodeAgentEnvironmentScanner.ClientId or OpenCode.OpenCodeAgentEnvironmentScanner.ClientId)
         {
             var root = scope is AgentConfigurationScope.Project ? workspaceRoot.FullName : executionContext.HomeDirectory.FullName;
             return Path.Combine(root, ".agents", "skills");
         }
 
-        if (client.Id != "claude-code")
+        if (client.Id != ClaudeCodeAgentEnvironmentScanner.ClientId)
         {
             throw new ArgumentOutOfRangeException(nameof(client), client, null);
         }

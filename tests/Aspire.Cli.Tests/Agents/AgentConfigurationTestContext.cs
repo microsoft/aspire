@@ -53,10 +53,9 @@ internal sealed class AgentConfigurationTestContext : IDisposable
     public TestEnvironment Environment { get; }
     public CliExecutionContext ExecutionContext { get; }
     public AgentClientCatalog Catalog { get; }
-    public AgentClient CopilotCli => Catalog.Clients.Single(client => client.Id == "copilot-cli");
-    public AgentClient CopilotApp => Catalog.Clients.Single(client => client.Id == "copilot-app");
+    public AgentClient Copilot => Catalog.Clients.Single(client => client.Id == "copilot");
     public AgentClient VsCode => Catalog.Clients.Single(client => client.Id == "vscode");
-    public AgentClient ClaudeCode => Catalog.Clients.Single(client => client.Id == "claude-code");
+    public AgentClient ClaudeCode => Catalog.Clients.Single(client => client.Id == "claude");
     public AgentClient OpenCode => Catalog.Clients.Single(client => client.Id == "opencode");
     public TestAgentCliRunner CliRunner { get; }
     public string CopilotDirectory => CopilotPaths.GetConfigDirectory(ExecutionContext, Environment);

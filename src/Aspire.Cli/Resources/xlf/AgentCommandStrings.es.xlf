@@ -67,6 +67,11 @@
         <target state="new">Existing Aspire MCP settings in another applicable scope were preserved. No default entry was added that could override or broaden those customizations.</target>
         <note />
       </trans-unit>
+      <trans-unit id="Configuration_ExistingPluginPin">
+        <source>A pinned Aspire plugin source was preserved. No unpinned source was added to another configuration scope.</source>
+        <target state="new">A pinned Aspire plugin source was preserved. No unpinned source was added to another configuration scope.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Configuration_ExistingProjectHook">
         <source>An existing project-level Aspire usage hook was preserved. No additional user hook was added, to avoid duplicate events.</source>
         <target state="new">An existing project-level Aspire usage hook was preserved. No additional user hook was added, to avoid duplicate events.</target>
@@ -138,7 +143,7 @@
         <note />
       </trans-unit>
       <trans-unit id="DeprecatedConfigFix">
-        <source>Run 'aspire agent init --mcp' and select the affected clients to update configuration</source>
+        <source>Run 'aspire agent init --mcp' and select the affected client environments to update configuration</source>
         <target state="needs-review-translation">Ejecución de "agent init" para actualizar la configuración</target>
         <note />
       </trans-unit>
@@ -152,14 +157,24 @@
         <target state="needs-review-translation">Administrar integraciones de agentes de IA.</target>
         <note />
       </trans-unit>
+      <trans-unit id="Environment_Copilot">
+        <source>GitHub Copilot (CLI and App)</source>
+        <target state="new">GitHub Copilot (CLI and App)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Environment_VsCode">
+        <source>VS Code (native settings)</source>
+        <target state="new">VS Code (native settings)</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_AspireSkillsAsset">
         <source>Aspire source</source>
         <target state="new">Aspire source</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AspireSkillsOptionDescription">
-        <source>Register native Aspire skills and supported canvases for the selected clients (y/n or true/false; default: yes)</source>
-        <target state="new">Register native Aspire skills and supported canvases for the selected clients (y/n or true/false; default: yes)</target>
+        <source>Register native Aspire skills and supported canvases for the selected client environments (y/n or true/false; default: yes)</source>
+        <target state="new">Register native Aspire skills and supported canvases for the selected client environments (y/n or true/false; default: yes)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AspireifyHandoff">
@@ -177,11 +192,6 @@
         <target state="new">The selected clients acquire and load the registered Aspire content. Client trust or activation may still be required; registration does not mean the content is installed or loaded.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_ClientsOptionDescription">
-        <source>Comma-separated clients ({0}), '{1}', or '{2}'. Defaults to detected clients</source>
-        <target state="new">Comma-separated clients ({0}), '{1}', or '{2}'. Defaults to detected clients</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_ConfigureAspireSkillsPrompt">
         <source>Register Aspire skills and supported canvases?</source>
         <target state="new">Register Aspire skills and supported canvases?</target>
@@ -193,8 +203,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServerPrompt">
-        <source>Configure the Aspire MCP server for the selected clients?</source>
-        <target state="new">Configure the Aspire MCP server for the selected clients?</target>
+        <source>Configure the Aspire MCP server for the selected client environments?</source>
+        <target state="new">Configure the Aspire MCP server for the selected client environments?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfiguredTarget">
@@ -203,7 +213,7 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">
-        <source>Configure independent assets for selected agent clients at project and user level</source>
+        <source>Configure independent assets for selected client environments at project and user level</source>
         <target state="needs-review-translation">Inicialice la configuración del entorno del agente para los agentes detectados.</target>
         <note />
       </trans-unit>
@@ -213,8 +223,18 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_DotnetInspectOptionDescription">
-        <source>Install the dotnet-inspect bootstrap skill for the selected clients (y/n or true/false; default: no)</source>
-        <target state="new">Install the dotnet-inspect bootstrap skill for the selected clients (y/n or true/false; default: no)</target>
+        <source>Install the dotnet-inspect bootstrap skill for the selected client environments (y/n or true/false; default: no)</source>
+        <target state="new">Install the dotnet-inspect bootstrap skill for the selected client environments (y/n or true/false; default: no)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_EnvironmentSelectionNotice">
+        <source>Choose where Aspire writes project and user settings. Copilot shares CLI/App configuration. VS Code has its own MCP and plugin-marketplace settings and can reuse installed Copilot plugins or Copilot/Claude workspace recommendations. Usage hooks are configured separately for detected supported environments, subject to policy and telemetry opt-out.</source>
+        <target state="new">Choose where Aspire writes project and user settings. Copilot shares CLI/App configuration. VS Code has its own MCP and plugin-marketplace settings and can reuse installed Copilot plugins or Copilot/Claude workspace recommendations. Usage hooks are configured separately for detected supported environments, subject to policy and telemetry opt-out.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_EnvironmentsOptionDescription">
+        <source>Comma-separated client environments ({0}), '{1}', or '{2}'. Defaults to detected environments</source>
+        <target state="new">Comma-separated client environments ({0}), '{1}', or '{2}'. Defaults to detected environments</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_FailedTarget">
@@ -242,9 +262,9 @@
         <target state="new">Invalid value '{1}' for '{0}'. Use y/n or true/false.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_InvalidClients">
-        <source>Invalid client selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
-        <target state="new">Invalid client selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
+      <trans-unit id="InitCommand_InvalidEnvironments">
+        <source>Invalid client environment selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
+        <target state="new">Invalid client environment selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_McpAsset">
@@ -253,8 +273,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_McpOptionDescription">
-        <source>Configure the Aspire MCP server for selected clients (y/n or true/false; default: no)</source>
-        <target state="new">Configure the Aspire MCP server for selected clients (y/n or true/false; default: no)</target>
+        <source>Configure the Aspire MCP server for selected client environments (y/n or true/false; default: no)</source>
+        <target state="new">Configure the Aspire MCP server for selected client environments (y/n or true/false; default: no)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_NoConfigurationSelected">
@@ -273,8 +293,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightOptionDescription">
-        <source>Install Playwright CLI and its skills for the selected clients (y/n or true/false; default: no)</source>
-        <target state="new">Install Playwright CLI and its skills for the selected clients (y/n or true/false; default: no)</target>
+        <source>Install Playwright CLI and its skills for the selected client environments (y/n or true/false; default: no)</source>
+        <target state="new">Install Playwright CLI and its skills for the selected client environments (y/n or true/false; default: no)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">

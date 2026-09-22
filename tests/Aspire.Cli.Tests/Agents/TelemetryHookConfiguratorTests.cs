@@ -15,15 +15,15 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     public async Task Plan_WritesDetectedCopilotUserHook()
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
-        var request = context.Request([context.CopilotCli],
-            detections: [new(context.CopilotCli, null, false)]);
+        var request = context.Request([context.Copilot],
+            detections: [new(context.Copilot, null, false)]);
 
         var result = await context.Service.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
 
         AssertNativeConfigured(result);
         var hook = Assert.Single(result.Targets, target => target.Asset is AgentAssetKind.TelemetryHooks);
         Assert.Equal(AgentConfigurationStatus.Configured, hook.Status);
-        Assert.Equal([context.CopilotCli], hook.Clients);
+        Assert.Equal([context.Copilot], hook.Clients);
         Assert.Equal(AgentConfigurationScope.User, hook.Scope);
         Assert.Equal(1, context.HookInstaller.Calls);
 
@@ -42,13 +42,13 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     public async Task Plan_RegistersOneSharedCopilotHookForDetectedAppAndCli()
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
-        AgentClient[] clients = [context.CopilotCli, context.CopilotApp];
+        AgentClient[] clients = [context.Copilot];
 
         var request = context.Request(clients, detections:
         [
-            new(context.CopilotCli, null, false),
-            new(context.CopilotApp, null, false),
-            new(context.CopilotCli, null, false)
+            new(context.Copilot, null, false),
+            new(context.Copilot, null, false),
+            new(context.Copilot, null, false)
         ]);
 
         var result = await context.Service.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
@@ -68,7 +68,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         context.SetVariable("COPILOT_HOME", custom.FullName);
 
         var result = await context.Service.ConfigureAsync(
-            context.Request([context.CopilotCli], detections: [new(context.CopilotCli, null, false)]),
+            context.Request([context.Copilot], detections: [new(context.Copilot, null, false)]),
             CancellationToken.None).DefaultTimeout();
 
         AssertNativeConfigured(result);
@@ -158,7 +158,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         await AgentConfigurationTestContext.WriteAsync(path, existing).DefaultTimeout();
 
         var result = await context.Service.ConfigureAsync(
-            context.Request([context.CopilotCli], detections: [new(context.CopilotCli, null, false)]),
+            context.Request([context.Copilot], detections: [new(context.Copilot, null, false)]),
             CancellationToken.None).DefaultTimeout();
 
         AssertNativeConfigured(result);
@@ -199,7 +199,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var request = context.Request([context.OpenCode],
-            detections: [new(context.CopilotCli, null, false), new(context.ClaudeCode, null, false)]);
+            detections: [new(context.Copilot, null, false), new(context.ClaudeCode, null, false)]);
 
         var results = await context.Writer.ApplyAsync(context.Hooks.Plan(request), CancellationToken.None).DefaultTimeout();
 
@@ -221,7 +221,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     public async Task Plan_SelectedButUndetectedClientsDoNotReceiveHooks()
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
-        var request = context.Request([context.CopilotCli, context.ClaudeCode],
+        var request = context.Request([context.Copilot, context.ClaudeCode],
             detections: [new(context.VsCode, null, false), new(context.OpenCode, null, false)]);
 
         var results = await context.Writer.ApplyAsync(context.Hooks.Plan(request), CancellationToken.None).DefaultTimeout();
@@ -239,15 +239,15 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
         Assert.Empty(context.Hooks.Plan(context.Request([context.VsCode, context.OpenCode],
             detections: [new(context.VsCode, null, false), new(context.OpenCode, null, false)])));
-        Assert.Empty(context.Hooks.Plan(context.Request([context.CopilotCli, context.ClaudeCode],
-            skills: false, detections: [new(context.CopilotCli, null, false), new(context.ClaudeCode, null, false)])));
+        Assert.Empty(context.Hooks.Plan(context.Request([context.Copilot, context.ClaudeCode],
+            skills: false, detections: [new(context.Copilot, null, false), new(context.ClaudeCode, null, false)])));
         Assert.Empty(context.Hooks.Plan(context.Request([], detections: [new(context.ClaudeCode, null, false)])));
         Assert.Equal(0, context.HookInstaller.Calls);
     }
 
     [Theory]
-    [InlineData("copilot-cli")]
-    [InlineData("claude-code")]
+    [InlineData("copilot")]
+    [InlineData("claude")]
     public async Task Plan_PreservesBytesAndTimestampOnRepeat(string clientName)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);

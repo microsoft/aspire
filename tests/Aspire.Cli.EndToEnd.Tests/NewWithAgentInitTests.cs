@@ -50,7 +50,7 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
         await auto.RunCommandAsync("export CLAUDE_CONFIG_DIR=\"$PWD/.client-config/claude\"", counter);
         await auto.AspireNewAcceptingAgentInitAsync(
             "StarterApp",
-            extraArguments: "--clients claude-code --playwright y --dotnet-inspect n --aspire-skills n");
+            extraArguments: "--environments claude --playwright y --dotnet-inspect n --aspire-skills n");
 
         // Wait for agent init to complete (downloads @playwright/cli from npm).
         // Explicit asset/client flags avoid native client detection or Aspire source acquisition.

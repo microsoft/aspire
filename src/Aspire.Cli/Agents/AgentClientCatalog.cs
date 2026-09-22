@@ -5,11 +5,12 @@ using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Agents.VsCode;
+using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Associates client identities with their environment implementations without probing or configuring them.
+/// Lists configuration environments without probing or configuring them.
 /// </summary>
 internal sealed class AgentClientCatalog
 {
@@ -20,9 +21,8 @@ internal sealed class AgentClientCatalog
         OpenCodeAgentEnvironmentScanner openCode)
         : this(
         [
-            new(CopilotAgentEnvironmentScanner.CliClientId, "GitHub Copilot CLI", copilot),
-            new(CopilotAgentEnvironmentScanner.AppClientId, "GitHub Copilot App", copilot),
-            new(VsCodeAgentEnvironmentScanner.ClientId, "VS Code", vsCode),
+            new(CopilotAgentEnvironmentScanner.ClientId, AgentCommandStrings.Environment_Copilot, copilot),
+            new(VsCodeAgentEnvironmentScanner.ClientId, AgentCommandStrings.Environment_VsCode, vsCode),
             new(ClaudeCodeAgentEnvironmentScanner.ClientId, "Claude Code", claudeCode),
             new(OpenCodeAgentEnvironmentScanner.ClientId, "OpenCode", openCode)
         ])
@@ -35,12 +35,13 @@ internal sealed class AgentClientCatalog
     }
 
     public IReadOnlyList<AgentClient> Clients { get; }
+
 }
 
 /// <summary>
-/// An immutable client identity shared by discovery, selection, and configuration.
+/// An immutable configuration-environment identity shared by discovery, selection, and setup.
 /// </summary>
-internal sealed record AgentClient(string Id, string DisplayName, IAgentClientEnvironment Environment)
+internal sealed record AgentClient(string Id, string DisplayName, IAgentEnvironmentScanner Environment)
 {
     public override string ToString() => Id;
 }

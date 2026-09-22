@@ -18,7 +18,7 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task ScanAsync_DetectsAppAndCliIndependently(bool appInstalled, bool cliInstalled)
+    public async Task ScanAsync_AppOrCliDetectsOneSharedEnvironment(bool appInstalled, bool cliInstalled)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var runner = new TestAgentCliRunner
@@ -30,37 +30,22 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
             ["AI_AGENT"] = appInstalled ? "github_copilot_app_agent" : null
         });
         var agent = CreateAgent(workspace, runner, environment);
-        var clients = new TestAgentClients(agent);
         var directories = CreateScanDirectories(workspace.WorkspaceRoot);
 
-        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        var expected = new List<AgentClientDetection>();
-        if (appInstalled)
-        {
-            expected.Add(new(clients.CopilotApp, null, false));
-        }
-        if (cliInstalled)
-        {
-            expected.Add(new(clients.CopilotCli, "1.2.3", false));
-        }
-        Assert.Equal<AgentClientDetection>(expected, detections);
+        Assert.Equal<AgentEnvironmentDetection?>(
+            appInstalled || cliInstalled ? new(cliInstalled ? "1.2.3" : null, false) : null,
+            detections);
         Assert.Equal(["copilot"], runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
 
-        var list = Assert.IsAssignableFrom<IList<AgentClientDetection>>(detections);
-        Assert.True(list.IsReadOnly);
-        Assert.Throws<NotSupportedException>(() => list.Add(new(clients.ClaudeCode, null, false)));
-        if (detections.Count > 0)
-        {
-            Assert.Throws<NotSupportedException>(() => list[0] = new(clients.ClaudeCode, null, false));
-        }
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ScanAsync_WhenInVsCode_DetectsCliWithoutInvokingInstallationShim(bool appInstalled)
+    public async Task ScanAsync_WhenInVsCode_DoesNotAssumeCopilotInstallationOrInvokeShim(bool appInstalled)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var runner = new TestAgentCliRunner
@@ -77,16 +62,11 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
             ["AI_AGENT"] = appInstalled ? "github_copilot_app_agent" : null
         });
         var agent = CreateAgent(workspace, runner, environment);
-        var clients = new TestAgentClients(agent);
         var directories = CreateScanDirectories(workspace.WorkspaceRoot);
 
-        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>(
-            appInstalled
-                ? [new(clients.CopilotApp, null, false), new(clients.CopilotCli, null, false)]
-                : [new(clients.CopilotCli, null, false)],
-            detections);
+        Assert.Equal<AgentEnvironmentDetection?>(appInstalled ? new(null, false) : null, detections);
         Assert.Empty(runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
     }
@@ -100,12 +80,11 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
             CopilotVersion = SemVersion.Parse("1.2.3-preview.1+build.2", SemVersionStyles.Strict)
         };
         var agent = CreateAgent(workspace, runner, TestEnvironment.CreateWindows());
-        var clients = new TestAgentClients(agent);
         var directories = CreateScanDirectories(workspace.WorkspaceRoot);
 
-        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(clients.CopilotCli, "1.2.3-preview.1+build.2", false)], detections);
+        Assert.Equal(new AgentEnvironmentDetection("1.2.3-preview.1+build.2", false), detections);
     }
 
     [Theory]
@@ -129,12 +108,11 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
             ["COPILOT_HOME"] = configDirectory.FullName
         });
         var agent = CreateAgent(workspace, runner, environment);
-        var clients = new TestAgentClients(agent);
         var directories = CreateScanDirectories(workspace.WorkspaceRoot);
 
-        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(clients.CopilotCli, "1.0.0", false)], detections);
+        Assert.Equal(new AgentEnvironmentDetection("1.0.0", false), detections);
         Assert.Equal(content, await File.ReadAllTextAsync(configPath));
         Assert.Equal(lastWriteTime, File.GetLastWriteTimeUtc(configPath));
         Assert.Equal(entries, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order());

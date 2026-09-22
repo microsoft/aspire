@@ -79,7 +79,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Configure independent assets for selected agent clients at project and user level.
+        ///   Looks up a localized string similar to Configure independent assets for selected client environments at project and user level.
         /// </summary>
         internal static string InitCommand_Description {
             get {
@@ -97,7 +97,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Run 'aspire agent init --mcp' and select the affected clients to update configuration.
+        ///   Looks up a localized string similar to Run 'aspire agent init --mcp' and select the affected client environments to update configuration.
         /// </summary>
         internal static string DeprecatedConfigFix {
             get {
@@ -115,7 +115,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Configure the Aspire MCP server for the selected clients?.
+        ///   Looks up a localized string similar to Configure the Aspire MCP server for the selected client environments?.
         /// </summary>
         internal static string InitCommand_ConfigureMcpServerPrompt {
             get {
@@ -250,7 +250,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Configure the Aspire MCP server for selected clients (y/n or true/false; default: no).
+        ///   Looks up a localized string similar to Configure the Aspire MCP server for selected client environments (y/n or true/false; default: no).
         /// </summary>
         internal static string InitCommand_McpOptionDescription {
             get {
@@ -331,7 +331,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Install Playwright CLI and its skills for the selected clients (y/n or true/false; default: no).
+        ///   Looks up a localized string similar to Install Playwright CLI and its skills for the selected client environments (y/n or true/false; default: no).
         /// </summary>
         internal static string InitCommand_PlaywrightOptionDescription {
             get {
@@ -340,7 +340,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Install the dotnet-inspect bootstrap skill for the selected clients (y/n or true/false; default: no).
+        ///   Looks up a localized string similar to Install the dotnet-inspect bootstrap skill for the selected client environments (y/n or true/false; default: no).
         /// </summary>
         internal static string InitCommand_DotnetInspectOptionDescription {
             get {
@@ -349,7 +349,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Register native Aspire skills and supported canvases for the selected clients (y/n or true/false; default: yes).
+        ///   Looks up a localized string similar to Register native Aspire skills and supported canvases for the selected client environments (y/n or true/false; default: yes).
         /// </summary>
         internal static string InitCommand_AspireSkillsOptionDescription {
             get {
@@ -358,11 +358,11 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Comma-separated clients ({0}), '{1}', or '{2}'. Defaults to detected clients.
+        ///   Looks up a localized string similar to Comma-separated client environments ({0}), '{1}', or '{2}'. Defaults to detected environments.
         /// </summary>
-        internal static string InitCommand_ClientsOptionDescription {
+        internal static string InitCommand_EnvironmentsOptionDescription {
             get {
-                return ResourceManager.GetString("InitCommand_ClientsOptionDescription", resourceCulture);
+                return ResourceManager.GetString("InitCommand_EnvironmentsOptionDescription", resourceCulture);
             }
         }
 
@@ -376,11 +376,11 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Invalid client selection '{0}'. Use {1}, '{2}', or '{3}'..
+        ///   Looks up a localized string similar to Invalid client environment selection '{0}'. Use {1}, '{2}', or '{3}'..
         /// </summary>
-        internal static string InitCommand_InvalidClients {
+        internal static string InitCommand_InvalidEnvironments {
             get {
-                return ResourceManager.GetString("InitCommand_InvalidClients", resourceCulture);
+                return ResourceManager.GetString("InitCommand_InvalidEnvironments", resourceCulture);
             }
         }
 
@@ -610,6 +610,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to A pinned Aspire plugin source was preserved. No unpinned source was added to another configuration scope.
+        /// </summary>
+        internal static string Configuration_ExistingPluginPin {
+            get {
+                return ResourceManager.GetString("Configuration_ExistingPluginPin", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The configuration has an unsupported JSON shape at '{0}'; this entry was left unchanged..
         /// </summary>
         internal static string Configuration_UnexpectedShape {
@@ -750,6 +759,33 @@ namespace Aspire.Cli.Resources {
         internal static string InitCommand_SkillFileOutsideTarget {
             get {
                 return ResourceManager.GetString("InitCommand_SkillFileOutsideTarget", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Describes the selected configuration targets and shared plugin discovery.
+        /// </summary>
+        internal static string InitCommand_EnvironmentSelectionNotice {
+            get {
+                return ResourceManager.GetString("InitCommand_EnvironmentSelectionNotice", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to GitHub Copilot (CLI and App).
+        /// </summary>
+        internal static string Environment_Copilot {
+            get {
+                return ResourceManager.GetString("Environment_Copilot", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to VS Code (native settings).
+        /// </summary>
+        internal static string Environment_VsCode {
+            get {
+                return ResourceManager.GetString("Environment_VsCode", resourceCulture);
             }
         }
     }

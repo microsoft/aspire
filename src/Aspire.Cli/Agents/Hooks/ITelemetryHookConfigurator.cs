@@ -12,7 +12,10 @@ namespace Aspire.Cli.Agents.Hooks;
 internal interface ITelemetryHookConfigurator
 {
     /// <summary>
-    /// Contributes user-level hook edits independently of native client selection and configuration outcomes.
+    /// Contributes deferred user-level hook edits so the shared writer can combine hooks
+    /// and plugin settings in the same file. Targeting depends on detection, not selection.
     /// </summary>
+    /// <param name="request">The asset selections and detected environments for this setup operation.</param>
+    /// <returns>Deferred edits whose outcomes are reported by the writer as <see cref="AgentTargetResult"/> values.</returns>
     IEnumerable<AgentConfigurationTarget> Plan(AgentInitRequest request);
 }

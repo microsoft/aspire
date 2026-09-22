@@ -11,39 +11,56 @@ namespace Aspire.Cli.Agents.ClaudeCode;
 /// <summary>
 /// Discovers Claude Code and supplies its native plugin, MCP, and hook configuration.
 /// </summary>
-/// <param name="claudeCodeCliRunner">The Claude Code CLI runner for checking if Claude Code is installed.</param>
-/// <param name="executionContext">The CLI execution context for resolving workspace and user configuration paths.</param>
-/// <param name="environment">The environment abstraction for reading environment variables.</param>
-/// <param name="logger">The logger for diagnostic output.</param>
-internal sealed class ClaudeCodeAgentEnvironmentScanner(
-    IClaudeCodeCliRunner claudeCodeCliRunner,
-    CliExecutionContext executionContext,
-    IEnvironment environment,
-    ILogger<ClaudeCodeAgentEnvironmentScanner> logger) : IAgentClientEnvironment
+internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
 {
-    internal const string ClientId = "claude-code";
+    private readonly IClaudeCodeCliRunner _claudeCodeCliRunner;
+    private readonly CliExecutionContext _executionContext;
+    private readonly IEnvironment _environment;
+    private readonly ILogger<ClaudeCodeAgentEnvironmentScanner> _logger;
+
+    /// <summary>
+    /// Initializes a new instance of <see cref="ClaudeCodeAgentEnvironmentScanner"/>.
+    /// </summary>
+    /// <param name="claudeCodeCliRunner">The Claude Code CLI runner for checking if Claude Code is installed.</param>
+    /// <param name="executionContext">The CLI execution context for resolving workspace and user configuration paths.</param>
+    /// <param name="environment">The environment abstraction for reading environment variables.</param>
+    /// <param name="logger">The logger for diagnostic output.</param>
+    public ClaudeCodeAgentEnvironmentScanner(
+        IClaudeCodeCliRunner claudeCodeCliRunner,
+        CliExecutionContext executionContext,
+        IEnvironment environment,
+        ILogger<ClaudeCodeAgentEnvironmentScanner> logger)
+    {
+        ArgumentNullException.ThrowIfNull(claudeCodeCliRunner);
+        ArgumentNullException.ThrowIfNull(executionContext);
+        ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(logger);
+        _claudeCodeCliRunner = claudeCodeCliRunner;
+        _executionContext = executionContext;
+        _environment = environment;
+        _logger = logger;
+    }
+
+    internal const string ClientId = "claude";
     internal const string HookEventName = "PostToolUse";
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<AgentClientDetection>> ScanAsync(IReadOnlyList<AgentClient> clients, DirectoryInfo workingDirectory, DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
+    public async Task<AgentEnvironmentDetection?> ScanAsync(DirectoryInfo workingDirectory, DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        logger.LogDebug("Starting Claude Code environment scan in directory: {WorkingDirectory}", workingDirectory.FullName);
+        _logger.LogDebug("Starting Claude Code environment scan in directory: {WorkingDirectory}", workingDirectory.FullName);
 
         var hasProjectConfiguration = HasProjectConfiguration(workingDirectory, workspaceRoot);
-        var version = await claudeCodeCliRunner.GetVersionAsync(cancellationToken).ConfigureAwait(false);
+        var version = await _claudeCodeCliRunner.GetVersionAsync(cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
 
         if (hasProjectConfiguration || version is not null)
         {
-            logger.LogDebug("Detected Claude Code with version: {Version}", version);
-            return Array.AsReadOnly<AgentClientDetection>(
-            [
-                new(clients.Single(client => client.Id == ClientId), version?.ToString(), IsInsiders: false)
-            ]);
+            _logger.LogDebug("Detected Claude Code with version: {Version}", version);
+            return new(version?.ToString(), IsInsiders: false);
         }
 
-        return Array.AsReadOnly<AgentClientDetection>([]);
+        return null;
     }
 
     /// <summary>
@@ -53,7 +70,7 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner(
     /// <param name="repositoryRoot">The workspace root to use as the boundary for searches.</param>
     private bool HasProjectConfiguration(DirectoryInfo startDirectory, DirectoryInfo repositoryRoot)
         => AgentPath.ProjectDirectories(startDirectory, repositoryRoot).Any(directory =>
-            Path.GetRelativePath(executionContext.HomeDirectory.FullName, directory.FullName) != "." &&
+            Path.GetRelativePath(_executionContext.HomeDirectory.FullName, directory.FullName) != "." &&
             (Directory.Exists(Path.Combine(directory.FullName, ".claude")) ||
              File.Exists(Path.Combine(directory.FullName, ".mcp.json"))));
 
@@ -61,11 +78,11 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner(
     public IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request)
     {
         var client = request.Clients.Single(client => client.Environment == this);
-        var mcpFile = GetMcpFile(executionContext, environment);
+        var mcpFile = GetMcpFile(_executionContext, _environment);
         if (request.Assets.AspireSkills)
         {
             yield return PluginTarget(Path.Combine(request.WorkspaceRoot.FullName, ".claude", "settings.json"), AgentConfigurationScope.Project);
-            yield return PluginTarget(Path.Combine(GetConfigDirectory(executionContext, environment), "settings.json"), AgentConfigurationScope.User);
+            yield return PluginTarget(Path.Combine(GetConfigDirectory(_executionContext, _environment), "settings.json"), AgentConfigurationScope.User);
         }
 
         if (request.Assets.Mcp)
@@ -76,7 +93,7 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner(
 
         AgentConfigurationTarget PluginTarget(string path, AgentConfigurationScope scope)
             => new(path, scope, AgentAssetKind.AspireSkills, [client], "plugins:aspire", async (root, context, cancellationToken) =>
-                AspireSkillsPluginConfiguration.Apply(root, await AgentConfigurationJson.ReadSettingsAsync(context, PluginSettings(request, executionContext, environment), cancellationToken)));
+                AspireSkillsPluginConfiguration.Apply(root, await AgentConfigurationJson.ReadSettingsAsync(context, PluginSettings(request, _executionContext, _environment), cancellationToken)));
 
         AgentConfigurationTarget McpTarget(string path, AgentConfigurationScope scope)
             => new(path, scope, AgentAssetKind.Mcp, [client], "mcpServers:aspire", async (root, context, cancellationToken) =>
@@ -91,12 +108,12 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner(
                 // Presence of managed-mcp.json gives the administrator exclusive control;
                 // never add servers to it or pretend a user setting can override it.
                 // https://code.claude.com/docs/en/mcp#managed-mcp-configuration
-                if (await context.ReadOptionalAsync(Path.Combine(GetManagedDirectory(executionContext, environment), "managed-mcp.json"), cancellationToken) is not null)
+                if (await context.ReadOptionalAsync(Path.Combine(GetManagedDirectory(_executionContext, _environment), "managed-mcp.json"), cancellationToken) is not null)
                 {
                     return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_PolicyBlocked);
                 }
 
-                var settings = (await AgentConfigurationJson.ReadSettingsAsync(context, PluginSettings(request, executionContext, environment), cancellationToken)).ToList();
+                var settings = (await AgentConfigurationJson.ReadSettingsAsync(context, PluginSettings(request, _executionContext, _environment), cancellationToken)).ToList();
                 if (await context.ReadOptionalAsync(mcpFile, cancellationToken) is { } state)
                 {
                     settings.Add(state);
@@ -117,7 +134,7 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner(
                     settings.Add(projectMcp);
                 }
 
-                var managed = await AgentConfigurationJson.ReadSettingsAsync(context, ManagedSettings(executionContext, environment), cancellationToken);
+                var managed = await AgentConfigurationJson.ReadSettingsAsync(context, ManagedSettings(_executionContext, _environment), cancellationToken);
                 if (AspireMcpConfiguration.CheckPolicy(settings, managed, managedAllowlistOnly: false) is { } policy)
                 {
                     return policy;

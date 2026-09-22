@@ -26,17 +26,12 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         var entries = Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order().ToArray();
         var runner = new TestAgentCliRunner { ClaudeCodeVersion = new SemVersion(2, 1, 0) };
         var agent = CreateAgent(runner, workspace.CreateExecutionContext());
-        var clients = new TestAgentClients(agent);
         var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+        var detections = await agent.ScanAsync(directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>([new(clients.ClaudeCode, "2.1.0", false)], detections);
+        Assert.Equal(new AgentEnvironmentDetection("2.1.0", false), detections);
         Assert.Equal(entries, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order());
-        var list = Assert.IsAssignableFrom<IList<AgentClientDetection>>(detections);
-        Assert.True(list.IsReadOnly);
-        Assert.Throws<NotSupportedException>(() => list[0] = new(clients.CopilotCli, null, false));
-        Assert.Throws<NotSupportedException>(list.Clear);
     }
 
     private static ClaudeCodeAgentEnvironmentScanner CreateAgent(TestAgentCliRunner runner, CliExecutionContext executionContext)

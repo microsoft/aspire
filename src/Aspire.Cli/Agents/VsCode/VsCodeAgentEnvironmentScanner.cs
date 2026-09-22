@@ -2,39 +2,60 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Agents.Copilot;
+using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Agents.VsCode;
 
 /// <summary>
-/// Discovers VS Code and configures native workspace/user MCP and shared Copilot plugin settings.
+/// Discovers VS Code and configures native MCP, workspace plugin recommendations, and marketplace discovery.
 /// </summary>
-/// <param name="vsCodeCliRunner">The VS Code CLI runner for checking if VS Code is installed.</param>
-/// <param name="executionContext">The CLI execution context for resolving workspace and user configuration paths.</param>
-/// <param name="environment">The environment abstraction for reading environment variables.</param>
-/// <param name="logger">The logger for diagnostic output.</param>
-internal sealed class VsCodeAgentEnvironmentScanner(
-    IVsCodeCliRunner vsCodeCliRunner,
-    CliExecutionContext executionContext,
-    IEnvironment environment,
-    ILogger<VsCodeAgentEnvironmentScanner> logger) : IAgentClientEnvironment
+internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
 {
+    private readonly IVsCodeCliRunner _vsCodeCliRunner;
+    private readonly CliExecutionContext _executionContext;
+    private readonly IEnvironment _environment;
+    private readonly ILogger<VsCodeAgentEnvironmentScanner> _logger;
+
+    /// <summary>
+    /// Initializes a new instance of <see cref="VsCodeAgentEnvironmentScanner"/>.
+    /// </summary>
+    /// <param name="vsCodeCliRunner">The VS Code CLI runner for checking if VS Code is installed.</param>
+    /// <param name="executionContext">The CLI execution context for resolving workspace and user configuration paths.</param>
+    /// <param name="environment">The environment abstraction for reading environment variables.</param>
+    /// <param name="logger">The logger for diagnostic output.</param>
+    public VsCodeAgentEnvironmentScanner(
+        IVsCodeCliRunner vsCodeCliRunner,
+        CliExecutionContext executionContext,
+        IEnvironment environment,
+        ILogger<VsCodeAgentEnvironmentScanner> logger)
+    {
+        ArgumentNullException.ThrowIfNull(vsCodeCliRunner);
+        ArgumentNullException.ThrowIfNull(executionContext);
+        ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(logger);
+        _vsCodeCliRunner = vsCodeCliRunner;
+        _executionContext = executionContext;
+        _environment = environment;
+        _logger = logger;
+    }
+
     internal const string ClientId = "vscode";
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<AgentClientDetection>> ScanAsync(IReadOnlyList<AgentClient> clients, DirectoryInfo workingDirectory, DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
+    public async Task<AgentEnvironmentDetection?> ScanAsync(DirectoryInfo workingDirectory, DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var client = clients.Single(client => client.Id == ClientId);
-        logger.LogDebug("Starting VS Code environment scan in directory: {WorkingDirectory}", workingDirectory.FullName);
+        _logger.LogDebug("Starting VS Code environment scan in directory: {WorkingDirectory}", workingDirectory.FullName);
 
         var hasProjectConfiguration = HasProjectConfiguration(workingDirectory, workspaceRoot);
-        var isVsCodeTerminal = environment.GetEnvironmentVariable("TERM_PROGRAM") == "vscode";
+        var isVsCodeTerminal = _environment.GetEnvironmentVariable("TERM_PROGRAM") == "vscode";
         if (hasProjectConfiguration || isVsCodeTerminal)
         {
-            var version = isVsCodeTerminal ? environment.GetEnvironmentVariable("TERM_PROGRAM_VERSION")?.Trim() : null;
+            var version = isVsCodeTerminal ? _environment.GetEnvironmentVariable("TERM_PROGRAM_VERSION")?.Trim() : null;
             if (string.IsNullOrEmpty(version))
             {
                 version = null;
@@ -42,29 +63,26 @@ internal sealed class VsCodeAgentEnvironmentScanner(
 
             // VS Code exposes e.g. "1.110.0" or "1.111.0-insider" in TERM_PROGRAM_VERSION.
             // Retain that evidence for native user paths even when a project marker avoids CLI probes.
-            return Array.AsReadOnly<AgentClientDetection>(
-            [
-                new(client, version, IsInsiders: version?.Contains("-insider", StringComparison.OrdinalIgnoreCase) == true)
-            ]);
+            return new(version, IsInsiders: version?.Contains("-insider", StringComparison.OrdinalIgnoreCase) == true);
         }
 
-        var vsCodeVersion = await vsCodeCliRunner.GetVersionAsync(new VsCodeRunOptions { UseInsiders = false }, cancellationToken).ConfigureAwait(false);
+        var vsCodeVersion = await _vsCodeCliRunner.GetVersionAsync(new VsCodeRunOptions { UseInsiders = false }, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         if (vsCodeVersion is not null)
         {
-            logger.LogDebug("Found VS Code stable version: {Version}", vsCodeVersion);
-            return Array.AsReadOnly<AgentClientDetection>([new(client, vsCodeVersion.ToString(), IsInsiders: false)]);
+            _logger.LogDebug("Found VS Code stable version: {Version}", vsCodeVersion);
+            return new(vsCodeVersion.ToString(), IsInsiders: false);
         }
 
-        var vsCodeInsidersVersion = await vsCodeCliRunner.GetVersionAsync(new VsCodeRunOptions { UseInsiders = true }, cancellationToken).ConfigureAwait(false);
+        var vsCodeInsidersVersion = await _vsCodeCliRunner.GetVersionAsync(new VsCodeRunOptions { UseInsiders = true }, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         if (vsCodeInsidersVersion is not null)
         {
-            logger.LogDebug("Found VS Code Insiders version: {Version}", vsCodeInsidersVersion);
-            return Array.AsReadOnly<AgentClientDetection>([new(client, vsCodeInsidersVersion.ToString(), IsInsiders: true)]);
+            _logger.LogDebug("Found VS Code Insiders version: {Version}", vsCodeInsidersVersion);
+            return new(vsCodeInsidersVersion.ToString(), IsInsiders: true);
         }
 
-        return Array.AsReadOnly<AgentClientDetection>([]);
+        return null;
     }
 
     /// <summary>
@@ -74,36 +92,45 @@ internal sealed class VsCodeAgentEnvironmentScanner(
     /// <param name="repositoryRoot">The workspace root to use as the boundary for searches.</param>
     private bool HasProjectConfiguration(DirectoryInfo startDirectory, DirectoryInfo repositoryRoot)
         => AgentPath.ProjectDirectories(startDirectory, repositoryRoot).Any(directory =>
-            Path.GetRelativePath(executionContext.HomeDirectory.FullName, directory.FullName) != "." &&
+            Path.GetRelativePath(_executionContext.HomeDirectory.FullName, directory.FullName) != "." &&
             Directory.Exists(Path.Combine(directory.FullName, ".vscode")));
 
     /// <inheritdoc />
     public IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request)
     {
         var client = request.Clients.Single(client => client.Environment == this);
-        // The supported Copilot-backed runtime shares plugin registration, not MCP files.
-        // A selected Copilot frontend already contributes the shared plugin targets.
-        if (!request.Clients.Any(client => client.Environment is CopilotAgentEnvironmentScanner))
+        var editions = request.Detections.Where(detection => detection.Client.Environment is VsCodeAgentEnvironmentScanner)
+            .Select(detection => detection.IsInsiders).Distinct().DefaultIfEmpty(false).ToArray();
+        if (request.Assets.AspireSkills)
         {
-            foreach (var target in CopilotAgentEnvironmentScanner.GetPluginTargets(request, executionContext, environment))
-            {
-                yield return target;
-            }
+            // VS Code reads recommendations in Copilot or Claude workspace settings, but
+            // discovers user marketplaces through its own settings. It does not acquire a
+            // plugin just because a source is registered, or share global activation state.
+            // https://code.visualstudio.com/docs/agent-customization/agent-plugins
+            var recommendation = request.Clients.Any(entry => entry.Environment is ClaudeCodeAgentEnvironmentScanner) &&
+                !request.Clients.Any(entry => entry.Environment is CopilotAgentEnvironmentScanner)
+                    ? Path.Combine(request.WorkspaceRoot.FullName, ".claude", "settings.json")
+                    : Path.Combine(request.WorkspaceRoot.FullName, ".github", "copilot", "settings.json");
+            yield return PluginTarget(recommendation, AgentConfigurationScope.Project);
         }
 
-        if (!request.Assets.Mcp)
+        if (!request.Assets.AspireSkills && !request.Assets.Mcp)
         {
             yield break;
         }
 
-        yield return Target(Path.Combine(request.WorkspaceRoot.FullName, ".vscode", "mcp.json"), AgentConfigurationScope.Project);
+        if (request.Assets.Mcp)
+        {
+            yield return Target(Path.Combine(request.WorkspaceRoot.FullName, ".vscode", "mcp.json"), AgentConfigurationScope.Project);
+        }
 
-        var editions = request.Detections.Where(detection => detection.Client.Environment is VsCodeAgentEnvironmentScanner)
-            .Select(detection => detection.IsInsiders).Distinct().DefaultIfEmpty(false);
         foreach (var insiders in editions)
         {
-            var userDirectory = GetUserDirectory(insiders, executionContext, environment);
-            yield return Target(Path.Combine(userDirectory, "mcp.json"), AgentConfigurationScope.User);
+            var userDirectory = GetUserDirectory(insiders, _executionContext, _environment);
+            foreach (var target in UserTargets(userDirectory))
+            {
+                yield return target;
+            }
 
             // Existing profiles have independent mcp.json resources. Never invent a profile
             // or inspect client-owned storage to guess a --profile/--user-data-dir session.
@@ -126,7 +153,8 @@ internal sealed class VsCodeAgentEnvironmentScanner(
 
             if (error is not null)
             {
-                yield return new AgentConfigurationTarget(profileDirectory, AgentConfigurationScope.User, AgentAssetKind.Mcp,
+                yield return new AgentConfigurationTarget(profileDirectory, AgentConfigurationScope.User,
+                    request.Assets.AspireSkills ? AgentAssetKind.AspireSkills : AgentAssetKind.Mcp,
                     [client], "profiles:unavailable",
                     (_, _, _) => Task.FromResult(new AgentConfigurationEdit(AgentConfigurationStatus.Failed, error)));
             }
@@ -137,10 +165,91 @@ internal sealed class VsCodeAgentEnvironmentScanner(
                 if (Path.GetFileName(profile) != "builtin" &&
                     (File.Exists(Path.Combine(profile, "settings.json")) || File.Exists(Path.Combine(profile, "mcp.json"))))
                 {
-                    yield return Target(Path.Combine(profile, "mcp.json"), AgentConfigurationScope.User);
+                    foreach (var target in UserTargets(profile))
+                    {
+                        yield return target;
+                    }
                 }
             }
         }
+
+        IEnumerable<AgentConfigurationTarget> UserTargets(string directory)
+        {
+            if (request.Assets.AspireSkills)
+            {
+                yield return PluginTarget(Path.Combine(directory, "settings.json"), AgentConfigurationScope.User);
+            }
+            if (request.Assets.Mcp)
+            {
+                yield return Target(Path.Combine(directory, "mcp.json"), AgentConfigurationScope.User);
+            }
+        }
+
+        AgentConfigurationTarget PluginTarget(string path, AgentConfigurationScope scope)
+            => new(path, scope, AgentAssetKind.AspireSkills, [client],
+                scope is AgentConfigurationScope.Project ? "plugins:aspire" : "marketplaces:aspire",
+                async (root, context, cancellationToken) =>
+                {
+                    var workspace = request.WorkspaceRoot.FullName;
+                    var recommendationPaths = new[]
+                    {
+                        Path.Combine(workspace, ".claude", "settings.json"),
+                        Path.Combine(workspace, ".claude", "settings.local.json"),
+                        Path.Combine(workspace, ".github", "copilot", "settings.json"),
+                        Path.Combine(workspace, ".github", "copilot", "settings.local.json")
+                    }.Concat(CopilotPaths.ManagedSettings(_executionContext, _environment));
+                    var recommendations = await AgentConfigurationJson.ReadSettingsAsync(context, recommendationPaths, cancellationToken);
+                    var settingsPaths = editions.Select(edition => Path.Combine(GetUserDirectory(edition, _executionContext, _environment), "settings.json"))
+                        .Append(Path.Combine(workspace, ".vscode", "settings.json"));
+                    if (scope is AgentConfigurationScope.User)
+                    {
+                        settingsPaths = settingsPaths.Append(path);
+                    }
+                    var settings = await AgentConfigurationJson.ReadSettingsAsync(context, settingsPaths, cancellationToken);
+                    if (CheckPluginSettings(settings.Concat(recommendations)) is { } blocked)
+                    {
+                        return blocked;
+                    }
+
+                    var nativePin = settings.SelectMany(settingsFile =>
+                            AgentConfigurationJson.OptionalStrings(settingsFile, "chat.plugins.marketplaces") ?? [])
+                        .Select(AgentConfigurationJson.String)
+                        .Any(source => source is not null && IsAspireMarketplace(source) && source.Contains('#'));
+                    if (scope is AgentConfigurationScope.Project)
+                    {
+                        if (nativePin)
+                        {
+                            return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_ExistingPluginPin);
+                        }
+                        return AspireSkillsPluginConfiguration.Apply(root, recommendations);
+                    }
+
+                    var recommendation = new JsonObject();
+                    var registration = AspireSkillsPluginConfiguration.Apply(recommendation, recommendations);
+                    if (registration.Status is not AgentConfigurationStatus.Configured)
+                    {
+                        return registration;
+                    }
+
+                    var marketplaces = AgentConfigurationJson.OptionalStrings(root, "chat.plugins.marketplaces");
+                    if (marketplaces?.Any(value => IsAspireMarketplace(AgentConfigurationJson.String(value)!)) is true)
+                    {
+                        return registration;
+                    }
+                    var source = recommendation["extraKnownMarketplaces"]![AspireSkillsPluginConfiguration.MarketplaceName]!["source"]!.AsObject();
+                    if (nativePin || source.ContainsKey("ref") || source.ContainsKey("sha"))
+                    {
+                        return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_ExistingPluginPin);
+                    }
+
+                    if (marketplaces is null)
+                    {
+                        marketplaces = new JsonArray();
+                        root["chat.plugins.marketplaces"] = marketplaces;
+                    }
+                    marketplaces.Add((JsonNode)AspireSkillsPluginConfiguration.Repository);
+                    return registration;
+                });
 
         AgentConfigurationTarget Target(string path, AgentConfigurationScope scope)
             => new(path, scope, AgentAssetKind.Mcp, [client], "servers:aspire",
@@ -151,6 +260,39 @@ internal sealed class VsCodeAgentEnvironmentScanner(
                         ? edit with { Message = AgentCommandStrings.Configuration_ProfileLimitations }
                         : edit);
                 });
+    }
+
+    private static AgentConfigurationEdit? CheckPluginSettings(IEnumerable<JsonObject> settings)
+    {
+        foreach (var settingsFile in settings)
+        {
+            if (AgentConfigurationJson.Boolean(settingsFile, "chat.plugins.enabled") is false)
+            {
+                return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_Disabled);
+            }
+            // These settings represent policy, not plugin installation/activation state.
+            // Never enable plugins or relax strict marketplaces on the user's behalf.
+            // https://code.visualstudio.com/docs/enterprise/ai-settings#manage-agent-plugins-and-marketplaces
+            if (AgentConfigurationJson.Boolean(settingsFile, "chat.plugins.strictMarketplaces") is true ||
+                (AgentConfigurationJson.OptionalObject(settingsFile, "chat.plugins.enabledPlugins") is { } allowed &&
+                 AgentConfigurationJson.Boolean(allowed, AspireSkillsPluginConfiguration.PluginName) is not true))
+            {
+                return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_PolicyBlocked);
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsAspireMarketplace(string value)
+    {
+        // Native marketplaces accept owner/repo, HTTPS and SCP-style git remotes.
+        // Preserve an existing ref fragment, e.g. "microsoft/aspire-skills#v0.0.2".
+        var source = value.Split('#', 2)[0].TrimEnd('/');
+        return source.Equals(AspireSkillsPluginConfiguration.Repository, StringComparison.OrdinalIgnoreCase) ||
+            source.Equals($"https://github.com/{AspireSkillsPluginConfiguration.Repository}", StringComparison.OrdinalIgnoreCase) ||
+            source.Equals($"https://github.com/{AspireSkillsPluginConfiguration.Repository}.git", StringComparison.OrdinalIgnoreCase) ||
+            source.Equals($"git@github.com:{AspireSkillsPluginConfiguration.Repository}.git", StringComparison.OrdinalIgnoreCase);
     }
 
     public static string GetUserDirectory(bool insiders, CliExecutionContext executionContext, IEnvironment environment)

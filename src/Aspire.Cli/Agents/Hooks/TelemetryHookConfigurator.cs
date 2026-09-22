@@ -43,8 +43,8 @@ internal sealed class TelemetryHookConfigurator(
             yield return Target(Path.Combine(ClaudeCodeAgentEnvironmentScanner.GetConfigDirectory(executionContext, environment), "settings.json"), [claude], copilot: false);
         }
 
-        // No VS Code/OpenCode hook schemas are invented. VS Code's supported Copilot-backed
-        // runtime shares plugin registration, which is distinct from a verified hook target.
+        // These usage scripts support Copilot and Claude, not standalone VS Code/OpenCode
+        // hook configuration. Plugin-format compatibility does not imply identical hook contracts.
         AgentConfigurationTarget Target(string path, IReadOnlyList<AgentClient> clients, bool copilot)
             => new(path, AgentConfigurationScope.User, AgentAssetKind.TelemetryHooks, clients, "hooks:aspire",
                 async (root, context, cancellationToken) =>

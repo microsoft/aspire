@@ -59,7 +59,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
 
         // Step 4: Run aspire agent init for Playwright only. This test is about
         // @playwright/cli acquisition, not native Aspire source registration.
-        await auto.TypeAsync("aspire agent init --workspace-root . --clients claude-code --playwright y --dotnet-inspect n --aspire-skills n --mcp n --non-interactive");
+        await auto.TypeAsync("aspire agent init --workspace-root . --environments claude --playwright y --dotnet-inspect n --aspire-skills n --mcp n --non-interactive");
         await auto.EnterAsync();
 
         // Wait for installation to complete (this downloads from npm, can take a while)
@@ -115,7 +115,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
 
         // Stay in the parent directory. The explicit workspace root and client selection
         // must control project destinations independently of generation's working directory.
-        await auto.TypeAsync("aspire agent init --workspace-root TestProject --clients claude-code --playwright y --dotnet-inspect n --aspire-skills n --mcp n --non-interactive");
+        await auto.TypeAsync("aspire agent init --workspace-root TestProject --environments claude --playwright y --dotnet-inspect n --aspire-skills n --mcp n --non-interactive");
         await auto.EnterAsync();
 
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromMinutes(3));

@@ -2283,7 +2283,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-empty --name TestApp --output ./output --clients none");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --environments none");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -2308,7 +2308,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-empty --name TestApp --output ./output --playwright y --dotnet-inspect n --aspire-skills false --clients claude-code,copilot-app");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --playwright y --dotnet-inspect n --aspire-skills false --environments claude,copilot");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -2318,7 +2318,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var request = Assert.Single(service.Requests);
         Assert.Equal(outputDir, request.WorkspaceRoot.FullName);
         Assert.Equal(new AgentAssetSelection(false, true, false, false), request.Assets);
-        Assert.Equal(["claude-code", "copilot-app"], request.Clients.Select(client => client.Id));
+        Assert.Equal(["claude", "copilot"], request.Clients.Select(client => client.Id));
     }
 
     [Fact]
@@ -2546,7 +2546,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(testInteractionService);
         Assert.Contains(expectedMessage, testInteractionService.DisplayedErrors);
         Assert.Empty(Assert.IsType<TestAgentInitService>(provider.GetRequiredService<IAgentInitService>()).Requests);
-        Assert.Empty(Assert.IsType<TestAgentClientEnvironment>(provider.GetRequiredService<IAgentClientEnvironment>()).Calls);
+        Assert.Empty(Assert.IsType<TestAgentClientEnvironment>(provider.GetRequiredService<IAgentEnvironmentScanner>()).Calls);
     }
 
     [Fact]
@@ -3274,7 +3274,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         Assert.Empty(Assert.IsType<TestAgentInitService>(provider.GetRequiredService<IAgentInitService>()).Requests);
-        Assert.Empty(Assert.IsType<TestAgentClientEnvironment>(provider.GetRequiredService<IAgentClientEnvironment>()).Calls);
+        Assert.Empty(Assert.IsType<TestAgentClientEnvironment>(provider.GetRequiredService<IAgentEnvironmentScanner>()).Calls);
     }
 
     [Theory]
@@ -3303,7 +3303,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var service = Assert.IsType<TestAgentInitService>(provider.GetRequiredService<IAgentInitService>());
         var request = Assert.Single(service.Requests);
         Assert.Equal(new AgentAssetSelection(false, false, false, true), request.Assets);
-        Assert.Equal(["copilot-cli"], request.Clients.Select(client => client.Id));
+        Assert.Equal(["copilot"], request.Clients.Select(client => client.Id));
         Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), request.WorkspaceRoot.FullName);
     }
 
@@ -3321,7 +3321,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output")));
         Assert.Empty(Assert.IsType<TestAgentInitService>(provider.GetRequiredService<IAgentInitService>()).Requests);
-        Assert.Empty(Assert.IsType<TestAgentClientEnvironment>(provider.GetRequiredService<IAgentClientEnvironment>()).Calls);
+        Assert.Empty(Assert.IsType<TestAgentClientEnvironment>(provider.GetRequiredService<IAgentEnvironmentScanner>()).Calls);
     }
 
     [Fact]
@@ -3345,7 +3345,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--mcp")]
     [InlineData("--skills all")]
     [InlineData("--skill-locations standard")]
-    [InlineData("--clients unknown-client")]
+    [InlineData("--environments unknown-client")]
     public async Task NewCommand_RejectsUnsupportedAgentOptionsBeforeCreatingProject(string argument)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -3368,7 +3368,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             Result = new(
             [
-                new(AgentAssetKind.AspireSkills, [TestAgentClients.Default.CopilotCli],
+                new(AgentAssetKind.AspireSkills, [TestAgentClients.Default.Copilot],
                     "settings.json", AgentConfigurationScope.Project, AgentConfigurationStatus.Blocked, "Existing source is pinned.")
             ])
         };

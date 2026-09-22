@@ -32,7 +32,7 @@ internal sealed class AgentInitCommand : BaseCommand
     internal static readonly Option<AgentConfirmation?> s_dotnetInspectOption = CreateAssetOption("--dotnet-inspect", AgentCommandStrings.InitCommand_DotnetInspectOptionDescription);
     internal static readonly Option<AgentConfirmation?> s_aspireSkillsOption = CreateAssetOption("--aspire-skills", AgentCommandStrings.InitCommand_AspireSkillsOptionDescription);
 
-    private readonly Option<string?> _clientsOption;
+    private readonly Option<string?> _environmentsOption;
 
     public AgentInitCommand(
         AgentClientCatalog clientCatalog,
@@ -44,7 +44,7 @@ internal sealed class AgentInitCommand : BaseCommand
         _clientCatalog = clientCatalog;
         _agentInitService = agentInitService;
         _gitRepository = gitRepository;
-        _clientsOption = CreateClientsOption();
+        _environmentsOption = CreateEnvironmentsOption();
 
         AddOptions(this, includeMcp: true, includeWorkspaceRoot: true);
     }
@@ -64,7 +64,7 @@ internal sealed class AgentInitCommand : BaseCommand
         command.Options.Add(s_playwrightOption);
         command.Options.Add(s_dotnetInspectOption);
         command.Options.Add(s_aspireSkillsOption);
-        command.Options.Add(_clientsOption);
+        command.Options.Add(_environmentsOption);
     }
 
     internal AgentInitPromptBindings CreateBindings(ParseResult parseResult, bool includeMcp) => new(
@@ -72,7 +72,7 @@ internal sealed class AgentInitCommand : BaseCommand
         CreateAssetBinding(parseResult, s_playwrightOption, defaultValue: false),
         CreateAssetBinding(parseResult, s_dotnetInspectOption, defaultValue: false),
         CreateAssetBinding(parseResult, s_aspireSkillsOption, defaultValue: true),
-        PromptBinding.Create(parseResult, _clientsOption));
+        PromptBinding.Create(parseResult, _environmentsOption));
 
     internal Task<CommandResult> ExecuteCommandAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
@@ -170,14 +170,14 @@ internal sealed class AgentInitCommand : BaseCommand
         return option;
     }
 
-    private Option<string?> CreateClientsOption()
+    private Option<string?> CreateEnvironmentsOption()
     {
         var clientIds = _clientCatalog.Clients.Select(static client => client.Id).ToArray();
         var supportedClients = string.Join(",", clientIds);
 
-        return new Option<string?>("--clients")
+        return new Option<string?>("--environments")
         {
-            Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_ClientsOptionDescription,
+            Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_EnvironmentsOptionDescription,
                 supportedClients, ConsoleInteractionService.AllChoice, ConsoleInteractionService.NoneChoice),
             Recursive = true,
             CustomParser = result =>
@@ -198,7 +198,7 @@ internal sealed class AgentInitCommand : BaseCommand
                 if (requestedClients.Length == 0 ||
                     requestedClients.Any(client => !clientIds.Contains(client, StringComparer.OrdinalIgnoreCase)))
                 {
-                    result.AddError(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InvalidClients,
+                    result.AddError(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InvalidEnvironments,
                         value, supportedClients, ConsoleInteractionService.AllChoice, ConsoleInteractionService.NoneChoice));
                 }
 
@@ -272,7 +272,10 @@ internal sealed class AgentInitCommand : BaseCommand
                 foreach (var clients in _clientCatalog.Clients.GroupBy(client => client.Environment))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    found.AddRange(await clients.Key.ScanAsync(clients.ToArray(), ExecutionContext.WorkingDirectory, workspaceRoot, cancellationToken));
+                    if (await clients.Key.ScanAsync(ExecutionContext.WorkingDirectory, workspaceRoot, cancellationToken) is { } evidence)
+                    {
+                        found.AddRange(clients.Select(client => new AgentClientDetection(client, evidence.Version, evidence.IsInsiders)));
+                    }
                 }
 
                 cancellationToken.ThrowIfCancellationRequested();
@@ -283,10 +286,11 @@ internal sealed class AgentInitCommand : BaseCommand
         var detectedClients = detections.Select(static detection => detection.Client).ToHashSet();
         var defaults = _clientCatalog.Clients.Where(detectedClients.Contains).ToArray();
         // No default is intentionally different from "none": unattended setup must ask
-        // for --clients when detection cannot supply a choice.
+        // for --environments when detection cannot supply a choice.
         var clientsBinding = defaults.Length == 0
             ? bindings.Clients
             : bindings.Clients.WithDefault(string.Join(",", defaults.Select(static client => client.Id)));
+        InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_EnvironmentSelectionNotice);
         var clients = await InteractionService.PromptForSelectionsAsync(
             McpCommandStrings.InitCommand_AgentConfigurationSelectPrompt,
             _clientCatalog.Clients,

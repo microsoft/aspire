@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Agents;
+using Aspire.Cli.Resources;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Agents;
@@ -18,12 +19,12 @@ public class AgentClientCatalogTests(ITestOutputHelper output)
         context.SetVariable("VSCODE_APPDATA", "\0invalid");
 
         Assert.Equal(
-            ["copilot-cli", "copilot-app", "vscode", "claude-code", "opencode"],
+            ["copilot", "vscode", "claude", "opencode"],
             context.Catalog.Clients.Select(client => client.Id));
         Assert.Equal(
-            ["GitHub Copilot CLI", "GitHub Copilot App", "VS Code", "Claude Code", "OpenCode"],
+            [AgentCommandStrings.Environment_Copilot, AgentCommandStrings.Environment_VsCode, "Claude Code", "OpenCode"],
             context.Catalog.Clients.Select(client => client.DisplayName));
-        Assert.Same(context.CopilotCli.Environment, context.CopilotApp.Environment);
+        Assert.Equal(4, context.Catalog.Clients.Count);
         Assert.Equal(4, context.Catalog.Clients.Select(client => client.Environment).Distinct().Count());
         Assert.Throws<NotSupportedException>(() =>
             ((IList<AgentClient>)context.Catalog.Clients).Clear());
@@ -33,10 +34,9 @@ public class AgentClientCatalogTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData("copilot-cli")]
-    [InlineData("copilot-app")]
+    [InlineData("copilot")]
     [InlineData("vscode")]
-    [InlineData("claude-code")]
+    [InlineData("claude")]
     [InlineData("opencode")]
     public async Task UndetectedClient_CanConfigureWithItsRegisteredEnvironment(string clientId)
     {
@@ -45,7 +45,10 @@ public class AgentClientCatalogTests(ITestOutputHelper output)
         var detections = new List<AgentClientDetection>();
         foreach (var clients in context.Catalog.Clients.GroupBy(client => client.Environment))
         {
-            detections.AddRange(await clients.Key.ScanAsync(clients.ToArray(), context.Project, context.Project, CancellationToken.None).DefaultTimeout());
+            if (await clients.Key.ScanAsync(context.Project, context.Project, CancellationToken.None).DefaultTimeout() is { } evidence)
+            {
+                detections.AddRange(clients.Select(entry => new AgentClientDetection(entry, evidence.Version, evidence.IsInsiders)));
+            }
         }
         var probes = context.CliRunner.Commands.ToArray();
 

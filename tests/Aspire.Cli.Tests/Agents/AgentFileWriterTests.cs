@@ -337,7 +337,7 @@ public class AgentFileWriterTests(ITestOutputHelper outputHelper)
             path,
             AgentConfigurationScope.Project,
             AgentAssetKind.Mcp,
-            [TestAgentClients.Default.CopilotCli],
+            [TestAgentClients.Default.Copilot],
             "test",
             (root, _, _) =>
             {

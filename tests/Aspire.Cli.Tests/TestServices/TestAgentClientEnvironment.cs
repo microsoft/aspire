@@ -3,28 +3,47 @@
 
 using System.Collections.Concurrent;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Tests.TestServices;
 
-internal sealed class TestAgentClientEnvironment(params AgentClientDetection[] detections) : IAgentClientEnvironment
+internal sealed class TestAgentClientEnvironment : IAgentEnvironmentScanner
 {
-    private readonly IReadOnlyList<AgentClientDetection> _detections = Array.AsReadOnly(detections.ToArray());
-    private readonly ConcurrentQueue<(IReadOnlyList<AgentClient> Clients, DirectoryInfo WorkingDirectory, DirectoryInfo WorkspaceRoot, CancellationToken CancellationToken)> _calls = new();
+    private readonly IReadOnlyList<AgentClientDetection> _detections;
+    private readonly ConcurrentQueue<(DirectoryInfo WorkingDirectory, DirectoryInfo WorkspaceRoot, CancellationToken CancellationToken)> _calls;
 
-    public IReadOnlyList<(IReadOnlyList<AgentClient> Clients, DirectoryInfo WorkingDirectory, DirectoryInfo WorkspaceRoot, CancellationToken CancellationToken)> Calls => _calls.ToArray();
+    public TestAgentClientEnvironment(params AgentClientDetection[] detections)
+    {
+        _detections = Array.AsReadOnly(detections.ToArray());
+        _calls = new();
+    }
 
-    public Func<IReadOnlyList<AgentClient>, DirectoryInfo, DirectoryInfo, CancellationToken, Task<IReadOnlyList<AgentClientDetection>>>? ScanAsyncCallback { get; init; }
+    private TestAgentClientEnvironment(TestAgentClientEnvironment owner, string id)
+    {
+        _detections = owner._detections.Where(detection => detection.Client.Id == id).ToArray();
+        _calls = owner._calls;
+        ScanAsyncCallback = owner.ScanAsyncCallback;
+        GetTargetsCallback = owner.GetTargetsCallback;
+    }
+
+    public IReadOnlyList<(DirectoryInfo WorkingDirectory, DirectoryInfo WorkspaceRoot, CancellationToken CancellationToken)> Calls => _calls.ToArray();
+
+    public Func<DirectoryInfo, DirectoryInfo, CancellationToken, Task<AgentEnvironmentDetection?>>? ScanAsyncCallback { get; init; }
 
     public Func<AgentInitRequest, IEnumerable<AgentConfigurationTarget>>? GetTargetsCallback { get; init; }
 
-    public Task<IReadOnlyList<AgentClientDetection>> ScanAsync(IReadOnlyList<AgentClient> clients, DirectoryInfo workingDirectory, DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
+    public AgentClientCatalog CreateCatalog()
+        => new(new TestAgentClients(this).All.Select(client => client with { Environment = new TestAgentClientEnvironment(this, client.Id) }));
+
+    public Task<AgentEnvironmentDetection?> ScanAsync(DirectoryInfo workingDirectory, DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _calls.Enqueue((clients, workingDirectory, workspaceRoot, cancellationToken));
+        _calls.Enqueue((workingDirectory, workspaceRoot, cancellationToken));
 
-        return ScanAsyncCallback?.Invoke(clients, workingDirectory, workspaceRoot, cancellationToken) ??
-            Task.FromResult<IReadOnlyList<AgentClientDetection>>(Array.AsReadOnly(_detections
-                .Select(detection => detection with { Client = clients.Single(client => client.Id == detection.Client.Id) }).ToArray()));
+        return ScanAsyncCallback?.Invoke(workingDirectory, workspaceRoot, cancellationToken) ??
+            Task.FromResult<AgentEnvironmentDetection?>(_detections.Count > 0
+                ? new(_detections[0].Version, _detections[0].IsInsiders)
+                : null);
     }
 
     public IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request)
@@ -38,18 +57,16 @@ internal sealed class TestAgentClients
 {
     public static TestAgentClients Default { get; } = new(new TestAgentClientEnvironment());
 
-    public TestAgentClients(IAgentClientEnvironment environment)
+    public TestAgentClients(IAgentEnvironmentScanner environment)
     {
-        CopilotCli = new("copilot-cli", "GitHub Copilot CLI", environment);
-        CopilotApp = new("copilot-app", "GitHub Copilot App", environment);
-        VsCode = new("vscode", "VS Code", environment);
-        ClaudeCode = new("claude-code", "Claude Code", environment);
+        Copilot = new("copilot", AgentCommandStrings.Environment_Copilot, environment);
+        VsCode = new("vscode", AgentCommandStrings.Environment_VsCode, environment);
+        ClaudeCode = new("claude", "Claude Code", environment);
         OpenCode = new("opencode", "OpenCode", environment);
-        All = Array.AsReadOnly<AgentClient>([CopilotCli, CopilotApp, VsCode, ClaudeCode, OpenCode]);
+        All = Array.AsReadOnly<AgentClient>([Copilot, VsCode, ClaudeCode, OpenCode]);
     }
 
-    public AgentClient CopilotCli { get; }
-    public AgentClient CopilotApp { get; }
+    public AgentClient Copilot { get; }
     public AgentClient VsCode { get; }
     public AgentClient ClaudeCode { get; }
     public AgentClient OpenCode { get; }

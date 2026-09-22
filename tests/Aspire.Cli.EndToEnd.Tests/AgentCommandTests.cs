@@ -75,7 +75,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         File.WriteAllText(configPath, existing);
 
         await auto.RunCommandAsync(
-            "aspire agent init --non-interactive --workspace-root . --mcp y --playwright n --dotnet-inspect n --aspire-skills n --clients claude-code",
+            "aspire agent init --non-interactive --workspace-root . --mcp y --playwright n --dotnet-inspect n --aspire-skills n --environments claude",
             counter);
 
         var expected = JsonNode.Parse(existing)!;
@@ -124,6 +124,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
         await auto.RunCommandAsync("export COPILOT_HOME=\"$PWD/.client-config/copilot\"", counter);
+        await auto.RunCommandAsync("export VSCODE_APPDATA=\"$PWD/.client-config/vscode\"", counter);
         Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".vscode"));
 
         await auto.TypeAsync("aspire agent init --workspace-root .");
@@ -136,8 +137,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         var projectSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "copilot", "settings.json");
-        var userSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".client-config", "copilot", "settings.json");
-        AssertNativeSettings(projectSettings, userSettings);
+        var userSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".client-config", "vscode", "Code", "User", "settings.json");
+        AssertVsCodeSettings(projectSettings, userSettings);
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".vscode", "mcp.json")));
         Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills")));
     }
@@ -164,7 +165,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         File.WriteAllText(mcpPath, existingMcp);
 
         // Explicit clients work even when neither Copilot frontend is installed in the container.
-        const string command = "aspire agent init --non-interactive --workspace-root . --clients copilot-cli,COPILOT-APP";
+        const string command = "aspire agent init --non-interactive --workspace-root . --environments copilot,copilot";
         await auto.RunCommandAsync(command, counter);
         var projectSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "copilot", "settings.json");
         var userSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".client-config", "copilot", "settings.json");
@@ -203,16 +204,16 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         File.WriteAllText(configPath, existing);
 
         await auto.RunCommandAsync(
-            "aspire agent init --non-interactive --workspace-root . --mcp n --playwright n --dotnet-inspect n --aspire-skills n --clients claude-code",
+            "aspire agent init --non-interactive --workspace-root . --mcp n --playwright n --dotnet-inspect n --aspire-skills n --environments claude",
             counter);
         Assert.Equal(existing, File.ReadAllText(configPath));
 
         await auto.RunCommandAsync(
-            "aspire agent init --non-interactive --workspace-root . --mcp --playwright --dotnet-inspect --clients none",
+            "aspire agent init --non-interactive --workspace-root . --mcp --playwright --dotnet-inspect --environments none",
             counter);
         Assert.Equal(existing, File.ReadAllText(configPath));
 
-        await auto.TypeAsync("aspire agent init --non-interactive --workspace-root . --mcp --clients unknown-client");
+        await auto.TypeAsync("aspire agent init --non-interactive --workspace-root . --mcp --environments unknown-client");
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
             snapshot => snapshot.ContainsText($"[{counter.Value} ERR:"),
@@ -238,8 +239,9 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
         await auto.RunCommandAsync("export COPILOT_HOME=\"$PWD/.client-config/copilot\"", counter);
+        await auto.RunCommandAsync("export VSCODE_APPDATA=\"$PWD/.client-config/vscode\"", counter);
 
-        await auto.TypeAsync("aspire init --language csharp --clients vscode");
+        await auto.TypeAsync("aspire init --language csharp --environments vscode");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created aspire.config.json", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitUntilAsync(
@@ -255,8 +257,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         var projectSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "copilot", "settings.json");
-        var userSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".client-config", "copilot", "settings.json");
-        AssertNativeSettings(projectSettings, userSettings);
+        var userSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".client-config", "vscode", "Code", "User", "settings.json");
+        AssertVsCodeSettings(projectSettings, userSettings);
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".vscode", "mcp.json")));
         Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills")));
     }
@@ -277,14 +279,15 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
         await auto.RunCommandAsync("export COPILOT_HOME=\"$PWD/.client-config/copilot\"", counter);
-        await auto.AspireNewAcceptingAgentInitAsync("StarterApp", extraArguments: "--clients vscode");
+        await auto.RunCommandAsync("export VSCODE_APPDATA=\"$PWD/.client-config/vscode\"", counter);
+        await auto.AspireNewAcceptingAgentInitAsync("StarterApp", extraArguments: "--environments vscode");
         await AcceptDefaultAssetsAsync(auto, includeMcp: false);
         await auto.WaitForSuccessPromptAsync(counter);
 
         var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "StarterApp");
         var projectSettings = Path.Combine(projectRoot, ".github", "copilot", "settings.json");
-        var userSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".client-config", "copilot", "settings.json");
-        AssertNativeSettings(projectSettings, userSettings);
+        var userSettings = Path.Combine(workspace.WorkspaceRoot.FullName, ".client-config", "vscode", "Code", "User", "settings.json");
+        AssertVsCodeSettings(projectSettings, userSettings);
         Assert.False(File.Exists(Path.Combine(projectRoot, ".vscode", "mcp.json")));
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "copilot", "settings.json")));
         Assert.False(Directory.Exists(Path.Combine(projectRoot, ".agents", "skills")));
@@ -295,7 +298,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         if (includeMcp)
         {
             await auto.WaitUntilAsync(
-                s => s.ContainsText("Configure the Aspire MCP server for the selected clients?"),
+                s => s.ContainsText("Configure the Aspire MCP server for the selected client environments?"),
                 timeout: TimeSpan.FromSeconds(30), description: "MCP asset prompt, default No");
             await auto.EnterAsync();
         }
@@ -314,9 +317,16 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
     }
 
-    private static void AssertNativeSettings(string projectSettings, string userSettings)
+    private static void AssertVsCodeSettings(string projectSettings, string userSettings)
     {
-        foreach (var path in new[] { projectSettings, userSettings })
+        AssertNativeSettings(projectSettings);
+        var settings = JsonNode.Parse(File.ReadAllText(userSettings))!;
+        Assert.Equal(["microsoft/aspire-skills"], settings["chat.plugins.marketplaces"]!.AsArray().Select(value => value!.GetValue<string>()));
+    }
+
+    private static void AssertNativeSettings(params string[] paths)
+    {
+        foreach (var path in paths)
         {
             var settings = Assert.IsType<JsonObject>(JsonNode.Parse(File.ReadAllText(path)));
             var source = settings["extraKnownMarketplaces"]?["aspire-skills"]?["source"];

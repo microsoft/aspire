@@ -10,8 +10,8 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output)
 {
     private static readonly (string Client, string Path)[] s_markers =
     [
-        ("claude-code", ".claude"),
-        ("claude-code", ".mcp.json"),
+        ("claude", ".claude"),
+        ("claude", ".mcp.json"),
         ("vscode", ".vscode"),
         ("opencode", "opencode.json"),
         ("opencode", "opencode.jsonc"),
@@ -45,9 +45,9 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output)
         var client = context.Catalog.Clients.Single(client => client.Id == clientId);
         var entries = Directory.GetFileSystemEntries(context.Workspace.Path, "*", SearchOption.AllDirectories).Order().ToArray();
 
-        var result = await client.Environment.ScanAsync([client], working, context.Project, CancellationToken.None).DefaultTimeout();
+        var result = await client.Environment.ScanAsync(working, context.Project, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal([new AgentClientDetection(client, null, false)], result);
+        Assert.Equal(new AgentEnvironmentDetection(null, false), result);
         Assert.Equal(clientId == "vscode" ? [] : new[] { clientId == "opencode" ? "opencode" : "claude" }, context.CliRunner.Commands);
         Assert.Equal(entries, Directory.GetFileSystemEntries(context.Workspace.Path, "*", SearchOption.AllDirectories).Order());
     }
@@ -62,9 +62,9 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output)
         var root = trailingSeparator ? new DirectoryInfo(context.Project.FullName + Path.DirectorySeparatorChar) : context.Project;
         var client = context.Catalog.Clients.Single(client => client.Id == clientId);
 
-        var result = await client.Environment.ScanAsync([client], working, root, CancellationToken.None).DefaultTimeout();
+        var result = await client.Environment.ScanAsync(working, root, CancellationToken.None).DefaultTimeout();
 
-        Assert.Empty(result);
+        Assert.Null(result);
     }
 
     [Theory]
@@ -82,14 +82,14 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output)
         var client = context.Catalog.Clients.Single(client => client.Id == clientId);
         var entries = Directory.GetFileSystemEntries(context.Workspace.Path, "*", SearchOption.AllDirectories).Order().ToArray();
 
-        var result = await client.Environment.ScanAsync([client], working, context.Project, CancellationToken.None).DefaultTimeout();
+        var result = await client.Environment.ScanAsync(working, context.Project, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentClientDetection>(hasTargetConfiguration ? [new(client, null, false)] : [], result);
+        Assert.Equal<AgentEnvironmentDetection?>(hasTargetConfiguration ? new(null, false) : null, result);
         Assert.Equal(entries, Directory.GetFileSystemEntries(context.Workspace.Path, "*", SearchOption.AllDirectories).Order());
     }
 
     [Theory]
-    [InlineData("claude-code", ".claude")]
+    [InlineData("claude", ".claude")]
     [InlineData("vscode", ".vscode")]
     public async Task ScanAsync_HomeDirectoriesAreNotProjectEvidence(string clientId, string marker)
     {
@@ -98,12 +98,12 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output)
         var working = context.Home.CreateSubdirectory("nested");
         var client = context.Catalog.Clients.Single(client => client.Id == clientId);
 
-        Assert.Empty(await client.Environment.ScanAsync([client], working, context.Home, CancellationToken.None).DefaultTimeout());
+        Assert.Null(await client.Environment.ScanAsync(working, context.Home, CancellationToken.None).DefaultTimeout());
     }
 
     [Theory]
-    [InlineData("copilot-cli")]
-    [InlineData("claude-code")]
+    [InlineData("copilot")]
+    [InlineData("claude")]
     [InlineData("vscode")]
     [InlineData("opencode")]
     public async Task ScanAsync_NoEvidenceIsReadOnlyAndCancellationDoesNotProbe(string clientId)
@@ -112,14 +112,11 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output)
         var client = context.Catalog.Clients.Single(client => client.Id == clientId);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            client.Environment.ScanAsync([client], context.Project, context.Project, new CancellationToken(canceled: true))).DefaultTimeout();
+            client.Environment.ScanAsync(context.Project, context.Project, new CancellationToken(canceled: true))).DefaultTimeout();
         Assert.Empty(context.CliRunner.Commands);
-        var result = await client.Environment.ScanAsync([client], context.Project, context.Project, CancellationToken.None).DefaultTimeout();
+        var result = await client.Environment.ScanAsync(context.Project, context.Project, CancellationToken.None).DefaultTimeout();
 
-        Assert.Empty(result);
-        var collection = Assert.IsAssignableFrom<ICollection<AgentClientDetection>>(result);
-        Assert.True(collection.IsReadOnly);
-        Assert.Throws<NotSupportedException>(() => collection.Add(new(client, null, false)));
+        Assert.Null(result);
         Assert.Empty(context.Project.EnumerateFileSystemInfos());
         Assert.Empty(context.Home.EnumerateFileSystemInfos());
     }
@@ -137,9 +134,9 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output)
         var entries = Directory.GetFileSystemEntries(context.Workspace.Path, "*", SearchOption.AllDirectories).Order().ToArray();
         var client = context.Catalog.Clients.Single(client => client.Id == clientId);
 
-        var result = await client.Environment.ScanAsync([client], context.Project, context.Project, CancellationToken.None).DefaultTimeout();
+        var result = await client.Environment.ScanAsync(context.Project, context.Project, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal([new AgentClientDetection(client, null, false)], result);
+        Assert.Equal(new AgentEnvironmentDetection(null, false), result);
         Assert.Equal(content, await File.ReadAllTextAsync(file));
         Assert.Equal(timestamp, File.GetLastWriteTimeUtc(file));
         Assert.Equal(entries, Directory.GetFileSystemEntries(context.Workspace.Path, "*", SearchOption.AllDirectories).Order());

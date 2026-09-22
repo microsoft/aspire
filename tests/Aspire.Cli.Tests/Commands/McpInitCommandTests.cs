@@ -28,14 +28,14 @@ public class McpInitCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            $"{commandName} --workspace-root \"{selectedRoot.FullName}\" --mcp Y --playwright false --dotnet-inspect true --aspire-skills n --clients copilot-app,claude-code");
+            $"{commandName} --workspace-root \"{selectedRoot.FullName}\" --mcp Y --playwright false --dotnet-inspect true --aspire-skills n --environments copilot,claude");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         var request = Assert.Single(service.Requests);
         Assert.Equal(selectedRoot.FullName, request.WorkspaceRoot.FullName);
         Assert.Equal(new AgentAssetSelection(true, false, true, false), request.Assets);
-        Assert.Equal(["copilot-app", "claude-code"], request.Clients.Select(client => client.Id));
+        Assert.Equal(["copilot", "claude"], request.Clients.Select(client => client.Id));
         Assert.Empty(request.Detections);
     }
 
@@ -63,7 +63,7 @@ public class McpInitCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var exitCode = await provider.GetRequiredService<RootCommand>()
-            .Parse("mcp init --mcp --aspire-skills n --clients claude-code").InvokeAsync().DefaultTimeout();
+            .Parse("mcp init --mcp --aspire-skills n --environments claude").InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Single(service.Requests);
@@ -85,7 +85,7 @@ public class McpInitCommandTests(ITestOutputHelper outputHelper)
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
 
         var exitCode = await provider.GetRequiredService<RootCommand>()
-            .Parse("mcp init --mcp --clients none").InvokeAsync().DefaultTimeout();
+            .Parse("mcp init --mcp --environments none").InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Empty(Assert.IsType<TestAgentInitService>(provider.GetRequiredService<IAgentInitService>()).Requests);

@@ -24,7 +24,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         var request = new AgentInitRequest(
             context.Project,
             new AgentAssetSelection(Mcp: true, playwright, dotnetInspect, AspireSkills: true),
-            noClients ? [] : [TestAgentClients.Default.CopilotCli],
+            noClients ? [] : [TestAgentClients.Default.Copilot],
             []);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
@@ -38,11 +38,10 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("copilot-cli", ".agents")]
-    [InlineData("copilot-app", ".agents")]
+    [InlineData("copilot", ".agents")]
     [InlineData("vscode", ".agents")]
     [InlineData("opencode", ".agents")]
-    [InlineData("claude-code", ".claude")]
+    [InlineData("claude", ".claude")]
     public async Task InstallAsync_DotnetInspectBeforeAppHost_WritesOnlySelectedClientLocations(string clientId, string nativeDirectory)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
@@ -79,7 +78,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp, TestAgentClients.Default.ClaudeCode, TestAgentClients.Default.VsCode, TestAgentClients.Default.OpenCode]);
+        var request = context.ManagedRequest([TestAgentClients.Default.Copilot, TestAgentClients.Default.ClaudeCode, TestAgentClients.Default.VsCode, TestAgentClients.Default.OpenCode]);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -112,12 +111,12 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp, TestAgentClients.Default.CopilotCli]);
+        var request = context.ManagedRequest([TestAgentClients.Default.Copilot]);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
         Assert.Equal(4, results.Count);
-        Assert.All(results, static result => Assert.Equal([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp], result.Clients));
+        Assert.All(results, static result => Assert.Equal([TestAgentClients.Default.Copilot], result.Clients));
         Assert.Equal(4, results.Select(static result => result.TargetPath).Distinct(StringComparers.FileSystemPath).Count());
         Assert.Equal([".agents"], context.Project.EnumerateDirectories().Select(static directory => directory.Name));
         Assert.Equal([".agents"], context.Home.EnumerateDirectories().Select(static directory => directory.Name));
@@ -130,7 +129,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var installer = context.CreateManagedSkillInstaller(context.Workspace.WorkspaceRoot, context.Workspace.WorkspaceRoot);
-        var request = CreateRequest(context.Workspace.WorkspaceRoot, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp]);
+        var request = CreateRequest(context.Workspace.WorkspaceRoot, [TestAgentClients.Default.Copilot]);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -139,7 +138,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         {
             Assert.Equal(AgentConfigurationScope.Project, result.Scope);
             Assert.Equal(AgentConfigurationStatus.Configured, result.Status);
-            Assert.Equal([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp], result.Clients);
+            Assert.Equal([TestAgentClients.Default.Copilot], result.Clients);
         });
         Assert.Equal(1, context.Npm.InstallGlobalCallCount);
         Assert.Equal(1, context.Playwright.InstallSkillsCallCount);
@@ -153,7 +152,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         var home = new DirectoryInfo(Path.Combine(context.Workspace.Path, "mixedcase"));
         Assert.SkipWhen(!home.Exists, "The test volume is case-sensitive.");
         var installer = context.CreateManagedSkillInstaller(project, home);
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli], playwright: false);
+        var request = CreateRequest(project, [TestAgentClients.Default.Copilot], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -171,7 +170,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         Assert.SkipWhen(home.Exists, "The test volume is case-insensitive.");
         home.Create();
         var installer = context.CreateManagedSkillInstaller(project, home);
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli], playwright: false);
+        var request = CreateRequest(project, [TestAgentClients.Default.Copilot], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -191,14 +190,14 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
             TestSymlinkHelper.TryCreateSymlink(Path.Combine(claude.FullName, "skills"), sharedSkills.FullName);
         }
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode]);
+        var request = context.ManagedRequest([TestAgentClients.Default.Copilot, TestAgentClients.Default.ClaudeCode]);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
         Assert.Equal(4, results.Count);
         Assert.All(results, static result =>
         {
-            Assert.Equal([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode], result.Clients);
+            Assert.Equal([TestAgentClients.Default.Copilot, TestAgentClients.Default.ClaudeCode], result.Clients);
             Assert.Equal(AgentConfigurationStatus.Configured, result.Status);
         });
         Assert.Equal(1, context.Npm.InstallGlobalCallCount);
@@ -277,7 +276,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         context.SetVariable("OPENCODE_CONFIG_DIR", Path.Combine(context.Workspace.Path, "opencode-config"));
         context.SetVariable("CLAUDE_CONFIG_DIR", Path.Combine(context.Workspace.Path, "claude-config"));
         var installer = context.CreateManagedSkillInstaller(context.Project, context.Home);
-        var request = CreateRequest(context.Project, [TestAgentClients.Default.CopilotApp, TestAgentClients.Default.VsCode, TestAgentClients.Default.OpenCode], playwright: false);
+        var request = CreateRequest(context.Project, [TestAgentClients.Default.Copilot, TestAgentClients.Default.VsCode, TestAgentClients.Default.OpenCode], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -307,7 +306,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         }
         var timestamps = existingFiles.Keys.ToDictionary(static path => path, File.GetLastWriteTimeUtc);
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli]);
+        var request = context.ManagedRequest([TestAgentClients.Default.Copilot]);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -327,7 +326,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         var relativePath = Path.Combine("assets", "example.bin");
         context.Playwright.SkillFiles[relativePath] = bytes;
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode], dotnetInspect: false);
+        var request = context.ManagedRequest([TestAgentClients.Default.Copilot, TestAgentClients.Default.ClaudeCode], dotnetInspect: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -345,7 +344,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         using var context = new AgentConfigurationTestContext(outputHelper);
         context.Playwright.InstalledVersion = new SemVersion(0, 1, 7);
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode]);
+        var request = context.ManagedRequest([TestAgentClients.Default.Copilot, TestAgentClients.Default.ClaudeCode]);
         var first = await installer.InstallAsync(request, CancellationToken.None);
         var files = Directory.GetFiles(context.Workspace.Path, "*", SearchOption.AllDirectories);
         foreach (var path in files)
@@ -372,7 +371,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         using var context = new AgentConfigurationTestContext(outputHelper);
         context.Playwright.InstalledVersion = new SemVersion(0, 1, 7);
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], dotnetInspect: false);
+        var request = context.ManagedRequest([TestAgentClients.Default.Copilot], dotnetInspect: false);
         var first = await installer.InstallAsync(request, CancellationToken.None);
         var projectTarget = Assert.Single(first, static result => result.Scope is AgentConfigurationScope.Project);
         var skillPath = Path.Combine(projectTarget.TargetPath, "SKILL.md");
@@ -396,7 +395,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         var blocker = Path.Combine(skillDirectory.FullName, "references");
         await File.WriteAllTextAsync(blocker, "user file");
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli]);
+        var request = context.ManagedRequest([TestAgentClients.Default.Copilot]);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -416,7 +415,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         using var context = new AgentConfigurationTestContext(outputHelper);
         var blocker = context.Project.CreateSubdirectory(Path.Combine(".agents", "skills", "dotnet-inspect", "SKILL.md"));
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], playwright: false);
+        var request = context.ManagedRequest([TestAgentClients.Default.Copilot], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -436,7 +435,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(userFile, "user-owned reference");
         TestSymlinkHelper.TryCreateSymlink(Path.Combine(references.FullName, "commands.md"), userFile, isDirectory: false);
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], dotnetInspect: false);
+        var request = context.ManagedRequest([TestAgentClients.Default.Copilot], dotnetInspect: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -474,7 +473,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         var project = new DirectoryInfo(projectPath);
         var home = new DirectoryInfo(homePath);
         var installer = context.CreateManagedSkillInstaller(project, home);
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp]);
+        var request = CreateRequest(project, [TestAgentClients.Default.Copilot]);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -482,7 +481,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         Assert.All(results, static result =>
         {
             Assert.Equal(AgentConfigurationStatus.Failed, result.Status);
-            Assert.Equal([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp], result.Clients);
+            Assert.Equal([TestAgentClients.Default.Copilot], result.Clients);
             Assert.NotNull(result.Message);
         });
         Assert.Equal("project blocker", await File.ReadAllTextAsync(projectPath));
@@ -509,7 +508,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
                 break;
         }
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([context.CopilotCli, context.ClaudeCode], dotnetInspect: dotnetInspect);
+        var request = context.ManagedRequest([context.Copilot, context.ClaudeCode], dotnetInspect: dotnetInspect);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -549,7 +548,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         var installer = context.CreateManagedSkillInstaller(context.Project, context.Home);
-        var request = CreateRequest(context.Project, [TestAgentClients.Default.CopilotCli]);
+        var request = CreateRequest(context.Project, [TestAgentClients.Default.Copilot]);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => installer.InstallAsync(request, cancellation.Token));
 
@@ -579,13 +578,13 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
             Directory.CreateSymbolicLink(link, redirected.FullName);
         };
         var installer = context.CreateManagedSkillInstaller(context.Project, context.Home);
-        var request = CreateRequest(context.Project, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode], dotnetInspect: false);
+        var request = CreateRequest(context.Project, [TestAgentClients.Default.Copilot, TestAgentClients.Default.ClaudeCode], dotnetInspect: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
         var failure = Assert.Single(results, static result => result.Scope is AgentConfigurationScope.Project);
         Assert.Equal(AgentConfigurationStatus.Failed, failure.Status);
-        Assert.Equal([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode], failure.Clients);
+        Assert.Equal([TestAgentClients.Default.Copilot, TestAgentClients.Default.ClaudeCode], failure.Clients);
         Assert.Contains(AgentCommandStrings.Configuration_ConcurrentChange, failure.Message!);
         Assert.All(results.Where(static result => result.Scope is AgentConfigurationScope.User),
             static result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
@@ -608,7 +607,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
             TestSymlinkHelper.TryCreateSymlink(Path.Combine(skills.FullName, "dotnet-inspect"), physicalSkill.FullName);
         }
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], playwright: false);
+        var request = context.ManagedRequest([TestAgentClients.Default.Copilot], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -629,7 +628,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         var link = Path.Combine(shared.FullName, "skills");
         TestSymlinkHelper.TryCreateSymlink(link, missing);
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], playwright: false);
+        var request = context.ManagedRequest([TestAgentClients.Default.Copilot], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -649,7 +648,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         var link = Path.Combine(skill.FullName, "SKILL.md");
         TestSymlinkHelper.TryCreateSymlink(link, physicalPath, isDirectory: false);
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], playwright: false);
+        var request = context.ManagedRequest([TestAgentClients.Default.Copilot], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -673,7 +672,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         var path = Path.Combine(skill.FullName, "SKILL.md");
         await File.WriteAllTextAsync(path, "working skill");
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], playwright: false);
+        var request = context.ManagedRequest([TestAgentClients.Default.Copilot], playwright: false);
 
         // Permit the optimistic byte reads but not replacement/deletion of the destination.
         using (var locked = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
@@ -706,7 +705,7 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         var mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.GroupWrite;
         File.SetUnixFileMode(path, mode);
         var installer = context.CreateManagedSkillInstaller();
-        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], playwright: false);
+        var request = context.ManagedRequest([TestAgentClients.Default.Copilot], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 

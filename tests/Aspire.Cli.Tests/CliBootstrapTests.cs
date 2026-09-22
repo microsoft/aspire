@@ -86,7 +86,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     {
         using var host = await BuildHostAsync();
         var catalog = host.Services.GetRequiredService<AgentClientCatalog>();
-        IAgentClientEnvironment[] environments =
+        IAgentEnvironmentScanner[] environments =
         [
             host.Services.GetRequiredService<Aspire.Cli.Agents.Copilot.CopilotAgentEnvironmentScanner>(),
             host.Services.GetRequiredService<Aspire.Cli.Agents.VsCode.VsCodeAgentEnvironmentScanner>(),
@@ -96,7 +96,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(4, environments.Length);
         Assert.Equal(
-            ["copilot-cli", "copilot-app", "vscode", "claude-code", "opencode"],
+            ["copilot", "vscode", "claude", "opencode"],
             catalog.Clients.Select(client => client.Id));
         Assert.Equal(environments, catalog.Clients.Select(client => client.Environment).Distinct());
     }
