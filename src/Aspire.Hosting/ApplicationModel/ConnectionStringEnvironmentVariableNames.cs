@@ -8,18 +8,53 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Describes the logical and physical names used for a connection-string reference.
 /// </summary>
-/// <param name="LogicalName">The logical connection name used by application configuration.</param>
-/// <param name="OriginalName">The original environment-variable name derived directly from the logical name.</param>
-/// <param name="PortableName">The portable environment-variable name.</param>
-/// <param name="IsExplicit">Whether the physical environment-variable name was explicitly supplied by the source resource.</param>
 [Experimental("ASPIRECONNECTIONSTRINGS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed record ConnectionStringEnvironmentVariableNames(
-    string LogicalName,
-    string OriginalName,
-    string PortableName,
-    bool IsExplicit)
+public sealed record ConnectionStringEnvironmentVariableNames
 {
     private const string Prefix = "ConnectionStrings__";
+
+    internal ConnectionStringEnvironmentVariableNames(string logicalName, string originalName, string portableName, bool isExplicit)
+    {
+        LogicalName = logicalName;
+        OriginalName = originalName;
+        PortableName = portableName;
+        IsExplicit = isExplicit;
+    }
+
+    /// <summary>
+    /// Gets the logical connection name used by application configuration.
+    /// </summary>
+    public string LogicalName { get; init; }
+
+    /// <summary>
+    /// Gets the original environment-variable name derived directly from the logical name.
+    /// </summary>
+    public string OriginalName { get; init; }
+
+    /// <summary>
+    /// Gets the portable environment-variable name.
+    /// </summary>
+    public string PortableName { get; init; }
+
+    /// <summary>
+    /// Gets whether the physical environment-variable name was explicitly supplied by the source resource.
+    /// </summary>
+    public bool IsExplicit { get; init; }
+
+    /// <summary>
+    /// Deconstructs the logical and physical names for a connection-string reference.
+    /// </summary>
+    /// <param name="LogicalName">The logical connection name used by application configuration.</param>
+    /// <param name="OriginalName">The original environment-variable name derived directly from the logical name.</param>
+    /// <param name="PortableName">The portable environment-variable name.</param>
+    /// <param name="IsExplicit">Whether the physical environment-variable name was explicitly supplied by the source resource.</param>
+    public void Deconstruct(out string LogicalName, out string OriginalName, out string PortableName, out bool IsExplicit)
+    {
+        LogicalName = this.LogicalName;
+        OriginalName = this.OriginalName;
+        PortableName = this.PortableName;
+        IsExplicit = this.IsExplicit;
+    }
 
     /// <summary>
     /// Creates the logical and physical environment-variable names for a connection-string reference.
@@ -34,14 +69,14 @@ public sealed record ConnectionStringEnvironmentVariableNames(
 
         if (resource.ConnectionStringEnvironmentVariable is { } explicitName)
         {
-            return new(logicalName, explicitName, explicitName, IsExplicit: true);
+            return new(logicalName, explicitName, explicitName, isExplicit: true);
         }
 
         return new(
             logicalName,
             Prefix + logicalName,
             Prefix + EnvironmentVariableNameEncoder.EncodeConnectionStringName(logicalName),
-            IsExplicit: false);
+            isExplicit: false);
     }
 
     /// <summary>

@@ -183,7 +183,7 @@ public static class QdrantBuilderExtensions
                 httpLogicalName,
                 $"{connectionStringNames.OriginalName}_{QdrantServerResource.HttpEndpointName}",
                 $"{connectionStringNames.PortableName}_{QdrantServerResource.HttpEndpointName}",
-                IsExplicit: true)
+                isExplicit: true)
             : ConnectionStringEnvironmentVariableNames.Create(resource, httpLogicalName);
         var httpConnectionStringExpression = qdrantResource.Resource.HttpConnectionStringExpression;
         var httpReferenceAnnotation = new ConnectionStringReferenceAnnotation(

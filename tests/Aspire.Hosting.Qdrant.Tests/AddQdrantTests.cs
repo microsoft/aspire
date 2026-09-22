@@ -201,7 +201,7 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
                         "my-qdrant",
                         "ConnectionStrings__my-qdrant",
                         "ConnectionStrings__my_qdrant",
-                        IsExplicit: false),
+                        isExplicit: false),
                     reference.EnvironmentVariableNames);
             },
             reference =>
@@ -212,7 +212,7 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
                         "my-qdrant_http",
                         "ConnectionStrings__my-qdrant_http",
                         "ConnectionStrings__my_qdrant_http",
-                        IsExplicit: false),
+                        isExplicit: false),
                     reference.EnvironmentVariableNames);
             });
 #pragma warning restore ASPIRECONNECTIONSTRINGS001
