@@ -20,6 +20,28 @@ NORMALIZED_TRUSTED_FAILED_JOBS_FILE="${ANALYSIS_FILE}.trusted-failed-jobs.tmp"
 NORMALIZED_TRUSTED_TEST_FAILURES_FILE="${ANALYSIS_FILE}.trusted-test-failures.tmp"
 BOUND_ANALYSIS_FILE="${ANALYSIS_FILE}.bound.tmp"
 trap 'rm -f "$NORMALIZED_TRUSTED_FAILED_JOBS_FILE" "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE" "$BOUND_ANALYSIS_FILE"' EXIT
+
+normalize_test_name() {
+  # Keep this aligned with analyze-ci-failure-cause-resolver.js. Only named xUnit
+  # theory arguments are normalized; parenthetical display-name qualifiers identify
+  # separate tests.
+  jq -nr --arg test_name "$1" '
+    $test_name
+    | gsub("^\\s+|\\s+$"; "")
+    | . as $display_name
+    | (index("(")) as $argument_start
+    | if $argument_start != null and
+          $argument_start > 0 and
+          ($display_name[$argument_start:] |
+            test("^\\(\\s*[A-Za-z_][A-Za-z0-9_]*\\s*:"))
+      then $display_name[0:$argument_start]
+      else $display_name
+      end
+    | gsub("\\s+"; " ")
+    | ascii_downcase
+  '
+}
+
 if [ ! -f "$ANALYSIS_FILE" ] || [ ! -f "$RUN_CONTEXT_FILE" ] ||
    [ ! -f "$TRUSTED_FAILED_JOBS_FILE" ] || [ ! -f "$TEST_EVIDENCE_FILE" ] ||
    [ ! -f "$RUN_FILE" ]; then
@@ -351,7 +373,7 @@ if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
       if [ "$CAUSE_TYPE" = "flaky-test" ]; then
         PRIOR_CAUSE_TEST_NAME=$(jq -r 'if (.test_name | type) == "string" then .test_name else "" end' "$PRIOR_CAUSE_FILE")
         CAUSE_TEST_NAME=$(jq -r '.test_name' "$CAUSE_FILE")
-        if [ "$PRIOR_CAUSE_TEST_NAME" != "$CAUSE_TEST_NAME" ]; then
+        if [ "$(normalize_test_name "$PRIOR_CAUSE_TEST_NAME")" != "$(normalize_test_name "$CAUSE_TEST_NAME")" ]; then
           echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} cannot change stored test_name"
           exit 1
         fi

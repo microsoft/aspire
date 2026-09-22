@@ -46,7 +46,8 @@
     {
       "jobName": { "regex": ".*windows.*" },
       "output": "0xC0000142",
-      "reason": "Windows process initialization failure (0xC0000142)"
+      "reason": "Windows process initialization failure (0xC0000142)",
+      "causeId": "windows-process-init-failure-0xc0000142"
     },
     {
       "output": "Could not resolve host",
