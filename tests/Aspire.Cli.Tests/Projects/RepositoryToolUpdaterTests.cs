@@ -593,6 +593,91 @@ public class RepositoryToolUpdaterTests(ITestOutputHelper outputHelper)
         Assert.Empty(interaction.DisplayedSuccess);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetUpdateStepAsync_DefersManifestWritesUntilCallback(bool cancelBeforeApply)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var root = CreateRepository(workspace);
+        var dotnetPath = await WriteManifestAsync(root, isNpm: false, "13.3.0");
+        var npmPath = await WriteManifestAsync(root, isNpm: true, "13.3.0");
+        var originals = new Dictionary<string, byte[]>
+        {
+            [dotnetPath] = await File.ReadAllBytesAsync(dotnetPath),
+            [npmPath] = await File.ReadAllBytesAsync(npmPath)
+        };
+        var npm = new FakeNpmRunner
+        {
+            ResolvePackageAsyncCallback = (_, _, _) => Task.FromResult<NpmPackageInfo?>(new() { Version = SemVersion.Parse("13.4.0") })
+        };
+        var interaction = new TestInteractionService();
+        var updater = CreateUpdater(npm, interaction);
+        using var cancellation = new CancellationTokenSource();
+        var manifests = await updater.FindManifestsAsync(root, cancellation.Token);
+
+        var updateStep = await updater.GetUpdateStepAsync(manifests, CreateChannel("13.4.0"), cancellation.Token);
+
+        Assert.NotNull(updateStep);
+        Assert.Empty(interaction.BooleanPromptCalls);
+        Assert.Empty(interaction.DisplayedSuccess);
+        foreach (var (path, original) in originals)
+        {
+            Assert.Equal(original, await File.ReadAllBytesAsync(path));
+        }
+
+        if (cancelBeforeApply)
+        {
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(updateStep.Callback);
+            foreach (var (path, original) in originals)
+            {
+                Assert.Equal(original, await File.ReadAllBytesAsync(path));
+            }
+            Assert.Empty(interaction.DisplayedSuccess);
+        }
+        else
+        {
+            await updateStep.Callback();
+            var updatedManifests = await updater.FindManifestsAsync(root, cancellation.Token);
+            Assert.Equal(2, updatedManifests.Count);
+            Assert.All(updatedManifests, manifest => Assert.Equal("13.4.0", Assert.Single(manifest.References).Version));
+            Assert.Equal(UpdateCommandStrings.RepositoryToolsUpdated, Assert.Single(interaction.DisplayedSuccess));
+        }
+        Assert.Empty(interaction.BooleanPromptCalls);
+    }
+
+    [Theory]
+    [InlineData("""{"dependencies":{"@microsoft/aspire-cli":"13.2.0"}}""")]
+    [InlineData("""{"dependencies":{}}""")]
+    [InlineData("""{"dependencies":{"@microsoft/aspire-cli":"13.3.0"},"devDependencies":{"@microsoft/aspire-cli":"13.3.0"}}""")]
+    [InlineData("""{"devDependencies":{"@microsoft/aspire-cli":"13.3.0"}}""")]
+    public async Task GetUpdateStepAsync_ChangedCliReferencesDoNotApplyAnyManifest(string changedManifest)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var root = CreateRepository(workspace);
+        var dotnetPath = await WriteManifestAsync(root, isNpm: false, "13.3.0");
+        var npmPath = await WriteManifestAsync(root, isNpm: true, "13.3.0");
+        var originalDotnet = await File.ReadAllBytesAsync(dotnetPath);
+        var npm = new FakeNpmRunner
+        {
+            ResolvePackageAsyncCallback = (_, _, _) => Task.FromResult<NpmPackageInfo?>(new() { Version = SemVersion.Parse("13.4.0") })
+        };
+        var interaction = new TestInteractionService();
+        var updater = CreateUpdater(npm, interaction);
+        var manifests = await updater.FindManifestsAsync(root, CancellationToken.None);
+        var updateStep = await updater.GetUpdateStepAsync(manifests, CreateChannel("13.4.0"), CancellationToken.None);
+        Assert.NotNull(updateStep);
+        await File.WriteAllTextAsync(npmPath, changedManifest);
+
+        var exception = await Assert.ThrowsAsync<ProjectUpdaterException>(updateStep.Callback);
+
+        Assert.Equal(string.Format(UpdateCommandStrings.ToolManifestChangedFormat, npmPath), exception.Message);
+        Assert.Equal(originalDotnet, await File.ReadAllBytesAsync(dotnetPath));
+        Assert.Equal(changedManifest, await File.ReadAllTextAsync(npmPath));
+        Assert.Empty(interaction.DisplayedSuccess);
+    }
+
     private static DirectoryInfo CreateRepository(TemporaryWorkspace workspace)
     {
         workspace.CreateDirectory(".git");

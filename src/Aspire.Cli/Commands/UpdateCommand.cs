@@ -377,14 +377,6 @@ internal sealed class UpdateCommand : BaseCommand
                 return CommandResult.Success();
             }
 
-            var nugetConfigDirBinding = PromptBinding.Create(parseResult, s_nugetConfigDirOption);
-            var updateContext = new UpdatePackagesContext
-            {
-                AppHostFile = projectFile,
-                Channel = channel,
-                ConfirmBinding = confirmBinding,
-                NuGetConfigDirBinding = nugetConfigDirBinding
-            };
             // A repository-pinned CLI is updated through its manifest, not by replacing the
             // executable currently running (which may be in a shared package cache).
             var cliUpdateResult = await TryUpdateCliBeforeGuestProjectUpdateAsync(
@@ -394,6 +386,15 @@ internal sealed class UpdateCommand : BaseCommand
                 return cliUpdateResult;
             }
 
+            var toolUpdateStep = await _repositoryToolUpdater.GetUpdateStepAsync(toolManifests, channel, cancellationToken);
+            var updateContext = new UpdatePackagesContext
+            {
+                AppHostFile = projectFile,
+                Channel = channel,
+                ConfirmBinding = confirmBinding,
+                NuGetConfigDirBinding = PromptBinding.Create(parseResult, s_nugetConfigDirOption),
+                AdditionalUpdateSteps = toolUpdateStep is null ? [] : [toolUpdateStep]
+            };
             await project.UpdatePackagesAsync(updateContext, cancellationToken);
 
             // The package update may have moved the project onto a newer Aspire version whose
@@ -404,15 +405,6 @@ internal sealed class UpdateCommand : BaseCommand
             // same IMigration registry behind `aspire doctor`, so any future migration shows up here
             // automatically.
             await HandlePendingMigrationsAsync(parseResult.GetValue(s_migrateOption), projectFile, confirmBinding, cancellationToken);
-
-            if (hasRepositoryTools)
-            {
-                // Guest project updates can install dependencies and edit package.json.
-                // Update the CLI pin last so that restore does not install the new CLI,
-                // and re-read the manifests to preserve any project-update changes.
-                toolManifests = await _repositoryToolUpdater.FindManifestsAsync(updateDirectory, cancellationToken);
-                await _repositoryToolUpdater.UpdateAsync(toolManifests, channel, confirmBinding, cancellationToken);
-            }
 
             // After successful project update, check if CLI update is available and prompt
             // Only prompt if the channel supports CLI downloads (has a non-null CliDownloadBaseUrl)

@@ -372,6 +372,11 @@
         <target state="translated">{1} olan {0} paketini {2} olarak güncelleyin</target>
         <note />
       </trans-unit>
+      <trans-unit id="UpdateRepositoryTools">
+        <source>Update repository Aspire CLI references</source>
+        <target state="new">Update repository Aspire CLI references</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UpdateSuccessfulMessage">
         <source>Update successful!</source>
         <target state="translated">Güncelleme başarılı!</target>

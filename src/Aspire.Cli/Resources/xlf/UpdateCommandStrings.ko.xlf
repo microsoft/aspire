@@ -372,6 +372,11 @@
         <target state="translated">패키지 {0}을(를) {1}에서 {2}(으)로 업데이트</target>
         <note />
       </trans-unit>
+      <trans-unit id="UpdateRepositoryTools">
+        <source>Update repository Aspire CLI references</source>
+        <target state="new">Update repository Aspire CLI references</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UpdateSuccessfulMessage">
         <source>Update successful!</source>
         <target state="translated">업데이트 성공!</target>

@@ -226,6 +226,9 @@
   <data name="RepositoryToolsUpToDate" xml:space="preserve">
     <value>Repository Aspire CLI references are up to date.</value>
   </data>
+  <data name="UpdateRepositoryTools" xml:space="preserve">
+    <value>Update repository Aspire CLI references</value>
+  </data>
   <data name="RepositoryToolsUpdated" xml:space="preserve">
     <value>Repository Aspire CLI references updated. The running CLI was not replaced.</value>
   </data>

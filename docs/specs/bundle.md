@@ -627,8 +627,13 @@ prints guidance to run the repository's package-manager install command to refre
 lockfile and use the updated tool. For npm, use `npm install`, or
 `npm install --package-lock-only` to refresh only the lockfile. `npm ci` can fail while
 the manifest and lockfile disagree.
-Existing AppHost integration updates retain their normal restore behavior and run before
-the repository CLI pins are changed, so they do not install the newly selected CLI version.
+CLI manifest edits appear in the same confirmation as integration and `aspire.config.json`
+updates. For .NET AppHosts, all these files are changed in the apply phase before the
+AppHost restore; a restore failure does not prevent the tool-manifest edits from being
+saved. Updating only CLI manifests does not trigger an AppHost restore.
+Guest AppHosts retain their existing regenerate-before-save behavior: CLI manifest edits
+are applied alongside saving `aspire.config.json` after successful SDK regeneration,
+so dependency installation does not consume the newly selected CLI version.
 
 When repository CLI references exist, `aspire update` does not offer executable
 self-update. Run `dotnet tool restore` or the repository's package-manager install

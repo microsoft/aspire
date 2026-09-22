@@ -372,6 +372,11 @@
         <target state="translated">将包 {0} 从 {1} 更新为 {2}</target>
         <note />
       </trans-unit>
+      <trans-unit id="UpdateRepositoryTools">
+        <source>Update repository Aspire CLI references</source>
+        <target state="new">Update repository Aspire CLI references</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UpdateSuccessfulMessage">
         <source>Update successful!</source>
         <target state="translated">更新成功!</target>

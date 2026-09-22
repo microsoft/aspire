@@ -372,6 +372,11 @@
         <target state="translated">Mettre à jour le package {0} de {1} à {2}</target>
         <note />
       </trans-unit>
+      <trans-unit id="UpdateRepositoryTools">
+        <source>Update repository Aspire CLI references</source>
+        <target state="new">Update repository Aspire CLI references</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UpdateSuccessfulMessage">
         <source>Update successful!</source>
         <target state="translated">Mise à jour correcte !</target>

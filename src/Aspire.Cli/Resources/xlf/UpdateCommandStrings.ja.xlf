@@ -372,6 +372,11 @@
         <target state="translated">パッケージ {0} を {1} から {2} に更新する</target>
         <note />
       </trans-unit>
+      <trans-unit id="UpdateRepositoryTools">
+        <source>Update repository Aspire CLI references</source>
+        <target state="new">Update repository Aspire CLI references</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UpdateSuccessfulMessage">
         <source>Update successful!</source>
         <target state="translated">正常に更新されました!</target>

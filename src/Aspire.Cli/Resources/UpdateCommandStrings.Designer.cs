@@ -70,6 +70,7 @@ namespace Aspire.Cli.Resources {
     internal static string SelectChannelPrompt => ResourceManager.GetString("SelectChannelPrompt", resourceCulture);
     internal static string RepositoryToolUpdateFormat => ResourceManager.GetString("RepositoryToolUpdateFormat", resourceCulture);
     internal static string RepositoryToolsUpToDate => ResourceManager.GetString("RepositoryToolsUpToDate", resourceCulture);
+    internal static string UpdateRepositoryTools => ResourceManager.GetString("UpdateRepositoryTools", resourceCulture);
     internal static string RepositoryToolsUpdated => ResourceManager.GetString("RepositoryToolsUpdated", resourceCulture);
     internal static string RestoreRepositoryDotNetTool => ResourceManager.GetString("RestoreRepositoryDotNetTool", resourceCulture);
     internal static string RestoreRepositoryNpmTool => ResourceManager.GetString("RestoreRepositoryNpmTool", resourceCulture);

@@ -87,6 +87,24 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
 
     public async Task UpdateAsync(IReadOnlyList<RepositoryToolManifest> manifests, PackageChannel channel, PromptBinding<bool> confirmBinding, CancellationToken cancellationToken)
     {
+        var updateStep = await GetUpdateStepAsync(manifests, channel, cancellationToken);
+        if (updateStep is null)
+        {
+            return;
+        }
+
+        interactionService.DisplayMessage(KnownEmojis.Package, updateStep.GetFormattedDisplayText(), allowMarkup: true);
+        if (await interactionService.PromptConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, confirmBinding, cancellationToken: cancellationToken))
+        {
+            await updateStep.Callback();
+        }
+    }
+
+    /// <summary>
+    /// Resolves repository CLI changes without writing files so they can join the project update plan.
+    /// </summary>
+    public async Task<UpdateStep?> GetUpdateStepAsync(IReadOnlyList<RepositoryToolManifest> manifests, PackageChannel channel, CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
         var updates = new List<(RepositoryToolManifest Manifest, RepositoryToolReference Reference, string Version)>();
         var skippedReference = false;
@@ -126,41 +144,48 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
                 interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, UpdateCommandStrings.RepositoryToolsUpToDate);
             }
 
-            return;
+            return null;
         }
 
-        foreach (var (manifest, reference, version) in updates)
-        {
-            interactionService.DisplayMessage(KnownEmojis.Package,
-                string.Format(CultureInfo.CurrentCulture, UpdateCommandStrings.RepositoryToolUpdateFormat,
-                    manifest.File.FullName.EscapeMarkup(), manifest.PackageId.EscapeMarkup(),
-                    reference.Version.EscapeMarkup(), version.EscapeMarkup()), allowMarkup: true);
-        }
+        var displayText = string.Join(Environment.NewLine, updates.Select(update =>
+            string.Format(CultureInfo.CurrentCulture, UpdateCommandStrings.RepositoryToolUpdateFormat,
+                update.Manifest.File.FullName.EscapeMarkup(), update.Manifest.PackageId.EscapeMarkup(),
+                update.Reference.Version.EscapeMarkup(), update.Version.EscapeMarkup())));
+        return new RepositoryToolsUpdateStep(displayText, () => ApplyUpdatesAsync(updates, cancellationToken));
+    }
 
-        if (!await interactionService.PromptConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, confirmBinding, cancellationToken: cancellationToken))
-        {
-            return;
-        }
-
-        var changedManifests = updates.Select(update => update.Manifest).Distinct().ToArray();
+    private async Task ApplyUpdatesAsync(
+        IReadOnlyList<(RepositoryToolManifest Manifest, RepositoryToolReference Reference, string Version)> updates,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var changedManifests = new List<RepositoryToolManifest>();
         var originalFiles = new Dictionary<string, byte[]>();
-        foreach (var manifest in changedManifests)
+        foreach (var manifestUpdates in updates.GroupBy(update => update.Manifest))
         {
-            if (await File.ReadAllTextAsync(manifest.File.FullName, cancellationToken) != manifest.OriginalContent)
+            var original = manifestUpdates.Key;
+            var manifest = await ReadManifestAsync(original.File.FullName, original.IsNpm, cancellationToken);
+            // Guest regeneration can edit unrelated package.json fields before this step.
+            // Preserve those edits, but reject changes to the CLI references the user approved.
+            if (manifest is null || manifest.IsRoot != original.IsRoot ||
+                !manifest.References.Select(reference => (reference.Properties.GetPath(), reference.Key, reference.Version))
+                    .SequenceEqual(original.References.Select(reference => (reference.Properties.GetPath(), reference.Key, reference.Version))))
             {
-                throw new ProjectUpdaterException(string.Format(CultureInfo.CurrentCulture, UpdateCommandStrings.ToolManifestChangedFormat, manifest.File.FullName));
+                throw new ProjectUpdaterException(string.Format(CultureInfo.CurrentCulture, UpdateCommandStrings.ToolManifestChangedFormat, original.File.FullName));
             }
 
             originalFiles.Add(manifest.File.FullName, await File.ReadAllBytesAsync(manifest.File.FullName, cancellationToken));
+            foreach (var (_, reference, version) in manifestUpdates)
+            {
+                var currentReference = manifest.References.Single(candidate =>
+                    candidate.Key == reference.Key && candidate.Properties.GetPath() == reference.Properties.GetPath());
+                currentReference.Properties[currentReference.Key] = version;
+            }
+            changedManifests.Add(manifest);
         }
 
         try
         {
-            foreach (var (manifest, reference, version) in updates)
-            {
-                reference.Properties[reference.Key] = version;
-            }
-
             foreach (var manifest in changedManifests)
             {
                 var newLine = manifest.OriginalContent.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
@@ -273,6 +298,12 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
         {
             throw new ProjectUpdaterException(string.Format(CultureInfo.CurrentCulture, UpdateCommandStrings.FailedReadToolManifestFormat, path, ex.Message));
         }
+    }
+
+    private sealed record RepositoryToolsUpdateStep(string DisplayText, Func<Task> Callback)
+        : UpdateStep(UpdateCommandStrings.UpdateRepositoryTools, Callback)
+    {
+        public override string GetFormattedDisplayText() => DisplayText;
     }
 }
 
