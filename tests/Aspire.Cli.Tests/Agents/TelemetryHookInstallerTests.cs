@@ -4,7 +4,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -31,16 +30,17 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task EnsureInstalledAsync_MatchesBundledHooksAndMetadata()
+    public async Task EnsureInstalledAsync_MatchesPinnedHookMetadata()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
-        var bundleDirectory = workspace.CreateDirectory("bundle");
-        var bundleProvider = new EmbeddedAspireSkillsBundleProvider(
-            new AspireSkillsBundleProvider(),
-            NullLogger<EmbeddedAspireSkillsBundleProvider>.Instance);
-        var bundle = await bundleProvider.CreateBundleAsync(bundleDirectory, CancellationToken.None).DefaultTimeout();
-        Assert.NotNull(bundle);
+        await using var metadataStream = typeof(TelemetryHookInstaller).Assembly.GetManifestResourceStream("telemetry-hooks.metadata.json")
+            ?? throw new InvalidOperationException("Embedded telemetry hook provenance is missing.");
+        using var metadata = await JsonDocument.ParseAsync(metadataStream, cancellationToken: TestContext.Current.CancellationToken).DefaultTimeout();
+        var root = metadata.RootElement;
+        Assert.Equal("microsoft/aspire-skills", root.GetProperty("repository").GetString());
+        Assert.Matches("^[0-9a-f]{40}$", root.GetProperty("commitSha").GetString()!);
+        Assert.Matches(@"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$", root.GetProperty("version").GetString()!);
 
         var scripts = await CreateInstaller(workspace, home).EnsureInstalledAsync(CancellationToken.None).DefaultTimeout();
         var installedPaths = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -49,32 +49,17 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
             ["track-telemetry.ps1"] = scripts.PowerShellScriptPath
         };
 
-        await using var manifestStream = File.OpenRead(Path.Combine(bundleDirectory.FullName, "skill-manifest.json"));
-        using var manifest = await JsonDocument.ParseAsync(manifestStream).DefaultTimeout();
-        await using var metadataStream = typeof(TelemetryHookInstaller).Assembly.GetManifestResourceStream("aspire-skills.metadata.json");
-        Assert.NotNull(metadataStream);
-        using var metadata = await JsonDocument.ParseAsync(metadataStream).DefaultTimeout();
+        var hashes = root.GetProperty("files");
+        Assert.Equal(installedPaths.Keys.Order(StringComparer.Ordinal), hashes.EnumerateObject().Select(hook => hook.Name).Order(StringComparer.Ordinal));
 
-        var bundledHooks = manifest.RootElement.GetProperty("hooks");
-        var recordedHooks = metadata.RootElement.GetProperty("hooks");
-        Assert.Equal(bundledHooks.GetProperty("commitSha").GetString(), recordedHooks.GetProperty("commitSha").GetString());
-
-        var bundledFiles = bundledHooks.GetProperty("files").EnumerateObject().ToArray();
-        var recordedFiles = recordedHooks.GetProperty("files");
-        var expectedNames = bundledFiles.Select(file => file.Name).Order(StringComparer.Ordinal).ToArray();
-        Assert.Equal(expectedNames, installedPaths.Keys.Order(StringComparer.Ordinal));
-        Assert.Equal(expectedNames, recordedFiles.EnumerateObject().Select(file => file.Name).Order(StringComparer.Ordinal));
-
-        foreach (var file in bundledFiles)
+        foreach (var (name, path) in installedPaths)
         {
-            var bundledPath = Path.Combine(bundleDirectory.FullName, "hooks", "scripts", file.Name);
-            var bundledContent = await ReadLfNormalizedAsync(bundledPath).DefaultTimeout();
-            var installedContent = await ReadLfNormalizedAsync(installedPaths[file.Name]).DefaultTimeout();
-            Assert.Equal(bundledContent, installedContent);
-
-            var installedHash = Convert.ToHexStringLower(SHA512.HashData(Encoding.UTF8.GetBytes(installedContent)));
-            Assert.Equal(file.Value.GetString(), installedHash);
-            Assert.Equal(file.Value.GetString(), recordedFiles.GetProperty(file.Name).GetString());
+            var recordedHash = hashes.GetProperty(name).GetString();
+            Assert.Matches("^[0-9a-f]{128}$", recordedHash!);
+            // Canonical hashes use LF UTF-8 without a BOM, including for Windows checkouts.
+            var installedContent = await File.ReadAllTextAsync(path, new UTF8Encoding(false, true)).DefaultTimeout();
+            var installedBytes = Encoding.UTF8.GetBytes(installedContent.ReplaceLineEndings("\n"));
+            Assert.Equal(recordedHash, Convert.ToHexStringLower(SHA512.HashData(installedBytes)));
         }
     }
 
@@ -154,12 +139,5 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
     {
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: home);
         return new TelemetryHookInstaller(executionContext, NullLogger<TelemetryHookInstaller>.Instance);
-    }
-
-    private static async Task<string> ReadLfNormalizedAsync(string path)
-    {
-        // Git can check the PowerShell resource out with CRLF; release hook hashes use LF UTF-8 without a BOM.
-        var content = await File.ReadAllTextAsync(path);
-        return content.Replace("\r\n", "\n").Replace('\r', '\n');
     }
 }

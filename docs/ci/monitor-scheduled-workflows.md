@@ -37,8 +37,7 @@ means "broken". The watchdog files an issue on any failure conclusion:
 
 - `generate-api-diffs`, `generate-ats-diffs`
 - `refresh-manifests`
-- `update-dependencies`, `update-ai-foundry-models`,
-  `update-azure-vm-sizes`, `update-aspire-skills-bundle`
+- `update-dependencies`, `update-ai-foundry-models`, `update-azure-vm-sizes`
 - `deployment-cleanup`
 - `labeler-cache-retention`
 - `warm-cli-e2e-image-cache`
