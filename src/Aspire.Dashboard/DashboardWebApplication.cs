@@ -64,8 +64,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     /// </summary>
     public const int ExitCodeAddressInUse = DashboardExitCodes.AddressInUse;
 
-    private const string DashboardAuthCookieName = ".Aspire.Dashboard.Auth";
-    private const string DashboardHttpAuthCookieName = ".Aspire.Dashboard.Auth.Http";
     private const string DashboardAntiForgeryCookieName = ".Aspire.Dashboard.Antiforgery";
     private const string OtlpExporterEndpointConfigurationKey = "OTEL_EXPORTER_OTLP_ENDPOINT";
     // Blazor discovers routed pages and layouts as Type values, then activates them and assigns
@@ -889,6 +887,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 };
             });
 
+        var (authCookieName, httpAuthCookieName) = DashboardAuthenticationCookieNames.Create(dashboardOptions.GetApplicationNameOrDefault());
+
         switch (dashboardOptions.Frontend.AuthMode)
         {
             case FrontendAuthMode.OpenIdConnect:
@@ -901,8 +901,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
                 authentication.AddCookie(options =>
                 {
-                    options.Cookie.Name = DashboardAuthCookieName;
-                    options.CookieManager = new AspireDashboardCookieManager(DashboardHttpAuthCookieName);
+                    options.Cookie.Name = authCookieName;
+                    options.CookieManager = new AspireDashboardCookieManager(httpAuthCookieName);
                 });
 
                 authentication.AddOpenIdConnect(options =>
@@ -961,8 +961,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                         claimsIdentity.AddClaim(new Claim(FrontendAuthorizationDefaults.BrowserTokenClaimName, bool.TrueString));
                         return Task.CompletedTask;
                     };
-                    options.Cookie.Name = DashboardAuthCookieName;
-                    options.CookieManager = new AspireDashboardCookieManager(DashboardHttpAuthCookieName);
+                    options.Cookie.Name = authCookieName;
+                    options.CookieManager = new AspireDashboardCookieManager(httpAuthCookieName);
                 });
                 break;
             case FrontendAuthMode.Unsecured:

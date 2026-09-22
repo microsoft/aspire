@@ -109,7 +109,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         _logger = logger;
         _timeProvider = timeProvider;
         _deleteRunDirectory = deleteRunDirectory;
-        var applicationName = string.IsNullOrWhiteSpace(options.Value.ApplicationName) ? "Aspire" : options.Value.ApplicationName;
+        var applicationName = options.Value.GetApplicationNameOrDefault();
         _applicationMarkerFileName = GetApplicationDirectoryName(applicationName);
         var startedAt = timeProvider.GetUtcNow();
         // A millisecond timestamp collision is very unlikely. The exclusive run lock below also ensures that if two
