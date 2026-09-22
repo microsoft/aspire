@@ -6,6 +6,7 @@ using Aspire.Cli.NuGet;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
+using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Logging.Abstractions;
 using NuGet.Configuration;
 using NuGet.ProjectModel;
@@ -202,6 +203,81 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
                 Directory.Delete(packageRoot, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public void RestoreAsync_RespectsNuGetPackagesEnvironmentVariable()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feedDirectory = workspace.CreateDirectory("feed");
+        var environmentPackagesDirectory = workspace.CreateDirectory("env-packages");
+        var restoreDirectory = workspace.CreateDirectory("restore");
+        var packageId = $"Aspire.Test.Package.{Guid.NewGuid():N}";
+        CreatePackage(feedDirectory.FullName, packageId);
+
+        // No globalPackagesFolder entry: this covers the environment override specifically, which is
+        // resolved by NuGet's settings rather than by anything this client passes explicitly.
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        File.WriteAllText(
+            nugetConfigPath,
+            $"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="local" value="{feedDirectory.FullName}" />
+              </packageSources>
+            </configuration>
+            """);
+
+        // The restore runs in a child process because NUGET_PACKAGES is read once when NuGet's
+        // settings are first loaded, and the test host has its own value pointing at a shared cache.
+        // The variable is set both on the child's start info and again inside the child: passing it
+        // through start info alone did not reach the child reliably when other classes ran alongside
+        // this one.
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment["NUGET_PACKAGES"] = environmentPackagesDirectory.FullName;
+
+        RemoteExecutor.Invoke(
+            static async (packageId, configPath, restorePath, workingDirectory, packagesDirectory) =>
+            {
+                Environment.SetEnvironmentVariable("NUGET_PACKAGES", packagesDirectory);
+
+                var client = new NuGetClient(
+                    new TestFeatures(),
+                    new TestEnvironment(),
+                    NullLogger<NuGetClient>.Instance);
+
+                await client.RestoreAsync(
+                    [(packageId, "[1.0.0]")],
+                    "net10.0",
+                    runtimeIdentifier: null,
+                    restorePath,
+                    [],
+                    configPath,
+                    workingDirectory,
+                    CancellationToken.None);
+            },
+            packageId,
+            nugetConfigPath,
+            restoreDirectory.FullName,
+            workspace.WorkspaceRoot.FullName,
+            environmentPackagesDirectory.FullName,
+            options).Dispose();
+
+        // NuGet records the resolved packages folder in the assets file, which is also what feeds
+        // the restore cache key, so assert on it rather than only on the extracted files.
+        var assets = new LockFileFormat().Read(Path.Combine(restoreDirectory.FullName, LockFileFormat.AssetsFileName));
+        Assert.Contains(
+            assets.PackageFolders,
+            folder => string.Equals(
+                Path.TrimEndingDirectorySeparator(folder.Path),
+                Path.TrimEndingDirectorySeparator(environmentPackagesDirectory.FullName),
+                StringComparison.OrdinalIgnoreCase));
+
+        // The package must actually land under the override, not merely be referenced from it.
+        Assert.True(
+            Directory.Exists(Path.Combine(environmentPackagesDirectory.FullName, packageId.ToLowerInvariant(), "1.0.0")),
+            $"Expected '{packageId}' to be installed under the NUGET_PACKAGES directory.");
     }
 
     [Fact]
