@@ -4,8 +4,8 @@
   "title": "Multiple unrelated 'Build test project' jobs (Hosting.RemoteHost, Hosting.Azure, Hosting.Azure.Kubernetes, Playground, Dashboard) fail with generic exit code 1",
   "job_name": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
   "error_pattern": "Process completed with exit code 1. (Build test project step failed across multiple unrelated jobs simultaneously; job logs unavailable: 'Failed to fetch logs for job').",
-  "analysis": "The 'Build test project' step failed with only a generic exit code 1 annotation and no job log content was retrievable ('Failed to fetch logs for job'). The PR only modifies unrelated JavaScript files under .github/extensions/aspire-team-app, which cannot affect the Aspire.Hosting.RemoteHost.Tests build. This matches a previously observed widespread pattern of unrelated build-test-project failures across many jobs simultaneously.",
-  "failure_details": "Job: Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)\nFailed Steps: Build test project\nAnnotation: failure: Process completed with exit code 1.\nLogs: (Failed to fetch logs for job 106499466155)",
+  "analysis": "The failing job's 'Build test project' step produced only a generic 'Process completed with exit code 1' annotation with no underlying error text, and job logs could not be fetched. The PR is a dependency-only update to eng/Version.Details.xml and eng/Versions.props (microsoft/dcp bump) with no relation to Hosting.RemoteHost test code. This recurring, previously-tracked pattern spans multiple unrelated job matrices, indicating a transient CI/runner infrastructure issue rather than a code defect introduced by this PR.",
+  "failure_details": "### Job: Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)\n- Conclusion: failure\n- Failed Steps: Build test project\n\nJob Logs: (Failed to fetch logs for job 106632273839)\n\nAnnotations:\n- failure: Process completed with exit code 1.",
   "occurrences": [
     {
       "run_id": 33494022725,
@@ -118,6 +118,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
       "pr_number": 20192,
       "observed_at": "2026-09-21T21:09:35Z"
+    },
+    {
+      "run_id": 35692292750,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35692292750",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
+      "pr_number": 20300,
+      "observed_at": "2026-09-22T06:30:49Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19838"
