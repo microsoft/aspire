@@ -58,12 +58,12 @@ suite('Blazor WASM debugger setup', () => {
         });
     }
 
-    test('does not retry activation or initialization errors', async () => {
-        const error = new Error('C# initialization failed');
+    test('does not retry preparation errors', async () => {
+        const error = new Error('C# activation failed');
         await assert.rejects(ensureBlazorWasmDebuggerReady({
             prepare: async () => { throw error; },
-            reloadWindow: async () => { assert.fail('Initialization failures must not trigger reload.'); },
-            onRetry: () => { assert.fail('Initialization failures must not be retried.'); },
+            reloadWindow: async () => { assert.fail('Preparation failures must not trigger reload.'); },
+            onRetry: () => { assert.fail('Preparation failures must not be retried.'); },
         }), caught => caught === error);
     });
 

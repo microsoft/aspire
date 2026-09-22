@@ -144,7 +144,7 @@ corepack yarn test:e2e
 
 Linux exercises Chrome, while Windows exercises Edge. The shard generates standalone, hosted-global, and hosted-per-page `net11.0` fixtures. Both VSIX files must match the current platform, and C# must be 2.145.15-prerelease or newer.
 
-Before starting the AppHost, the shard waits for C# initialization and checks that its `VSWebAssemblyBridge` dependency was installed. If that component is missing, setup reloads the isolated extension host to let C# reacquire and validate it, with at most three activation attempts. Other initialization errors fail immediately, and a component that remains missing fails setup explicitly instead of falling back to the legacy proxy. The managed-breakpoint scenarios themselves are never retried.
+Before starting the AppHost, the shard awaits C# activation, which installs its runtime dependencies, and checks that `VSWebAssemblyBridge` is present. It does not wait for language-server project import to check this runtime component. If the component is missing, setup reloads the isolated extension host to let C# reacquire and validate it, with at most three activation attempts. Other activation errors fail immediately, and a component that remains missing fails setup explicitly instead of falling back to the legacy proxy. The managed-breakpoint scenarios themselves are never retried.
 
 Each managed proof uses a separate browser profile under the test run's temporary root. A browser lock left by another scenario therefore cannot block its launch. Profiles are removed by the runner after VS Code exits and are not included in uploaded diagnostics; the breakpoint, debug-session shutdown, and command-reset assertions still have to pass.
 
