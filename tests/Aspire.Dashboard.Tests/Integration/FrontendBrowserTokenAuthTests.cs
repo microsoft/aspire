@@ -16,6 +16,8 @@ namespace Aspire.Dashboard.Tests.Integration;
 
 public class FrontendBrowserTokenAuthTests
 {
+    private const string ApplicationName = "Test application";
+    private static readonly (string AuthCookieName, string HttpAuthCookieName) s_cookieNames = DashboardAuthenticationCookieNames.Create(ApplicationName);
     private readonly ITestOutputHelper _testOutputHelper;
 
     public FrontendBrowserTokenAuthTests(ITestOutputHelper testOutputHelper)
@@ -131,6 +133,7 @@ public class FrontendBrowserTokenAuthTests
             config[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "https://127.0.0.1:0;http://127.0.0.1:0";
             config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.BrowserToken.ToString();
             config[DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = apiKey;
+            config[DashboardConfigNames.DashboardApplicationName.ConfigKey] = ApplicationName;
         });
         await app.StartAsync().DefaultTimeout();
 
@@ -154,8 +157,8 @@ public class FrontendBrowserTokenAuthTests
         Assert.Equal(HttpStatusCode.Redirect, httpsResponse.StatusCode);
         Assert.Equal(HttpStatusCode.Redirect, httpResponse.StatusCode);
 
-        var httpsCookie = Assert.Single(httpsResponse.Headers.GetValues("Set-Cookie"), c => c.StartsWith(".Aspire.Dashboard.Auth=", StringComparison.Ordinal));
-        var httpCookie = Assert.Single(httpResponse.Headers.GetValues("Set-Cookie"), c => c.StartsWith(".Aspire.Dashboard.Auth.Http=", StringComparison.Ordinal));
+        var httpsCookie = Assert.Single(httpsResponse.Headers.GetValues("Set-Cookie"), c => c.StartsWith($"{s_cookieNames.AuthCookieName}=", StringComparison.Ordinal));
+        var httpCookie = Assert.Single(httpResponse.Headers.GetValues("Set-Cookie"), c => c.StartsWith($"{s_cookieNames.HttpAuthCookieName}=", StringComparison.Ordinal));
         Assert.Contains("; secure", httpsCookie, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("; secure", httpCookie, StringComparison.OrdinalIgnoreCase);
     }
@@ -170,6 +173,7 @@ public class FrontendBrowserTokenAuthTests
             config[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "https://127.0.0.1:0;http://127.0.0.1:0";
             config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.BrowserToken.ToString();
             config[DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = apiKey;
+            config[DashboardConfigNames.DashboardApplicationName.ConfigKey] = ApplicationName;
         });
         await app.StartAsync().DefaultTimeout();
 
@@ -201,12 +205,12 @@ public class FrontendBrowserTokenAuthTests
             deletedCookies,
             c =>
             {
-                Assert.StartsWith(".Aspire.Dashboard.Auth=", c, StringComparison.Ordinal);
+                Assert.StartsWith($"{s_cookieNames.AuthCookieName}=", c, StringComparison.Ordinal);
                 Assert.Contains("expires=Thu, 01 Jan 1970", c, StringComparison.OrdinalIgnoreCase);
             },
             c =>
             {
-                Assert.StartsWith(".Aspire.Dashboard.Auth.Http=", c, StringComparison.Ordinal);
+                Assert.StartsWith($"{s_cookieNames.HttpAuthCookieName}=", c, StringComparison.Ordinal);
                 Assert.Contains("expires=Thu, 01 Jan 1970", c, StringComparison.OrdinalIgnoreCase);
             });
     }
@@ -253,6 +257,7 @@ public class FrontendBrowserTokenAuthTests
             config[DashboardConfigNames.ForwardedHeaders.ConfigKey] = bool.TrueString;
             config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.BrowserToken.ToString();
             config[DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = apiKey;
+            config[DashboardConfigNames.DashboardApplicationName.ConfigKey] = ApplicationName;
         });
         await app.StartAsync().DefaultTimeout();
 
@@ -272,7 +277,7 @@ public class FrontendBrowserTokenAuthTests
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
 
-        var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"), c => c.StartsWith(".Aspire.Dashboard.Auth=", StringComparison.Ordinal));
+        var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"), c => c.StartsWith($"{s_cookieNames.AuthCookieName}=", StringComparison.Ordinal));
         Assert.Contains("; secure", cookie, StringComparison.OrdinalIgnoreCase);
     }
 
