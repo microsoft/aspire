@@ -35,6 +35,7 @@
     <ProjectReference Include="..\..\tools\TypeScriptApiCompat\TypeScriptApiCompat.csproj" />
     <ProjectReference Include="..\..\tools\SelectTests\SelectTests.csproj" />
     <ProjectReference Include="..\..\tools\Aspire.TestTools\Aspire.TestTools.csproj" />
+    <ProjectReference Include="..\..\tools\CreateLayout\CreateLayout.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />

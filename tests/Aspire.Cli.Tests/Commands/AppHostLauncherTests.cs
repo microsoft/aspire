@@ -1745,22 +1745,6 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class SignalingFakeTimeProvider(TimeSpan signaledDueTime) : FakeTimeProvider
-    {
-        public TaskCompletionSource TimerCreated { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
-        {
-            var timer = base.CreateTimer(callback, state, dueTime, period);
-            if (dueTime == signaledDueTime)
-            {
-                TimerCreated.TrySetResult();
-            }
-
-            return timer;
-        }
-    }
-
     private sealed class FixedLayoutDiscovery : ILayoutDiscovery
     {
         public LayoutConfiguration? DiscoverLayout(string? projectDirectory = null) => null;

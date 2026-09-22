@@ -5,10 +5,12 @@ using System.Globalization;
 using System.Text;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
+using Microsoft.Extensions.Localization;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components;
@@ -39,6 +41,9 @@ public sealed partial class LogViewer
 
     [Inject]
     public required ILogger<LogViewer> Logger { get; init; }
+
+    [Inject]
+    public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
 
     [Parameter]
     public LogEntries? LogEntries { get; set; } = null!;

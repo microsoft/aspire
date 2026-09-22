@@ -1,13 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOTNETPROJECT001, ASPIREEXTENSION001, ASPIREPIPELINES001
+#pragma warning disable ASPIREDOTNETPROJECT001, ASPIREEXTENSION001, ASPIREPIPELINES001, ASPIREPROJECTS001
 
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -25,6 +26,7 @@ internal static class DotnetProjectBuildCoordinator
     private const string DebugSessionPortConfigurationKey = "DEBUG_SESSION_PORT";
     private const string DebugSessionInfoConfigurationKey = "DEBUG_SESSION_INFO";
     private const string AspireStorePathConfigurationKey = "Aspire:Store:Path";
+    private const string RestoreProjectsIndividuallyConfigurationKey = "Aspire:Dotnet:RestoreProjectsIndividually";
 
     public static CoordinatorState? Prepare(
         IDistributedApplicationBuilder builder,
@@ -62,6 +64,9 @@ internal static class DotnetProjectBuildCoordinator
         }
 
         state.AddResource(resourceBuilder.Resource);
+        resourceBuilder.WithAnnotation(new DotnetProgramBuildCompletionAnnotation(
+            (services, cancellationToken) =>
+                state.WaitForBuildCompletionAsync(resourceBuilder.Resource, services, cancellationToken)));
 
         // Preserve the eagerly visible dependency used by model tests and tooling. BeforeStart replaces
         // the build plan after all resource environment callbacks and SDK roots are known, then adds the
@@ -175,7 +180,7 @@ internal static class DotnetProjectBuildCoordinator
 
     private static async Task WaitForSuccessfulBuildAsync(
         IServiceProvider services,
-        DotnetProjectBuildResource buildResource,
+        IResource buildResource,
         CancellationToken cancellationToken)
     {
         var notificationService = services.GetRequiredService<ResourceNotificationService>();
@@ -221,13 +226,16 @@ internal static class DotnetProjectBuildCoordinator
     internal sealed class CoordinatorState : IDisposable
     {
         private readonly IDistributedApplicationBuilder _builder;
+        private readonly object _materializationLock = new();
         private readonly List<ResourceRegistration> _registrations = [];
         private readonly List<DotnetProjectBuildResource> _ownedBuildResources = [];
         private readonly List<SharedBuildEnvironment> _sharedBuildEnvironments = [];
         private readonly Dictionary<DotnetProjectResource, Action> _eagerDependencyRollbacks =
             new(ReferenceEqualityComparer.Instance);
         private bool _materialized;
+        private bool _materializationInProgress;
         private bool _disposed;
+        private TaskCompletionSource _materializationCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public CoordinatorState(IDistributedApplicationBuilder builder)
         {
@@ -264,18 +272,47 @@ internal static class DotnetProjectBuildCoordinator
             _registrations.Add(new ResourceRegistration(resource));
         }
 
-        public Task WaitForBuildCompletionAsync(
+        public async Task WaitForBuildCompletionAsync(
             DotnetProjectResource resource,
             IServiceProvider services,
             CancellationToken cancellationToken)
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
+            Task materializationTask;
+            lock (_materializationLock)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                materializationTask = _materializationCompletion.Task;
+            }
+
+            // BeforeStartEvent subscribers can request build output before the BeforeStart pipeline's final
+            // action creates the plan. Waiting here must not block that event or depend on application readiness.
+            await materializationTask.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             var registration = _registrations.Single(
                 registration => ReferenceEquals(registration.Resource, resource));
-            var finalBuildResource = registration.FinalBuildResource ?? throw new InvalidOperationException(
-                $"The coordinated build plan for .NET project resource '{resource.Name}' has not been materialized.");
-            return WaitForSuccessfulBuildAsync(services, finalBuildResource, cancellationToken);
+            if (registration.FinalBuildResource is { } finalBuildResource)
+            {
+                // Do not cache this wait: another command can arrive during a later build attempt.
+                await WaitForSuccessfulBuildAsync(services, finalBuildResource, cancellationToken).ConfigureAwait(false);
+
+                // The initial build barrier stays finished when the project's separate rebuilder runs.
+                // Once that resource has been used, its latest attempt must also succeed before consumers
+                // can use the output. Do not wait on a dormant, explicitly started rebuilder.
+                var model = services.GetRequiredService<DistributedApplicationModel>();
+                var notifications = services.GetRequiredService<ResourceNotificationService>();
+                if (FindRebuilder(model, resource) is { } rebuilder &&
+                    notifications.TryGetCurrentState(rebuilder.Name, out var rebuildEvent) &&
+                    rebuildEvent.Snapshot.State?.Text is { } state &&
+                    (state == KnownResourceStates.Starting ||
+                     state == KnownResourceStates.Running ||
+                     state == KnownResourceStates.Waiting ||
+                     state == KnownResourceStates.Building ||
+                     state == KnownResourceStates.Stopping ||
+                     KnownResourceStates.TerminalStates.Contains(state)))
+                {
+                    await WaitForSuccessfulBuildAsync(services, rebuilder, cancellationToken).ConfigureAwait(false);
+                }
+            }
         }
 
         public void AddEagerBuildDependencies()
@@ -304,12 +341,17 @@ internal static class DotnetProjectBuildCoordinator
 
         public void Dispose()
         {
-            if (_disposed)
+            lock (_materializationLock)
             {
-                return;
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _disposed = true;
+                _materializationCompletion.TrySetCanceled();
             }
 
-            _disposed = true;
             RemoveEagerBuildDependencies(_registrations.Select(registration => registration.Resource));
             foreach (var buildResource in _ownedBuildResources)
             {
@@ -325,9 +367,57 @@ internal static class DotnetProjectBuildCoordinator
             DistributedApplicationModel model,
             IServiceProvider services)
         {
+            TaskCompletionSource completion;
+            lock (_materializationLock)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                completion = _materializationCompletion;
+                if (_materializationInProgress)
+                {
+                    return completion.Task;
+                }
+
+                _materializationInProgress = true;
+            }
+
+            // Consumers must remain able to capture this attempt while the synchronous model mutation runs.
+            try
+            {
+                MaterializeBuildPlanCore(model, services);
+            }
+            catch (Exception ex)
+            {
+                lock (_materializationLock)
+                {
+                    _materializationInProgress = false;
+                    if (!_disposed)
+                    {
+                        // Existing consumers observe this failed attempt; subsequent consumers can await a retry.
+                        _materializationCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                    }
+
+                    completion.TrySetException(ex);
+                }
+
+                throw;
+            }
+
+            lock (_materializationLock)
+            {
+                _materializationInProgress = false;
+                completion.TrySetResult();
+            }
+
+            return Task.CompletedTask;
+        }
+
+        private void MaterializeBuildPlanCore(
+            DistributedApplicationModel model,
+            IServiceProvider services)
+        {
             if (_materialized)
             {
-                return Task.CompletedTask;
+                return;
             }
 
             var activeResources = model.Resources.ToHashSet(ReferenceEqualityComparer.Instance);
@@ -384,15 +474,17 @@ internal static class DotnetProjectBuildCoordinator
                 }
 
                 _materialized = true;
-                return Task.CompletedTask;
+                return;
             }
 
             var buildSteps = CreateBuildSteps(buildEntries);
+            var restoreProjectsIndividually = _builder.Configuration.GetValue<bool>(RestoreProjectsIndividuallyConfigurationKey);
             var applicationLifetime = services.GetRequiredService<IHostApplicationLifetime>();
             var primaryBuildResource = PrimaryBuildResource!;
             var originalPrimaryProjectPaths = primaryBuildResource.ProjectPaths;
             var originalPrimaryWorkingDirectory = primaryBuildResource.WorkingDirectory;
             var originalPrimaryBuildConfiguration = primaryBuildResource.BuildConfiguration;
+            var originalPrimaryRestoreProjectsIndividually = primaryBuildResource.RestoreProjectsIndividually;
             var rollbackActions = new Stack<Action>();
 
             try
@@ -401,7 +493,8 @@ internal static class DotnetProjectBuildCoordinator
                     primaryBuildResource.ConfigureTraversalBuild(
                         originalPrimaryProjectPaths,
                         originalPrimaryWorkingDirectory,
-                        originalPrimaryBuildConfiguration));
+                        originalPrimaryBuildConfiguration,
+                        originalPrimaryRestoreProjectsIndividually));
 
                 var buildResources = new List<DotnetProjectBuildResource>(buildSteps.Count);
                 for (var index = 0; index < buildSteps.Count; index++)
@@ -426,7 +519,8 @@ internal static class DotnetProjectBuildCoordinator
                         buildResource.ConfigureTraversalBuild(
                             step.Projects.Select(entry => entry.Metadata.ProjectPath),
                             step.WorkingDirectory,
-                            step.Configuration);
+                            step.Configuration,
+                            restoreProjectsIndividually);
                         rollbackActions.Push(ValidateMaterializedBuildCallbacks(buildResource, step.Projects));
                     }
                     else
@@ -546,8 +640,6 @@ internal static class DotnetProjectBuildCoordinator
 
                 throw;
             }
-
-            return Task.CompletedTask;
         }
 
         private void RemoveEagerBuildDependencies(IEnumerable<DotnetProjectResource> resources)

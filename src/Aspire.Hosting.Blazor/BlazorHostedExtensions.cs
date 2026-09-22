@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTS001
+
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
@@ -32,6 +34,29 @@ public static class BlazorHostedExtensions
         this IResourceBuilder<ProjectResource> host,
         IResourceBuilder<IResourceWithServiceDiscovery> service,
         string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix)
+        => ProxyBlazorServiceCore(host, service, apiPrefix);
+
+    /// <summary>
+    /// Configures a .NET program host to proxy requests from its WebAssembly client to a service.
+    /// </summary>
+    /// <typeparam name="T">The .NET program resource type.</typeparam>
+    /// <param name="host">The host resource builder.</param>
+    /// <param name="service">The service to proxy.</param>
+    /// <param name="apiPrefix">The URL path prefix for API proxy routes.</param>
+    /// <returns>The host resource builder for chaining.</returns>
+    [AspireExportIgnore(Reason = "Blazor hosted APIs are not yet stable for ATS export.")]
+    public static IResourceBuilder<T> ProxyBlazorService<T>(
+        this IResourceBuilder<T> host,
+        IResourceBuilder<IResourceWithServiceDiscovery> service,
+        string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix)
+        where T : class, IDotnetProgramResource, IResourceWithEnvironment, IResourceWithServiceDiscovery
+        => ProxyBlazorServiceCore(host, service, apiPrefix);
+
+    private static IResourceBuilder<T> ProxyBlazorServiceCore<T>(
+        IResourceBuilder<T> host,
+        IResourceBuilder<IResourceWithServiceDiscovery> service,
+        string apiPrefix)
+        where T : class, IDotnetProgramResource, IResourceWithEnvironment, IResourceWithServiceDiscovery
     {
         var annotation = GetOrAddHostedClientAnnotation(host.Resource);
         annotation.Services.Add(new HostedClientService(service.Resource.Name, apiPrefix));
@@ -60,6 +85,26 @@ public static class BlazorHostedExtensions
     public static IResourceBuilder<ProjectResource> ProxyBlazorTelemetry(
         this IResourceBuilder<ProjectResource> host,
         string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix)
+        => ProxyBlazorTelemetryCore(host, otlpPrefix);
+
+    /// <summary>
+    /// Configures a .NET program host to proxy OpenTelemetry data from its WebAssembly client.
+    /// </summary>
+    /// <typeparam name="T">The .NET program resource type.</typeparam>
+    /// <param name="host">The host resource builder.</param>
+    /// <param name="otlpPrefix">The URL path prefix for OTLP proxy routes.</param>
+    /// <returns>The host resource builder for chaining.</returns>
+    [AspireExportIgnore(Reason = "Blazor hosted APIs are not yet stable for ATS export.")]
+    public static IResourceBuilder<T> ProxyBlazorTelemetry<T>(
+        this IResourceBuilder<T> host,
+        string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix)
+        where T : class, IDotnetProgramResource, IResourceWithEnvironment, IResourceWithServiceDiscovery
+        => ProxyBlazorTelemetryCore(host, otlpPrefix);
+
+    private static IResourceBuilder<T> ProxyBlazorTelemetryCore<T>(
+        IResourceBuilder<T> host,
+        string otlpPrefix)
+        where T : class, IDotnetProgramResource, IResourceWithEnvironment, IResourceWithServiceDiscovery
     {
         var annotation = GetOrAddHostedClientAnnotation(host.Resource);
         annotation.ProxyBlazorTelemetry = true;
@@ -81,6 +126,26 @@ public static class BlazorHostedExtensions
     public static IResourceBuilder<ProjectResource> WithBlazorDebuggerBrowser(
         this IResourceBuilder<ProjectResource> host,
         string browser = "msedge")
+        => WithBlazorDebuggerBrowserCore(host, browser);
+
+    /// <summary>
+    /// Configures the browser launched for a hosted Blazor WebAssembly client on a .NET program resource.
+    /// </summary>
+    /// <typeparam name="T">The .NET program resource type.</typeparam>
+    /// <param name="host">The host resource builder.</param>
+    /// <param name="browser">The browser to use for debugging.</param>
+    /// <returns>The host resource builder for chaining.</returns>
+    [AspireExportIgnore(Reason = "Blazor hosted APIs are not yet stable for ATS export.")]
+    public static IResourceBuilder<T> WithBlazorDebuggerBrowser<T>(
+        this IResourceBuilder<T> host,
+        string browser = "msedge")
+        where T : class, IDotnetProgramResource, IResourceWithEnvironment, IResourceWithServiceDiscovery
+        => WithBlazorDebuggerBrowserCore(host, browser);
+
+    private static IResourceBuilder<T> WithBlazorDebuggerBrowserCore<T>(
+        IResourceBuilder<T> host,
+        string browser)
+        where T : class, IDotnetProgramResource, IResourceWithEnvironment, IResourceWithServiceDiscovery
     {
         var annotation = GetOrAddHostedClientAnnotation(host.Resource);
         annotation.DebuggerBrowser = browser;
@@ -88,9 +153,10 @@ public static class BlazorHostedExtensions
         return host;
     }
 
-    private static void EnsureEnvironmentCallback(
-        IResourceBuilder<ProjectResource> host,
+    private static void EnsureEnvironmentCallback<T>(
+        IResourceBuilder<T> host,
         HostedClientAnnotation annotation)
+        where T : class, IDotnetProgramResource, IResourceWithEnvironment, IResourceWithServiceDiscovery
     {
         if (annotation.IsInitialized)
         {
@@ -275,12 +341,13 @@ public static class BlazorHostedExtensions
         return null;
     }
 
-    private static void AddBrowserDebuggerResource(
-        IResourceBuilder<ProjectResource> host,
+    private static void AddBrowserDebuggerResource<T>(
+        IResourceBuilder<T> host,
         string serverProjectPath,
         Func<string?> clientProjectPathProvider,
         string? relativePath,
         string browser)
+        where T : class, IDotnetProgramResource, IResourceWithEnvironment, IResourceWithServiceDiscovery
     {
         var workingDirectory = Path.GetDirectoryName(serverProjectPath) ?? serverProjectPath;
 

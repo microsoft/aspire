@@ -1,0 +1,19 @@
+﻿Description:
+  Initialize Aspire in an existing codebase
+
+Usage:
+  Aspire.Cli.Tests init [options]
+
+Options:
+  --language <language>                                                  The programming language for the AppHost (csharp, typescript)
+  --file-based                                                           Create apphost.cs in the current directory, skipping .NET solution discovery. Requires C#.
+  --suppress-agent-init                                                  Suppress AI agent environment configuration after project creation
+  --skill-locations <skill-locations>                                    Comma-separated list of skill locations to install (e.g. standard,claudecode,github,opencode), 'all', or 'none'
+  --skills <skills>                                                      Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include playwright-cli,dotnet-inspect. Use 'all' or 'none'
+  -?, -h, --help                                                         Show help and usage information
+  -l, --log-level <Critical|Debug|Error|Information|None|Trace|Warning>  Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)
+  --non-interactive                                                      Run the command in non-interactive mode, disabling all interactive prompts and spinners
+  --nologo                                                               Suppress the startup banner and telemetry notice
+  --banner                                                               Display the animated Aspire CLI welcome banner
+  --wait-for-debugger                                                    Wait for a debugger to attach before executing the command
+

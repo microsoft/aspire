@@ -1154,6 +1154,114 @@ internal sealed class DashboardClient : IDashboardClient
         return response.FileId;
     }
 
+    public async IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        EnsureInitialized();
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+        var errorCount = 0;
+
+        // Each subscriber owns its RPC, including recovery. Reopening it supplies a fresh snapshot, so neither the
+        // dock nor a detached window has to reconstruct changes missed during a disconnect.
+        while (true)
+        {
+            await WhenConnected.WaitAsync(cts.Token).ConfigureAwait(false);
+
+            var unsupported = false;
+            var updates = WatchTerminalsCoreAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+            await using (updates.ConfigureAwait(false))
+            {
+                while (true)
+                {
+                    bool hasNext;
+                    try
+                    {
+                        hasNext = await updates.MoveNextAsync().ConfigureAwait(false);
+                    }
+                    catch (RpcException ex)
+                    {
+                        cts.Token.ThrowIfCancellationRequested();
+                        unsupported = ex.StatusCode == StatusCode.Unimplemented;
+                        if (unsupported)
+                        {
+                            // Older AppHosts can serve the dashboard without implementing the terminal RPC.
+                            _logger.LogWarning("Server does not support terminals.");
+                        }
+                        else
+                        {
+                            _logger.LogWarning(ex, "Terminal watch stream disconnected. Retrying.");
+                        }
+                        break;
+                    }
+
+                    if (!hasNext)
+                    {
+                        break;
+                    }
+
+                    errorCount = 0;
+                    yield return updates.Current;
+                }
+            }
+
+            if (unsupported)
+            {
+                yield break;
+            }
+
+            // Normal stream completion also needs recovery. Dispose the old RPC before backing off, and cancel
+            // both connection waits and backoff when the subscriber goes away or the dashboard client is disposed.
+            var delay = TimeSpan.FromSeconds(Math.Min(Math.Pow(2, errorCount), 15));
+            errorCount = Math.Min(errorCount + 1, 4);
+            await Task.Delay(delay, cts.Token).ConfigureAwait(false);
+        }
+    }
+
+    private async IAsyncEnumerable<WatchTerminalsUpdate> WatchTerminalsCoreAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var call = _client!.WatchTerminals(new WatchTerminalsRequest(), headers: _headers, cancellationToken: cancellationToken);
+        await foreach (var update in call.ResponseStream.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+        {
+            yield return update;
+        }
+    }
+
+    public async Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken)
+    {
+        EnsureInitialized();
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+        await _client!.CloseTerminalAsync(
+            new CloseTerminalRequest { TerminalId = terminalId },
+            headers: _headers,
+            cancellationToken: cts.Token).ConfigureAwait(false);
+    }
+
+    public async Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken)
+    {
+        EnsureInitialized();
+
+        // The call outlives this method, so the linked CTS cannot be scoped with `using` here. Link to the client
+        // token anyway so a dashboard-wide disconnect tears the tunnel down instead of leaking it.
+        var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+        var call = _client!.AttachTerminal(headers: _headers, cancellationToken: combinedTokens.Token);
+        var stream = new GrpcTerminalClientStream(call, terminalId, combinedTokens);
+
+        try
+        {
+            // The AppHost blocks on the selector frame before wiring the call to Hex1b, so send it eagerly rather than
+            // waiting for the browser's first HMP1 frame — otherwise nothing streams until the user types.
+            await stream.SendSelectorAsync(combinedTokens.Token).ConfigureAwait(false);
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
+
+        return stream;
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _state, StateDisposed) is not StateDisposed)

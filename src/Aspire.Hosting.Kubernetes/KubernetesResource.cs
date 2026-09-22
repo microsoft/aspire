@@ -197,7 +197,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     internal string GetContainerImageName(IResource resourceInstance)
     {
-        if (!resourceInstance.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _) && resourceInstance is not ProjectResource)
+        if (!resourceInstance.RequiresImageBuild())
         {
             if (resourceInstance.TryGetContainerImageName(out var containerImageName))
             {
@@ -815,7 +815,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             IsEmbeddedParameter = isEmbedded
         };
     }
-    
+
     private static HelmValue ResolveUnknownValue(IManifestExpressionProvider parameter, IResource resource)
     {
         var formattedName = parameter.ValueExpression.Replace(HelmExtensions.StartDelimiter, string.Empty)

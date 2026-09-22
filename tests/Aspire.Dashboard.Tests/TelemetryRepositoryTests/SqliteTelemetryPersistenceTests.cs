@@ -66,6 +66,25 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
     }
 
     [Fact]
+    public async Task RunReadAsync_CancellationTranslatesOtherSqliteErrors()
+    {
+        using var cancellationSource = new CancellationTokenSource();
+
+        var queryTask = SqliteTelemetryRepository.RunReadAsync<object?>(_ =>
+        {
+            cancellationSource.Cancel();
+
+            using var connection = new SqliteConnection("Data Source=:memory:");
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "INVALID SQL";
+            return command.ExecuteScalar();
+        }, cancellationSource.Token);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queryTask).DefaultTimeout();
+    }
+
+    [Fact]
     public async Task Cache_UsesCanonicalResourceViewAndScopeAcrossSignals()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);

@@ -102,6 +102,21 @@ public sealed partial class SqliteResourceRepository
             });
     }
 
+    private static void TrimConsoleLogs(SqliteConnection connection, IDbTransaction transaction, int maxConsoleLogCount)
+    {
+        // At the default 100,000-row limit, this is faster than OFFSET unless more than roughly 10,000
+        // excess logs are trimmed at once, which isn't a realistic ingestion pattern.
+        connection.Execute("""
+            DELETE FROM console_logs
+            WHERE console_log_id IN (
+                SELECT console_log_id
+                FROM console_logs
+                ORDER BY console_log_id
+                LIMIT MAX((SELECT COUNT(*) FROM console_logs) - @MaxConsoleLogCount, 0)
+            );
+            """, new { MaxConsoleLogCount = maxConsoleLogCount }, transaction);
+    }
+
     private static void InsertEnvironment(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<Resource> resources)
     {
         var rows = resources

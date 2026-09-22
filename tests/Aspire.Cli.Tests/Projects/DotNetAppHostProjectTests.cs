@@ -1174,8 +1174,80 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(125, exitCode);
     }
 
-    [Fact]
-    public async Task RunAsync_ProjectAppHostMissingSelectedLaunchProfileFallsBackWithoutSelectingDefault()
+    [Theory]
+    [InlineData(null, null, "http", "http")]
+    [InlineData(null, "http", "https", "http")]
+    [InlineData("https", null, "http", "https")]
+    [InlineData(null, null, null, "https")]
+    [InlineData(null, null, "", "https")]
+    public async Task RunAsync_ProjectAppHostDirectLaunchHonorsLaunchProfileEnvironment(
+        string? explicitProfile, string? contextProfile, string? inheritedProfile, string expectedProfile)
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
+            {
+              "profiles": {
+                "https": {
+                  "commandName": "Project",
+                  "applicationUrl": "https://localhost:15000",
+                  "environmentVariables": { "SELECTED_PROFILE": "https" }
+                },
+                "http": {
+                  "commandName": "Project",
+                  "applicationUrl": "http://localhost:16000",
+                  "environmentVariables": { "SELECTED_PROFILE": "http" }
+                }
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAsyncCallback = (_, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("A Project launch profile should use direct launch."),
+            RunAppHostCommandAsyncCallback = (_, command, _, args, env, _, _, _) =>
+            {
+                Assert.Equal(appHostCommand.FullName, command);
+                Assert.Equal(["--custom", "value"], args);
+                Assert.NotNull(env);
+                Assert.Equal(expectedProfile, env["DOTNET_LAUNCH_PROFILE"]);
+                Assert.Equal(expectedProfile, env["SELECTED_PROFILE"]);
+                Assert.Equal(expectedProfile == "http" ? "http://localhost:16000" : "https://localhost:15000", env[KnownAspNetCoreConfigNames.Urls]);
+                return Task.FromResult(125);
+            }
+        };
+        // dotnet run sets DOTNET_LAUNCH_PROFILE on the Aspire CLI process when the bundle
+        // hook delegates the launch. Keep that inherited state isolated from the test process.
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["DOTNET_LAUNCH_PROFILE"] = inheritedProfile
+        });
+        var project = CreateDotNetAppHostProject(runner, environment: environment);
+        var contextEnvironment = new Dictionary<string, string>();
+        if (contextProfile is not null)
+        {
+            contextEnvironment["DOTNET_LAUNCH_PROFILE"] = contextProfile;
+        }
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchProfile = explicitProfile,
+            NoBuild = true,
+            UnmatchedTokens = ["--custom", "value"],
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = contextEnvironment
+        }, CancellationToken.None);
+
+        Assert.Equal(125, exitCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunAsync_ProjectAppHostMissingSelectedLaunchProfileFallsBackWithoutSelectingDefault(bool inheritedProfile)
     {
         var appHostFile = CreateProjectAppHost();
         var appHostCommand = CreateBuiltAppHostCommand("AppHost");
@@ -1199,7 +1271,11 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
             RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) => throw new InvalidOperationException("direct launch should not substitute the default profile.")
         };
-        var project = CreateDotNetAppHostProject(runner);
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["DOTNET_LAUNCH_PROFILE"] = inheritedProfile ? "missing" : null
+        });
+        var project = CreateDotNetAppHostProject(runner, environment: environment);
 
         runner.RunAsyncCallback = (_, watch, noBuild, noRestore, args, env, _, options, _) =>
         {
@@ -1216,7 +1292,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var exitCode = await project.RunAsync(new AppHostProjectContext
         {
             AppHostFile = appHostFile,
-            LaunchProfile = "missing",
+            LaunchProfile = inheritedProfile ? null : "missing",
             NoBuild = false,
             NoRestore = false,
             WorkingDirectory = _workspace.WorkspaceRoot,

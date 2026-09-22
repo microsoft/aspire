@@ -1,3 +1,7 @@
+fluent-overflow::part(items) {
+    flex-grow: 0;
+}
+
 fluent-button {
     --aspire-button-background: var(--colorNeutralBackground1);
     --aspire-button-foreground: var(--colorNeutralForeground1);
@@ -338,7 +342,16 @@ fluent-field.aspire-checkbox {
 }
 
 fluent-field.aspire-checkbox:has(> fluent-checkbox[disabled]) {
-    opacity: 0.3;
+    color: var(--colorNeutralForegroundDisabled);
+}
+
+fluent-field.aspire-checkbox > fluent-checkbox[disabled] {
+    --colorNeutralStrokeDisabled: var(--colorNeutralForegroundDisabled);
+    cursor: not-allowed;
+}
+
+fluent-field.aspire-checkbox:has(> fluent-checkbox[disabled]) > label {
+    cursor: not-allowed;
 }
 
 fluent-field.aspire-checkbox:not(:has(> fluent-checkbox[disabled])) > label {
@@ -450,18 +463,23 @@ fluent-dropdown fluent-option {
 }
 
 fluent-dropdown fluent-option[selected],
-fluent-dropdown fluent-option:hover,
-fluent-dropdown fluent-option:state(active),
-fluent-dropdown fluent-option:focus-visible {
+fluent-dropdown fluent-option:not(:state(disabled)):hover,
+fluent-dropdown fluent-option:not(:state(disabled)):state(active),
+fluent-dropdown fluent-option:not(:state(disabled)):focus-visible {
     color: var(--aspire-dropdown-option-foreground);
     background-color: var(--aspire-dropdown-option-selected-background);
+}
+
+fluent-dropdown fluent-option:state(disabled) {
+    cursor: not-allowed;
+    opacity: var(--disabled-opacity);
 }
 
 fluent-dropdown fluent-option:state(active) {
     border: none;
 }
 
-fluent-dropdown fluent-option[selected]:hover {
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):hover {
     background-color: var(--aspire-dropdown-option-selected-hover-background);
 }
 
@@ -469,8 +487,12 @@ fluent-dropdown fluent-option::part(content) {
     transform: translateX(-20px);
 }
 
+/* Fluent's selected checkmark is inside shadow DOM and uses currentColor. Make the host
+   transparent to hide it globally, then restore the option text through its exposed part. */
 fluent-dropdown fluent-option[selected],
-fluent-dropdown fluent-option[selected]:hover {
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):hover,
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):state(active),
+fluent-dropdown fluent-option[selected]:not(:state(disabled)):focus-visible {
     position: relative;
     color: transparent;
 }
@@ -481,7 +503,7 @@ fluent-dropdown fluent-option[selected]::part(content) {
 
 fluent-dropdown fluent-option[selected]::before {
     position: absolute;
-    top: 5px;
+    top: 7px;
     left: 1px;
     width: 3px;
     height: 14px;
@@ -494,7 +516,8 @@ fluent-dropdown fluent-option:focus-visible {
     outline: none;
 }
 
-fluent-text-input[appearance="outline"]:focus-within::part(root) {
+fluent-text-input[appearance="outline"]:focus-within::part(root),
+.terminal-container:focus-within::after {
     border-color: var(--colorStrokeFocus1);
     outline: var(--strokeWidthThick) solid var(--colorStrokeFocus1);
     outline-offset: calc(-1 * var(--strokeWidthThick));
@@ -623,11 +646,11 @@ body {
     overflow: hidden;
 }
 
-.aspire-menu-container {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) {
     --colorNeutralBackground1Hover: var(--aspire-menu-item-hover-background);
 }
 
-.aspire-menu-container fluent-menu-list {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-list {
     gap: 0;
     padding: 3px 0;
     border-radius: var(--aspire-popup-radius);
@@ -635,11 +658,11 @@ body {
     box-shadow: var(--aspire-popup-shadow);
 }
 
-.aspire-menu-container fluent-menu-list:has(> fluent-menu-item:state(submenu)) {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-list:has(> fluent-menu-item:state(submenu)) {
     min-width: 180px;
 }
 
-.aspire-menu-container fluent-menu-item {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item {
     gap: 0;
     grid-template-columns: minmax(32px, auto) 0 minmax(0, 1fr) minmax(32px, auto);
     height: 28px;
@@ -655,35 +678,48 @@ body {
     line-height: var(--lineHeightBase300);
 }
 
-.aspire-menu-container fluent-menu-item:state(submenu) {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:state(submenu) {
     grid-template-columns: minmax(32px, auto) 0 minmax(0, 1fr) minmax(32px, auto) 24px;
     height: 32px;
     min-height: 32px;
     padding-inline-end: 8px;
 }
 
-.aspire-menu-container fluent-menu-item > [slot="start"],
-.aspire-menu-container fluent-menu-item > [slot="indicator"] {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item > [slot="start"],
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item > [slot="indicator"] {
     grid-column: 1;
     grid-row: 1;
     position: relative;
     inset-inline-start: 8px;
 }
 
-.aspire-menu-container fluent-menu-item:hover,
-.aspire-menu-container fluent-menu-item:state(active),
-.aspire-menu-container fluent-menu-item:focus-visible {
+[cell-type="columnheader"] > fluent-menu fluent-menu-item {
+    text-align: left;
+}
+
+[cell-type="columnheader"] > fluent-menu fluent-menu-item > [slot="start"] {
+    color: var(--colorBrandForeground1);
+    width: 16px !important;
+}
+
+[cell-type="columnheader"] > [col-header-ui] {
+    background: var(--aspire-popup-background);
+}
+
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(disabled)):hover,
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(disabled)):state(active),
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(disabled)):focus-visible {
     background-color: var(--aspire-menu-item-hover-background);
 }
 
-.aspire-menu-container fluent-divider {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-divider {
     margin-block: 4px;
 }
 
 /* Fluent v5 separates the indicator and start slots. Collapse the unused indicator track so the
    icon and content align with v4's 32px start track while retaining the end slot for secondary actions. */
 
-.aspire-menu-container fluent-menu-item:not(:state(submenu))::part(content) {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(submenu))::part(content) {
     grid-column: 2 / span 2;
     grid-row: 1;
     min-width: 0;
@@ -692,7 +728,7 @@ body {
     text-overflow: ellipsis;
 }
 
-.aspire-menu-container fluent-menu-item:state(submenu)::part(content) {
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:state(submenu)::part(content) {
     grid-column: 3;
     grid-row: 1;
     padding-inline: 0;
@@ -702,7 +738,7 @@ fluent-menu-item:state(disabled) {
     background-color: transparent;
     color: var(--colorNeutralForeground1);
     cursor: not-allowed;
-    opacity: 0.3;
+    opacity: var(--disabled-opacity);
 }
 
 .aspire-menu-container.mobile-nav-menu {
@@ -793,6 +829,12 @@ body .fluent-multi-splitter > .fluent-multi-splitter-bar {
     z-index: 99;
 }
 
+.fluent-multi-splitter > .fluent-multi-splitter-bar:focus-visible {
+    outline: none;
+    background-color: var(--fluent-multi-splitter-background-color-active);
+    opacity: var(--fluent-multi-splitter-hover-opacity);
+}
+
 .fluent-multi-splitter > .fluent-multi-splitter-bar > span[part="resize"] {
     display: none;
 }
@@ -863,12 +905,15 @@ fluent-text-input[type="search"] [slot="start"] svg {
     margin-block: 0;
 }
 
-.fluent-tabs {
+/* Custom tab hosts share the Fluent tab appearance without taking over their selection lifecycle. */
+.fluent-tabs,
+.aspire-tab-list {
     max-width: 100%;
     min-width: 0;
 }
 
-.fluent-tabs:not(.aspire-content-tabs) {
+.fluent-tabs:not(.aspire-content-tabs),
+.aspire-tab-list {
     width: fit-content !important;
     display: flex;
     align-items: center;
@@ -877,7 +922,8 @@ fluent-text-input[type="search"] [slot="start"] svg {
 }
 
 .fluent-tabs:not(.aspire-content-tabs),
-.fluent-tabs.aspire-content-tabs > fluent-tablist {
+.fluent-tabs.aspire-content-tabs > fluent-tablist,
+.aspire-tab-list {
     min-height: 40px;
     gap: 4px;
     padding: 3px;
@@ -904,7 +950,8 @@ fluent-text-input[type="search"] [slot="start"] svg {
     display: none;
 }
 
-fluent-tab {
+fluent-tab,
+.aspire-tab {
     height: 32px;
     padding: 0 12px;
     gap: 4px;
@@ -936,7 +983,8 @@ fluent-tab.tab-label fluent-badge {
     font-weight: var(--fontWeightRegular);
 }
 
-fluent-tab[aria-selected="true"] {
+fluent-tab[aria-selected="true"],
+.aspire-tab.active {
     color: var(--colorNeutralForeground1);
     background-color: var(--colorNeutralBackground3);
     border-color: var(--colorNeutralStroke1);
@@ -952,11 +1000,13 @@ fluent-tablist::after {
     display: none;
 }
 
-fluent-tab[aria-selected="false"] {
+fluent-tab[aria-selected="false"],
+.aspire-tab:not(.active) {
     color: var(--colorNeutralForeground3);
 }
 
-fluent-tab[aria-selected="false"]:hover {
+fluent-tab[aria-selected="false"]:hover,
+.aspire-tab:not(.active):hover {
     color: var(--colorNeutralForeground1);
 }
 
@@ -992,7 +1042,7 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
 }
 
 .fluent-data-grid > thead > tr > th,
-.fluent-data-grid > thead > tr > th fluent-button,
+.fluent-data-grid > thead > tr > th > fluent-button,
 .fluent-data-grid > thead > tr > th [col-title-text] {
     color: var(--colorNeutralForeground3);
     font-weight: 400 !important;
@@ -1005,7 +1055,7 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
     white-space: nowrap;
 }
 
-.fluent-data-grid > thead > tr > th fluent-button::part(content) {
+.fluent-data-grid > thead > tr > th > fluent-button::part(content) {
     min-width: 0;
     overflow: hidden;
 }
@@ -1020,7 +1070,7 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
     --aspire-data-grid-cell-border-color: var(--datagrid-border-color);
 }
 
-.property-grid-container .fluent-data-grid > thead > tr > th fluent-button {
+.property-grid-container .fluent-data-grid > thead > tr > th > fluent-button {
     --colorSubtleBackground: var(--property-grid-background-color);
 }
 
@@ -1108,7 +1158,7 @@ fluent-badge.property-details-accordion-badge {
     padding: 4px 1px 4px 8px;
 }
 
-.fluent-data-grid > thead > tr > th fluent-button {
+.fluent-data-grid > thead > tr > th > fluent-button {
     --aspire-button-foreground: var(--colorNeutralForeground3);
     --aspire-button-border-color: transparent;
     --colorSubtleBackground: var(--aspire-page-background);

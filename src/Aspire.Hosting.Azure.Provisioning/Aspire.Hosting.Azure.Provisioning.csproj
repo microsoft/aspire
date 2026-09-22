@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <EnableAspireIntegrationAnalyzers>true</EnableAspireIntegrationAnalyzers>
+    <PackageTags>aspire hosting azure provisioning bicep polyglot</PackageTags>
+    <Description>Shared Azure Provisioning expression APIs for polyglot Aspire AppHosts.</Description>
+    <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting.Azure\Aspire.Hosting.Azure.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Provisioning.Generators\Aspire.Hosting.Azure.Provisioning.Generators.csproj" PrivateAssets="all" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
+    <PackageReference Include="Azure.Provisioning" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.Provisioning.Tests" />
+  </ItemGroup>
+
+</Project>

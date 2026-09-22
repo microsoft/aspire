@@ -18,6 +18,8 @@ namespace Aspire.Dashboard.Components.Layout;
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
+
+    private TerminalDock? _terminalDock;
     private bool _runSelectionChanged;
     private bool _isSwitchingRuns;
     // Fluent v5 has no API to notify the provider after mutating an existing toast's options. This value is
@@ -65,6 +67,9 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
 
     [Inject]
+    public required IStringLocalizer<Resources.TerminalStrings> TerminalLoc { get; init; }
+
+    [Inject]
     public required DashboardDialogService DialogService { get; init; }
 
     [Inject]
@@ -102,6 +107,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
+
+    private bool IsTerminalDockEnabled => !_isSwitchingRuns && DashboardClient.IsEnabled && !DashboardClient.IsReadOnly;
 
     protected override async Task OnInitializedAsync()
     {
@@ -538,4 +545,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         await JSInteropHelpers.SafeDisposeAsync(_jsModule);
         await JSInteropHelpers.SafeDisposeAsync(_keyboardHandlers);
     }
+
+    private Task ToggleTerminalDockAsync()
+        => IsTerminalDockEnabled && _terminalDock is { } dock ? dock.ToggleAsync() : Task.CompletedTask;
 }

@@ -103,6 +103,13 @@ jobs:
               if (typeof pull.user?.login !== 'string' || pull.user.login.length === 0) {
                 throw new Error(`Missing author login for PR #${pull.number}.`);
               }
+              // GitHub represents coding-agent PR authors as { login: "Copilot", type: "Bot" },
+              // but the collaborator endpoint rejects this identity with 404 "Copilot is not a user".
+              // It cannot satisfy the author-write gate; skip it without hiding other lookup failures.
+              // https://github.com/microsoft/aspire/actions/runs/34510935899
+              if (pull.user.type === 'Bot' && pull.user.login === 'Copilot') {
+                return false;
+              }
               // Check the author, not the triggering actor or author_association:
               // a maintainer pushing to an external PR must not opt its author in.
               // The API maps maintain to write and triage to read, including custom roles.

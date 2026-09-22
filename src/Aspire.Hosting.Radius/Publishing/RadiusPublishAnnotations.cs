@@ -27,7 +27,16 @@ internal sealed class RadiusInfrastructureConfigureAnnotation(Action<RadiusInfra
 /// because the publish and deploy steps run in the same process against the same resource
 /// instance, mirroring how cloud-provider credentials flow to the credential-register step.
 /// </remarks>
-internal sealed class RadiusDeployParametersAnnotation(IReadOnlyDictionary<string, ParameterResource> parameters) : IResourceAnnotation
+internal sealed class RadiusDeployParametersAnnotation(
+    IReadOnlyDictionary<string, ParameterResource> parameters,
+    IReadOnlyDictionary<ParameterResource, IReadOnlyList<IResource>> rabbitMqUserNames) : IResourceAnnotation
 {
     public IReadOnlyDictionary<string, ParameterResource> Parameters { get; } = parameters;
+
+    /// <summary>
+    /// The RabbitMQ resources whose user name each parameter supplies. A parameter can be shared by
+    /// several brokers, so every owner is carried and the deploy-time check applies while any of
+    /// them is still part of the deployment.
+    /// </summary>
+    public IReadOnlyDictionary<ParameterResource, IReadOnlyList<IResource>> RabbitMqUserNames { get; } = rabbitMqUserNames;
 }

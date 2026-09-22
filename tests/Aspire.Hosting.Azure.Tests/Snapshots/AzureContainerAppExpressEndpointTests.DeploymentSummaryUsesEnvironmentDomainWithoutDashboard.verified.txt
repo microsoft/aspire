@@ -1,0 +1,7 @@
+﻿[
+  {
+    Key: api,
+    Value: [https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io](https://api.salmonisland-e9e6a567.westus3.azurecontainerapps.io) ([Azure Portal](https://portal.azure.com/#/resource/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/example-rg/providers/Microsoft.App/containerApps/api/overview)),
+    EnableMarkdown: true
+  }
+]

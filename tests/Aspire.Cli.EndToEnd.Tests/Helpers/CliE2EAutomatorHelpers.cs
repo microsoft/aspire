@@ -90,11 +90,6 @@ internal static class CliE2EAutomatorHelpers
 
             await auto.RunCommandAsync($"export ASPIRE_E2E_WORKSPACE={AspireCliShellCommandHelpers.QuoteBashArg(containerWorkspace)}", counter);
 
-            if (!CliE2ETestHelpers.IsRunningInCI && ShouldPreserveLocalWorkspace())
-            {
-                workspace.Preserve();
-            }
-
             if (ShouldCaptureWorkspaceDiagnostics())
             {
                 await auto.RunCommandAsync(
@@ -570,11 +565,6 @@ internal static class CliE2EAutomatorHelpers
     {
         await auto.PrepareBashEnvironmentAsync(workspace.WorkspaceRoot.FullName, counter, TimeSpan.FromSeconds(10));
         await auto.RunCommandAsync($"export ASPIRE_E2E_WORKSPACE={AspireCliShellCommandHelpers.QuoteBashArg(workspace.WorkspaceRoot.FullName)}", counter);
-
-        if (!CliE2ETestHelpers.IsRunningInCI && ShouldPreserveLocalWorkspace())
-        {
-            workspace.Preserve();
-        }
 
         if (ShouldCaptureWorkspaceDiagnostics())
         {
@@ -1160,7 +1150,7 @@ internal static class CliE2EAutomatorHelpers
         await auto.WaitForAnyPromptAsync(counter);
     }
 
-    private static bool ShouldPreserveLocalWorkspace()
+    private static bool ShouldCaptureWorkspaceOnFailure()
     {
         return TestContext.Current?.KeyValueStorage.TryGetValue("PreserveWorkspaceOnFailure", out var value) == true &&
             value is true;
@@ -1168,7 +1158,7 @@ internal static class CliE2EAutomatorHelpers
 
     private static bool ShouldCaptureWorkspaceDiagnostics()
     {
-        return CliE2ETestHelpers.IsRunningInCI || ShouldPreserveLocalWorkspace();
+        return CliE2ETestHelpers.IsRunningInCI || ShouldCaptureWorkspaceOnFailure();
     }
 
     private enum AspireNewEmptyAppHostResult

@@ -1,0 +1,35 @@
+﻿[
+  {
+    Method: CreateTunnelAsync,
+    TunnelId: mytunnel,
+    Arguments: [
+      create,
+      mytunnel,
+      --service-uri,
+      https://eun1.rel.tunnels.api.visualstudio.com,
+      --json,
+      --nologo
+    ]
+  },
+  {
+    Method: UpdateTunnelAsync,
+    TunnelId: mytunnel.eun1,
+    Arguments: [
+      update,
+      mytunnel.eun1,
+      --json,
+      --nologo
+    ]
+  },
+  {
+    Method: ResetAccessAsync,
+    TunnelId: mytunnel.eun1,
+    Arguments: [
+      access,
+      reset,
+      mytunnel.eun1,
+      --json,
+      --nologo
+    ]
+  }
+]

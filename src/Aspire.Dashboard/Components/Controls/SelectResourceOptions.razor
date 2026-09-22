@@ -24,6 +24,7 @@
         var label = string.IsNullOrEmpty(key.ToString()) ? Loc[nameof(Resources.ResourceFilterOptionEmpty)] : key.ToString();
 
         <FluentCheckbox Label="@label"
+                        title="@label"
                         Class="aspire-checkbox"
                         @bind-Value:get="@isChecked"
                         @bind-Value:set="@(c => OnValueVisibilityChangedInternalAsync(key, c))" />

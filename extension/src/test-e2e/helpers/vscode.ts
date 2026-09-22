@@ -419,11 +419,13 @@ export async function acceptModalDialog(buttonTitle: string, timeoutMs = 120000,
         try {
             const dialog = new ModalDialog();
             const message = await dialog.getMessage();
-            if (!message) {
+            const details = await dialog.getDetails().catch(() => '');
+            // Debug launch errors can have an empty heading with the entire
+            // "Unable to launch browser: ..." message in the details element.
+            if (!message && !details) {
                 return false;
             }
 
-            const details = await dialog.getDetails().catch(() => '');
             if (screenshotName) {
                 await VSBrowser.instance.takeScreenshot(screenshotName).catch(() => undefined);
             }

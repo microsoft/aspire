@@ -224,6 +224,21 @@ public sealed class GraphAffectedProjectsTests
         Assert.Contains("Other", affected);
     }
 
+    // Failure mode: projects under tests/ are not reported in AffectedTestProjects, so test projects
+    // fail to be classified and carry into TestSelector as production projects.
+    [Fact]
+    public void AffectedTestProjectsClassifiesProjectsUnderTestsDir()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var repo = new GraphFixture(workspace);
+
+        var result = repo.ComputeResult("Core/Core.cs");
+
+        Assert.Contains("AppTests", result.AffectedTestProjects);
+        Assert.DoesNotContain("Core", result.AffectedTestProjects);
+        Assert.DoesNotContain("Mid", result.AffectedTestProjects);
+    }
+
     /// <summary>
     /// Creates a disposable temp directory containing a minimal but real MSBuild project graph plus an
     /// <c>Aspire.slnx</c>, and runs <see cref="GraphAffectedProjects.Compute"/> against it using a
@@ -252,9 +267,9 @@ public sealed class GraphAffectedProjectsTests
             Write("Mid/Mid.cs", "namespace Mid; public class M(ITestOutputHelper outputHelper) { }");
             WriteProject("Mid/Mid.csproj", compiles: ["Mid.cs"], references: [@"..\Core\Core.csproj"]);
 
-            // AppTests -> Mid (a "test" project by name).
-            Write("AppTests/AppTests.cs", "namespace AppTests; public class T(ITestOutputHelper outputHelper) { }");
-            WriteProject("AppTests/AppTests.csproj", compiles: ["AppTests.cs"], references: [@"..\Mid\Mid.csproj"]);
+            // AppTests -> Mid (a "test" project by name under tests/).
+            Write("tests/AppTests/AppTests.cs", "namespace AppTests; public class T(ITestOutputHelper outputHelper) { }");
+            WriteProject("tests/AppTests/AppTests.csproj", compiles: ["AppTests.cs"], references: [@"..\..\Mid\Mid.csproj"]);
 
             // Other: own file + linked shared file; isolated leaf.
             Write("Other/Other.cs", "namespace Other; public class O(ITestOutputHelper outputHelper) { }");
@@ -270,7 +285,7 @@ public sealed class GraphAffectedProjectsTests
                 <Solution>
                   <Project Path="Core/Core.csproj" />
                   <Project Path="Mid/Mid.csproj" />
-                  <Project Path="AppTests/AppTests.csproj" />
+                  <Project Path="tests/AppTests/AppTests.csproj" />
                   <Project Path="Other/Other.csproj" />
                   <Project Path="Core/Nested/Nested.csproj" />
                 </Solution>

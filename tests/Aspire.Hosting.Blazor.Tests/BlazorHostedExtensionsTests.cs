@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREEXTENSION001, ASPIREFILESYSTEM001
+#pragma warning disable ASPIREEXTENSION001, ASPIREFILESYSTEM001, ASPIREDOTNETPROJECT001, ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.JavaScript;
@@ -31,6 +31,25 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("cluster-weatherapi", env["ReverseProxy__Routes__route-weatherapi__ClusterId"]);
         Assert.Equal("/_api/weatherapi/{**catch-all}", env["ReverseProxy__Routes__route-weatherapi__Match__Path"]);
         Assert.Equal("/_api/weatherapi", env["ReverseProxy__Routes__route-weatherapi__Transforms__0__PathRemovePrefix"]);
+        Assert.Equal("https+http://weatherapi", env["ReverseProxy__Clusters__cluster-weatherapi__Destinations__d1__Address"]);
+    }
+
+    [Fact]
+    public async Task ProxyService_DotnetProjectHost_EmitsYarpRoutes()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
+
+        var blazorApp = builder.AddDotnetProject(
+                "blazorapp",
+                "blazorapp.csproj",
+                options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .ProxyBlazorService(weatherApi);
+
+        var env = await GetEnvironmentVariables(blazorApp.Resource, builder);
+
+        Assert.Equal("cluster-weatherapi", env["ReverseProxy__Routes__route-weatherapi__ClusterId"]);
         Assert.Equal("https+http://weatherapi", env["ReverseProxy__Clusters__cluster-weatherapi__Destinations__d1__Address"]);
     }
 

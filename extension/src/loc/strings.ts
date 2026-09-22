@@ -198,6 +198,9 @@ export const browserDisplayName = (url: string) => vscode.l10n.t('Browser: {0}',
 export const browserLabel = vscode.l10n.t('Browser');
 export const unsupportedBrowserDebugTarget = (browser: string, url: string, supportedBrowsers: string) => vscode.l10n.t("Browser '{0}' cannot be debugged for '{1}'. Supported browsers are: {2}.", browser, url, supportedBrowsers);
 export const unsupportedBrowserDebugTargetWithoutUrl = (browser: string, supportedBrowsers: string) => vscode.l10n.t("Browser '{0}' cannot be debugged. Supported browsers are: {1}.", browser, supportedBrowsers);
+export const csharpExtensionMissingForBlazorDebugging = (extensionId: string, minimumVersion: string) => vscode.l10n.t('Debugging this Blazor client requires {0} version {1} or later. Install the C# extension, then start debugging again.', extensionId, minimumVersion);
+export const csharpExtensionOutdatedForBlazorDebugging = (extensionId: string, installedVersion: string, minimumVersion: string) => vscode.l10n.t('Debugging this Blazor client requires {0} version {2} or later. Installed version: {1}. Update the C# extension, then start debugging again.', extensionId, installedVersion, minimumVersion);
+export const missingBlazorClientProject = (projectPath: string) => vscode.l10n.t("The Blazor client project '{0}' does not exist. Restore or rebuild the AppHost, then start debugging again.", projectPath);
 export const goDisplayName = (program: string) => `Go: ${program}`;
 export const goLabel = 'Go';
 export const rustDisplayName = (program: string) => vscode.l10n.t('Rust: {0}', program);

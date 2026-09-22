@@ -49,6 +49,30 @@ let authorPermission = { permission: 'write', role_name: 'write' };
 let permissionChecks = 0;
 
 switch (scenario) {
+    case 'copilot-author':
+    case 'copilot-author-manual':
+    case 'copilot-author-dry-run':
+        pull.user = { login: 'Copilot', type: 'Bot' };
+        expectedDecision = 'PR author does not have repository write access';
+        if (scenario === 'copilot-author-manual') {
+            context.eventName = 'workflow_dispatch';
+        } else if (scenario === 'copilot-author-dry-run') {
+            env.COPILOT_REVIEW_MODE = 'dry-run';
+        }
+        break;
+    case 'copilot-author-scan-continues':
+        context.eventName = 'schedule';
+        pullPages = [[43], [42]];
+        expectedDecision = 'PR author does not have repository write access';
+        expectedWrites = 1;
+        break;
+    case 'copilot-login-human':
+        pull.user = { login: 'Copilot', type: 'User' };
+        expectedError = 'Copilot is not a user';
+        break;
+    case 'api-permission-not-found':
+        expectedError = 'Not Found';
+        break;
     case 'author-read':
     case 'author-none':
     case 'author-triage':
@@ -312,8 +336,11 @@ const pulls = {
         const count = (getCounts.get(number) ?? 0) + 1;
         getCounts.set(number, count);
         const result = structuredClone(count > 1 && current ? current : pull);
-        if (scenario === 'pagination') {
+        if (scenario === 'pagination' || scenario === 'copilot-author-scan-continues') {
             result.number = number;
+        }
+        if (scenario === 'copilot-author-scan-continues' && number === 43) {
+            result.user = { login: 'Copilot', type: 'Bot' };
         }
         return { data: result };
     },
@@ -331,6 +358,9 @@ const pulls = {
 const repos = {
     getCollaboratorPermissionLevel: async (args) => {
         request('getCollaboratorPermissionLevel', args);
+        if (args.username === 'Copilot' || scenario === 'api-permission-not-found') {
+            throw Object.assign(new Error(args.username === 'Copilot' ? 'Copilot is not a user' : 'Not Found'), { status: 404 });
+        }
         assert.equal(args.username, pull.user.login);
         permissionChecks++;
         return { data: scenario === 'author-permission-revoked' && permissionChecks > 1
@@ -412,6 +442,17 @@ if (scenario.startsWith('scheduled-') && scenario !== 'scheduled-recent') {
 }
 if (scenario === 'pagination') {
     assert.deepEqual([...getCounts.keys()], [42, 43]);
+}
+if (['copilot-author', 'copilot-author-manual', 'copilot-author-dry-run'].includes(scenario)) {
+    assert.deepEqual(calls, scenario === 'copilot-author-manual' ? ['list', 'get'] : ['get']);
+}
+if (scenario === 'copilot-author-scan-continues') {
+    assert.deepEqual([...getCounts.keys()], [43, 42]);
+    assert.deepEqual(calls, ['list', 'get', 'get', 'getCollaboratorPermissionLevel', 'listReviews', 'get', 'getCollaboratorPermissionLevel', 'requestReviewers']);
+    assert.equal(writes[0].pull_number, 42);
+}
+if (scenario === 'copilot-login-human' || scenario === 'api-permission-not-found') {
+    assert.deepEqual(calls, ['get', 'getCollaboratorPermissionLevel']);
 }
 if (scenario === 'api-write-error') {
     assert.equal(calls.filter(endpoint => endpoint === 'requestReviewers').length, 1);

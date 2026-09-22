@@ -196,18 +196,6 @@
   <data name="ConsoleLogsNoWrapLogs" xml:space="preserve">
     <value>Don't wrap log lines</value>
   </data>
-  <data name="TerminalToolbarDecreaseFontSize" xml:space="preserve">
-    <value>Decrease font size</value>
-  </data>
-  <data name="TerminalToolbarIncreaseFontSize" xml:space="preserve">
-    <value>Increase font size</value>
-  </data>
-  <data name="TerminalToolbarGridSize" xml:space="preserve">
-    <value>Terminal dimensions</value>
-  </data>
-  <data name="TerminalToolbarGridSizeAuto" xml:space="preserve">
-    <value>Fit</value>
-  </data>
   <data name="ConsoleLogsViewConsoleOption" xml:space="preserve">
     <value>Console logs</value>
     <comment>Option in the View dropdown that shows the resource's console logs.</comment>

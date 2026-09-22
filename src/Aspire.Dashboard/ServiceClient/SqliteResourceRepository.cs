@@ -4,10 +4,12 @@
 using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Shared.ConsoleLogs;
 using Dapper;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Dashboard.ServiceClient;
 
@@ -19,6 +21,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
     private readonly DashboardSqliteDatabase _database;
     private readonly IKnownPropertyLookup _knownPropertyLookup;
     private readonly ILogger _logger;
+    private readonly int _maxConsoleLogCount;
     private readonly object _stateLock = new();
     private readonly Dictionary<string, ResourceState> _resourceStates = new(StringComparers.ResourceName);
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _resourceChannels = [];
@@ -31,14 +34,17 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
     /// <param name="database">The dashboard database used to persist resources and console logs.</param>
     /// <param name="knownPropertyLookup">The lookup for known resource properties.</param>
     /// <param name="loggerFactory">The logger factory.</param>
+    /// <param name="dashboardOptions">The dashboard options.</param>
     public SqliteResourceRepository(
         DashboardSqliteDatabase database,
         IKnownPropertyLookup knownPropertyLookup,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        IOptions<DashboardOptions> dashboardOptions)
     {
         _database = database;
         _knownPropertyLookup = knownPropertyLookup;
         _logger = loggerFactory.CreateLogger<SqliteResourceRepository>();
+        _maxConsoleLogCount = dashboardOptions.Value.Frontend.MaxConsoleLogCount;
 
         LoadResources();
     }
@@ -365,6 +371,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                 WHERE resource_name = @ResourceName;
                 """, new { ResourceName = resourceName }, transaction);
             InsertConsoleLogs(connection, transaction, resourceName, consoleLogsToInsert);
+            TrimConsoleLogs(connection, transaction, _maxConsoleLogCount);
             transaction.Commit();
 
             lock (_stateLock)

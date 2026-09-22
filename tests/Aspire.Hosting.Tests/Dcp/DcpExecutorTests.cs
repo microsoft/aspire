@@ -44,6 +44,125 @@ namespace Aspire.Hosting.Tests.Dcp;
 public class DcpExecutorTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task ExecutablePrecomputedReplicasCreateDistinctProducersAndRestartIndividually()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = AddExecutableWithPrecomputedReplicas(builder)
+            .WithHttpEndpoint(name: "http", env: "PORT");
+        var kubernetesService = new TestKubernetesService();
+        var startingEvents = new ConcurrentQueue<OnResourceStartingContext>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceStartingContext>(context =>
+        {
+            startingEvents.Enqueue(context);
+            return Task.CompletedTask;
+        });
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService,
+            events: events);
+
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var executables = GetCreatedExecutablesForResource(kubernetesService, "program");
+        Assert.Equal(2, executables.Count);
+        Assert.Same(resource.Resource, Assert.Single(startingEvents).Resource);
+        var service = Assert.Single(kubernetesService.CreatedResources.OfType<Service>());
+        var targetPorts = new HashSet<int>();
+        foreach (var executable in executables)
+        {
+            Assert.True(executable.TryGetAnnotationAsObjectList<ServiceProducerAnnotation>(CustomResource.ServiceProducerAnnotation, out var producers));
+            var producer = Assert.Single(producers);
+            Assert.Equal(service.Metadata.Name, producer.ServiceName);
+            var targetPort = Assert.IsType<int>(producer.Port);
+            AssertPortAllocatedFromProxylessEndpointAllocatorRange(targetPort);
+            Assert.True(targetPorts.Add(targetPort));
+            Assert.Equal(
+                $"{{{{- portForServing \"{service.Metadata.Name}\" -}}}}",
+                Assert.Single(executable.Spec.Env!, variable => variable.Name == "PORT").Value);
+        }
+
+        var firstName = executables[0].Metadata.Name;
+        var secondName = executables[1].Metadata.Name;
+        var reference = executor.GetResource(firstName);
+        await executor.StopResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+        await executor.StartResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        var afterRestart = GetCreatedExecutablesForResource(kubernetesService, "program");
+        Assert.Equal(3, afterRestart.Count);
+        Assert.Equal(2, afterRestart.Count(executable => executable.Metadata.Name == firstName));
+        Assert.Single(afterRestart, executable => executable.Metadata.Name == secondName);
+    }
+
+    [Fact]
+    public async Task ExecutablePrecomputedReplicasCanEachBeExplicitlyStarted()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = AddExecutableWithPrecomputedReplicas(builder).WithExplicitStart();
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "program"));
+        Assert.True(resource.Resource.TryGetInstances(out var instances));
+        for (var index = 0; index < instances.Length; index++)
+        {
+            var reference = executor.GetResource(instances[index].Name);
+            await executor.StartResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+
+            var created = GetCreatedExecutablesForResource(kubernetesService, "program");
+            Assert.Equal(index + 1, created.Count);
+            Assert.All(created, executable => Assert.True(executable.Spec.Start));
+        }
+    }
+
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, 8080)]
+    public async Task ExecutablePrecomputedReplicasRejectIncompatibleEndpoints(bool proxied, int? targetPort)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        AddExecutableWithPrecomputedReplicas(builder)
+            .WithHttpEndpoint(name: "http", isProxied: proxied, targetPort: targetPort);
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.RunApplicationAsync()).DefaultTimeout();
+
+        Assert.Equal(
+            proxied
+                ? "Resource 'program' can have multiple replicas, and it uses endpoint 'http' that has TargetPort property set. Each replica must have a unique port; setting TargetPort is not allowed."
+                : "Resource 'program' uses multiple replicas and a proxy-less endpoint 'http'. These features do not work together.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task PlainExecutableReplicaEligibilityIsUnchanged()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var resource = builder.AddExecutable("program", "program", builder.AppHostDirectory)
+            .WithAnnotation(new ReplicaAnnotation(3));
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        Assert.True(resource.Resource.TryGetInstances(out var instances));
+        Assert.Single(instances);
+        var executable = GetCreatedExecutableForResource(kubernetesService, "program");
+        Assert.Equal("1", executable.Metadata.Annotations[CustomResource.ResourceReplicaCount]);
+        Assert.Equal("0", executable.Metadata.Annotations[CustomResource.ResourceReplicaIndex]);
+    }
+
+    [Fact]
     public async Task ContainersArePassedOtelServiceName()
     {
         // Arrange
@@ -2642,6 +2761,119 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             {
                 logLines.Enqueue(logLine);
             }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResourceWatch_ReportsPreviousStateForChangesRefreshesAndReplacements(bool reportDeletion)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("database", "image");
+        var kubernetesService = new TestKubernetesService();
+        var changes = Channel.CreateUnbounded<OnResourceChangedContext>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.Resource.Name == "database" && context.Status.State is not null)
+            {
+                changes.Writer.TryWrite(context);
+            }
+
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService, events: events);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        await PublishStateAsync(ContainerState.Running, previousState: null);
+        await PublishStateAsync(ContainerState.Exited, ContainerState.Running);
+        await PublishStateAsync(ContainerState.Exited, ContainerState.Exited);
+
+        var endpoint = Endpoint.Create("database-endpoint", "", "database-service");
+        endpoint.Metadata.OwnerReferences = [new V1OwnerReference
+        {
+            ApiVersion = container.ApiVersion,
+            Kind = container.Kind,
+            Name = container.Metadata.Name,
+            Uid = container.Metadata.Uid
+        }];
+        kubernetesService.PushResourceModified(endpoint);
+        await AssertChangeAsync(ContainerState.Exited, ContainerState.Exited);
+
+        await PublishStateAsync(ContainerState.Running, ContainerState.Exited);
+        await PublishStateAsync(ContainerState.Exited, ContainerState.Running);
+
+        if (reportDeletion)
+        {
+            kubernetesService.PushResourceDeleted(container);
+        }
+
+        container.Metadata.Uid = "database-replacement";
+        kubernetesService.PushResourceUnchanged(container, k8s.WatchEventType.Added);
+        await AssertChangeAsync(ContainerState.Exited, previousState: null);
+        await PublishStateAsync(ContainerState.Exited, ContainerState.Exited);
+
+        async Task PublishStateAsync(string state, string? previousState)
+        {
+            container.Status = new ContainerStatus { State = state };
+            kubernetesService.PushResourceModified(container);
+            await AssertChangeAsync(state, previousState);
+        }
+
+        async Task AssertChangeAsync(string state, string? previousState)
+        {
+            var change = await changes.Reader.ReadAsync().AsTask().DefaultTimeout();
+            Assert.Equal(state, change.Status.State);
+            Assert.Equal(previousState, change.PreviousState);
+        }
+    }
+
+    [Fact]
+    public async Task ResourceWatch_PreviousStateIsScopedToReplica()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        AddExecutableWithPrecomputedReplicas(builder);
+        var kubernetesService = new TestKubernetesService();
+        var changes = Channel.CreateUnbounded<OnResourceChangedContext>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.Resource.Name == "program" && context.Status.State is not null)
+            {
+                changes.Writer.TryWrite(context);
+            }
+
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService, events: events);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var executables = GetCreatedExecutablesForResource(kubernetesService, "program");
+        Assert.Equal(2, executables.Count);
+        await PublishStateAsync(executables[0], ExecutableState.Finished, previousState: null);
+        await PublishStateAsync(executables[1], ExecutableState.Finished, previousState: null);
+        await PublishStateAsync(executables[0], ExecutableState.Running, ExecutableState.Finished);
+        await PublishStateAsync(executables[1], ExecutableState.Finished, ExecutableState.Finished);
+        await PublishStateAsync(executables[0], ExecutableState.Finished, ExecutableState.Running);
+
+        async Task PublishStateAsync(Executable executable, string state, string? previousState)
+        {
+            executable.Status = new ExecutableStatus { State = state };
+            kubernetesService.PushResourceModified(executable);
+            var change = await changes.Reader.ReadAsync().AsTask().DefaultTimeout();
+            Assert.Equal(executable.Metadata.Name, change.DcpResourceName);
+            Assert.Equal(state, change.Status.State);
+            Assert.Equal(previousState, change.PreviousState);
         }
     }
 
@@ -9494,6 +9726,486 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ExecutableCanResolveExplicitContainerNetworkSelfReference()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+
+        var executable = builder.AddExecutable("executable", "command", "")
+            .WithEndpoint(name: "http", scheme: "http", targetPort: 1234, port: 5678, isProxied: true)
+            .WithEndpoint(name: "unused", targetPort: 1235, port: 5679, isProxied: true);
+
+        var containerEndpoint = executable.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+        executable
+            .WithEnvironment(
+                "CONTAINER_URL",
+                ReferenceExpression.Create(
+                    $"{containerEndpoint.Property(EndpointProperty.Scheme)}://{containerEndpoint.Property(EndpointProperty.Host)}:{containerEndpoint.Property(EndpointProperty.Port)}"))
+            .WithEnvironment("HOST_PORT", executable.GetEndpoint("unused").Property(EndpointProperty.Port));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var tunnelService = Assert.Single(
+            kubernetesService.CreatedResources.OfType<Service>(),
+            service => service.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName));
+        Assert.Equal(executable.Resource.Name, tunnelService.AppModelResourceName);
+        Assert.Equal("http", tunnelService.EndpointName);
+
+        var dcpExecutable = Assert.Single(
+            kubernetesService.CreatedResources.OfType<Executable>(),
+            resource => resource.AppModelResourceName == executable.Resource.Name);
+        Assert.NotNull(dcpExecutable.Spec.Env);
+        Assert.Equal(
+            $"http://{KnownHostNames.DefaultContainerTunnelHostName}:{tunnelService.AllocatedPort}",
+            Assert.Single(dcpExecutable.Spec.Env, variable => variable.Name == "CONTAINER_URL").Value);
+        Assert.Equal(
+            "5679",
+            Assert.Single(dcpExecutable.Spec.Env, variable => variable.Name == "HOST_PORT").Value);
+
+        Assert.Single(kubernetesService.CreatedResources.OfType<ContainerNetwork>());
+        Assert.Single(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+    }
+
+    [Fact]
+    public async Task ExecutableCanResolveContainerNetworkReferenceAfterTargetResourceReplacement()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+
+        var target = builder.AddExecutable("target", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+        var targetEndpoint = target.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+        var source = builder.AddExecutable("source", "command", "")
+            .WithEnvironment("TARGET_PORT", targetEndpoint.Property(EndpointProperty.Port));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var replacement = new ExecutableResource(
+            target.Resource.Name,
+            target.Resource.Command,
+            target.Resource.WorkingDirectory);
+        replacement.Annotations.Add(targetEndpoint.EndpointAnnotation);
+        distributedAppModel.Resources[distributedAppModel.Resources.IndexOf(target.Resource)] = replacement;
+
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var tunnelService = Assert.Single(
+            kubernetesService.CreatedResources.OfType<Service>(),
+            service => service.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName));
+        Assert.Equal(target.Resource.Name, tunnelService.AppModelResourceName);
+
+        var sourceExecutable = Assert.Single(
+            kubernetesService.CreatedResources.OfType<Executable>(),
+            resource => resource.AppModelResourceName == source.Resource.Name);
+        Assert.NotNull(sourceExecutable.Spec.Env);
+        Assert.Equal(
+            tunnelService.AllocatedPort.ToString(),
+            Assert.Single(sourceExecutable.Spec.Env, variable => variable.Name == "TARGET_PORT").Value);
+    }
+
+    [Fact]
+    public async Task ProjectCanResolveExplicitContainerNetworkSelfReference()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+
+        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
+            .WithEndpoint(name: "http", scheme: "http", targetPort: 8080, port: 5678, isProxied: true);
+        project.WithEnvironment(
+            "CONTAINER_PORT",
+            project.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork).Property(EndpointProperty.Port));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var tunnelService = Assert.Single(
+            kubernetesService.CreatedResources.OfType<Service>(),
+            service => service.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName));
+        Assert.Equal(project.Resource.Name, tunnelService.AppModelResourceName);
+
+        var dcpExecutable = Assert.Single(
+            kubernetesService.CreatedResources.OfType<Executable>(),
+            resource => resource.AppModelResourceName == project.Resource.Name);
+        Assert.NotNull(dcpExecutable.Spec.Env);
+        Assert.Equal(
+            tunnelService.AllocatedPort.ToString(),
+            Assert.Single(dcpExecutable.Spec.Env, variable => variable.Name == "CONTAINER_PORT").Value);
+    }
+
+    [Fact]
+    public async Task ExecutableCanResolveExplicitContainerNetworkReferenceToAnotherExecutable()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+
+        var target = builder.AddExecutable("target", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+
+        var source = builder.AddExecutable("source", "command", "")
+            .WithEnvironment(
+                "TARGET_PORT",
+                target.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork).Property(EndpointProperty.Port));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var tunnelService = Assert.Single(
+            kubernetesService.CreatedResources.OfType<Service>(),
+            service => service.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName));
+        Assert.Equal(target.Resource.Name, tunnelService.AppModelResourceName);
+        Assert.Equal("http", tunnelService.EndpointName);
+
+        var sourceExecutable = Assert.Single(
+            kubernetesService.CreatedResources.OfType<Executable>(),
+            resource => resource.AppModelResourceName == source.Resource.Name);
+        Assert.NotNull(sourceExecutable.Spec.Env);
+        Assert.Equal(
+            tunnelService.AllocatedPort.ToString(),
+            Assert.Single(sourceExecutable.Spec.Env, variable => variable.Name == "TARGET_PORT").Value);
+    }
+
+    [Fact]
+    public async Task ExecutableContainerNetworkReferenceRequiresContainerResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var executable = builder.AddExecutable("executable", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+        executable.WithEnvironment(
+            "CONTAINER_PORT",
+            executable.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork).Property(EndpointProperty.Port));
+        builder.AddExecutable("healthy", "command", "");
+
+        var kubernetesService = new TestKubernetesService();
+        using var resourceLoggerService = new ResourceLoggerService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var failures = new List<OnResourceFailedToStartContext>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failures.Add(context);
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            dcpOptions: dcpOptions,
+            resourceLoggerService: resourceLoggerService,
+            events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var failure = Assert.Single(failures);
+        Assert.Equal(executable.Resource, failure.Resource);
+        const string expectedFailureMessage =
+            "Resource 'executable' references endpoint 'http' on executable resource 'executable' using the default Aspire container network, " +
+            "but the application does not contain any container resources.";
+        Assert.Contains(expectedFailureMessage, failure.ErrorMessage);
+        Assert.DoesNotContain(
+            kubernetesService.CreatedResources.OfType<Executable>(),
+            resource => resource.AppModelResourceName == executable.Resource.Name);
+        Assert.Single(
+            kubernetesService.CreatedResources.OfType<Executable>(),
+            resource => resource.AppModelResourceName == "healthy");
+        Assert.Empty(kubernetesService.CreatedResources.OfType<ContainerNetwork>());
+        Assert.Empty(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+
+        var logLines = new List<LogLine>();
+        await foreach (var lines in resourceLoggerService.GetAllAsync(executable.Resource).DefaultTimeout())
+        {
+            logLines.AddRange(lines);
+        }
+
+        Assert.Contains(logLines, line =>
+            line.IsErrorMessage &&
+            line.Content.Contains(expectedFailureMessage, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExecutableContainerNetworkReferenceRequiresTcpEndpoint()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+
+        var executable = builder.AddExecutable("executable", "command", "")
+            .WithEndpoint(
+                name: "udp",
+                targetPort: 1234,
+                port: 5678,
+                isProxied: true,
+                protocol: ProtocolType.Udp);
+        executable.WithEnvironment(
+            "CONTAINER_PORT",
+            executable.GetEndpoint("udp", KnownNetworkIdentifiers.DefaultAspireContainerNetwork).Property(EndpointProperty.Port));
+        builder.AddExecutable("healthy", "command", "");
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var failures = new ConcurrentQueue<OnResourceFailedToStartContext>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failures.Enqueue(context);
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            dcpOptions: dcpOptions,
+            events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var failure = Assert.Single(failures);
+        Assert.Equal(executable.Resource, failure.Resource);
+        Assert.Contains(
+            "Resource 'executable' references endpoint 'udp' on executable resource 'executable' using the default Aspire container network, " +
+            "but the Aspire container tunnel only supports TCP endpoints.",
+            failure.ErrorMessage);
+        Assert.DoesNotContain(
+            kubernetesService.CreatedResources.OfType<Executable>(),
+            resource => resource.AppModelResourceName == executable.Resource.Name);
+        Assert.Single(
+            kubernetesService.CreatedResources.OfType<Executable>(),
+            resource => resource.AppModelResourceName == "healthy");
+        Assert.DoesNotContain(
+            kubernetesService.CreatedResources.OfType<Service>(),
+            service => service.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName));
+        Assert.Empty(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+    }
+
+    [Fact]
+    public async Task ExecutableContainerNetworkReferenceToContainerDoesNotCreateTunnel()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var target = builder.AddContainer("target", "image")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678);
+
+        var source = builder.AddExecutable("source", "command", "")
+            .WithEnvironment(
+                "TARGET_PORT",
+                target.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork).Property(EndpointProperty.Port));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        Assert.DoesNotContain(
+            kubernetesService.CreatedResources.OfType<Service>(),
+            service => service.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName));
+        Assert.Empty(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+
+        var sourceExecutable = Assert.Single(
+            kubernetesService.CreatedResources.OfType<Executable>(),
+            resource => resource.AppModelResourceName == source.Resource.Name);
+        Assert.NotNull(sourceExecutable.Spec.Env);
+        Assert.Equal(
+            "1234",
+            Assert.Single(sourceExecutable.Spec.Env, variable => variable.Name == "TARGET_PORT").Value);
+    }
+
+    [Fact]
+    public async Task ExplicitStartExecutableDefersContainerNetworkEndpointAllocationUntilManualStart()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+
+        var callbackCount = 0;
+        var executable = builder.AddExecutable("executable", "command", "")
+            .WithExplicitStart()
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+        var containerEndpoint = executable.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+        executable.WithEnvironment(context =>
+        {
+            Interlocked.Increment(ref callbackCount);
+            context.EnvironmentVariables["CONTAINER_PORT"] = containerEndpoint.Property(EndpointProperty.Port);
+        });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        Assert.Equal(0, callbackCount);
+        Assert.Single(kubernetesService.CreatedResources.OfType<ContainerNetwork>());
+        Assert.Empty(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+
+        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(executable.Resource, instanceIndex: 0).Name);
+        await appExecutor.StartResourceAsync(reference, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(1, callbackCount);
+
+        var tunnelService = Assert.Single(
+            kubernetesService.CreatedResources.OfType<Service>(),
+            service => service.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName));
+        var dcpExecutable = Assert.Single(
+            kubernetesService.CreatedResources.OfType<Executable>(),
+            resource => resource.AppModelResourceName == executable.Resource.Name);
+        Assert.NotNull(dcpExecutable.Spec.Env);
+        Assert.Equal(
+            tunnelService.AllocatedPort.ToString(),
+            Assert.Single(dcpExecutable.Spec.Env, variable => variable.Name == "CONTAINER_PORT").Value);
+
+        Assert.Single(kubernetesService.CreatedResources.OfType<ContainerNetwork>());
+        Assert.Single(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+    }
+
+    [Fact]
+    public async Task ExplicitStartEndpointProvisioningIsCanceledWhenExecutorStops()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+
+        var executable = builder.AddExecutable("executable", "command", "")
+            .WithExplicitStart()
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+        executable.WithEnvironment(
+            "CONTAINER_PORT",
+            executable.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork).Property(EndpointProperty.Port));
+
+        var tunnelServiceCreateStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var kubernetesService = new TestKubernetesService(beforeCreateAsync: async (resource, cancellationToken) =>
+        {
+            if (resource is Service service &&
+                service.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName))
+            {
+                tunnelServiceCreateStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+        });
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(executable.Resource, instanceIndex: 0).Name);
+        var startTask = appExecutor.StartResourceAsync(reference, CancellationToken.None);
+        await tunnelServiceCreateStarted.Task.DefaultTimeout();
+
+        await appExecutor.StopAsync(CancellationToken.None).DefaultTimeout();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => startTask).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ContainerAndExecutableShareContainerNetworkAllocationFailure()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var target = builder.AddExecutable("target", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+        var containerEndpoint = target.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+        var executableSource = builder.AddExecutable("executable-source", "command", "")
+            .WithEnvironment("TARGET_PORT", containerEndpoint.Property(EndpointProperty.Port));
+        var containerSource = builder.AddContainer("container-source", "image")
+            .WithEnvironment("TARGET_PORT", target.GetEndpoint("http").Property(EndpointProperty.Port));
+
+        var failures = new ConcurrentQueue<OnResourceFailedToStartContext>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failures.Enqueue(context);
+            return Task.CompletedTask;
+        });
+
+        var tunnelServiceCreateCount = 0;
+        var kubernetesService = new TestKubernetesService(beforeCreate: resource =>
+        {
+            if (resource is Service service &&
+                service.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName))
+            {
+                Interlocked.Increment(ref tunnelServiceCreateCount);
+                throw new InvalidOperationException("Simulated tunnel service creation failure.");
+            }
+        });
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            dcpOptions: dcpOptions,
+            events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        Assert.Equal(1, tunnelServiceCreateCount);
+        Assert.Equal(
+            [containerSource.Resource, executableSource.Resource],
+            failures
+                .Select(failure => failure.Resource)
+                .Where(resource => ReferenceEquals(resource, containerSource.Resource) || ReferenceEquals(resource, executableSource.Resource))
+                .OrderBy(resource => resource.Name)
+                .ToArray());
+    }
+
+    [Fact]
     public async Task WaitingTunnelDependentContainersDoNotBlockTunnelCreation()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -9919,6 +10631,17 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
     }
 
+    private static IResourceBuilder<ExecutableResource> AddExecutableWithPrecomputedReplicas(IDistributedApplicationBuilder builder)
+    {
+        return builder.AddExecutable("program", "program", builder.AppHostDirectory)
+            .WithAnnotation(new ReplicaAnnotation(2))
+            .WithAnnotation(new DcpInstancesAnnotation(
+            [
+                new DcpInstance("program-first", "first", 0),
+                new DcpInstance("program-second", "second", 1)
+            ]));
+    }
+
     private static Executable GetCreatedExecutableForResource(TestKubernetesService kubernetesService, string appModelResourceName)
     {
         return Assert.Single(GetCreatedExecutablesForResource(kubernetesService, appModelResourceName));
@@ -10159,6 +10882,32 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedTimestamp, executableSpec.MonitorTimestamp);
     }
 
+    [Theory]
+    [InlineData(null, "(unknown)")]
+    [InlineData(ContainerVolumeState.Pending, ContainerVolumeState.Pending)]
+    [InlineData(ContainerVolumeState.RuntimeUnhealthy, ContainerVolumeState.RuntimeUnhealthy)]
+    public void EnsureContainerVolumesReady_ThrowsWhenVolumeIsNotReady(string? state, string expectedState)
+    {
+        var volume = ContainerVolume.Create("volume-resource", "physical-volume");
+        volume.Status = new ContainerVolumeStatus { State = state };
+
+        var exception = Assert.Throws<DistributedApplicationException>(
+            () => DcpExecutor.EnsureContainerVolumesReady([volume]));
+
+        Assert.Equal(
+            $"One or more container volumes did not become ready: 'physical-volume': current state is '{expectedState}'",
+            exception.Message);
+    }
+
+    [Fact]
+    public void EnsureContainerVolumesReady_AllowsReadyVolumes()
+    {
+        var volume = ContainerVolume.Create("volume-resource", "physical-volume");
+        volume.Status = new ContainerVolumeStatus { State = ContainerVolumeState.Ready };
+
+        DcpExecutor.EnsureContainerVolumesReady([volume]);
+    }
+
     private static DcpExecutor CreateAppExecutor(
         DistributedApplicationModel distributedAppModel,
         IHostEnvironment? hostEnvironment = null,
@@ -10217,18 +10966,16 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var appResources = new DcpAppResourceStore();
         var proxylessEndpointPortAllocator = new ProxylessEndpointPortAllocator(Options.Create(dcpOptions));
         var applicationOptions = distributedApplicationOptions ?? new DistributedApplicationOptions();
-        var executableConfigurationResolver = new ExecutableConfigurationResolver(executionContext, locations, aspireStore);
-        var executableLaunchPolicy = new ExecutableLaunchPolicy(configuration);
-
-        var executableCreator = new ExecutableCreator(
+        var containerNetworkEndpointProvisioner = new ContainerNetworkEndpointProvisioner(
+            configuration,
+            Options.Create(dcpOptions),
             nameGenerator,
             distributedAppModel,
-            appResources,
-            executableConfigurationResolver,
-            configuration,
-            applicationOptions,
-            executableLaunchPolicy,
-            NullLogger<ExecutableCreator>.Instance);
+            resourceLoggerService,
+            dcpDependencyCheckService,
+            hostEnv,
+            NullLogger<ContainerNetworkEndpointProvisioner>.Instance,
+            appResources);
 
         var containerCreator = new ContainerCreator(
             configuration,
@@ -10238,9 +10985,23 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             executionContext,
             resourceLoggerService,
             dcpDependencyCheckService,
-            hostEnv,
             containerCreatorLogger ?? NullLogger<ContainerCreator>.Instance,
-            appResources);
+            appResources,
+            containerNetworkEndpointProvisioner);
+
+        var executableConfigurationResolver = new ExecutableConfigurationResolver(executionContext, locations, aspireStore);
+        var executableLaunchPolicy = new ExecutableLaunchPolicy(configuration);
+
+        var executableCreator = new ExecutableCreator(
+            nameGenerator,
+            distributedAppModel,
+            appResources,
+            containerNetworkEndpointProvisioner,
+            executableConfigurationResolver,
+            configuration,
+            applicationOptions,
+            executableLaunchPolicy,
+            NullLogger<ExecutableCreator>.Instance);
 
         return new DcpExecutor(
             logger ?? NullLogger<DcpExecutor>.Instance,
@@ -10258,6 +11019,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             appResources,
             executableCreator,
             containerCreator,
+            containerNetworkEndpointProvisioner,
             new ProfilingTelemetry(configuration),
             proxylessEndpointPortAllocator,
             userSecretsManager ?? NoopUserSecretsManager.Instance);

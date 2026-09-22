@@ -1,4 +1,4 @@
-﻿{
+{
   CapabilityId: Aspire.Hosting.CodeGeneration.TypeScript.Tests/withPersistence,
   MethodName: withPersistence,
   QualifiedMethodName: withPersistence,
@@ -6,6 +6,7 @@
   Documentation: {
     Summary: Configures the Redis resource with persistence
   },
+  IsExperimental: false,
   IsObsolete: false,
   Parameters: [
     {

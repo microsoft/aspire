@@ -243,13 +243,14 @@ public sealed class FrontendOptions
     public string? PublicUrl { get; set; }
 
     /// <summary>
-    /// Gets and sets an optional limit on the number of console log messages to be retained in the viewer.
+    /// Gets and sets the limit on the number of console log messages retained in the viewer and database.
     /// </summary>
     /// <remarks>
-    /// The viewer will retain at most this number of log messages. When the limit is reached, the oldest messages will be removed.
-    /// Defaults to 10,000, which matches the default used in the app host's circular buffer, on the publish side.
+    /// The viewer retains at most this many messages. The database limit is shared across resources.
+    /// When either limit is exceeded, the oldest messages are removed.
+    /// Defaults to 100,000.
     /// </remarks>
-    public int MaxConsoleLogCount { get; set; } = 10_000;
+    public int MaxConsoleLogCount { get; set; } = 100_000;
 
     public OpenIdConnectOptions OpenIdConnect { get; set; } = new();
 
@@ -313,8 +314,8 @@ public static class OptionsHelpers
 
 public sealed class TelemetryLimitOptions
 {
-    public int MaxLogCount { get; set; } = 10_000;
-    public int MaxTraceCount { get; set; } = 10_000;
+    public int MaxLogCount { get; set; } = 100_000;
+    public int MaxTraceCount { get; set; } = 100_000;
     public int MaxMetricsCount { get; set; } = 50_000; // Allows for 1 metric point per second for over 12 hours.
     public int MaxAttributeCount { get; set; } = 128;
     public int MaxAttributeLength { get; set; } = int.MaxValue;

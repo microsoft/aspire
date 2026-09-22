@@ -50,7 +50,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsHeader", resourceCulture);
             }
         }
-        
+
         public static string ConsoleLogsSelectResourceToolbar {
             get {
                 return ResourceManager.GetString("ConsoleLogsSelectResourceToolbar", resourceCulture);
@@ -192,30 +192,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ConsoleLogsNoWrapLogs {
             get {
                 return ResourceManager.GetString("ConsoleLogsNoWrapLogs", resourceCulture);
-            }
-        }
-        
-        public static string TerminalToolbarDecreaseFontSize {
-            get {
-                return ResourceManager.GetString("TerminalToolbarDecreaseFontSize", resourceCulture);
-            }
-        }
-        
-        public static string TerminalToolbarIncreaseFontSize {
-            get {
-                return ResourceManager.GetString("TerminalToolbarIncreaseFontSize", resourceCulture);
-            }
-        }
-        
-        public static string TerminalToolbarGridSize {
-            get {
-                return ResourceManager.GetString("TerminalToolbarGridSize", resourceCulture);
-            }
-        }
-        
-        public static string TerminalToolbarGridSizeAuto {
-            get {
-                return ResourceManager.GetString("TerminalToolbarGridSizeAuto", resourceCulture);
             }
         }
         

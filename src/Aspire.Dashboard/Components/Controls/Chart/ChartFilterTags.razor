@@ -4,33 +4,25 @@
     var orderedValues = GetOrderedValues(Filter.Values).ToList();
 }
 
-<FluentOverflow Class="dimension-overflow" MaxRenderedItems="@MaxRenderedOverflowItems">
-    <ChildContent>
+<FluentOverflow TItem="DimensionValueViewModel" Items="@orderedValues" Class="dimension-overflow" MaxRenderedItems="@MaxRenderedOverflowItems" Threshold="0">
+    <ItemTemplate Context="item">
         @{
-            var i = 0;
-        }
-        @* TODO: Filter the values before rendering if metric dimension cardinality becomes large enough to cause performance problems. *@
-        @foreach (var item in orderedValues)
-        {
+            var isFirstItem = ReferenceEquals(item, orderedValues[0]);
             var isIncludedInFilters = Filter.SelectedValues.Contains(item);
             var isIncludedInFiltersClass = isIncludedInFilters ? "included-in-filters" : "";
-            // Always display the first item by setting a fixed value.
-            <div behavior="@(i == 0 ? "fixed" : null)">
-                <button type="button"
-                        class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
-                        aria-pressed="@isIncludedInFilters"
-                        @onclick="args => OnTagClickedAsync(args, item)">
-                    @item.Text
-                </button>
-            </div>
-            i++;
         }
-    </ChildContent>
+        <div class="@(isFirstItem ? "dimension-overflow-ellipsis" : null)" behavior="@(isFirstItem ? "ellipsis" : null)">
+            <button type="button"
+                    class="dimension-tag filter-value-tag @isIncludedInFiltersClass"
+                    aria-pressed="@isIncludedInFilters"
+                    @onclick="args => OnTagClickedAsync(args, item)">
+                @item.Text
+            </button>
+        </div>
+    </ItemTemplate>
     <MoreTemplate Context="overflow">
         @{
-            // The first item is fixed, so managed overflow item indexes start at the second value.
-            var firstOverflowItem = overflow.ItemsOverflow.FirstOrDefault();
-            var hasSelectedInOverflow = firstOverflowItem is not null && orderedValues.Skip(firstOverflowItem.Index + 1).Any(Filter.SelectedValues.Contains);
+            var hasSelectedInOverflow = overflow.Items.Any(Filter.SelectedValues.Contains);
             var isIncludedInFiltersClass = hasSelectedInOverflow ? "included-in-filters" : "";
         }
         @* Display must be inline block so the width is correctly calculated. *@

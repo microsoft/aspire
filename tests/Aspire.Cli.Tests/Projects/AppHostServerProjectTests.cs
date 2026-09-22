@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.AspNetCore.InternalTesting;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
@@ -43,8 +45,114 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, new TestProcessExecutionFactory(), new TestEnvironment(), logger);
     }
 
-    [Fact]
-    public async Task CreateProjectFiles_AppSettingsJson_MatchesSnapshot()
+        [Fact]
+        public async Task CreateProjectFiles_RestoreRootConfigDirectory_PreservesRelativeSources()
+        {
+                var repoRoot = _workspace.CreateDirectory("repo");
+                var appPath = _workspace.CreateDirectory("app");
+                var projectModelPath = _workspace.CreateDirectory("model");
+                var parentFeed = _workspace.CreateDirectory("parent-feed");
+                var parentConfigPath = Path.Combine(_workspace.Path, "NuGet.Config");
+                await File.WriteAllTextAsync(parentConfigPath, """
+                        <configuration>
+                            <packageSources>
+                                <clear />
+                                <add key="parent-feed" value="./parent-feed" />
+                            </packageSources>
+                            <packageSourceMapping>
+                                <clear />
+                                <packageSource key="parent-feed">
+                                    <package pattern="*" />
+                                </packageSource>
+                            </packageSourceMapping>
+                        </configuration>
+                        """);
+                var feed = repoRoot.CreateSubdirectory("feed");
+                var repoConfigPath = Path.Combine(repoRoot.FullName, "NuGet.Config");
+                await File.WriteAllTextAsync(repoConfigPath, """
+                        <configuration>
+                            <packageSources>
+                                <add key="repo-feed" value="./feed" />
+                            </packageSources>
+                            <packageSourceMapping>
+                                <packageSource key="repo-feed">
+                                    <package pattern="*" />
+                                </packageSource>
+                            </packageSourceMapping>
+                        </configuration>
+                        """);
+                await File.WriteAllTextAsync(Path.Combine(repoRoot.FullName, "Directory.Packages.props"), "<Project />");
+                await File.WriteAllTextAsync(Path.Combine(appPath.FullName, "NuGet.Config"), """
+                        <configuration>
+                            <packageSources>
+                                <clear />
+                                <add key="app-feed" value="./other-feed" />
+                            </packageSources>
+                        </configuration>
+                        """);
+                var packagingService = new TestPackagingService
+                {
+                        GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([])
+                };
+                var project = new DotNetBasedAppHostServerProject(
+                        appPath.FullName, "test.sock", repoRoot.FullName,
+                        new TestDotNetCliRunner(), packagingService,
+                        new TestProcessExecutionFactory(), new TestEnvironment(),
+                        NullLogger<DotNetBasedAppHostServerProject>.Instance,
+                        projectModelPath: projectModelPath.FullName,
+                        restoreRootConfigDirectory: repoRoot.FullName);
+
+                var (projectFilePath, _) = await project.CreateProjectFilesAsync([]).DefaultTimeout();
+
+                Assert.Equal(repoRoot.FullName, XDocument.Load(projectFilePath).Descendants("RestoreRootConfigDirectory").Single().Value);
+                Assert.False(NuGetConfigMerger.TryFindNuGetConfigInDirectory(projectModelPath, out _));
+
+                // Evaluate NuGet's actual settings without restoring packages. A relative source such as
+                // <add key="repo-feed" value="./feed" /> must resolve beside the original config file.
+                var startInfo = new ProcessStartInfo("dotnet")
+                {
+                        WorkingDirectory = projectModelPath.FullName,
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true,
+                        ArgumentList =
+                        {
+                                "msbuild", projectFilePath, "-nologo", "-target:_GetRestoreSettings",
+                                "-property:RestoreProjectStyle=PackageReference",
+                                "-getProperty:_OutputSources,_OutputConfigFilePaths"
+                        }
+                };
+                using var process = Process.Start(startInfo);
+                Assert.NotNull(process);
+                try
+                {
+                        var outputTask = process.StandardOutput.ReadToEndAsync();
+                        var errorTask = process.StandardError.ReadToEndAsync();
+                        await process.WaitForExitAsync().DefaultTimeout();
+                        var output = await outputTask.DefaultTimeout();
+                        var error = await errorTask.DefaultTimeout();
+                        Assert.True(process.ExitCode == 0, $"{output}{Environment.NewLine}{error}");
+
+                        using var document = JsonDocument.Parse(output);
+                        var properties = document.RootElement.GetProperty("Properties");
+                        var sources = properties.GetProperty("_OutputSources").GetString()!.Split(';');
+                        Assert.Equal(new[] { parentFeed.FullName, feed.FullName }.Order(StringComparer.Ordinal), sources.Order(StringComparer.Ordinal));
+                        var configPaths = properties.GetProperty("_OutputConfigFilePaths").GetString()!.Split(';');
+                        Assert.Contains(repoConfigPath, configPaths);
+                        Assert.Contains(parentConfigPath, configPaths);
+                }
+                finally
+                {
+                        if (!process.HasExited)
+                        {
+                                process.Kill(entireProcessTree: true);
+                        }
+                }
+        }
+
+        [Fact]
+        public async Task CreateProjectFiles_AppSettingsJson_MatchesSnapshot()
     {
         // Arrange
         var project = CreateProject();
