@@ -114,7 +114,9 @@
          Test-only dependency; pinned to a version present on the dotnet-public feed mirror. -->
     <PackageVersion Include="Deque.AxeCore.Playwright" Version="4.13.0" />
     <PackageVersion Include="DnsClient" Version="1.8.0" />
-    <PackageVersion Include="Google.Protobuf" Version="3.36.1" />
+    <!-- Keep the last version with Authenticode-signed DLLs until upstream signing is restored
+         and verified: https://github.com/protocolbuffers/protobuf/issues/29579 -->
+    <PackageVersion Include="Google.Protobuf" Version="3.35.1" />
     <PackageVersion Include="Grpc.AspNetCore" Version="2.83.0" />
     <PackageVersion Include="Grpc.Net.ClientFactory" Version="2.83.0" />
     <PackageVersion Include="Grpc.Tools" Version="2.83.0" />
