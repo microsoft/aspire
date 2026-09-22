@@ -3,9 +3,11 @@
 
 using System.Reflection;
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Certificates;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -28,7 +30,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
 {
     private static readonly string[] s_fixedChannels = ["stable", "staging", "daily", "local"];
 
-    private static async Task<IHost> BuildHostAsync()
+    private static async Task<IHost> BuildHostAsync(Dictionary<string, string?>? configurationValues = null)
     {
         var loggingOptions = Program.ParseLoggingOptions([]);
         var errorWriter = new TestStartupErrorWriter();
@@ -36,7 +38,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter, logBufferContext);
         var identityChannelReader = new IdentityChannelReader(typeof(Program).Assembly);
         var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(finalDrainBudget: Timeout.InfiniteTimeSpan), identityChannelReader);
-        return await Program.BuildApplicationAsync([], startupContext);
+        return await Program.BuildApplicationAsync([], startupContext, configurationValues);
     }
 
     private static string GetBakedEntryAssemblyChannel()
@@ -113,6 +115,24 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var context = host.Services.GetRequiredService<CliExecutionContext>();
 
         Assert.Equal(bakedChannel, context.IdentityChannel);
+    }
+
+    [Fact]
+    public async Task BuildApplication_ConfiguresCertificateManagerWithNssDbPaths()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "NSS certificate trust is only configured on Linux.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var nssDbDirectory = workspace.CreateDirectory("nssdb");
+        using var host = await BuildHostAsync(new Dictionary<string, string?>
+        {
+            [CertificateConfiguration.NssDbPathsConfigPath] = $"firefox={nssDbDirectory.FullName}"
+        });
+
+        var manager = Assert.IsType<UnixCertificateManager>(host.Services.GetRequiredService<CertificateManager>());
+        var nssDb = Assert.Single(manager.GetNssDbs(workspace.WorkspaceRoot.FullName));
+
+        Assert.Equal(nssDbDirectory.FullName, nssDb.Path);
     }
 
     [Fact]
