@@ -40,13 +40,16 @@ internal interface IAuxiliaryBackchannelMonitor
     /// Triggers an immediate scan of the backchannels directory for new/removed AppHosts.
     /// </summary>
     /// <param name="cancellationToken">A cancellation token.</param>
+    /// <param name="pruneOrphanedSockets">Whether to delete sockets whose owning process has exited.</param>
+    /// <param name="throwOnDiscoveryFailure">Whether directory discovery failures must propagate to the caller.</param>
     /// <returns>A task representing the scan operation.</returns>
-    Task ScanAsync(CancellationToken cancellationToken = default);
+    Task ScanAsync(CancellationToken cancellationToken = default, bool pruneOrphanedSockets = true, bool throwOnDiscoveryFailure = false);
 
     /// <summary>
     /// Watches for AppHost connection changes and yields the full active connection set after each change.
     /// </summary>
     /// <param name="cancellationToken">A cancellation token.</param>
+    /// <param name="readOnly">Whether to avoid filesystem cleanup and report discovery failures instead of ignoring them.</param>
     /// <returns>The active connections after the initial scan and after each observed change.</returns>
-    IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync(CancellationToken cancellationToken = default);
+    IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync(CancellationToken cancellationToken = default, bool readOnly = false);
 }

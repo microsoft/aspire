@@ -15,6 +15,11 @@ namespace Aspire.Cli.Resources {
     [System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class StopCommandStrings {
+        public static string ProtocolRequiresExactIdentity {
+            get {
+                return ResourceManager.GetString("ProtocolRequiresExactIdentity", resourceCulture);
+            }
+        }
 
         private static System.Resources.ResourceManager resourceMan;
 
@@ -114,6 +119,36 @@ namespace Aspire.Cli.Resources {
         public static string ForceOptionDescription {
             get {
                 return ResourceManager.GetString("ForceOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string PidOptionDescription {
+            get {
+                return ResourceManager.GetString("PidOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string PidMustBePositive {
+            get {
+                return ResourceManager.GetString("PidMustBePositive", resourceCulture);
+            }
+        }
+
+        public static string AppHostNotRunningWithPid {
+            get {
+                return ResourceManager.GetString("AppHostNotRunningWithPid", resourceCulture);
+            }
+        }
+
+        public static string AppHostNotRunningAtPathWithPid {
+            get {
+                return ResourceManager.GetString("AppHostNotRunningAtPathWithPid", resourceCulture);
+            }
+        }
+
+        public static string AmbiguousAppHostPid {
+            get {
+                return ResourceManager.GetString("AmbiguousAppHostPid", resourceCulture);
             }
         }
 
