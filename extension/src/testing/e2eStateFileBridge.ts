@@ -3047,22 +3047,16 @@ function cloneDebugConsoleOutputEvent(event: AspireDebugConsoleOutputEvent, sequ
   };
 }
 
-// https://github.com/dotnet/vscode-csharp/blob/v2.148.23-prerelease/src/csharpExtensionExports.ts
-interface CsharpDebuggerApi {
-  initializationFinished?: () => Promise<void>;
-}
-
 async function prepareBlazorWasmDebugger(): Promise<BlazorWasmDebuggerStatus> {
-  const extension = vscode.extensions.getExtension<CsharpDebuggerApi>(csharpExtensionId);
+  const extension = vscode.extensions.getExtension(csharpExtensionId);
   if (!extension) {
     throw new Error(`${csharpExtensionId} is required for the Blazor browser debugger E2E tests.`);
   }
 
-  const api = await extension.activate();
-  if (typeof api?.initializationFinished !== 'function') {
-    throw new Error(`${csharpExtensionId} did not export initializationFinished(), so debugger readiness cannot be observed.`);
-  }
-  await api.initializationFinished();
+  // Activation awaits runtime dependency installation. initializationFinished() additionally
+  // waits for project import, which is unrelated to checking the bridge and can remain pending.
+  // https://github.com/dotnet/vscode-csharp/blob/v2.148.23-prerelease/src/main.ts
+  await extension.activate();
 
   // The pinned C# extension downloads this runtime dependency during activation. If acquisition
   // fails, it still activates but silently selects the legacy app-hosted proxy instead of VSdbg.

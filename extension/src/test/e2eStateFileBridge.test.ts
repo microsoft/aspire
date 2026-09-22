@@ -275,18 +275,17 @@ suite('E2E state file bridge', () => {
     });
 
     for (const bridgeInstalled of [false, true]) {
-        test(`reports C# bridge readiness after initialization when installed=${bridgeInstalled}`, async () => {
+        test(`reports C# bridge readiness after activation when installed=${bridgeInstalled}`, async () => {
             const extensionPath = path.join(runRoot, 'csharp');
             const bridgeDirectory = path.join(extensionPath, '.vswebassemblybridge');
             fs.mkdirSync(bridgeDirectory, { recursive: true });
             if (bridgeInstalled) {
                 fs.writeFileSync(path.join(bridgeDirectory, 'Microsoft.Diagnostics.BrowserDebugHost.dll'), '');
             }
-            let finishInitialization!: () => void;
-            const initialized = new Promise<void>(resolve => { finishInitialization = resolve; });
-            const api = { initializationFinished: sandbox.stub().returns(initialized) };
-            const extension = createMockExtension(csharpExtensionId, extensionPath, api);
-            const activate = sandbox.spy(extension, 'activate');
+            let finishActivation!: (api: object) => void;
+            const activated = new Promise<object>(resolve => { finishActivation = resolve; });
+            const extension = createMockExtension(csharpExtensionId, extensionPath, {});
+            const activate = sandbox.stub(extension, 'activate').returns(activated);
             sandbox.stub(vscode.extensions, 'getExtension').withArgs(csharpExtensionId).returns(extension);
             let completed = false;
 
@@ -296,11 +295,10 @@ suite('E2E state file bridge', () => {
                 .then(result => { completed = true; return result; });
             await Promise.resolve();
             assert.strictEqual(completed, false);
-            finishInitialization();
+            finishActivation({});
 
             assert.strictEqual(await preparation, bridgeInstalled ? 'ready' : 'missing-bridge');
             assert.strictEqual(activate.calledOnce, true);
-            assert.strictEqual(api.initializationFinished.calledOnce, true);
         });
     }
 
@@ -313,21 +311,26 @@ suite('E2E state file bridge', () => {
         /ms-dotnettools\.csharp is required/);
     });
 
-    test('rejects C# exports without an observable initialization contract', async () => {
-        const extension = createMockExtension(csharpExtensionId, runRoot, {});
+    test('checks installed bridge dependencies without waiting for project import', async () => {
+        const bridgeDirectory = path.join(runRoot, '.vswebassemblybridge');
+        fs.mkdirSync(bridgeDirectory);
+        fs.writeFileSync(path.join(bridgeDirectory, 'Microsoft.Diagnostics.BrowserDebugHost.dll'), '');
+        const initializationFinished = sandbox.stub().rejects(new Error('Project import is not ready'));
+        const extension = createMockExtension(csharpExtensionId, runRoot, { initializationFinished });
         sandbox.stub(vscode.extensions, 'getExtension').withArgs(csharpExtensionId).returns(extension);
 
-        await assert.rejects(dispatchControlCommand(
+        const status = await dispatchControlCommand(
             { name: 'prepareBlazorWasmDebugger' },
-            createRepository([]), createLaunchService(), {} as AspireAppHostTreeProvider, {} as AspireTerminalProvider),
-        /did not export initializationFinished/);
+            createRepository([]), createLaunchService(), {} as AspireAppHostTreeProvider, {} as AspireTerminalProvider);
+
+        assert.strictEqual(status, 'ready');
+        assert.strictEqual(initializationFinished.called, false);
     });
 
-    test('does not misclassify a C# initialization failure as a missing component', async () => {
-        const error = new Error('C# project initialization failed');
-        const extension = createMockExtension(csharpExtensionId, runRoot, {
-            initializationFinished: async () => { throw error; },
-        });
+    test('does not misclassify a C# activation failure as a missing component', async () => {
+        const error = new Error('C# activation failed');
+        const extension = createMockExtension(csharpExtensionId, runRoot, {});
+        sandbox.stub(extension, 'activate').rejects(error);
         sandbox.stub(vscode.extensions, 'getExtension').withArgs(csharpExtensionId).returns(extension);
 
         await assert.rejects(dispatchControlCommand(
