@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Automated NuGet dependency version bump in aspire.dev repo tooling; not related to any product changelog entry",
+  "mergedAt": "2026-09-22T12:02:08Z",
+  "number": 1710,
+  "runDate": "2026-09-22T12:10:39Z",
+  "status": "excluded",
+  "title": "Bump the nuget-selected group with 4 updates"
+}
