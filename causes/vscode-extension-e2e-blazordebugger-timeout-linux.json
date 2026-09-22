@@ -5,8 +5,8 @@
   "test_name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for hosted-global / hosted-per-page",
   "job_name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
   "error_pattern": "Error: Timed out after ~299600ms waiting for Blazor WASM root session for resource 'hosted-global'/'hosted-per-page'. Last error: <none>.",
-  "analysis": "Both hosted-global and hosted-per-page Blazor browser debugger E2E tests timed out (~299s) waiting for the WASM root debug session, matching a previously recorded recurring flaky pattern for this shard on Linux (issue #20184). The PR only modifies dynamic-debug and Windows teardown E2E test files, unrelated to the Blazor browser-debugger shard.",
-  "failure_details": "Aspire Blazor browser debugger E2E hits a managed breakpoint for hosted-global:\nFailed to apply E2E control revision 1790049233027: Error: Timed out after 299583ms waiting for Blazor WASM root session for resource 'hosted-global'. Last error: <none>.\n\nAspire Blazor browser debugger E2E hits a managed breakpoint for hosted-per-page:\nFailed to apply E2E control revision 1790049233030: Error: Timed out after 299720ms waiting for Blazor WASM root session for resource 'hosted-per-page'. Last error: <none>.",
+  "analysis": "Both hosted-global and hosted-per-page Blazor WASM debugger E2E scenarios timed out after ~300 seconds waiting for the managed WASM debug root session to be established on Linux. This is a known recurring flaky pattern in the VS Code extension E2E browser-debugger suite unrelated to this PR, which only modifies Azure provisioning proxy generation code and has no relationship to the VS Code extension or its debugger infrastructure.",
+  "failure_details": "Error: Failed to apply E2E control revision 1790097247080: Error: Timed out after 299622ms waiting for Blazor WASM root session for resource 'hosted-global'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"e57b6881-8753-463f-a4b2-0cf4a96924da\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",...}]}\n\nError: Failed to apply E2E control revision 1790097247083: Error: Timed out after 299727ms waiting for Blazor WASM root session for resource 'hosted-per-page'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"2ca89458-b4f1-470b-913e-dedc86f53793\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",...}]}",
   "occurrences": [
     {
       "run_id": 35132956836,
@@ -28,6 +28,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
       "pr_number": 20289,
       "observed_at": "2026-09-22T04:17:26Z"
+    },
+    {
+      "run_id": 35756256834,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35756256834",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, browser-debugger)",
+      "pr_number": 20131,
+      "observed_at": "2026-09-22T17:48:00Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20184"

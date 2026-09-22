@@ -4,8 +4,8 @@
   "title": "Multiple unrelated 'Build test project' jobs (Hosting.RemoteHost, Hosting.Azure, Hosting.Azure.Kubernetes, Playground, Dashboard) fail with generic exit code 1",
   "job_name": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
   "error_pattern": "Process completed with exit code 1. (Build test project step failed across multiple unrelated jobs simultaneously; job logs unavailable: 'Failed to fetch logs for job').",
-  "analysis": "The failing job's 'Build test project' step produced only a generic 'Process completed with exit code 1' annotation with no underlying error text, and job logs could not be fetched. The PR is a dependency-only update to eng/Version.Details.xml and eng/Versions.props (microsoft/dcp bump) with no relation to Hosting.RemoteHost test code. This recurring, previously-tracked pattern spans multiple unrelated job matrices, indicating a transient CI/runner infrastructure issue rather than a code defect introduced by this PR.",
-  "failure_details": "### Job: Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)\n- Conclusion: failure\n- Failed Steps: Build test project\n\nJob Logs: (Failed to fetch logs for job 106632273839)\n\nAnnotations:\n- failure: Process completed with exit code 1.",
+  "analysis": "The 'Build test project' step failed with only a generic 'Process completed with exit code 1' annotation, and the underlying job log could not be fetched ('Failed to fetch logs for job'). This is a recurring, widespread pattern affecting multiple unrelated test job categories (RemoteHost, Azure, Kubernetes, Playground, Dashboard) simultaneously across many PRs, which strongly indicates a shared build/runner infrastructure issue rather than a code problem, especially since the PR's changes to Aspire.Hosting.RemoteHost/Ats/AtsMarshaller.cs and its test file are additive and unrelated to build infra.",
+  "failure_details": "Annotation: **failure**: Process completed with exit code 1.\nJob log: 1:(Failed to fetch logs for job 106845010048)\nFailed step: Build test project\nNo further diagnostic detail was available from the job logs for this run.",
   "occurrences": [
     {
       "run_id": 33494022725,
@@ -125,6 +125,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
       "pr_number": 20300,
       "observed_at": "2026-09-22T06:30:49Z"
+    },
+    {
+      "run_id": 35756256834,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35756256834",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
+      "pr_number": 20131,
+      "observed_at": "2026-09-22T17:48:00Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19838"
