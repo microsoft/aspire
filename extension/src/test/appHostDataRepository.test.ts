@@ -17,7 +17,7 @@ import { errorFetchingAppHosts } from '../loc/strings';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
 
-import { removeDirectorySafely } from './testHelpers';
+import { createDeferred, removeDirectorySafely } from './testHelpers';
 class TestChildProcess extends EventEmitter {
     stdout = new PassThrough();
     stderr = new PassThrough();
@@ -7468,12 +7468,4 @@ async function waitForCondition(condition: () => boolean, message: string): Prom
     }
 
     assert.ok(condition(), message);
-}
-
-function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-    let resolve: (value: T) => void = () => { };
-    const promise = new Promise<T>(promiseResolve => {
-        resolve = promiseResolve;
-    });
-    return { promise, resolve };
 }

@@ -1,8 +1,15 @@
 import * as vscode from 'vscode';
-import { AppHostDiscoveryService } from './appHostDiscovery';
-import { summarizeAppHostLanguages } from './appHostLanguage';
+import type { AppHostDataRepository, WorkspaceAppHostDiscoverySnapshot } from '../data/AppHostDataRepository';
+import { type AppHostLanguageSummary, summarizeAppHostLanguages } from './appHostLanguage';
 import { type AppHostTargetVersionSummary, summarizeAppHostTargetVersions } from './appHostTargetVersion';
+import { extensionLogOutputChannel } from './logging';
 import { sendTelemetryEvent, setCommandInvocationListener, setCommonTelemetryProperties } from './telemetry';
+
+interface AppHostTelemetryContext {
+    apphost_present: 'true' | 'false' | undefined;
+    apphost_languages: AppHostLanguageSummary;
+    apphost_target_versions: AppHostTargetVersionSummary;
+}
 
 /**
  * Trigger that caused the meaningful-engagement event to fire.
@@ -20,27 +27,32 @@ export type EngagementTrigger = 'apphost_detected' | 'command' | 'debug_session'
  * installed, regardless of whether the user touches Aspire. We instead wait
  * for one of:
  *
- *   - an AppHost is discovered in the workspace (via {@link AppHostDiscoveryService}),
+ *   - an AppHost is discovered in the workspace (via {@link AppHostDataRepository}),
  *   - any extension command is invoked (signalled via {@link recordCommandInvoked}),
  *   - the DCP server accepts a `PUT /run_session` (signalled via {@link recordDebugSession}).
  *
- * Whichever triggers first wins; subsequent triggers are dropped. We also
- * publish a small set of common telemetry properties (apphost language
- * summary, presence flag) at fire time so subsequent events from the same
- * session carry consistent context.
+ * Whichever triggers first wins; subsequent triggers are dropped. Workspace
+ * context is refreshed independently from the repository's discovery snapshots,
+ * so a failed first scan cannot permanently misclassify subsequent events.
  */
 export class MeaningfulEngagementReporter implements vscode.Disposable {
     private _fired = false;
+    private _disposed = false;
+    private _contextGeneration = 0;
+    private _contextTask: Promise<void> = Promise.resolve();
+    private _context: AppHostTelemetryContext = {
+        apphost_present: undefined,
+        apphost_languages: 'unknown',
+        apphost_target_versions: 'unknown',
+    };
     private readonly _disposables: vscode.Disposable[] = [];
 
     constructor(
-        private readonly _appHostDiscoveryService: AppHostDiscoveryService,
+        repository: Pick<AppHostDataRepository, 'workspaceAppHostDiscovery' | 'onDidChangeWorkspaceAppHostDiscovery'>,
     ) {
-        // Subscribe to discovery changes; the first time a workspace folder
-        // produces at least one buildable AppHost candidate, fire.
         this._disposables.push(
-            this._appHostDiscoveryService.onDidChangeCandidates(folder => {
-                void this._checkAppHostsForFolder(folder, 'change');
+            repository.onDidChangeWorkspaceAppHostDiscovery(snapshot => {
+                this._updateWorkspaceContext(snapshot);
             })
         );
 
@@ -49,10 +61,8 @@ export class MeaningfulEngagementReporter implements vscode.Disposable {
         setCommandInvocationListener(() => this.recordCommandInvoked());
         this._disposables.push({ dispose: () => setCommandInvocationListener(undefined) });
 
-        // Probe the current set of workspace folders eagerly. An AppHost may
-        // already be present at activation; we don't want to wait for a
-        // discovery change event that may never come.
-        this._probeInitialWorkspaceFolders();
+        // Discovery may already have completed before this subscriber was created.
+        this._updateWorkspaceContext(repository.workspaceAppHostDiscovery);
     }
 
     /**
@@ -74,95 +84,83 @@ export class MeaningfulEngagementReporter implements vscode.Disposable {
     }
 
     dispose(): void {
+        if (this._disposed) {
+            return;
+        }
+        this._disposed = true;
+        this._contextGeneration++;
         this._disposables.forEach(d => d.dispose());
+        setCommonTelemetryProperties({
+            apphost_present: undefined,
+            apphost_languages: undefined,
+            apphost_target_versions: undefined,
+        });
     }
 
-    private _probeInitialWorkspaceFolders(): void {
-        const folders = vscode.workspace.workspaceFolders;
-        if (!folders) {
+    private _updateWorkspaceContext(snapshot: WorkspaceAppHostDiscoverySnapshot): void {
+        if (this._disposed) {
             return;
         }
-        for (const folder of folders) {
-            void this._checkAppHostsForFolder(folder, 'initial');
+
+        const generation = ++this._contextGeneration;
+        const complete = snapshot.status === 'success';
+        const hasCandidates = snapshot.candidates.length > 0;
+        this._context = {
+            // An incomplete scan can prove presence, but cannot prove absence.
+            apphost_present: hasCandidates ? 'true' : complete ? 'false' : undefined,
+            apphost_languages: complete ? summarizeAppHostLanguages(snapshot.candidates) : 'unknown',
+            apphost_target_versions: complete && !hasCandidates ? 'none' : 'unknown',
+        };
+        setCommonTelemetryProperties(this._context);
+
+        this._contextTask = complete && hasCandidates
+            ? this._updateTargetVersions(snapshot.candidates, generation)
+            : Promise.resolve();
+        if (hasCandidates) {
+            void this._tryFire('apphost_detected');
         }
     }
 
-    private async _checkAppHostsForFolder(folder: vscode.WorkspaceFolder, _origin: 'initial' | 'change'): Promise<void> {
-        if (this._fired) {
-            return;
-        }
+    private async _updateTargetVersions(
+        candidates: WorkspaceAppHostDiscoverySnapshot['candidates'],
+        generation: number): Promise<void> {
         try {
-            const candidates = await this._appHostDiscoveryService.discover(folder);
-            if (this._fired) {
+            const targetVersions = await summarizeAppHostTargetVersions(candidates);
+            if (this._disposed || generation !== this._contextGeneration) {
                 return;
             }
-            if (candidates.length > 0) {
-                await this._tryFire('apphost_detected');
-            }
+
+            this._context.apphost_target_versions = targetVersions;
+            setCommonTelemetryProperties({ apphost_target_versions: targetVersions });
         }
-        catch {
-            // AppHost discovery can fail when the CLI is missing or the
-            // workspace doesn't have an Aspire project — those failures are
-            // not interesting for engagement telemetry.
+        catch (error) {
+            if (!this._disposed && generation === this._contextGeneration) {
+                extensionLogOutputChannel.warn(`Failed to resolve AppHost target versions for telemetry: ${String(error)}`);
+            }
         }
     }
 
     private async _tryFire(trigger: EngagementTrigger): Promise<void> {
-        if (this._fired) {
+        if (this._fired || this._disposed) {
             return;
         }
         this._fired = true;
 
-        // Collect a coarse snapshot of the workspace state at fire time. We
-        // intentionally only fetch from already-running discovery — never
-        // forcing a new discovery — to keep the event side-effect-free.
-        const appHostSummary = await this._safeAppHostSummary();
+        // Wait only for metadata already being read, never for another CLI discovery.
+        // If discovery changes in the meantime, report the latest conservative context.
+        await this._contextTask;
+        if (this._disposed) {
+            return;
+        }
         const workspaceFolderCount = vscode.workspace.workspaceFolders?.length ?? 0;
         const hasCSharpDevKit = vscode.extensions.getExtension('ms-dotnettools.csdevkit') !== undefined;
 
-        // Publish a small set of properties to be merged into every
-        // subsequent event in this session.
-        setCommonTelemetryProperties({
-            apphost_languages: appHostSummary.languages,
-            apphost_target_versions: appHostSummary.targetVersions,
-            apphost_present: appHostSummary.languages === 'none' ? 'false' : 'true',
-        });
-
         sendTelemetryEvent('aspire/vscode/engagement/active', {
             trigger,
-            apphost_present: appHostSummary.languages === 'none' ? 'false' : 'true',
-            apphost_languages: appHostSummary.languages,
-            apphost_target_versions: appHostSummary.targetVersions,
+            ...this._context,
             has_csharp_devkit: hasCSharpDevKit ? 'true' : 'false',
         }, {
             workspace_folders: workspaceFolderCount,
         });
-    }
-
-    private async _safeAppHostSummary(): Promise<{
-        languages: ReturnType<typeof summarizeAppHostLanguages>;
-        targetVersions: AppHostTargetVersionSummary;
-    }> {
-        const folders = vscode.workspace.workspaceFolders;
-        if (!folders || folders.length === 0) {
-            return {
-                languages: 'none',
-                targetVersions: 'none',
-            };
-        }
-        const all: import('./appHostDiscovery').CandidateAppHostDisplayInfo[] = [];
-        for (const folder of folders) {
-            try {
-                const candidates = await this._appHostDiscoveryService.discover(folder);
-                all.push(...candidates);
-            }
-            catch {
-                // ignored; see _checkAppHostsForFolder
-            }
-        }
-        return {
-            languages: summarizeAppHostLanguages(all),
-            targetVersions: await summarizeAppHostTargetVersions(all),
-        };
     }
 }

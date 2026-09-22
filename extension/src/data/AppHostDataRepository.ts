@@ -40,6 +40,11 @@ interface CombinedWorkspaceAppHostCandidates {
     selectedAppHostPath: string | null;
 }
 
+export interface WorkspaceAppHostDiscoverySnapshot {
+    readonly status: 'pending' | 'success' | 'error';
+    readonly candidates: readonly CandidateAppHostDisplayInfo[];
+}
+
 interface DescribeStream {
     appHostPath: string;
     process: ChildProcessWithoutNullStreams | undefined;
@@ -84,6 +89,8 @@ export class AppHostDataRepository {
 
     private readonly _onDidChangeData = new vscode.EventEmitter<void>();
     readonly onDidChangeData = this._onDidChangeData.event;
+    private readonly _onDidChangeWorkspaceAppHostDiscovery = new vscode.EventEmitter<WorkspaceAppHostDiscoverySnapshot>();
+    readonly onDidChangeWorkspaceAppHostDiscovery = this._onDidChangeWorkspaceAppHostDiscovery.event;
 
     // ── Mode / panel state ──
     private _viewMode: ViewMode = 'workspace';
@@ -121,6 +128,7 @@ export class AppHostDataRepository {
     private readonly _workspaceFolderAppHostCandidates = new Map<string, CandidateAppHostDisplayInfo[]>();
     private _workspaceAppHostDescription: string | undefined;
     private _workspaceAppHostDiscoveryComplete = false;
+    private _workspaceAppHostDiscovery: WorkspaceAppHostDiscoverySnapshot = { status: 'pending', candidates: [] };
     private _workspaceAppHostDiscoveryVersion = 0;
     private _workspaceAppHostDiscoveryInProgress = false;
     private _workspaceAppHostDiscoveryRefreshQueued = false;
@@ -241,6 +249,10 @@ export class AppHostDataRepository {
 
     get isWorkspaceAppHostDiscoveryComplete(): boolean {
         return this._workspaceAppHostDiscoveryComplete;
+    }
+
+    get workspaceAppHostDiscovery(): WorkspaceAppHostDiscoverySnapshot {
+        return this._workspaceAppHostDiscovery;
     }
 
     get errorMessage(): string | undefined {
@@ -569,6 +581,7 @@ export class AppHostDataRepository {
         this._psPollerDisposable.dispose();
         this._psPoller.dispose();
         this._onDidChangeData.dispose();
+        this._onDidChangeWorkspaceAppHostDiscovery.dispose();
         if (this._ownsAppHostDiscoveryService) {
             this._appHostDiscoveryService.dispose();
         }
@@ -614,11 +627,13 @@ export class AppHostDataRepository {
             this._workspaceAppHostDiscoveryComplete = true;
             this._clearWorkspaceAppHostDiscovery();
             this._clearErrors();
+            this._setWorkspaceAppHostDiscovery('success', []);
             this._syncPolling();
             this._updateWorkspaceContext({ clearLoading: true });
             return;
         }
 
+        this._setWorkspaceAppHostDiscovery('pending', []);
         if (this._workspaceAppHostDiscoveryInProgress) {
             this._workspaceAppHostDiscoveryRefreshQueued = true;
             this._workspaceAppHostDiscoveryForceRefreshQueued ||= options?.forceRefresh === true;
@@ -729,6 +744,7 @@ export class AppHostDataRepository {
 
             this._setWorkspaceFolderAppHostCandidates(workspaceFolderCandidates);
             const result = combineWorkspaceAppHostCandidates(workspaceFolderCandidates);
+            this._setWorkspaceAppHostDiscovery(errors.length > 0 ? 'error' : 'success', result.appHostCandidates);
             const buildableAppHostCandidates = result.appHostCandidates.filter(isBuildableAppHostCandidate);
             if (errors.length > 0 && buildableAppHostCandidates.length === 0) {
                 throw new Error(formatWorkspaceFolderDiscoveryError(errors[0]));
@@ -750,6 +766,9 @@ export class AppHostDataRepository {
 
             cancellationSource.cancel();
             this._workspaceAppHostDiscoveryComplete = true;
+            if (this._workspaceAppHostDiscovery.status === 'pending') {
+                this._setWorkspaceAppHostDiscovery('error', []);
+            }
             extensionLogOutputChannel.warn(`Failed to fetch workspace apphost: ${error}`);
             this._runtimeSnapshotAfterWorkspaceDiscovery = false;
             this._clearWorkspaceAppHostDiscovery();
@@ -823,6 +842,7 @@ export class AppHostDataRepository {
 
     private _markWorkspaceAppHostDiscoveryPending(options?: { preserveCandidates?: boolean }): void {
         this._workspaceAppHostDiscoveryComplete = false;
+        this._setWorkspaceAppHostDiscovery('pending', []);
         if (!options?.preserveCandidates) {
             this._clearWorkspaceAppHostDiscovery();
         }
@@ -831,6 +851,22 @@ export class AppHostDataRepository {
             this._updateLoadingContext();
             this._updateWorkspaceContext({ clearLoading: false });
         }
+    }
+
+    private _setWorkspaceAppHostDiscovery(
+        status: WorkspaceAppHostDiscoverySnapshot['status'],
+        candidates: readonly CandidateAppHostDisplayInfo[]): void {
+        if (this._disposed || (status === 'pending' && this._workspaceAppHostDiscovery.status === 'pending')) {
+            return;
+        }
+
+        // Keep discovery certainty separate from the UI's retained candidates and runtime errors.
+        // A partial result proves presence, but it cannot describe the whole workspace.
+        this._workspaceAppHostDiscovery = {
+            status,
+            candidates: candidates.map(candidate => ({ ...candidate })),
+        };
+        this._onDidChangeWorkspaceAppHostDiscovery.fire(this._workspaceAppHostDiscovery);
     }
 
     private _handleWorkspaceAppHostCandidates(appHostCandidates: readonly AppHostCandidate[], selectedAppHostPath: string | null): void {
