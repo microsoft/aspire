@@ -11,6 +11,7 @@ async function main() {
 
     const request = JSON.parse(await fs.readFile(inputPath, 'utf8'));
     process.env.GH_AW_AGENT_OUTPUT = request.agentOutputPath;
+    process.env.ANALYSIS_DIR = request.analysisDir;
     process.env.ENABLE_RERUN = request.enableRerun ?? 'true';
 
     const calls = { failed: [], reruns: [], infos: [], warnings: [] };

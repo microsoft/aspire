@@ -963,7 +963,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         Assert.Equal(0, result.ExitCode);
         using var analysis = JsonDocument.Parse(
-            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "agent", "analysis-result.json")));
+            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "ci-analysis-output", "analysis-result.json")));
         var failedTest = analysis.RootElement.GetProperty("failed_tests")[0];
         Assert.Equal("Trusted\nerror", failedTest.GetProperty("error").GetString());
         Assert.Equal("trusted\nframe", failedTest.GetProperty("stack_trace").GetString());
@@ -1031,7 +1031,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         Assert.Equal(0, result.ExitCode);
         using var analysis = JsonDocument.Parse(
-            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "agent", "analysis-result.json")));
+            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "ci-analysis-output", "analysis-result.json")));
         Assert.Collection(
             analysis.RootElement.GetProperty("failed_tests").EnumerateArray(),
             failedTest =>
@@ -1497,7 +1497,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         Assert.Equal(0, result.ExitCode);
         using var sanitized = JsonDocument.Parse(
-            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "agent", "analysis-result.json")));
+            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "ci-analysis-output", "analysis-result.json")));
         var failedJob = sanitized.RootElement.GetProperty("failed_jobs")[0];
         Assert.Equal(500, failedJob.GetProperty("reason").GetString()!.Length);
         Assert.StartsWith("Job [link](https://evil.example)", failedJob.GetProperty("reason").GetString(), StringComparison.Ordinal);
@@ -1712,7 +1712,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         Assert.Equal(0, result.ExitCode);
         using var sanitizedCause = JsonDocument.Parse(
-            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "agent", "causes", "flaky-failure.json")));
+            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "ci-analysis-output", "causes", "flaky-failure.json")));
         Assert.Equal(expected, sanitizedCause.RootElement.GetProperty(field).GetString());
     }
 
@@ -1767,7 +1767,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 error_pattern = legacyPattern,
             }));
 
-        var causePath = Path.Combine(_workspace.Path, "agent", "causes", "nuget-timeout.json");
+        var causePath = Path.Combine(_workspace.Path, "ci-analysis-output", "causes", "nuget-timeout.json");
         var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
 
         Assert.Equal(0, result.ExitCode);
@@ -4242,6 +4242,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             new Dictionary<string, string>
             {
                 ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["ANALYSIS_DIR"] = Path.Combine(_workspace.Path, "ci-analysis-output"),
                 ["GH_TOKEN"] = "test-token",
                 ["GIT_CALL_LOG"] = gitCallLog,
                 ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
@@ -4260,7 +4261,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     public async Task PublicationStepStopsBeforeIssueMutationWhenCauseCacheLookupFails(string failingState)
     {
         await PreparePublicationStepFixtureAsync();
-        var causesDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "agent", "causes")).FullName;
+        var causesDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "ci-analysis-output", "causes")).FullName;
         await File.WriteAllTextAsync(
             Path.Combine(causesDirectory, "nuget-timeout.json"),
             """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"timeout","job_ids":[456]}""");
@@ -4292,6 +4293,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             {
                 ["FAILING_STATE"] = failingState,
                 ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["ANALYSIS_DIR"] = Path.Combine(_workspace.Path, "ci-analysis-output"),
                 ["GH_CALL_LOG"] = ghCallLog,
                 ["GH_TOKEN"] = "test-token",
                 ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
@@ -4320,14 +4322,14 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         bool hasUnsupportedTrailingContent)
     {
         await PreparePublicationStepFixtureAsync();
-        var agentDirectory = Path.Combine(_workspace.Path, "agent");
-        var causesDirectory = Directory.CreateDirectory(Path.Combine(agentDirectory, "causes")).FullName;
+        var analysisDirectory = Path.Combine(_workspace.Path, "ci-analysis-output");
+        var causesDirectory = Directory.CreateDirectory(Path.Combine(analysisDirectory, "causes")).FullName;
         var failureDataDirectory = Path.Combine(_workspace.Path, "ci-failure-data");
         var isMainBreakage = causeType == "main-repository-breakage";
         var verdict = isMainBreakage ? "main-repository-breakage" : "transient-infra";
         var classification = isMainBreakage ? "main-repository-breakage" : "transient-infra";
         await File.WriteAllTextAsync(
-            Path.Combine(agentDirectory, "analysis-result.json"),
+            Path.Combine(analysisDirectory, "analysis-result.json"),
             $$"""{"verdict":"{{verdict}}","failed_jobs":[{"id":456,"classification":"{{classification}}","reason":"Failure"}],"failed_tests":[],"causes":["main-failure"]}""");
         await File.WriteAllTextAsync(
             Path.Combine(causesDirectory, "main-failure.json"),
@@ -4474,6 +4476,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 ["EDITED_LABELS_PATH"] = editedLabelsPath,
                 ["EDITED_TITLE_PATH"] = editedTitlePath,
                 ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["ANALYSIS_DIR"] = Path.Combine(_workspace.Path, "ci-analysis-output"),
                 ["GH_TOKEN"] = "test-token",
                 ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
                 ["STORED_CAUSE_PATH"] = storedCausePath,
@@ -4538,6 +4541,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             new Dictionary<string, string>
             {
                 ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["ANALYSIS_DIR"] = Path.Combine(_workspace.Path, "ci-analysis-output"),
                 ["GH_CALL_LOG"] = ghCallLog,
                 ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
             });
@@ -4577,6 +4581,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             new Dictionary<string, string>
             {
                 ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["ANALYSIS_DIR"] = Path.Combine(_workspace.Path, "ci-analysis-output"),
                 ["GH_CALL_LOG"] = ghCallLog,
                 ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
                 ["TMPDIR"] = tempDirectory,
@@ -4618,6 +4623,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             new Dictionary<string, string>
             {
                 ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["ANALYSIS_DIR"] = Path.Combine(_workspace.Path, "ci-analysis-output"),
                 ["GH_CALL_LOG"] = ghCallLog,
                 ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
             });
@@ -4672,6 +4678,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             new Dictionary<string, string>
             {
                 ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["ANALYSIS_DIR"] = Path.Combine(_workspace.Path, "ci-analysis-output"),
                 ["GH_CALL_LOG"] = ghCallLog,
                 ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
                 ["PR_LOOKUP_COUNT_PATH"] = prLookupCountPath,
@@ -4704,6 +4711,47 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     [Fact]
+    public void AnalysisConsumersReceiveDownloadedAnalysisDirectory()
+    {
+        ForEachExecutableWorkflow(workflow =>
+        {
+            // The analysis JSON and cause files ship only in the `ci-analysis-output` artifact.
+            // They are not siblings of the agent output, so deriving their location from
+            // GH_AW_AGENT_OUTPUT silently reads a path that never exists on the runner.
+            Assert.DoesNotContain("dirname \"$OUTPUT_FILE\")/agent", workflow, StringComparison.Ordinal);
+            Assert.DoesNotContain("path.dirname(outputFile), 'agent'", workflow, StringComparison.Ordinal);
+
+            // Every consumer must take the directory from the download step rather than defaulting,
+            // so a missing or renamed download step fails loudly instead of reading a bogus path.
+            var analysisDirAssignments = workflow
+                .Split('\n')
+                .Where(line => line.StartsWith("ANALYSIS_DIR:", StringComparison.Ordinal))
+                .ToArray();
+
+            Assert.Equal(4, analysisDirAssignments.Length);
+            Assert.All(
+                analysisDirAssignments,
+                line => Assert.Contains("${{ steps.download-analysis.outputs.download-path }}", line, StringComparison.Ordinal));
+
+            // Both privileged jobs that read the analysis must actually download the artifact.
+            Assert.Equal(3, CountOccurrences(workflow, "name: ci-analysis-output"));
+        });
+    }
+
+    private static int CountOccurrences(string value, string token)
+    {
+        var count = 0;
+        var index = value.IndexOf(token, StringComparison.Ordinal);
+        while (index >= 0)
+        {
+            count++;
+            index = value.IndexOf(token, index + token.Length, StringComparison.Ordinal);
+        }
+
+        return count;
+    }
+
+    [Fact]
     public void RerunUsesTrustedRunContext()
     {
         ForEachExecutableWorkflow(workflow =>
@@ -4718,9 +4766,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
             var rerunValidation = GetSection(
                 workflow,
-                "const analysisFile = path.join(path.dirname(outputFile), 'agent', 'analysis-result.json');",
+                "const analysisFile = path.join(analysisDir, 'analysis-result.json');",
                 "if (!enableRerun)");
-            Assert.Contains("const causesDir = path.join(path.dirname(outputFile), 'agent', 'causes');", rerunValidation, StringComparison.Ordinal);
+            Assert.Contains("const causesDir = path.join(analysisDir, 'causes');", rerunValidation, StringComparison.Ordinal);
             Assert.Contains("const trustedFailedJobsFile = path.join('ci-failure-data', 'failed-jobs.json');", rerunValidation, StringComparison.Ordinal);
             Assert.Contains("analysisJobIdSet.size !== trustedJobIdSet.size", rerunValidation, StringComparison.Ordinal);
             Assert.Contains("!analysisJobIds.every(jobId => trustedJobIdSet.has(jobId))", rerunValidation, StringComparison.Ordinal);
@@ -6876,6 +6924,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         process.StartInfo.RedirectStandardOutput = true;
         process.StartInfo.UseShellExecute = false;
         process.StartInfo.Environment["GH_AW_AGENT_OUTPUT"] = agentOutputPath;
+        process.StartInfo.Environment["ANALYSIS_DIR"] = Path.Combine(_workspace.Path, "ci-analysis-output");
 
         process.Start();
 
@@ -6951,8 +7000,8 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         string testEvidenceState = "complete",
         string trustedTestFailuresJson = "[]")
     {
-        var agentDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "agent")).FullName;
-        var causesDirectory = Directory.CreateDirectory(Path.Combine(agentDirectory, "causes")).FullName;
+        var analysisDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "ci-analysis-output")).FullName;
+        var causesDirectory = Directory.CreateDirectory(Path.Combine(analysisDirectory, "causes")).FullName;
         var failureDataDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "ci-failure-data")).FullName;
         await File.WriteAllTextAsync(
             Path.Combine(_workspace.Path, "output.json"),
@@ -6960,7 +7009,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             {
                 items = new[] { new { type = "rerun_failed_jobs", run_id = 123, reason = rerunReason } },
             }));
-        await File.WriteAllTextAsync(Path.Combine(agentDirectory, "analysis-result.json"), analysis);
+        await File.WriteAllTextAsync(Path.Combine(analysisDirectory, "analysis-result.json"), analysis);
         await File.WriteAllTextAsync(Path.Combine(causesDirectory, "nuget-timeout.json"), cause);
         await File.WriteAllTextAsync(
             Path.Combine(failureDataDirectory, "run-context.json"),
@@ -7002,6 +7051,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             {
                 script,
                 agentOutputPath = Path.Combine(_workspace.Path, "output.json"),
+                analysisDir = Path.Combine(_workspace.Path, "ci-analysis-output"),
                 currentRunAttempt,
                 prState,
                 prLocked,
@@ -7043,10 +7093,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
             Path.Combine(workflowDirectory, Path.GetFileName(IssueScriptRelativePath)));
 
-        var agentDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "agent")).FullName;
+        var analysisDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "ci-analysis-output")).FullName;
         var failureDataDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "ci-failure-data")).FullName;
         await File.WriteAllTextAsync(
-            Path.Combine(agentDirectory, "analysis-result.json"),
+            Path.Combine(analysisDirectory, "analysis-result.json"),
             """{"verdict":"transient-infra","failed_jobs":[{"id":456,"classification":"transient-infra","reason":"Infrastructure failure"}],"failed_tests":[],"causes":[]}""");
         await File.WriteAllTextAsync(
             Path.Combine(failureDataDirectory, "run-context.json"),
@@ -7147,9 +7197,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         string prMetadata = "{}",
         string candidateHistoryStatus = """{"state":"available"}""")
     {
-        var agentDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "agent")).FullName;
+        var analysisDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "ci-analysis-output")).FullName;
         var failureDataDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "ci-failure-data")).FullName;
-        await File.WriteAllTextAsync(Path.Combine(agentDirectory, "analysis-result.json"), analysis);
+        await File.WriteAllTextAsync(Path.Combine(analysisDirectory, "analysis-result.json"), analysis);
         await File.WriteAllTextAsync(Path.Combine(failureDataDirectory, "run-context.json"), runContext);
         await File.WriteAllTextAsync(Path.Combine(failureDataDirectory, "run.json"), run);
         await File.WriteAllTextAsync(Path.Combine(failureDataDirectory, "failed-jobs.json"), trustedFailedJobs);
@@ -7165,7 +7215,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         var arguments = new List<string>
         {
             command,
-            Path.Combine(_workspace.Path, "agent", "analysis-result.json"),
+            Path.Combine(_workspace.Path, "ci-analysis-output", "analysis-result.json"),
         };
         if (outputPath is not null)
         {
@@ -7236,12 +7286,12 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         bool writeTrustedTestFailures = true,
         string testEvidenceState = "complete")
     {
-        var agentDirectory = Path.Combine(_workspace.Path, "agent");
+        var analysisDirectory = Path.Combine(_workspace.Path, "ci-analysis-output");
         var failureDataDirectory = Path.Combine(_workspace.Path, "ci-failure-data");
-        Directory.CreateDirectory(agentDirectory);
+        Directory.CreateDirectory(analysisDirectory);
         Directory.CreateDirectory(failureDataDirectory);
 
-        await File.WriteAllTextAsync(Path.Combine(agentDirectory, "analysis-result.json"), analysis);
+        await File.WriteAllTextAsync(Path.Combine(analysisDirectory, "analysis-result.json"), analysis);
         await File.WriteAllTextAsync(Path.Combine(failureDataDirectory, "run-context.json"), runContext);
         await File.WriteAllTextAsync(Path.Combine(failureDataDirectory, "failed-jobs.json"), trustedFailedJobs);
         await File.WriteAllTextAsync(
@@ -7303,7 +7353,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     private async Task WriteCauseFilesAsync(IReadOnlyDictionary<string, string> causes)
     {
-        var causesDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "agent", "causes")).FullName;
+        var causesDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "ci-analysis-output", "causes")).FullName;
         foreach (var (fileName, cause) in causes)
         {
             await File.WriteAllTextAsync(Path.Combine(causesDirectory, fileName), cause);

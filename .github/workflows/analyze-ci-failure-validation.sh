@@ -6,7 +6,10 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-ANALYSIS_DIR="${ANALYSIS_DIR:-$(dirname "$GH_AW_AGENT_OUTPUT")/agent}"
+# The analysis JSON and cause files ship in the `ci-analysis-output` artifact, which the
+# caller's `download-analysis` step unpacks. They are not siblings of the agent output, so
+# this path must be supplied rather than derived.
+: "${ANALYSIS_DIR:?ANALYSIS_DIR is required (download-analysis step missing?)}"
 ANALYSIS_FILE="$ANALYSIS_DIR/analysis-result.json"
 CAUSES_DIR="$ANALYSIS_DIR/causes"
 RUN_CONTEXT_FILE="ci-failure-data/run-context.json"

@@ -72,6 +72,25 @@ public sealed class AgenticWorkflowTests
         var script = Scalar(publish, "run");
         Assert.Contains("ANALYSIS_FILE=\"$ANALYSIS_DIR/analysis-result.json\"", script, StringComparison.Ordinal);
         Assert.Contains("CAUSES_DIR=\"$ANALYSIS_DIR/causes\"", script, StringComparison.Ordinal);
+
+        // The comment step runs in the same job but needs its own env wiring; without it the
+        // analysis file is unreadable and the step fails before any comment is posted.
+        var comment = Step(root, "Comment on PR");
+        Assert.Equal("${{ steps.download-analysis.outputs.download-path }}", Scalar(Mapping(comment, "env"), "ANALYSIS_DIR"));
+        Assert.Contains(
+            "ANALYSIS_FILE=\"$ANALYSIS_DIR/analysis-result.json\"",
+            Scalar(comment, "run"),
+            StringComparison.Ordinal);
+
+        // The rerun job is a separate job, so it must download the artifact itself.
+        var rerunDownload = Step(root, "Download CI analysis files for rerun");
+        AssertArtifact(rerunDownload, "actions/download-artifact", "ci-analysis-output");
+        Assert.Equal("download-analysis", Scalar(rerunDownload, "id"));
+        Assert.Equal("${{ runner.temp }}/ci-analysis-output", Scalar(Mapping(rerunDownload, "with"), "path"));
+
+        var rerun = Step(root, "Rerun failed jobs");
+        Assert.Equal("${{ steps.download-analysis.outputs.download-path }}", Scalar(Mapping(rerun, "env"), "ANALYSIS_DIR"));
+
         AssertUploadOrdering(root, extension, upload, download, publish);
     }
 

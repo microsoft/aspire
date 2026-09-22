@@ -746,13 +746,10 @@ safe-outputs:
           run: |
             set -euo pipefail
 
-            OUTPUT_FILE="$GH_AW_AGENT_OUTPUT"
-            if [ -z "$OUTPUT_FILE" ]; then
-              echo "::error::No GH_AW_AGENT_OUTPUT environment variable found"
-              exit 1
-            fi
-
-            ANALYSIS_DIR="${ANALYSIS_DIR:-$(dirname "$OUTPUT_FILE")/agent}"
+            # The analysis JSON and cause files ship in the `ci-analysis-output` artifact,
+            # which the `download-analysis` step unpacks. They are not siblings of the agent
+            # output, so this path must come from that step rather than being derived.
+            : "${ANALYSIS_DIR:?ANALYSIS_DIR is required (download-analysis step missing?)}"
             ANALYSIS_FILE="$ANALYSIS_DIR/analysis-result.json"
             CAUSES_DIR="$ANALYSIS_DIR/causes"
 
@@ -1138,11 +1135,16 @@ safe-outputs:
             fi
 
         - name: Comment on PR
+          env:
+            ANALYSIS_DIR: ${{ steps.download-analysis.outputs.download-path }}
           run: |
             set -euo pipefail
 
-            OUTPUT_FILE="$GH_AW_AGENT_OUTPUT"
-            ANALYSIS_FILE="$(dirname "$OUTPUT_FILE")/agent/analysis-result.json"
+            # The analysis JSON ships in the `ci-analysis-output` artifact, which the
+            # `download-analysis` step unpacks. It is not a sibling of the agent output,
+            # so this path must come from that step rather than being derived.
+            : "${ANALYSIS_DIR:?ANALYSIS_DIR is required (download-analysis step missing?)}"
+            ANALYSIS_FILE="$ANALYSIS_DIR/analysis-result.json"
             RUN_CONTEXT_FILE="ci-failure-data/run-context.json"
             TRUSTED_FAILED_JOBS_FILE="ci-failure-data/failed-jobs.json"
             RUN_SCOPE=$(jq -r '.run_scope' "$RUN_CONTEXT_FILE")
@@ -1242,6 +1244,12 @@ safe-outputs:
           required: true
           type: string
       steps:
+        - name: Download CI analysis files for rerun
+          id: download-analysis
+          uses: actions/download-artifact@v8.0.1
+          with:
+            name: ci-analysis-output
+            path: ${{ runner.temp }}/ci-analysis-output
         - uses: actions/download-artifact@v8.0.1
           with:
             name: ci-failure-data
@@ -1250,6 +1258,7 @@ safe-outputs:
           uses: actions/github-script@v9.0.0
           env:
             ENABLE_RERUN: ${{ env.ENABLE_RERUN }}
+            ANALYSIS_DIR: ${{ steps.download-analysis.outputs.download-path }}
           with:
             script: |
               const fs = require('fs');
@@ -1270,8 +1279,16 @@ safe-outputs:
                 return;
               }
 
-              const analysisFile = path.join(path.dirname(outputFile), 'agent', 'analysis-result.json');
-              const causesDir = path.join(path.dirname(outputFile), 'agent', 'causes');
+              // The analysis JSON and cause files ship in the `ci-analysis-output` artifact,
+              // which the `download-analysis` step unpacks. They are not siblings of the agent
+              // output, so this path must come from that step rather than being derived.
+              const analysisDir = process.env.ANALYSIS_DIR;
+              if (!analysisDir) {
+                core.setFailed('ANALYSIS_DIR is required (download-analysis step missing?)');
+                return;
+              }
+              const analysisFile = path.join(analysisDir, 'analysis-result.json');
+              const causesDir = path.join(analysisDir, 'causes');
               const runContextFile = path.join('ci-failure-data', 'run-context.json');
               const trustedFailedJobsFile = path.join('ci-failure-data', 'failed-jobs.json');
               const testEvidenceFile = path.join('ci-failure-data', 'test-evidence.json');
