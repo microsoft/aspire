@@ -20,6 +20,17 @@
       },
       "additionalProperties": false
     },
+    "certificates": {
+      "description": "Developer certificate configuration.",
+      "type": "object",
+      "properties": {
+        "nssDbPaths": {
+          "description": "NSS database paths used for browser certificate trust on Linux. Separate paths with the platform path separator and optionally prefix each path with \"firefox=\" or \"chromium=\".",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "channel": {
       "description": "The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\", \"daily\"). Used by aspire add to determine which NuGet feed to use.",
       "type": "string"
