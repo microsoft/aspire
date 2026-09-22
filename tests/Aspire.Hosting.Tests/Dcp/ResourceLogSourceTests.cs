@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Text;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests.Dcp;
@@ -40,7 +41,7 @@ public class ResourceLogSourceTests
             kubernetesService,
             executable,
             follow);
-        using var cancellationTokenSource = new CancellationTokenSource();
+        using var cancellationTokenSource = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
         var entries = new List<ResourceLogEntry>();
 
         await foreach (var batch in logSource.WithCancellation(cancellationTokenSource.Token))
