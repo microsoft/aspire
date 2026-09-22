@@ -84,6 +84,15 @@ function makeGithub(store) {
                     }
                     return { data: {} };
                 },
+                addLabels: async ({ issue_number, labels }) => {
+                    calls.push('addLabels');
+                    const issue = store.issues.find(candidate => candidate.number === issue_number);
+                    issue.labels = [...new Set([
+                        ...issue.labels.map(label => typeof label === 'string' ? label : label.name),
+                        ...labels,
+                    ])];
+                    return { data: issue.labels.map(name => ({ name })) };
+                },
             },
         },
     };

@@ -148,10 +148,13 @@ function planIssueReconciliation({
         actionsForCanonical(canonical, { created: false, matches }),
         canonical.number);
     const hasExplicitReopen = canonicalActions.some(action => action.type === 'reopen');
+    // Repairing labels must not reopen a closed issue when its current occurrence was
+    // already published and no issue content changed.
+    const hasReopeningChange = canonicalActions.some(action => action.type !== 'add-labels');
     const shouldReopen =
         canonical.state === 'closed' &&
         !hasExplicitReopen &&
-        (reopen === 'always' || (reopen === 'when-changing' && canonicalActions.length > 0));
+        (reopen === 'always' || (reopen === 'when-changing' && hasReopeningChange));
     if (shouldReopen) {
         actions.push({ type: 'reopen', issueNumber: canonical.number });
     }
@@ -214,6 +217,9 @@ async function executeAction(transport, action, canonicalIssueNumber) {
             break;
         case 'reopen':
             await transport.reopenIssue(issueNumber);
+            break;
+        case 'add-labels':
+            await transport.addLabels(issueNumber, action.labels);
             break;
         default:
             throw new Error(`Unsupported issue reconciliation action '${action.type}'.`);
@@ -385,6 +391,12 @@ function createOctokitIssueTransport(github, context) {
         closeIssue: (issueNumber, options) => closeIssue(
             github, owner, repo, issueNumber, options),
         reopenIssue: issueNumber => reopenIssue(github, owner, repo, issueNumber),
+        addLabels: (issueNumber, labels) => github.rest.issues.addLabels({
+            owner,
+            repo,
+            issue_number: issueNumber,
+            labels,
+        }),
         listComments: issueNumber => listComments(github, owner, repo, issueNumber),
     };
 }

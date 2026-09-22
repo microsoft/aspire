@@ -120,6 +120,94 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
         Assert.True(result.Publish.Created);
     }
 
+    [Theory]
+    [InlineData("flaky-test", "test-failure")]
+    [InlineData("main-repository-breakage", "main-ci-break")]
+    [RequiresTools(["node"])]
+    public async Task PublishRepairsMissingSupplementalLabelOnExistingIssue(
+        string causeType,
+        string supplementalLabel)
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = CreateCause(causeType),
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        labels = new[] { "ci-failure-cause", "area-build" },
+                        body = $"""
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:{causeType} -->
+                            """
+                    }
+                },
+                mainContext = new
+                {
+                    lastSuccessfulSha = "1111111111111111111111111111111111111111",
+                    failedSha = "2222222222222222222222222222222222222222"
+                },
+                repeat = 2
+            });
+
+        Assert.Equal(1, result.Calls.Count(call => call == "addLabels"));
+        Assert.Equal(
+            ["ci-failure-cause", "area-build", supplementalLabel],
+            Assert.Single(result.Issues).Labels);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task LabelRepairDoesNotReopenClosedReceiptIssue()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = CreateCause("flaky-test"),
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "flaky-test",
+                    occurrences = new[]
+                    {
+                        new
+                        {
+                            run_id = 991,
+                            observed_at = "2026-08-29T18:30:00Z",
+                            issue_published = true
+                        }
+                    }
+                },
+                issues = new[]
+                {
+                    new
+                    {
+                        number = 10,
+                        state = "closed",
+                        labels = new[] { "ci-failure-cause", "area-build" },
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:flaky-test -->
+                            """
+                    }
+                }
+            });
+
+        Assert.True(result.Publish.Skipped);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("closed", issue.State);
+        Assert.Equal(["ci-failure-cause", "area-build", "test-failure"], issue.Labels);
+        Assert.Contains("addLabels", result.Calls);
+        Assert.DoesNotContain("update", result.Calls);
+    }
+
     [Fact]
     [RequiresTools(["node"])]
     public async Task PublishUsesOldestExactTypedIssueAndClosesDuplicate()

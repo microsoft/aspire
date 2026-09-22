@@ -837,6 +837,31 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorTreatsUnicodeCaseDistinctTestNamesAsDifferent()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"flaky-test"}],"failed_tests":[{"name":"Tests.échec","job":"Tests","error":"boom","stack_trace":"frame","classification":"flaky","reason":"Intermittent"}],"causes":["flaky-failure"]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            "flaky-failure.json",
+            """{"id":"flaky-failure","type":"flaky-test","title":"Flaky failure","test_name":"Tests.échec","error_pattern":"boom","job_ids":[123]}""");
+        var priorCausesDirectory = Directory.CreateDirectory(
+            Path.Combine(_workspace.Path, "ci-failure-data", "prior-causes")).FullName;
+        await File.WriteAllTextAsync(
+            Path.Combine(priorCausesDirectory, "flaky-failure.json"),
+            """{"id":"flaky-failure","type":"flaky-test","title":"Stored failure","test_name":"Tests.Échec","error_pattern":"old"}""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Cause flaky-failure.json cannot change stored test_name",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
     public async Task AnalysisValidatorAllowsReusedFlakyCauseForParameterizedTheoryRows()
     {
         const string testName = "Aspire.Sample.Tests.TheoryTests.Sample(value: primary)";

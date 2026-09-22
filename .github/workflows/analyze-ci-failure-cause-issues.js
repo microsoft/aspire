@@ -541,6 +541,14 @@ async function ensureCauseLabels(github, context, cause, ensuredLabels) {
     }
 }
 
+function missingCauseLabels(cause, issue) {
+    const existingLabels = new Set((issue.labels ?? [])
+        .map(label => typeof label === 'string' ? label : label?.name)
+        .filter(Boolean));
+    return labelsForCause(cause)
+        .filter(label => !existingLabels.has(label));
+}
+
 async function publishCauseIssue(
     github,
     context,
@@ -595,6 +603,10 @@ async function publishCauseIssue(
             if (created) {
                 return [];
             }
+            const missingLabels = missingCauseLabels(cause, issue);
+            const labelActions = missingLabels.length > 0
+                ? [{ type: 'add-labels', labels: missingLabels }]
+                : [];
             let updatedBody = issue.body;
             const canonicalIssueUrl =
                 `https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issue.number}`;
@@ -619,8 +631,8 @@ async function publishCauseIssue(
                         `Issue #${issue.number} has an unsupported occurrence section: ${error.message}. Skipping occurrence update and duplicate reconciliation.`);
                     canReconcileDuplicates = false;
                     return cause.type === 'main-repository-breakage' && issue.title !== issueTitle
-                        ? [{ type: 'update', title: issueTitle }]
-                        : [];
+                        ? [{ type: 'update', title: issueTitle }, ...labelActions]
+                        : labelActions;
                 }
             }
             if (cause.type === 'main-repository-breakage') {
@@ -637,7 +649,7 @@ async function publishCauseIssue(
             }
             if (updatedBody === issue.body &&
                 (cause.type !== 'main-repository-breakage' || issue.title === issueTitle)) {
-                return [];
+                return labelActions;
             }
             const update = {
                 type: 'update',
@@ -646,7 +658,7 @@ async function publishCauseIssue(
             if (cause.type === 'main-repository-breakage') {
                 update.title = issueTitle;
             }
-            return [update];
+            return [update, ...labelActions];
         },
     });
 

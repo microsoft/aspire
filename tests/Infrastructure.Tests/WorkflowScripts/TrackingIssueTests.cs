@@ -494,6 +494,35 @@ public sealed class TrackingIssueTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task LabelOnlyCanonicalActionDoesNotReopenClosedIssue()
+    {
+        var result = await InvokeHarnessAsync<PlanExecutionResult>(
+            "planAndExecute",
+            new
+            {
+                marker = "<!-- m -->",
+                addLabels = new[] { "supplemental" },
+                issues = new object[]
+                {
+                    new
+                    {
+                        number = 8,
+                        body = "<!-- m -->",
+                        state = "closed",
+                        labels = new[] { "primary" }
+                    },
+                }
+            });
+
+        Assert.Equal(["add-labels"], result.Plan.Actions.Select(action => action.Type));
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("closed", issue.State);
+        Assert.Equal(["primary", "supplemental"], issue.Labels);
+        Assert.DoesNotContain("update", result.Calls);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task DuplicateMutationsWaitForCanonicalActionsToSucceed()
     {
         var result = await InvokeHarnessAsync<PlanExecutionResult>(

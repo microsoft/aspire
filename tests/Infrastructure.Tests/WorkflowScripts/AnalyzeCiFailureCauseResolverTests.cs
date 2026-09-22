@@ -1276,6 +1276,216 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task RejectsFlakyAliasForDifferentTest()
+    {
+        const string currentTestName = "Aspire.Sample.Tests.SampleTests.CurrentTest";
+        object payload = CreateSingleTestPayload(
+            currentTestName,
+            "legacy-other-test",
+            new
+            {
+                id = "canonical-other-test",
+                type = "flaky-test",
+                title = "Other flaky test",
+                test_name = "Aspire.Sample.Tests.SampleTests.OtherTest",
+                error_pattern = "The other test failed."
+            });
+        using JsonDocument document = JsonDocument.Parse(JsonSerializer.Serialize(payload, s_jsonOptions));
+        object expandedPayload = new
+        {
+            analysis = document.RootElement.GetProperty("analysis"),
+            causes = document.RootElement.GetProperty("causes"),
+            priorCauses = new object[]
+            {
+                document.RootElement.GetProperty("priorCauses")[0],
+                new
+                {
+                    id = "legacy-other-test",
+                    canonical_id = "canonical-other-test",
+                    type = "flaky-test"
+                }
+            },
+            retryPatterns = document.RootElement.GetProperty("retryPatterns")
+        };
+
+        CommandResult result = await ExecuteHarnessAsync(expandedPayload);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("belongs to a different test", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RejectsFlakyRootForDifferentTest()
+    {
+        object payload = CreateSingleTestPayload(
+            "Aspire.Sample.Tests.SampleTests.CurrentTest",
+            "other-test",
+            new
+            {
+                id = "other-test",
+                type = "flaky-test",
+                title = "Other flaky test",
+                test_name = "Aspire.Sample.Tests.SampleTests.OtherTest",
+                error_pattern = "The other test failed."
+            });
+
+        CommandResult result = await ExecuteHarnessAsync(payload);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("belongs to a different test", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DoesNotCanonicalizeUnicodeCaseDistinctTestNames()
+    {
+        const string currentCauseId = "current-unicode-test";
+        JsonElement result = await ResolveAsync(CreateSingleTestPayload(
+            "Aspire.Sample.Tests.SampleTests.échec",
+            currentCauseId,
+            new
+            {
+                id = "prior-unicode-test",
+                type = "flaky-test",
+                title = "Prior Unicode test",
+                test_name = "Aspire.Sample.Tests.SampleTests.Échec",
+                error_pattern = "The prior test failed."
+            }));
+
+        Assert.Equal(currentCauseId, FindOnlyCause(result).GetProperty("id").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ReusesStoredAliasAsCanonicalCause()
+    {
+        JsonElement result = await ResolveAsync(CreateSingleInfraPayload(
+            causeId: "old-infra",
+            priorCauses:
+            [
+                new
+                {
+                    id = "canonical-infra",
+                    type = "infra-failure",
+                    title = "Canonical infrastructure failure",
+                    error_pattern = "Shared infrastructure failure",
+                    aliases = new[] { "old-infra" }
+                }
+            ]));
+
+        Assert.Equal("canonical-infra", FindOnlyCause(result).GetProperty("id").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ReusesNormalizedStoredAliasAsCanonicalCause()
+    {
+        JsonElement result = await ResolveAsync(CreateSingleInfraPayload(
+            causeId: "old-infra",
+            priorCauses:
+            [
+                new
+                {
+                    id = "canonical-infra",
+                    type = "infra-failure",
+                    title = "Canonical infrastructure failure",
+                    error_pattern = "Shared infrastructure failure",
+                    aliases = new[] { "Old.Infra" }
+                }
+            ]));
+
+        Assert.Equal("canonical-infra", FindOnlyCause(result).GetProperty("id").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ReusesStoredAliasFromRetryPattern()
+    {
+        JsonElement result = await ResolveAsync(CreateSingleInfraPayload(
+            causeId: "new-infra",
+            priorCauses:
+            [
+                new
+                {
+                    id = "canonical-infra",
+                    type = "infra-failure",
+                    title = "Canonical infrastructure failure",
+                    error_pattern = "Shared infrastructure failure",
+                    aliases = new[] { "old-infra" }
+                }
+            ],
+            retryCauseId: "old-infra"));
+
+        Assert.Equal("canonical-infra", FindOnlyCause(result).GetProperty("id").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RejectsStoredAliasClaimedByDifferentFamilies()
+    {
+        object payload = CreateSingleInfraPayload(
+            causeId: "new-infra",
+            priorCauses:
+            [
+                new
+                {
+                    id = "canonical-alpha",
+                    type = "infra-failure",
+                    title = "Alpha infrastructure failure",
+                    error_pattern = "Alpha failure",
+                    aliases = new[] { "shared-alias" }
+                },
+                new
+                {
+                    id = "canonical-beta",
+                    type = "infra-failure",
+                    title = "Beta infrastructure failure",
+                    error_pattern = "Beta failure",
+                    aliases = new[] { "shared-alias" }
+                }
+            ]);
+
+        CommandResult result = await ExecuteHarnessAsync(payload);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Stored alias 'shared-alias' belongs to conflicting canonical causes", result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RejectsStoredAliasThatCollidesWithDifferentTypedCause()
+    {
+        object payload = CreateSingleInfraPayload(
+            causeId: "new-infra",
+            priorCauses:
+            [
+                new
+                {
+                    id = "canonical-infra",
+                    type = "infra-failure",
+                    title = "Canonical infrastructure failure",
+                    error_pattern = "Shared infrastructure failure",
+                    aliases = new[] { "shared-alias" }
+                },
+                new
+                {
+                    id = "shared-alias",
+                    type = "flaky-test",
+                    title = "Flaky test",
+                    test_name = "Aspire.Sample.Tests.SampleTests.FlakyTest",
+                    error_pattern = "The test failed."
+                }
+            ]);
+
+        CommandResult result = await ExecuteHarnessAsync(payload);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Stored alias 'shared-alias' conflicts with existing cause", result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task DoesNotTrustAgentAuthoredCanonicalId()
     {
         const string proposedCauseId = "proposed-infra-cause";
@@ -4080,6 +4290,59 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
             },
             priorCauses = new[] { priorCause },
             retryPatterns = new { jobFailurePatterns = Array.Empty<object>() }
+        };
+
+    private static object CreateSingleInfraPayload(
+        string causeId,
+        object[] priorCauses,
+        string? retryCauseId = null)
+        => new
+        {
+            analysis = new
+            {
+                causes = new[] { causeId },
+                failed_jobs = new[]
+                {
+                    new
+                    {
+                        id = 1,
+                        name = "Build / Linux",
+                        classification = "transient-infra",
+                        reason = "Shared infrastructure failure"
+                    }
+                },
+                failed_tests = Array.Empty<object>()
+            },
+            causes = new[]
+            {
+                new
+                {
+                    id = causeId,
+                    type = "infra-failure",
+                    title = "Current infrastructure failure",
+                    error_pattern = "Shared infrastructure failure",
+                    job_ids = new[] { 1 }
+                }
+            },
+            priorCauses,
+            retryPatterns = new
+            {
+                jobFailurePatterns = retryCauseId is null
+                    ? Array.Empty<object>()
+                    :
+                    [
+                        new
+                        {
+                            output = "Shared infrastructure failure",
+                            reason = "Known infrastructure failure",
+                            causeId = retryCauseId
+                        }
+                    ]
+            },
+            trustedJobLogs = new Dictionary<string, string>
+            {
+                ["1"] = "Shared infrastructure failure"
+            }
         };
 
     private static object CreatePriorMatcherCause(string causeId)

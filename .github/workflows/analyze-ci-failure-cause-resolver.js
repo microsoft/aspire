@@ -29,6 +29,7 @@ function resolveCauses({
     // Historical memory predates the slug contract. Match sanitized proposals back to those
     // records so fixing an ID does not split one cause into old and new identities.
     const priorByNormalizedId = buildPriorByNormalizedId(priorCauses);
+    const priorAliases = buildPriorAliases(priorCauses, priorById, priorByNormalizedId);
     const failedJobsById = new Map(analysis.failed_jobs.map(job => [job.id, job]));
     const trustedFailedJobsById = buildTrustedFailedJobsById(analysis, trustedFailedJobs);
     const canonicalizations = [];
@@ -51,7 +52,11 @@ function resolveCauses({
         }));
         const evidence = buildEvidence(cause, analysis, jobIds, jobNames, trustedJobLogs);
 
-        const proposedPriorCause = findPriorCauseById(cause.id, priorById, priorByNormalizedId);
+        const proposedPriorCause = findPriorCauseById(
+            cause.id,
+            priorById,
+            priorByNormalizedId,
+            priorAliases);
         const proposedCanonicalCause = proposedPriorCause
             ? resolveAlias(proposedPriorCause, priorById)
             : undefined;
@@ -65,10 +70,20 @@ function resolveCauses({
 
         if (cause.type === 'flaky-test') {
             const sameTestPriorCauses = findPriorCausesByTestName(cause, priorCauses, priorById);
-            const proposedAliasMatchesTest = proposedAlias &&
+            const proposedHistoricalCauseMatchesTest = proposedCanonicalCause &&
                 [sameTestPriorCauses.canonical, ...sameTestPriorCauses.extras]
-                    .some(candidate => candidate?.id === proposedAlias.id);
-            if (!proposedAlias || proposedAliasMatchesTest) {
+                    .some(candidate => candidate?.id === proposedCanonicalCause.id);
+            const proposedFamilyHasTestNames = proposedCanonicalCause &&
+                findPriorRecordsForCanonicalCause(proposedCanonicalCause.id, priorCauses)
+                    .some(record => allTestNames(record).length > 0);
+            if (proposedCanonicalCause &&
+                !proposedHistoricalCauseMatchesTest &&
+                (proposedAlias || proposedFamilyHasTestNames)) {
+                throw new Error(
+                    `Flaky cause '${cause.id}' belongs to a different test than historical cause ` +
+                    `'${proposedCanonicalCause.id}'.`);
+            }
+            if (!proposedAlias || proposedHistoricalCauseMatchesTest) {
                 testNameMatch = sameTestPriorCauses.canonical;
                 sameTestCanonicalExtras = sameTestPriorCauses.extras;
             }
@@ -79,7 +94,8 @@ function resolveCauses({
                     jobEvidence,
                     retryPatterns,
                     priorById,
-                    priorByNormalizedId)
+                    priorByNormalizedId,
+                    priorAliases)
                 : undefined;
             explicitMatcherMatch = findPriorCauseByExplicitMatcher(evidence, priorCauses, priorById);
             const crossMechanismMatches = uniqueById(
@@ -98,7 +114,11 @@ function resolveCauses({
             proposedAlias ??
             retryPatternMatch ??
             explicitMatcherMatch ??
-            findPriorCauseByExistingId(cause, priorById, priorByNormalizedId);
+            findPriorCauseByExistingId(
+                cause,
+                priorById,
+                priorByNormalizedId,
+                priorAliases);
         if (canonicalPriorCause?.type) {
             validateCauseType(canonicalPriorCause);
             if (canonicalPriorCause.type !== cause.type) {
@@ -564,6 +584,85 @@ function buildPriorByNormalizedId(priorCauses) {
     return priorByNormalizedId;
 }
 
+function buildPriorAliases(priorCauses, priorById, priorByNormalizedId) {
+    const byId = new Map();
+    const byNormalizedId = new Map();
+
+    for (const cause of priorCauses) {
+        const canonicalCause = resolveAlias(cause, priorById);
+        for (const alias of cause.aliases ?? []) {
+            if (typeof alias !== 'string') {
+                continue;
+            }
+
+            const existingCause = priorById.get(alias);
+            if (existingCause) {
+                const existingCanonicalCause = resolveAlias(existingCause, priorById);
+                if (existingCanonicalCause.id !== canonicalCause.id ||
+                    existingCanonicalCause.type !== canonicalCause.type) {
+                    throw new Error(
+                        `Stored alias '${alias}' conflicts with existing cause ` +
+                        `'${existingCanonicalCause.id}'.`);
+                }
+            }
+
+            if (safeCauseIdPattern.test(alias)) {
+                registerStoredAlias(byId, alias, alias, canonicalCause);
+            }
+
+            const normalizedAlias = normalizeCauseId(alias);
+            if (!safeCauseIdPattern.test(normalizedAlias)) {
+                continue;
+            }
+            if (priorByNormalizedId.has(normalizedAlias)) {
+                const normalizedCause = priorByNormalizedId.get(normalizedAlias);
+                if (!normalizedCause) {
+                    const normalizedCanonicalCauses = uniqueById(priorCauses
+                        .filter(record => normalizeCauseId(record.id) === normalizedAlias)
+                        .map(record => resolveAlias(record, priorById)));
+                    if (normalizedCanonicalCauses.length !== 1 ||
+                        normalizedCanonicalCauses[0].id !== canonicalCause.id ||
+                        normalizedCanonicalCauses[0].type !== canonicalCause.type) {
+                        throw new Error(
+                            `Stored alias '${alias}' conflicts with ambiguous normalized cause ID ` +
+                            `'${normalizedAlias}'.`);
+                    }
+                } else {
+                    const normalizedCanonicalCause = resolveAlias(normalizedCause, priorById);
+                    if (normalizedCanonicalCause.id !== canonicalCause.id ||
+                        normalizedCanonicalCause.type !== canonicalCause.type) {
+                        throw new Error(
+                            `Stored alias '${alias}' conflicts with existing cause ` +
+                            `'${normalizedCanonicalCause.id}'.`);
+                    }
+                }
+            }
+            registerStoredAlias(byNormalizedId, normalizedAlias, alias, canonicalCause);
+        }
+    }
+
+    return { byId, byNormalizedId };
+}
+
+function registerStoredAlias(aliasMap, key, alias, canonicalCause) {
+    const existingAlias = aliasMap.get(key);
+    if (existingAlias && (
+        existingAlias.canonical_id !== canonicalCause.id ||
+        existingAlias.type !== canonicalCause.type)) {
+        throw new Error(
+            `Stored alias '${alias}' belongs to conflicting canonical causes ` +
+            `'${existingAlias.canonical_id}' and '${canonicalCause.id}'.`);
+    }
+
+    // Fresh causes can be absorbed without leaving a separate alias file. Preserve the
+    // alias shape here so explicit alias precedence and flaky-test identity checks still run.
+    aliasMap.set(key, {
+        id: key,
+        canonical_id: canonicalCause.id,
+        type: canonicalCause.type,
+    });
+}
+
 function normalizeCauseId(causeId) {
     return String(causeId ?? '')
         .trim()
@@ -632,13 +731,20 @@ function buildEvidence(cause, analysis, jobIds, jobNames, trustedJobLogs) {
     ].filter(value => typeof value === 'string' && value.length > 0).join('\n');
 }
 
-function findPriorCauseByExistingId(cause, priorById, priorByNormalizedId) {
-    const priorCause = findPriorCauseById(cause.id, priorById, priorByNormalizedId);
+function findPriorCauseByExistingId(cause, priorById, priorByNormalizedId, priorAliases) {
+    const priorCause = findPriorCauseById(
+        cause.id,
+        priorById,
+        priorByNormalizedId,
+        priorAliases);
     return priorCause ? resolveAlias(priorCause, priorById) : undefined;
 }
 
-function findPriorCauseById(causeId, priorById, priorByNormalizedId) {
-    return priorById.get(causeId) ?? priorByNormalizedId.get(causeId);
+function findPriorCauseById(causeId, priorById, priorByNormalizedId, priorAliases) {
+    return priorById.get(causeId) ??
+        priorAliases.byId.get(causeId) ??
+        priorByNormalizedId.get(causeId) ??
+        priorAliases.byNormalizedId.get(causeId);
 }
 
 function findPriorCausesByTestName(cause, priorCauses, priorById) {
@@ -665,7 +771,8 @@ function findPriorCauseByRetryPattern(
     jobEvidence,
     retryPatterns,
     priorById,
-    priorByNormalizedId) {
+    priorByNormalizedId,
+    priorAliases) {
     const matchingCauseIds = unique((retryPatterns.jobFailurePatterns ?? [])
         .filter(pattern => pattern.enabled !== false)
         .filter(pattern => pattern.causeId)
@@ -686,7 +793,11 @@ function findPriorCauseByRetryPattern(
     }
 
     const causeId = matchingCauseIds[0];
-    const priorCause = findPriorCauseById(causeId, priorById, priorByNormalizedId);
+    const priorCause = findPriorCauseById(
+        causeId,
+        priorById,
+        priorByNormalizedId,
+        priorAliases);
     return priorCause ? resolveAlias(priorCause, priorById) : { id: causeId };
 }
 
@@ -894,7 +1005,7 @@ function normalizeTestName(testName) {
 
     return canonicalName
         .replace(/\s+/g, ' ')
-        .toLowerCase();
+        .replace(/[A-Z]/g, character => character.toLowerCase());
 }
 
 function allTestNames(cause) {

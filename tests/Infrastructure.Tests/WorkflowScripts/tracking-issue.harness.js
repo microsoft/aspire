@@ -100,6 +100,12 @@ function makeGithub(store, concurrentIssue, fault = {}) {
                     const issue = store.issues.find(i => i.number === issue_number);
                     issue.commentBodies.push(body);
                 },
+                addLabels: async ({ issue_number, labels }) => {
+                    calls.push(`addLabels:${issue_number}`);
+                    const issue = store.issues.find(i => i.number === issue_number);
+                    issue.labels = [...new Set([...(issue.labels ?? []), ...labels])];
+                    return { data: issue.labels.map(name => ({ name })) };
+                },
             },
         },
     };
@@ -158,6 +164,9 @@ async function dispatch(operation, payload) {
                     }
                     if (payload.comment !== undefined) {
                         actions.push({ type: 'comment', body: payload.comment });
+                    }
+                    if (payload.addLabels !== undefined) {
+                        actions.push({ type: 'add-labels', labels: payload.addLabels });
                     }
                     return actions;
                 },
