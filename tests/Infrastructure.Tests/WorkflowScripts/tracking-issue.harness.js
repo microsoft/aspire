@@ -12,11 +12,30 @@ async function main() {
     process.stdout.write(JSON.stringify({ result }));
 }
 
-// In-memory octokit fake mirroring the surface recordRun touches, so the
-// find-or-create + comment-dedup contract can be exercised without a network.
-// Comments are stored as plain strings; listComments adapts them to { body }.
-function makeGithub(store) {
+// Issue list/create responses expose GitHub's integer comment count. Comment bodies
+// are available only through listComments, matching the REST API boundary.
+function toRestIssue(issue) {
+    return {
+        ...issue,
+        comments: issue.commentBodies.length,
+        commentBodies: undefined,
+    };
+}
+
+function snapshotIssues(issues) {
+    return issues.map(issue => ({
+        number: issue.number,
+        state: issue.state,
+        stateReason: issue.stateReason,
+        body: issue.body,
+        labels: issue.labels ?? [],
+        comments: [...issue.commentBodies],
+    }));
+}
+
+function makeGithub(store, concurrentIssue, fault = {}) {
     const calls = [];
+    let listCount = 0;
     return {
         calls,
         paginate: async (fn, params) => (await fn(params)).data,
@@ -30,30 +49,56 @@ function makeGithub(store) {
                     if (!labels) {
                         throw new Error('listForRepo must be called with a label filter');
                     }
+                    listCount++;
+                    if (listCount === 2 && concurrentIssue) {
+                        store.issues.push({
+                            commentBodies: concurrentIssue.comments ?? [],
+                            state: 'open',
+                            ...concurrentIssue,
+                            comments: undefined,
+                        });
+                    }
                     const requestedState = state ?? 'open';
                     return {
-                        data: store.issues.filter(issue => requestedState === 'all' || issue.state === requestedState),
+                        data: store.issues
+                            .filter(issue => requestedState === 'all' || issue.state === requestedState)
+                            .map(toRestIssue),
                     };
                 },
                 create: async ({ title, body, labels }) => {
                     calls.push('create');
-                    const issue = { number: store.next++, title, body, labels, state: 'open', comments: [] };
+                    const issue = {
+                        number: store.next++,
+                        title,
+                        body,
+                        labels,
+                        state: 'open',
+                        commentBodies: [],
+                    };
                     store.issues.push(issue);
-                    return { data: issue };
+                    return { data: toRestIssue(issue) };
                 },
-                update: async ({ issue_number, state }) => {
-                    calls.push('update');
+                update: async ({ issue_number, state, state_reason, body }) => {
+                    calls.push(fault.detailedCalls
+                        ? `update:${issue_number}:${body === undefined ? 'state' : 'body'}`
+                        : 'update');
                     const issue = store.issues.find(i => i.number === issue_number);
                     if (state) { issue.state = state; }
+                    if (state_reason) { issue.stateReason = state_reason; }
+                    if (body !== undefined) { issue.body = body; }
+                    return { data: issue };
                 },
                 listComments: async ({ issue_number }) => {
                     const issue = store.issues.find(i => i.number === issue_number);
-                    return { data: (issue?.comments ?? []).map(body => ({ body })) };
+                    return { data: (issue?.commentBodies ?? []).map(body => ({ body })) };
                 },
                 createComment: async ({ issue_number, body }) => {
-                    calls.push('createComment');
+                    calls.push(fault.detailedCalls ? `createComment:${issue_number}` : 'createComment');
+                    if (body === fault.failComment) {
+                        throw new Error(`Injected createComment failure for issue #${issue_number}`);
+                    }
                     const issue = store.issues.find(i => i.number === issue_number);
-                    (issue.comments ??= []).push(body);
+                    issue.commentBodies.push(body);
                 },
             },
         },
@@ -81,14 +126,91 @@ async function dispatch(operation, payload) {
         case 'readAutoClose':
             return { value: engine.readAutoClose(payload.body) };
 
-        case 'recordRun': {
+        case 'planAndExecute': {
             const store = {
-                issues: (payload.issues ?? []).map(issue => ({ comments: [], state: 'open', ...issue })),
+                issues: (payload.issues ?? []).map(issue => ({
+                    commentBodies: issue.comments ?? [],
+                    state: 'open',
+                    ...issue,
+                    comments: undefined,
+                })),
                 next: payload.nextNumber ?? 1000,
             };
-            const github = makeGithub(store);
+            const fault = {
+                failComment: payload.failComment,
+                detailedCalls: payload.failComment !== undefined,
+            };
+            const github = makeGithub(store, undefined, fault);
             const core = { info: () => {}, warning: () => {} };
             const context = { repo: { owner: 'microsoft', repo: 'aspire' } };
+            const transport = engine.createOctokitIssueTransport(github, context);
+            const options = {
+                label: payload.label ?? 'automation-broken',
+                marker: payload.marker,
+                title: payload.title ?? 'Tracking issue',
+                buildBody: () => payload.body ?? `${payload.marker}\n\nbody`,
+                closeDuplicates: payload.closeDuplicates,
+                reopen: 'when-changing',
+                actionsForCanonical: issue => {
+                    const actions = [];
+                    if (payload.updateBody !== undefined && issue.body !== payload.updateBody) {
+                        actions.push({ type: 'update', body: payload.updateBody });
+                    }
+                    if (payload.comment !== undefined) {
+                        actions.push({ type: 'comment', body: payload.comment });
+                    }
+                    return actions;
+                },
+            };
+            const plan = engine.planIssueReconciliation({
+                ...options,
+                issues: store.issues.map(toRestIssue),
+            });
+            let execution = { appliedActions: [] };
+            let resumedExecution = { appliedActions: [] };
+            let issuesAfterFailure = [];
+            let error;
+            try {
+                execution = await engine.executeIssueReconciliation(transport, core, {
+                    ...options,
+                });
+            } catch (exception) {
+                error = exception.message;
+                issuesAfterFailure = snapshotIssues(store.issues);
+                if (payload.resumeAfterFailure) {
+                    fault.failComment = undefined;
+                    resumedExecution = await engine.executeIssueReconciliation(transport, core, {
+                        ...options,
+                    });
+                }
+            }
+            return {
+                plan,
+                appliedActions: execution.appliedActions,
+                resumedAppliedActions: resumedExecution.appliedActions,
+                error,
+                calls: github.calls,
+                issues: snapshotIssues(store.issues),
+                issuesAfterFailure,
+            };
+        }
+
+        case 'recordRun': {
+            const store = {
+                issues: (payload.issues ?? []).map(issue => ({
+                    commentBodies: issue.comments ?? [],
+                    state: 'open',
+                    ...issue,
+                    comments: undefined,
+                })),
+                next: payload.nextNumber ?? 1000,
+            };
+            const github = makeGithub(store, payload.concurrentIssue);
+            const core = { info: () => {}, warning: () => {} };
+            const context = { repo: { owner: 'microsoft', repo: 'aspire' } };
+            const isMatchingIssue = payload.requiredSecondLine
+                ? issue => issue.body?.replaceAll('\r\n', '\n').split('\n')[1] === payload.requiredSecondLine
+                : undefined;
 
             const result = await engine.recordRun(github, context, core, {
                 label: payload.label ?? 'automation-broken',
@@ -98,6 +220,8 @@ async function dispatch(operation, payload) {
                 runId: payload.runId,
                 buildBody: () => payload.body ?? `${payload.marker}\n\nbody`,
                 comment: payload.comment ?? 'failure',
+                closeDuplicates: payload.closeDuplicates,
+                isMatchingIssue,
             });
 
             return {
@@ -106,9 +230,10 @@ async function dispatch(operation, payload) {
                 issues: store.issues.map(issue => ({
                     number: issue.number,
                     state: issue.state,
+                    stateReason: issue.stateReason,
                     body: issue.body,
                     labels: issue.labels ?? [],
-                    comments: issue.comments ?? [],
+                    comments: issue.commentBodies,
                 })),
             };
         }
