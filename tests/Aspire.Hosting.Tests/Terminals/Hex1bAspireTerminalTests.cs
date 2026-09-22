@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO.Pipelines;
 using System.Text;
-using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Hex1b;

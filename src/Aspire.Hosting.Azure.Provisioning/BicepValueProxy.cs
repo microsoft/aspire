@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.ComponentModel;
+using System.Net;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Primitives;
@@ -88,7 +89,12 @@ public sealed class BicepValueProxy
         EnsureLiteralType<T>();
         if (_value.Kind == BicepValueKind.Literal)
         {
-            var literalValue = new BicepValue<T>((T)_value.LiteralValue!);
+            // The shared string factory also supplies IP literals. Only parse literals;
+            // expression-backed strings must retain their SDK reference and secure metadata.
+            var literal = typeof(T) == typeof(IPAddress) && _value.LiteralValue is string address
+                ? (T)(object)IPAddress.Parse(address)
+                : (T)_value.LiteralValue!;
+            var literalValue = new BicepValue<T>(literal);
             target.Assign(literalValue);
 
             if (IsSecure && !((IBicepValue)target).IsSecure)
@@ -118,7 +124,7 @@ public sealed class BicepValueProxy
     /// Converts a literal or proxy value to the requested Azure Provisioning value type.
     /// </summary>
     /// <typeparam name="T">The expected literal type.</typeparam>
-    /// <param name="value">A literal value or <see cref="BicepValueProxy"/>.</param>
+    /// <param name="value">A literal value, an IP address string when <typeparamref name="T"/> is <see cref="IPAddress"/>, or <see cref="BicepValueProxy"/>.</param>
     /// <returns>An Azure Provisioning value that preserves expression and reference metadata.</returns>
     [EditorBrowsable(EditorBrowsableState.Never)]
     [AspireExportIgnore(Reason = "Used by generated provisioning proxy code.")]
@@ -138,6 +144,13 @@ public sealed class BicepValueProxy
         if (value is T literal)
         {
             return literal;
+        }
+
+        // IP addresses travel over ATS as strings, but the SDK requires typed literals.
+        // Keep proxy conversion above this branch so expressions and references retain their metadata.
+        if (typeof(T) == typeof(IPAddress) && value is string address)
+        {
+            return (T)(object)IPAddress.Parse(address);
         }
 
         throw new ArgumentException($"Expected a {typeof(T).Name} literal or {nameof(BicepValueProxy)}.", nameof(value));
@@ -173,6 +186,11 @@ public sealed class BicepValueProxy
         }
 
         if (targetType.IsAssignableFrom(_valueType))
+        {
+            return;
+        }
+
+        if (targetType == typeof(IPAddress) && _valueType == typeof(string))
         {
             return;
         }

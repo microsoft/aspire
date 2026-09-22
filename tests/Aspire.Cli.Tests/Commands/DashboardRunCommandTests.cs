@@ -151,6 +151,65 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DashboardRunCommand_LaunchesDashboardExecutable()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        string[]? capturedArgs = null;
+        var (services, dashboardPath, executionFactory) = CreateServicesWithLayout(workspace);
+        executionFactory.AssertionCallback = (args, _, _, _) => { capturedArgs = args; };
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("dashboard run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedArgs);
+        Assert.Equal(dashboardPath, executionFactory.LastFileName);
+        Assert.Collection(capturedArgs,
+            arg => Assert.Equal("--ASPNETCORE_URLS=http://localhost:18888", arg),
+            arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL=http://localhost:4317", arg),
+            arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL=http://localhost:4318", arg),
+            arg => Assert.Equal("--ASPIRE_DASHBOARD_API_ENABLED=true", arg));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task DashboardRunCommand_DashboardExecutableMissing_DoesNotLaunchLegacyExecutable(bool dashboardDirectoryExists, bool legacyDashboardExists)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var testInteractionService = new TestInteractionService();
+        var (services, dashboardPath, executionFactory) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
+        File.Delete(dashboardPath);
+        if (!dashboardDirectoryExists)
+        {
+            Directory.Delete(Path.GetDirectoryName(dashboardPath)!);
+        }
+
+        if (legacyDashboardExists)
+        {
+            var managedDir = Path.Combine(workspace.WorkspaceRoot.FullName, "layout", BundleDiscovery.ManagedDirectoryName);
+            File.WriteAllText(Path.Combine(managedDir, Path.GetFileName(dashboardPath)), "fake legacy dashboard");
+        }
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("dashboard run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
+        Assert.Equal(DashboardCommandStrings.ManagedBinaryNotFound, Assert.Single(testInteractionService.DisplayedErrors));
+        Assert.Empty(executionFactory.CreatedExecutions);
+    }
+
+    [Fact]
     public async Task DashboardRunCommand_BundleAvailableWithinDelay_DoesNotDisplayBundleStatus()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -224,7 +283,6 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedArgs);
         Assert.Collection(capturedArgs,
-            arg => Assert.Equal("dashboard", arg),
             arg => Assert.Equal("--ASPNETCORE_URLS=http://localhost:18888", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL=http://localhost:4317", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL=http://localhost:4318", arg),
@@ -321,7 +379,6 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedArgs);
         Assert.Collection(capturedArgs,
-            arg => Assert.Equal("dashboard", arg),
             arg => Assert.Equal("--ASPNETCORE_URLS=http://localhost:18888", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL=http://localhost:4317", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL=http://localhost:4318", arg),
@@ -347,7 +404,6 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedArgs);
         Assert.Collection(capturedArgs,
-            arg => Assert.Equal("dashboard", arg),
             arg => Assert.Equal("--ASPNETCORE_URLS=http://localhost:5000", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL=http://localhost:9317", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL=http://localhost:9318", arg),
@@ -382,7 +438,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
-        var (services, managedPath, executionFactory) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
+        var (services, dashboardPath, executionFactory) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
 
         // Make CreateExecution return an execution whose StartAsync() returns false,
         // which causes LayoutProcessRunner.StartAsync to throw InvalidOperationException.
@@ -406,7 +462,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
-        var expectedMessage = string.Format(CultureInfo.CurrentCulture, DashboardCommandStrings.DashboardFailedToStart, $"Failed to start process: {managedPath}");
+        var expectedMessage = string.Format(CultureInfo.CurrentCulture, DashboardCommandStrings.DashboardFailedToStart, $"Failed to start process: {dashboardPath}");
         Assert.Equal(expectedMessage, errorMessage);
     }
 
@@ -622,7 +678,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         TerminalLinkAssert.ContainsLink(outputString, fileUri, logFilePath);
     }
 
-    private (IServiceCollection Services, string ManagedPath, TestProcessExecutionFactory ExecutionFactory) CreateServicesWithLayout(
+    private (IServiceCollection Services, string ExecutablePath, TestProcessExecutionFactory ExecutionFactory) CreateServicesWithLayout(
         TemporaryWorkspace workspace,
         TestInteractionService? interactionService = null,
         TestBundleService? bundleService = null)
@@ -632,11 +688,19 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(managedDir);
         var managedPath = Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName("aspire-managed"));
         File.WriteAllText(managedPath, "fake");
+        var dashboardDir = Path.Combine(layoutDir, BundleDiscovery.DashboardDirectoryName);
+        var dashboardPath = Path.Combine(dashboardDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        Directory.CreateDirectory(dashboardDir);
+        File.WriteAllText(dashboardPath, "fake native dashboard");
 
         var layout = new LayoutConfiguration
         {
             LayoutPath = layoutDir,
-            Components = new LayoutComponents { Managed = "managed" }
+            Components = new LayoutComponents
+            {
+                Dashboard = BundleDiscovery.DashboardDirectoryName,
+                Managed = BundleDiscovery.ManagedDirectoryName
+            }
         };
         bundleService ??= new TestBundleService(isBundle: true);
         bundleService.Layout = layout;
@@ -657,7 +721,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
             }
         });
 
-        return (services, managedPath, executionFactory);
+        return (services, dashboardPath, executionFactory);
     }
 
     private static IEnvironment CreateEnvironment(Dictionary<string, string?> envVars)

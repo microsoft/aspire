@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Serialization;
 using Aspire.Shared;
 using Microsoft.Extensions.Options;
 
@@ -71,12 +72,15 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 {
     private const string TemporaryDirectoryPrefix = "aspire-dashboard-";
 
+    private static readonly TimeSpan s_minimumLockAge = TimeSpan.FromDays(1);
+
     internal const string DatabaseFileName = "dashboard.db";
     internal const int MaxApplicationDirectoryNameLength = 80;
     internal const int MaxRuns = 10;
     internal const int SchemaVersion = DashboardSqliteDatabase.SchemaVersion;
 
-    private static readonly JsonSerializerOptions s_jsonOptions = new() { WriteIndented = true };
+    // Preserve the persisted PascalCase names and indentation without changing the shared context's defaults.
+    private static readonly DashboardJsonSerializerContext s_jsonContext = new(new JsonSerializerOptions { WriteIndented = true });
 
     private readonly string? _runsDirectory;
     private readonly string? _metadataPath;
@@ -245,12 +249,32 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             GetRunLockPath(CurrentWorkingDirectory));
     }
 
-    private static void DeleteUnheldLocks(string directory, string searchPattern, string currentLockPath)
+    private void DeleteUnheldLocks(string directory, string searchPattern, string currentLockPath)
     {
+        var lockCutoff = _timeProvider.GetUtcNow().UtcDateTime - s_minimumLockAge;
         foreach (var lockPath in Directory.EnumerateFiles(directory, searchPattern, SearchOption.TopDirectoryOnly))
         {
             if (string.Equals(lockPath, currentLockPath, StringComparison.OrdinalIgnoreCase))
             {
+                continue;
+            }
+
+            DateTime lastWriteTimeUtc;
+            try
+            {
+                lastWriteTimeUtc = File.GetLastWriteTimeUtc(lockPath);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Permissions can change after enumeration, or a matching lock in the shared temporary root may
+                // belong to another user. Lock cleanup is best effort and must not prevent dashboard startup.
+                continue;
+            }
+
+            if (lastWriteTimeUtc > lockCutoff)
+            {
+                // On Unix, another process can observe a newly created lock file before FileStream has applied its
+                // exclusive lock. Delay cleanup so initialization has ample time to establish ownership.
                 continue;
             }
 
@@ -300,7 +324,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     private void UpdatePinnedState(DashboardRunDescriptor run, string runDirectory, bool isPinned)
     {
         var metadataPath = Path.Combine(runDirectory, "run.json");
-        var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
+        var metadata = JsonSerializer.Deserialize(File.ReadAllText(metadataPath), s_jsonContext.DashboardRunMetadata);
         if (metadata?.SchemaVersion != run.SchemaVersion ||
             !string.Equals(metadata.RunId, run.RunId, StringComparison.Ordinal))
         {
@@ -395,7 +419,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 var metadataPath = Path.Combine(directory, "run.json");
                 try
                 {
-                    var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
+                    var metadata = JsonSerializer.Deserialize(File.ReadAllText(metadataPath), s_jsonContext.DashboardRunMetadata);
                     if (metadata is not null)
                     {
                         var run = CreateDescriptor(metadata, directory, isCurrent: false);
@@ -470,7 +494,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
         try
         {
-            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(metadata, s_jsonOptions));
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(metadata, s_jsonContext.DashboardRunMetadata));
             File.Move(temporaryPath, metadataPath, overwrite: true);
         }
         catch
@@ -521,7 +545,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         try
         {
             var metadataPath = Path.Combine(runDirectory, "run.json");
-            return JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath))?.IsPinned == true;
+            return JsonSerializer.Deserialize(File.ReadAllText(metadataPath), s_jsonContext.DashboardRunMetadata)?.IsPinned == true;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -665,7 +689,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         }
     }
 
-    private sealed record DashboardRunMetadata
+    internal sealed record DashboardRunMetadata
     {
         public required int SchemaVersion { get; init; }
         public required string RunId { get; init; }

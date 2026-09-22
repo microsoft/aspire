@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.IO.Pipelines;
-using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Hex1b;

@@ -24,12 +24,13 @@ including `WithTerminal()`, AppHost-owned terminals, and terminal interactions.
 ## AppHost-owned terminals
 
 For processes that the AppHost launches directly rather than as resources, use
-the experimental `TerminalService` API (`ASPIRETERMINAL001`).
+the experimental `TerminalService` API (`ASPIRETERMINAL001`) in
+`Aspire.Hosting.ApplicationModel`, alongside `ResourceNotificationService`.
 `TerminalLaunchOptions` holds the executable, arguments, working directory,
 environment variables, initial grid dimensions, title, and dashboard placement:
 
 ```csharp
-using Aspire.Hosting.Terminals;
+using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.DependencyInjection;
 
 #pragma warning disable ASPIRETERMINAL001

@@ -4,6 +4,7 @@
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Hosting;
 using System.Diagnostics;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.AspNetCore.InternalTesting;
@@ -14,6 +15,337 @@ namespace Aspire.Cli.Tests.Certificates;
 
 public class UnixCertificateManagerTests
 {
+    [Fact]
+    public void ResolveNssDbs_DiscoversFirefoxProfileFromDefaultXdgConfigDirectory()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var profileDirectory = CreateDirectory(homeDirectory, ".config", "mozilla", "firefox", "test.default-release");
+            var manager = CreateManager();
+
+            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
+
+            Assert.Equal(profileDirectory, nssDb.Path);
+            AssertFirefoxNssDb(nssDb);
+        });
+    }
+
+    [Fact]
+    public void ResolveNssDbs_DiscoversFirefoxProfileFromConfiguredXdgConfigDirectory()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var xdgConfigHome = CreateDirectory(homeDirectory, "custom-config");
+            var profileDirectory = CreateDirectory(homeDirectory, "custom-config", "mozilla", "firefox", "test.default-release");
+            var manager = CreateManager(new Dictionary<string, string?>
+            {
+                ["XDG_CONFIG_HOME"] = xdgConfigHome
+            });
+
+            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
+
+            Assert.Equal(profileDirectory, nssDb.Path);
+            AssertFirefoxNssDb(nssDb);
+        });
+    }
+
+    [Fact]
+    public void ResolveNssDbs_IgnoresRelativeXdgConfigDirectory()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var profileDirectory = CreateDirectory(homeDirectory, ".config", "mozilla", "firefox", "test.default-release");
+            var manager = CreateManager(new Dictionary<string, string?>
+            {
+                ["XDG_CONFIG_HOME"] = "relative-config"
+            });
+
+            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
+
+            Assert.Equal(profileDirectory, nssDb.Path);
+            AssertFirefoxNssDb(nssDb);
+        });
+    }
+
+    [Fact]
+    public void ResolveNssDbs_PrefersLegacyFirefoxDirectoryWhenPresent()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var legacyProfileDirectory = CreateDirectory(homeDirectory, ".mozilla", "firefox", "legacy.default-release");
+            CreateDirectory(homeDirectory, ".config", "mozilla", "firefox", "xdg.default-release");
+            var manager = CreateManager();
+
+            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
+
+            Assert.Equal(legacyProfileDirectory, nssDb.Path);
+            AssertFirefoxNssDb(nssDb);
+        });
+    }
+
+    [Fact]
+    public void ResolveNssDbs_RecognizesStandardXdgFirefoxOverride()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var profileDirectory = CreateDirectory(homeDirectory, ".config", "mozilla", "firefox", "test.default-release");
+            var manager = CreateManager(new Dictionary<string, string?>
+            {
+                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = profileDirectory
+            });
+
+            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
+
+            Assert.Equal(profileDirectory, nssDb.Path);
+            AssertFirefoxNssDb(nssDb);
+        });
+    }
+
+    [Fact]
+    public void ResolveNssDbs_RecognizesConfiguredXdgFirefoxOverride()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var xdgConfigHome = CreateDirectory(homeDirectory, "custom-config");
+            var profileDirectory = CreateDirectory(homeDirectory, "custom-config", "mozilla", "firefox", "test.default-release");
+            var manager = CreateManager(new Dictionary<string, string?>
+            {
+                ["XDG_CONFIG_HOME"] = xdgConfigHome,
+                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = profileDirectory
+            });
+
+            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
+
+            Assert.Equal(profileDirectory, nssDb.Path);
+            AssertFirefoxNssDb(nssDb);
+        });
+    }
+
+    [Fact]
+    public void ResolveNssDbs_RecognizesTypedFirefoxOverride()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var profileDirectory = CreateDirectory(homeDirectory, "custom-browser", "profile");
+            var manager = CreateManager(new Dictionary<string, string?>
+            {
+                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = $"firefox={profileDirectory}"
+            });
+
+            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
+
+            Assert.Equal(profileDirectory, nssDb.Path);
+            AssertFirefoxNssDb(nssDb);
+        });
+    }
+
+    [Fact]
+    public void ResolveNssDbs_RecognizesAspireOverride()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var profileDirectory = CreateDirectory(homeDirectory, "custom-browser", "profile");
+            var manager = CreateManager(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.CliDevCertsNssDbPaths] = $"firefox={profileDirectory}"
+            });
+
+            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
+
+            Assert.Equal(profileDirectory, nssDb.Path);
+            AssertFirefoxNssDb(nssDb);
+        });
+    }
+
+    [Fact]
+    public void ResolveNssDbs_AspireOverrideTakesPrecedence()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var aspireProfileDirectory = CreateDirectory(homeDirectory, "aspire-browser", "profile");
+            var dotnetProfileDirectory = CreateDirectory(homeDirectory, "dotnet-browser", "profile");
+            var manager = CreateManager(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.CliDevCertsNssDbPaths] = $"firefox={aspireProfileDirectory}",
+                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = $"chromium={dotnetProfileDirectory}"
+            });
+
+            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
+
+            Assert.Equal(aspireProfileDirectory, nssDb.Path);
+            AssertFirefoxNssDb(nssDb);
+        });
+    }
+
+    [Fact]
+    public void ResolveNssDbs_EmptyAspireOverrideFallsBackToDotnetOverride()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var dotnetProfileDirectory = CreateDirectory(homeDirectory, "dotnet-browser", "profile");
+            var manager = CreateManager(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.CliDevCertsNssDbPaths] = string.Empty,
+                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = $"chromium={dotnetProfileDirectory}"
+            });
+
+            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
+
+            Assert.Equal(dotnetProfileDirectory, nssDb.Path);
+            AssertChromiumNssDb(nssDb);
+        });
+    }
+
+    [Fact]
+    public void ResolveNssDbs_AspireOverrideNamesAspireVariableInDiagnostics()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var missingProfileDirectory = Path.Combine(homeDirectory.FullName, "missing-profile");
+            var sink = new TestSink();
+            var logger = new TestLogger(nameof(UnixCertificateManager), sink, enabled: true);
+            var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.CliDevCertsNssDbPaths] = missingProfileDirectory
+            });
+            var manager = new UnixCertificateManager(logger, environment);
+
+            var nssDbs = manager.GetNssDbs(homeDirectory.FullName);
+
+            Assert.Empty(nssDbs);
+            Assert.Collection(
+                sink.Writes,
+                write => Assert.Equal(
+                    $"Reading NSS database locations from {KnownConfigNames.CliDevCertsNssDbPaths}.",
+                    write.Message),
+                write => Assert.Equal(
+                    $"The NSS database '{missingProfileDirectory}' provided via {KnownConfigNames.CliDevCertsNssDbPaths} does not exist.",
+                    write.Message));
+        });
+    }
+
+    [Fact]
+    public void ResolveNssDbs_RecognizesTypedChromiumOverride()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var profileDirectory = CreateDirectory(homeDirectory, ".mozilla", "firefox", "test.default-release");
+            var manager = CreateManager(new Dictionary<string, string?>
+            {
+                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = $"chromium={profileDirectory}"
+            });
+
+            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
+
+            Assert.Equal(profileDirectory, nssDb.Path);
+            AssertChromiumNssDb(nssDb);
+        });
+    }
+
+    [Fact]
+    public void ResolveNssDbs_PreservesUntypedChromiumOverride()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var profileDirectory = CreateDirectory(homeDirectory, "custom-browser", "profile");
+            var manager = CreateManager(new Dictionary<string, string?>
+            {
+                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = profileDirectory
+            });
+
+            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
+
+            Assert.Equal(profileDirectory, nssDb.Path);
+            AssertChromiumNssDb(nssDb);
+        });
+    }
+
+    [Fact]
+    public void ResolveNssDbs_IgnoresEmptyTypedOverrides()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var manager = CreateManager(new Dictionary<string, string?>
+            {
+                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = $"firefox={Path.PathSeparator}chromium="
+            });
+
+            var nssDbs = manager.GetNssDbs(homeDirectory.FullName);
+
+            Assert.Empty(nssDbs);
+        });
+    }
+
+    [Fact]
+    public void ResolveNssDbs_OverridesReplaceDiscovery()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            CreateDirectory(homeDirectory, ".pki", "nssdb");
+            var overrideDirectory = CreateDirectory(homeDirectory, "custom-browser", "profile");
+            var manager = CreateManager(new Dictionary<string, string?>
+            {
+                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = overrideDirectory
+            });
+
+            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
+
+            Assert.Equal(overrideDirectory, nssDb.Path);
+        });
+    }
+
+    [Fact]
+    public void CreateProcessStartInfos_PreserveFirefoxArgumentsContainingSpaces()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var profileDirectory = CreateDirectory(homeDirectory, "custom browser", "profile with spaces");
+            var manager = CreateManager(new Dictionary<string, string?>
+            {
+                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = $"firefox={profileDirectory}"
+            });
+            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
+            var certificatePath = Path.Combine(homeDirectory.FullName, "certificate with spaces.pem");
+            const string nickname = "nickname with spaces";
+
+            AssertProcessStartInfo(
+                nssDb.CreateCheckProcessStartInfo(nickname),
+                "-d", $"sql:{profileDirectory}", "-n", nickname, "-L");
+            AssertProcessStartInfo(
+                nssDb.CreateAddProcessStartInfo(certificatePath, nickname),
+                "-d", $"sql:{profileDirectory}", "-n", nickname, "-A", "-i", certificatePath, "-t", "C,,");
+            AssertProcessStartInfo(
+                nssDb.CreateRemoveProcessStartInfo(nickname),
+                "-d", $"sql:{profileDirectory}", "-n", nickname, "-D");
+        });
+    }
+
+    [Fact]
+    public void CreateProcessStartInfos_PreserveChromiumArgumentsContainingSpaces()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            var profileDirectory = CreateDirectory(homeDirectory, "custom browser", "profile with spaces");
+            var manager = CreateManager(new Dictionary<string, string?>
+            {
+                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = $"chromium={profileDirectory}"
+            });
+            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
+            var certificatePath = Path.Combine(homeDirectory.FullName, "certificate with spaces.pem");
+            const string nickname = "nickname with spaces";
+
+            AssertProcessStartInfo(
+                nssDb.CreateCheckProcessStartInfo(nickname),
+                "-d", $"sql:{profileDirectory}", "-n", nickname, "-V", "-u", "V");
+            AssertProcessStartInfo(
+                nssDb.CreateAddProcessStartInfo(certificatePath, nickname),
+                "-d", $"sql:{profileDirectory}", "-n", nickname, "-A", "-i", certificatePath, "-t", "P,,");
+            AssertProcessStartInfo(
+                nssDb.CreateRemoveProcessStartInfo(nickname),
+                "-d", $"sql:{profileDirectory}", "-n", nickname, "-D");
+        });
+    }
+
     [Fact]
     public async Task GetTrustLevel_WhenCanceled_KillsCertUtilProcessTree()
     {
@@ -36,10 +368,9 @@ public class UnixCertificateManagerTests
                 ["SSL_CERT_DIR"] = tempDirectory.FullName,
                 ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = nssDbDirectory.FullName
             });
-            var manager = new UnixCertificateManager(NullLogger.Instance, environment, _ => new ProcessStartInfo(certUtilFile.FullName)
+            var manager = new UnixCertificateManager(NullLogger.Instance, environment, startInfo =>
             {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
+                startInfo.FileName = certUtilFile.FullName;
             });
             using var certificate = manager.CreateAspNetCoreHttpsDevelopmentCertificate(
                 DateTimeOffset.UtcNow.AddDays(-1),
@@ -83,10 +414,9 @@ public class UnixCertificateManagerTests
                 ["SSL_CERT_DIR"] = tempDirectory.FullName,
                 ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = nssDbDirectory.FullName
             });
-            var manager = new UnixCertificateManager(NullLogger.Instance, environment, _ => new ProcessStartInfo(certUtilFile.FullName)
+            var manager = new UnixCertificateManager(NullLogger.Instance, environment, startInfo =>
             {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
+                startInfo.FileName = certUtilFile.FullName;
             });
             using var certificate = manager.CreateAspNetCoreHttpsDevelopmentCertificate(
                 DateTimeOffset.UtcNow.AddDays(-1),
@@ -286,6 +616,50 @@ public class UnixCertificateManagerTests
             UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
 
         return certUtilFile;
+    }
+
+    private static UnixCertificateManager CreateManager(IReadOnlyDictionary<string, string?>? variables = null)
+        => new(NullLogger.Instance, TestEnvironment.CreateLinux(variables));
+
+    private static string CreateDirectory(DirectoryInfo homeDirectory, params string[] pathSegments)
+    {
+        var path = Path.Combine([homeDirectory.FullName, .. pathSegments]);
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private static void RunWithTemporaryHome(Action<DirectoryInfo> test)
+    {
+        var homeDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            test(homeDirectory);
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    private static void AssertFirefoxNssDb(UnixCertificateManager.NssDb nssDb)
+    {
+        Assert.Equal("Firefox", nssDb.BrowserFamily);
+        Assert.Equal(["-L"], nssDb.CheckArguments);
+        Assert.Equal("C", nssDb.TrustUsage);
+    }
+
+    private static void AssertChromiumNssDb(UnixCertificateManager.NssDb nssDb)
+    {
+        Assert.Equal("Chromium", nssDb.BrowserFamily);
+        Assert.Equal(["-V", "-u", "V"], nssDb.CheckArguments);
+        Assert.Equal("P", nssDb.TrustUsage);
+    }
+
+    private static void AssertProcessStartInfo(ProcessStartInfo startInfo, params string[] expectedArguments)
+    {
+        Assert.Equal(CertificateHelpers.CertUtilCommand, startInfo.FileName);
+        Assert.Empty(startInfo.Arguments);
+        Assert.Equal(expectedArguments, startInfo.ArgumentList);
     }
 
     private static string EscapeShellPath(string path) => path.Replace("'", "'\"'\"'", StringComparison.Ordinal);

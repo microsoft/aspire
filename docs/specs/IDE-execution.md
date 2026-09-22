@@ -70,10 +70,11 @@ The payload is best explained using an example:
         {
             // Indicates the type of the launch configuration.
             // This is a required property for all kinds of launch configurations.
-            // The value "project" indicates this is a service that has an associated Visual Studio project file.
+            // The value "project" indicates this is a service represented by a project file or,
+            // when the IDE explicitly advertises "project" launch configuration support, a file-based C# app.
             "type": "project",
 
-            "project_path": "(Path to Visual Studio project file for the program)",
+            "project_path": "(Path to project file or explicitly supported file-based C# app)",
 
             // ... other launch configuration properties
         }
@@ -162,7 +163,7 @@ The properties of the IDE endpoint information document are:
 | Property | Description | Type |
 | --- | --------- | --- |
 | `protocols_supported` | List of protocols supported by the IDE endpoint. See [protocol versioning](#protocol-versioning) for more information. | `string[]` |
-| `supported_launch_configurations` | List of launch configurations supported by the IDE endpoint. This property is optional; if omitted, DCP will assume that only `project` launch configuration is supported. | `string[]` |
+| `supported_launch_configurations` | List of launch configurations supported by the IDE endpoint. This property is optional. If omitted, DCP assumes legacy `project` support only for launch configurations whose `project_path` identifies a project file. A file-based C# app (`.cs`) requires the endpoint to explicitly include `project`. | `string[]` |
 
 ## Launch configurations (run session requests)
 
@@ -170,14 +171,14 @@ The run session creation request contains one or more launch configurations for 
 
 ### Project launch configuration (type: `project`)
 
-Project launch configuration contains details for launching programs that have project files compatible with Visual Studio IDE.
+Project launch configuration contains details for launching programs represented by project files compatible with the IDE. It can also represent a file-based C# app (`.cs`) when the IDE endpoint explicitly advertises `project` launch configuration support; the omitted-capability compatibility behavior applies only to project files.
 
 **Project launch configuration properties**
 
 | Property | Description | Required? |
 | --- | --------- | --- |
 | `type` | Launch configuration type indicator; must be `project`. | Required |
-| `project_path` | Path to the project file for the program that is being launched. | Required |
+| `project_path` | Path to the project file for the program, or to a file-based C# app (`.cs`) when the endpoint explicitly advertises `project` launch configuration support. | Required |
 | `mode` | Specifies the launch mode. Currently supported modes are `Debug` (run the project under the debugger) and `NoDebug` (run the project without debugging). | Optional, defaults to `Debug`. |
 | `launch_profile` | The name of the launch profile to be used for project execution. See below for more details on how the launch profile should be processed. | Optional |
 | `disable_launch_profile` | If set to `true`, the project will be launched without a launch profile and the value of "launch_profile" parameter is disregarded. | Optional |

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
