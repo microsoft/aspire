@@ -18,7 +18,6 @@ const {
 } = require('./e2e-download-retry');
 const { shouldAllowAdvisoryTestFailure } = require('./e2e-process-failure.cjs');
 const { runWithProcessTreeTimeout } = require('./e2e-process-runner.cjs');
-const { startBlazorProfileDiagnostics } = require('./e2e-blazor-profile-diagnostics.cjs');
 
 const extensionRoot = path.resolve(__dirname, '..');
 const extensionPackageJson = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.json'), 'utf8'));
@@ -627,7 +626,6 @@ async function main() {
   let recording;
   let testFailure;
   let cleanupFailed = false;
-  let profileDiagnostics;
   try {
     if (verifyExtesterFeedOnly) {
       verifyExtesterFeed();
@@ -638,9 +636,6 @@ async function main() {
     prepareRunDirectories();
     prepareNuGetPackageCache();
     logE2eConfiguration();
-    if (enableBrowserDebuggerE2E && process.platform === 'linux') {
-      profileDiagnostics = startBlazorProfileDiagnostics({ runRoot: shortRunRoot, storageDir, resultsDir, controlFile, stateFile });
-    }
 
     const bundledCliPath = resolveCliPath();
     // A dev-build CLI resolves its AppHost server and code generators relative to its own location,
@@ -770,7 +765,6 @@ async function main() {
     }
   }
   finally {
-    profileDiagnostics?.capture('before-runner-cleanup');
     const cleanupErrors = [];
     await runCleanupStep('stop recording', () => stopRecording(recording, testFailure), cleanupErrors);
     await runCleanupStep('stop workspace AppHost', stopWorkspaceAppHost, cleanupErrors);
@@ -778,7 +772,6 @@ async function main() {
     await runCleanupStep('redact test results', () => redactTextFilesForArtifacts(resultsDir), cleanupErrors);
     await runCleanupStep('copy storage diagnostics', copyStorageDiagnostics, cleanupErrors);
     await runCleanupStep('copy workspace diagnostics', copyWorkspaceDiagnostics, cleanupErrors);
-    profileDiagnostics?.stop();
     await runCleanupStep('cleanup temporary run root', cleanupTemporaryRunRoot, cleanupErrors);
 
     if (cleanupErrors.length > 0) {
