@@ -8,6 +8,14 @@ using Terminals.AppHost;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+builder.AddCSharpApp("palette-test", "Scripts/pallete-test.cs")
+    .WithTerminal(options =>
+    {
+        options.Columns = 120;
+        options.Rows = 50;
+        options.ShowTerminalHost = true;
+    });
+
 builder.AddCSharpApp("terminal-features", "Scripts/terminal-features.cs")
     .WithTerminal(options =>
     {
