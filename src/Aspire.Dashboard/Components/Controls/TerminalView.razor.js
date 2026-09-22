@@ -7,6 +7,10 @@ const terminals = new Map();
 const rememberedFontSizes = new Map();
 let nextId = 1;
 const DEFAULT_FONT_SIZE = 13;
+// Tint the default surfaces while keeping Hex1b's foreground, ANSI and selection colors.
+// The dark surface matches Dashboard's purple-neutral background; light uses a similar lavender tint.
+const darkPalette = { ...defaultDarkPalette, background: "#312e3c" };
+const lightPalette = { ...defaultLightPalette, background: "#d5d0df" };
 const RECONNECT_BACKOFF_MS = [500, 1000, 2000, 4000, 5000];
 const MAX_RECONNECT_ATTEMPTS = 30;
 // Aspire's WebSocket endpoint sends this private-use code only after authoritative
@@ -32,7 +36,7 @@ function scrollbarConfiguration(state) {
             return getComputedStyle(probe).color;
         };
         const forced = state.forcedColors.matches;
-        const palette = state.colorMode === "light" ? defaultLightPalette : defaultDarkPalette;
+        const palette = state.colorMode === "light" ? lightPalette : darkPalette;
         const tooltipStyle = {
             background: color(forced ? "Canvas" : "var(--aspire-popup-background)"),
             color: color(forced ? "CanvasText" : "var(--colorNeutralForeground1)"),
@@ -87,7 +91,7 @@ function updateAppearance(state) {
     }
     // Follow Dashboard's resolved theme, not the OS preference or a local control theme.
     state.colorMode = document.documentElement.dataset.theme === "light" ? "light" : "dark";
-    const palette = state.colorMode === "light" ? defaultLightPalette : defaultDarkPalette;
+    const palette = state.colorMode === "light" ? lightPalette : darkPalette;
     state.viewElement.style.setProperty("--terminal-background", palette.background);
     state.client?.setColorMode(state.colorMode);
     state.scrollbar = scrollbarConfiguration(state);
@@ -493,6 +497,8 @@ async function mountClient(state, generation, controller) {
             sizing: state.sizing,
             readOnly: state.readOnly,
             colorMode: state.colorMode,
+            lightModePalette: lightPalette,
+            darkModePalette: darkPalette,
             scrollbar: state.scrollbar,
             padding: 3,
             onTitleChange(title) {

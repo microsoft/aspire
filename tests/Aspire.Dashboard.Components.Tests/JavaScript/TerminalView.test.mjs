@@ -370,15 +370,15 @@ for (const [name, ranges, text, visible] of [
     });
 }
 
-for (const [theme, palette] of [["light", defaultLightPalette], ["dark", defaultDarkPalette]]) {
-    test(`terminal mounts with the built-in ${theme} palette selected by Dashboard`, async () => {
+for (const [theme, background] of [["light", "#d5d0df"], ["dark", "#312e3c"]]) {
+    test(`terminal mounts with the Aspire ${theme} background and unchanged Hex1b text colors`, async () => {
         document.documentElement.dataset.theme = theme;
         const { view } = mount();
         const attempt = attempts[0];
         assert.equal(attempt.options.colorMode, theme);
-        assert.equal(attempt.options.lightModePalette, undefined, "Use Hex1b's built-in palette");
-        assert.equal(attempt.options.darkModePalette, undefined, "Use Hex1b's built-in palette");
-        assert.equal(view.style["--terminal-background"], palette.background);
+        assert.deepEqual(attempt.options.lightModePalette, { ...defaultLightPalette, background: "#d5d0df" });
+        assert.deepEqual(attempt.options.darkModePalette, { ...defaultDarkPalette, background: "#312e3c" });
+        assert.equal(view.style["--terminal-background"], background);
         attempt.resolve();
         await settle();
         assert.equal(attempt.client.colorMode, theme);
@@ -403,10 +403,10 @@ test("theme and contrast changes update palettes and replace the complete overla
     assert.notEqual(attempt.client.scrollbar.render, initial.render);
     assert.equal(attempt.options.colorMode, "dark");
     assert.equal(attempt.client.colorMode, "light");
-    assert.equal(view.style["--terminal-background"], defaultLightPalette.background);
+    assert.equal(view.style["--terminal-background"], attempt.options.lightModePalette.background);
     const focusCalls = attempt.client.focusCalls;
     const selection = attempt.client.selection;
-    for (const [theme, palette] of [["dark", defaultDarkPalette], ["light", defaultLightPalette]]) {
+    for (const [theme, palette] of [["dark", attempt.options.darkModePalette], ["light", attempt.options.lightModePalette]]) {
         document.documentElement.dataset.theme = theme;
         themeObservers[0].callback();
         assert.equal(attempt.client.colorMode, theme);
@@ -430,6 +430,8 @@ test("theme and contrast changes update palettes and replace the complete overla
     terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=app&replica=1");
     assert.equal(attempts[1].options.scrollbar, attempt.client.scrollbar);
     assert.equal(attempts[1].options.colorMode, "light");
+    assert.deepEqual(attempts[1].options.lightModePalette, attempt.options.lightModePalette);
+    assert.deepEqual(attempts[1].options.darkModePalette, attempt.options.darkModePalette);
     attempts[1].resolve();
     await settle();
     attempts[1].close(1006);
@@ -442,7 +444,7 @@ test("a hidden terminal mounts with the latest Dashboard palette when revealed",
     document.documentElement.dataset.theme = "light";
     themeObservers[0].callback();
     assert.equal(attempts.length, 0);
-    assert.equal(view.style["--terminal-background"], defaultLightPalette.background);
+    assert.equal(view.style["--terminal-background"], "#d5d0df");
     element.clientWidth = 800;
     element.clientHeight = 600;
     observers[0].callback();

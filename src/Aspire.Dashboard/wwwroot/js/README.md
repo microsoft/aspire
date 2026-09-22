@@ -101,8 +101,11 @@ workers through the CSP worker-source fallback; its production
 
 ### Terminal palettes
 
-The terminal follows the Dashboard's resolved light/dark theme using Hex1b's
-built-in **Hex1b Light** and **Hex1b Dark** palettes. Mounting passes `colorMode`;
+The terminal follows the Dashboard's resolved light/dark theme using Aspire variants
+of **Hex1b Light** and **Hex1b Dark**. Only the default backgrounds are changed:
+light lavender `#d5d0df` and dark purple-neutral `#312e3c`. Foreground, ANSI and
+selection colors retain the Hex1b defaults. The frame and overlay track share the
+active palette background. Mounting passes both palettes and `colorMode`;
 theme changes call `setColorMode` on the existing client, including changes that
 occur while mounting or while a dock pane is hidden. Terminal frames, toolbars,
 dock tabs and detached-window headers follow the same Dashboard theme.
@@ -115,8 +118,8 @@ are required; legacy RGBA frames cannot be recolored.
 
 Both GPU backends paint opaque selection foreground/background from the active
 palette. The adapter does not tint the transparent selection geometry with CSS.
-Custom Aspire palettes can later be supplied through `lightModePalette` and
-`darkModePalette` at mount and updated through `setPalette`, independently of
+Aspire palettes are supplied through `lightModePalette` and
+`darkModePalette` at mount and can be updated through `setPalette`, independently of
 the Dashboard controls and scrollbar styling.
 
 ### Terminal metadata
