@@ -371,19 +371,52 @@ for (const [name, ranges, text, visible] of [
 }
 
 for (const [theme, background] of [["light", "#d5d0df"], ["dark", "#312e3c"]]) {
-    test(`terminal mounts with the Aspire ${theme} background and unchanged Hex1b text colors`, async () => {
+    test(`terminal mounts with the Aspire ${theme} palette and unchanged neutral and selection colors`, async () => {
         document.documentElement.dataset.theme = theme;
         const { view } = mount();
         const attempt = attempts[0];
         assert.equal(attempt.options.colorMode, theme);
-        assert.deepEqual(attempt.options.lightModePalette, { ...defaultLightPalette, background: "#d5d0df" });
-        assert.deepEqual(attempt.options.darkModePalette, { ...defaultDarkPalette, background: "#312e3c" });
+        for (const [palette, defaults] of [
+            [attempt.options.lightModePalette, defaultLightPalette],
+            [attempt.options.darkModePalette, defaultDarkPalette],
+        ]) {
+            const { ansi, background: paletteBackground, ...unchanged } = palette;
+            const { ansi: defaultAnsi, background: defaultBackground, ...defaultUnchanged } = defaults;
+            assert.deepEqual(unchanged, defaultUnchanged);
+            assert.equal(ansi.length, 16);
+            for (const index of [0, 7, 8, 15]) {
+                assert.equal(ansi[index], defaultAnsi[index]);
+            }
+            for (const color of [paletteBackground, ...ansi]) {
+                assert.match(color, /^#[0-9a-f]{6}$/);
+            }
+        }
         assert.equal(view.style["--terminal-background"], background);
         attempt.resolve();
         await settle();
         assert.equal(attempt.client.colorMode, theme);
     });
 }
+
+test("chromatic ANSI text meets contrast targets on both Aspire backgrounds", () => {
+    // WCAG relative luminance uses linearized sRGB, not perceptual OKLCH lightness.
+    // https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html
+    const luminance = hex => {
+        const channels = hex.slice(1).match(/../g).map(channel => parseInt(channel, 16) / 255)
+            .map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    mount();
+    for (const palette of [attempts[0].options.lightModePalette, attempts[0].options.darkModePalette]) {
+        const background = luminance(palette.background);
+        for (const index of [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14]) {
+            const foreground = luminance(palette.ansi[index]);
+            const contrast = (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+            assert.ok(contrast >= (index < 8 ? 5 : 6),
+                `ANSI ${index} on ${palette.background} has contrast ${contrast}`);
+        }
+    }
+});
 
 test("theme and contrast changes update palettes and replace the complete overlay without reconnecting", async () => {
     const { id, view } = mount();

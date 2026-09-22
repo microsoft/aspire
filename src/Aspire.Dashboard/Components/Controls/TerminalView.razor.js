@@ -7,10 +7,26 @@ const terminals = new Map();
 const rememberedFontSizes = new Map();
 let nextId = 1;
 const DEFAULT_FONT_SIZE = 13;
-// Tint the default surfaces while keeping Hex1b's foreground, ANSI and selection colors.
-// The dark surface matches Dashboard's purple-neutral background; light uses a similar lavender tint.
-const darkPalette = { ...defaultDarkPalette, background: "#312e3c" };
-const lightPalette = { ...defaultLightPalette, background: "#d5d0df" };
+// Retain Hex1b's neutral slots and selection colors. Chromatic slots increase OKLCH chroma
+// by up to 25% (dark) / 10% (light), reducing chroma at the sRGB boundary rather than clipping.
+// Lightness is adjusted where necessary for >=5:1 normal / >=6:1 bright text on these backgrounds.
+// These are precomputed colors, so palette changes need no runtime color conversion.
+const darkPalette = {
+    ...defaultDarkPalette,
+    background: "#312e3c",
+    ansi: [
+        "#242424", "#fb7d88", "#87b179", "#ca9f2c", "#6fabdc", "#c195cc", "#4cb4ba", "#b7b4ae",
+        "#9a9a9a", "#ff99a0", "#94c384", "#dfaf2b", "#79bcf3", "#d6a3e2", "#4fc8cd", "#dedad3",
+    ],
+};
+const lightPalette = {
+    ...defaultLightPalette,
+    background: "#d5d0df",
+    ansi: [
+        "#24262b", "#9e233a", "#365d28", "#6a4f00", "#165786", "#6d4478", "#005d61", "#b7b4ae",
+        "#595959", "#93042d", "#295118", "#5b4500", "#004b7a", "#62376d", "#005054", "#e3dfd7",
+    ],
+};
 const RECONNECT_BACKOFF_MS = [500, 1000, 2000, 4000, 5000];
 const MAX_RECONNECT_ATTEMPTS = 30;
 // Aspire's WebSocket endpoint sends this private-use code only after authoritative
