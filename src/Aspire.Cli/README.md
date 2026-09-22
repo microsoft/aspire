@@ -129,7 +129,7 @@ On Unix, the NSS databases used to trust the Aspire development certificate can 
 aspire config set --global certificates.nssDbPaths "firefox=/path/to/firefox/profile:chromium=/path/to/chromium/nssdb"
 ```
 
-The `certificates.nssDbPaths` setting takes precedence over the `ASPIRE_CLI_DEV_CERTS_NSSDB_PATHS` environment variable. When neither Aspire-specific override has a value, the CLI preserves the upstream `DOTNET_DEV_CERTS_NSSDB_PATHS` behavior.
+The `certificates.nssDbPaths` setting takes precedence over the upstream `DOTNET_DEV_CERTS_NSSDB_PATHS` environment variable. When the Aspire setting has no value, the CLI preserves the upstream behavior.
 
 ## Additional documentation
 

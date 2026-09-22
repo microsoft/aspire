@@ -4,7 +4,6 @@
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Hosting;
 using System.Diagnostics;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.AspNetCore.InternalTesting;
@@ -141,24 +140,6 @@ public class UnixCertificateManagerTests
     }
 
     [Fact]
-    public void ResolveNssDbs_RecognizesAspireOverride()
-    {
-        RunWithTemporaryHome(homeDirectory =>
-        {
-            var profileDirectory = CreateDirectory(homeDirectory, "custom-browser", "profile");
-            var manager = CreateManager(new Dictionary<string, string?>
-            {
-                [KnownConfigNames.CliDevCertsNssDbPaths] = $"firefox={profileDirectory}"
-            });
-
-            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
-
-            Assert.Equal(profileDirectory, nssDb.Path);
-            AssertFirefoxNssDb(nssDb);
-        });
-    }
-
-    [Fact]
     public void ResolveNssDbs_RecognizesAspireConfiguration()
     {
         RunWithTemporaryHome(homeDirectory =>
@@ -182,12 +163,10 @@ public class UnixCertificateManagerTests
         RunWithTemporaryHome(homeDirectory =>
         {
             var configuredProfileDirectory = CreateDirectory(homeDirectory, "configured-browser", "profile");
-            var aspireEnvironmentProfileDirectory = CreateDirectory(homeDirectory, "aspire-environment-browser", "profile");
             var dotnetProfileDirectory = CreateDirectory(homeDirectory, "dotnet-browser", "profile");
             var manager = CreateManager(
                 new Dictionary<string, string?>
                 {
-                    [KnownConfigNames.CliDevCertsNssDbPaths] = $"chromium={aspireEnvironmentProfileDirectory}",
                     ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = $"chromium={dotnetProfileDirectory}"
                 },
                 new Dictionary<string, string?>
@@ -203,16 +182,14 @@ public class UnixCertificateManagerTests
     }
 
     [Fact]
-    public void ResolveNssDbs_EmptyAspireConfigurationFallsBackToAspireOverride()
+    public void ResolveNssDbs_EmptyAspireConfigurationFallsBackToDotnetOverride()
     {
         RunWithTemporaryHome(homeDirectory =>
         {
-            var aspireProfileDirectory = CreateDirectory(homeDirectory, "aspire-browser", "profile");
             var dotnetProfileDirectory = CreateDirectory(homeDirectory, "dotnet-browser", "profile");
             var manager = CreateManager(
                 new Dictionary<string, string?>
                 {
-                    [KnownConfigNames.CliDevCertsNssDbPaths] = $"firefox={aspireProfileDirectory}",
                     ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = $"chromium={dotnetProfileDirectory}"
                 },
                 new Dictionary<string, string?>
@@ -222,78 +199,8 @@ public class UnixCertificateManagerTests
 
             var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
 
-            Assert.Equal(aspireProfileDirectory, nssDb.Path);
-            AssertFirefoxNssDb(nssDb);
-        });
-    }
-
-    [Fact]
-    public void ResolveNssDbs_AspireOverrideTakesPrecedence()
-    {
-        RunWithTemporaryHome(homeDirectory =>
-        {
-            var aspireProfileDirectory = CreateDirectory(homeDirectory, "aspire-browser", "profile");
-            var dotnetProfileDirectory = CreateDirectory(homeDirectory, "dotnet-browser", "profile");
-            var manager = CreateManager(new Dictionary<string, string?>
-            {
-                [KnownConfigNames.CliDevCertsNssDbPaths] = $"firefox={aspireProfileDirectory}",
-                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = $"chromium={dotnetProfileDirectory}"
-            });
-
-            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
-
-            Assert.Equal(aspireProfileDirectory, nssDb.Path);
-            AssertFirefoxNssDb(nssDb);
-        });
-    }
-
-    [Fact]
-    public void ResolveNssDbs_EmptyAspireOverrideFallsBackToDotnetOverride()
-    {
-        RunWithTemporaryHome(homeDirectory =>
-        {
-            var dotnetProfileDirectory = CreateDirectory(homeDirectory, "dotnet-browser", "profile");
-            var manager = CreateManager(new Dictionary<string, string?>
-            {
-                [KnownConfigNames.CliDevCertsNssDbPaths] = string.Empty,
-                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = $"chromium={dotnetProfileDirectory}"
-            });
-
-            var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
-
             Assert.Equal(dotnetProfileDirectory, nssDb.Path);
             AssertChromiumNssDb(nssDb);
-        });
-    }
-
-    [Fact]
-    public void ResolveNssDbs_AspireOverrideNamesAspireVariableInDiagnostics()
-    {
-        RunWithTemporaryHome(homeDirectory =>
-        {
-            var missingProfileDirectory = Path.Combine(homeDirectory.FullName, "missing-profile");
-            var sink = new TestSink();
-            var logger = new TestLogger(nameof(UnixCertificateManager), sink, enabled: true);
-            var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
-            {
-                [KnownConfigNames.CliDevCertsNssDbPaths] = missingProfileDirectory
-            });
-            var manager = new UnixCertificateManager(
-                logger,
-                environment,
-                CertificateConfiguration.ResolveNssDbOverride(new ConfigurationBuilder().Build(), environment));
-
-            var nssDbs = manager.GetNssDbs(homeDirectory.FullName);
-
-            Assert.Empty(nssDbs);
-            Assert.Collection(
-                sink.Writes,
-                write => Assert.Equal(
-                    $"Reading NSS database locations from {KnownConfigNames.CliDevCertsNssDbPaths}.",
-                    write.Message),
-                write => Assert.Equal(
-                    $"The NSS database '{missingProfileDirectory}' provided via {KnownConfigNames.CliDevCertsNssDbPaths} does not exist.",
-                    write.Message));
         });
     }
 
@@ -315,7 +222,7 @@ public class UnixCertificateManagerTests
             var manager = new UnixCertificateManager(
                 logger,
                 environment,
-                CertificateConfiguration.ResolveNssDbOverride(configuration, environment));
+                CertificateConfiguration.ResolveNssDbOverride(configuration));
 
             var nssDbs = manager.GetNssDbs(homeDirectory.FullName);
 
@@ -332,7 +239,7 @@ public class UnixCertificateManagerTests
     }
 
     [Fact]
-    public void ResolveNssDbs_EmptyAspireOverridesNameDotnetVariableInDiagnostics()
+    public void ResolveNssDbs_EmptyAspireConfigurationNamesDotnetVariableInDiagnostics()
     {
         RunWithTemporaryHome(homeDirectory =>
         {
@@ -342,7 +249,6 @@ public class UnixCertificateManagerTests
             var logger = new TestLogger(nameof(UnixCertificateManager), sink, enabled: true);
             var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
             {
-                [KnownConfigNames.CliDevCertsNssDbPaths] = string.Empty,
                 [dotnetVariableName] = missingProfileDirectory
             });
             var configuration = new ConfigurationBuilder()
@@ -354,7 +260,7 @@ public class UnixCertificateManagerTests
             var manager = new UnixCertificateManager(
                 logger,
                 environment,
-                CertificateConfiguration.ResolveNssDbOverride(configuration, environment));
+                CertificateConfiguration.ResolveNssDbOverride(configuration));
 
             var nssDbs = manager.GetNssDbs(homeDirectory.FullName);
 
@@ -772,7 +678,7 @@ public class UnixCertificateManagerTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(configurationValues)
             .Build();
-        var nssDbOverride = CertificateConfiguration.ResolveNssDbOverride(configuration, environment);
+        var nssDbOverride = CertificateConfiguration.ResolveNssDbOverride(configuration);
 
         return new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride);
     }

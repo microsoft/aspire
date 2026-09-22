@@ -467,8 +467,7 @@ public class Program
         {
             var environment = sp.GetRequiredService<IEnvironment>();
             var nssDbOverride = CertificateConfiguration.ResolveNssDbOverride(
-                sp.GetRequiredService<IConfiguration>(),
-                environment);
+                sp.GetRequiredService<IConfiguration>());
 
             return CertificateManager.Create(
                 sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>(),

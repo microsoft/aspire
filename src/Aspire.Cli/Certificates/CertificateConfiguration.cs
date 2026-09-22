@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Certificates;
@@ -15,20 +14,14 @@ internal static class CertificateConfiguration
     public const string NssDbPathsConfigKey = "certificates.nssDbPaths";
 
     /// <summary>
-    /// Resolves the Aspire NSS database override from CLI configuration and its environment compatibility alias.
+    /// Resolves the Aspire NSS database override from CLI configuration.
     /// </summary>
-    public static NssDbOverride? ResolveNssDbOverride(IConfiguration configuration, IEnvironment environment)
+    public static NssDbOverride? ResolveNssDbOverride(IConfiguration configuration)
     {
         var configuredValue = configuration[NssDbPathsConfigPath];
         if (!string.IsNullOrEmpty(configuredValue))
         {
             return new NssDbOverride(configuredValue, NssDbPathsConfigKey);
-        }
-
-        var environmentValue = environment.GetEnvironmentVariable(KnownConfigNames.CliDevCertsNssDbPaths);
-        if (!string.IsNullOrEmpty(environmentValue))
-        {
-            return new NssDbOverride(environmentValue, KnownConfigNames.CliDevCertsNssDbPaths);
         }
 
         return null;
