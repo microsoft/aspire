@@ -13,6 +13,7 @@ using Aspire.Hosting;
 using Google.Protobuf;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Testing;
+using Microsoft.Extensions.Options;
 using OpenTelemetry.Proto.Collector.Logs.V1;
 using OpenTelemetry.Proto.Collector.Metrics.V1;
 using OpenTelemetry.Proto.Collector.Trace.V1;
@@ -132,6 +133,70 @@ public class OtlpHttpServiceTests
         Assert.Equal(HttpStatusCode.Unauthorized, responseMessage.StatusCode);
         Assert.Null(responseMessage.Content.Headers.ContentType);
         Assert.Equal(string.Empty, await responseMessage.Content.ReadAsStringAsync().DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task Configuration_OtlpHttpEndPoint_NullSecondaryApiKeyInJson_FailsValidation()
+    {
+        // Arrange
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        var configFilePath = Path.Combine(tempDirectory.FullName, "appsettings.json");
+        const string configJson = """
+            {
+              "Dashboard": {
+                "Otlp": {
+                  "AuthMode": "ApiKey",
+                  "PrimaryApiKey": "TestKey123!",
+                  "SecondaryApiKey": null
+                }
+              }
+            }
+            """;
+        await File.WriteAllTextAsync(configFilePath, configJson).DefaultTimeout();
+
+        try
+        {
+            await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
+            {
+                config[KnownConfigNames.DashboardConfigFilePath] = configFilePath;
+            });
+
+            // Act
+            var exception = Assert.Throws<OptionsValidationException>(() => _ = app.DashboardOptionsMonitor.CurrentValue);
+
+            // Assert
+            Assert.Contains($"SecondaryApiKey must not be empty when OTLP authentication mode is API key. Remove {DashboardConfigNames.DashboardOtlpSecondaryApiKeyName.ConfigKey} or specify a non-empty value.", exception.Failures);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory.FullName, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CallService_OtlpHttpEndPoint_EmptyApiKey_Failure()
+    {
+        // Arrange
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
+        {
+            config[DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey] = OtlpAuthMode.ApiKey.ToString();
+            config[DashboardConfigNames.DashboardOtlpPrimaryApiKeyName.ConfigKey] = "TestKey123!";
+        });
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.OtlpServiceHttpEndPointAccessor().EndPoint}");
+        using var requestMessage = new HttpRequestMessage(HttpMethod.Post, "/v1/logs")
+        {
+            Content = new ByteArrayContent(new ExportLogsServiceRequest().ToByteArray())
+        };
+        requestMessage.Content.Headers.TryAddWithoutValidation("content-type", OtlpHttpEndpointsBuilder.ProtobufContentType);
+        requestMessage.Headers.TryAddWithoutValidation(OtlpApiKeyAuthenticationHandler.ApiKeyHeaderName, string.Empty);
+
+        // Act
+        var responseMessage = await httpClient.SendAsync(requestMessage).DefaultTimeout();
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, responseMessage.StatusCode);
     }
 
     [Fact]
