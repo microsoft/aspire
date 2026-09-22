@@ -224,6 +224,8 @@ var api = apim.AddApi("catalog-api", catalog, "catalog")
 
 Use `WithPolicy` when a complete APIM policy document is required. APIM replaces the complete policy at that scope; replacing an API policy also replaces Aspire's generated backend-routing statement. `WithPolicy` and `WithInboundPolicy` cannot be combined at the same scope because doing so would silently discard one configuration.
 
+Aspire deploys each API-level policy after that API's generated and explicitly declared operations, including any operation-level policies, to avoid overlapping those writes to the same API.
+
 ### Policy fragments
 
 Define shared policy statements once and include them at the service, API, or operation scope:

@@ -321,6 +321,15 @@ resource _apim_apiPolicy_openai_api 'Microsoft.ApiManagement/service/apis/polici
   parent: openai_api
   dependsOn: [
     openai_pool
+    _apim_proxyDELETEOperation_openai_api
+    _apim_proxyGETOperation_openai_api
+    _apim_proxyHEADOperation_openai_api
+    _apim_proxyOPTIONSOperation_openai_api
+    _apim_proxyPATCHOperation_openai_api
+    _apim_proxyPOSTOperation_openai_api
+    _apim_proxyPUTOperation_openai_api
+    _apim_proxyTRACEOperation_openai_api
+    openai_api_chat_completions
   ]
 }
 

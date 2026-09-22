@@ -237,6 +237,15 @@ resource _apim_apiPolicy_catalog_api 'Microsoft.ApiManagement/service/apis/polic
   parent: catalog_api
   dependsOn: [
     _apim_computeBackend_catalog_api
+    _apim_proxyDELETEOperation_catalog_api
+    _apim_proxyGETOperation_catalog_api
+    _apim_proxyHEADOperation_catalog_api
+    _apim_proxyOPTIONSOperation_catalog_api
+    _apim_proxyPATCHOperation_catalog_api
+    _apim_proxyPOSTOperation_catalog_api
+    _apim_proxyPUTOperation_catalog_api
+    _apim_proxyTRACEOperation_catalog_api
+    _apim_operationPolicy_get_product
   ]
 }
 

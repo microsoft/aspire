@@ -8,6 +8,7 @@
 
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.ApiManagement.Provisioning;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -729,6 +730,63 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.Contains("""value: '{"openapi":"3.0.1","info":{"title":"Catalog","version":"v1"},"paths":{}}'""", bicep);
         Assert.DoesNotContain("name: 'proxy'", bicep);
         await Verify(bicep, "bicep");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ApiPolicyWaitsForOperationConfiguration(bool importOpenApi)
+    {
+        using var temporaryWorkspace = TemporaryWorkspace.Create(output);
+        var documentPath = Path.Combine(temporaryWorkspace.Path, "catalog.json");
+        await File.WriteAllTextAsync(
+            documentPath,
+            """{"openapi":"3.0.1","info":{"title":"Catalog","version":"v1"},"paths":{}}""",
+            TestContext.Current.CancellationToken);
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+        });
+        var backend = apim.AddBackend("catalog-backend", ReferenceExpression.Create($"https://example.com"));
+        var api = apim.AddApi("catalog-api", "catalog").WithBackend(backend);
+        if (importOpenApi)
+        {
+            api.WithOpenApiDocument(documentPath)
+                .WithPolicy("<policies><inbound><base /><set-backend-service backend-id=\"catalog-backend\" /></inbound></policies>");
+        }
+        api.AddOperation("get-product", "GET", "/products/{id}");
+        api.AddOperation("list-products", "GET", "/products")
+            .WithInboundPolicy("<set-header name=\"x-source\" exists-action=\"override\"><value>apim</value></set-header>");
+
+        // A different API's operations must not become dependencies of the catalog policy.
+        apim.AddApi("other-api", "other").WithBackend(backend)
+            .AddOperation("other-operation", "GET", "/other");
+
+        string[]? dependencies = null;
+        apim.ConfigureInfrastructure(infrastructure =>
+        {
+            var policy = infrastructure.GetProvisionableResources()
+                .OfType<ApiManagementApiPolicyProvisioningResource>()
+                .Single(resource => resource.BicepIdentifier == "_apim_apiPolicy_catalog_api");
+            dependencies = policy.DependsOn.Select(resource => resource.BicepIdentifier).ToArray();
+        });
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+        var (_, bicep) = await GetManifestWithBicep(apim.Resource);
+
+        var expected = new List<string> { "catalog_backend" };
+        if (!importOpenApi)
+        {
+            expected.AddRange(new[] { "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE" }
+                .Select(method => $"_apim_proxy{method}Operation_catalog_api"));
+        }
+        expected.Add("get_product");
+        expected.Add("_apim_operationPolicy_list_products");
+        Assert.Equal(expected, dependencies);
+        await Verify(bicep, "bicep").UseParameters(importOpenApi);
     }
 
     [Fact]

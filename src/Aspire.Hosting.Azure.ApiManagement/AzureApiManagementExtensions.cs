@@ -24,6 +24,7 @@ using Azure.Provisioning.CognitiveServices;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.KeyVault;
 using Azure.Provisioning.Network;
+using Azure.Provisioning.Primitives;
 using Azure.Provisioning.Resources;
 using Azure.Provisioning.Roles;
 using Azure.Provisioning.Storage;
@@ -2184,6 +2185,7 @@ public static class AzureApiManagementExtensions
             infrastructure.Add(api);
         }
 
+        List<ProvisionableResource> operationDependencies = [];
         if (apiResource.OpenApiSource is null)
         {
             // APIM's management plane accepts "*" as an operation method, but gateways do not
@@ -2206,12 +2208,13 @@ public static class AzureApiManagementExtensions
                     Required = true,
                 });
                 infrastructure.Add(catchAllOperation);
+                operationDependencies.Add(catchAllOperation);
             }
         }
 
         foreach (var operationResource in apiResource.Operations)
         {
-            AddOperation(infrastructure, operationResource, api, policyFragments, namedValues);
+            operationDependencies.Add(AddOperation(infrastructure, operationResource, api, policyFragments, namedValues));
         }
 
         var policyXml = apiResource.PolicyXml ??
@@ -2229,6 +2232,12 @@ public static class AzureApiManagementExtensions
             Value = policyXml!,
         };
         policy.DependsOn.Add(backend);
+        // The API policy write failed with PreconditionFailed while operation writes overlapped
+        // in the APIM deployment test. Finish this API's operations and their policies first.
+        foreach (var operationDependency in operationDependencies)
+        {
+            policy.DependsOn.Add(operationDependency);
+        }
         foreach (var policyFragment in policyFragments)
         {
             policy.DependsOn.Add(policyFragment);
@@ -2584,7 +2593,7 @@ public static class AzureApiManagementExtensions
         return circuitBreaker;
     }
 
-    private static void AddOperation(
+    private static ProvisionableResource AddOperation(
         AzureResourceInfrastructure infrastructure,
         AzureApiManagementOperationResource operationResource,
         ApiManagementApiProvisioningResource api,
@@ -2619,7 +2628,7 @@ public static class AzureApiManagementExtensions
 
         if (policyXml is null)
         {
-            return;
+            return operation;
         }
 
         var policy = new ApiManagementOperationPolicyProvisioningResource(
@@ -2639,6 +2648,8 @@ public static class AzureApiManagementExtensions
             policy.DependsOn.Add(namedValue);
         }
         infrastructure.Add(policy);
+
+        return policy;
     }
 
     private static IResourceBuilder<AzureApiManagementNamedValueResource> AddNamedValueCore(
