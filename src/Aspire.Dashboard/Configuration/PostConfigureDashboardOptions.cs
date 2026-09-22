@@ -38,8 +38,9 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
 
         if (_configuration[DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] is { Length: > 0 } persistenceMode)
         {
-            if (Enum.TryParse<DashboardPersistenceMode>(persistenceMode, ignoreCase: true, out var parsedPersistenceMode) &&
-                Enum.IsDefined(parsedPersistenceMode))
+            if (!int.TryParse(persistenceMode, out _) &&
+               Enum.TryParse<DashboardPersistenceMode>(persistenceMode, ignoreCase: true, out var parsedPersistenceMode) &&
+               Enum.IsDefined(parsedPersistenceMode))
             {
                 options.Data.PersistenceMode = parsedPersistenceMode;
                 options.Data.PersistenceModeParseError = null;
