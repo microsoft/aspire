@@ -219,6 +219,11 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
     - Changes to `NuGet.config` adding unapproved feeds
     - Changes to `global.json`
     - Using `== null` instead of `is null`
+    - Pinned GitHub Actions SHAs changed in `.github/workflows/**` without a confirmed matching
+      update to the repository/enterprise allowed-actions policy. Flag each changed
+      `owner/repo[/path]@<sha>` reference as blocking, since the workflow fails with
+      "actions not allowed" until an admin adds the new SHA (settings live outside git, so the
+      PR must call out the SHAs to allow). Do not flag unchanged pins.
 13. **Code comment guidance** — apply the `AGENTS.md` Code comments guidance when reviewing changed code. Flag only concrete problems, such as comments that contradict the code, workaround comments without a tracking link, parser/protocol/log parsing that omits the raw shape needed to understand edge cases, or comments around privacy/security-sensitive behavior that fail to explain the opt-in, scope, or WHY. Do not flag subjective missing comments or ask for comments on obvious code.
 14. **Test problems** — flaky patterns per the test review guidelines: thread-unsafe test fakes, log-based readiness checks instead of `WaitForHealthyAsync()`, shared timeout budgets, hardcoded ports, `Directory.SetCurrentDirectory` usage, commented-out tests.
 15. **Missing or insufficient test coverage** — production behavior changed without appropriate coverage for the affected surface, or a bug fix lacks a focused regression test that would have failed before the fix. Be specific about the impacted code path, the regression risk, which behavior is untested, and which coverage type is expected. For deployment changes, explicitly flag PRs that only update generated manifests or snapshots when a deployment E2E test should verify the deployed behavior.

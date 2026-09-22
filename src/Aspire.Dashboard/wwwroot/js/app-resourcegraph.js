@@ -639,17 +639,16 @@ class ResourceGraph {
             event.currentTarget.id);
     };
 
-    openResourceContextMenu = async (id, clientX, clientY, trigger, focusElementId) => {
+    openResourceContextMenu = (id, clientX, clientY, trigger, focusElementId) => {
         this.contextMenuTrigger?.setAttribute("aria-expanded", "false");
         this.contextMenuTrigger = trigger;
         this.contextMenuChanged(true);
 
-        try {
-            await this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', id, clientX, clientY, focusElementId);
-        } catch (error) {
-            this.contextMenuChanged(false);
-            throw error;
-        }
+        return this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', id, clientX, clientY, focusElementId)
+            .catch(error => {
+                this.contextMenuChanged(false);
+                throw error;
+            });
     };
 
     contextMenuChanged = (open) => {

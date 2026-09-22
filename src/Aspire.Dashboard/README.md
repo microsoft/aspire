@@ -73,7 +73,7 @@ Browser token authentication works by asking for a token. The token can either b
 |--------|-------------|
 | `Dashboard:Frontend:AuthMode`<br/>Default: `BrowserToken` | Can be set to `BrowserToken`, `OpenIdConnect`, or `Unsecured`. `Unsecured` should only be used during local development. It's not recommended when hosting the dashboard publicly or in other settings. |
 | `Dashboard:Frontend:BrowserToken`<br/>Default: `null` | Specifies the browser token. If it isn't specified, the dashboard generates one. Tooling that automates login can specify a token and open a browser with the token in the query string. A new token should be generated each time the dashboard is launched. |
-| `Dashboard:Frontend:MaxConsoleLogCount`<br/>Default: `10,000` | An optional limit on the number of console log messages retained in the viewer. When the limit is reached, the oldest messages are removed. |
+| `Dashboard:Frontend:MaxConsoleLogCount`<br/>Default: `100,000` | The maximum number of console log messages retained in the viewer and database. The database limit is shared across resources. When the limit is exceeded, the oldest messages are removed. |
 | `Dashboard:Frontend:PublicUrl`<br/>Default: `null` | Specifies the public URL used to access the dashboard frontend and construct links to it. If a public URL isn't specified, the frontend endpoint is used instead. This setting is important when the dashboard is accessed through a proxy and its endpoint isn't directly reachable. |
 | `Dashboard:Frontend:OpenIdConnect:NameClaimType`<br/>Default: `name` | Specifies one or more claim types used to display the authenticated user's full name. Can be a single claim type or a comma-delimited list. |
 | `Dashboard:Frontend:OpenIdConnect:UsernameClaimType`<br/>Default: `preferred_username` | Specifies one or more claim types used to display the authenticated user's username. Can be a single claim type or a comma-delimited list. |
@@ -157,11 +157,13 @@ The dashboard connects to a resource service to load and display resource inform
 | `Dashboard:ResourceServiceClient:AuthMode`<br/>Default: `null` | Can be set to `ApiKey`, `Certificate`, or `Unsecured`. This value is required if a resource service URL is specified. `Unsecured` should only be used during local development. |
 | `Dashboard:ResourceServiceClient:ApiKey`<br/>Default: `null` | The API key sent to the resource service in the `x-resource-service-api-key` header. This value is required when auth mode is `ApiKey`. |
 | `Dashboard:ResourceServiceClient:ClientCertificate:Source`<br/>Default: `null` | Can be set to `File` or `KeyStore`. This value is required when auth mode is `Certificate`. |
-| `Dashboard:ResourceServiceClient:ClientCertificate:FilePath`<br/>Default: `null` | The certificate file path. This value is required when source is `File`. |
+| `Dashboard:ResourceServiceClient:ClientCertificate:FilePath`<br/>Default: `null` | The PKCS#12/PFX certificate file path. The file should contain the client certificate and its private key. This value is required when source is `File`. |
 | `Dashboard:ResourceServiceClient:ClientCertificate:Password`<br/>Default: `null` | The optional password for the certificate file. |
 | `Dashboard:ResourceServiceClient:ClientCertificate:Subject`<br/>Default: `null` | The certificate subject. This value is required when source is `KeyStore`. |
 | `Dashboard:ResourceServiceClient:ClientCertificate:Store`<br/>Default: `My` | The certificate [`StoreName`](https://learn.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.storename). |
 | `Dashboard:ResourceServiceClient:ClientCertificate:Location`<br/>Default: `CurrentUser` | The certificate [`StoreLocation`](https://learn.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.storelocation). |
+
+File-based client certificate loading uses `X509CertificateLoader.LoadPkcs12FromFile` and accepts only PKCS#12/PFX files, with or without a password. Unlike earlier versions, it does not accept standalone DER/PEM certificates, PKCS#7 containers, Windows serialized certificates, or Authenticode-signed files. To migrate, export the client certificate and its private key as PKCS#12/PFX, or use `KeyStore` to select an installed certificate with an associated private key.
 
 #### Telemetry limits
 
@@ -174,8 +176,8 @@ Telemetry limits have different scopes depending on the telemetry type:
 
 | Option | Description |
 |--------|-------------|
-| `Dashboard:TelemetryLimits:MaxLogCount`<br/>Default: `10,000` | The maximum number of log entries. The limit is shared across resources. |
-| `Dashboard:TelemetryLimits:MaxTraceCount`<br/>Default: `10,000` | The maximum number of traces. The limit is shared across resources. |
+| `Dashboard:TelemetryLimits:MaxLogCount`<br/>Default: `100,000` | The maximum number of log entries. The limit is shared across resources. |
+| `Dashboard:TelemetryLimits:MaxTraceCount`<br/>Default: `100,000` | The maximum number of traces. The limit is shared across resources. |
 | `Dashboard:TelemetryLimits:MaxMetricsCount`<br/>Default: `50,000` | The maximum number of metric data points. The limit is per dimension. |
 | `Dashboard:TelemetryLimits:MaxAttributeCount`<br/>Default: `128` | The maximum number of attributes on telemetry. |
 | `Dashboard:TelemetryLimits:MaxAttributeLength`<br/>Default: `null` | The maximum length of attributes. |

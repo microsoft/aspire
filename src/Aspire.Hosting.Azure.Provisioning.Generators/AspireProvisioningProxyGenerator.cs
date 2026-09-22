@@ -618,7 +618,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         Dictionary<INamedTypeSymbol, string> proxyNames,
         HashSet<INamedTypeSymbol> supportedCollections)
     {
-        if (IsSimpleType(elementType))
+        if (IsSimpleType(elementType) || IsIPAddress(elementType))
         {
             return true;
         }
@@ -749,7 +749,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
 
         if (isProvisionableResource)
         {
-            GenerateAddToMethod(source, proxyName);
+            GenerateAddToMethod(source, proxyName, proxyBaseType is not null && IsProvisionableResource(proxyBaseType));
         }
 
         foreach (var property in GetExportableProperties(
@@ -825,7 +825,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         source.AppendLine();
     }
 
-    private static void GenerateAddToMethod(StringBuilder source, string proxyName)
+    private static void GenerateAddToMethod(StringBuilder source, string proxyName, bool hidesBaseMethod)
     {
         source.AppendLine();
         AppendDocumentationSummary(
@@ -834,7 +834,12 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
             "Adds this provisioning resource to the Azure resource infrastructure.");
         AppendInfrastructureParameterDocumentation(source, "        ");
         AppendMethodExportAttribute(source, proxyName + ".addTo", "AddTo");
-        source.Append("        internal void AddTo(").Append(AzureResourceInfrastructureTypeName)
+        source.Append("        internal ");
+        if (hidesBaseMethod)
+        {
+            source.Append("new ");
+        }
+        source.Append("void AddTo(").Append(AzureResourceInfrastructureTypeName)
             .AppendLine(" infrastructure)");
         source.AppendLine("        {");
         source.AppendLine("            if (infrastructure is null)");
@@ -1241,7 +1246,7 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         var elementTypeName = collection.ElementType
             .WithNullableAnnotation(NullableAnnotation.NotAnnotated)
             .ToDisplayString(s_typeDisplayFormat);
-        var simpleElement = IsSimpleType(collection.ElementType);
+        var simpleElement = IsSimpleType(collection.ElementType) || IsIPAddress(collection.ElementType);
         TryMapType(collection.ElementType, proxyNames, collectionNames, out var mappedElementType);
 
         source.AppendLine("    [global::Aspire.Hosting.AspireExportAttribute]");
@@ -1311,12 +1316,21 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         }
         else
         {
-            source.Append("            var literal = Inner[").Append(indexExpression).AppendLine("].Value;");
-            source.AppendLine("            if (literal is null)");
+            source.Append("            var element = Inner[").Append(indexExpression).AppendLine("];");
+            source.AppendLine("            if (((global::Azure.Provisioning.IBicepValue)element).Kind != global::Azure.Provisioning.BicepValueKind.Literal)");
             source.AppendLine("            {");
             source.AppendLine("                throw new global::System.InvalidOperationException(\"Expression-backed complex collection elements cannot be returned as model proxies.\");");
             source.AppendLine("            }");
             source.AppendLine();
+            source.AppendLine("            var literal = element.Value;");
+            if (!collection.ElementType.IsValueType)
+            {
+                source.AppendLine("            if (literal is null)");
+                source.AppendLine("            {");
+                source.AppendLine("                throw new global::System.InvalidOperationException(\"Null complex collection elements cannot be returned as model proxies.\");");
+                source.AppendLine("            }");
+                source.AppendLine();
+            }
             source.Append("            return ");
             AppendMappedFromUnderlying(source, "literal", mappedElementType);
             source.AppendLine(";");
@@ -1417,10 +1431,11 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     {
         if (simpleElement)
         {
+            // ATS carries IP address literals as strings; Convert<IPAddress> parses them for the SDK.
             source.Append("[global::Aspire.Hosting.AspireUnionAttribute(typeof(")
                 .Append(BicepValueProxyTypeName)
                 .Append("), typeof(")
-                .Append(elementTypeName)
+                .Append(elementTypeName == "global::System.Net.IPAddress" ? "string" : elementTypeName)
                 .Append("))] object value");
         }
         else
@@ -1900,9 +1915,14 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
     {
         AppendUnionAttribute(source, mappedParameter.Type, string.Empty);
         source.Append(mappedParameter.Type.ExposedTypeName);
+        // Older SDKs have nullable-oblivious constructors such as
+        // AgentPoolSnapshot(string bicepIdentifier, string resourceVersion = null).
+        // Preserve that semantic default in the nullable-enabled generated signature.
         if (includeDefaultValue &&
-            IsNullableFactoryProxyParameter(mappedParameter) &&
-            !mappedParameter.Type.IsNullable)
+            !mappedParameter.Type.ExposedTypeName.EndsWith("?", StringComparison.Ordinal) &&
+            (IsNullableFactoryProxyParameter(mappedParameter) ||
+                (mappedParameter.Parameter.Type.IsReferenceType &&
+                    mappedParameter.Parameter is { HasExplicitDefaultValue: true, ExplicitDefaultValue: null })))
         {
             source.Append('?');
         }
@@ -2628,6 +2648,11 @@ internal sealed class AspireProvisioningProxyGenerator : IIncrementalGenerator
         }
 
         return false;
+    }
+
+    private static bool IsIPAddress(ITypeSymbol type)
+    {
+        return type.ToDisplayString(s_typeDisplayFormat) == "global::System.Net.IPAddress";
     }
 
     private static bool IsSimpleType(ITypeSymbol type)

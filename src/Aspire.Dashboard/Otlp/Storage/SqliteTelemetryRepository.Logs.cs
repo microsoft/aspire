@@ -201,7 +201,7 @@ public sealed partial class SqliteTelemetryRepository
         query.Parameters.Add("StartIndex", context.StartIndex);
         query.Parameters.Add("Count", context.Count);
         query.Parameters.Add("LatestItemCount", Math.Max(context.LatestItemCount ?? int.MaxValue, 0));
-        var recordsWithCount = connection.Query<long, LogRecord?, (long TotalItemCount, LogRecord? Record)>(
+        var pageRecords = connection.Query<PageLogRecord>(
             $"""
             WITH
             filtered_logs AS (
@@ -255,14 +255,11 @@ public sealed partial class SqliteTelemetryRepository
             LEFT JOIN paged_logs pl ON 1 = 1
             ORDER BY pl.timestamp_ticks, pl.log_id DESC;
             """,
-            static (totalItemCount, record) => (totalItemCount, record),
-            query.Parameters,
-            splitOn: "LogId").AsList();
+            query.Parameters).AsList();
 
-        var totalCount = checked((int)recordsWithCount[0].TotalItemCount);
-        var records = recordsWithCount
-            .Where(item => item.Record is not null)
-            .Select(item => item.Record!)
+        var totalCount = checked((int)pageRecords[0].TotalItemCount);
+        var records = pageRecords
+            .Where(item => item.LogId is not null)
             .ToList();
 
         return new PagedResult<OtlpLogEntry>
@@ -405,7 +402,7 @@ public sealed partial class SqliteTelemetryRepository
     private OtlpLogEntry? GetLogFromDatabase(long logId)
     {
         using var connection = _database.OpenConnection();
-        var records = connection.Query<LogRecord>("""
+        var records = connection.Query<PageLogRecord>("""
             SELECT
                 l.log_id AS LogId,
                 l.resource_id AS ResourceId,
@@ -671,14 +668,14 @@ public sealed partial class SqliteTelemetryRepository
         return operation is null ? "0 = 1" : $"{expression} {operation} @{parameterName}";
     }
 
-    private List<OtlpLogEntry> MaterializeLogs(SqliteConnection connection, List<LogRecord> records)
+    private List<OtlpLogEntry> MaterializeLogs(SqliteConnection connection, List<PageLogRecord> records)
     {
         if (records.Count == 0)
         {
             return [];
         }
 
-        var logIds = records.Select(record => record.LogId).Distinct().ToArray();
+        var logIds = records.Select(record => record.LogId!.Value).Distinct().ToArray();
         var attributeRecords = new List<OwnedAttributeRecord>();
         foreach (var logIdBatch in logIds.Chunk(MaxLogAttributeReadBatchSize))
         {
@@ -693,22 +690,22 @@ public sealed partial class SqliteTelemetryRepository
         var results = new List<OtlpLogEntry>(records.Count);
         foreach (var record in records)
         {
-            var (_, view, scope) = GetCachedTelemetryMetadata(record.ResourceId, record.ResourceViewId, record.ScopeId, CachedTelemetryType.Logs);
+            var (_, view, scope) = GetCachedTelemetryMetadata(record.ResourceId!.Value, record.ResourceViewId!.Value, record.ScopeId!.Value, CachedTelemetryType.Logs);
 
             results.Add(new OtlpLogEntry(
-                record.LogId,
-                new DateTime(record.TimestampTicks, DateTimeKind.Utc),
-                checked((uint)record.Flags),
-                (LogLevel)record.Severity,
-                record.SeverityNumber,
-                record.Message,
-                record.SpanId,
-                record.TraceId,
-                record.ParentId,
+                record.LogId!.Value,
+                new DateTime(record.TimestampTicks!.Value, DateTimeKind.Utc),
+                checked((uint)record.Flags!.Value),
+                (LogLevel)record.Severity!.Value,
+                record.SeverityNumber!.Value,
+                record.Message!,
+                record.SpanId!,
+                record.TraceId!,
+                record.ParentId!,
                 record.OriginalFormat,
                 view,
                 scope,
-                ToPairs(logAttributes[record.LogId]),
+                ToPairs(logAttributes[record.LogId.Value]),
                 record.EventName));
         }
 
@@ -802,44 +799,45 @@ public sealed partial class SqliteTelemetryRepository
         public long ScopeId { get; }
     }
 
-    private class AttributeRecord
+    internal class AttributeRecord
     {
         public required string AttributeKey { get; init; }
         public required string AttributeValue { get; init; }
     }
 
-    private sealed class OwnedAttributeRecord : AttributeRecord
+    internal sealed class OwnedAttributeRecord : AttributeRecord
     {
         public required long OwnerId { get; init; }
     }
 
-    private sealed class LogRecord
+    internal sealed class PageLogRecord
     {
-        public required long LogId { get; init; }
-        public required long ResourceId { get; init; }
-        public required long ResourceViewId { get; init; }
-        public required long ScopeId { get; init; }
-        public required long TimestampTicks { get; init; }
-        public required long Flags { get; init; }
-        public required int Severity { get; init; }
-        public required int SeverityNumber { get; init; }
-        public required string Message { get; init; }
-        public required string SpanId { get; init; }
-        public required string TraceId { get; init; }
-        public required string ParentId { get; init; }
+        public long TotalItemCount { get; init; }
+        public long? LogId { get; init; }
+        public long? ResourceId { get; init; }
+        public long? ResourceViewId { get; init; }
+        public long? ScopeId { get; init; }
+        public long? TimestampTicks { get; init; }
+        public long? Flags { get; init; }
+        public int? Severity { get; init; }
+        public int? SeverityNumber { get; init; }
+        public string? Message { get; init; }
+        public string? SpanId { get; init; }
+        public string? TraceId { get; init; }
+        public string? ParentId { get; init; }
         public string? OriginalFormat { get; init; }
         public string? EventName { get; init; }
-        public required string ResourceName { get; init; }
+        public string? ResourceName { get; init; }
         public string? InstanceId { get; init; }
-        public required bool UninstrumentedPeer { get; init; }
-        public required bool HasLogs { get; init; }
-        public required bool HasTraces { get; init; }
-        public required bool HasMetrics { get; init; }
-        public required string ScopeName { get; init; }
-        public required string ScopeVersion { get; init; }
+        public bool? UninstrumentedPeer { get; init; }
+        public bool? HasLogs { get; init; }
+        public bool? HasTraces { get; init; }
+        public bool? HasMetrics { get; init; }
+        public string? ScopeName { get; init; }
+        public string? ScopeVersion { get; init; }
     }
 
-    private sealed class LogSummaryRecord
+    internal sealed class LogSummaryRecord
     {
         public required int TotalItemCount { get; init; }
         public required bool IsFull { get; init; }
@@ -859,7 +857,7 @@ public sealed partial class SqliteTelemetryRepository
         public bool? HasGenAI { get; init; }
     }
 
-    private sealed class FieldValueRecord
+    internal sealed class FieldValueRecord
     {
         public string? FieldValue { get; init; }
         public required int ValueCount { get; init; }
