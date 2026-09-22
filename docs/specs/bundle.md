@@ -597,53 +597,6 @@ The CLI automatically detects whether to use bundle or SDK mode based on its exe
 
 No user configuration or flags are required - the experience is identical regardless of installation method.
 
-### Repository CLI version updates
-
-Plain `aspire update` updates existing repository-local CLI version references alongside
-the AppHost's integrations. It also works without an AppHost when a CLI reference exists:
-
-```bash
-aspire update --channel stable --yes --non-interactive
-```
-
-The command searches upward from the selected AppHost's directory (or the working
-directory when there is no AppHost), stopping at the repository's `.git` directory or
-worktree file. For .NET tools it checks `.config/dotnet-tools.json` before
-`dotnet-tools.json` at each level, uses the nearest `Aspire.Cli` entry, and respects
-`isRoot`. For npm it uses the nearest `package.json` containing
-`@microsoft/aspire-cli` in `dependencies`, `devDependencies`, or `optionalDependencies`.
-It does not create manifests, add missing dependencies, or recursively scan other projects.
-
-.NET tool versions come from the selected package channel, not the running executable.
-npm stable/default updates resolve the public registry's `latest` version; other explicit
-channels require their exact CLI version to be published on npm. An unavailable version
-fails before either tool manifest is changed. Exact npm pins and simple `^`/`~` ranges
-are updated while preserving the range prefix; other specifiers are left unchanged with
-a warning.
-
-The repository CLI update step only changes version references in the manifests. It leaves
-npm, pnpm, and Yarn lockfiles unchanged and does not install packages or run lifecycle scripts. The command
-prints guidance to run the repository's package-manager install command to refresh the
-lockfile and use the updated tool. For npm, use `npm install`, or
-`npm install --package-lock-only` to refresh only the lockfile. `npm ci` can fail while
-the manifest and lockfile disagree.
-CLI manifest edits appear in the same confirmation as integration and `aspire.config.json`
-updates. For .NET AppHosts, all these files are changed in the apply phase before the
-AppHost restore; a restore failure does not prevent the tool-manifest edits from being
-saved. Updating only CLI manifests does not trigger an AppHost restore.
-Guest AppHosts retain their existing regenerate-before-save behavior: CLI manifest edits
-are applied alongside saving `aspire.config.json` after successful SDK regeneration,
-so dependency installation does not consume the newly selected CLI version.
-
-When repository CLI references exist, `aspire update` does not offer executable
-self-update. Run `dotnet tool restore` or the repository's package-manager install
-command to use the updated tool. Non-stable .NET tool versions require the selected
-channel's feed to be configured for the manifest's directory. `aspire update --self`
-remains separate and does not edit repository manifests.
-If a guest AppHost's target SDK requires a newer CLI, the command updates the repository
-tool references first and asks the user to restore the tool and re-run before updating
-the AppHost, rather than replacing the running executable.
-
 ### Self-Update Command
 
 `aspire update --self` updates the CLI to the latest version:

@@ -96,11 +96,11 @@ public class RepositoryToolUpdaterTests(ITestOutputHelper outputHelper)
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task FindManifestsAsync_RespectsGitDirectoryAndWorktreeBoundaries(bool gitFile, bool localManifests)
+    public async Task FindManifestsAsync_FindsNearestManifestsRegardlessOfGitDirectoryOrWorktree(bool gitFile, bool localManifests)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        await WriteManifestAsync(workspace.WorkspaceRoot, isNpm: false, "13.1.0");
-        await WriteManifestAsync(workspace.WorkspaceRoot, isNpm: true, "13.1.0");
+        var ancestorDotnet = await WriteManifestAsync(workspace.WorkspaceRoot, isNpm: false, "13.1.0");
+        var ancestorNpm = await WriteManifestAsync(workspace.WorkspaceRoot, isNpm: true, "13.1.0");
         var root = workspace.CreateDirectory("repository");
         var gitPath = Path.Combine(root.FullName, ".git");
         if (gitFile)
@@ -117,6 +117,11 @@ public class RepositoryToolUpdaterTests(ITestOutputHelper outputHelper)
         {
             expectedPaths.Add(await WriteManifestAsync(root, isNpm: false, "13.3.0"));
             expectedPaths.Add(await WriteManifestAsync(root, isNpm: true, "13.3.0"));
+        }
+        else
+        {
+            expectedPaths.Add(ancestorDotnet);
+            expectedPaths.Add(ancestorNpm);
         }
 
         var updater = CreateUpdater(CreateUnusedNpmRunner(), new TestInteractionService());
@@ -150,113 +155,14 @@ public class RepositoryToolUpdaterTests(ITestOutputHelper outputHelper)
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task FindManifestsAsync_RejectsLinksOutsideRepository(bool directoryLink, bool gitFile)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var root = workspace.CreateDirectory("repository");
-        var gitPath = Path.Combine(root.FullName, ".git");
-        if (gitFile)
-        {
-            await File.WriteAllTextAsync(gitPath, "gitdir: ../worktrees/repository");
-        }
-        else
-        {
-            Directory.CreateDirectory(gitPath);
-        }
-        var external = workspace.CreateDirectory("repository-outside");
-        var target = await WriteManifestAsync(external, isNpm: !directoryLink, "13.3.0");
-        var original = await File.ReadAllBytesAsync(target);
-        var link = Path.Combine(root.FullName, directoryLink ? ".config" : "package.json");
-        TestSymlinkHelper.TryCreateSymlink(link, directoryLink ? external.FullName : target, directoryLink);
-        var updater = CreateUpdater(CreateUnusedNpmRunner(), new TestInteractionService());
-
-        var exception = await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
-            updater.FindManifestsAsync(root, CancellationToken.None));
-
-        Assert.Contains(root.FullName, exception.Message);
-        Assert.Equal(original, await File.ReadAllBytesAsync(target));
-    }
-
-    [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task UpdateAsync_RechecksLinkTargetsBeforeApplying(bool directoryLink, bool outsideRepository)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var selectedRepository = workspace.CreateDirectory("repository");
-        selectedRepository.CreateSubdirectory(".git");
-        var originalDirectory = selectedRepository.CreateSubdirectory("original");
-        var replacementDirectory = outsideRepository
-            ? workspace.CreateDirectory("outside")
-            : selectedRepository.CreateSubdirectory("replacement");
-        var originalPath = await WriteManifestAsync(originalDirectory, isNpm: !directoryLink, "13.3.0");
-        var replacementPath = await WriteManifestAsync(replacementDirectory, isNpm: !directoryLink, "13.3.0");
-        var originalBytes = await File.ReadAllBytesAsync(originalPath);
-        var replacementBytes = await File.ReadAllBytesAsync(replacementPath);
-        var link = Path.Combine(selectedRepository.FullName, directoryLink ? ".config" : "package.json");
-        TestSymlinkHelper.TryCreateSymlink(link, directoryLink ? originalDirectory.FullName : originalPath, directoryLink);
-        var otherManifest = await WriteManifestAsync(selectedRepository, isNpm: directoryLink, "13.3.0");
-        var otherBytes = await File.ReadAllBytesAsync(otherManifest);
-        var npm = new FakeNpmRunner
-        {
-            ResolvePackageAsyncCallback = (_, _, _) => Task.FromResult<NpmPackageInfo?>(new() { Version = SemVersion.Parse("13.4.0") })
-        };
-        var interaction = new TestInteractionService
-        {
-            ConfirmCallback = (_, _) =>
-            {
-                if (directoryLink)
-                {
-                    Directory.Delete(link);
-                }
-                else
-                {
-                    File.Delete(link);
-                }
-                TestSymlinkHelper.TryCreateSymlink(link, directoryLink ? replacementDirectory.FullName : replacementPath, directoryLink);
-                return true;
-            }
-        };
-        var updater = CreateUpdater(npm, interaction);
-        var manifests = await updater.FindManifestsAsync(selectedRepository, CancellationToken.None);
-
-        await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
-            updater.UpdateAsync(manifests, CreateChannel("13.4.0"), PromptBinding.CreateDefault(true), CancellationToken.None));
-
-        Assert.Equal(originalBytes, await File.ReadAllBytesAsync(originalPath));
-        Assert.Equal(replacementBytes, await File.ReadAllBytesAsync(replacementPath));
-        Assert.Equal(otherBytes, await File.ReadAllBytesAsync(otherManifest));
-        Assert.Empty(interaction.DisplayedSuccess);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task FindManifestsAsync_RejectsUnresolvableLinks(bool directoryLink)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var root = CreateRepository(workspace);
-        var link = Path.Combine(root.FullName, directoryLink ? ".config" : "package.json");
-        TestSymlinkHelper.TryCreateSymlink(link, link, directoryLink);
-        var updater = CreateUpdater(CreateUnusedNpmRunner(), new TestInteractionService());
-
-        var exception = await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
-            updater.FindManifestsAsync(root, CancellationToken.None));
-
-        Assert.Contains("could not be safely resolved", exception.Message);
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task UpdateAsync_AllowsLinksWithinSymlinkedRepository(bool directoryLink)
+    public async Task UpdateAsync_UpdatesLinkedManifests(bool directoryLink, bool targetInRepository)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.CreateDirectory("repository");
         root.CreateSubdirectory(".git");
-        var targetDirectory = root.CreateSubdirectory("manifests");
+        var targetDirectory = targetInRepository
+            ? root.CreateSubdirectory("manifests")
+            : workspace.CreateDirectory("shared");
         var target = await WriteManifestAsync(targetDirectory, isNpm: !directoryLink, "13.3.0");
         var link = Path.Combine(root.FullName, directoryLink ? ".config" : "package.json");
         TestSymlinkHelper.TryCreateSymlink(link, directoryLink ? targetDirectory.FullName : target, directoryLink);
@@ -274,6 +180,7 @@ public class RepositoryToolUpdaterTests(ITestOutputHelper outputHelper)
         Assert.Equal(RepositoryToolUpdateResult.Applied, result);
         var updated = Assert.Single(await updater.FindManifestsAsync(new DirectoryInfo(alias), CancellationToken.None));
         Assert.Equal("13.4.0", Assert.Single(updated.References).Version);
+        Assert.Equal(await File.ReadAllTextAsync(target), await File.ReadAllTextAsync(updated.File.FullName));
         Assert.NotNull(directoryLink ? new DirectoryInfo(link).LinkTarget : new FileInfo(link).LinkTarget);
     }
 

@@ -244,9 +244,6 @@
   <data name="ToolManifestChangedFormat" xml:space="preserve">
     <value>The tool manifest '{0}' changed during update. Run 'aspire update' again.</value>
   </data>
-  <data name="UnsafeToolManifestPathFormat" xml:space="preserve">
-    <value>Cannot update tool manifest '{0}': its path could not be safely resolved within repository '{1}'. Remove or correct symbolic links that point outside the repository.</value>
-  </data>
   <data name="FailedResolveNpmToolFormat" xml:space="preserve">
     <value>Could not resolve @microsoft/aspire-cli@{0} from npm. Check that npm is available and this version is published. Repository tool manifests were not changed.</value>
   </data>
