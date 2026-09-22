@@ -210,15 +210,86 @@ function parseOccurrenceSection(body) {
     };
 }
 
-function renderOccurrenceHistory(body, newRow, totalOccurrenceCount) {
-    if (!OCCURRENCE_ROW_PATTERN.test(newRow)) {
+function occurrenceRunId(row) {
+    return Number.parseInt(OCCURRENCE_ROW_PATTERN.exec(row)?.groups?.runId, 10);
+}
+
+function collectOpenDuplicateOccurrenceHistory(canonicalIssue, matchingIssues) {
+    const rowsByRunId = new Map();
+    let totalOccurrenceCount = 0;
+
+    for (const issue of matchingIssues) {
+        if (issue.number === canonicalIssue.number || issue.state === 'closed') {
+            continue;
+        }
+
+        const issueBodyLines = normalizedBodyLines(issue.body);
+        if (!issueBodyLines.includes(OCCURRENCES_START) &&
+            !issueBodyLines.includes(OCCURRENCES_END) &&
+            !issueBodyLines.includes('## Occurrences')) {
+            continue;
+        }
+
+        const parsed = parseOccurrenceSection(issue.body);
+        if ((parsed.shownOccurrenceCount !== undefined &&
+            parsed.shownOccurrenceCount !== parsed.rows.length) ||
+            (parsed.totalOccurrenceCount !== undefined &&
+                parsed.totalOccurrenceCount < parsed.rows.length)) {
+            throw new OccurrenceRenderError(
+                `issue #${issue.number} has inconsistent occurrence counts`);
+        }
+
+        totalOccurrenceCount = Math.max(
+            totalOccurrenceCount,
+            parsed.totalOccurrenceCount ?? parsed.rows.length);
+        for (const row of parsed.rows) {
+            const runId = occurrenceRunId(row);
+            const existingRow = rowsByRunId.get(runId);
+            if (existingRow && existingRow !== row) {
+                throw new OccurrenceRenderError(
+                    `issue #${issue.number} conflicts on occurrence ${runId}`);
+            }
+            rowsByRunId.set(runId, row);
+        }
+    }
+
+    return {
+        rows: [...rowsByRunId.values()],
+        totalOccurrenceCount,
+    };
+}
+
+function renderOccurrenceHistory(body, newRows, totalOccurrenceCount) {
+    newRows = Array.isArray(newRows) ? newRows : [newRows];
+    if (!newRows.every(row => OCCURRENCE_ROW_PATTERN.test(row))) {
         throw new OccurrenceRenderError('invalid occurrence row');
     }
 
     const parsed = parseOccurrenceSection(body);
-    const rows = [...parsed.rows, newRow];
-    const total = totalOccurrenceCount ?? rows.length;
-    if (!Number.isInteger(total) || total < rows.length) {
+    const rowsByRunId = new Map();
+    for (const row of parsed.rows) {
+        const runId = occurrenceRunId(row);
+        if (rowsByRunId.has(runId)) {
+            throw new OccurrenceRenderError('occurrence total is smaller than the rendered history');
+        }
+        rowsByRunId.set(runId, row);
+    }
+    for (const row of newRows) {
+        const runId = occurrenceRunId(row);
+        const existingRow = rowsByRunId.get(runId);
+        if (existingRow && existingRow !== row) {
+            throw new OccurrenceRenderError(`conflicting occurrence rows for run ${runId}`);
+        }
+        rowsByRunId.set(runId, row);
+    }
+
+    const rows = [...rowsByRunId.values()]
+        .toSorted((left, right) => occurrenceRunId(left) - occurrenceRunId(right));
+    const total = Math.max(
+        totalOccurrenceCount ?? 0,
+        parsed.totalOccurrenceCount ?? 0,
+        rows.length);
+    if (!Number.isInteger(total)) {
         throw new OccurrenceRenderError('occurrence total is smaller than the rendered history');
     }
 
@@ -599,7 +670,7 @@ async function publishCauseIssue(
         isMatchingIssue: issue => matchesCauseIssue(issue, cause),
         isCanonicalIssue: issue => normalizedBodyLines(issue.body)[0] === marker,
         canReconcileDuplicates: () => canReconcileDuplicates,
-        actionsForCanonical: (issue, { created }) => {
+        actionsForCanonical: (issue, { created, matches }) => {
             if (created) {
                 return [];
             }
@@ -610,6 +681,21 @@ async function publishCauseIssue(
             let updatedBody = issue.body;
             const canonicalIssueUrl =
                 `https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issue.number}`;
+            let duplicateOccurrenceRows = [];
+            let duplicateOccurrenceCount = 0;
+            try {
+                const duplicateHistory = collectOpenDuplicateOccurrenceHistory(issue, matches);
+                duplicateOccurrenceRows = duplicateHistory.rows;
+                duplicateOccurrenceCount = duplicateHistory.totalOccurrenceCount;
+            } catch (error) {
+                if (!(error instanceof OccurrenceRenderError)) {
+                    throw error;
+                }
+                core.warning(
+                    `Issue #${issue.number} has duplicate history that cannot be merged: ${error.message}. Skipping duplicate reconciliation.`);
+                canReconcileDuplicates = false;
+            }
+
             if (isOccurrencePublished(
                 issue.body,
                 storedOccurrences,
@@ -617,22 +703,52 @@ async function publishCauseIssue(
                 canonicalIssueUrl,
                 allowLegacyPublicationEvidence)) {
                 occurrenceAlreadyPublished = true;
-            } else {
+            }
+            const newOccurrenceRows = [...duplicateOccurrenceRows];
+            if (!occurrenceAlreadyPublished) {
+                newOccurrenceRows.push(occurrenceRow(cause, run));
+            }
+            if (newOccurrenceRows.length > 0) {
                 try {
                     updatedBody = renderOccurrenceHistory(
                         issue.body,
-                        occurrenceRow(cause, run),
-                        totalOccurrenceCount);
+                        newOccurrenceRows,
+                        Math.max(totalOccurrenceCount ?? 0, duplicateOccurrenceCount));
                 } catch (error) {
                     if (!(error instanceof OccurrenceRenderError)) {
                         throw error;
                     }
-                    core.warning(
-                        `Issue #${issue.number} has an unsupported occurrence section: ${error.message}. Skipping occurrence update and duplicate reconciliation.`);
-                    canReconcileDuplicates = false;
-                    return cause.type === 'main-repository-breakage' && issue.title !== issueTitle
-                        ? [{ type: 'update', title: issueTitle }, ...labelActions]
-                        : labelActions;
+                    let occurrenceUpdateError = error;
+                    if (duplicateOccurrenceRows.length > 0) {
+                        core.warning(
+                            `Issue #${issue.number} has conflicting duplicate occurrence history: ${error.message}. Skipping duplicate reconciliation.`);
+                        canReconcileDuplicates = false;
+                        if (occurrenceAlreadyPublished) {
+                            updatedBody = issue.body;
+                            occurrenceUpdateError = undefined;
+                        } else {
+                            try {
+                                updatedBody = renderOccurrenceHistory(
+                                    issue.body,
+                                    occurrenceRow(cause, run),
+                                    totalOccurrenceCount);
+                                occurrenceUpdateError = undefined;
+                            } catch (fallbackError) {
+                                if (!(fallbackError instanceof OccurrenceRenderError)) {
+                                    throw fallbackError;
+                                }
+                                occurrenceUpdateError = fallbackError;
+                            }
+                        }
+                    }
+                    if (occurrenceUpdateError) {
+                        core.warning(
+                            `Issue #${issue.number} has an unsupported occurrence section: ${occurrenceUpdateError.message}. Skipping occurrence update and duplicate reconciliation.`);
+                        canReconcileDuplicates = false;
+                        return cause.type === 'main-repository-breakage' && issue.title !== issueTitle
+                            ? [{ type: 'update', title: issueTitle }, ...labelActions]
+                            : labelActions;
+                    }
                 }
             }
             if (cause.type === 'main-repository-breakage') {
