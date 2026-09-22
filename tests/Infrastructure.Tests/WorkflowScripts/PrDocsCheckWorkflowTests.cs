@@ -11,6 +11,43 @@ namespace Infrastructure.Tests;
 public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
 {
     [Fact]
+    public void SourceWorkflowUsesSeparateForkInstallationWithoutChangingUpstreamCheckout()
+    {
+        var workflow = ReadWorkflow("pr-docs-check.md");
+        var createPr = GetSection(workflow, "^  create-pull-request:", "^  jobs:");
+        var headApp = GetSection(createPr, "^    head-github-app:", "^    protected-files:");
+
+        Assert.Contains("target-repo: \"microsoft/aspire.dev\"", createPr, StringComparison.Ordinal);
+        Assert.Contains("head-repo: \"IEvangelist/aspire.dev\"", createPr, StringComparison.Ordinal);
+        Assert.Contains("allowed-repos: [\"microsoft/aspire.dev\", \"IEvangelist/aspire.dev\"]", createPr, StringComparison.Ordinal);
+        Assert.Contains("owner: \"IEvangelist\"", headApp, StringComparison.Ordinal);
+        Assert.Contains("repositories: [\"aspire.dev\"]", headApp, StringComparison.Ordinal);
+        Assert.Contains("secrets.ASPIRE_BOT_APP_ID", headApp, StringComparison.Ordinal);
+        Assert.Contains("secrets.ASPIRE_BOT_PRIVATE_KEY", headApp, StringComparison.Ordinal);
+        Assert.Contains("draft: true", createPr, StringComparison.Ordinal);
+        Assert.Contains("max-turns: 50", workflow, StringComparison.Ordinal);
+
+        var checkout = GetSection(workflow, "^checkout:", "^tools:");
+        Assert.Single(Regex.Matches(checkout, @"(?m)^  - repository: microsoft/aspire\.dev\r?$").Cast<Match>());
+        Assert.Contains("current: true", checkout, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CompiledWorkflowScopesForkTokenToSafeOutputHead()
+    {
+        var workflow = ReadWorkflow("pr-docs-check.lock.yml");
+        var safeOutputs = GetSection(workflow, "^  safe_outputs:", "^  validate-docs-outcome:");
+        var headApp = GetSection(safeOutputs, "^      - name: Generate GitHub App head token", "^      - name:");
+
+        Assert.Contains("id: safe-outputs-head-app-token", headApp, StringComparison.Ordinal);
+        Assert.Contains("owner: IEvangelist", headApp, StringComparison.Ordinal);
+        Assert.Contains("repositories: aspire.dev", headApp, StringComparison.Ordinal);
+        Assert.Contains("${{ steps.safe-outputs-head-app-token.outputs.token }}", safeOutputs, StringComparison.Ordinal);
+        Assert.Contains("\\\"head-repo\\\":\\\"IEvangelist/aspire.dev\\\"", safeOutputs, StringComparison.Ordinal);
+        Assert.Contains("\\\"target-repo\\\":\\\"microsoft/aspire.dev\\\"", safeOutputs, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SourceWorkflowResolvesCanonicalTargetIntoSafeOutputs()
     {
         var workflow = ReadWorkflow("pr-docs-check.md");
@@ -124,7 +161,7 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
                 StringComparison.Ordinal);
             Assert.True(urlValidationIndex >= 0, "The drafted PR URL must be validated.");
             Assert.True(lookupIndex > urlValidationIndex, "The drafted PR URL must be validated before the GitHub lookup.");
-            Assert.Contains("--jq '.base.ref // \"\"'", validationJob, StringComparison.Ordinal);
+            Assert.Contains("jq -r '.base.ref // \"\"'", validationJob, StringComparison.Ordinal);
             Assert.Contains("--created-pr-base", validationJob, StringComparison.Ordinal);
 
             var validationStep = GetSection(
@@ -293,5 +330,12 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
         Assert.False(
             resolveStep.Contains("github.token", StringComparison.Ordinal),
             "The cross-repository lookup must not use the repository-scoped github.token.");
+        Assert.Contains(".head.repo.full_name // \"\"", resolveStep, StringComparison.Ordinal);
+        Assert.Contains("[ \"${ACTUAL_HEAD_REPO,,}\" != \"ievangelist/aspire.dev\" ]", resolveStep, StringComparison.Ordinal);
+        var rejectHeadIndex = resolveStep.IndexOf("Drafted PR head is not IEvangelist/aspire.dev.", StringComparison.Ordinal);
+        var exitIndex = resolveStep.IndexOf("exit 1", rejectHeadIndex, StringComparison.Ordinal);
+        var exportBaseIndex = resolveStep.IndexOf("echo \"base=${ACTUAL_BASE}\"", StringComparison.Ordinal);
+        Assert.True(rejectHeadIndex >= 0 && exitIndex > rejectHeadIndex && exportBaseIndex > exitIndex,
+            "A wrong or missing fork head must fail before exporting the actual base for trusted side effects.");
     }
 }

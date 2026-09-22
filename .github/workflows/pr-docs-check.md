@@ -3,8 +3,9 @@ description: |
   Analyzes merged pull requests for significant user-facing changes. When a
   PR is merged against main or release/* branches, this workflow determines
   whether microsoft/aspire.dev needs a documentation PR. If documentation
-  updates are required, it creates a draft PR with the changes following the
-  doc-writer skill conventions. The draft PR targets the aspire.dev branch
+  updates are required, aspire-repo-bot pushes a documentation branch to
+  IEvangelist/aspire.dev and opens a draft PR on microsoft/aspire.dev following
+  the doc-writer skill conventions. The draft PR targets the aspire.dev branch
   resolved from the source PR's release reasoning (PR milestone, linked-issue
   milestone, then source PR base), using the matching release/* branch when it
   already exists and falling back to aspire.dev main otherwise. It also
@@ -160,9 +161,13 @@ jobs:
             exit 1
           fi
 
-          ACTUAL_BASE="$(gh api \
-            "/repos/microsoft/aspire.dev/pulls/${BASH_REMATCH[1]}" \
-            --jq '.base.ref // ""')"
+          DRAFT_PR="$(gh api "/repos/microsoft/aspire.dev/pulls/${BASH_REMATCH[1]}")"
+          ACTUAL_HEAD_REPO="$(jq -r '.head.repo.full_name // ""' <<< "${DRAFT_PR}")"
+          if [ "${ACTUAL_HEAD_REPO,,}" != "ievangelist/aspire.dev" ]; then
+            echo "ERROR: Drafted PR head is not IEvangelist/aspire.dev." >&2
+            exit 1
+          fi
+          ACTUAL_BASE="$(jq -r '.base.ref // ""' <<< "${DRAFT_PR}")"
           if ! [[ "${ACTUAL_BASE}" =~ ^(main|release/[0-9]+\.[0-9]+(\.[0-9]+)?)$ ]]; then
             echo "ERROR: Drafted PR has an invalid target branch." >&2
             exit 1
@@ -227,6 +232,15 @@ safe-outputs:
       - main
       - release/*
     target-repo: "microsoft/aspire.dev"
+    head-repo: "IEvangelist/aspire.dev"
+    allowed-repos: ["microsoft/aspire.dev", "IEvangelist/aspire.dev"]
+    # Install aspire-repo-bot on the fork with Contents write access first.
+    # Personal and Microsoft installations need separate owner-scoped tokens.
+    head-github-app:
+      client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+      private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+      owner: "IEvangelist"
+      repositories: ["aspire.dev"]
     # Keep protected-file handling explicit in the source of truth. Copilot
     # workflows automatically protect AGENTS.md alongside dependency manifests
     # and repository security config unless this policy is intentionally relaxed.
@@ -308,9 +322,13 @@ safe-outputs:
               exit 1
             fi
 
-            ACTUAL_BASE="$(gh api \
-              "/repos/microsoft/aspire.dev/pulls/${BASH_REMATCH[1]}" \
-              --jq '.base.ref // ""')"
+            DRAFT_PR="$(gh api "/repos/microsoft/aspire.dev/pulls/${BASH_REMATCH[1]}")"
+            ACTUAL_HEAD_REPO="$(jq -r '.head.repo.full_name // ""' <<< "${DRAFT_PR}")"
+            if [ "${ACTUAL_HEAD_REPO,,}" != "ievangelist/aspire.dev" ]; then
+              echo "ERROR: Drafted PR head is not IEvangelist/aspire.dev." >&2
+              exit 1
+            fi
+            ACTUAL_BASE="$(jq -r '.base.ref // ""' <<< "${DRAFT_PR}")"
             if ! [[ "${ACTUAL_BASE}" =~ ^(main|release/[0-9]+\.[0-9]+(\.[0-9]+)?)$ ]]; then
               echo "ERROR: Drafted PR has an invalid target branch." >&2
               exit 1
@@ -1040,6 +1058,8 @@ needed, create a draft PR with the actual documentation changes.
 ## Context
 
 - **Source repository**: `microsoft/aspire`
+- **Documentation base repository**: `microsoft/aspire.dev`
+- **Documentation head repository**: `IEvangelist/aspire.dev` (pushed only by trusted safe outputs)
 - **PR Number**: `${{ github.event.pull_request.number || github.event.inputs.pr_number }}`
 - **PR Title**: `${{ github.event.pull_request.title }}`
 
@@ -1456,7 +1476,9 @@ modify this value.
 
 **Head branch**: the `docs_work_branch` value from
 `.pr-docs-check/target.json`. Set the safe output's `branch` field to that exact
-string. Do not derive, rename, or replace it.
+string. Do not derive, rename, or replace it, or prefix it with an owner.
+The trusted handler pushes it to `IEvangelist/aspire.dev` and opens the PR with
+an owner-qualified head against `microsoft/aspire.dev`. Do not push it yourself.
 
 **Title**: A clear, concise title describing the documentation work
 (the `[docs]` prefix will be added automatically)
