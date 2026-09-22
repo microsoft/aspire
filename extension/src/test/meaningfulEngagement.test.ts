@@ -1,15 +1,21 @@
 import * as assert from 'assert';
 import type { TelemetryReporter } from '@vscode/extension-telemetry';
+import { ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { PassThrough } from 'node:stream';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AppHostDataRepository } from '../data/AppHostDataRepository';
+import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvider';
+import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import type { CandidateAppHostDisplayInfo, AppHostDiscoveryService } from '../utils/appHostDiscovery';
+import { AppHostDiscoveryService, type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import * as appHostTargetVersion from '../utils/appHostTargetVersion';
+import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { MeaningfulEngagementReporter } from '../utils/meaningfulEngagement';
-import { __resetCommonPropertiesForTests, __setReporterForTests, getCommonTelemetryProperties, sendTelemetryEvent, setCommonTelemetryProperties } from '../utils/telemetry';
+import * as cli from '../utils/process/cliProcess';
+import { __resetCommonPropertiesForTests, __setReporterForTests, getCommonTelemetryProperties, setCommonTelemetryProperties, withCommandTelemetry } from '../utils/telemetry';
 
 import { createDeferred, removeDirectorySafely } from './testHelpers';
 
@@ -97,6 +103,7 @@ suite('MeaningfulEngagementReporter', () => {
             status: 'buildable',
         }];
         const discovery = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => candidates,
         } as unknown as AppHostDiscoveryService;
@@ -138,34 +145,70 @@ suite('MeaningfulEngagementReporter', () => {
         }
     });
 
-    test('refreshes shared workspace context after discovery recovers without repeating engagement', async () => {
-        const fixture = createDiscoveryFixture([new Error('Discovery failed')]);
+    test('refreshes shared workspace context after an editor command recovers discovery without repeating engagement', async () => {
+        const folder: vscode.WorkspaceFolder = {
+            uri: vscode.Uri.file(makeTempDir()),
+            name: 'workspace',
+            index: 0,
+        };
+        const candidate: CandidateAppHostDisplayInfo = {
+            path: join(folder.uri.fsPath, 'AppHost.csproj'),
+            language: 'csharp',
+            status: 'buildable',
+        };
+        sinon.stub(vscode.workspace, 'workspaceFolders').value([folder]);
+        sinon.stub(vscode.workspace, 'findFiles').resolves([]);
+        sinon.stub(vscode.window, 'activeTextEditor').value(undefined);
+        sinon.stub(appHostTargetVersion, 'summarizeAppHostTargetVersions').resolves('13.5.0');
+        const subscriptions: vscode.Disposable[] = [];
+        const terminal = new AspireTerminalProvider(subscriptions);
+        const cliPath = sinon.stub(terminal, 'getAspireCliExecutablePath').rejects(new Error('CLI unavailable'));
+        const config = new ConfigInfoProvider(terminal);
+        sinon.stub(config, 'getConfigInfo').resolves(undefined);
+        const spawn = sinon.stub(cli, 'spawnCliProcess').callsFake((_terminal, _command, args, options) => {
+            assert.strictEqual(args?.[0], 'ls');
+            options?.stdoutCallback?.(JSON.stringify([candidate]));
+            options?.exitCallback?.(0);
+            const stdin = new PassThrough();
+            const stdout = new PassThrough();
+            const stderr = new PassThrough();
+            return Object.assign(new ChildProcess(), {
+                stdin, stdout, stderr,
+                stdio: [stdin, stdout, stderr, undefined, undefined] satisfies ChildProcessWithoutNullStreams['stdio'],
+            });
+        });
+        const discovery = new AppHostDiscoveryService(terminal, config);
+        const repository = new AppHostDataRepository(terminal, discovery, config);
+        const reporter = new MeaningfulEngagementReporter(repository);
+        const launchService = sinon.createStubInstance(AppHostLaunchService);
+        launchService.launch.resolves(undefined);
+        const editor = new AspireEditorCommandProvider(discovery, launchService);
         try {
-            await waitFor(() => fixture.repository.hasError);
-            fixture.reporter.recordCommandInvoked();
-            await waitFor(() => fake.events.some(event => event.name === 'aspire/vscode/engagement/active'));
+            await waitFor(() => repository.hasError);
 
-            fixture.setResult(fixture.folder, [fixture.candidate]);
-            fixture.changed.fire(fixture.folder);
-            await waitFor(() => fixture.repository.workspaceAppHostPath === fixture.candidate.path);
+            // CLI recovery does not edit a workspace file or refresh the AppHosts panel.
+            cliPath.resolves('aspire');
+            await withCommandTelemetry('aspire-vscode.runAppHostCommand', () => editor.tryExecuteRunAppHost(true));
             await new Promise<void>(resolve => setImmediate(resolve));
 
-            sendTelemetryEvent('aspire/vscode/command/invoked', {
-                command: 'aspire-vscode.refreshAppHosts',
-                outcome: 'success',
-            });
-
+            assert.strictEqual(launchService.launch.calledOnce, true);
+            assert.strictEqual(launchService.launch.firstCall.args[0], candidate.path);
+            assert.strictEqual(spawn.callCount, 1);
             assert.deepStrictEqual(fake.events.at(-1)?.properties, {
                 apphost_languages: 'csharp',
                 apphost_target_versions: '13.5.0',
                 apphost_present: 'true',
-                command: 'aspire-vscode.refreshAppHosts',
+                command: 'aspire-vscode.runAppHostCommand',
                 outcome: 'success',
             });
             assert.strictEqual(fake.events.filter(event => event.name === 'aspire/vscode/engagement/active').length, 1);
         }
         finally {
-            fixture.dispose();
+            editor.dispose();
+            reporter.dispose();
+            repository.dispose();
+            discovery.dispose();
+            subscriptions.forEach(subscription => subscription.dispose());
         }
     });
 
@@ -244,6 +287,19 @@ suite('MeaningfulEngagementReporter', () => {
             };
             fixture.targetVersions.callsFake(async candidates => candidates.length > 1 ? 'multiple' : '13.5.0');
             fixture.setResult(fixture.folder, [fixture.candidate]);
+            const pendingSecondFolder = createDeferred<CandidateAppHostDisplayInfo[]>();
+            fixture.setResult(secondFolder, pendingSecondFolder.promise);
+            fixture.changed.fire(secondFolder);
+            await waitFor(() => getCommonTelemetryProperties().apphost_present === 'true');
+            assert.strictEqual(fixture.repository.workspaceAppHostDiscovery.status, 'pending');
+            assert.deepStrictEqual(getCommonTelemetryProperties(), {
+                apphost_present: 'true',
+                apphost_languages: 'unknown',
+                apphost_target_versions: 'unknown',
+            });
+
+            pendingSecondFolder.resolve([]);
+            await waitFor(() => fixture.repository.isWorkspaceAppHostDiscoveryComplete);
             fixture.setResult(secondFolder, new Error('Second folder failed'));
             fixture.changed.fire(secondFolder);
             await waitFor(() => fixture.repository.workspaceAppHostDiscovery.status === 'error');
@@ -348,6 +404,7 @@ suite('MeaningfulEngagementReporter', () => {
             return result;
         });
         const discovery = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: changed.event,
             discover,
         } as unknown as AppHostDiscoveryService;

@@ -5,7 +5,7 @@ import { spawnCliProcess, terminateCliProcess } from '../utils/process/cliProces
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostDescribeMayNotBeSupported, appHostDiscoveryProgress, appHostPathMustBeNonEmptyAbsolute, aspireCliDescribeNotSupported, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
-import { AppHostCandidate, AppHostDiscoveryService, CandidateAppHostDisplayInfo, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
+import { AppHostCandidate, AppHostDiscoveryService, type AppHostDiscoveryStateChange, CandidateAppHostDisplayInfo, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
 import { nonInteractiveCliEnvironment } from '../utils/environment';
@@ -126,6 +126,8 @@ export class AppHostDataRepository {
     private _workspaceAppHostPath: string | undefined;
     private _workspaceAppHostCandidatePaths: string[] = [];
     private readonly _workspaceFolderAppHostCandidates = new Map<string, CandidateAppHostDisplayInfo[]>();
+    private readonly _workspaceFolderDiscoveryStates = new Map<string, AppHostDiscoveryStateChange>();
+    private _workspaceDiscoveryDescriptors: Map<string, FileSystemEntryDescriptor> | undefined;
     private _workspaceAppHostDescription: string | undefined;
     private _workspaceAppHostDiscoveryComplete = false;
     private _workspaceAppHostDiscovery: WorkspaceAppHostDiscoverySnapshot = { status: 'pending', candidates: [] };
@@ -172,14 +174,25 @@ export class AppHostDataRepository {
         this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
         this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider, this._configInfoProvider);
         this._ownsAppHostDiscoveryService = appHostDiscoveryService === undefined;
-        this._appHostDiscoveryChangeDisposable = this._appHostDiscoveryService.onDidChangeCandidates(workspaceFolder => {
-            const workspaceFolders = vscode.workspace.workspaceFolders;
-            if (workspaceFolders?.some(currentWorkspaceFolder =>
-                currentWorkspaceFolder.uri.toString() === workspaceFolder.uri.toString())) {
-                this._markWorkspaceAppHostDiscoveryPending();
-                this._fetchWorkspaceAppHost();
-            }
-        });
+        this._appHostDiscoveryChangeDisposable = vscode.Disposable.from(
+            this._appHostDiscoveryService.onDidChangeCandidates(workspaceFolder => {
+                const workspaceFolders = vscode.workspace.workspaceFolders;
+                if (workspaceFolders?.some(currentWorkspaceFolder =>
+                    currentWorkspaceFolder.uri.toString() === workspaceFolder.uri.toString())) {
+                    this._markWorkspaceAppHostDiscoveryPending();
+                    this._fetchWorkspaceAppHost();
+                }
+            }),
+            this._appHostDiscoveryService.onDidChangeDiscoveryState(change => {
+                if (this._disposed || this._workspaceAppHostDiscoveryRefreshQueued
+                    || !vscode.workspace.workspaceFolders?.some(folder =>
+                        folder.uri.toString() === change.workspaceFolder.uri.toString())) {
+                    return;
+                }
+
+                this._workspaceFolderDiscoveryStates.set(change.workspaceFolder.uri.toString(), change);
+                this._publishWorkspaceAppHostDiscovery();
+            }));
         this._workspaceFoldersChangeDisposable = vscode.workspace.onDidChangeWorkspaceFolders(event => {
             this._removeWorkspaceFolderCandidates(event.removed);
             for (const workspaceFolder of event.removed) {
@@ -582,6 +595,7 @@ export class AppHostDataRepository {
         this._psPoller.dispose();
         this._onDidChangeData.dispose();
         this._onDidChangeWorkspaceAppHostDiscovery.dispose();
+        this._workspaceFolderDiscoveryStates.clear();
         if (this._ownsAppHostDiscoveryService) {
             this._appHostDiscoveryService.dispose();
         }
@@ -627,6 +641,7 @@ export class AppHostDataRepository {
             this._workspaceAppHostDiscoveryComplete = true;
             this._clearWorkspaceAppHostDiscovery();
             this._clearErrors();
+            this._workspaceFolderDiscoveryStates.clear();
             this._setWorkspaceAppHostDiscovery('success', []);
             this._syncPolling();
             this._updateWorkspaceContext({ clearLoading: true });
@@ -643,6 +658,11 @@ export class AppHostDataRepository {
             return;
         }
 
+        this._workspaceFolderDiscoveryStates.clear();
+        // Partial telemetry snapshots and the final UI aggregate describe the same batch.
+        // Share filesystem identity lookups until that batch completes or is cancelled.
+        const descriptors = new Map<string, FileSystemEntryDescriptor>();
+        this._workspaceDiscoveryDescriptors = descriptors;
         const discoveryVersion = ++this._workspaceAppHostDiscoveryVersion;
         const workspaceFolderSnapshot = [...workspaceFolders];
         const workspaceFolderCandidates: WorkspaceFolderAppHostCandidates[] = workspaceFolderSnapshot.map(workspaceFolder => ({
@@ -674,7 +694,7 @@ export class AppHostDataRepository {
                 return;
             }
 
-            const result = combineWorkspaceAppHostCandidates(workspaceFolderCandidates);
+            const result = combineWorkspaceAppHostCandidates(workspaceFolderCandidates, descriptors);
             const buildableAppHostCandidates = result.appHostCandidates.filter(isBuildableAppHostCandidate);
             if (buildableAppHostCandidates.length > 0) {
                 this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
@@ -714,6 +734,8 @@ export class AppHostDataRepository {
                 while (nextWorkspaceFolderIndex < workspaceFolderCandidates.length) {
                     const workspaceFolderIndex = nextWorkspaceFolderIndex++;
                     const folderCandidates = workspaceFolderCandidates[workspaceFolderIndex];
+                    const folderKey = folderCandidates.workspaceFolder.uri.toString();
+                    const previousState = this._workspaceFolderDiscoveryStates.get(folderKey);
                     try {
                         folderCandidates.candidates = await this._appHostDiscoveryService.discover(
                             folderCandidates.workspaceFolder,
@@ -726,6 +748,19 @@ export class AppHostDataRepository {
                             workspaceFolder: folderCandidates.workspaceFolder,
                             error,
                         };
+                    }
+                    // Cache hits have no state transition to publish. For fresh scans, the
+                    // shared service may already have published a newer result (or a replacement
+                    // scan), so the awaited result must not overwrite that state.
+                    if (!cancellationSource.token.isCancellationRequested
+                        && this._isCurrentWorkspaceDiscovery(discoveryVersion, workspaceFolderSnapshot)
+                        && this._workspaceFolderDiscoveryStates.get(folderKey) === previousState) {
+                        this._workspaceFolderDiscoveryStates.set(folderKey, {
+                            workspaceFolder: folderCandidates.workspaceFolder,
+                            status: errors[workspaceFolderIndex] ? 'error' : 'success',
+                            candidates: folderCandidates.candidates,
+                        });
+                        this._publishWorkspaceAppHostDiscovery();
                     }
                 }
             };
@@ -743,8 +778,7 @@ export class AppHostDataRepository {
             }
 
             this._setWorkspaceFolderAppHostCandidates(workspaceFolderCandidates);
-            const result = combineWorkspaceAppHostCandidates(workspaceFolderCandidates);
-            this._setWorkspaceAppHostDiscovery(errors.length > 0 ? 'error' : 'success', result.appHostCandidates);
+            const result = combineWorkspaceAppHostCandidates(workspaceFolderCandidates, descriptors);
             const buildableAppHostCandidates = result.appHostCandidates.filter(isBuildableAppHostCandidate);
             if (errors.length > 0 && buildableAppHostCandidates.length === 0) {
                 throw new Error(formatWorkspaceFolderDiscoveryError(errors[0]));
@@ -783,6 +817,7 @@ export class AppHostDataRepository {
             }
 
             this._workspaceAppHostDiscoveryCancellationSource = undefined;
+            this._workspaceDiscoveryDescriptors = undefined;
             this._workspaceAppHostDiscoveryInProgress = false;
             this._hideWorkspaceAppHostDiscoveryProgress();
             if (this._workspaceAppHostDiscoveryRefreshQueued && !this._disposed) {
@@ -802,6 +837,7 @@ export class AppHostDataRepository {
         this._workspaceAppHostDiscoveryCancellationSource?.cancel();
         this._workspaceAppHostDiscoveryCancellationSource?.dispose();
         this._workspaceAppHostDiscoveryCancellationSource = undefined;
+        this._workspaceDiscoveryDescriptors = undefined;
         this._workspaceAppHostDiscoveryInProgress = false;
         this._hideWorkspaceAppHostDiscoveryProgress();
         return forceRefresh;
@@ -856,7 +892,8 @@ export class AppHostDataRepository {
     private _setWorkspaceAppHostDiscovery(
         status: WorkspaceAppHostDiscoverySnapshot['status'],
         candidates: readonly CandidateAppHostDisplayInfo[]): void {
-        if (this._disposed || (status === 'pending' && this._workspaceAppHostDiscovery.status === 'pending')) {
+        if (this._disposed || (status === 'pending' && this._workspaceAppHostDiscovery.status === 'pending'
+            && candidates.length === 0 && this._workspaceAppHostDiscovery.candidates.length === 0)) {
             return;
         }
 
@@ -867,6 +904,19 @@ export class AppHostDataRepository {
             candidates: candidates.map(candidate => ({ ...candidate })),
         };
         this._onDidChangeWorkspaceAppHostDiscovery.fire(this._workspaceAppHostDiscovery);
+    }
+
+    private _publishWorkspaceAppHostDiscovery(): void {
+        const folders = vscode.workspace.workspaceFolders ?? [];
+        const states = folders.map(folder => this._workspaceFolderDiscoveryStates.get(folder.uri.toString()));
+        const status = states.some(state => !state || state.status === 'pending')
+            ? 'pending'
+            : states.some(state => state?.status === 'error') ? 'error' : 'success';
+        const combined = combineWorkspaceAppHostCandidates(folders.map((workspaceFolder, index) => ({
+            workspaceFolder,
+            candidates: [...(states[index]?.candidates ?? [])],
+        })), this._workspaceDiscoveryDescriptors ?? new Map());
+        this._setWorkspaceAppHostDiscovery(status, combined.appHostCandidates);
     }
 
     private _handleWorkspaceAppHostCandidates(appHostCandidates: readonly AppHostCandidate[], selectedAppHostPath: string | null): void {
@@ -983,7 +1033,7 @@ export class AppHostDataRepository {
             workspaceFolder,
             candidates: this._workspaceFolderAppHostCandidates.get(workspaceFolder.uri.toString()) ?? [],
         }));
-        const result = combineWorkspaceAppHostCandidates(workspaceFolderCandidates);
+        const result = combineWorkspaceAppHostCandidates(workspaceFolderCandidates, new Map());
         this._setWorkspaceAppHostCandidatePaths(result.appHostCandidates.filter(isBuildableAppHostCandidate));
 
         const selectedAppHostPath = this._workspaceAppHostPath;
@@ -1638,12 +1688,13 @@ function formatWorkspaceFolderDiscoveryError(error: WorkspaceFolderDiscoveryErro
     return `${error.workspaceFolder.uri.fsPath}: ${String(error.error)}`;
 }
 
-function combineWorkspaceAppHostCandidates(workspaceFolderCandidates: readonly WorkspaceFolderAppHostCandidates[]): CombinedWorkspaceAppHostCandidates {
+function combineWorkspaceAppHostCandidates(
+    workspaceFolderCandidates: readonly WorkspaceFolderAppHostCandidates[],
+    descriptorByResolvedPath: Map<string, FileSystemEntryDescriptor>): CombinedWorkspaceAppHostCandidates {
     const appHostCandidates: Array<{ candidate: AppHostCandidate; descriptor: FileSystemEntryDescriptor; workspaceFolderDepth: number }> = [];
     const appHostCandidateIndex = new FileSystemEntryDescriptorIndex();
     const explicitlySelectedPaths: string[] = [];
     const explicitlySelectedPathIndex = new FileSystemEntryDescriptorIndex();
-    const descriptorByResolvedPath = new Map<string, FileSystemEntryDescriptor>();
     const getDescriptor = (candidatePath: string): FileSystemEntryDescriptor => {
         const resolvedPath = path.resolve(candidatePath);
         let descriptor = descriptorByResolvedPath.get(resolvedPath);

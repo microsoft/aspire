@@ -179,6 +179,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable',
                 selected: workspaceFolder.name === selectedFolder.name,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -255,6 +256,7 @@ suite('AppHostDataRepository', () => {
             });
         // A discovery that never resolves keeps `_workspaceAppHostDiscoveryComplete` false.
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: new vscode.EventEmitter<vscode.WorkspaceFolder>().event,
             discover: () => new Promise<CandidateAppHostDisplayInfo[]>(() => { }),
             dispose: () => { },
@@ -298,6 +300,7 @@ suite('AppHostDataRepository', () => {
         const appHostPath = '/configured/AppHost.csproj';
         let discoveryCount = 0;
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             discover: () => ++discoveryCount === 1
                 ? Promise.resolve([{
@@ -381,6 +384,7 @@ suite('AppHostDataRepository', () => {
         const discoveryService = {
             discover,
             forgetWorkspaceFolder: () => { },
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -423,6 +427,7 @@ suite('AppHostDataRepository', () => {
         const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
         const discover = sinon.stub().callsFake(() => new Promise<CandidateAppHostDisplayInfo[]>(() => { }));
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             discover,
             dispose: () => { },
@@ -541,6 +546,7 @@ suite('AppHostDataRepository', () => {
         }]);
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -593,6 +599,7 @@ suite('AppHostDataRepository', () => {
         }]);
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -641,6 +648,7 @@ suite('AppHostDataRepository', () => {
         }]);
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -682,6 +690,7 @@ suite('AppHostDataRepository', () => {
         }]);
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -756,6 +765,7 @@ suite('AppHostDataRepository', () => {
             }]);
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -796,6 +806,7 @@ suite('AppHostDataRepository', () => {
                 : siblingDiscovery.promise);
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -848,6 +859,7 @@ suite('AppHostDataRepository', () => {
                 : Promise.reject(new Error('root-b discovery failed')));
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -888,6 +900,7 @@ suite('AppHostDataRepository', () => {
         });
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -946,6 +959,7 @@ suite('AppHostDataRepository', () => {
             const discoveryService = {
                 discover,
                 forgetWorkspaceFolder,
+                onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
                 onDidChangeCandidates: candidateChangeEmitter.event,
                 dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -993,6 +1007,7 @@ suite('AppHostDataRepository', () => {
         }]);
         const discoveryService = {
             discover,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -1030,6 +1045,7 @@ suite('AppHostDataRepository', () => {
         const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
         const discoveryService = {
             discover: () => new Promise<CandidateAppHostDisplayInfo[]>(() => { }),
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: candidateChangeEmitter.event,
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -2019,6 +2035,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -2086,6 +2103,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -2840,6 +2858,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -2904,6 +2923,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -2972,6 +2992,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -3057,6 +3078,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -3126,6 +3148,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -3193,6 +3216,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -3247,6 +3271,7 @@ suite('AppHostDataRepository', () => {
                 status: 'buildable' as const,
                 selected: true,
             }],
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             dispose: () => { },
         } as unknown as AppHostDiscoveryService;
@@ -3884,6 +3909,7 @@ suite('AppHostDataRepository', () => {
         ];
         const discoveryChanges = new vscode.EventEmitter<vscode.WorkspaceFolder>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: discoveryChanges.event,
             discover: async () => candidates,
             dispose: () => { },
@@ -3943,6 +3969,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => discovery.promise,
             dispose: () => { },
@@ -4001,6 +4028,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => discovery.promise,
             dispose: () => { },
@@ -4080,6 +4108,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => discovery.promise,
             dispose: () => { },
@@ -4188,6 +4217,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => discovery.promise,
             dispose: () => { },
@@ -4228,6 +4258,7 @@ suite('AppHostDataRepository', () => {
         // the condition under which the old gate refused to clear loading for open-tab-only hosts.
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => discovery.promise,
             dispose: () => { },
@@ -4303,6 +4334,7 @@ suite('AppHostDataRepository', () => {
         // the workspace view must clear its "Searching…" loading state the moment discovery resolves —
         // not linger until a ps change that never arrives (the toggle-to-global-and-back workaround).
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => [
                 {
@@ -4346,6 +4378,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => discovery.promise,
             dispose: () => { },
@@ -4393,6 +4426,7 @@ suite('AppHostDataRepository', () => {
         discoverStub.onFirstCall().returns(firstDiscovery.promise);
         discoverStub.onSecondCall().returns(secondDiscovery.promise);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: discoveryChanges.event,
             discover: discoverStub,
             dispose: () => { },
@@ -4450,6 +4484,7 @@ suite('AppHostDataRepository', () => {
             return secondDiscovery.promise;
         });
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: discoveryChanges.event,
             discover: discoverStub,
             dispose: () => { },
@@ -4502,6 +4537,7 @@ suite('AppHostDataRepository', () => {
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         let incrementalCandidateCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: (_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onIncrementalCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
                 incrementalCandidateCallback = onIncrementalCandidate;
@@ -4554,6 +4590,7 @@ suite('AppHostDataRepository', () => {
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         let incrementalCandidateCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: (_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onIncrementalCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
                 incrementalCandidateCallback = onIncrementalCandidate;
@@ -4607,6 +4644,7 @@ suite('AppHostDataRepository', () => {
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         let incrementalCandidateCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: (_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onIncrementalCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
                 incrementalCandidateCallback = onIncrementalCandidate;
@@ -4653,6 +4691,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: () => discovery.promise,
             dispose: () => { },
@@ -4700,6 +4739,7 @@ suite('AppHostDataRepository', () => {
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         let incrementalCandidateCallback: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: (_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, _cancellationToken?: vscode.CancellationToken, onIncrementalCandidate?: (candidate: CandidateAppHostDisplayInfo) => void) => {
                 incrementalCandidateCallback = onIncrementalCandidate;
@@ -4769,6 +4809,7 @@ suite('AppHostDataRepository', () => {
         });
         discoverStub.onSecondCall().returns(secondDiscovery.promise);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: (listener: (workspaceFolder: vscode.WorkspaceFolder) => void) => {
                 candidatesChanged = listener;
                 return { dispose: () => { } };
@@ -4817,6 +4858,7 @@ suite('AppHostDataRepository', () => {
             status: 'buildable',
         }]);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: discoverStub,
             dispose: () => { },
@@ -4869,6 +4911,7 @@ suite('AppHostDataRepository', () => {
         };
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => {
                 throw new Error('aspire ls failed');
@@ -4903,6 +4946,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discoverStub = sinon.stub().resolves([]);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: discoverStub,
             dispose: () => { },
@@ -4957,6 +5001,7 @@ suite('AppHostDataRepository', () => {
         const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
         const discoverStub = sinon.stub().returns(discovery.promise);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: discoverStub,
             dispose: () => { },
@@ -5023,6 +5068,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const discoverStub = sinon.stub().resolves([]);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: discoverStub,
             dispose: () => { },
@@ -5067,6 +5113,7 @@ suite('AppHostDataRepository', () => {
         discoverStub.onFirstCall().returns(firstDiscovery.promise);
         discoverStub.onSecondCall().returns(secondDiscovery.promise);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: discoverStub,
             dispose: () => { },
@@ -5187,6 +5234,7 @@ suite('AppHostDataRepository', () => {
         const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => [
                 {
@@ -5235,6 +5283,7 @@ suite('AppHostDataRepository', () => {
         }]);
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: () => ({ dispose: () => { } }),
             discover: async () => {
                 throw new Error('aspire ls failed');
@@ -5373,6 +5422,7 @@ suite('AppHostDataRepository', () => {
         }]);
         const discoveryEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
         const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: discoveryEmitter.event,
             discover: () => new Promise<CandidateAppHostDisplayInfo[]>(() => { }),
             dispose: () => { },
@@ -6424,6 +6474,7 @@ suite('AppHostDataRepository global polling', () => {
         });
         const discoveryService = {
             discover: discoverStub,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: discoveryChanges.event,
             dispose: () => discoveryChanges.dispose(),
         } as unknown as AppHostDiscoveryService;
@@ -6682,6 +6733,7 @@ suite('AppHostDataRepository global polling', () => {
         }];
         const discoveryService = {
             discover: async () => candidates,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: discoveryChanges.event,
             dispose: () => discoveryChanges.dispose(),
         } as unknown as AppHostDiscoveryService;
@@ -6743,6 +6795,7 @@ suite('AppHostDataRepository global polling', () => {
         }];
         const discoveryService = {
             discover: async () => candidates,
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
             onDidChangeCandidates: discoveryChanges.event,
             dispose: () => discoveryChanges.dispose(),
         } as unknown as AppHostDiscoveryService;
