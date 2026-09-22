@@ -48,6 +48,11 @@ files. A failed handoff terminates and waits for the exact newly launched child
 on either platform; it does not terminate an already-running companion.
 Stop waits for that exact tray process lifetime to exit.
 
+On Windows, the helper uses the same-user desktop shell as the GUI's parent
+instead of inheriting CLI or terminal job lifetimes. System job membership alone
+does not prevent startup. A running desktop shell owned by the invoking user is
+required; starting the tray with **Run as different user** is not supported.
+
 There is one companion per OS user across CLI installations. Starting from a
 different CLI restores an already-running companion; it does not hot-swap its
 backend or bundle. Stop and start again to adopt a new installation/version.

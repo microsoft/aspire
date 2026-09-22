@@ -4,6 +4,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Security.Principal;
 using Aspire.Shared;
 using Microsoft.Win32.SafeHandles;
 
@@ -109,59 +110,129 @@ internal static partial class WindowsTrayLauncher
         return probe is null;
     }
 
-    private static unsafe SafeProcessHandle LaunchDetached(string executable, string commandLine, string workingDirectory)
+    internal static unsafe SafeProcessHandle LaunchDetached(string executable, string commandLine, string workingDirectory)
     {
         const uint detachedProcess = 0x00000008;
         const uint breakawayFromJob = 0x01000000;
         const uint createSuspended = 0x00000004;
-        var startup = new StartupInfo { Size = sizeof(StartupInfo) };
-        var command = (commandLine + '\0').ToCharArray();
-        fixed (char* commandPointer = command)
+        const uint extendedStartupInfoPresent = 0x00080000;
+        const nuint parentProcessAttribute = 0x00020000;
+        using var shell = OpenDesktopShellProcess();
+        nuint attributeSize = 0;
+        InitializeProcThreadAttributeList(0, 1, 0, ref attributeSize);
+        if (attributeSize == 0)
         {
-            // Process.Start can inherit stdio and the caller's kill-on-close job. Do not
-            // inherit any handles, console, or job lifetime; a restrictive job must fail
-            // clearly rather than produce a GUI that disappears when the CLI exits.
-            // BREAKAWAY is ignored when the parent has no job.
-            // https://learn.microsoft.com/windows/win32/procthread/process-creation-flags
-            if (!CreateProcess(executable, commandPointer, 0, 0, false,
-                detachedProcess | breakawayFromJob | createSuspended, 0, workingDirectory, ref startup, out var process))
+            throw new Win32Exception(Marshal.GetLastPInvokeError(), "Windows could not size the tray process attributes.");
+        }
+        var attributes = (nint)NativeMemory.Alloc(attributeSize);
+        var initialized = false;
+        try
+        {
+            if (!InitializeProcThreadAttributeList(attributes, 1, 0, ref attributeSize))
+            {
+                throw new Win32Exception(Marshal.GetLastPInvokeError(), "Windows could not initialize the tray process attributes.");
+            }
+            initialized = true;
+            // Inherit job membership from the same-user desktop shell, not the CLI or
+            // terminal. BREAKAWAY alone can leave a child in an outer terminal job, while
+            // IsProcessInJob also matches harmless system jobs that survive the CLI.
+            // Keep CreateProcess (rather than ShellExecute) for the exact child handle,
+            // invoking environment, and bounded readiness/cleanup protocol.
+            // https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute
+            var shellHandle = shell.DangerousGetHandle();
+            if (!UpdateProcThreadAttribute(attributes, 0, parentProcessAttribute, &shellHandle, (nuint)sizeof(nint), 0, 0))
+            {
+                throw new Win32Exception(Marshal.GetLastPInvokeError(), "Windows could not select the desktop shell as the tray parent.");
+            }
+            var startup = new StartupInfoEx
+            {
+                StartupInfo = new StartupInfo { Size = sizeof(StartupInfoEx) },
+                Attributes = attributes
+            };
+            var command = (commandLine + '\0').ToCharArray();
+            fixed (char* commandPointer = command)
+            {
+                if (!CreateProcess(executable, commandPointer, 0, 0, false,
+                    detachedProcess | breakawayFromJob | createSuspended | extendedStartupInfoPresent,
+                    0, workingDirectory, ref startup, out var process))
+                {
+                    var error = Marshal.GetLastPInvokeError();
+                    throw new Win32Exception(error,
+                        $"Windows could not launch an independent tray process (native error {error}).");
+                }
+                using var thread = new SafeWaitHandle(process.Thread, ownsHandle: true);
+                var child = new SafeProcessHandle(process.Process, ownsHandle: true);
+                try
+                {
+                    if (ResumeThread(thread) == uint.MaxValue)
+                    {
+                        throw new Win32Exception(Marshal.GetLastPInvokeError(), "Windows could not resume the tray process.");
+                    }
+
+                    return child;
+                }
+                catch
+                {
+                    using (child)
+                    {
+                        TerminateAndWait(child);
+                    }
+                    throw;
+                }
+            }
+        }
+        finally
+        {
+            if (initialized)
+            {
+                DeleteProcThreadAttributeList(attributes);
+            }
+            NativeMemory.Free((void*)attributes);
+        }
+    }
+
+    private static SafeProcessHandle OpenDesktopShellProcess()
+    {
+        var window = GetShellWindow();
+        if (window == 0 || GetWindowThreadProcessId(window, out var processId) == 0)
+        {
+            throw new InvalidOperationException("Starting the Windows tray requires a running desktop shell.");
+        }
+
+        // Selecting a parent also selects its token. Do not switch users when the CLI
+        // was launched with Run as different user on another user's desktop.
+        const uint createProcess = 0x0080;
+        const uint queryLimitedInformation = 0x1000;
+        var shell = OpenProcess(createProcess | queryLimitedInformation, false, processId);
+        try
+        {
+            if (shell.IsInvalid)
+            {
+                throw new Win32Exception(Marshal.GetLastPInvokeError(), "Windows could not open the desktop shell for tray startup.");
+            }
+            if (!OpenProcessToken(shell, 0x0008, out var token))
             {
                 var error = Marshal.GetLastPInvokeError();
-                throw new Win32Exception(error,
-                    $"Windows could not launch an independent tray process (native error {error}). A parent job may prohibit detached applications.");
+                token.Dispose();
+                throw new Win32Exception(error, "Windows could not verify the desktop shell's user.");
             }
-            using var thread = new SafeWaitHandle(process.Thread, ownsHandle: true);
-            var child = new SafeProcessHandle(process.Process, ownsHandle: true);
-            try
+            using (token)
+            using (var shellIdentity = new WindowsIdentity(token.DangerousGetHandle()))
+            using (var currentIdentity = WindowsIdentity.GetCurrent())
             {
-                // Nested jobs can allow breaking away from only part of the hierarchy.
-                // Verify independence before running any GUI code or starting its watcher.
-                // https://learn.microsoft.com/windows/win32/procthread/nested-jobs
-                if (!IsProcessInJob(child, 0, out var inJob))
+                if (shellIdentity.User is null || currentIdentity.User is null ||
+                    !shellIdentity.User.Equals(currentIdentity.User))
                 {
-                    throw new Win32Exception(Marshal.GetLastPInvokeError(), "Windows could not verify the tray's independent lifetime.");
+                    throw new InvalidOperationException("The Windows tray must be started by the desktop shell's user.");
                 }
-                if (inJob)
-                {
-                    throw new InvalidOperationException("A parent Windows job prevents the tray from running independently of the CLI.");
-                }
-                if (ResumeThread(thread) == uint.MaxValue)
-                {
-                    throw new Win32Exception(Marshal.GetLastPInvokeError(), "Windows could not resume the tray process.");
-                }
+            }
 
-                return child;
-            }
-            catch
-            {
-                // Only this exact, still-suspended child is terminated. It has not started
-                // discovery; never terminate a running tray or any AppHost during stop.
-                using (child)
-                {
-                    TerminateAndWait(child);
-                }
-                throw;
-            }
+            return shell;
+        }
+        catch
+        {
+            shell.Dispose();
+            throw;
         }
     }
 
@@ -187,9 +258,29 @@ internal static partial class WindowsTrayLauncher
         throw new Win32Exception(Marshal.GetLastPInvokeError(), "Windows could not wait for the failed tray launch to exit.");
     }
 
+    [LibraryImport("user32.dll")]
+    private static partial nint GetShellWindow();
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    private static partial uint GetWindowThreadProcessId(nint window, out uint processId);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    private static partial SafeProcessHandle OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inheritHandle, uint processId);
+
+    [LibraryImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool OpenProcessToken(SafeProcessHandle process, uint access, out SafeAccessTokenHandle token);
+
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool IsProcessInJob(SafeProcessHandle process, nint job, [MarshalAs(UnmanagedType.Bool)] out bool result);
+    private static partial bool InitializeProcThreadAttributeList(nint attributes, uint count, uint flags, ref nuint size);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static unsafe partial bool UpdateProcThreadAttribute(nint attributes, uint flags, nuint attribute, void* value, nuint size, nint previousValue, nint returnSize);
+
+    [LibraryImport("kernel32.dll")]
+    private static partial void DeleteProcThreadAttributeList(nint attributes);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     private static partial uint ResumeThread(SafeWaitHandle thread);
@@ -206,7 +297,14 @@ internal static partial class WindowsTrayLauncher
     private static unsafe partial bool CreateProcess(string applicationName, char* commandLine,
         nint processAttributes, nint threadAttributes, [MarshalAs(UnmanagedType.Bool)] bool inheritHandles,
         uint creationFlags, nint environment, string currentDirectory,
-        ref StartupInfo startupInfo, out ProcessInformation processInformation);
+        ref StartupInfoEx startupInfo, out ProcessInformation processInformation);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct StartupInfoEx
+    {
+        public StartupInfo StartupInfo;
+        public nint Attributes;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct StartupInfo
