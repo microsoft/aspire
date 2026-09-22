@@ -46,15 +46,31 @@ public class DashboardServerFixture : IAsyncLifetime
     {
         await PlaywrightFixture.InitializeAsync();
 
+        DashboardApp = CreateDashboardApp(Configuration, Resources, ConfigureServices);
+
+        await DashboardApp.StartAsync();
+
+        if (Resources is not null)
+        {
+            var writer = DashboardApp.Services.GetRequiredService<IResourceRepositoryWriter>();
+            await writer.ReplaceResourcesAsync(Resources.Select(CreateResource).ToList());
+        }
+    }
+
+    internal static DashboardWebApplication CreateDashboardApp(
+        IReadOnlyDictionary<string, string?> configuration,
+        IReadOnlyList<ResourceViewModel>? resources = null,
+        Action<IServiceCollection>? configureServices = null)
+    {
         const string aspireDashboardAssemblyName = "Aspire.Dashboard";
         var currentAssemblyName = Assembly.GetExecutingAssembly().GetName().Name!;
         var currentAssemblyDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
         var aspireAssemblyDirectory = currentAssemblyDirectory.Replace(currentAssemblyName, aspireDashboardAssemblyName);
 
-        var config = new ConfigurationManager().AddInMemoryCollection(Configuration).Build();
+        var config = new ConfigurationManager().AddInMemoryCollection(configuration).Build();
 
         // Add services to the container.
-        DashboardApp = new DashboardWebApplication(
+        return new DashboardWebApplication(
             options: new WebApplicationOptions
             {
                 EnvironmentName = "Development",
@@ -65,20 +81,12 @@ public class DashboardServerFixture : IAsyncLifetime
             preConfigureBuilder: builder =>
             {
                 builder.Configuration.AddConfiguration(config);
-                var dashboardClient = new MockDashboardClient(Resources);
+                var dashboardClient = new MockDashboardClient(resources);
                 builder.Services.AddSingleton<IDashboardClient>(dashboardClient);
                 builder.Services.AddSingleton<IRepositoryFactory>(
                     services => new MockRepositoryFactory(services, dashboardClient));
-                ConfigureServices(builder.Services);
+                configureServices?.Invoke(builder.Services);
             });
-
-        await DashboardApp.StartAsync();
-
-        if (Resources is not null)
-        {
-            var writer = DashboardApp.Services.GetRequiredService<IResourceRepositoryWriter>();
-            await writer.ReplaceResourcesAsync(Resources.Select(CreateResource).ToList());
-        }
     }
 
     private static Resource CreateResource(ResourceViewModel resource)
