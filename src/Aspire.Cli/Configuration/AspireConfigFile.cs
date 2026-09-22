@@ -491,10 +491,10 @@ internal sealed class AspireConfigDocs
 internal sealed class AspireConfigCertificates
 {
     /// <summary>
-    /// Optional NSS database path overrides used for browser certificate trust on Unix.
+    /// Optional NSS database path overrides used for browser certificate trust on Linux.
     /// </summary>
     [JsonPropertyName("nssDbPaths")]
-    [Description("NSS database paths used for browser certificate trust on Unix. Separate paths with the platform path separator and optionally prefix each path with \"firefox=\" or \"chromium=\".")]
+    [Description("NSS database paths used for browser certificate trust on Linux. Separate paths with the platform path separator and optionally prefix each path with \"firefox=\" or \"chromium=\".")]
     public string? NssDbPaths { get; set; }
 }
 

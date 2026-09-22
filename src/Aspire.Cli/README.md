@@ -123,7 +123,7 @@ aspire docs search "redis"
 
 ## Browser certificate trust configuration
 
-On Unix, the NSS databases used to trust the Aspire development certificate can be configured locally or in the user-level Aspire configuration:
+On Linux, the NSS databases used to trust the Aspire development certificate can be configured locally or in the user-level Aspire configuration:
 
 ```bash
 aspire config set --global certificates.nssDbPaths "firefox=/path/to/firefox/profile:chromium=/path/to/chromium/nssdb"
