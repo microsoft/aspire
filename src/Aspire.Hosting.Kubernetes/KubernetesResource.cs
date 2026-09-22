@@ -440,9 +440,10 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         }
     }
 
-    private void RemoveGeneratedOriginalConnectionStringAliases(Dictionary<string, object> environmentVariables)
+    private static void RemoveGeneratedOriginalConnectionStringAliases(Dictionary<string, object> environmentVariables)
     {
-        foreach (var reference in resource.Annotations.OfType<ConnectionStringReference>())
+        // Snapshot the references before projecting aliases in the same dictionary.
+        foreach (var reference in environmentVariables.Values.OfType<ConnectionStringReference>().Distinct().ToArray())
         {
             if (reference.EnvironmentVariableNames is not { } names ||
                 string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||

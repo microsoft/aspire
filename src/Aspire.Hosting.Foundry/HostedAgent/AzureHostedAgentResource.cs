@@ -318,7 +318,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             }
         }
 
-        ProjectPortableConnectionStringAliases(target, collectedEnvVars);
+        ProjectPortableConnectionStringAliases(collectedEnvVars);
 
         var resolvedEnvVars = new Dictionary<string, string>();
         foreach (var (key, value) in collectedEnvVars)
@@ -363,9 +363,10 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         return resolvedEnvVars;
     }
 
-    private static void ProjectPortableConnectionStringAliases(IResource target, Dictionary<string, object> environmentVariables)
+    private static void ProjectPortableConnectionStringAliases(Dictionary<string, object> environmentVariables)
     {
-        foreach (var reference in target.Annotations.OfType<ConnectionStringReference>())
+        // Snapshot the references before projecting aliases in the same dictionary.
+        foreach (var reference in environmentVariables.Values.OfType<ConnectionStringReference>().Distinct().ToArray())
         {
             if (reference.EnvironmentVariableNames is not { } names ||
                 string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||

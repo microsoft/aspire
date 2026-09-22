@@ -1,5 +1,5 @@
 ﻿{
-  ConnectionStrings__my-qdrant: Endpoint={my-qdrant.bindings.grpc.url};Key={my-qdrant-Key.value},
+  ConnectionStrings__my-qdrant: {my-qdrant.connectionString},
   ConnectionStrings__my-qdrant_http: Endpoint={my-qdrant.bindings.http.url};Key={my-qdrant-Key.value},
   ConnectionStrings__my_qdrant: {my-qdrant.connectionString},
   ConnectionStrings__my_qdrant_http: Endpoint={my-qdrant.bindings.http.url};Key={my-qdrant-Key.value}

@@ -677,7 +677,6 @@ public class HostedAgentExtensionTests
         var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
         var reference = new ConnectionStringReference(connection.Resource, optional: false);
         var agent = builder.AddExecutable("agent", "python", ".")
-            .WithAnnotation(reference)
             .WithEnvironment("ConnectionStrings__my-db", reference)
             .WithEnvironment("ConnectionStrings__my_db", "Host=manual");
 
@@ -709,7 +708,6 @@ public class HostedAgentExtensionTests
             connection.Resource, optional: false, names, "HttpConnectionStringExpression",
             ReferenceExpression.Create($"Host=http"));
         var agent = builder.AddExecutable("agent", "python", ".")
-            .WithAnnotation(reference)
             .WithEnvironment(names.OriginalName, reference)
             .WithEnvironment(names.PortableName, reference);
 #pragma warning restore ASPIRECONNECTIONSTRINGS001
@@ -724,6 +722,33 @@ public class HostedAgentExtensionTests
 
         Assert.Equal(
             new Dictionary<string, string> { ["ConnectionStrings__my_db_http"] = "Host=http" },
+            envVars);
+    }
+
+    [Fact]
+    public async Task GetResolvedEnvironmentVariables_PreservesReplacedConnectionStringAliases()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithReference(connection)
+            .WithEnvironment("ConnectionStrings__my-db", "Host=original")
+            .WithEnvironment("ConnectionStrings__my_db", "Host=portable");
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["ConnectionStrings__my-db"] = "Host=original",
+                ["ConnectionStrings__my_db"] = "Host=portable"
+            },
             envVars);
     }
 

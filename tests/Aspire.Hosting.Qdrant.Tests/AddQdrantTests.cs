@@ -190,9 +190,15 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
         var projectA = appBuilder.AddProject<ProjectA>("projecta", o => o.ExcludeLaunchProfile = true)
             .WithReference(qdrant);
 
+        var context = new EnvironmentCallbackContext(appBuilder.ExecutionContext, projectA.Resource);
+        foreach (var callback in projectA.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>())
+        {
+            await callback.Callback(context);
+        }
+
 #pragma warning disable ASPIRECONNECTIONSTRINGS001
         Assert.Collection(
-            projectA.Resource.Annotations.OfType<ConnectionStringReference>(),
+            context.EnvironmentVariables.Values.OfType<ConnectionStringReference>().Distinct(),
             reference =>
             {
                 Assert.Same(qdrant.Resource, reference.Resource);
@@ -219,7 +225,7 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
             });
 #pragma warning restore ASPIRECONNECTIONSTRINGS001
 
-        var httpReference = projectA.Resource.Annotations.OfType<ConnectionStringReference>().Last();
+        var httpReference = Assert.IsType<ConnectionStringReference>(context.EnvironmentVariables["ConnectionStrings__my-qdrant_http"]);
         Assert.Equal("Endpoint=http://localhost:6333;Key=pass",
             await ((IValueProvider)httpReference).GetValueAsync(CancellationToken.None));
         Assert.Equal("Endpoint=http://localhost:6333;Key=pass",
@@ -283,15 +289,22 @@ public class AddQdrantTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void WithReferenceRejectsPrimaryAndHttpAliasCollision()
+    public async Task WithReferenceRejectsPrimaryAndHttpAliasCollision()
     {
         using var appBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var qdrant = appBuilder.AddQdrant("qdrant");
         var consumer = appBuilder.AddContainer("consumer", "fake")
-            .WithReference(qdrant, connectionName: "search");
+            .WithReference(qdrant, connectionName: "search")
+            .WithReference(qdrant, connectionName: "search_http");
 
-        var exception = Assert.Throws<DistributedApplicationException>(
-            () => consumer.WithReference(qdrant, connectionName: "search_http"));
+        var context = new EnvironmentCallbackContext(appBuilder.ExecutionContext, consumer.Resource);
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        {
+            foreach (var callback in consumer.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>())
+            {
+                await callback.Callback(context);
+            }
+        });
 
         Assert.Equal(
             "Connection-string references 'search_http' and 'search_http' on resource 'consumer' both use the environment variable " +

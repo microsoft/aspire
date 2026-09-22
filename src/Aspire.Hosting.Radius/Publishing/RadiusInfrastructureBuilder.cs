@@ -3097,7 +3097,7 @@ internal sealed class RadiusInfrastructureBuilder
     /// prefixes that <c>WithReference</c>'s connection-property splat used for it.
     /// </summary>
     /// <remarks>
-    /// Use the logical name recorded by <see cref="ConnectionStringReference"/>, not the
+    /// Use the logical name carried by <see cref="ConnectionStringReference"/> environment values, not the
     /// projected physical alias: <c>db__primary</c> splats to <c>DB__PRIMARY_*</c> even though its
     /// portable connection-string alias is <c>ConnectionStrings__db_primary</c>.
     /// <para>
@@ -3105,7 +3105,7 @@ internal sealed class RadiusInfrastructureBuilder
     /// is suppressed via <see cref="ReferenceEnvironmentInjectionFlags"/>.
     /// </para>
     /// </remarks>
-    private static Dictionary<IResource, HashSet<string>> BuildReferencePrefixes(IResource resource)
+    private static Dictionary<IResource, HashSet<string>> BuildReferencePrefixes(IResource resource, Dictionary<string, object> environmentVariables)
     {
         var prefixes = new Dictionary<IResource, HashSet<string>>();
 
@@ -3122,7 +3122,7 @@ internal sealed class RadiusInfrastructureBuilder
             }
         }
 
-        foreach (var reference in resource.Annotations.OfType<ConnectionStringReference>())
+        foreach (var reference in environmentVariables.Values.OfType<ConnectionStringReference>())
         {
             if (reference.EnvironmentVariableNames is { } names)
             {
@@ -3663,7 +3663,8 @@ internal sealed class RadiusInfrastructureBuilder
             }
         }
 
-        ProjectPortableConnectionStringAliases(resource, context.EnvironmentVariables);
+        var referencePrefixes = BuildReferencePrefixes(resource, context.EnvironmentVariables);
+        ProjectPortableConnectionStringAliases(context.EnvironmentVariables);
 
         // Drop HTTPS service-discovery variables: containers in the cluster don't terminate TLS
         // (ingress/service mesh does), so an https `services__*` URL would be unreachable. This
@@ -3678,8 +3679,6 @@ internal sealed class RadiusInfrastructureBuilder
         {
             context.EnvironmentVariables.Remove(key);
         }
-
-        var referencePrefixes = BuildReferencePrefixes(resource);
 
         // Created on demand: a container with no credential-bearing variable emits no secret.
         RadiusSecuritySecretConstruct? containerSecret = null;
@@ -3776,9 +3775,10 @@ internal sealed class RadiusInfrastructureBuilder
         return result;
     }
 
-    private static void ProjectPortableConnectionStringAliases(IResource resource, Dictionary<string, object> environmentVariables)
+    private static void ProjectPortableConnectionStringAliases(Dictionary<string, object> environmentVariables)
     {
-        foreach (var reference in resource.Annotations.OfType<ConnectionStringReference>())
+        // Snapshot the references before projecting aliases in the same dictionary.
+        foreach (var reference in environmentVariables.Values.OfType<ConnectionStringReference>().Distinct().ToArray())
         {
             if (reference.EnvironmentVariableNames is not { } names ||
                 string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||

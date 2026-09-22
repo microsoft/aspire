@@ -1055,6 +1055,26 @@ public class BackingResourceValueResolutionTests
     }
 
     [Fact]
+    public void NestedConnectionName_WithOverriddenOriginalAlias_PreservesLogicalPropertyPrefixes()
+    {
+        var (_, logger) = GenerateBicep(b =>
+        {
+            var shared = b.AddParameter("shared", "hunter2", secret: true);
+            var sql = b.AddSqlServer("sql", password: shared);
+
+            b.AddContainer("api", "myapp/api", "1.0")
+                .WithReference(sql, "db__primary")
+                .WithEnvironment("ConnectionStrings__db__primary", "Host=override");
+        });
+
+        Assert.Equal(
+            ["The password parameter 'shared' supplied for 'sql' is not used when deploying " +
+             "to Radius. The recipe that provisions that resource generates its own credentials, and consumers are given " +
+             "those instead. Remove the parameter, or provision the resource yourself if the value must be fixed."],
+            logger.Entries.Where(e => e.Level == LogLevel.Warning).Select(e => e.Message));
+    }
+
+    [Fact]
     public Task NestedConnectionName_UserAuthoredPortablePrefix_IsReportedAsAnUnrelatedUse()
     {
         var (bicep, logger) = GenerateBicep(b =>

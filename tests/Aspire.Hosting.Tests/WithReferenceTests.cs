@@ -803,15 +803,14 @@ public class WithReferenceTests
         var project = builder.AddProject<ProjectB>("project")
             .WithReference(resource, connectionName: "my--db");
 
-        var reference = Assert.Single(project.Resource.Annotations.OfType<ConnectionStringReference>());
-        Assert.Same(resource.Resource, reference.Resource);
         var context = new EnvironmentCallbackContext(builder.ExecutionContext, project.Resource);
         foreach (var callback in project.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>())
         {
             await callback.Callback(context);
         }
 
-        Assert.Same(reference, context.EnvironmentVariables["ConnectionStrings__my--db"]);
+        var reference = Assert.IsType<ConnectionStringReference>(context.EnvironmentVariables["ConnectionStrings__my--db"]);
+        Assert.Same(resource.Resource, reference.Resource);
         Assert.Same(reference, context.EnvironmentVariables["ConnectionStrings__my_db"]);
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
@@ -875,13 +874,13 @@ public class WithReferenceTests
     }
 
     [Fact]
-    public async Task StandaloneConnectionStringAnnotationDoesNotReserveGeneratedAliases()
+    public async Task StandaloneConnectionStringValueDoesNotReserveGeneratedAliases()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var standalone = builder.AddResource(new TestResource("my-db") { ConnectionString = "Host=standalone" });
         var generated = builder.AddResource(new TestResource("generated") { ConnectionString = "Host=generated" });
         var project = builder.AddProject<ProjectB>("project")
-            .WithAnnotation(new ConnectionStringReference(standalone.Resource, optional: false))
+            .WithEnvironment("ConnectionStrings__my-db", new ConnectionStringReference(standalone.Resource, optional: false))
             .WithReference(generated, connectionName: "my_db");
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
@@ -890,14 +889,23 @@ public class WithReferenceTests
             TestServiceProvider.Instance).DefaultTimeout();
 
         Assert.Equal(
-            [new KeyValuePair<string, string>("ConnectionStrings__my_db", "Host=generated")],
+            [
+                new KeyValuePair<string, string>("ConnectionStrings__my-db", "Host=standalone"),
+                new KeyValuePair<string, string>("ConnectionStrings__my_db", "Host=generated")
+            ],
             config.Where(static entry => entry.Key.StartsWith("ConnectionStrings__", StringComparison.Ordinal)));
     }
 
-    [Fact]
-    public void ConnectionStringPortableAliasCollisionsFailEarly()
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run, null)]
+    [InlineData(DistributedApplicationOperation.Run, "ConnectionStrings__my-db")]
+    [InlineData(DistributedApplicationOperation.Run, "ConnectionStrings__my_db")]
+    [InlineData(DistributedApplicationOperation.Publish, null)]
+    [InlineData(DistributedApplicationOperation.Publish, "ConnectionStrings__my-db")]
+    [InlineData(DistributedApplicationOperation.Publish, "ConnectionStrings__my_db")]
+    public async Task ConnectionStringPortableAliasCollisionsFailDuringEnvironmentEvaluation(DistributedApplicationOperation operation, string? overriddenName)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(operation);
 
         var dashed = builder.AddResource(new TestResource("dashed")
         {
@@ -909,9 +917,21 @@ public class WithReferenceTests
         });
         var project = builder.AddProject<ProjectB>("project")
             .WithReference(dashed, connectionName: "my-db");
+        if (overriddenName is not null)
+        {
+            project.WithEnvironment(overriddenName, "Host=override");
+        }
 
-        var exception = Assert.Throws<DistributedApplicationException>(
-            () => project.WithReference(underscored, connectionName: "my_db"));
+        project.WithReference(underscored, connectionName: "my_db");
+
+        var context = new EnvironmentCallbackContext(builder.ExecutionContext, project.Resource);
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        {
+            foreach (var callback in project.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>())
+            {
+                await callback.Callback(context);
+            }
+        });
 
         Assert.Equal(
             "Connection-string references 'my-db' and 'my_db' on resource 'project' both use the environment variable " +
@@ -920,17 +940,24 @@ public class WithReferenceTests
     }
 
     [Fact]
-    public void ConnectionStringPortableAliasCollisionsAreCaseInsensitive()
+    public async Task ConnectionStringPortableAliasCollisionsAreCaseInsensitive()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var first = builder.AddResource(new TestResource("first"));
         var second = builder.AddResource(new TestResource("second"));
         var project = builder.AddProject<ProjectB>("project")
-            .WithReference(first, connectionName: "My-Db");
+            .WithReference(first, connectionName: "My-Db")
+            .WithReference(second, connectionName: "my_db");
 
-        var exception = Assert.Throws<DistributedApplicationException>(
-            () => project.WithReference(second, connectionName: "my_db"));
+        var context = new EnvironmentCallbackContext(builder.ExecutionContext, project.Resource);
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        {
+            foreach (var callback in project.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>())
+            {
+                await callback.Callback(context);
+            }
+        });
 
         Assert.Equal(
             "Connection-string references 'My-Db' and 'my_db' on resource 'project' both use the environment variable " +
@@ -939,19 +966,48 @@ public class WithReferenceTests
     }
 
     [Fact]
-    public void ConnectionStringPortableAliasCollisionsAreIgnoredWhenConnectionStringsAreNotInjected()
+    public async Task ConnectionStringPortableAliasCollisionsAreIgnoredWhenConnectionStringsAreNotInjected()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var dashed = builder.AddResource(new TestResource("dashed"));
-        var underscored = builder.AddResource(new TestResource("underscored"));
-        var project = builder.AddProject<ProjectB>("project")
+        var dashed = builder.AddResource(new TestResourceWithProperties("dashed"));
+        var underscored = builder.AddResource(new TestResourceWithProperties("underscored"));
+        var project = builder.AddContainer("project", "fake")
             .WithReferenceEnvironment(ReferenceEnvironmentInjectionFlags.ConnectionProperties)
             .WithReference(dashed, connectionName: "my-db");
 
         var result = project.WithReference(underscored, connectionName: "my_db");
 
         Assert.Same(project, result);
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal(
+            new Dictionary<string, string> { ["MY_DB_HOST"] = "localhost", ["MY_DB_PORT"] = "5432" },
+            config);
+    }
+
+    [Fact]
+    public async Task RemovedConnectionStringValuesDoNotReserveAliases()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var first = builder.AddResource(new TestResource("first") { ConnectionString = "Host=first" });
+        var second = builder.AddResource(new TestResource("second") { ConnectionString = "Host=second" });
+        var consumer = builder.AddContainer("consumer", "fake")
+            .WithReference(first, connectionName: "my-db")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables.Remove("ConnectionStrings__my-db");
+                context.EnvironmentVariables.Remove("ConnectionStrings__my_db");
+            })
+            .WithReference(second, connectionName: "my_db");
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            consumer.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal(
+            [new KeyValuePair<string, string>("ConnectionStrings__my_db", "Host=second")],
+            config);
     }
 
     [Fact]

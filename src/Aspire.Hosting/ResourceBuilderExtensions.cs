@@ -1135,14 +1135,13 @@ public static class ResourceBuilderExtensions
                 environmentVariableNames,
                 nameof(IResourceWithConnectionString.ConnectionStringExpression),
                 connectionStringExpression: null);
-            ValidateConnectionStringReference(builder.Resource, connectionStringReference);
-            builder.Resource.Annotations.Add(connectionStringReference);
         }
 
         return builder.WithEnvironment(context =>
         {
             if (connectionStringReference is not null)
             {
+                ValidateConnectionStringReference(context, connectionStringReference);
                 context.EnvironmentVariables[environmentVariableNames.OriginalName] = connectionStringReference;
 
                 if (!string.Equals(environmentVariableNames.OriginalName, environmentVariableNames.PortableName, StringComparison.OrdinalIgnoreCase))
@@ -1172,14 +1171,14 @@ public static class ResourceBuilderExtensions
         });
     }
 
-    internal static void ValidateConnectionStringReference(IResource destination, ConnectionStringReference candidate)
+    internal static void ValidateConnectionStringReference(EnvironmentCallbackContext context, ConnectionStringReference candidate)
     {
         if (candidate.EnvironmentVariableNames is not { } candidateNames)
         {
             return;
         }
 
-        foreach (var existing in destination.Annotations.OfType<ConnectionStringReference>())
+        foreach (var existing in context.EnvironmentVariables.Values.OfType<ConnectionStringReference>())
         {
             if (existing.EnvironmentVariableNames is not { } existingNames ||
                 IsEquivalentConnectionStringReference(existing, candidate))
@@ -1195,7 +1194,7 @@ public static class ResourceBuilderExtensions
             {
                 throw new DistributedApplicationException(
                     $"Connection-string references '{existingNames.LogicalName}' and " +
-                    $"'{candidateNames.LogicalName}' on resource '{destination.Name}' both use " +
+                    $"'{candidateNames.LogicalName}' on resource '{context.Resource.Name}' both use " +
                     $"the environment variable '{conflictingName}'. Use unique connectionName values when calling WithReference.");
             }
         }

@@ -199,15 +199,9 @@ public static class QdrantBuilderExtensions
 
         if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
         {
-            ResourceBuilderExtensions.ValidateConnectionStringReference(builder.Resource, httpReference);
-            builder.Resource.Annotations.Add(httpReference);
-
             builder.WithEnvironment(context =>
             {
-                // primary endpoint (gRPC)
-                context.EnvironmentVariables[connectionStringNames.OriginalName] = qdrantResource.Resource.ConnectionStringExpression;
-
-                // HTTP endpoint
+                ResourceBuilderExtensions.ValidateConnectionStringReference(context, httpReference);
                 context.EnvironmentVariables[httpConnectionStringNames.OriginalName] = httpReference;
 
                 if (!string.Equals(httpConnectionStringNames.OriginalName, httpConnectionStringNames.PortableName, StringComparison.OrdinalIgnoreCase))

@@ -8,7 +8,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Represents a reference to a connection string.
 /// </summary>
-public class ConnectionStringReference(IResourceWithConnectionString resource, bool optional) : IExpressionValue, IManifestExpressionProvider, IValueProvider, IValueWithReferences, IResourceAnnotation
+public class ConnectionStringReference(IResourceWithConnectionString resource, bool optional) : IExpressionValue, IManifestExpressionProvider, IValueProvider, IValueWithReferences
 {
     private readonly ReferenceExpression? _connectionStringExpression;
 

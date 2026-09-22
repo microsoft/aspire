@@ -80,9 +80,9 @@ internal sealed class AzureAppServiceWebsiteContext(
 
     private void ProjectPortableConnectionStringAliases()
     {
-        var aliases = resource.Annotations
+        var aliases = EnvironmentVariables.Values
             .OfType<ConnectionStringReference>()
-            .Select(static annotation => annotation.EnvironmentVariableNames)
+            .Select(static reference => reference.EnvironmentVariableNames)
             .OfType<ConnectionStringEnvironmentVariableNames>()
             .Where(static names =>
                 !names.IsExplicit &&
