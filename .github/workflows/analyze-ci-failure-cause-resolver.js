@@ -66,6 +66,7 @@ function resolveCauses({
         let testNameMatch;
         let sameTestCanonicalExtras = [];
         let retryPatternMatch;
+        let matchingRetryPatterns = [];
         let explicitMatcherMatch;
 
         if (cause.type === 'flaky-test') {
@@ -89,7 +90,7 @@ function resolveCauses({
             }
         }
         if (!proposedAlias) {
-            retryPatternMatch = cause.type === 'infra-failure'
+            const retryPatternResolution = cause.type === 'infra-failure'
                 ? findPriorCauseByRetryPattern(
                     jobEvidence,
                     retryPatterns,
@@ -97,6 +98,8 @@ function resolveCauses({
                     priorByNormalizedId,
                     priorAliases)
                 : undefined;
+            retryPatternMatch = retryPatternResolution?.cause;
+            matchingRetryPatterns = retryPatternResolution?.patterns ?? [];
             explicitMatcherMatch = findPriorCauseByExplicitMatcher(evidence, priorCauses, priorById);
             const crossMechanismMatches = uniqueById(
                 [testNameMatch, retryPatternMatch, explicitMatcherMatch].filter(Boolean));
@@ -157,18 +160,38 @@ function resolveCauses({
             addPriorCauseAlias(priorCauseAliases, record.id, canonicalId);
             compatibleNormalizedPriorAliases.add(record.id);
         }
-        const supersededPriorCause =
+        const supersededPriorCauseCandidate =
             proposedCanonicalCause?.id !== priorCauseId &&
             proposedCanonicalCause?.id !== canonicalId
             ? proposedCanonicalCause
             : undefined;
-        if (supersededPriorCause) {
-            validateCauseType(supersededPriorCause);
-            if (supersededPriorCause.type !== cause.type) {
+        if (supersededPriorCauseCandidate) {
+            validateCauseType(supersededPriorCauseCandidate);
+            if (supersededPriorCauseCandidate.type !== cause.type) {
                 throw new Error(
                     `Cause '${cause.id}' of type '${cause.type}' cannot alias prior cause type ` +
-                    `'${supersededPriorCause.type}'.`);
+                    `'${supersededPriorCauseCandidate.type}'.`);
             }
+        }
+        // A trusted matcher can redirect the current proposal without proving that an existing
+        // root named by the agent belongs to the same historical family. Only rewrite that root
+        // when the same identity mechanism also matches its stored diagnostic pattern.
+        const supersededPriorCause =
+            supersededPriorCauseCandidate &&
+            ((retryPatternMatch?.id === priorCauseId &&
+                retryPatternsMatchPriorCause(
+                    matchingRetryPatterns,
+                    supersededPriorCauseCandidate)) ||
+                (explicitMatcherMatch?.id === priorCauseId &&
+                    explicitMatchersMatchPriorCause(
+                        explicitMatcherMatch,
+                        supersededPriorCauseCandidate,
+                        evidence,
+                        priorCauses,
+                        priorById)))
+                ? supersededPriorCauseCandidate
+                : undefined;
+        if (supersededPriorCause) {
             addPriorCauseAlias(priorCauseAliases, supersededPriorCause.id, canonicalId);
         }
         const sameTestExtraRecords = sameTestCanonicalExtras.flatMap(extra => {
@@ -773,7 +796,7 @@ function findPriorCauseByRetryPattern(
     priorById,
     priorByNormalizedId,
     priorAliases) {
-    const matchingCauseIds = unique((retryPatterns.jobFailurePatterns ?? [])
+    const matchingPatterns = (retryPatterns.jobFailurePatterns ?? [])
         .filter(pattern => pattern.enabled !== false)
         .filter(pattern => pattern.causeId)
         .filter(pattern => pattern.output || pattern.jobName)
@@ -781,8 +804,8 @@ function findPriorCauseByRetryPattern(
             (!pattern.jobName || matchesConfiguredPattern(pattern.jobName, job.name)) &&
             (!pattern.output ||
                 (typeof job.output === 'string' &&
-                    matchesConfiguredPattern(pattern.output, job.output)))))
-        .map(pattern => pattern.causeId));
+                    matchesConfiguredPattern(pattern.output, job.output)))));
+    const matchingCauseIds = unique(matchingPatterns.map(pattern => pattern.causeId));
 
     if (matchingCauseIds.length > 1) {
         throw new Error(`Failure matched multiple retry-pattern cause IDs: ${matchingCauseIds.join(', ')}.`);
@@ -798,7 +821,10 @@ function findPriorCauseByRetryPattern(
         priorById,
         priorByNormalizedId,
         priorAliases);
-    return priorCause ? resolveAlias(priorCause, priorById) : { id: causeId };
+    return {
+        cause: priorCause ? resolveAlias(priorCause, priorById) : { id: causeId },
+        patterns: matchingPatterns,
+    };
 }
 
 function findPriorCauseByExplicitMatcher(evidence, priorCauses, priorById) {
@@ -822,6 +848,35 @@ function findPriorCauseByExplicitMatcher(evidence, priorCauses, priorById) {
     }
 
     return canonicalCandidates[0];
+}
+
+function retryPatternsMatchPriorCause(patterns, priorCause) {
+    return typeof priorCause.error_pattern === 'string' &&
+        patterns.some(pattern =>
+            pattern.output &&
+            matchesConfiguredPattern(pattern.output, priorCause.error_pattern));
+}
+
+function explicitMatchersMatchPriorCause(
+    canonicalCause,
+    priorCause,
+    evidence,
+    priorCauses,
+    priorById) {
+    if (typeof priorCause.error_pattern !== 'string' ||
+        priorCause.error_pattern.length === 0) {
+        return false;
+    }
+
+    return priorCauses
+        .filter(record => resolveAlias(record, priorById).id === canonicalCause.id)
+        .some(record => (record.matchers ?? []).some((matcher, index) =>
+            matchesExplicitMatcher(matcher, evidence, record.id, index) &&
+            matchesExplicitMatcher(
+                matcher,
+                priorCause.error_pattern,
+                record.id,
+                index)));
 }
 
 function selectOldestCanonicalCause(candidates, priorById) {

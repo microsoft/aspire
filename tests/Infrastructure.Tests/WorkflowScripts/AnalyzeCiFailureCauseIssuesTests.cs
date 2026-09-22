@@ -1125,9 +1125,13 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
             occurrence.GetProperty("issue_published_url").GetString());
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("open", true)]
+    [InlineData("closed", false)]
     [RequiresTools(["node"])]
-    public async Task ReplayingPublishedOccurrenceMergesOpenAliasHistoryBeforeClosingDuplicate()
+    public async Task ReplayingPublishedOccurrenceMergesAliasHistoryBeforeClosingOpenDuplicate(
+        string aliasState,
+        bool expectsDuplicateClosure)
     {
         var result = await InvokeHarnessAsync<PublishResult>(
             "publishCauseIssues",
@@ -1198,7 +1202,7 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
                     new
                     {
                         number = 10,
-                        state = "open",
+                        state = aliasState,
                         body = """
                             <!-- ci-failure-cause:legacy-worker-crash -->
                             <!-- ci-failure-cause-type:infra-failure -->
@@ -1222,6 +1226,131 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
         Assert.Contains("[900](https://github.com/microsoft/aspire/actions/runs/900)", canonical.Body);
         Assert.Equal("open", canonical.State);
         Assert.Equal("closed", Assert.Single(result.Issues, issue => issue.Number == 10).State);
+        Assert.Equal(expectsDuplicateClosure ? [10] : [], result.Publish.DuplicatesClosed);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [RequiresTools(["node"])]
+    public async Task ClosedCanonicalImportsClosedAliasHistoryOnlyForNewOccurrence(
+        bool occurrenceAlreadyPublished)
+    {
+        Dictionary<string, object> currentOccurrence = new()
+        {
+            ["run_id"] = 991,
+            ["observed_at"] = "2026-08-29T18:30:00Z",
+        };
+        if (occurrenceAlreadyPublished)
+        {
+            currentOccurrence["issue_published"] = true;
+            currentOccurrence["issue_published_url"] =
+                "https://github.com/microsoft/aspire/issues/20";
+        }
+        var canonicalBody = occurrenceAlreadyPublished
+            ? """
+                <!-- ci-failure-cause:worker-crash -->
+                <!-- ci-failure-cause-type:infra-failure -->
+
+                <!-- ci-failure-occurrences:start -->
+                ## Occurrences
+
+                Showing 2 most recent of 3 occurrences.
+
+                | Date | Build | Job | Context |
+                |------|-------|-----|----|
+                | 2026-08-27 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                | 2026-08-29 | [991](https://github.com/microsoft/aspire/actions/runs/991) | ` Build / Windows ` | #19804 |
+                <!-- ci-failure-occurrences:end -->
+                """
+            : """
+                <!-- ci-failure-cause:worker-crash -->
+                <!-- ci-failure-cause-type:infra-failure -->
+
+                <!-- ci-failure-occurrences:start -->
+                ## Occurrences
+
+                Showing 1 most recent of 1 occurrences.
+
+                | Date | Build | Job | Context |
+                |------|-------|-----|----|
+                | 2026-08-27 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                <!-- ci-failure-occurrences:end -->
+                """;
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    title = "Worker process crashed",
+                    error_pattern = "Process completed with exit code -1073741502 (0xC0000142)",
+                    aliases = new[] { "legacy-worker-crash" },
+                    job_ids = new[] { 101 },
+                    job_names = new[] { "Build / Windows" }
+                },
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 100, observed_at = "2026-08-27T00:00:00Z" },
+                        new { run_id = 900, observed_at = "2026-08-28T18:30:00Z" },
+                        currentOccurrence,
+                    }
+                },
+                storedAliases = new[]
+                {
+                    new
+                    {
+                        id = "legacy-worker-crash",
+                        canonical_id = "worker-crash",
+                        type = "infra-failure",
+                        occurrences = new[]
+                        {
+                            new { run_id = 900, observed_at = "2026-08-28T18:30:00Z" },
+                        }
+                    }
+                },
+                issues = new object[]
+                {
+                    new
+                    {
+                        number = 20,
+                        state = "closed",
+                        body = canonicalBody
+                    },
+                    new
+                    {
+                        number = 10,
+                        state = "closed",
+                        body = """
+                            <!-- ci-failure-cause:legacy-worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 1 most recent of 1 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-28 | [900](https://github.com/microsoft/aspire/actions/runs/900) | ` Build / Windows ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                }
+            });
+
+        Assert.Equal(occurrenceAlreadyPublished, result.Publish.Skipped);
+        var canonical = Assert.Single(result.Issues, issue => issue.Number == 20);
+        Assert.Equal(occurrenceAlreadyPublished ? "closed" : "open", canonical.State);
+        Assert.Equal(!occurrenceAlreadyPublished, canonical.Body.Contains("[900](", StringComparison.Ordinal));
+        Assert.Equal(!occurrenceAlreadyPublished, result.Calls.Contains("update"));
     }
 
     [Fact]
@@ -1304,6 +1433,96 @@ public sealed class AnalyzeCiFailureCauseIssuesTests : IDisposable
             result.Warnings,
             warning => warning.Contains(
                 "Skipping duplicate reconciliation",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task MalformedClosedAliasHistoryDoesNotBlockOpenDuplicateClosure()
+    {
+        var result = await InvokeHarnessAsync<PublishResult>(
+            "publishCauseIssues",
+            new
+            {
+                workspace = _workspace.Path,
+                cause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    title = "Worker process crashed",
+                    error_pattern = "Process completed with exit code -1073741502 (0xC0000142)",
+                    aliases = new[] { "legacy-worker-crash", "older-worker-crash" },
+                    job_ids = new[] { 101 },
+                    job_names = new[] { "Build / Windows" }
+                },
+                storedCause = new
+                {
+                    id = "worker-crash",
+                    type = "infra-failure",
+                    occurrences = new object[]
+                    {
+                        new { run_id = 100, observed_at = "2026-08-27T00:00:00Z" },
+                        new { run_id = 991, observed_at = "2026-08-29T18:30:00Z" },
+                    }
+                },
+                issues = new object[]
+                {
+                    new
+                    {
+                        number = 20,
+                        state = "open",
+                        body = """
+                            <!-- ci-failure-cause:worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 1 most recent of 1 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-27 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Build / Windows ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    },
+                    new
+                    {
+                        number = 10,
+                        state = "open",
+                        body = "<!-- ci-failure-cause:legacy-worker-crash -->\n<!-- ci-failure-cause-type:infra-failure -->"
+                    },
+                    new
+                    {
+                        number = 5,
+                        state = "closed",
+                        body = """
+                            <!-- ci-failure-cause:older-worker-crash -->
+                            <!-- ci-failure-cause-type:infra-failure -->
+
+                            <!-- ci-failure-occurrences:start -->
+                            <!-- ci-failure-occurrences:start -->
+                            ## Occurrences
+
+                            Showing 1 most recent of 1 occurrences.
+
+                            | Date | Build | Job | Context |
+                            |------|-------|-----|----|
+                            | 2026-08-28 | [900](https://github.com/microsoft/aspire/actions/runs/900) | ` Build / Windows ` | #19804 |
+                            <!-- ci-failure-occurrences:end -->
+                            """
+                    }
+                }
+            });
+
+        Assert.Equal([10], result.Publish.DuplicatesClosed);
+        Assert.Equal("closed", Assert.Single(result.Issues, issue => issue.Number == 10).State);
+        Assert.Equal("closed", Assert.Single(result.Issues, issue => issue.Number == 5).State);
+        Assert.Contains("[991](", Assert.Single(result.Issues, issue => issue.Number == 20).Body);
+        Assert.Contains(
+            result.Warnings,
+            warning => warning.Contains(
+                "Closed issue #5 has duplicate history that cannot be merged",
                 StringComparison.Ordinal));
     }
 

@@ -214,41 +214,83 @@ function occurrenceRunId(row) {
     return Number.parseInt(OCCURRENCE_ROW_PATTERN.exec(row)?.groups?.runId, 10);
 }
 
-function collectOpenDuplicateOccurrenceHistory(canonicalIssue, matchingIssues) {
+function hasOccurrenceSection(body) {
+    const lines = normalizedBodyLines(body);
+    return lines.includes(OCCURRENCES_START) ||
+        lines.includes(OCCURRENCES_END) ||
+        lines.includes('## Occurrences');
+}
+
+function collectDuplicateOccurrenceHistory(
+    canonicalIssue,
+    matchingIssues,
+    { includeClosedIssues = true } = {}) {
     const rowsByRunId = new Map();
+    const canonicalRowsByRunId = new Map();
+    const ignoredClosedIssues = [];
     let totalOccurrenceCount = 0;
 
-    for (const issue of matchingIssues) {
-        if (issue.number === canonicalIssue.number || issue.state === 'closed') {
+    for (const row of normalizedBodyLines(canonicalIssue.body)
+        .filter(line => OCCURRENCE_ROW_PATTERN.test(line))) {
+        canonicalRowsByRunId.set(occurrenceRunId(row), row);
+    }
+
+    const duplicates = matchingIssues
+        .filter(issue => issue.number !== canonicalIssue.number)
+        .filter(issue => includeClosedIssues || issue.state !== 'closed')
+        .toSorted((left, right) =>
+            Number(left.state === 'closed') - Number(right.state === 'closed'));
+
+    for (const issue of duplicates) {
+        if (!hasOccurrenceSection(issue.body)) {
             continue;
         }
 
-        const issueBodyLines = normalizedBodyLines(issue.body);
-        if (!issueBodyLines.includes(OCCURRENCES_START) &&
-            !issueBodyLines.includes(OCCURRENCES_END) &&
-            !issueBodyLines.includes('## Occurrences')) {
+        let parsed;
+        try {
+            parsed = parseOccurrenceSection(issue.body);
+            if ((parsed.shownOccurrenceCount !== undefined &&
+                parsed.shownOccurrenceCount !== parsed.rows.length) ||
+                (parsed.totalOccurrenceCount !== undefined &&
+                    parsed.totalOccurrenceCount < parsed.rows.length)) {
+                throw new OccurrenceRenderError(
+                    `issue #${issue.number} has inconsistent occurrence counts`);
+            }
+        } catch (error) {
+            if (issue.state !== 'closed' || !(error instanceof OccurrenceRenderError)) {
+                throw error;
+            }
+            ignoredClosedIssues.push({ issueNumber: issue.number, error });
             continue;
         }
 
-        const parsed = parseOccurrenceSection(issue.body);
-        if ((parsed.shownOccurrenceCount !== undefined &&
-            parsed.shownOccurrenceCount !== parsed.rows.length) ||
-            (parsed.totalOccurrenceCount !== undefined &&
-                parsed.totalOccurrenceCount < parsed.rows.length)) {
-            throw new OccurrenceRenderError(
-                `issue #${issue.number} has inconsistent occurrence counts`);
+        const issueRowsByRunId = new Map();
+        let conflict;
+        for (const row of parsed.rows) {
+            const runId = occurrenceRunId(row);
+            const existingRow =
+                canonicalRowsByRunId.get(runId) ??
+                rowsByRunId.get(runId) ??
+                issueRowsByRunId.get(runId);
+            if (existingRow && existingRow !== row) {
+                conflict = new OccurrenceRenderError(
+                    `conflicting duplicate occurrence history in issue #${issue.number} for occurrence ${runId}`);
+                break;
+            }
+            issueRowsByRunId.set(runId, row);
+        }
+        if (conflict) {
+            if (issue.state !== 'closed') {
+                throw conflict;
+            }
+            ignoredClosedIssues.push({ issueNumber: issue.number, error: conflict });
+            continue;
         }
 
         totalOccurrenceCount = Math.max(
             totalOccurrenceCount,
             parsed.totalOccurrenceCount ?? parsed.rows.length);
-        for (const row of parsed.rows) {
-            const runId = occurrenceRunId(row);
-            const existingRow = rowsByRunId.get(runId);
-            if (existingRow && existingRow !== row) {
-                throw new OccurrenceRenderError(
-                    `issue #${issue.number} conflicts on occurrence ${runId}`);
-            }
+        for (const [runId, row] of issueRowsByRunId) {
             rowsByRunId.set(runId, row);
         }
     }
@@ -256,6 +298,7 @@ function collectOpenDuplicateOccurrenceHistory(canonicalIssue, matchingIssues) {
     return {
         rows: [...rowsByRunId.values()],
         totalOccurrenceCount,
+        ignoredClosedIssues,
     };
 }
 
@@ -681,12 +724,31 @@ async function publishCauseIssue(
             let updatedBody = issue.body;
             const canonicalIssueUrl =
                 `https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${issue.number}`;
+            if (isOccurrencePublished(
+                issue.body,
+                storedOccurrences,
+                run.runId,
+                canonicalIssueUrl,
+                allowLegacyPublicationEvidence)) {
+                occurrenceAlreadyPublished = true;
+            }
             let duplicateOccurrenceRows = [];
             let duplicateOccurrenceCount = 0;
             try {
-                const duplicateHistory = collectOpenDuplicateOccurrenceHistory(issue, matches);
+                const hasOpenDuplicate = matches.some(match =>
+                    match.number !== issue.number && match.state !== 'closed');
+                const duplicateHistory = collectDuplicateOccurrenceHistory(issue, matches, {
+                    includeClosedIssues:
+                        issue.state !== 'closed' ||
+                        !occurrenceAlreadyPublished ||
+                        hasOpenDuplicate,
+                });
                 duplicateOccurrenceRows = duplicateHistory.rows;
                 duplicateOccurrenceCount = duplicateHistory.totalOccurrenceCount;
+                for (const ignored of duplicateHistory.ignoredClosedIssues) {
+                    core.warning(
+                        `Closed issue #${ignored.issueNumber} has duplicate history that cannot be merged: ${ignored.error.message}. Skipping its history.`);
+                }
             } catch (error) {
                 if (!(error instanceof OccurrenceRenderError)) {
                     throw error;
@@ -696,14 +758,6 @@ async function publishCauseIssue(
                 canReconcileDuplicates = false;
             }
 
-            if (isOccurrencePublished(
-                issue.body,
-                storedOccurrences,
-                run.runId,
-                canonicalIssueUrl,
-                allowLegacyPublicationEvidence)) {
-                occurrenceAlreadyPublished = true;
-            }
             const newOccurrenceRows = [...duplicateOccurrenceRows];
             if (!occurrenceAlreadyPublished) {
                 newOccurrenceRows.push(occurrenceRow(cause, run));

@@ -808,6 +808,76 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ExplicitMatcherDoesNotAbsorbUnrelatedHistoricalRoot()
+    {
+        JsonElement result = await ResolveAsync(new
+        {
+            analysis = new
+            {
+                causes = new[] { "dns-outage" },
+                failed_jobs = new[]
+                {
+                    new
+                    {
+                        id = 1,
+                        name = "Build / Windows",
+                        classification = "transient-infra",
+                        reason = "Process completed with exit code 0xC0000142."
+                    }
+                },
+                failed_tests = Array.Empty<object>()
+            },
+            causes = new[]
+            {
+                new
+                {
+                    id = "dns-outage",
+                    type = "infra-failure",
+                    title = "Windows process initialization failure",
+                    error_pattern = "Process completed with exit code 0xC0000142.",
+                    job_ids = new[] { 1 }
+                }
+            },
+            priorCauses = new object[]
+            {
+                new
+                {
+                    id = "windows-init",
+                    type = "infra-failure",
+                    title = "Windows initialization failure",
+                    error_pattern = "0xC0000142",
+                    matchers = new[]
+                    {
+                        new { kind = "error-literal", value = "0xC0000142" }
+                    }
+                },
+                new
+                {
+                    id = "dns-outage",
+                    type = "infra-failure",
+                    title = "DNS outage",
+                    error_pattern = "NXDOMAIN",
+                    issue_url = "https://github.com/microsoft/aspire/issues/2",
+                    aliases = new[] { "legacy-dns-outage" }
+                }
+            },
+            retryPatterns = new { jobFailurePatterns = Array.Empty<object>() },
+            trustedJobLogs = new Dictionary<string, string>
+            {
+                ["1"] = "Process completed with exit code 0xC0000142."
+            }
+        });
+
+        JsonElement cause = FindOnlyCause(result);
+        Assert.Equal("windows-init", cause.GetProperty("id").GetString());
+        Assert.False(cause.TryGetProperty("issue_url", out _));
+        Assert.False(cause.TryGetProperty("aliases", out _));
+        Assert.Empty(result.GetProperty("priorCauseAliases").EnumerateArray());
+        Assert.Empty(result.GetProperty("priorCauseMigrations").EnumerateArray());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task RejectsMalformedStoredMatcherWithCauseContext()
     {
         object payload = CreateSingleTestPayload(
@@ -2414,6 +2484,82 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
             }));
 
         Assert.Equal(canonicalCauseId, FindOnlyCause(result).GetProperty("id").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RetryPatternDoesNotAbsorbUnrelatedHistoricalRoot()
+    {
+        JsonElement result = await ResolveAsync(CreateRetryPatternPayload(
+            "dns-outage",
+            new
+            {
+                output = "0xC0000142",
+                causeId = "windows-init"
+            },
+            [
+                new
+                {
+                    id = "windows-init",
+                    type = "infra-failure",
+                    title = "Windows initialization failure",
+                    error_pattern = "0xC0000142"
+                },
+                new
+                {
+                    id = "dns-outage",
+                    type = "infra-failure",
+                    title = "DNS outage",
+                    error_pattern = "NXDOMAIN",
+                    issue_url = "https://github.com/microsoft/aspire/issues/2",
+                    aliases = new[] { "legacy-dns-outage" }
+                }
+            ],
+            causeEvidence: "Process completed with exit code 0xC0000142.",
+            trustedJobLogs: new Dictionary<string, string>
+            {
+                ["1"] = "Process completed with exit code 0xC0000142."
+            }));
+
+        JsonElement cause = FindOnlyCause(result);
+        Assert.Equal("windows-init", cause.GetProperty("id").GetString());
+        Assert.False(cause.TryGetProperty("issue_url", out _));
+        Assert.False(cause.TryGetProperty("aliases", out _));
+        Assert.Empty(result.GetProperty("priorCauseAliases").EnumerateArray());
+        Assert.Empty(result.GetProperty("priorCauseMigrations").EnumerateArray());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task JobNameOnlyRetryPatternDoesNotAbsorbHistoricalRoot()
+    {
+        JsonElement result = await ResolveAsync(CreateRetryPatternPayload(
+            "dns-outage",
+            new
+            {
+                jobName = new { regex = ".*Sample.*" },
+                causeId = "windows-init"
+            },
+            [
+                new
+                {
+                    id = "windows-init",
+                    type = "infra-failure",
+                    title = "Windows initialization failure",
+                    error_pattern = "0xC0000142"
+                },
+                new
+                {
+                    id = "dns-outage",
+                    type = "infra-failure",
+                    title = "DNS outage",
+                    error_pattern = "0xC0000142"
+                }
+            ]));
+
+        Assert.Equal("windows-init", FindOnlyCause(result).GetProperty("id").GetString());
+        Assert.Empty(result.GetProperty("priorCauseAliases").EnumerateArray());
+        Assert.Empty(result.GetProperty("priorCauseMigrations").EnumerateArray());
     }
 
     [Fact]
@@ -4473,7 +4619,7 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
                     id = canonicalBetaId,
                     type = "infra-failure",
                     title = "Canonical beta",
-                    error_pattern = "Beta failure token",
+                    error_pattern = "Alpha failure token",
                     matchers = new[] { new { kind = "error-literal", value = "Beta failure token" } }
                 }
             },
