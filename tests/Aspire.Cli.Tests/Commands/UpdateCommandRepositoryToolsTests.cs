@@ -70,11 +70,25 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
         Assert.Empty(interaction.BooleanPromptCalls);
     }
 
-    [Fact]
-    public async Task Update_NewerGuestSdkRequiresRestoringRepositoryToolWithoutReplacingExecutable()
+    [Theory]
+    [InlineData(true, true, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    public async Task Update_NewerGuestSdkRequiresRestoringRepositoryToolWithoutReplacingExecutable(bool hasDownloadUrl, bool hasDownloader, bool pinsAlreadyCurrent)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var (dotnetManifest, _) = await CreateManifestsAsync(workspace.WorkspaceRoot);
+        var (dotnetManifest, npmManifest) = await CreateManifestsAsync(workspace.WorkspaceRoot);
+        if (pinsAlreadyCurrent)
+        {
+            var dotnet = JsonNode.Parse(await File.ReadAllTextAsync(dotnetManifest))!;
+            dotnet["tools"]!["aspire.cli"]!["version"] = "99.0.0";
+            await File.WriteAllTextAsync(dotnetManifest, dotnet.ToJsonString());
+            var npm = JsonNode.Parse(await File.ReadAllTextAsync(npmManifest))!;
+            npm["devDependencies"]![RepositoryToolUpdater.NpmPackageId] = "^99.0.0";
+            await File.WriteAllTextAsync(npmManifest, npm.ToJsonString());
+        }
         var appHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         await File.WriteAllTextAsync(appHost.FullName, "// test apphost");
         var projectUpdated = false;
@@ -82,6 +96,14 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             ConfigureUpdates(options, interaction);
+            if (!hasDownloader)
+            {
+                options.CliDownloaderFactory = _ => null!;
+            }
+            options.NpmRunnerFactory = _ => new FakeNpmRunner
+            {
+                ResolvePackageAsyncCallback = (_, _, _) => Task.FromResult<NpmPackageInfo?>(new() { Version = SemVersion.Parse("99.0.0") })
+            };
             options.ProjectLocatorFactory = _ => new TestProjectLocator
             {
                 UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(appHost)
@@ -104,7 +126,7 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
                 [
                     new PackageChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, [],
                         new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance,
-                        cliDownloadBaseUrl: "https://example.invalid/cli", pinnedVersion: "99.0.0")
+                        cliDownloadBaseUrl: hasDownloadUrl ? "https://example.invalid/cli" : null, pinnedVersion: "99.0.0")
                 ])
             };
         });
@@ -118,6 +140,107 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
         Assert.Equal("99.0.0", JsonNode.Parse(await File.ReadAllTextAsync(dotnetManifest))!["tools"]!["aspire.cli"]!["version"]!.GetValue<string>());
         Assert.Contains(interaction.DisplayedMessages, message => message.Message == UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
         Assert.Empty(interaction.BooleanPromptCalls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Update_UnsupportedProjectsAreNotTreatedAsMissingAppHost(bool hasRepositoryTools)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var originals = new Dictionary<string, byte[]>();
+        if (hasRepositoryTools)
+        {
+            var (dotnetManifest, npmManifest) = await CreateManifestsAsync(workspace.WorkspaceRoot);
+            originals.Add(dotnetManifest, await File.ReadAllBytesAsync(dotnetManifest));
+            originals.Add(npmManifest, await File.ReadAllBytesAsync(npmManifest));
+        }
+        var interaction = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            ConfigureUpdates(options, interaction);
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) =>
+                    throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.UnsupportedProjects)
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var result = await provider.GetRequiredService<RootCommand>()
+            .Parse("update --channel stable --yes --non-interactive").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.SdkNotInstalled, result);
+        Assert.Contains(InteractionServiceStrings.NoSupportedAppHostsFound, interaction.DisplayedErrors);
+        Assert.Empty(interaction.BooleanPromptCalls);
+        Assert.Empty(interaction.DisplayedSuccess);
+        foreach (var (path, original) in originals)
+        {
+            Assert.Equal(original, await File.ReadAllBytesAsync(path));
+        }
+    }
+
+    [Fact]
+    public async Task Update_DecliningGuestRepositoryToolUpdateContinuesProjectUpdateWithoutChangingPins()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (dotnetManifest, npmManifest) = await CreateManifestsAsync(workspace.WorkspaceRoot);
+        var originalDotnet = await File.ReadAllBytesAsync(dotnetManifest);
+        var originalNpm = await File.ReadAllBytesAsync(npmManifest);
+        var appHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        await File.WriteAllTextAsync(appHost.FullName, "// test apphost");
+        var confirmations = 0;
+        var interaction = new TestInteractionService
+        {
+            ConfirmCallback = (prompt, _) =>
+            {
+                Assert.Equal(UpdateCommandStrings.PerformUpdatesPrompt, prompt);
+                return ++confirmations > 1;
+            }
+        };
+        var projectUpdated = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            ConfigureUpdates(options, interaction);
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(appHost)
+            };
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                CanHandleCallback = _ => true,
+                LanguageId = "typescript/nodejs",
+                DisplayName = "TypeScript (Node.js)",
+                DetectionPatterns = ["apphost.ts"],
+                UpdatePackagesAsyncCallback = async (context, cancellationToken) =>
+                {
+                    Assert.Empty(context.AdditionalUpdateSteps);
+                    projectUpdated = await interaction.PromptConfirmAsync(
+                        UpdateCommandStrings.PerformUpdatesPrompt, context.ConfirmBinding, cancellationToken: cancellationToken);
+                    return new UpdatePackagesResult { UpdatesApplied = projectUpdated };
+                }
+            };
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                [
+                    new PackageChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, [],
+                        new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance,
+                        cliDownloadBaseUrl: "https://example.invalid/cli", pinnedVersion: "99.0.0")
+                ])
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var result = await provider.GetRequiredService<RootCommand>()
+            .Parse("update --channel stable").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result);
+        Assert.True(projectUpdated);
+        Assert.Equal(2, confirmations);
+        Assert.Equal(originalDotnet, await File.ReadAllBytesAsync(dotnetManifest));
+        Assert.Equal(originalNpm, await File.ReadAllBytesAsync(npmManifest));
+        Assert.Empty(interaction.DisplayedSuccess);
     }
 
     [Fact]

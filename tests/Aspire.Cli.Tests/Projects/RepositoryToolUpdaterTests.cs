@@ -195,8 +195,9 @@ public class RepositoryToolUpdaterTests(ITestOutputHelper outputHelper)
         var updater = CreateUpdater(CreateUnusedNpmRunner(), interaction);
         var manifests = await updater.FindManifestsAsync(workingDirectory, CancellationToken.None);
 
-        await updater.UpdateAsync(manifests, channel, PromptBinding.CreateDefault(true), CancellationToken.None);
+        var result = await updater.UpdateAsync(manifests, channel, PromptBinding.CreateDefault(true), CancellationToken.None);
 
+        Assert.Equal(RepositoryToolUpdateResult.Applied, result);
         Assert.Equal(manifestPath, Assert.Single(manifests).File.FullName);
         await Verify(await File.ReadAllTextAsync(manifestPath), "json");
         Assert.Equal(unrelatedContent, await File.ReadAllTextAsync(unrelatedPath));
@@ -298,8 +299,9 @@ public class RepositoryToolUpdaterTests(ITestOutputHelper outputHelper)
         var updater = CreateUpdater(npm, interaction);
         var manifests = await updater.FindManifestsAsync(root, CancellationToken.None);
 
-        await updater.UpdateAsync(manifests, CreateChannel("13.4.0"), PromptBinding.CreateDefault(true), CancellationToken.None);
+        var result = await updater.UpdateAsync(manifests, CreateChannel("13.4.0"), PromptBinding.CreateDefault(true), CancellationToken.None);
 
+        Assert.Equal(RepositoryToolUpdateResult.NoChanges, result);
         Assert.Equal(originalContent, await File.ReadAllBytesAsync(manifestPath));
         Assert.Equal(originalLock, await File.ReadAllTextAsync(lockPath));
         Assert.Equal(isNpm ? 1 : 0, resolutionCalls);
@@ -427,8 +429,9 @@ public class RepositoryToolUpdaterTests(ITestOutputHelper outputHelper)
         var updater = CreateUpdater(npm, interaction);
         var manifests = await updater.FindManifestsAsync(root, CancellationToken.None);
 
-        await updater.UpdateAsync(manifests, CreateChannel("13.4.0"), PromptBinding.CreateDefault(true), CancellationToken.None);
+        var result = await updater.UpdateAsync(manifests, CreateChannel("13.4.0"), PromptBinding.CreateDefault(true), CancellationToken.None);
 
+        Assert.Equal(RepositoryToolUpdateResult.Declined, result);
         Assert.Equal(originalDotNet, await File.ReadAllBytesAsync(dotNetPath));
         Assert.Equal(originalNpm, await File.ReadAllBytesAsync(npmPath));
         Assert.Equal(originalLock, await File.ReadAllTextAsync(lockPath));

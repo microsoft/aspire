@@ -85,19 +85,22 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
         return manifests;
     }
 
-    public async Task UpdateAsync(IReadOnlyList<RepositoryToolManifest> manifests, PackageChannel channel, PromptBinding<bool> confirmBinding, CancellationToken cancellationToken)
+    public async Task<RepositoryToolUpdateResult> UpdateAsync(IReadOnlyList<RepositoryToolManifest> manifests, PackageChannel channel, PromptBinding<bool> confirmBinding, CancellationToken cancellationToken)
     {
         var updateStep = await GetUpdateStepAsync(manifests, channel, cancellationToken);
         if (updateStep is null)
         {
-            return;
+            return RepositoryToolUpdateResult.NoChanges;
         }
 
         interactionService.DisplayMessage(KnownEmojis.Package, updateStep.GetFormattedDisplayText(), allowMarkup: true);
         if (await interactionService.PromptConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, confirmBinding, cancellationToken: cancellationToken))
         {
             await updateStep.Callback();
+            return RepositoryToolUpdateResult.Applied;
         }
+
+        return RepositoryToolUpdateResult.Declined;
     }
 
     /// <summary>
@@ -313,3 +316,10 @@ internal sealed record RepositoryToolManifest(FileInfo File, JsonObject Content,
 }
 
 internal sealed record RepositoryToolReference(JsonObject Properties, string Key, string Version);
+
+internal enum RepositoryToolUpdateResult
+{
+    NoChanges,
+    Declined,
+    Applied
+}

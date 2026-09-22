@@ -214,7 +214,7 @@ internal sealed class UpdateCommand : BaseCommand
                         ?? await _projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true, cancellationToken);
                 }
             }
-            catch (ProjectLocatorException ex) when (passedAppHostProjectFile is null && string.Equals(ex.Message, ErrorStrings.NoProjectFileFound, StringComparisons.CliInputOrOutput))
+            catch (ProjectLocatorException ex) when (passedAppHostProjectFile is null && ex.FailureReason == ProjectLocatorFailureReason.NoProjectFileFound)
             {
                 toolManifests = await _repositoryToolUpdater.FindManifestsAsync(ExecutionContext.WorkingDirectory, cancellationToken);
                 if (toolManifests.Count == 0)
@@ -379,14 +379,15 @@ internal sealed class UpdateCommand : BaseCommand
 
             // A repository-pinned CLI is updated through its manifest, not by replacing the
             // executable currently running (which may be in a shared package cache).
-            var cliUpdateResult = await TryUpdateCliBeforeGuestProjectUpdateAsync(
+            var (cliUpdateResult, skipRepositoryToolUpdates) = await TryUpdateCliBeforeGuestProjectUpdateAsync(
                 project, projectFile, channel, confirmBinding, parseResult, toolManifests, cancellationToken);
             if (cliUpdateResult is not null)
             {
                 return cliUpdateResult;
             }
 
-            var toolUpdateStep = await _repositoryToolUpdater.GetUpdateStepAsync(toolManifests, channel, cancellationToken);
+            var toolUpdateStep = skipRepositoryToolUpdates ? null :
+                await _repositoryToolUpdater.GetUpdateStepAsync(toolManifests, channel, cancellationToken);
             var updateContext = new UpdatePackagesContext
             {
                 AppHostFile = projectFile,
@@ -456,7 +457,7 @@ internal sealed class UpdateCommand : BaseCommand
         catch (ProjectLocatorException ex)
         {
             // Check if this is a "no project found" error and prompt for self-update
-            if (string.Equals(ex.Message, ErrorStrings.NoProjectFileFound, StringComparisons.CliInputOrOutput))
+            if (ex.FailureReason == ProjectLocatorFailureReason.NoProjectFileFound)
             {
                 // dotnet tool and npm installs have package-manager-specific update commands, so
                 // this recovery path does not prompt for archive self-update in those cases. Nix
@@ -587,7 +588,7 @@ internal sealed class UpdateCommand : BaseCommand
         }
     }
 
-    private async Task<CommandResult?> TryUpdateCliBeforeGuestProjectUpdateAsync(
+    private async Task<(CommandResult? Result, bool SkipRepositoryToolUpdates)> TryUpdateCliBeforeGuestProjectUpdateAsync(
         IAppHostProject project,
         FileInfo projectFile,
         PackageChannel channel,
@@ -596,12 +597,11 @@ internal sealed class UpdateCommand : BaseCommand
         IReadOnlyList<RepositoryToolManifest> toolManifests,
         CancellationToken cancellationToken)
     {
-        if (_cliDownloader is null ||
-            string.IsNullOrEmpty(channel.CliDownloadBaseUrl) ||
+        if ((toolManifests.Count == 0 && (_cliDownloader is null || string.IsNullOrEmpty(channel.CliDownloadBaseUrl))) ||
             project.LanguageId.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase) ||
             projectFile.Directory is not { } projectDirectory)
         {
-            return null;
+            return (null, false);
         }
 
         var targetSdkVersion = await GetLatestGuestSdkVersionAsync(channel, projectDirectory, cancellationToken);
@@ -609,7 +609,7 @@ internal sealed class UpdateCommand : BaseCommand
             !SemVersion.TryParse(ExecutionContext.IdentitySdkVersion, SemVersionStyles.Strict, out var currentCliVersion) ||
             SemVersion.PrecedenceComparer.Compare(targetSdkVersion, currentCliVersion) <= 0)
         {
-            return null;
+            return (null, false);
         }
 
         if (toolManifests.Count > 0)
@@ -617,9 +617,14 @@ internal sealed class UpdateCommand : BaseCommand
             // Guest SDK generation still needs a compatible CLI. Update the repository pin
             // and let the user restore it and re-run rather than overwriting
             // the running executable or generating code with an incompatible CLI.
-            await _repositoryToolUpdater.UpdateAsync(toolManifests, channel, confirmBinding, cancellationToken);
+            var toolUpdateResult = await _repositoryToolUpdater.UpdateAsync(toolManifests, channel, confirmBinding, cancellationToken);
+            if (toolUpdateResult == RepositoryToolUpdateResult.Declined)
+            {
+                // Continue the project update without asking to change the same CLI pins again.
+                return (null, true);
+            }
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
-            return CommandResult.Success();
+            return (CommandResult.Success(), false);
         }
 
         var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
@@ -629,7 +634,7 @@ internal sealed class UpdateCommand : BaseCommand
 
         if (!shouldUpdateCli)
         {
-            return null;
+            return (null, false);
         }
 
         var dotNetToolUpdateCommand = GetDotNetToolUpdateCommand();
@@ -638,7 +643,7 @@ internal sealed class UpdateCommand : BaseCommand
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
             InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
-            return CommandResult.Success();
+            return (CommandResult.Success(), false);
         }
 
         var npmUpdateCommand = GetNpmUpdateCommand();
@@ -647,7 +652,7 @@ internal sealed class UpdateCommand : BaseCommand
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.NpmSelfUpdateMessage);
             InteractionService.DisplayPlainText($"  {npmUpdateCommand}");
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
-            return CommandResult.Success();
+            return (CommandResult.Success(), false);
         }
 
         var selfUpdateResult = await ExecuteSelfUpdateAsync(parseResult, channel.Name, cancellationToken);
@@ -656,7 +661,7 @@ internal sealed class UpdateCommand : BaseCommand
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
         }
 
-        return selfUpdateResult;
+        return (selfUpdateResult, false);
     }
 
     private async Task<SemVersion?> GetLatestGuestSdkVersionAsync(PackageChannel channel, DirectoryInfo projectDirectory, CancellationToken cancellationToken)
