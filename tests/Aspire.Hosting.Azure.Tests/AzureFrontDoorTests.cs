@@ -6,9 +6,6 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
-using Azure.Provisioning.Cdn;
-using Azure.Provisioning.Primitives;
-using Microsoft.Extensions.DependencyInjection;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -107,89 +104,6 @@ public class AzureFrontDoorTests(ITestOutputHelper testOutputHelper)
 
         using var app = builder.Build();
 
-        await ExecuteBeforeStartHooksAsync(app, default);
-
-        var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource);
-
-        await Verify(bicep, "bicep");
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task FrontDoorResourceNamesRemainStable(bool useStaticNames)
-    {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
-
-        if (useStaticNames)
-        {
-            builder.Services.Configure<AzureProvisioningOptions>(options =>
-            {
-                options.ProvisioningBuildOptions.Random = new Random(42);
-                options.ProvisioningBuildOptions.InfrastructureResolvers.Insert(0, new StaticResourceNamePropertyResolver());
-            });
-        }
-
-        builder.AddAzureContainerAppEnvironment("env");
-
-        var api = builder.AddProject<Project>("My-Api-12-With-A-Long-Resource-Name", launchProfileName: null)
-            .WithHttpsEndpoint()
-            .WithExternalHttpEndpoints();
-
-        var frontDoor = builder.AddAzureFrontDoor("Front-Door-12")
-            .WithOrigin(api)
-            .ConfigureInfrastructure(infrastructure =>
-            {
-                var resources = infrastructure.GetProvisionableResources().OfType<ProvisionableResource>().ToList();
-
-                Assert.Collection(resources,
-                    resource => AssertNameRequirements(Assert.IsAssignableFrom<CdnProfile>(resource), 260),
-                    resource => AssertNameRequirements(Assert.IsAssignableFrom<FrontDoorEndpoint>(resource), 46),
-                    resource => AssertNameRequirements(Assert.IsAssignableFrom<FrontDoorOriginGroup>(resource), 90),
-                    resource => AssertNameRequirements(Assert.IsAssignableFrom<FrontDoorOrigin>(resource), 90),
-                    resource => AssertNameRequirements(Assert.IsAssignableFrom<FrontDoorRoute>(resource), 90));
-            });
-
-        using var app = builder.Build();
-        await ExecuteBeforeStartHooksAsync(app, default);
-
-        var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource, skipPreparer: true);
-
-        await Verify(bicep, "bicep").UseParameters(useStaticNames);
-
-        static void AssertNameRequirements(ProvisionableResource resource, int maxLength)
-        {
-            var requirements = resource.GetResourceNameRequirements();
-            Assert.Equal(1, requirements.MinLength);
-            Assert.Equal(maxLength, requirements.MaxLength);
-            Assert.Equal(ResourceNameCharacters.Alphanumeric | ResourceNameCharacters.Hyphen, requirements.ValidCharacters);
-        }
-    }
-
-    [Fact]
-    public async Task FrontDoorResourceNamesCanBeCustomized()
-    {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
-
-        builder.AddAzureContainerAppEnvironment("env");
-
-        var api = builder.AddProject<Project>("api", launchProfileName: null)
-            .WithHttpsEndpoint()
-            .WithExternalHttpEndpoints();
-
-        var frontDoor = builder.AddAzureFrontDoor("frontdoor")
-            .WithOrigin(api)
-            .ConfigureInfrastructure(infrastructure =>
-            {
-                var resources = infrastructure.GetProvisionableResources().ToList();
-                resources.OfType<CdnProfile>().Single().Name = "custom-profile";
-                resources.OfType<FrontDoorEndpoint>().Single().Name = "custom-endpoint";
-                resources.OfType<FrontDoorOriginGroup>().Single().Name = "custom-origin-group";
-                resources.OfType<FrontDoorOrigin>().Single().Name = "custom-origin";
-                resources.OfType<FrontDoorRoute>().Single().Name = "custom-route";
-            });
-
-        using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
         var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource);

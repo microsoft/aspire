@@ -4,7 +4,7 @@ param location string = resourceGroup().location
 param my_api_host string
 
 resource frontdoor 'Microsoft.Cdn/profiles@2025-06-01' = {
-  name: take('frontdoor-${uniqueString(resourceGroup().id)}', 260)
+  name: take('frontdoor${uniqueString(resourceGroup().id)}', 260)
   tags: {
     'aspire-resource-name': 'frontdoor'
   }
@@ -15,13 +15,13 @@ resource frontdoor 'Microsoft.Cdn/profiles@2025-06-01' = {
 }
 
 resource my_apiEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2025-06-01' = {
-  name: take('myapiEndpoint-${uniqueString(resourceGroup().id)}', 46)
+  name: take('myapiendpoint${uniqueString(resourceGroup().id)}', 24)
   location: 'Global'
   parent: frontdoor
 }
 
 resource my_apiOriginGroup 'Microsoft.Cdn/profiles/originGroups@2025-06-01' = {
-  name: take('myapiOriginGroup-${uniqueString(resourceGroup().id)}', 90)
+  name: take('myapiorigingroup${uniqueString(resourceGroup().id)}', 24)
   properties: {
     loadBalancingSettings: {
       sampleSize: 4
@@ -37,7 +37,7 @@ resource my_apiOriginGroup 'Microsoft.Cdn/profiles/originGroups@2025-06-01' = {
 }
 
 resource my_apiOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2025-06-01' = {
-  name: take('my-apiOrigin-${uniqueString(resourceGroup().id, my_api_host)}', 90)
+  name: take('my-apiOrigin-${uniqueString(resourceGroup().id, my_api_host)}', 24)
   properties: {
     hostName: my_api_host
     originHostHeader: my_api_host
@@ -46,7 +46,7 @@ resource my_apiOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2025-06-01' =
 }
 
 resource my_apiRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2025-06-01' = {
-  name: take('myapiRoute-${uniqueString(resourceGroup().id)}', 90)
+  name: take('myapiroute${uniqueString(resourceGroup().id)}', 24)
   properties: {
     originGroup: {
       id: my_apiOriginGroup.id

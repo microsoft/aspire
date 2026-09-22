@@ -12,7 +12,6 @@ using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.Cdn;
 using Azure.Provisioning.Expressions;
-using Azure.Provisioning.Primitives;
 
 namespace Aspire.Hosting;
 
@@ -69,7 +68,7 @@ public static class AzureFrontDoorExtensions
             var azureResource = (AzureFrontDoorResource)infrastructure.AspireResource;
 
             // Create the CDN profile (Front Door)
-            var profile = new CdnProfileWithNameRequirements(infrastructure.AspireResource.GetBicepIdentifier())
+            var profile = new CdnProfile(infrastructure.AspireResource.GetBicepIdentifier())
             {
                 SkuName = CdnSkuName.StandardAzureFrontDoor,
                 Location = new AzureLocation("Global"),
@@ -96,7 +95,7 @@ public static class AzureFrontDoorExtensions
                 var hostParam = hostExpression.AsProvisioningParameter(infrastructure, $"{originBicepId}_host");
 
                 // Endpoint
-                var endpoint = new FrontDoorEndpointWithNameRequirements($"{originBicepId}Endpoint")
+                var endpoint = new FrontDoorEndpoint($"{originBicepId}Endpoint")
                 {
                     Parent = profile,
                     Location = new AzureLocation("Global")
@@ -104,7 +103,7 @@ public static class AzureFrontDoorExtensions
                 infrastructure.Add(endpoint);
 
                 // Origin group — LoadBalancingSettings is required by ARM even with a single origin.
-                var originGroup = new FrontDoorOriginGroupWithNameRequirements($"{originBicepId}OriginGroup")
+                var originGroup = new FrontDoorOriginGroup($"{originBicepId}OriginGroup")
                 {
                     Parent = profile,
                     HealthProbeSettings = new HealthProbeSettings
@@ -121,7 +120,7 @@ public static class AzureFrontDoorExtensions
                 };
                 infrastructure.Add(originGroup);
 
-                var origin = new FrontDoorOriginWithNameRequirements($"{originBicepId}Origin")
+                var origin = new FrontDoorOrigin($"{originBicepId}Origin")
                 {
                     Parent = originGroup,
                     HostName = hostParam,
@@ -136,7 +135,7 @@ public static class AzureFrontDoorExtensions
                 infrastructure.Add(origin);
 
                 // Route
-                var route = new FrontDoorRouteWithNameRequirements($"{originBicepId}Route")
+                var route = new FrontDoorRoute($"{originBicepId}Route")
                 {
                     Parent = endpoint,
                     OriginGroupId = originGroup.Id,
@@ -252,37 +251,5 @@ public static class AzureFrontDoorExtensions
         }
 
         return ("/", HealthProbeProtocol.Https);
-    }
-
-    // beta.3's TypeSpec generator lost the beta.2 naming requirements. Restore the metadata rather than
-    // assigning Name so both default and caller-configured resolvers preserve deployed resource identities.
-    // Remove these subclasses when the SDK restores the beta.2 requirements:
-    // https://github.com/Azure/azure-sdk-for-net/tree/Azure.Provisioning.Cdn_1.0.0-beta.2/sdk/cdn/Azure.Provisioning.Cdn/src/Generated
-    private static ResourceNameRequirements GetFrontDoorNameRequirements(int maxLength) =>
-        new(minLength: 1, maxLength: maxLength, validCharacters: ResourceNameCharacters.Alphanumeric | ResourceNameCharacters.Hyphen);
-
-    private sealed class CdnProfileWithNameRequirements(string bicepIdentifier) : CdnProfile(bicepIdentifier)
-    {
-        public override ResourceNameRequirements GetResourceNameRequirements() => GetFrontDoorNameRequirements(260);
-    }
-
-    private sealed class FrontDoorEndpointWithNameRequirements(string bicepIdentifier) : FrontDoorEndpoint(bicepIdentifier)
-    {
-        public override ResourceNameRequirements GetResourceNameRequirements() => GetFrontDoorNameRequirements(46);
-    }
-
-    private sealed class FrontDoorOriginGroupWithNameRequirements(string bicepIdentifier) : FrontDoorOriginGroup(bicepIdentifier)
-    {
-        public override ResourceNameRequirements GetResourceNameRequirements() => GetFrontDoorNameRequirements(90);
-    }
-
-    private sealed class FrontDoorOriginWithNameRequirements(string bicepIdentifier) : FrontDoorOrigin(bicepIdentifier)
-    {
-        public override ResourceNameRequirements GetResourceNameRequirements() => GetFrontDoorNameRequirements(90);
-    }
-
-    private sealed class FrontDoorRouteWithNameRequirements(string bicepIdentifier) : FrontDoorRoute(bicepIdentifier)
-    {
-        public override ResourceNameRequirements GetResourceNameRequirements() => GetFrontDoorNameRequirements(90);
     }
 }
