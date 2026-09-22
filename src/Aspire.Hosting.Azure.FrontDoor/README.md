@@ -40,6 +40,12 @@ const frontDoor = await builder.addAzureFrontDoor("frontdoor")
     .withOrigin(api);
 ```
 
+## Resource naming compatibility
+
+The integration preserves the Azure resource naming rules from `Azure.Provisioning.Cdn` 1.0.0-beta.2 when using 1.0.0-beta.3. Profiles, endpoints, origin groups, origins, and routes created by the integration retain their generated names, avoiding resource replacement or endpoint hostname changes solely from this package update. Custom naming resolvers remain supported, and names assigned through `ConfigureInfrastructure` are not overwritten.
+
+This compatibility behavior applies to resources created by the integration, not additional SDK resources created in `ConfigureInfrastructure` callbacks.
+
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/

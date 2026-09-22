@@ -7,12 +7,12 @@ param web_host string
 
 resource frontdoor 'Microsoft.Cdn/profiles@2025-06-01' = {
   name: take('frontdoor-${uniqueString(resourceGroup().id)}', 260)
+  tags: {
+    'aspire-resource-name': 'frontdoor'
+  }
   location: 'Global'
   sku: {
     name: 'Standard_AzureFrontDoor'
-  }
-  tags: {
-    'aspire-resource-name': 'frontdoor'
   }
 }
 
@@ -25,14 +25,14 @@ resource apiEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2025-06-01' = {
 resource apiOriginGroup 'Microsoft.Cdn/profiles/originGroups@2025-06-01' = {
   name: take('apiOriginGroup-${uniqueString(resourceGroup().id)}', 90)
   properties: {
-    healthProbeSettings: {
-      probePath: '/'
-      probeProtocol: 'Https'
-    }
     loadBalancingSettings: {
       sampleSize: 4
       successfulSamplesRequired: 3
       additionalLatencyInMilliseconds: 50
+    }
+    healthProbeSettings: {
+      probePath: '/'
+      probeProtocol: 'Https'
     }
   }
   parent: frontdoor
@@ -50,15 +50,15 @@ resource apiOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2025-06-01' = {
 resource apiRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2025-06-01' = {
   name: take('apiRoute-${uniqueString(resourceGroup().id)}', 90)
   properties: {
-    forwardingProtocol: 'HttpsOnly'
-    httpsRedirect: 'Enabled'
-    linkToDefaultDomain: 'Enabled'
     originGroup: {
       id: apiOriginGroup.id
     }
     patternsToMatch: [
       '/*'
     ]
+    forwardingProtocol: 'HttpsOnly'
+    linkToDefaultDomain: 'Enabled'
+    httpsRedirect: 'Enabled'
   }
   parent: apiEndpoint
   dependsOn: [
@@ -75,14 +75,14 @@ resource webEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2025-06-01' = {
 resource webOriginGroup 'Microsoft.Cdn/profiles/originGroups@2025-06-01' = {
   name: take('webOriginGroup-${uniqueString(resourceGroup().id)}', 90)
   properties: {
-    healthProbeSettings: {
-      probePath: '/'
-      probeProtocol: 'Https'
-    }
     loadBalancingSettings: {
       sampleSize: 4
       successfulSamplesRequired: 3
       additionalLatencyInMilliseconds: 50
+    }
+    healthProbeSettings: {
+      probePath: '/'
+      probeProtocol: 'Https'
     }
   }
   parent: frontdoor
@@ -100,15 +100,15 @@ resource webOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2025-06-01' = {
 resource webRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2025-06-01' = {
   name: take('webRoute-${uniqueString(resourceGroup().id)}', 90)
   properties: {
-    forwardingProtocol: 'HttpsOnly'
-    httpsRedirect: 'Enabled'
-    linkToDefaultDomain: 'Enabled'
     originGroup: {
       id: webOriginGroup.id
     }
     patternsToMatch: [
       '/*'
     ]
+    forwardingProtocol: 'HttpsOnly'
+    linkToDefaultDomain: 'Enabled'
+    httpsRedirect: 'Enabled'
   }
   parent: webEndpoint
   dependsOn: [
