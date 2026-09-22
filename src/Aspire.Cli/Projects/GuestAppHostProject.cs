@@ -291,13 +291,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// Builds the AppHost server project and generates SDK code.
     /// </summary>
     /// <returns><see langword="true"/> if the code was generated successfully; otherwise, <see langword="false"/>.</returns>
-    internal async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
+    internal async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, bool updateDependencies, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
     {
         var config = LoadConfiguration(directory);
-        return await BuildAndGenerateSdkAsync(directory, config, packageSourceOverride, cancellationToken);
+        return await BuildAndGenerateSdkAsync(directory, config, updateDependencies, packageSourceOverride, cancellationToken);
     }
 
-    private async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, AspireConfigFile config, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
+    private async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, AspireConfigFile config, bool updateDependencies, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
     {
         var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
 
@@ -339,20 +339,22 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             targetSdkVersion: config.SdkVersion,
             cancellationToken);
 
-        // Step 5: Install dependencies using GuestRuntime (best effort - don't block code generation)
-        await InstallDependenciesAsync(
+        // Step 5: Install dependencies using GuestRuntime. A failed locked restore must not report success.
+        var installResult = await InstallDependenciesAsync(
             directory,
             rpcClient,
             environmentVariables: new Dictionary<string, string>(),
+            updateDependencies,
             treatMissingJavaScriptToolAsWarning: true,
             cancellationToken);
 
-        return true;
+        return installResult == 0;
     }
 
     Task<bool> IGuestAppHostSdkGenerator.BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride, CancellationToken cancellationToken)
     {
-        return BuildAndGenerateSdkAsync(directory, packageSourceOverride, cancellationToken);
+        // This interface is used by starter templates after scaffolding their dependency manifests.
+        return BuildAndGenerateSdkAsync(directory, updateDependencies: true, packageSourceOverride, cancellationToken);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -613,6 +615,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     directory,
                     rpcClient,
                     environmentVariables,
+                    updateDependencies: false,
                     treatMissingJavaScriptToolAsWarning: false,
                     cancellationToken);
                 if (installResult != 0)
@@ -1201,6 +1204,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     directory,
                     rpcClient,
                     environmentVariables,
+                    updateDependencies: false,
                     treatMissingJavaScriptToolAsWarning: false,
                     cancellationToken);
                 if (installResult != 0)
@@ -1448,7 +1452,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         config.AddOrUpdatePackage(context.PackageId, context.PackageVersion);
 
         // Build and regenerate SDK code with the new package
-        var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, cancellationToken: cancellationToken);
+        var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, updateDependencies: true, cancellationToken: cancellationToken);
         if (!regenerateSuccess)
         {
             return false;
@@ -1578,7 +1582,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             UpdateCommandStrings.RegeneratingSdkCode,
             async () =>
             {
-                var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, cancellationToken: cancellationToken);
+                var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, updateDependencies: true, cancellationToken: cancellationToken);
 
                 if (!regenerateSuccess)
                 {
@@ -2117,6 +2121,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         DirectoryInfo directory,
         IAppHostRpcClient rpcClient,
         IDictionary<string, string> environmentVariables,
+        bool updateDependencies,
         bool treatMissingJavaScriptToolAsWarning,
         CancellationToken cancellationToken)
     {
@@ -2149,7 +2154,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             JavaAppHostToolchainResolver.ClearStagedDependencies(javaToolchain);
         }
 
-        var (result, output) = await _guestRuntime.InstallDependenciesAsync(directory, environmentVariables, cancellationToken);
+        var (result, output) = await _guestRuntime.InstallDependenciesAsync(directory, environmentVariables, updateDependencies, cancellationToken);
         if (result != 0)
         {
             var lines = output.GetLines().ToArray();

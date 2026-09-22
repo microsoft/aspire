@@ -97,7 +97,7 @@ internal sealed class RestoreCommand : BaseCommand
 
                 var success = await _interactionService.ShowStatusAsync(
                     RestoreCommandStrings.RestoringSdkCode,
-                    async () => await configOnlyGuestProject.BuildAndGenerateSdkAsync(configOnlyProjectDirectory, cancellationToken: cancellationToken),
+                    async () => await configOnlyGuestProject.BuildAndGenerateSdkAsync(configOnlyProjectDirectory, updateDependencies: false, cancellationToken: cancellationToken),
                     emoji: KnownEmojis.Gear);
 
                 if (success)
@@ -154,7 +154,7 @@ internal sealed class RestoreCommand : BaseCommand
 
                 var success = await _interactionService.ShowStatusAsync(
                     RestoreCommandStrings.RestoringSdkCode,
-                    async () => await guestProject.BuildAndGenerateSdkAsync(directory, cancellationToken: cancellationToken),
+                    async () => await guestProject.BuildAndGenerateSdkAsync(directory, updateDependencies: false, cancellationToken: cancellationToken),
                     emoji: KnownEmojis.Gear);
 
                 if (success)
