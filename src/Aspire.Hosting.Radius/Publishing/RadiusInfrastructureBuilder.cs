@@ -3778,17 +3778,17 @@ internal sealed class RadiusInfrastructureBuilder
         foreach (var reference in resource.Annotations.OfType<ConnectionStringReferenceAnnotation>())
         {
             var names = reference.EnvironmentVariableNames;
-            if (string.Equals(names.LegacyName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
+            if (string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
                 !environmentVariables.ContainsKey(names.PortableName))
             {
                 continue;
             }
 
             // Radius renders these values as Kubernetes container environment variables. Deploy only
-            // the portable generated alias, preserving any later override of the exact logical alias.
-            if (environmentVariables.Remove(names.LegacyName, out var legacyValue))
+            // the portable generated alias, preserving any later override of the original alias.
+            if (environmentVariables.Remove(names.OriginalName, out var originalValue))
             {
-                environmentVariables[names.PortableName] = legacyValue;
+                environmentVariables[names.PortableName] = originalValue;
             }
         }
     }

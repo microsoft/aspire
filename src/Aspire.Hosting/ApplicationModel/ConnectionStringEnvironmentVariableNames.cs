@@ -9,13 +9,13 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Describes the logical and physical names used for a connection-string reference.
 /// </summary>
 /// <param name="LogicalName">The logical connection name used by application configuration.</param>
-/// <param name="LegacyName">The legacy environment-variable name derived directly from the logical name.</param>
+/// <param name="OriginalName">The original environment-variable name derived directly from the logical name.</param>
 /// <param name="PortableName">The portable environment-variable name.</param>
 /// <param name="IsExplicit">Whether the physical environment-variable name was explicitly supplied by the source resource.</param>
 [Experimental("ASPIRECONNECTIONSTRINGS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed record ConnectionStringEnvironmentVariableNames(
     string LogicalName,
-    string LegacyName,
+    string OriginalName,
     string PortableName,
     bool IsExplicit)
 {
@@ -50,9 +50,9 @@ public sealed record ConnectionStringEnvironmentVariableNames(
     /// <returns>The physical environment-variable names.</returns>
     public IEnumerable<string> GetPhysicalNames()
     {
-        yield return LegacyName;
+        yield return OriginalName;
 
-        if (!string.Equals(LegacyName, PortableName, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(OriginalName, PortableName, StringComparison.OrdinalIgnoreCase))
         {
             yield return PortableName;
         }

@@ -400,7 +400,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 await c.Callback(context).ConfigureAwait(false);
             }
 
-            RemoveGeneratedLegacyConnectionStringAliases(context.EnvironmentVariables);
+            RemoveGeneratedOriginalConnectionStringAliases(context.EnvironmentVariables);
 
             // Remove HTTPS service discovery variables — containers in Kubernetes don't have TLS certificates.
             // TLS termination is handled externally by ingress controllers or service mesh.
@@ -440,12 +440,12 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         }
     }
 
-    private void RemoveGeneratedLegacyConnectionStringAliases(Dictionary<string, object> environmentVariables)
+    private void RemoveGeneratedOriginalConnectionStringAliases(Dictionary<string, object> environmentVariables)
     {
         foreach (var reference in resource.Annotations.OfType<ConnectionStringReferenceAnnotation>())
         {
             var names = reference.EnvironmentVariableNames;
-            if (string.Equals(names.LegacyName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
+            if (string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
                 !environmentVariables.ContainsKey(names.PortableName))
             {
                 continue;
@@ -453,10 +453,10 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             // Kubernetes projects environment values through normalized Helm paths. Keeping both generated
             // aliases would map them to the same values key, so deploy only the portable physical name. The
-            // exact logical name wins when both aliases are present, so retain any later override of its value.
-            if (environmentVariables.Remove(names.LegacyName, out var legacyValue))
+            // original name wins when both aliases are present, so retain any later override of its value.
+            if (environmentVariables.Remove(names.OriginalName, out var originalValue))
             {
-                environmentVariables[names.PortableName] = legacyValue;
+                environmentVariables[names.PortableName] = originalValue;
             }
         }
     }

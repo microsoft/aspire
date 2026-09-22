@@ -1088,7 +1088,7 @@ public static class ResourceBuilderExtensions
     /// Injects a connection string as an environment variable from the source resource into the destination resource, using the source resource's name as the connection string name (if not overridden).
     /// The logical connection name is preserved for application configuration. When the source resource does not specify
     /// <see cref="IResourceWithConnectionString.ConnectionStringEnvironmentVariable"/> and the logical name is not portable as an environment-variable suffix,
-    /// Aspire emits both the legacy name and a portable alias that replaces characters unsupported in environment-variable names.
+    /// Aspire emits both the original name and a portable alias that replaces characters unsupported in environment-variable names.
     /// For example, <c>my-db</c> produces <c>ConnectionStrings__my-db</c> and <c>ConnectionStrings__my_db</c> on targets that support both names.
     /// <para>
     /// Each resource defines the format of the connection string value. The
@@ -1142,9 +1142,9 @@ public static class ResourceBuilderExtensions
             if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
             {
                 var connectionStringReference = new ConnectionStringReference(resource, optional);
-                context.EnvironmentVariables[environmentVariableNames.LegacyName] = connectionStringReference;
+                context.EnvironmentVariables[environmentVariableNames.OriginalName] = connectionStringReference;
 
-                if (!string.Equals(environmentVariableNames.LegacyName, environmentVariableNames.PortableName, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(environmentVariableNames.OriginalName, environmentVariableNames.PortableName, StringComparison.OrdinalIgnoreCase))
                 {
                     context.EnvironmentVariables[environmentVariableNames.PortableName] = connectionStringReference;
                 }

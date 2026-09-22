@@ -368,17 +368,17 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         foreach (var reference in target.Annotations.OfType<ConnectionStringReferenceAnnotation>())
         {
             var names = reference.EnvironmentVariableNames;
-            if (string.Equals(names.LegacyName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
+            if (string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
                 !environmentVariables.ContainsKey(names.PortableName))
             {
                 continue;
             }
 
             // Foundry Hosted Agents accept only letters, digits, and underscores. Deploy only the
-            // portable generated alias, preserving any later override of the exact logical alias.
-            if (environmentVariables.Remove(names.LegacyName, out var legacyValue))
+            // portable generated alias, preserving any later override of the original alias.
+            if (environmentVariables.Remove(names.OriginalName, out var originalValue))
             {
-                environmentVariables[names.PortableName] = legacyValue;
+                environmentVariables[names.PortableName] = originalValue;
             }
         }
     }

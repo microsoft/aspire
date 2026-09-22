@@ -181,7 +181,7 @@ public static class QdrantBuilderExtensions
         var httpConnectionStringNames = connectionStringNames.IsExplicit
             ? new ConnectionStringEnvironmentVariableNames(
                 httpLogicalName,
-                $"{connectionStringNames.LegacyName}_{QdrantServerResource.HttpEndpointName}",
+                $"{connectionStringNames.OriginalName}_{QdrantServerResource.HttpEndpointName}",
                 $"{connectionStringNames.PortableName}_{QdrantServerResource.HttpEndpointName}",
                 IsExplicit: true)
             : ConnectionStringEnvironmentVariableNames.Create(resource, httpLogicalName);
@@ -204,12 +204,12 @@ public static class QdrantBuilderExtensions
             builder.WithEnvironment(context =>
             {
                 // primary endpoint (gRPC)
-                context.EnvironmentVariables[connectionStringNames.LegacyName] = qdrantResource.Resource.ConnectionStringExpression;
+                context.EnvironmentVariables[connectionStringNames.OriginalName] = qdrantResource.Resource.ConnectionStringExpression;
 
                 // HTTP endpoint
-                context.EnvironmentVariables[httpConnectionStringNames.LegacyName] = httpConnectionStringExpression;
+                context.EnvironmentVariables[httpConnectionStringNames.OriginalName] = httpConnectionStringExpression;
 
-                if (!string.Equals(httpConnectionStringNames.LegacyName, httpConnectionStringNames.PortableName, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(httpConnectionStringNames.OriginalName, httpConnectionStringNames.PortableName, StringComparison.OrdinalIgnoreCase))
                 {
                     context.EnvironmentVariables[httpConnectionStringNames.PortableName] = httpConnectionStringExpression;
                 }

@@ -17,7 +17,7 @@
 
 `WithReference` keeps the resource name, or its explicit `connectionName`, as the logical .NET configuration name. Physical environment-variable names are derived separately:
 
-| Logical name | Legacy physical name | Portable physical name |
+| Logical name | Original physical name | Portable physical name |
 | --- | --- | --- |
 | `mydb` | `ConnectionStrings__mydb` | `ConnectionStrings__mydb` |
 | `my-db` | `ConnectionStrings__my-db` | `ConnectionStrings__my_db` |
@@ -46,7 +46,7 @@ Aspire writes the logical and portable values to the same configuration provider
 
 1. **Compatibility release:** Capable targets receive both aliases. Strict targets receive the portable alias, and updated integrations resolve either alias.
 2. **Adoption period:** Integration authors consume connection-reference metadata, and direct consumers adopt logical-then-portable fallback resolution. Applications using older integrations on strict targets should update their clients or use explicit portable `connectionName` values.
-3. **Future major release:** Legacy physical aliases may be considered for removal only after direct consumers have a public shared resolver and every workload type has an explicit migration path. A package major version alone is not sufficient reason to remove them.
+3. **Future major release:** Original physical aliases may be considered for removal only after direct consumers have a public shared resolver and every workload type has an explicit migration path. A package major version alone is not sufficient reason to remove them.
 
 ## Property Catalog
 

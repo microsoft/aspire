@@ -791,7 +791,7 @@ public class WithReferenceTests
     }
 
     [Fact]
-    public async Task ConnectionStringWithDashedLogicalNameEmitsLegacyAndPortableAliases()
+    public async Task ConnectionStringWithDashedLogicalNameEmitsOriginalAndPortableAliases()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
