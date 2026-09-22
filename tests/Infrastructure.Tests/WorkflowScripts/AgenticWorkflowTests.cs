@@ -67,7 +67,7 @@ public sealed class AgenticWorkflowTests
         Assert.Equal("${{ steps.download-analysis.outputs.download-path }}", Scalar(Mapping(validation, "env"), "ANALYSIS_DIR"));
         Assert.Contains("analyze-ci-failure-validation.sh", Scalar(validation, "run"), StringComparison.Ordinal);
 
-        var publish = Step(root, "Publish analysis data and comment on PR");
+        var publish = Step(root, "Publish analysis data and cause issues");
         Assert.Equal("${{ steps.download-analysis.outputs.download-path }}", Scalar(Mapping(publish, "env"), "ANALYSIS_DIR"));
         var script = Scalar(publish, "run");
         Assert.Contains("ANALYSIS_FILE=\"$ANALYSIS_DIR/analysis-result.json\"", script, StringComparison.Ordinal);
@@ -75,7 +75,7 @@ public sealed class AgenticWorkflowTests
 
         // The comment step runs in the same job but needs its own env wiring; without it the
         // analysis file is unreadable and the step fails before any comment is posted.
-        var comment = Step(root, "Comment on PR");
+        var comment = Step(root, "Comment on pull request");
         Assert.Equal("${{ steps.download-analysis.outputs.download-path }}", Scalar(Mapping(comment, "env"), "ANALYSIS_DIR"));
         Assert.Contains(
             "ANALYSIS_FILE=\"$ANALYSIS_DIR/analysis-result.json\"",
