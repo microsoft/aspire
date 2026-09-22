@@ -854,6 +854,30 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void InstallerResourceHasHiddenOnCompletionAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var scriptName = "main.py";
+
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
+            .WithPip();
+
+        var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Verify the installer resource exists
+        var installerResource = appModel.Resources.OfType<PythonInstallerResource>().Single();
+        Assert.Equal("pythonProject-installer", installerResource.Name);
+
+        // Verify the installer has HiddenBehavior.OnCompletion and exit code 0
+        Assert.True(installerResource.TryGetLastAnnotation<HiddenAnnotation>(out var hiddenAnnotation));
+        Assert.Equal(HiddenBehavior.OnCompletion, hiddenAnnotation.Behavior);
+        Assert.Contains(0, hiddenAnnotation.SuccessfulExitCodes);
+    }
+
+    [Fact]
     public void WithPip_AfterWithUv_ReplacesPackageManager()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
