@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
 import * as path from 'path';
 
 import type { BrowserLaunchConfiguration } from '../dcp/types';
@@ -12,7 +13,7 @@ import {
     waitForWorkspaceAppHost,
 } from './helpers/assertions';
 import { executeE2eControlCommand, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
-import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
+import { getDiagnosticsDir, getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { acceptModalDialog, openAspireView } from './helpers/vscode';
 import { blazorWasmDebugProofResponseAllowanceMs, blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofControlTimeoutMs, proveBlazorScenario } from './helpers';
 
@@ -165,51 +166,62 @@ suite('Aspire Blazor browser debugger E2E', function () {
         },
     ] as const;
 
-    for (const scenario of scenarios) {
-        test(`hits a managed breakpoint for ${scenario.resourceName}`, async function () {
-            this.timeout(scenarioTimeoutMs);
+    // Temporary investigation: reuse one VS Code/AppHost/profile across ordered rounds,
+    // rather than retrying failures or creating independent runner environments.
+    const scenarioIterations = process.platform === 'linux' ? 10 : 1;
+    for (let iteration = 1; iteration <= scenarioIterations; iteration++) {
+        const iterationSuffix = iteration === 1 ? '' : ` (iteration ${iteration})`;
+        for (const scenario of scenarios) {
+            test(`hits a managed breakpoint for ${scenario.resourceName}${iterationSuffix}`, async function () {
+                this.timeout(scenarioTimeoutMs);
 
-            try {
-                if (scenario.resourceName !== 'standalone') {
-                    await runScenarioServerCommand('startResource', scenario.serverResourceName, serverTransitionTimeoutMs);
-                }
-
-                const proof = await proveBlazorScenario({
-                    appHostPath,
-                    resourceName: scenario.resourceName,
-                    sourcePath: scenario.sourcePath,
-                    breakpointMarker: '// ASPIRE_E2E_MANAGED_BREAKPOINT',
-                    requestPath: scenario.requestPath,
-                    expectedBrowser,
-                    clientProjectPath: scenario.clientProjectPath,
-                    closeMode: scenario.closeMode,
-                    timeoutMs: blazorWasmDebugProofTimeoutMs,
-                });
-                await waitForNoBrowserDebugSessions(browserStateTimeoutMs);
-
-                const proofSessionIds = new Set([proof.rootSession.id, proof.browserSession.id, proof.managedSession.id]);
-                assert.ok(
-                    getBrowserDebugSessions().every(session => !proofSessionIds.has(session.id)),
-                    `Expected no proof-owned browser sessions after stopping ${scenario.resourceName}.`);
-            }
-            catch (error) {
-                if (error instanceof Error && error.message.includes('Unable to launch browser:')) {
-                    // js-debug's launch failure opens a modal that blocks subsequent
-                    // startDebugging calls until dismissed, even after adapter cleanup.
-                    try {
-                        await acceptModalDialog('Cancel', 30000, `blazor-launch-failure-${scenario.resourceName}`);
+                try {
+                    if (scenario.resourceName !== 'standalone' || iteration > 1) {
+                        await runScenarioServerCommand('startResource', scenario.serverResourceName, serverTransitionTimeoutMs);
                     }
-                    catch (dialogError) {
-                        throw new AggregateError([error, dialogError],
-                            `${error.message}\nLaunch-dialog cleanup failed: ${dialogError instanceof Error ? dialogError.message : String(dialogError)}`);
-                    }
+
+                    const proof = await proveBlazorScenario({
+                        appHostPath,
+                        resourceName: scenario.resourceName,
+                        sourcePath: scenario.sourcePath,
+                        breakpointMarker: '// ASPIRE_E2E_MANAGED_BREAKPOINT',
+                        requestPath: scenario.requestPath,
+                        expectedBrowser,
+                        clientProjectPath: scenario.clientProjectPath,
+                        closeMode: scenario.closeMode,
+                        timeoutMs: blazorWasmDebugProofTimeoutMs,
+                    });
+                    // The shared helper overwrites per-resource files. Archive each successful
+                    // proof before another round uses that resource, without changing its contract.
+                    fs.renameSync(
+                        path.join(getDiagnosticsDir(), `blazor-${scenario.resourceName}-proof.json`),
+                        path.join(getDiagnosticsDir(), `blazor-${scenario.resourceName}-iteration-${iteration}-proof.json`));
+                    await waitForNoBrowserDebugSessions(browserStateTimeoutMs);
+
+                    const proofSessionIds = new Set([proof.rootSession.id, proof.browserSession.id, proof.managedSession.id]);
+                    assert.ok(
+                        getBrowserDebugSessions().every(session => !proofSessionIds.has(session.id)),
+                        `Expected no proof-owned browser sessions after stopping ${scenario.resourceName}.`);
                 }
-                throw error;
-            }
-            finally {
-                await runScenarioServerCommand('stopResource', scenario.serverResourceName, serverTransitionTimeoutMs);
-            }
-        });
+                catch (error) {
+                    if (error instanceof Error && error.message.includes('Unable to launch browser:')) {
+                        // js-debug's launch failure opens a modal that blocks subsequent
+                        // startDebugging calls until dismissed, even after adapter cleanup.
+                        try {
+                            await acceptModalDialog('Cancel', 30000, `blazor-launch-failure-${scenario.resourceName}`);
+                        }
+                        catch (dialogError) {
+                            throw new AggregateError([error, dialogError],
+                                `${error.message}\nLaunch-dialog cleanup failed: ${dialogError instanceof Error ? dialogError.message : String(dialogError)}`);
+                        }
+                    }
+                    throw error;
+                }
+                finally {
+                    await runScenarioServerCommand('stopResource', scenario.serverResourceName, serverTransitionTimeoutMs);
+                }
+            });
+        }
     }
 
     async function runScenarioServerCommand(name: 'startResource' | 'stopResource', resourceName: string, timeoutMs: number): Promise<void> {

@@ -21,6 +21,8 @@ module.exports = {
     output: path.join(resultsDir, 'mocha.json'),
   },
   parallel: false,
+  // Temporary investigation: preserve the first browser failure instead of running cascades.
+  bail: process.env.ASPIRE_EXTENSION_E2E_SHARD === 'browser-debugger',
   spec: 'out/test-e2e/**/*.e2e.test.js',
   rootHooks: {
     async afterEach() {
