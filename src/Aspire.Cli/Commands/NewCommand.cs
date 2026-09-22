@@ -21,20 +21,6 @@ namespace Aspire.Cli.Commands;
 
 internal sealed class NewCommand : BaseCommand
 {
-    internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
-
-    protected override bool UpdateNotificationsEnabled => true;
-
-    internal override bool PrefetchesTemplatePackageMetadata => true;
-
-    private readonly INewCommandPrompter _prompter;
-    private readonly ITemplateProvider _templateProvider;
-    private readonly ITemplate[] _templates;
-    private readonly IBundleService _bundleService;
-    private readonly IPackagingService _packagingService;
-    private readonly AgentInitCommand _agentInitCommand;
-    private readonly ICliHostEnvironment _hostEnvironment;
-
     internal static readonly Option<string?> s_nameOption = new("--name", "-n")
     {
         Description = NewCommandStrings.NameArgumentDescription,
@@ -62,6 +48,13 @@ internal sealed class NewCommand : BaseCommand
         Recursive = true
     };
 
+    private readonly INewCommandPrompter _prompter;
+    private readonly ITemplateProvider _templateProvider;
+    private readonly ITemplate[] _templates;
+    private readonly IBundleService _bundleService;
+    private readonly IPackagingService _packagingService;
+    private readonly AgentInitCommand _agentInitCommand;
+    private readonly ICliHostEnvironment _hostEnvironment;
     private readonly Option<string?> _channelOption;
     private readonly Option<string?> _languageOption;
 
@@ -121,6 +114,12 @@ internal sealed class NewCommand : BaseCommand
             Subcommands.Add(templateCommand);
         }
     }
+
+    internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
+
+    protected override bool UpdateNotificationsEnabled => true;
+
+    internal override bool PrefetchesTemplatePackageMetadata => true;
 
     private string? ParseExplicitLanguageId(ParseResult parseResult)
     {

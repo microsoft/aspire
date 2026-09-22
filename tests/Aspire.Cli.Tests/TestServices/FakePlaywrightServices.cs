@@ -14,7 +14,7 @@ internal sealed class FakeNpmRunner : INpmRunner
 {
     public bool IsAvailable { get; set; } = true;
     public NpmPackageInfo? ResolveResult { get; set; }
-    public string? PackResult { get; set; } = string.Empty;
+    public bool PackSucceeds { get; set; } = true;
     public byte[] TarballContent { get; set; } = [1, 2, 3];
     public bool InstallGlobalResult { get; set; } = true;
     public int ResolveCallCount { get; private set; }
@@ -23,7 +23,6 @@ internal sealed class FakeNpmRunner : INpmRunner
     public string? ResolvedPackageName { get; private set; }
     public string? ResolvedVersionRange { get; private set; }
     public string? PackOutputDirectory { get; private set; }
-    public string? PackedTarballPath { get; private set; }
     public string? InstalledTarballPath { get; private set; }
     public Action<CancellationToken>? OnResolvePackage { get; set; }
 
@@ -43,14 +42,15 @@ internal sealed class FakeNpmRunner : INpmRunner
         cancellationToken.ThrowIfCancellationRequested();
         PackCallCount++;
         PackOutputDirectory = outputDirectory;
-        PackedTarballPath = PackResult;
-        if (PackResult == string.Empty)
+        if (!PackSucceeds)
         {
-            PackedTarballPath = Path.Combine(outputDirectory, "package.tgz");
-            await File.WriteAllBytesAsync(PackedTarballPath, TarballContent, cancellationToken);
+            return null;
         }
 
-        return PackedTarballPath;
+        var tarballPath = Path.Combine(outputDirectory, "package.tgz");
+        await File.WriteAllBytesAsync(tarballPath, TarballContent, cancellationToken);
+
+        return tarballPath;
     }
 
     public Task<bool> InstallGlobalAsync(string tarballPath, CancellationToken cancellationToken)
@@ -70,11 +70,6 @@ internal sealed class FakeNpmProvenanceChecker : INpmProvenanceChecker
 {
     public ProvenanceVerificationOutcome ProvenanceOutcome { get; set; } = ProvenanceVerificationOutcome.Verified;
     public int CallCount { get; private set; }
-    public string? CapturedPackageName { get; private set; }
-    public string? CapturedVersion { get; private set; }
-    public string? CapturedExpectedSourceRepository { get; private set; }
-    public string? CapturedExpectedWorkflowPath { get; private set; }
-    public string? CapturedExpectedBuildType { get; private set; }
     public Func<WorkflowRefInfo, bool>? CapturedValidateWorkflowRef { get; private set; }
     public string? CapturedSriIntegrity { get; private set; }
 
@@ -82,11 +77,6 @@ internal sealed class FakeNpmProvenanceChecker : INpmProvenanceChecker
     {
         cancellationToken.ThrowIfCancellationRequested();
         CallCount++;
-        CapturedPackageName = packageName;
-        CapturedVersion = version;
-        CapturedExpectedSourceRepository = expectedSourceRepository;
-        CapturedExpectedWorkflowPath = expectedWorkflowPath;
-        CapturedExpectedBuildType = expectedBuildType;
         CapturedValidateWorkflowRef = validateWorkflowRef;
         CapturedSriIntegrity = sriIntegrity;
 
@@ -111,16 +101,7 @@ internal sealed class FakePlaywrightCliRunner : IPlaywrightCliRunner
     public Action<string>? OnInstallSkills { get; set; }
     public Dictionary<string, byte[]> SkillFiles { get; } = new(StringComparer.Ordinal)
     {
-        ["SKILL.md"] = """
-            ---
-            name: playwright-cli
-            description: Browser automation with Playwright CLI.
-            ---
-
-            # Playwright CLI
-
-            See [commands](references/commands.md).
-            """u8.ToArray(),
+        ["SKILL.md"] = "# Playwright CLI\n\nSee [commands](references/commands.md)."u8.ToArray(),
         [Path.Combine("references", "commands.md")] = "# Playwright CLI commands"u8.ToArray()
     };
 

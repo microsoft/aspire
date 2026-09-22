@@ -82,23 +82,15 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task BuildApplication_RegistersClientCatalogWithSharedScanners()
+    public async Task BuildApplication_RegistersConfigurationEnvironmentScanners()
     {
         using var host = await BuildHostAsync();
-        var catalog = host.Services.GetRequiredService<AgentClientCatalog>();
-        IAgentEnvironmentScanner[] environments =
-        [
-            host.Services.GetRequiredService<Aspire.Cli.Agents.Copilot.CopilotAgentEnvironmentScanner>(),
-            host.Services.GetRequiredService<Aspire.Cli.Agents.VsCode.VsCodeAgentEnvironmentScanner>(),
-            host.Services.GetRequiredService<Aspire.Cli.Agents.ClaudeCode.ClaudeCodeAgentEnvironmentScanner>(),
-            host.Services.GetRequiredService<Aspire.Cli.Agents.OpenCode.OpenCodeAgentEnvironmentScanner>()
-        ];
+        var environments = host.Services.GetServices<IAgentEnvironmentScanner>().ToArray();
 
-        Assert.Equal(4, environments.Length);
         Assert.Equal(
             ["copilot", "vscode", "claude", "opencode"],
-            catalog.Clients.Select(client => client.Id));
-        Assert.Equal(environments, catalog.Clients.Select(client => client.Environment).Distinct());
+            environments.Select(environment => environment.Id));
+        Assert.Equal(environments, host.Services.GetServices<IAgentEnvironmentScanner>());
     }
 
     [Fact]

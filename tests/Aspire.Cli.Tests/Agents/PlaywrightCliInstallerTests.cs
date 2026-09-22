@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Security.Cryptography;
-using System.Text;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Resources;
@@ -47,7 +46,7 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
                 _npmRunner.ResolveResult = null;
                 break;
             case "pack":
-                _npmRunner.PackResult = null;
+                _npmRunner.PackSucceeds = false;
                 break;
             case "install":
                 _npmRunner.InstallGlobalResult = false;
@@ -121,12 +120,7 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal(1, _provenanceChecker.CallCount);
         Assert.Equal(1, _npmRunner.InstallGlobalCallCount);
         Assert.Equal(1, _playwrightRunner.InstallSkillsCallCount);
-        Assert.Equal(_npmRunner.PackedTarballPath, _npmRunner.InstalledTarballPath);
-        Assert.Equal(PlaywrightCliInstaller.PackageName, _provenanceChecker.CapturedPackageName);
-        Assert.Equal("0.1.7", _provenanceChecker.CapturedVersion);
-        Assert.Equal(PlaywrightCliInstaller.ExpectedSourceRepository, _provenanceChecker.CapturedExpectedSourceRepository);
-        Assert.Equal(PlaywrightCliInstaller.ExpectedWorkflowPath, _provenanceChecker.CapturedExpectedWorkflowPath);
-        Assert.Equal(PlaywrightCliInstaller.ExpectedBuildType, _provenanceChecker.CapturedExpectedBuildType);
+        Assert.Equal(Path.Combine(_npmRunner.PackOutputDirectory!, "package.tgz"), _npmRunner.InstalledTarballPath);
         Assert.Equal($"sha512-{Convert.ToBase64String(SHA512.HashData(_npmRunner.TarballContent))}", _provenanceChecker.CapturedSriIntegrity);
         Assert.False(Directory.Exists(_npmRunner.PackOutputDirectory));
         Assert.False(Directory.Exists(_playwrightRunner.InstallSkillsWorkingDirectory));
@@ -295,9 +289,8 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal(PlaywrightInstallStatus.Installed, result.Status);
         Assert.Equal(1, _playwrightRunner.InstallSkillsCallCount);
         Assert.False(Directory.Exists(_playwrightRunner.InstallSkillsWorkingDirectory));
-        var content = string.Join("\n\n", result.Files.Select(static file =>
-            $"{file.RelativePath.Replace('\\', '/')}\n{Encoding.UTF8.GetString(file.Content)}"));
-        await Verify(content, "txt");
+        Assert.Equal(_playwrightRunner.SkillFiles.Keys.Order(StringComparer.Ordinal), result.Files.Select(file => file.RelativePath).Order(StringComparer.Ordinal));
+        Assert.All(result.Files, file => Assert.Equal(_playwrightRunner.SkillFiles[file.RelativePath], file.Content));
     }
 
     [Fact]

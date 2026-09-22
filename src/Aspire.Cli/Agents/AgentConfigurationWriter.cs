@@ -128,7 +128,7 @@ internal sealed class AgentConfigurationWriter(ILogger<AgentConfigurationWriter>
                 .Select(group => group.First() with
                 {
                     Scope = group.Any(target => target.Scope is AgentConfigurationScope.User) ? AgentConfigurationScope.User : AgentConfigurationScope.Project,
-                    Clients = group.SelectMany(target => target.Clients).Distinct().ToArray(),
+                    Environments = group.SelectMany(target => target.Environments).Distinct().ToArray(),
                     ApplyAsync = async (root, context, cancellationToken) =>
                     {
                         // Sharing a physical entry must not bypass either client's policy.
@@ -276,12 +276,12 @@ internal sealed record AgentConfigurationTarget(
     string Path,
     AgentConfigurationScope Scope,
     AgentAssetKind Asset,
-    IReadOnlyList<AgentClient> Clients,
+    IReadOnlyList<IAgentEnvironmentScanner> Environments,
     string Entry,
     Func<JsonObject, AgentConfigurationWriter.ReadContext, CancellationToken, Task<AgentConfigurationEdit>> ApplyAsync)
 {
     public AgentTargetResult ToResult(AgentConfigurationStatus status, string message)
-        => new(Asset, Clients, Path, Scope, status, message);
+        => new(Asset, Environments, Path, Scope, status, message);
 }
 
 /// <summary>

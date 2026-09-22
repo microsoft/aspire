@@ -16,7 +16,7 @@ internal enum AgentAssetKind
 }
 
 /// <summary>
-/// The independent asset choices made before selecting clients.
+/// The independent asset choices made before selecting configuration environments.
 /// </summary>
 internal sealed record AgentAssetSelection(bool Mcp, bool Playwright, bool DotnetInspect, bool AspireSkills)
 {
@@ -24,12 +24,12 @@ internal sealed record AgentAssetSelection(bool Mcp, bool Playwright, bool Dotne
 }
 
 /// <summary>
-/// Resolved inputs for configuring selected clients.
+/// Selected configuration environments and independently detected clients.
 /// </summary>
 internal sealed record AgentInitRequest(
     DirectoryInfo WorkspaceRoot,
     AgentAssetSelection Assets,
-    IReadOnlyList<AgentClient> Clients,
+    IReadOnlyList<IAgentEnvironmentScanner> Environments,
     IReadOnlyList<AgentClientDetection> Detections);
 
 internal enum AgentConfigurationScope
@@ -52,7 +52,7 @@ internal enum AgentConfigurationStatus
 /// </summary>
 internal sealed record AgentTargetResult(
     AgentAssetKind Asset,
-    IReadOnlyList<AgentClient> Clients,
+    IReadOnlyList<IAgentEnvironmentScanner> Environments,
     string TargetPath,
     AgentConfigurationScope Scope,
     AgentConfigurationStatus Status,
@@ -70,10 +70,10 @@ internal sealed record AgentInitResult(IReadOnlyList<AgentTargetResult> Targets)
     public bool HasWarnings => Targets.Any(static target =>
         target.Status is AgentConfigurationStatus.Skipped or AgentConfigurationStatus.Blocked or AgentConfigurationStatus.Failed);
 
-    public IReadOnlyList<AgentClient> RegisteredClients => Targets
+    public IReadOnlyList<IAgentEnvironmentScanner> RegisteredEnvironments => Targets
         .Where(static target => target.Asset is AgentAssetKind.AspireSkills &&
             target.Status is AgentConfigurationStatus.Configured or AgentConfigurationStatus.Unchanged)
-        .SelectMany(static target => target.Clients)
+        .SelectMany(static target => target.Environments)
         .Distinct()
         .ToArray();
 }

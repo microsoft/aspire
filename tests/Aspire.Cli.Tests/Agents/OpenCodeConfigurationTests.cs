@@ -33,7 +33,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
     {
         using var context = new AgentConfigurationTestContext(output);
         var request = context.Request([context.OpenCode], mcp: true,
-            detections: [new(context.OpenCode, "opencode v2.0.0-preview.1", false)]);
+            detections: [new(AgentClientKind.OpenCode, "opencode v2.0.0-preview.1", false)]);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -91,7 +91,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
         var path = Path.Combine(context.Project.FullName, "opencode.json");
         await AgentConfigurationTestContext.WriteAsync(path, existing).DefaultTimeout();
         var request = context.Request([context.OpenCode], mcp: true,
-            detections: version is null ? [] : [new(context.OpenCode, version, false)]);
+            detections: version is null ? [] : [new(AgentClientKind.OpenCode, version, false)]);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -244,7 +244,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
         await AgentConfigurationTestContext.WriteAsync(project, existing).DefaultTimeout();
         await AgentConfigurationTestContext.WriteAsync(user, existing).DefaultTimeout();
         var request = context.Request([context.OpenCode], mcp: true,
-            detections: [new(context.OpenCode, version, false)]);
+            detections: [new(AgentClientKind.OpenCode, version, false)]);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -271,7 +271,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
     {
         using var context = new AgentConfigurationTestContext(output);
         var request = context.Request([context.OpenCode],
-            detections: [new(context.OpenCode, version, false)]);
+            detections: [new(AgentClientKind.OpenCode, version, false)]);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -300,7 +300,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
             }
             """).DefaultTimeout();
         var request = context.Request([context.OpenCode], mcp: true,
-            detections: [new(context.OpenCode, "1.18.30", false)]);
+            detections: [new(AgentClientKind.OpenCode, "1.18.30", false)]);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -321,7 +321,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output)
     {
         using var context = new AgentConfigurationTestContext(output);
         var request = context.Request([context.OpenCode], skills: false, mcp: true,
-            detections: [new(context.OpenCode, "1.18.30", false)]);
+            detections: [new(AgentClientKind.OpenCode, "1.18.30", false)]);
 
         var results = await context.ConfigureNativeAsync(request).DefaultTimeout();
 

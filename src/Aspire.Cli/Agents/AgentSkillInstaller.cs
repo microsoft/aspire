@@ -29,7 +29,7 @@ internal sealed class AgentSkillInstaller(
     /// <inheritdoc />
     public async Task<IReadOnlyList<AgentTargetResult>> InstallAsync(AgentInitRequest request, CancellationToken cancellationToken)
     {
-        if ((!request.Assets.Playwright && !request.Assets.DotnetInspect) || request.Clients.Count == 0)
+        if ((!request.Assets.Playwright && !request.Assets.DotnetInspect) || request.Environments.Count == 0)
         {
             return [];
         }
@@ -77,7 +77,7 @@ internal sealed class AgentSkillInstaller(
         AgentAssetKind[] assets = [AgentAssetKind.Playwright, AgentAssetKind.DotnetInspect];
         AgentConfigurationScope[] scopes = [AgentConfigurationScope.Project, AgentConfigurationScope.User];
 
-        foreach (var client in request.Clients.Distinct())
+        foreach (var client in request.Environments.Distinct())
         {
             foreach (var scope in scopes)
             {
@@ -97,7 +97,7 @@ internal sealed class AgentSkillInstaller(
                     string? error = null;
                     try
                     {
-                        logicalPath = Path.GetFullPath(Path.Combine(GetSkillBaseDirectory(client, scope, request.WorkspaceRoot), GetSkillName(asset)));
+                        logicalPath = Path.GetFullPath(Path.Combine(GetSkillBaseDirectory(client, scope, request.WorkspaceRoot, executionContext, environment), GetSkillName(asset)));
                         physicalPath = AgentPath.Resolve(logicalPath);
                     }
                     catch (Exception ex) when (ex is AgentConfigurationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
@@ -111,9 +111,9 @@ internal sealed class AgentSkillInstaller(
                     var key = $"{asset}:{physicalPath}";
                     if (targets.TryGetValue(key, out var existing))
                     {
-                        if (!existing.Clients.Contains(client))
+                        if (!existing.Environments.Contains(client))
                         {
-                            existing.Clients.Add(client);
+                            existing.Environments.Add(client);
                         }
 
                         existing.Aliases.Add(logicalPath);
@@ -133,7 +133,7 @@ internal sealed class AgentSkillInstaller(
         return targets.Values.ToArray();
     }
 
-    private string GetSkillBaseDirectory(AgentClient client, AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
+    internal static string GetSkillBaseDirectory(IAgentEnvironmentScanner client, AgentConfigurationScope scope, DirectoryInfo workspaceRoot, CliExecutionContext executionContext, IEnvironment environment)
     {
         // These clients natively discover both project and home .agents/skills directories.
         // COPILOT_HOME and OPENCODE_CONFIG_DIR relocate their own configuration, not this
@@ -238,7 +238,7 @@ internal sealed class AgentSkillInstaller(
         return physicalPath;
     }
 
-    private static string GetSkillName(AgentAssetKind asset) => asset switch
+    internal static string GetSkillName(AgentAssetKind asset) => asset switch
     {
         AgentAssetKind.Playwright => PlaywrightCliInstaller.PlaywrightCliSkillName,
         AgentAssetKind.DotnetInspect => DotnetInspectSkill.Name,
@@ -250,14 +250,14 @@ internal sealed class AgentSkillInstaller(
 
     private sealed record SkillTarget(
         AgentAssetKind Asset,
-        List<AgentClient> Clients,
+        List<IAgentEnvironmentScanner> Environments,
         string Path,
         AgentConfigurationScope Scope,
         HashSet<string> Aliases,
         string? Error)
     {
         public AgentTargetResult ToResult(AgentConfigurationStatus status, string? message) =>
-            new(Asset, Clients.ToArray(), Path, Scope, status, message);
+            new(Asset, Environments.ToArray(), Path, Scope, status, message);
     }
 }
 

@@ -131,8 +131,9 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await AcceptDefaultAssetsAsync(auto, includeMcp: true);
         await auto.WaitUntilAsync(
-            s => s.ContainsText("Which agent environments do you want to configure?") && s.ContainsText("[X] VS Code"),
-            timeout: TimeSpan.FromSeconds(30), description: "client selection with detected VS Code preselected");
+            s => s.ContainsText("Which agent environments do you want to configure?") &&
+                s.ContainsText("[X] VS Code") && s.ContainsText(".client-config/vscode/Code/User/settings.json"),
+            timeout: TimeSpan.FromSeconds(30), description: "detected VS Code selection showing its native settings destination");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -319,7 +320,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
     private static void AssertVsCodeSettings(string projectSettings, string userSettings)
     {
-        AssertNativeSettings(projectSettings);
+        Assert.False(File.Exists(projectSettings));
         var settings = JsonNode.Parse(File.ReadAllText(userSettings))!;
         Assert.Equal(["microsoft/aspire-skills"], settings["chat.plugins.marketplaces"]!.AsArray().Select(value => value!.GetValue<string>()));
     }

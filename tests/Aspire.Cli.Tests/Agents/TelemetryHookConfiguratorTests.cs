@@ -6,6 +6,7 @@ using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Resources;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Agents;
 
@@ -16,14 +17,14 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var request = context.Request([context.Copilot],
-            detections: [new(context.Copilot, null, false)]);
+            detections: [new(AgentClientKind.CopilotCli, null, false)]);
 
         var result = await context.Service.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
 
         AssertNativeConfigured(result);
         var hook = Assert.Single(result.Targets, target => target.Asset is AgentAssetKind.TelemetryHooks);
         Assert.Equal(AgentConfigurationStatus.Configured, hook.Status);
-        Assert.Equal([context.Copilot], hook.Clients);
+        Assert.Equal([context.Copilot], hook.Environments);
         Assert.Equal(AgentConfigurationScope.User, hook.Scope);
         Assert.Equal(1, context.HookInstaller.Calls);
 
@@ -42,20 +43,20 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     public async Task Plan_RegistersOneSharedCopilotHookForDetectedAppAndCli()
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
-        AgentClient[] clients = [context.Copilot];
+        IAgentEnvironmentScanner[] clients = [context.Copilot];
 
         var request = context.Request(clients, detections:
         [
-            new(context.Copilot, null, false),
-            new(context.Copilot, null, false),
-            new(context.Copilot, null, false)
+            new(AgentClientKind.CopilotApp, null, false),
+            new(AgentClientKind.CopilotCli, null, false),
+            new(AgentClientKind.CopilotCli, null, false)
         ]);
 
         var result = await context.Service.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
 
         AssertNativeConfigured(result);
         var hook = Assert.Single(result.Targets, target => target.Asset is AgentAssetKind.TelemetryHooks);
-        Assert.Equal(clients, hook.Clients);
+        Assert.Equal(clients, hook.Environments);
         Assert.Equal(AgentConfigurationStatus.Configured, hook.Status);
         Assert.Equal(1, context.HookInstaller.Calls);
     }
@@ -68,7 +69,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         context.SetVariable("COPILOT_HOME", custom.FullName);
 
         var result = await context.Service.ConfigureAsync(
-            context.Request([context.Copilot], detections: [new(context.Copilot, null, false)]),
+            context.Request([context.Copilot], detections: [new(AgentClientKind.CopilotCli, null, false)]),
             CancellationToken.None).DefaultTimeout();
 
         AssertNativeConfigured(result);
@@ -85,7 +86,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         using var context = new AgentConfigurationTestContext(outputHelper);
 
         var result = await context.Service.ConfigureAsync(
-            context.Request([context.ClaudeCode], detections: [new(context.ClaudeCode, null, false)]),
+            context.Request([context.ClaudeCode], detections: [new(AgentClientKind.ClaudeCode, null, false)]),
             CancellationToken.None).DefaultTimeout();
 
         AssertNativeConfigured(result);
@@ -131,7 +132,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
             """).DefaultTimeout();
 
         var result = await context.Service.ConfigureAsync(
-            context.Request([context.ClaudeCode], detections: [new(context.ClaudeCode, null, false)]),
+            context.Request([context.ClaudeCode], detections: [new(AgentClientKind.ClaudeCode, null, false)]),
             CancellationToken.None).DefaultTimeout();
 
         AssertNativeConfigured(result);
@@ -158,7 +159,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         await AgentConfigurationTestContext.WriteAsync(path, existing).DefaultTimeout();
 
         var result = await context.Service.ConfigureAsync(
-            context.Request([context.Copilot], detections: [new(context.Copilot, null, false)]),
+            context.Request([context.Copilot], detections: [new(AgentClientKind.CopilotCli, null, false)]),
             CancellationToken.None).DefaultTimeout();
 
         AssertNativeConfigured(result);
@@ -177,7 +178,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var request = context.Request([context.ClaudeCode],
-            detections: [new(context.ClaudeCode, null, false)]);
+            detections: [new(AgentClientKind.ClaudeCode, null, false)]);
         await context.ConfigureNativeAsync(request).DefaultTimeout();
         var path = Path.Combine(context.ClaudeDirectory, "settings.json");
         var root = await ReadObjectAsync(path).DefaultTimeout();
@@ -199,7 +200,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var request = context.Request([context.OpenCode],
-            detections: [new(context.Copilot, null, false), new(context.ClaudeCode, null, false)]);
+            detections: [new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.ClaudeCode, null, false)]);
 
         var results = await context.Writer.ApplyAsync(context.Hooks.Plan(request), CancellationToken.None).DefaultTimeout();
 
@@ -222,7 +223,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var request = context.Request([context.Copilot, context.ClaudeCode],
-            detections: [new(context.VsCode, null, false), new(context.OpenCode, null, false)]);
+            detections: [new(AgentClientKind.VsCode, null, false), new(AgentClientKind.OpenCode, null, false)]);
 
         var results = await context.Writer.ApplyAsync(context.Hooks.Plan(request), CancellationToken.None).DefaultTimeout();
 
@@ -238,10 +239,10 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         using var context = new AgentConfigurationTestContext(outputHelper);
 
         Assert.Empty(context.Hooks.Plan(context.Request([context.VsCode, context.OpenCode],
-            detections: [new(context.VsCode, null, false), new(context.OpenCode, null, false)])));
+            detections: [new(AgentClientKind.VsCode, null, false), new(AgentClientKind.OpenCode, null, false)])));
         Assert.Empty(context.Hooks.Plan(context.Request([context.Copilot, context.ClaudeCode],
-            skills: false, detections: [new(context.Copilot, null, false), new(context.ClaudeCode, null, false)])));
-        Assert.Empty(context.Hooks.Plan(context.Request([], detections: [new(context.ClaudeCode, null, false)])));
+            skills: false, detections: [new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.ClaudeCode, null, false)])));
+        Assert.Empty(context.Hooks.Plan(context.Request([], detections: [new(AgentClientKind.ClaudeCode, null, false)])));
         Assert.Equal(0, context.HookInstaller.Calls);
     }
 
@@ -251,8 +252,9 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     public async Task Plan_PreservesBytesAndTimestampOnRepeat(string clientName)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
-        var client = context.Catalog.Clients.Single(client => client.Id == clientName);
-        var request = context.Request([client], detections: [new(client, null, false)]);
+        var client = context.Environments.Single(client => client.Id == clientName);
+        var detectedClient = clientName == "copilot" ? AgentClientKind.CopilotCli : AgentClientKind.ClaudeCode;
+        var request = context.Request([client], detections: [new(detectedClient, null, false)]);
         var first = await context.Service.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
         var path = Assert.Single(first.Targets, target => target.Asset is AgentAssetKind.TelemetryHooks).TargetPath;
         var bytes = await File.ReadAllBytesAsync(path).DefaultTimeout();
@@ -275,7 +277,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         await AgentConfigurationTestContext.WriteAsync(path, """{/* comment */"model":"preserved",}""").DefaultTimeout();
 
         var result = await context.Service.ConfigureAsync(
-            context.Request([context.ClaudeCode], detections: [new(context.ClaudeCode, null, false)]),
+            context.Request([context.ClaudeCode], detections: [new(AgentClientKind.ClaudeCode, null, false)]),
             CancellationToken.None).DefaultTimeout();
 
         AssertNativeConfigured(result);
@@ -305,7 +307,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
             """).DefaultTimeout();
 
         var result = await context.Service.ConfigureAsync(
-            context.Request([context.ClaudeCode], detections: [new(context.ClaudeCode, null, false)]),
+            context.Request([context.ClaudeCode], detections: [new(AgentClientKind.ClaudeCode, null, false)]),
             CancellationToken.None).DefaultTimeout();
 
         AssertNativeConfigured(result);
@@ -316,12 +318,14 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         Assert.Equal(OperatingSystem.IsWindows() ? "pwsh" : "bash", (string?)groups[1]!["hooks"]![0]!["command"]);
     }
 
-    [Fact]
-    public async Task Plan_ExistingProjectHookPreventsDuplicateUserRegistration()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Plan_ExistingProjectHookRefreshesScriptsWithoutDuplicateUserRegistration(bool deleteScripts)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var request = context.Request([context.ClaudeCode],
-            detections: [new(context.ClaudeCode, null, false)]);
+            detections: [new(AgentClientKind.ClaudeCode, null, false)]);
         await context.ConfigureNativeAsync(request).DefaultTimeout();
         var projectPath = Path.Combine(context.Project.FullName, ".claude", "settings.json");
         var root = await ReadObjectAsync(projectPath).DefaultTimeout();
@@ -341,16 +345,34 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         var existing = root.ToJsonString();
         await File.WriteAllTextAsync(projectPath, existing).DefaultTimeout();
 
-        var result = await context.Service.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
+        var installer = new TelemetryHookInstaller(context.ExecutionContext, NullLogger<TelemetryHookInstaller>.Instance);
+        var scripts = await installer.EnsureInstalledAsync(CancellationToken.None).DefaultTimeout();
+        var shellBytes = await File.ReadAllBytesAsync(scripts.ShellScriptPath).DefaultTimeout();
+        var powerShellBytes = await File.ReadAllBytesAsync(scripts.PowerShellScriptPath).DefaultTimeout();
+        if (deleteScripts)
+        {
+            File.Delete(scripts.ShellScriptPath);
+            File.Delete(scripts.PowerShellScriptPath);
+        }
+        else
+        {
+            await File.WriteAllTextAsync(scripts.ShellScriptPath, "outdated shell script").DefaultTimeout();
+            await File.WriteAllTextAsync(scripts.PowerShellScriptPath, "outdated PowerShell script").DefaultTimeout();
+        }
+        var hooks = new TelemetryHookConfigurator(installer, context.Environments, context.ExecutionContext, NullLogger<TelemetryHookConfigurator>.Instance);
+        var service = new AgentInitService(context.Writer, context.SkillInstaller, hooks);
+
+        var result = await service.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
 
         Assert.All(result.Targets.Where(target => target.Asset is AgentAssetKind.AspireSkills),
             target => Assert.Equal(AgentConfigurationStatus.Unchanged, target.Status));
         var hook = Assert.Single(result.Targets, target => target.Asset is AgentAssetKind.TelemetryHooks);
         Assert.Equal(AgentConfigurationStatus.Skipped, hook.Status);
         Assert.Equal(AgentCommandStrings.Configuration_ExistingProjectHook, hook.Message);
-        Assert.Equal(0, context.HookInstaller.Calls);
         Assert.Equal(existing, await File.ReadAllTextAsync(projectPath).DefaultTimeout());
         Assert.Null((await ReadObjectAsync(hook.TargetPath).DefaultTimeout())["hooks"]);
+        Assert.Equal(shellBytes, await File.ReadAllBytesAsync(scripts.ShellScriptPath).DefaultTimeout());
+        Assert.Equal(powerShellBytes, await File.ReadAllBytesAsync(scripts.PowerShellScriptPath).DefaultTimeout());
     }
 
     [Fact]
@@ -358,7 +380,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var request = context.Request([context.ClaudeCode],
-            detections: [new(context.ClaudeCode, null, false)]);
+            detections: [new(AgentClientKind.ClaudeCode, null, false)]);
         await context.ConfigureNativeAsync(request).DefaultTimeout();
         var path = Path.Combine(context.ClaudeDirectory, "settings.json");
         var root = await ReadObjectAsync(path).DefaultTimeout();

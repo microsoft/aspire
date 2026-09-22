@@ -14,14 +14,10 @@ using Spectre.Console;
 namespace Aspire.Cli.Commands;
 
 /// <summary>
-/// Selects independent assets and clients before applying agent configuration.
+/// Selects independent assets and configuration environments before applying changes.
 /// </summary>
 internal sealed class AgentInitCommand : BaseCommand
 {
-    private readonly AgentClientCatalog _clientCatalog;
-    private readonly IAgentInitService _agentInitService;
-    private readonly IGitRepository _gitRepository;
-
     private static readonly Option<string?> s_workspaceRootOption = new("--workspace-root")
     {
         Description = AgentCommandStrings.InitCommand_WorkspaceRootOptionDescription
@@ -32,18 +28,24 @@ internal sealed class AgentInitCommand : BaseCommand
     internal static readonly Option<AgentConfirmation?> s_dotnetInspectOption = CreateAssetOption("--dotnet-inspect", AgentCommandStrings.InitCommand_DotnetInspectOptionDescription);
     internal static readonly Option<AgentConfirmation?> s_aspireSkillsOption = CreateAssetOption("--aspire-skills", AgentCommandStrings.InitCommand_AspireSkillsOptionDescription);
 
+    private readonly IReadOnlyList<IAgentEnvironmentScanner> _environmentScanners;
+    private readonly IAgentInitService _agentInitService;
+    private readonly IGitRepository _gitRepository;
+    private readonly IEnvironment _environment;
     private readonly Option<string?> _environmentsOption;
 
     public AgentInitCommand(
-        AgentClientCatalog clientCatalog,
+        IEnumerable<IAgentEnvironmentScanner> environmentScanners,
         IAgentInitService agentInitService,
         IGitRepository gitRepository,
+        IEnvironment environment,
         CommonCommandServices services)
         : base("init", AgentCommandStrings.InitCommand_Description, services)
     {
-        _clientCatalog = clientCatalog;
+        _environmentScanners = Array.AsReadOnly(environmentScanners.ToArray());
         _agentInitService = agentInitService;
         _gitRepository = gitRepository;
+        _environment = environment;
         _environmentsOption = CreateEnvironmentsOption();
 
         AddOptions(this, includeMcp: true, includeWorkspaceRoot: true);
@@ -172,7 +174,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
     private Option<string?> CreateEnvironmentsOption()
     {
-        var clientIds = _clientCatalog.Clients.Select(static client => client.Id).ToArray();
+        var clientIds = _environmentScanners.Select(static scanner => scanner.Id).ToArray();
         var supportedClients = string.Join(",", clientIds);
 
         return new Option<string?>("--environments")
@@ -263,18 +265,22 @@ internal sealed class AgentInitCommand : BaseCommand
             return new(CliExitCodes.Success, []);
         }
 
+        var detectedEnvironments = new HashSet<IAgentEnvironmentScanner>();
         var detections = await InteractionService.ShowStatusAsync(
             McpCommandStrings.InitCommand_DetectingAgentEnvironments,
             async () =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var found = new List<AgentClientDetection>();
-                foreach (var clients in _clientCatalog.Clients.GroupBy(client => client.Environment))
+                foreach (var scanner in _environmentScanners)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    if (await clients.Key.ScanAsync(ExecutionContext.WorkingDirectory, workspaceRoot, cancellationToken) is { } evidence)
+                    var context = new AgentEnvironmentScanContext(ExecutionContext.WorkingDirectory, workspaceRoot);
+                    await scanner.ScanAsync(context, cancellationToken);
+                    if (context.DetectedClients.Count > 0)
                     {
-                        found.AddRange(clients.Select(client => new AgentClientDetection(client, evidence.Version, evidence.IsInsiders)));
+                        detectedEnvironments.Add(scanner);
+                        found.AddRange(context.DetectedClients);
                     }
                 }
 
@@ -283,18 +289,21 @@ internal sealed class AgentInitCommand : BaseCommand
             },
             emoji: KnownEmojis.Robot);
 
-        var detectedClients = detections.Select(static detection => detection.Client).ToHashSet();
-        var defaults = _clientCatalog.Clients.Where(detectedClients.Contains).ToArray();
+        var defaults = _environmentScanners.Where(detectedEnvironments.Contains).ToArray();
         // No default is intentionally different from "none": unattended setup must ask
         // for --environments when detection cannot supply a choice.
         var clientsBinding = defaults.Length == 0
-            ? bindings.Clients
-            : bindings.Clients.WithDefault(string.Join(",", defaults.Select(static client => client.Id)));
+            ? bindings.Environments
+            : bindings.Environments.WithDefault(string.Join(",", defaults.Select(static client => client.Id)));
+        var previewRequest = new AgentInitRequest(workspaceRoot, assets, _environmentScanners, detections);
+        var descriptions = new Dictionary<IAgentEnvironmentScanner, string>();
         InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_EnvironmentSelectionNotice);
         var clients = await InteractionService.PromptForSelectionsAsync(
             McpCommandStrings.InitCommand_AgentConfigurationSelectPrompt,
-            _clientCatalog.Clients,
-            static client => client.DisplayName,
+            _environmentScanners,
+            scanner => descriptions.TryGetValue(scanner, out var description)
+                ? description
+                : descriptions[scanner] = DescribeEnvironment(scanner, previewRequest),
             preSelected: defaults,
             optional: true,
             binding: clientsBinding,
@@ -325,14 +334,78 @@ internal sealed class AgentInitCommand : BaseCommand
             activity?.SetStatus(ActivityStatusCode.Error);
         }
 
-        return new(result.HasErrors ? CliExitCodes.InvalidCommand : CliExitCodes.Success, result.RegisteredClients);
+        return new(result.HasErrors ? CliExitCodes.InvalidCommand : CliExitCodes.Success, result.RegisteredEnvironments);
+    }
+
+    private string DescribeEnvironment(IAgentEnvironmentScanner scanner, AgentInitRequest request)
+    {
+        try
+        {
+            // Show both standalone and shared locations: Copilot can reuse Claude's .mcp.json.
+            // Targets are deferred edits; enumerating them never applies configuration.
+            var ownTargets = scanner.GetTargets(request with { Environments = [scanner] }).ToArray();
+            var sharedTargets = scanner.GetTargets(request).ToArray();
+            var sharedScopes = sharedTargets
+                .Where(target => !ownTargets.Any(own => own.Scope == target.Scope && AgentPath.Comparer.Equals(own.Path, target.Path)))
+                .Select(target => target.Scope).ToHashSet();
+            var locations = ownTargets.Concat(sharedTargets)
+                .Select(target => (target.Scope, target.Path))
+                .ToList();
+            foreach (var scope in new[] { AgentConfigurationScope.Project, AgentConfigurationScope.User })
+            {
+                foreach (var asset in new[] { AgentAssetKind.Playwright, AgentAssetKind.DotnetInspect })
+                {
+                    if ((asset is AgentAssetKind.Playwright && request.Assets.Playwright) ||
+                        (asset is AgentAssetKind.DotnetInspect && request.Assets.DotnetInspect))
+                    {
+                        locations.Add((scope, Path.Combine(
+                            AgentSkillInstaller.GetSkillBaseDirectory(scanner, scope, request.WorkspaceRoot, ExecutionContext, _environment),
+                            AgentSkillInstaller.GetSkillName(asset))));
+                    }
+                }
+            }
+
+            var lines = new List<string> { scanner.DisplayName.EscapeMarkup() };
+            foreach (var group in locations.GroupBy(location => location.Scope).OrderBy(group => group.Key))
+            {
+                var scope = group.Key is AgentConfigurationScope.Project
+                    ? AgentCommandStrings.InitCommand_ProjectScope
+                    : AgentCommandStrings.InitCommand_UserScope;
+                if (sharedScopes.Contains(group.Key))
+                {
+                    scope = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ScopeWithSharedAlternatives, scope);
+                }
+                var paths = group.Select(location => DisplayPath(location.Path, group.Key)).Distinct(AgentPath.Comparer);
+                lines.Add("  " + string.Format(CultureInfo.CurrentCulture,
+                    AgentCommandStrings.InitCommand_EnvironmentLocationDescription, scope, string.Join(", ", paths)).EscapeMarkup());
+            }
+
+            return string.Join(Environment.NewLine, lines);
+        }
+        catch (Exception ex) when (ex is AgentConfigurationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return scanner.DisplayName.EscapeMarkup() + Environment.NewLine + "  " +
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.Configuration_ReadWriteFailed, ex.Message).EscapeMarkup();
+        }
+
+        string DisplayPath(string path, AgentConfigurationScope scope)
+        {
+            var root = scope is AgentConfigurationScope.Project ? request.WorkspaceRoot.FullName : ExecutionContext.HomeDirectory.FullName;
+            var relative = Path.GetRelativePath(root, path);
+            if (Path.IsPathRooted(relative) || relative == ".." || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            {
+                return path;
+            }
+
+            return scope is AgentConfigurationScope.Project ? relative : Path.Combine("~", relative);
+        }
     }
 
     private void DisplayResults(AgentInitResult result)
     {
         foreach (var target in result.Targets)
         {
-            var clients = string.Join(", ", target.Clients.Select(client => client.DisplayName));
+            var clients = string.Join(", ", target.Environments.Select(client => client.DisplayName));
             var scope = target.Scope is AgentConfigurationScope.Project ? AgentCommandStrings.InitCommand_ProjectScope : AgentCommandStrings.InitCommand_UserScope;
             var asset = target.Asset switch
             {
@@ -377,7 +450,7 @@ internal sealed class AgentInitCommand : BaseCommand
             }
         }
 
-        if (result.RegisteredClients.Count > 0)
+        if (result.RegisteredEnvironments.Count > 0)
         {
             InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_ClientAcquisitionNotice);
         }
@@ -399,9 +472,9 @@ internal sealed record AgentInitPromptBindings(
     PromptBinding<bool> Playwright,
     PromptBinding<bool> DotnetInspect,
     PromptBinding<bool> AspireSkills,
-    PromptBinding<string?> Clients);
+    PromptBinding<string?> Environments);
 
-internal readonly record struct AgentInitExecutionResult(int ExitCode, IReadOnlyList<AgentClient> RegisteredClients);
+internal readonly record struct AgentInitExecutionResult(int ExitCode, IReadOnlyList<IAgentEnvironmentScanner> RegisteredEnvironments);
 
 internal enum AgentConfirmation
 {

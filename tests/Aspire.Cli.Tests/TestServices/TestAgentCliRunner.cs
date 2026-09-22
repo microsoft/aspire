@@ -24,12 +24,14 @@ internal sealed class TestAgentCliRunner : ICopilotCliRunner, IClaudeCodeCliRunn
     public IReadOnlyList<string> Commands => _commands.ToArray();
     public Func<string, CancellationToken, Task<SemVersion?>>? GetVersionAsyncCallback { get; init; }
 
-    public AgentClientCatalog CreateCatalog(CliExecutionContext executionContext, IEnvironment environment)
-        => new(
+    public IReadOnlyList<IAgentEnvironmentScanner> CreateScanners(CliExecutionContext executionContext, IEnvironment environment)
+        => Array.AsReadOnly<IAgentEnvironmentScanner>(
+        [
             new CopilotAgentEnvironmentScanner(this, new CopilotAppInstallationDetector(environment, executionContext), executionContext, environment, NullLogger<CopilotAgentEnvironmentScanner>.Instance),
             new VsCodeAgentEnvironmentScanner(this, executionContext, environment, NullLogger<VsCodeAgentEnvironmentScanner>.Instance),
             new ClaudeCodeAgentEnvironmentScanner(this, executionContext, environment, NullLogger<ClaudeCodeAgentEnvironmentScanner>.Instance),
-            new OpenCodeAgentEnvironmentScanner(this, executionContext, environment, NullLogger<OpenCodeAgentEnvironmentScanner>.Instance));
+            new OpenCodeAgentEnvironmentScanner(this, executionContext, environment, NullLogger<OpenCodeAgentEnvironmentScanner>.Instance)
+        ]);
 
     Task<SemVersion?> ICopilotCliRunner.GetVersionAsync(CancellationToken cancellationToken)
         => GetVersionAsync("copilot", CopilotVersion, cancellationToken);

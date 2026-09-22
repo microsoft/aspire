@@ -31,21 +31,21 @@ internal static class CopilotPaths
         => AgentPath.Expand(GetConfigDirectory(executionContext.HomeDirectory, environment), executionContext);
 
     public static IEnumerable<string> PluginSettings(AgentInitRequest request, CliExecutionContext executionContext, IEnvironment environment)
+        => ProjectSettings(request.WorkspaceRoot)
+            .Prepend(Path.Combine(GetConfigDirectory(executionContext, environment), "settings.json"))
+            .Concat(ManagedSettings(executionContext, environment));
+
+    public static IEnumerable<string> ProjectSettings(DirectoryInfo workspaceRoot)
     {
         // Copilot reads Claude's project settings, never Claude's user settings.
         // https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference
-        yield return Path.Combine(GetConfigDirectory(executionContext, environment), "settings.json");
-        foreach (var path in ClaudeCodeAgentEnvironmentScanner.ProjectSettings(request.WorkspaceRoot))
+        foreach (var path in ClaudeCodeAgentEnvironmentScanner.ProjectSettings(workspaceRoot))
         {
             yield return path;
         }
 
-        yield return Path.Combine(request.WorkspaceRoot.FullName, ".github", "copilot", "settings.json");
-        yield return Path.Combine(request.WorkspaceRoot.FullName, ".github", "copilot", "settings.local.json");
-        foreach (var path in ManagedSettings(executionContext, environment))
-        {
-            yield return path;
-        }
+        yield return Path.Combine(workspaceRoot.FullName, ".github", "copilot", "settings.json");
+        yield return Path.Combine(workspaceRoot.FullName, ".github", "copilot", "settings.local.json");
     }
 
     public static IEnumerable<string> ManagedSettings(CliExecutionContext executionContext, IEnvironment environment)
@@ -59,13 +59,11 @@ internal static class CopilotPaths
     {
         // Cross-tool repository hooks must not be duplicated by a new user hook.
         // https://docs.github.com/en/copilot/reference/hooks-reference
-        foreach (var path in ClaudeCodeAgentEnvironmentScanner.ProjectSettings(request.WorkspaceRoot))
+        foreach (var path in ProjectSettings(request.WorkspaceRoot))
         {
             yield return path;
         }
 
-        yield return Path.Combine(request.WorkspaceRoot.FullName, ".github", "copilot", "settings.json");
-        yield return Path.Combine(request.WorkspaceRoot.FullName, ".github", "copilot", "settings.local.json");
         yield return Path.Combine(request.WorkspaceRoot.FullName, ".github", "hooks", "aspire-telemetry.json");
         yield return Path.Combine(GetConfigDirectory(executionContext, environment), "settings.json");
     }

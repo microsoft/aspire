@@ -172,8 +172,11 @@ internal static class CliTestHelper
         services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<NuGetPackagePrefetcher>());
         services.AddSingleton(options.AuxiliaryBackchannelMonitorFactory);
         services.AddSingleton(options.AgentEnvironmentFactory);
-        services.AddSingleton<IAgentEnvironmentScanner>(sp => sp.GetRequiredService<TestAgentClientEnvironment>());
-        services.AddSingleton(sp => sp.GetRequiredService<TestAgentClientEnvironment>().CreateCatalog());
+        services.AddSingleton(sp => new TestAgentEnvironments(sp.GetRequiredService<TestAgentEnvironmentScanner>()));
+        services.AddSingleton<IAgentEnvironmentScanner>(sp => sp.GetRequiredService<TestAgentEnvironments>().Copilot);
+        services.AddSingleton<IAgentEnvironmentScanner>(sp => sp.GetRequiredService<TestAgentEnvironments>().VsCode);
+        services.AddSingleton<IAgentEnvironmentScanner>(sp => sp.GetRequiredService<TestAgentEnvironments>().ClaudeCode);
+        services.AddSingleton<IAgentEnvironmentScanner>(sp => sp.GetRequiredService<TestAgentEnvironments>().OpenCode);
         services.AddSingleton(options.AgentInitServiceFactory);
         services.AddSingleton(options.GitRepositoryFactory);
         services.AddSingleton(options.NpmRunnerFactory);
@@ -670,11 +673,11 @@ internal sealed class CliServiceCollectionTestOptions
         return new TestAuxiliaryBackchannelMonitor();
     };
 
-    public Func<IServiceProvider, TestAgentClientEnvironment> AgentEnvironmentFactory { get; set; } = (IServiceProvider serviceProvider) =>
+    public Func<IServiceProvider, TestAgentEnvironmentScanner> AgentEnvironmentFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
         // Chained new/init tests get a deterministic client without probing the host.
         // Tests for the unattended --environments requirement explicitly supply an empty detector.
-        return new TestAgentClientEnvironment(new AgentClientDetection(TestAgentClients.Default.Copilot, Version: null, IsInsiders: false));
+        return new TestAgentEnvironmentScanner(new AgentClientDetection(AgentClientKind.CopilotCli, Version: null, IsInsiders: false));
     };
 
     public Func<IServiceProvider, IAgentInitService> AgentInitServiceFactory { get; set; } = _ => new TestAgentInitService();

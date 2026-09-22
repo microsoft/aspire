@@ -13,6 +13,9 @@ namespace Aspire.Cli.Agents.ClaudeCode;
 /// </summary>
 internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
 {
+    internal const string ClientId = "claude";
+    internal const string HookEventName = "PostToolUse";
+
     private readonly IClaudeCodeCliRunner _claudeCodeCliRunner;
     private readonly CliExecutionContext _executionContext;
     private readonly IEnvironment _environment;
@@ -41,26 +44,28 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
         _logger = logger;
     }
 
-    internal const string ClientId = "claude";
-    internal const string HookEventName = "PostToolUse";
+    /// <inheritdoc />
+    public string Id => ClientId;
+
+    public string DisplayName => "Claude Code";
+
+    public override string ToString() => Id;
 
     /// <inheritdoc />
-    public async Task<AgentEnvironmentDetection?> ScanAsync(DirectoryInfo workingDirectory, DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
+    public async Task ScanAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _logger.LogDebug("Starting Claude Code environment scan in directory: {WorkingDirectory}", workingDirectory.FullName);
+        _logger.LogDebug("Starting Claude Code environment scan in directory: {WorkingDirectory}", context.WorkingDirectory.FullName);
 
-        var hasProjectConfiguration = HasProjectConfiguration(workingDirectory, workspaceRoot);
+        var hasProjectConfiguration = HasProjectConfiguration(context.WorkingDirectory, context.WorkspaceRoot);
         var version = await _claudeCodeCliRunner.GetVersionAsync(cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
 
         if (hasProjectConfiguration || version is not null)
         {
             _logger.LogDebug("Detected Claude Code with version: {Version}", version);
-            return new(version?.ToString(), IsInsiders: false);
+            context.AddDetection(new(AgentClientKind.ClaudeCode, version?.ToString(), IsInsiders: false));
         }
-
-        return null;
     }
 
     /// <summary>
@@ -77,7 +82,6 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
     /// <inheritdoc />
     public IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request)
     {
-        var client = request.Clients.Single(client => client.Environment == this);
         var mcpFile = GetMcpFile(_executionContext, _environment);
         if (request.Assets.AspireSkills)
         {
@@ -92,11 +96,11 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
         }
 
         AgentConfigurationTarget PluginTarget(string path, AgentConfigurationScope scope)
-            => new(path, scope, AgentAssetKind.AspireSkills, [client], "plugins:aspire", async (root, context, cancellationToken) =>
+            => new(path, scope, AgentAssetKind.AspireSkills, [this], "plugins:aspire", async (root, context, cancellationToken) =>
                 AspireSkillsPluginConfiguration.Apply(root, await AgentConfigurationJson.ReadSettingsAsync(context, PluginSettings(request, _executionContext, _environment), cancellationToken)));
 
         AgentConfigurationTarget McpTarget(string path, AgentConfigurationScope scope)
-            => new(path, scope, AgentAssetKind.Mcp, [client], "mcpServers:aspire", async (root, context, cancellationToken) =>
+            => new(path, scope, AgentAssetKind.Mcp, [this], "mcpServers:aspire", async (root, context, cancellationToken) =>
             {
                 if (scope is AgentConfigurationScope.Project && AspireMcpConfiguration.UsesBareServers(root))
                 {
@@ -206,6 +210,16 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
             }
         }
     }
+
+    public AgentHookConfiguration? GetHookConfiguration(AgentInitRequest request)
+        => request.Detections.Any(detection => detection.Client is AgentClientKind.ClaudeCode)
+            ? new(
+                Path.Combine(GetConfigDirectory(_executionContext, _environment), "settings.json"),
+                PluginSettings(request, _executionContext, _environment),
+                ProjectSettings(request.WorkspaceRoot),
+                ValidateHooks,
+                ApplyHook)
+            : null;
 
     public static void ValidateHooks(JsonObject root)
     {

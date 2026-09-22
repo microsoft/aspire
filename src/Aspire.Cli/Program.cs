@@ -546,7 +546,6 @@ public class Program
         builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
         builder.Services.AddSingleton<PlaywrightCliInstaller>();
         builder.Services.AddSingleton<IAgentSkillInstaller, AgentSkillInstaller>();
-        builder.Services.AddSingleton<AgentClientCatalog>();
         builder.Services.AddSingleton<AgentConfigurationWriter>();
         builder.Services.AddSingleton<ITelemetryHookInstaller, TelemetryHookInstaller>();
         builder.Services.AddSingleton<ITelemetryHookConfigurator, TelemetryHookConfigurator>();
@@ -555,10 +554,10 @@ public class Program
         // One implementation per agent supplies both discovery and configuration.
         builder.Services.AddSingleton<ICopilotCliRunner, CopilotCliRunner>();
         builder.Services.AddSingleton<ICopilotAppInstallationDetector, CopilotAppInstallationDetector>();
-        builder.Services.AddSingleton<CopilotAgentEnvironmentScanner>();
-        builder.Services.AddSingleton<VsCodeAgentEnvironmentScanner>();
-        builder.Services.AddSingleton<ClaudeCodeAgentEnvironmentScanner>();
-        builder.Services.AddSingleton<OpenCodeAgentEnvironmentScanner>();
+        builder.Services.AddSingleton<IAgentEnvironmentScanner, CopilotAgentEnvironmentScanner>();
+        builder.Services.AddSingleton<IAgentEnvironmentScanner, VsCodeAgentEnvironmentScanner>();
+        builder.Services.AddSingleton<IAgentEnvironmentScanner, ClaudeCodeAgentEnvironmentScanner>();
+        builder.Services.AddSingleton<IAgentEnvironmentScanner, OpenCodeAgentEnvironmentScanner>();
 
         // Template factories.
         builder.Services.AddSingleton<TemplateNuGetConfigService>();

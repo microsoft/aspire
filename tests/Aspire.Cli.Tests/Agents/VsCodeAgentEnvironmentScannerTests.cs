@@ -27,16 +27,15 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
             VsCodeInsidersVersion = insidersInstalled ? SemVersion.Parse("1.101.0-insider", SemVersionStyles.Strict) : null
         };
         var agent = CreateAgent(runner, workspace.CreateExecutionContext(), new TestEnvironment());
-        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var context = new AgentEnvironmentScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await agent.ScanAsync(directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+        await agent.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
-        AgentEnvironmentDetection? expected = stableInstalled ? new("1.100.0", false)
-            : insidersInstalled ? new("1.101.0-insider", true) : null;
-        Assert.Equal(expected, detections);
+        AgentClientDetection[] expected = stableInstalled ? [new(AgentClientKind.VsCode, "1.100.0", false)]
+            : insidersInstalled ? [new(AgentClientKind.VsCode, "1.101.0-insider", true)] : [];
+        Assert.Equal(expected, context.DetectedClients);
         Assert.Equal(stableInstalled ? ["code"] : ["code", "code-insiders"], runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
-
     }
 
     [Fact]
@@ -49,11 +48,11 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
             VsCodeInsidersVersion = SemVersion.Parse("1.101.0-insider", SemVersionStyles.Strict)
         };
         var agent = CreateAgent(runner, workspace.CreateExecutionContext(), new TestEnvironment());
-        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var context = new AgentEnvironmentScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await agent.ScanAsync(directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+        await agent.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(new AgentEnvironmentDetection(null, false), detections);
+        Assert.Equal(new AgentClientDetection(AgentClientKind.VsCode, null, false), Assert.Single(context.DetectedClients));
         Assert.Empty(runner.Commands);
     }
 
@@ -80,11 +79,11 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
             ["TERM_PROGRAM_VERSION"] = terminalVersion
         });
         var agent = CreateAgent(runner, workspace.CreateExecutionContext(), environment);
-        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var context = new AgentEnvironmentScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await agent.ScanAsync(directories.WorkingDirectory, directories.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+        await agent.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(new AgentEnvironmentDetection(expectedVersion, isInsiders), detections);
+        Assert.Equal(new AgentClientDetection(AgentClientKind.VsCode, expectedVersion, isInsiders), Assert.Single(context.DetectedClients));
         Assert.Empty(runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
     }
@@ -104,10 +103,11 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
             ["TERM_PROGRAM_VERSION"] = "1.101.0-insider"
         });
         var agent = CreateAgent(runner, workspace.CreateExecutionContext(), environment);
+        var context = new AgentEnvironmentScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
-        var detections = await agent.ScanAsync(workspace.WorkspaceRoot, workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
+        await agent.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(new AgentEnvironmentDetection("1.101.0-insider", true), detections);
+        Assert.Equal(new AgentClientDetection(AgentClientKind.VsCode, "1.101.0-insider", true), Assert.Single(context.DetectedClients));
         Assert.Empty(runner.Commands);
     }
 
@@ -125,10 +125,10 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
             }
         };
         var agent = CreateAgent(runner, workspace.CreateExecutionContext(), new TestEnvironment());
-        var directories = CreateScanDirectories(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
+        var context = new AgentEnvironmentScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => agent.ScanAsync(directories.WorkingDirectory, directories.WorkspaceRoot, cancellationSource.Token)).DefaultTimeout();
+            () => agent.ScanAsync(context, cancellationSource.Token)).DefaultTimeout();
 
         Assert.Equal(["code"], runner.Commands);
     }
@@ -138,7 +138,4 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         CliExecutionContext executionContext,
         TestEnvironment environment)
         => new(runner, executionContext, environment, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
-
-    private static (DirectoryInfo WorkingDirectory, DirectoryInfo WorkspaceRoot) CreateScanDirectories(DirectoryInfo workingDirectory, DirectoryInfo repositoryRoot)
-        => (workingDirectory, repositoryRoot);
 }

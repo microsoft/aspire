@@ -6,7 +6,7 @@ using Aspire.Cli.Agents.Hooks;
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Configures selected assets and deduplicated native client targets.
+/// Configures selected assets and deduplicated native environment targets.
 /// </summary>
 internal interface IAgentInitService
 {
@@ -24,14 +24,14 @@ internal sealed class AgentInitService(
     public async Task<AgentInitResult> ConfigureAsync(AgentInitRequest request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!request.Assets.HasAssets || request.Clients.Count == 0)
+        if (!request.Assets.HasAssets || request.Environments.Count == 0)
         {
             return new AgentInitResult([]);
         }
 
         var results = new List<AgentTargetResult>();
         IEnumerable<AgentConfigurationTarget> nativeTargets = request.Assets.Mcp || request.Assets.AspireSkills
-            ? request.Clients.Select(client => client.Environment).Distinct().SelectMany(environment => environment.GetTargets(request))
+            ? request.Environments.Distinct().SelectMany(environment => environment.GetTargets(request))
             : [];
         results.AddRange(await writer.ApplyAsync(nativeTargets.Concat(hooks.Plan(request)), cancellationToken));
 

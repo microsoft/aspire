@@ -227,9 +227,14 @@
         <target state="new">Install the dotnet-inspect bootstrap skill for the selected client environments (y/n or true/false; default: no)</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_EnvironmentLocationDescription">
+        <source>{0}: {1}</source>
+        <target state="new">{0}: {1}</target>
+        <note>{0} is the project or user scope; {1} lists its configuration or skill paths.</note>
+      </trans-unit>
       <trans-unit id="InitCommand_EnvironmentSelectionNotice">
-        <source>Choose where Aspire writes project and user settings. Copilot shares CLI/App configuration. VS Code has its own MCP and plugin-marketplace settings and can reuse installed Copilot plugins or Copilot/Claude workspace recommendations. Usage hooks are configured separately for detected supported environments, subject to policy and telemetry opt-out.</source>
-        <target state="new">Choose where Aspire writes project and user settings. Copilot shares CLI/App configuration. VS Code has its own MCP and plugin-marketplace settings and can reuse installed Copilot plugins or Copilot/Claude workspace recommendations. Usage hooks are configured separately for detected supported environments, subject to policy and telemetry opt-out.</target>
+        <source>Shared locations are configured once. Usage hooks are configured separately for detected supported clients, respecting policy and telemetry opt-out.</source>
+        <target state="new">Shared locations are configured once. Usage hooks are configured separately for detected supported clients, respecting policy and telemetry opt-out.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_EnvironmentsOptionDescription">
@@ -306,6 +311,11 @@
         <source>Registered {0} for {1} ({2}): {3}</source>
         <target state="new">Registered {0} for {1} ({2}): {3}</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_ScopeWithSharedAlternatives">
+        <source>{0} (including shared alternatives)</source>
+        <target state="new">{0} (including shared alternatives)</target>
+        <note>{0} is the project or user scope. Some paths are alternatives used when multiple environments share configuration.</note>
       </trans-unit>
       <trans-unit id="InitCommand_SkillFileOutsideTarget">
         <source>The skill file resolves outside the selected skill directory: {0}</source>

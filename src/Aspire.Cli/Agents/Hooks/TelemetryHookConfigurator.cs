@@ -15,15 +15,15 @@ namespace Aspire.Cli.Agents.Hooks;
 /// </summary>
 internal sealed class TelemetryHookConfigurator(
     ITelemetryHookInstaller installer,
+    IEnumerable<IAgentEnvironmentScanner> environmentScanners,
     CliExecutionContext executionContext,
-    IEnvironment environment,
     ILogger<TelemetryHookConfigurator> logger) : ITelemetryHookConfigurator
 {
     internal const int HookTimeoutSeconds = 30;
 
     public IEnumerable<AgentConfigurationTarget> Plan(AgentInitRequest request)
     {
-        if (!request.Assets.HasAssets || request.Clients.Count == 0)
+        if (!request.Assets.HasAssets || request.Environments.Count == 0)
         {
             yield break;
         }
@@ -31,28 +31,19 @@ internal sealed class TelemetryHookConfigurator(
         Task<TelemetryHookScripts>? installation = null;
         // Hooks instrument detected clients independently of the assets and native client
         // targets selected for setup. Selecting an undetected client must not create its hook.
-        var detectedClients = request.Detections.Select(detection => detection.Client).Distinct().ToArray();
-        var copilotClients = detectedClients.Where(client => client.Environment is CopilotAgentEnvironmentScanner).ToArray();
-        if (copilotClients.Length > 0)
+        foreach (var scanner in environmentScanners)
         {
-            yield return Target(Path.Combine(CopilotPaths.GetConfigDirectory(executionContext, environment), "hooks", "aspire-telemetry.json"), copilotClients, copilot: true);
+            if (scanner.GetHookConfiguration(request) is { } configuration)
+            {
+                yield return Target(scanner, configuration);
+            }
         }
 
-        if (detectedClients.SingleOrDefault(client => client.Environment is ClaudeCodeAgentEnvironmentScanner) is { } claude)
-        {
-            yield return Target(Path.Combine(ClaudeCodeAgentEnvironmentScanner.GetConfigDirectory(executionContext, environment), "settings.json"), [claude], copilot: false);
-        }
-
-        // These usage scripts support Copilot and Claude, not standalone VS Code/OpenCode
-        // hook configuration. Plugin-format compatibility does not imply identical hook contracts.
-        AgentConfigurationTarget Target(string path, IReadOnlyList<AgentClient> clients, bool copilot)
-            => new(path, AgentConfigurationScope.User, AgentAssetKind.TelemetryHooks, clients, "hooks:aspire",
+        AgentConfigurationTarget Target(IAgentEnvironmentScanner scanner, AgentHookConfiguration configuration)
+            => new(configuration.Path, AgentConfigurationScope.User, AgentAssetKind.TelemetryHooks, [scanner], "hooks:aspire",
                 async (root, context, cancellationToken) =>
                 {
-                    var settingsPaths = copilot
-                        ? CopilotPaths.PluginSettings(request, executionContext, environment)
-                        : ClaudeCodeAgentEnvironmentScanner.PluginSettings(request, executionContext, environment);
-                    var settings = await AgentConfigurationJson.ReadSettingsAsync(context, settingsPaths, cancellationToken);
+                    var settings = await AgentConfigurationJson.ReadSettingsAsync(context, configuration.PolicyPaths, cancellationToken);
                     if (settings.Append(root).Any(config =>
                         AgentConfigurationJson.Boolean(config, "disableAllHooks") is true ||
                         AgentConfigurationJson.Boolean(config, "allowManagedHooksOnly") is true))
@@ -60,14 +51,11 @@ internal sealed class TelemetryHookConfigurator(
                         return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_PolicyBlocked);
                     }
 
-                    var projectSettings = copilot
-                        ? CopilotPaths.ExistingHookSettings(request, executionContext, environment)
-                        : ClaudeCodeAgentEnvironmentScanner.ProjectSettings(request.WorkspaceRoot);
-
-                    foreach (var configPath in projectSettings)
+                    var hasProjectHook = false;
+                    foreach (var configPath in configuration.ExistingHookPaths)
                     {
                         // A project/user alias can point at the same physical Claude file.
-                        if (AgentPath.Comparer.Equals(AgentPath.Resolve(configPath), AgentPath.Resolve(path)))
+                        if (AgentPath.Comparer.Equals(AgentPath.Resolve(configPath), AgentPath.Resolve(configuration.Path)))
                         {
                             continue;
                         }
@@ -75,17 +63,14 @@ internal sealed class TelemetryHookConfigurator(
                         if (await context.ReadOptionalAsync(configPath, cancellationToken) is { } config &&
                             ContainsAspireHook(config))
                         {
-                            return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_ExistingProjectHook);
+                            hasProjectHook = true;
+                            break;
                         }
                     }
 
-                    if (copilot)
+                    if (!hasProjectHook)
                     {
-                        CopilotAgentEnvironmentScanner.ValidateHooks(root);
-                    }
-                    else
-                    {
-                        ClaudeCodeAgentEnvironmentScanner.ValidateHooks(root);
+                        configuration.Validate(root);
                     }
 
                     TelemetryHookScripts scripts;
@@ -102,14 +87,14 @@ internal sealed class TelemetryHookConfigurator(
                             string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.Configuration_HookInstallationFailed, ex.Message));
                     }
 
-                    if (copilot)
+                    // Existing project hooks still need their embedded scripts repaired or
+                    // refreshed after a CLI upgrade, even though no user hook should be added.
+                    if (hasProjectHook)
                     {
-                        CopilotAgentEnvironmentScanner.ApplyHook(root, scripts, IsAspireHook);
+                        return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_ExistingProjectHook);
                     }
-                    else
-                    {
-                        ClaudeCodeAgentEnvironmentScanner.ApplyHook(root, scripts, IsAspireHook);
-                    }
+
+                    configuration.Apply(root, scripts, IsAspireHook);
 
                     return AgentConfigurationEdit.Applied(AgentCommandStrings.Configuration_HookConfigured);
                 });

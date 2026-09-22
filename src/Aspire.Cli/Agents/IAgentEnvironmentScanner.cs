@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Agents.Hooks;
+
 namespace Aspire.Cli.Agents;
 
 /// <summary>
@@ -9,26 +11,34 @@ namespace Aspire.Cli.Agents;
 internal interface IAgentEnvironmentScanner
 {
     /// <summary>
-    /// Returns read-only evidence that this environment is available within the workspace boundary.
+    /// Gets the stable command-line identifier for this configuration environment.
     /// </summary>
-    /// <param name="workingDirectory">The current working directory.</param>
-    /// <param name="workspaceRoot">The boundary for project configuration discovery.</param>
-    /// <param name="cancellationToken">A token to cancel the operation.</param>
-    /// <returns>Read-only evidence when detected; otherwise, <see langword="null"/>.</returns>
-    Task<AgentEnvironmentDetection?> ScanAsync(DirectoryInfo workingDirectory, DirectoryInfo workspaceRoot, CancellationToken cancellationToken);
+    string Id { get; }
 
     /// <summary>
-    /// Gets edits for selected clients, including clients that were not detected.
+    /// Gets the display name shared by selection and configuration results.
+    /// </summary>
+    string DisplayName { get; }
+
+    /// <summary>
+    /// Adds detected clients to the context without changing files or configuration.
+    /// </summary>
+    /// <param name="context">The workspace boundary and collected client detections.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    Task ScanAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets edits for this selected environment, even when no client was detected.
     /// </summary>
     IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request);
+
+    /// <summary>
+    /// Gets user-hook configuration for detected supported clients, independently of selection.
+    /// </summary>
+    AgentHookConfiguration? GetHookConfiguration(AgentInitRequest request) => null;
 }
 
 /// <summary>
 /// Read-only evidence that a client is present.
 /// </summary>
-internal sealed record AgentClientDetection(AgentClient Client, string? Version, bool IsInsiders);
-
-/// <summary>
-/// Read-only installation evidence returned without knowledge of catalog entries.
-/// </summary>
-internal readonly record struct AgentEnvironmentDetection(string? Version, bool IsInsiders);
+internal sealed record AgentClientDetection(AgentClientKind Client, string? Version, bool IsInsiders);

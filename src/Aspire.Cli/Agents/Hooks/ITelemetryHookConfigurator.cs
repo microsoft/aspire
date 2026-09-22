@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Nodes;
+
 namespace Aspire.Cli.Agents.Hooks;
 
 /// <summary>
@@ -19,3 +21,13 @@ internal interface ITelemetryHookConfigurator
     /// <returns>Deferred edits whose outcomes are reported by the writer as <see cref="AgentTargetResult"/> values.</returns>
     IEnumerable<AgentConfigurationTarget> Plan(AgentInitRequest request);
 }
+
+/// <summary>
+/// Environment-owned hook paths and schema edits, applied by the shared hook writer.
+/// </summary>
+internal sealed record AgentHookConfiguration(
+    string Path,
+    IEnumerable<string> PolicyPaths,
+    IEnumerable<string> ExistingHookPaths,
+    Action<JsonObject> Validate,
+    Action<JsonObject, TelemetryHookScripts, Func<JsonNode?, bool>> Apply);

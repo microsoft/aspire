@@ -7,10 +7,10 @@ using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Agents;
 
-public class AgentClientCatalogTests(ITestOutputHelper output)
+public class AgentEnvironmentScannerTests(ITestOutputHelper output)
 {
     [Fact]
-    public void Clients_AreReadOnlyDefinitionsWithoutConfigurationReads()
+    public void EnvironmentMetadata_DoesNotReadConfigurationOrProbeClients()
     {
         using var context = new AgentConfigurationTestContext(output);
         context.SetVariable("COPILOT_HOME", "\0invalid");
@@ -20,14 +20,10 @@ public class AgentClientCatalogTests(ITestOutputHelper output)
 
         Assert.Equal(
             ["copilot", "vscode", "claude", "opencode"],
-            context.Catalog.Clients.Select(client => client.Id));
+            context.Environments.Select(client => client.Id));
         Assert.Equal(
             [AgentCommandStrings.Environment_Copilot, AgentCommandStrings.Environment_VsCode, "Claude Code", "OpenCode"],
-            context.Catalog.Clients.Select(client => client.DisplayName));
-        Assert.Equal(4, context.Catalog.Clients.Count);
-        Assert.Equal(4, context.Catalog.Clients.Select(client => client.Environment).Distinct().Count());
-        Assert.Throws<NotSupportedException>(() =>
-            ((IList<AgentClient>)context.Catalog.Clients).Clear());
+            context.Environments.Select(client => client.DisplayName));
         Assert.Empty(context.Project.EnumerateFileSystemInfos());
         Assert.Empty(context.Home.EnumerateFileSystemInfos());
         Assert.Empty(context.CliRunner.Commands);
@@ -38,38 +34,34 @@ public class AgentClientCatalogTests(ITestOutputHelper output)
     [InlineData("vscode")]
     [InlineData("claude")]
     [InlineData("opencode")]
-    public async Task UndetectedClient_CanConfigureWithItsRegisteredEnvironment(string clientId)
+    public async Task UndetectedEnvironment_CanConfigureWithoutClientEvidence(string clientId)
     {
         using var context = new AgentConfigurationTestContext(output);
-        var client = context.Catalog.Clients.Single(client => client.Id == clientId);
-        var detections = new List<AgentClientDetection>();
-        foreach (var clients in context.Catalog.Clients.GroupBy(client => client.Environment))
+        var client = context.Environments.Single(client => client.Id == clientId);
+        var scanContext = new AgentEnvironmentScanContext(context.Project, context.Project);
+        foreach (var scanner in context.Environments)
         {
-            if (await clients.Key.ScanAsync(context.Project, context.Project, CancellationToken.None).DefaultTimeout() is { } evidence)
-            {
-                detections.AddRange(clients.Select(entry => new AgentClientDetection(entry, evidence.Version, evidence.IsInsiders)));
-            }
+            await scanner.ScanAsync(scanContext, CancellationToken.None).DefaultTimeout();
         }
         var probes = context.CliRunner.Commands.ToArray();
 
-        Assert.Empty(detections);
+        Assert.Empty(scanContext.DetectedClients);
         Assert.Equal(["copilot", "code", "code-insiders", "claude", "opencode"], probes);
         Assert.Empty(context.Project.EnumerateFileSystemInfos());
         Assert.Empty(context.Home.EnumerateFileSystemInfos());
 
         var result = await context.Service.ConfigureAsync(
-            context.Request([client], detections: detections), CancellationToken.None).DefaultTimeout();
+            context.Request([client], detections: scanContext.DetectedClients), CancellationToken.None).DefaultTimeout();
 
         Assert.False(result.HasErrors);
-        Assert.Equal(2, result.Targets.Count);
+        Assert.Equal(clientId == "vscode" ? 1 : 2, result.Targets.Count);
         Assert.All(result.Targets, target =>
         {
-            Assert.Equal([client], target.Clients);
+            Assert.Equal([client], target.Environments);
             Assert.Equal(AgentConfigurationStatus.Configured, target.Status);
             Assert.True(File.Exists(target.TargetPath));
         });
         Assert.Equal(probes, context.CliRunner.Commands);
         Assert.Equal(0, context.HookInstaller.Calls);
     }
-
 }

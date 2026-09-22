@@ -84,13 +84,6 @@ internal sealed class PlaywrightCliInstaller(
     internal const string PlaywrightCliSkillName = "playwright-cli";
 
     /// <summary>
-    /// The primary skill base directory where playwright-cli installs skills.
-    /// This must match the directory that the playwright-cli binary actually writes to.
-    /// See: https://github.com/microsoft/playwright-cli/issues/294
-    /// </summary>
-    internal static readonly string s_primarySkillBaseDirectory = Path.Combine(".claude", "skills");
-
-    /// <summary>
     /// Configuration key that disables package validation when set to "true".
     /// This is a break-glass mechanism for debugging npm service issues and must never be the default.
     /// </summary>
@@ -101,6 +94,13 @@ internal sealed class PlaywrightCliInstaller(
     /// exact version is used instead of resolving the latest from the version range.
     /// </summary>
     internal const string VersionOverrideKey = "playwrightCliVersion";
+
+    /// <summary>
+    /// The primary skill base directory where playwright-cli installs skills.
+    /// This must match the directory that the playwright-cli binary actually writes to.
+    /// See: https://github.com/microsoft/playwright-cli/issues/294
+    /// </summary>
+    internal static readonly string s_primarySkillBaseDirectory = Path.Combine(".claude", "skills");
 
     /// <summary>
     /// Installs the verified Playwright CLI and generates its skill in an isolated workspace.

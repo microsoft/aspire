@@ -3,7 +3,7 @@
     ⚠ Warning: 'aspire mcp' commands are deprecated and will be removed in a future release. Please use 'aspire agent' instead.,
     ,
     🤖 Detecting agent environments...,
-    Choose where Aspire writes project and user settings. Copilot shares CLI/App configuration. VS Code has its own MCP and plugin-marketplace settings and can reuse installed Copilot plugins or Copilot/Claude workspace recommendations. Usage hooks are configured separately for detected supported environments, subject to policy and telemetry opt-out.,
+    Shared locations are configured once. Usage hooks are configured separately for detected supported clients, respecting policy and telemetry opt-out.,
     Existing MCP configuration is disabled.,
     ⚠️ Configuration completed with errors. Please fix the reported issues and re-run the command.
   ],

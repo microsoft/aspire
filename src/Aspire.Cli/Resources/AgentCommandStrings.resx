@@ -163,7 +163,15 @@
     <value>Comma-separated client environments ({0}), '{1}', or '{2}'. Defaults to detected environments</value>
   </data>
   <data name="InitCommand_EnvironmentSelectionNotice" xml:space="preserve">
-    <value>Choose where Aspire writes project and user settings. Copilot shares CLI/App configuration. VS Code has its own MCP and plugin-marketplace settings and can reuse installed Copilot plugins or Copilot/Claude workspace recommendations. Usage hooks are configured separately for detected supported environments, subject to policy and telemetry opt-out.</value>
+    <value>Shared locations are configured once. Usage hooks are configured separately for detected supported clients, respecting policy and telemetry opt-out.</value>
+  </data>
+  <data name="InitCommand_EnvironmentLocationDescription" xml:space="preserve">
+    <value>{0}: {1}</value>
+    <comment>{0} is the project or user scope; {1} lists its configuration or skill paths.</comment>
+  </data>
+  <data name="InitCommand_ScopeWithSharedAlternatives" xml:space="preserve">
+    <value>{0} (including shared alternatives)</value>
+    <comment>{0} is the project or user scope. Some paths are alternatives used when multiple environments share configuration.</comment>
   </data>
   <data name="Environment_Copilot" xml:space="preserve">
     <value>GitHub Copilot (CLI and App)</value>

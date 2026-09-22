@@ -42,12 +42,13 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output)
         using var context = new AgentConfigurationTestContext(output);
         var working = context.Project.CreateSubdirectory("nested");
         await CreateMarkerAsync(inParent ? context.Project : working, marker);
-        var client = context.Catalog.Clients.Single(client => client.Id == clientId);
+        var client = context.Environments.Single(client => client.Id == clientId);
         var entries = Directory.GetFileSystemEntries(context.Workspace.Path, "*", SearchOption.AllDirectories).Order().ToArray();
 
-        var result = await client.Environment.ScanAsync(working, context.Project, CancellationToken.None).DefaultTimeout();
+        var scanContext = new AgentEnvironmentScanContext(working, context.Project);
+        await client.ScanAsync(scanContext, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(new AgentEnvironmentDetection(null, false), result);
+        Assert.Equal(ExpectedDetection(clientId), Assert.Single(scanContext.DetectedClients));
         Assert.Equal(clientId == "vscode" ? [] : new[] { clientId == "opencode" ? "opencode" : "claude" }, context.CliRunner.Commands);
         Assert.Equal(entries, Directory.GetFileSystemEntries(context.Workspace.Path, "*", SearchOption.AllDirectories).Order());
     }
@@ -60,11 +61,12 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output)
         await CreateMarkerAsync(context.Workspace.WorkspaceRoot, marker);
         var working = context.Project.CreateSubdirectory("nested");
         var root = trailingSeparator ? new DirectoryInfo(context.Project.FullName + Path.DirectorySeparatorChar) : context.Project;
-        var client = context.Catalog.Clients.Single(client => client.Id == clientId);
+        var client = context.Environments.Single(client => client.Id == clientId);
 
-        var result = await client.Environment.ScanAsync(working, root, CancellationToken.None).DefaultTimeout();
+        var scanContext = new AgentEnvironmentScanContext(working, root);
+        await client.ScanAsync(scanContext, CancellationToken.None).DefaultTimeout();
 
-        Assert.Null(result);
+        Assert.Empty(scanContext.DetectedClients);
     }
 
     [Theory]
@@ -79,12 +81,13 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output)
         {
             await CreateMarkerAsync(context.Project, marker);
         }
-        var client = context.Catalog.Clients.Single(client => client.Id == clientId);
+        var client = context.Environments.Single(client => client.Id == clientId);
         var entries = Directory.GetFileSystemEntries(context.Workspace.Path, "*", SearchOption.AllDirectories).Order().ToArray();
 
-        var result = await client.Environment.ScanAsync(working, context.Project, CancellationToken.None).DefaultTimeout();
+        var scanContext = new AgentEnvironmentScanContext(working, context.Project);
+        await client.ScanAsync(scanContext, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal<AgentEnvironmentDetection?>(hasTargetConfiguration ? new(null, false) : null, result);
+        Assert.Equal(hasTargetConfiguration ? [ExpectedDetection(clientId)] : [], scanContext.DetectedClients);
         Assert.Equal(entries, Directory.GetFileSystemEntries(context.Workspace.Path, "*", SearchOption.AllDirectories).Order());
     }
 
@@ -96,9 +99,12 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output)
         using var context = new AgentConfigurationTestContext(output);
         await CreateMarkerAsync(context.Home, marker);
         var working = context.Home.CreateSubdirectory("nested");
-        var client = context.Catalog.Clients.Single(client => client.Id == clientId);
+        var client = context.Environments.Single(client => client.Id == clientId);
 
-        Assert.Null(await client.Environment.ScanAsync(working, context.Home, CancellationToken.None).DefaultTimeout());
+        var scanContext = new AgentEnvironmentScanContext(working, context.Home);
+        await client.ScanAsync(scanContext, CancellationToken.None).DefaultTimeout();
+
+        Assert.Empty(scanContext.DetectedClients);
     }
 
     [Theory]
@@ -109,14 +115,15 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output)
     public async Task ScanAsync_NoEvidenceIsReadOnlyAndCancellationDoesNotProbe(string clientId)
     {
         using var context = new AgentConfigurationTestContext(output);
-        var client = context.Catalog.Clients.Single(client => client.Id == clientId);
+        var client = context.Environments.Single(client => client.Id == clientId);
+        var scanContext = new AgentEnvironmentScanContext(context.Project, context.Project);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            client.Environment.ScanAsync(context.Project, context.Project, new CancellationToken(canceled: true))).DefaultTimeout();
+            client.ScanAsync(scanContext, new CancellationToken(canceled: true))).DefaultTimeout();
         Assert.Empty(context.CliRunner.Commands);
-        var result = await client.Environment.ScanAsync(context.Project, context.Project, CancellationToken.None).DefaultTimeout();
+        await client.ScanAsync(scanContext, CancellationToken.None).DefaultTimeout();
 
-        Assert.Null(result);
+        Assert.Empty(scanContext.DetectedClients);
         Assert.Empty(context.Project.EnumerateFileSystemInfos());
         Assert.Empty(context.Home.EnumerateFileSystemInfos());
     }
@@ -132,15 +139,25 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output)
         File.SetLastWriteTimeUtc(file, new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         var timestamp = File.GetLastWriteTimeUtc(file);
         var entries = Directory.GetFileSystemEntries(context.Workspace.Path, "*", SearchOption.AllDirectories).Order().ToArray();
-        var client = context.Catalog.Clients.Single(client => client.Id == clientId);
+        var client = context.Environments.Single(client => client.Id == clientId);
 
-        var result = await client.Environment.ScanAsync(context.Project, context.Project, CancellationToken.None).DefaultTimeout();
+        var scanContext = new AgentEnvironmentScanContext(context.Project, context.Project);
+        await client.ScanAsync(scanContext, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(new AgentEnvironmentDetection(null, false), result);
+        Assert.Equal(ExpectedDetection(clientId), Assert.Single(scanContext.DetectedClients));
         Assert.Equal(content, await File.ReadAllTextAsync(file));
         Assert.Equal(timestamp, File.GetLastWriteTimeUtc(file));
         Assert.Equal(entries, Directory.GetFileSystemEntries(context.Workspace.Path, "*", SearchOption.AllDirectories).Order());
     }
+
+    private static AgentClientDetection ExpectedDetection(string clientId)
+        => new(clientId switch
+        {
+            "claude" => AgentClientKind.ClaudeCode,
+            "vscode" => AgentClientKind.VsCode,
+            "opencode" => AgentClientKind.OpenCode,
+            _ => throw new ArgumentOutOfRangeException(nameof(clientId))
+        }, null, false);
 
     private static Task CreateMarkerAsync(DirectoryInfo root, string marker)
     {

@@ -763,11 +763,29 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Describes the selected configuration targets and shared plugin discovery.
+        ///   Describes shared locations and separately detected usage hooks.
         /// </summary>
         internal static string InitCommand_EnvironmentSelectionNotice {
             get {
                 return ResourceManager.GetString("InitCommand_EnvironmentSelectionNotice", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}: {1}.
+        /// </summary>
+        internal static string InitCommand_EnvironmentLocationDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_EnvironmentLocationDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} (including shared alternatives).
+        /// </summary>
+        internal static string InitCommand_ScopeWithSharedAlternatives {
+            get {
+                return ResourceManager.GetString("InitCommand_ScopeWithSharedAlternatives", resourceCulture);
             }
         }
 

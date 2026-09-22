@@ -15,6 +15,16 @@ namespace Aspire.Tests.Shared;
 /// </summary>
 internal static class Hex1bAutomatorTestHelpers
 {
+    // Azure error codes that indicate a region's shared capacity is temporarily exhausted. These
+    // are infrastructure-side conditions (not product defects) that do not clear on a same-region
+    // retry, so the deployment tests treat them as skips rather than failures. Matched
+    // case-insensitively against the deploy pipeline's terminal output.
+    private static readonly string[] s_transientAzureCapacityErrorMarkers =
+    [
+        "AKSCapacityHeavyUsage",
+        "ManagedEnvironmentCapacityHeavyUsageError",
+    ];
+
     /// <summary>
     /// Waits for any prompt (success or error) matching the current sequence counter.
     /// </summary>
@@ -841,16 +851,6 @@ internal static class Hex1bAutomatorTestHelpers
             throw new InvalidOperationException($"Pipeline failed unexpectedly. Terminal output:{Environment.NewLine}{terminalOutput}");
         }
     }
-
-    // Azure error codes that indicate a region's shared capacity is temporarily exhausted. These
-    // are infrastructure-side conditions (not product defects) that do not clear on a same-region
-    // retry, so the deployment tests treat them as skips rather than failures. Matched
-    // case-insensitively against the deploy pipeline's terminal output.
-    private static readonly string[] s_transientAzureCapacityErrorMarkers =
-    [
-        "AKSCapacityHeavyUsage",
-        "ManagedEnvironmentCapacityHeavyUsageError",
-    ];
 
     private static bool ContainsTransientAzureCapacityError(string terminalOutput)
     {

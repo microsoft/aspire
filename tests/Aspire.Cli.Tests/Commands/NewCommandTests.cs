@@ -2318,7 +2318,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var request = Assert.Single(service.Requests);
         Assert.Equal(outputDir, request.WorkspaceRoot.FullName);
         Assert.Equal(new AgentAssetSelection(false, true, false, false), request.Assets);
-        Assert.Equal(["claude", "copilot"], request.Clients.Select(client => client.Id));
+        Assert.Equal(["claude", "copilot"], request.Environments.Select(client => client.Id));
     }
 
     [Fact]
@@ -2546,7 +2546,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(testInteractionService);
         Assert.Contains(expectedMessage, testInteractionService.DisplayedErrors);
         Assert.Empty(Assert.IsType<TestAgentInitService>(provider.GetRequiredService<IAgentInitService>()).Requests);
-        Assert.Empty(Assert.IsType<TestAgentClientEnvironment>(provider.GetRequiredService<IAgentEnvironmentScanner>()).Calls);
+        Assert.Empty(Assert.IsType<TestAgentEnvironmentScanner>(provider.GetRequiredService<IAgentEnvironmentScanner>()).Calls);
     }
 
     [Fact]
@@ -3274,7 +3274,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         Assert.Empty(Assert.IsType<TestAgentInitService>(provider.GetRequiredService<IAgentInitService>()).Requests);
-        Assert.Empty(Assert.IsType<TestAgentClientEnvironment>(provider.GetRequiredService<IAgentEnvironmentScanner>()).Calls);
+        Assert.Empty(Assert.IsType<TestAgentEnvironmentScanner>(provider.GetRequiredService<IAgentEnvironmentScanner>()).Calls);
     }
 
     [Theory]
@@ -3303,7 +3303,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var service = Assert.IsType<TestAgentInitService>(provider.GetRequiredService<IAgentInitService>());
         var request = Assert.Single(service.Requests);
         Assert.Equal(new AgentAssetSelection(false, false, false, true), request.Assets);
-        Assert.Equal(["copilot"], request.Clients.Select(client => client.Id));
+        Assert.Equal(["copilot"], request.Environments.Select(client => client.Id));
         Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), request.WorkspaceRoot.FullName);
     }
 
@@ -3321,7 +3321,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output")));
         Assert.Empty(Assert.IsType<TestAgentInitService>(provider.GetRequiredService<IAgentInitService>()).Requests);
-        Assert.Empty(Assert.IsType<TestAgentClientEnvironment>(provider.GetRequiredService<IAgentEnvironmentScanner>()).Calls);
+        Assert.Empty(Assert.IsType<TestAgentEnvironmentScanner>(provider.GetRequiredService<IAgentEnvironmentScanner>()).Calls);
     }
 
     [Fact]
@@ -3330,7 +3330,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
         {
-            options.AgentEnvironmentFactory = _ => new TestAgentClientEnvironment();
+            options.AgentEnvironmentFactory = _ => new TestAgentEnvironmentScanner();
         });
         using var provider = services.BuildServiceProvider();
 
@@ -3368,7 +3368,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             Result = new(
             [
-                new(AgentAssetKind.AspireSkills, [TestAgentClients.Default.Copilot],
+                new(AgentAssetKind.AspireSkills, [TestAgentEnvironments.Default.Copilot],
                     "settings.json", AgentConfigurationScope.Project, AgentConfigurationStatus.Blocked, "Existing source is pinned.")
             ])
         };

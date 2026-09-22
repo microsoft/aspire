@@ -39,10 +39,10 @@ internal sealed class AgentConfigurationTestContext : IDisposable
         Environment = TestEnvironment.CreateWindows(_variables);
         ExecutionContext = TestExecutionContextHelper.CreateExecutionContext(Project, homeDirectory: Home);
         CliRunner = new TestAgentCliRunner();
-        Catalog = CliRunner.CreateCatalog(ExecutionContext, Environment);
+        Environments = CliRunner.CreateScanners(ExecutionContext, Environment);
         Writer = new AgentConfigurationWriter(NullLogger<AgentConfigurationWriter>.Instance);
         HookInstaller = new TestAgentConfigurationHookInstaller(ExecutionContext);
-        Hooks = new TelemetryHookConfigurator(HookInstaller, ExecutionContext, Environment, NullLogger<TelemetryHookConfigurator>.Instance);
+        Hooks = new TelemetryHookConfigurator(HookInstaller, Environments, ExecutionContext, NullLogger<TelemetryHookConfigurator>.Instance);
         SkillInstaller = new TestAgentConfigurationSkillInstaller();
         Service = new AgentInitService(Writer, SkillInstaller, Hooks);
     }
@@ -52,11 +52,11 @@ internal sealed class AgentConfigurationTestContext : IDisposable
     public DirectoryInfo Home { get; }
     public TestEnvironment Environment { get; }
     public CliExecutionContext ExecutionContext { get; }
-    public AgentClientCatalog Catalog { get; }
-    public AgentClient Copilot => Catalog.Clients.Single(client => client.Id == "copilot");
-    public AgentClient VsCode => Catalog.Clients.Single(client => client.Id == "vscode");
-    public AgentClient ClaudeCode => Catalog.Clients.Single(client => client.Id == "claude");
-    public AgentClient OpenCode => Catalog.Clients.Single(client => client.Id == "opencode");
+    public IReadOnlyList<IAgentEnvironmentScanner> Environments { get; }
+    public IAgentEnvironmentScanner Copilot => Environments.Single(scanner => scanner.Id == "copilot");
+    public IAgentEnvironmentScanner VsCode => Environments.Single(scanner => scanner.Id == "vscode");
+    public IAgentEnvironmentScanner ClaudeCode => Environments.Single(scanner => scanner.Id == "claude");
+    public IAgentEnvironmentScanner OpenCode => Environments.Single(scanner => scanner.Id == "opencode");
     public TestAgentCliRunner CliRunner { get; }
     public string CopilotDirectory => CopilotPaths.GetConfigDirectory(ExecutionContext, Environment);
     public string ClaudeDirectory => ClaudeCodeAgentEnvironmentScanner.GetConfigDirectory(ExecutionContext, Environment);
@@ -80,7 +80,7 @@ internal sealed class AgentConfigurationTestContext : IDisposable
                 : TestExecutionContextHelper.CreateExecutionContext(workingDirectory ?? Project, homeDirectory: homeDirectory ?? Home),
             Environment, NullLogger<AgentSkillInstaller>.Instance);
 
-    public AgentInitRequest ManagedRequest(IReadOnlyList<AgentClient> clients, bool playwright = true, bool dotnetInspect = true)
+    public AgentInitRequest ManagedRequest(IReadOnlyList<IAgentEnvironmentScanner> clients, bool playwright = true, bool dotnetInspect = true)
         => Request(clients, skills: false, playwright: playwright, dotnetInspect: dotnetInspect);
 
     public void SetVariable(string name, string value) => _variables[name] = value;
@@ -88,7 +88,7 @@ internal sealed class AgentConfigurationTestContext : IDisposable
     public string VsCodeUserDirectory(bool insiders) => VsCodeAgentEnvironmentScanner.GetUserDirectory(insiders, ExecutionContext, Environment);
 
     public AgentInitRequest Request(
-        IReadOnlyList<AgentClient> clients,
+        IReadOnlyList<IAgentEnvironmentScanner> clients,
         bool skills = true,
         bool mcp = false,
         bool playwright = false,
@@ -97,7 +97,7 @@ internal sealed class AgentConfigurationTestContext : IDisposable
         => new(Project, new AgentAssetSelection(mcp, playwright, dotnetInspect, skills), clients, detections ?? []);
 
     public Task<IReadOnlyList<AgentTargetResult>> ConfigureNativeAsync(AgentInitRequest request, CancellationToken cancellationToken = default)
-        => Writer.ApplyAsync(request.Clients.Select(client => client.Environment).Distinct().SelectMany(environment => environment.GetTargets(request)), cancellationToken);
+        => Writer.ApplyAsync(request.Environments.Distinct().SelectMany(environment => environment.GetTargets(request)), cancellationToken);
 
     public static async Task WriteAsync(string path, string content)
     {

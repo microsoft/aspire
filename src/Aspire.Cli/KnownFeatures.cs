@@ -23,20 +23,6 @@ internal sealed record FeatureMetadata(string Name, string Description, bool Def
 // this is a copy of Shared/KnownResourceNames.cs
 internal static class KnownFeatures
 {
-    public static string FeaturePrefix => "features";
-    public static string UpdateNotificationsEnabled => "updateNotificationsEnabled";
-    public static string ShowDeprecatedPackages => "showDeprecatedPackages";
-    public static string StagingChannelEnabled => "stagingChannelEnabled";
-    public static string DefaultWatchEnabled => "defaultWatchEnabled";
-    public static string ShowAllTemplates => "showAllTemplates";
-    public static string ExperimentalPolyglotRust => "experimentalPolyglot:rust";
-    public static string ExperimentalPolyglotJava => "experimentalPolyglot:java";
-    public static string ExperimentalPolyglotGo => "experimentalPolyglot:go";
-    public static string ExperimentalPolyglotPython => "experimentalPolyglot:python";
-    public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
-    public static string TerminalCommandsEnabled => "terminalCommandsEnabled";
-    public static string PolyglotIntegrationFilterEnabled => "polyglotIntegrationFilterEnabled";
-
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
     {
         [UpdateNotificationsEnabled] = new(
@@ -99,6 +85,20 @@ internal static class KnownFeatures
             "(Experimental) Restrict 'aspire add', 'aspire integration list', and 'aspire integration search' in non-C# AppHosts to integrations carrying the 'polyglot' NuGet tag. Disabled by default because no remote feed resolves the tag usefully today: Azure DevOps Artifacts feeds ignore 'tags:' query scoping, and nuget.org returns no first-party integrations for it. The filter fails closed, so enabling it against a remote feed hides every integration. Enable it only against a local package source or hive, where the tag is read from the nuspec.",
             DefaultValue: false)
     };
+
+    public static string FeaturePrefix => "features";
+    public static string UpdateNotificationsEnabled => "updateNotificationsEnabled";
+    public static string ShowDeprecatedPackages => "showDeprecatedPackages";
+    public static string StagingChannelEnabled => "stagingChannelEnabled";
+    public static string DefaultWatchEnabled => "defaultWatchEnabled";
+    public static string ShowAllTemplates => "showAllTemplates";
+    public static string ExperimentalPolyglotRust => "experimentalPolyglot:rust";
+    public static string ExperimentalPolyglotJava => "experimentalPolyglot:java";
+    public static string ExperimentalPolyglotGo => "experimentalPolyglot:go";
+    public static string ExperimentalPolyglotPython => "experimentalPolyglot:python";
+    public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
+    public static string TerminalCommandsEnabled => "terminalCommandsEnabled";
+    public static string PolyglotIntegrationFilterEnabled => "polyglotIntegrationFilterEnabled";
 
     /// <summary>
     /// Gets metadata for a specific feature.

@@ -661,7 +661,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             Result = new(
             [
-                new(AgentAssetKind.AspireSkills, [TestAgentClients.Default.Copilot, TestAgentClients.Default.ClaudeCode],
+                new(AgentAssetKind.AspireSkills, [TestAgentEnvironments.Default.Copilot, TestAgentEnvironments.Default.ClaudeCode],
                     "settings.json", AgentConfigurationScope.Project, Enum.Parse<AgentConfigurationStatus>(status), null)
             ])
         };
@@ -669,8 +669,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
-            options.AgentEnvironmentFactory = _ => new TestAgentClientEnvironment(
-                new(TestAgentClients.Default.Copilot, null, false), new(TestAgentClients.Default.ClaudeCode, null, false));
+            options.AgentEnvironmentFactory = _ => new TestAgentEnvironmentScanner(
+                new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.ClaudeCode, null, false));
             options.AgentInitServiceFactory = _ => service;
         });
         using var serviceProvider = services.BuildServiceProvider();
@@ -708,7 +708,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             Result = new(
             [
-                new(Enum.Parse<AgentAssetKind>(asset), [TestAgentClients.Default.Copilot], "settings.json",
+                new(Enum.Parse<AgentAssetKind>(asset), [TestAgentEnvironments.Default.Copilot], "settings.json",
                     AgentConfigurationScope.Project, Enum.Parse<AgentConfigurationStatus>(status), null)
             ])
         };
@@ -732,7 +732,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(expectedExitCode, exitCode);
         Assert.Single(service.Requests);
-        Assert.Empty(service.Result.RegisteredClients);
+        Assert.Empty(service.Result.RegisteredEnvironments);
         var handoffs = interactionService.DisplayedMessages.Where(message => message.Emoji.Equals(KnownEmojis.Dizzy)).ToArray();
         Assert.Empty(handoffs);
     }
@@ -746,17 +746,17 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             Result = new(
             [
-                new(AgentAssetKind.AspireSkills, [TestAgentClients.Default.Copilot], "copilot-settings.json",
+                new(AgentAssetKind.AspireSkills, [TestAgentEnvironments.Default.Copilot], "copilot-settings.json",
                     AgentConfigurationScope.Project, AgentConfigurationStatus.Configured, null),
-                new(AgentAssetKind.AspireSkills, [TestAgentClients.Default.ClaudeCode], "claude-settings.json",
+                new(AgentAssetKind.AspireSkills, [TestAgentEnvironments.Default.ClaudeCode], "claude-settings.json",
                     AgentConfigurationScope.User, AgentConfigurationStatus.Blocked, "Conflicting marketplace source.")
             ])
         };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
-            options.AgentEnvironmentFactory = _ => new TestAgentClientEnvironment(
-                new(TestAgentClients.Default.Copilot, null, false), new(TestAgentClients.Default.ClaudeCode, null, false));
+            options.AgentEnvironmentFactory = _ => new TestAgentEnvironmentScanner(
+                new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.ClaudeCode, null, false));
             options.AgentInitServiceFactory = _ => service;
         });
         using var provider = services.BuildServiceProvider();
@@ -765,7 +765,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Single(service.Requests);
-        Assert.Equal([TestAgentClients.Default.Copilot], service.Result.RegisteredClients);
+        Assert.Equal([TestAgentEnvironments.Default.Copilot], service.Result.RegisteredEnvironments);
         var handoffs = interactionService.DisplayedMessages.Where(message => message.Emoji.Equals(KnownEmojis.Dizzy)).ToArray();
         Assert.Empty(handoffs);
     }
@@ -786,7 +786,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
 
         Assert.Empty(Assert.IsType<TestAgentInitService>(serviceProvider.GetRequiredService<IAgentInitService>()).Requests);
-        Assert.Empty(Assert.IsType<TestAgentClientEnvironment>(serviceProvider.GetRequiredService<IAgentEnvironmentScanner>()).Calls);
+        Assert.Empty(Assert.IsType<TestAgentEnvironmentScanner>(serviceProvider.GetRequiredService<IAgentEnvironmentScanner>()).Calls);
     }
 
     [Fact]
@@ -825,7 +825,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var service = Assert.IsType<TestAgentInitService>(serviceProvider.GetRequiredService<IAgentInitService>());
         var request = Assert.Single(service.Requests);
         Assert.Equal(new AgentAssetSelection(false, false, true, false), request.Assets);
-        Assert.Equal(["copilot", "claude"], request.Clients.Select(client => client.Id));
+        Assert.Equal(["copilot", "claude"], request.Environments.Select(client => client.Id));
         Assert.Equal(workspace.WorkspaceRoot.FullName, request.WorkspaceRoot.FullName);
     }
 
@@ -844,7 +844,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var service = Assert.IsType<TestAgentInitService>(provider.GetRequiredService<IAgentInitService>());
         var request = Assert.Single(service.Requests);
         Assert.Equal(new AgentAssetSelection(false, false, false, true), request.Assets);
-        Assert.Equal(["copilot"], request.Clients.Select(client => client.Id));
+        Assert.Equal(["copilot"], request.Environments.Select(client => client.Id));
     }
 
     [Fact]
@@ -859,7 +859,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
         Assert.Empty(Assert.IsType<TestAgentInitService>(provider.GetRequiredService<IAgentInitService>()).Requests);
-        Assert.Empty(Assert.IsType<TestAgentClientEnvironment>(provider.GetRequiredService<IAgentEnvironmentScanner>()).Calls);
+        Assert.Empty(Assert.IsType<TestAgentEnvironmentScanner>(provider.GetRequiredService<IAgentEnvironmentScanner>()).Calls);
     }
 
     [Fact]
@@ -868,7 +868,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            options.AgentEnvironmentFactory = _ => new TestAgentClientEnvironment();
+            options.AgentEnvironmentFactory = _ => new TestAgentEnvironmentScanner();
         });
         using var provider = services.BuildServiceProvider();
 
@@ -1181,7 +1181,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.FailedToInstallTemplates, exitCode);
         Assert.Contains(interactionService.DisplayedErrors, e => e.Contains("simulated network failure", StringComparison.Ordinal));
         Assert.Empty(Assert.IsType<TestAgentInitService>(serviceProvider.GetRequiredService<IAgentInitService>()).Requests);
-        Assert.Empty(Assert.IsType<TestAgentClientEnvironment>(serviceProvider.GetRequiredService<IAgentEnvironmentScanner>()).Calls);
+        Assert.Empty(Assert.IsType<TestAgentEnvironmentScanner>(serviceProvider.GetRequiredService<IAgentEnvironmentScanner>()).Calls);
     }
 
     /// <summary>
