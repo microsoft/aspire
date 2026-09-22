@@ -9,6 +9,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Semver;
 using Spectre.Console;
@@ -35,6 +36,7 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
         var manifests = new List<RepositoryToolManifest>();
         var searchDotNet = true;
         var searchNpm = true;
+        var repositoryRoot = FindRepositoryRoot(directory);
 
         // Follow local-tool lookup order and isRoot, but never edit a manifest outside the
         // repository. A .git file marks a worktree just as a .git directory marks a checkout.
@@ -46,7 +48,7 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
             {
                 foreach (var path in new[] { Path.Combine(current.FullName, ".config", "dotnet-tools.json"), Path.Combine(current.FullName, "dotnet-tools.json") })
                 {
-                    var manifest = await ReadManifestAsync(path, isNpm: false, cancellationToken);
+                    var manifest = await ReadManifestAsync(path, isNpm: false, repositoryRoot, cancellationToken);
                     if (manifest is null)
                     {
                         continue;
@@ -67,7 +69,7 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
 
             if (searchNpm)
             {
-                var manifest = await ReadManifestAsync(Path.Combine(current.FullName, "package.json"), isNpm: true, cancellationToken);
+                var manifest = await ReadManifestAsync(Path.Combine(current.FullName, "package.json"), isNpm: true, repositoryRoot, cancellationToken);
                 if (manifest is { References.Count: > 0 })
                 {
                     manifests.Add(manifest);
@@ -163,21 +165,21 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
     {
         cancellationToken.ThrowIfCancellationRequested();
         var changedManifests = new List<RepositoryToolManifest>();
-        var originalFiles = new Dictionary<string, byte[]>();
+        var originalFiles = new Dictionary<RepositoryToolManifest, byte[]>();
         foreach (var manifestUpdates in updates.GroupBy(update => update.Manifest))
         {
             var original = manifestUpdates.Key;
-            var manifest = await ReadManifestAsync(original.File.FullName, original.IsNpm, cancellationToken);
+            var manifest = await ReadManifestAsync(original.File.FullName, original.IsNpm, original.RepositoryRoot, cancellationToken);
             // Guest regeneration can edit unrelated package.json fields before this step.
             // Preserve those edits, but reject changes to the CLI references the user approved.
-            if (manifest is null || manifest.IsRoot != original.IsRoot ||
+            if (manifest is null || manifest.ResolvedPath != original.ResolvedPath || manifest.IsRoot != original.IsRoot ||
                 !manifest.References.Select(reference => (reference.Properties.GetPath(), reference.Key, reference.Version))
                     .SequenceEqual(original.References.Select(reference => (reference.Properties.GetPath(), reference.Key, reference.Version))))
             {
                 throw new ProjectUpdaterException(string.Format(CultureInfo.CurrentCulture, UpdateCommandStrings.ToolManifestChangedFormat, original.File.FullName));
             }
 
-            originalFiles.Add(manifest.File.FullName, await File.ReadAllBytesAsync(manifest.File.FullName, cancellationToken));
+            originalFiles.Add(manifest, await File.ReadAllBytesAsync(manifest.ResolvedPath, cancellationToken));
             foreach (var (_, reference, version) in manifestUpdates)
             {
                 var currentReference = manifest.References.Single(candidate =>
@@ -187,21 +189,25 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
             changedManifests.Add(manifest);
         }
 
+        var writtenManifests = new List<RepositoryToolManifest>();
         try
         {
             foreach (var manifest in changedManifests)
             {
                 var newLine = manifest.OriginalContent.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
                 var content = manifest.Content.ToJsonString(s_jsonOptions).ReplaceLineEndings(newLine) + newLine;
-                await File.WriteAllTextAsync(manifest.File.FullName, content, cancellationToken);
+                ValidateManifestPath(manifest);
+                writtenManifests.Add(manifest);
+                await File.WriteAllTextAsync(manifest.ResolvedPath, content, cancellationToken);
             }
         }
         catch
         {
             // A failed write or cancellation must not leave only some of the manifests updated.
-            foreach (var (path, content) in originalFiles)
+            foreach (var manifest in writtenManifests)
             {
-                await File.WriteAllBytesAsync(path, content, CancellationToken.None);
+                ValidateManifestPath(manifest);
+                await File.WriteAllBytesAsync(manifest.ResolvedPath, originalFiles[manifest], CancellationToken.None);
             }
 
             throw;
@@ -261,16 +267,59 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
             UpdateCommandStrings.NoPackageFoundFormat, DotNetPackageId, channel.Name));
     }
 
-    private static async Task<RepositoryToolManifest?> ReadManifestAsync(string path, bool isNpm, CancellationToken cancellationToken)
+    private static string FindRepositoryRoot(DirectoryInfo directory)
     {
-        if (!File.Exists(path))
+        var root = directory;
+        while (root.Parent is { } parent && !Directory.Exists(Path.Combine(root.FullName, ".git")) && !File.Exists(Path.Combine(root.FullName, ".git")))
+        {
+            root = parent;
+        }
+
+        if (!PathNormalizer.TryResolveSymlinks(root.FullName, out var resolvedRoot))
+        {
+            throw new ProjectUpdaterException(string.Format(CultureInfo.CurrentCulture,
+                UpdateCommandStrings.UnsafeToolManifestPathFormat, directory.FullName, root.FullName));
+        }
+
+        return Path.TrimEndingDirectorySeparator(resolvedRoot);
+    }
+
+    private static string ResolveManifestPath(string path, string repositoryRoot)
+    {
+        var rootPrefix = Path.EndsInDirectorySeparator(repositoryRoot) ? repositoryRoot : repositoryRoot + Path.DirectorySeparatorChar;
+        if (!PathNormalizer.TryResolveSymlinks(path, out var resolvedPath) ||
+            !resolvedPath.StartsWith(rootPrefix, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+        {
+            throw new ProjectUpdaterException(string.Format(CultureInfo.CurrentCulture,
+                UpdateCommandStrings.UnsafeToolManifestPathFormat, path, repositoryRoot));
+        }
+
+        return resolvedPath;
+    }
+
+    private static void ValidateManifestPath(RepositoryToolManifest manifest)
+    {
+        // Recheck after confirmation and immediately before writes (including rollback).
+        // Use the resolved path for I/O so replacing the original link cannot redirect it.
+        if (ResolveManifestPath(manifest.File.FullName, manifest.RepositoryRoot) != manifest.ResolvedPath ||
+            ResolveManifestPath(manifest.ResolvedPath, manifest.RepositoryRoot) != manifest.ResolvedPath)
+        {
+            throw new ProjectUpdaterException(string.Format(CultureInfo.CurrentCulture,
+                UpdateCommandStrings.ToolManifestChangedFormat, manifest.File.FullName));
+        }
+    }
+
+    private static async Task<RepositoryToolManifest?> ReadManifestAsync(string path, bool isNpm, string repositoryRoot, CancellationToken cancellationToken)
+    {
+        var resolvedPath = ResolveManifestPath(path, repositoryRoot);
+        if (!File.Exists(resolvedPath))
         {
             return null;
         }
 
         try
         {
-            var originalContent = await File.ReadAllTextAsync(path, cancellationToken);
+            var originalContent = await File.ReadAllTextAsync(resolvedPath, cancellationToken);
             var content = JsonNode.Parse(originalContent)?.AsObject() ?? throw new JsonException("Expected a JSON object.");
             var isRoot = !isNpm && content["isRoot"]?.GetValue<bool>() == true;
             var references = new List<RepositoryToolReference>();
@@ -295,7 +344,7 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
                 }
             }
 
-            return new(new FileInfo(path), content, originalContent, references, isNpm, isRoot);
+            return new(new FileInfo(path), content, originalContent, references, isNpm, isRoot, repositoryRoot, resolvedPath);
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
@@ -310,7 +359,7 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
     }
 }
 
-internal sealed record RepositoryToolManifest(FileInfo File, JsonObject Content, string OriginalContent, IReadOnlyList<RepositoryToolReference> References, bool IsNpm, bool IsRoot)
+internal sealed record RepositoryToolManifest(FileInfo File, JsonObject Content, string OriginalContent, IReadOnlyList<RepositoryToolReference> References, bool IsNpm, bool IsRoot, string RepositoryRoot, string ResolvedPath)
 {
     public string PackageId => IsNpm ? RepositoryToolUpdater.NpmPackageId : RepositoryToolUpdater.DotNetPackageId;
 }

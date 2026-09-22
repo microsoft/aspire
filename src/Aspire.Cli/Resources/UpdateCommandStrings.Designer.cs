@@ -76,6 +76,7 @@ namespace Aspire.Cli.Resources {
     internal static string RestoreRepositoryNpmTool => ResourceManager.GetString("RestoreRepositoryNpmTool", resourceCulture);
     internal static string UnsupportedToolVersionFormat => ResourceManager.GetString("UnsupportedToolVersionFormat", resourceCulture);
     internal static string ToolManifestChangedFormat => ResourceManager.GetString("ToolManifestChangedFormat", resourceCulture);
+    internal static string UnsafeToolManifestPathFormat => ResourceManager.GetString("UnsafeToolManifestPathFormat", resourceCulture);
     internal static string FailedResolveNpmToolFormat => ResourceManager.GetString("FailedResolveNpmToolFormat", resourceCulture);
     internal static string FailedReadToolManifestFormat => ResourceManager.GetString("FailedReadToolManifestFormat", resourceCulture);
     internal static string AnalyzingProjectStatus => ResourceManager.GetString("AnalyzingProjectStatus", resourceCulture);

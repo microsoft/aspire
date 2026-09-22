@@ -342,6 +342,11 @@
         <target state="new">The tool manifest '{0}' changed during update. Run 'aspire update' again.</target>
         <note />
       </trans-unit>
+      <trans-unit id="UnsafeToolManifestPathFormat">
+        <source>Cannot update tool manifest '{0}': its path could not be safely resolved within repository '{1}'. Remove or correct symbolic links that point outside the repository.</source>
+        <target state="new">Cannot update tool manifest '{0}': its path could not be safely resolved within repository '{1}'. Remove or correct symbolic links that point outside the repository.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnsupportedToolVersionFormat">
         <source>Skipping the Aspire CLI reference in '{0}': '{1}' is not an exact version or a simple ^/~ version range.</source>
         <target state="new">Skipping the Aspire CLI reference in '{0}': '{1}' is not an exact version or a simple ^/~ version range.</target>
