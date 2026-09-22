@@ -6,10 +6,14 @@ using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.OpenCode;
+using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Agents.VsCode;
+using Aspire.Cli.Npm;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Configuration;
+using Semver;
 
 namespace Aspire.Cli.Tests.Agents;
 
@@ -22,7 +26,7 @@ internal sealed class AgentConfigurationTestContext : IDisposable
 
     public AgentConfigurationTestContext(ITestOutputHelper output)
     {
-        Workspace = TemporaryWorkspace.CreateForCli(output);
+        Workspace = TemporaryWorkspace.Create(output);
         Project = Workspace.CreateDirectory("project");
         Home = Workspace.CreateDirectory("home");
         _variables = new Dictionary<string, string?>
@@ -65,6 +69,20 @@ internal sealed class AgentConfigurationTestContext : IDisposable
     public TestAgentConfigurationSkillInstaller SkillInstaller { get; }
     public TelemetryHookConfigurator Hooks { get; }
     public AgentInitService Service { get; }
+    public FakeNpmRunner Npm { get; } = new() { ResolveResult = new NpmPackageInfo { Version = new SemVersion(0, 1, 7) } };
+    public FakePlaywrightCliRunner Playwright { get; } = new();
+    public FakeNpmProvenanceChecker Provenance { get; } = new();
+
+    public AgentSkillInstaller CreateManagedSkillInstaller(DirectoryInfo? workingDirectory = null, DirectoryInfo? homeDirectory = null)
+        => new(new PlaywrightCliInstaller(Npm, Provenance, Playwright, new TestInteractionService(),
+            new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance),
+            workingDirectory is null && homeDirectory is null
+                ? ExecutionContext
+                : TestExecutionContextHelper.CreateExecutionContext(workingDirectory ?? Project, homeDirectory: homeDirectory ?? Home),
+            Environment, NullLogger<AgentSkillInstaller>.Instance);
+
+    public AgentInitRequest ManagedRequest(IReadOnlyList<AgentClient> clients, bool playwright = true, bool dotnetInspect = true)
+        => Request(clients, skills: false, playwright: playwright, dotnetInspect: dotnetInspect);
 
     public void SetVariable(string name, string value) => _variables[name] = value;
 

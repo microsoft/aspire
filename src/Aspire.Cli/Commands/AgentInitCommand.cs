@@ -259,7 +259,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (!assets.HasAssets)
         {
-            InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoAssetsSelected);
+            InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoConfigurationSelected);
             return new(CliExitCodes.Success, []);
         }
 
@@ -298,7 +298,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (clients.Count == 0)
         {
-            InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoClientsSelected);
+            InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoConfigurationSelected);
             return new(CliExitCodes.Success, []);
         }
 

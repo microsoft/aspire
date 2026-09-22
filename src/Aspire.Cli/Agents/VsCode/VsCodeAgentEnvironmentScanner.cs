@@ -64,32 +64,10 @@ internal sealed class VsCodeAgentEnvironmentScanner(
     }
 
     private bool HasProjectConfiguration(DirectoryInfo startDirectory, DirectoryInfo repositoryRoot)
-    {
-        var relativePath = Path.GetRelativePath(repositoryRoot.FullName, startDirectory.FullName);
-        if (Path.IsPathRooted(relativePath) || relativePath == ".." ||
-            relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-        {
-            // An explicit --workspace-root can be outside the current working directory.
-            startDirectory = repositoryRoot;
-        }
-
-        for (var currentDirectory = startDirectory; currentDirectory is not null; currentDirectory = currentDirectory.Parent)
-        {
-            // The home .vscode directory holds user extensions rather than workspace settings.
-            if (Path.GetRelativePath(executionContext.HomeDirectory.FullName, currentDirectory.FullName) != "." &&
-                Directory.Exists(Path.Combine(currentDirectory.FullName, ".vscode")))
-            {
-                return true;
-            }
-
-            if (Path.GetRelativePath(repositoryRoot.FullName, currentDirectory.FullName) == ".")
-            {
-                break;
-            }
-        }
-
-        return false;
-    }
+        // The home .vscode directory holds extensions, not workspace settings.
+        => AgentPath.ProjectDirectories(startDirectory, repositoryRoot).Any(directory =>
+            Path.GetRelativePath(executionContext.HomeDirectory.FullName, directory.FullName) != "." &&
+            Directory.Exists(Path.Combine(directory.FullName, ".vscode")));
 
     public IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request)
     {
@@ -159,7 +137,7 @@ internal sealed class VsCodeAgentEnvironmentScanner(
             => new(path, scope, AgentAssetKind.Mcp, [client], "servers:aspire",
                 (root, _, _) =>
                 {
-                    var edit = McpConfiguration.Apply(root, "servers", commandArray: false, "stdio");
+                    var edit = AspireMcpConfiguration.Apply(root, "servers", commandArray: false, "stdio");
                     return Task.FromResult(scope is AgentConfigurationScope.User && edit.Status is AgentConfigurationStatus.Configured
                         ? edit with { Message = AgentCommandStrings.Configuration_ProfileLimitations }
                         : edit);

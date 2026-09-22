@@ -53,35 +53,10 @@ internal sealed class OpenCodeAgentEnvironmentScanner(
     }
 
     private static bool HasProjectConfiguration(DirectoryInfo startDirectory, DirectoryInfo repositoryRoot)
-    {
-        var relativePath = Path.GetRelativePath(repositoryRoot.FullName, startDirectory.FullName);
-        if (Path.IsPathRooted(relativePath) || relativePath == ".." ||
-            relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-        {
-            // An explicit --workspace-root can be outside the current working directory.
-            startDirectory = repositoryRoot;
-        }
-
-        for (var currentDirectory = startDirectory; currentDirectory is not null; currentDirectory = currentDirectory.Parent)
-        {
-            // V2 also loads config files inside .opencode. A skills-only directory is not enough
-            // evidence of project configuration: https://opencode.ai/v2/docs/config#locations.
-            if (File.Exists(Path.Combine(currentDirectory.FullName, "opencode.json")) ||
-                File.Exists(Path.Combine(currentDirectory.FullName, "opencode.jsonc")) ||
-                File.Exists(Path.Combine(currentDirectory.FullName, ".opencode", "opencode.json")) ||
-                File.Exists(Path.Combine(currentDirectory.FullName, ".opencode", "opencode.jsonc")))
-            {
-                return true;
-            }
-
-            if (Path.GetRelativePath(repositoryRoot.FullName, currentDirectory.FullName) == ".")
-            {
-                break;
-            }
-        }
-
-        return false;
-    }
+        // V2 also loads configuration inside .opencode; a skills-only directory is insufficient.
+        // https://opencode.ai/v2/docs/config#locations
+        => AgentPath.ProjectDirectories(startDirectory, repositoryRoot).Any(directory =>
+            ConfigFiles(directory.FullName).Concat(ConfigFiles(Path.Combine(directory.FullName, ".opencode"))).Any(File.Exists));
 
     public IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request)
     {
@@ -174,26 +149,18 @@ internal sealed class OpenCodeAgentEnvironmentScanner(
                     {
                         var container = AgentConfigurationJson.OptionalObject(config, "mcp");
                         var servers = schema == 2 && container is not null ? AgentConfigurationJson.OptionalObject(container, "servers") : container;
-                        if (servers?.ContainsKey(McpConfiguration.ServerName) is true)
+                        if (AspireMcpConfiguration.CheckExistingEntry(servers, commandArray: true, () =>
                         {
-                            var existing = McpConfiguration.Apply(servers, "", commandArray: true, "local", bare: true);
-                            if (existing.Status is AgentConfigurationStatus.Blocked or AgentConfigurationStatus.Skipped)
-                            {
-                                return existing;
-                            }
-
                             var ownMcp = AgentConfigurationJson.OptionalObject(root, "mcp");
-                            var ownServers = schema == 2 && ownMcp is not null ? AgentConfigurationJson.OptionalObject(ownMcp, "servers") : ownMcp;
-                            if (ownServers?.ContainsKey(McpConfiguration.ServerName) is not true &&
-                                !McpConfiguration.IsDefaultEntry(servers[McpConfiguration.ServerName]!.AsObject(), commandArray: true))
-                            {
-                                return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_ExistingMcpCustomization);
-                            }
+                            return schema == 2 && ownMcp is not null ? AgentConfigurationJson.OptionalObject(ownMcp, "servers") : ownMcp;
+                        }) is { } existing)
+                        {
+                            return existing;
                         }
                     }
 
                     var mcp = AgentConfigurationJson.Object(root, "mcp");
-                    return McpConfiguration.Apply(mcp, "servers", commandArray: true, "local", bare: schema == 1);
+                    return AspireMcpConfiguration.Apply(mcp, "servers", commandArray: true, "local", bare: schema == 1);
                 });
     }
 

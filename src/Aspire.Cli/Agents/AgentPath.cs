@@ -14,6 +14,26 @@ internal static class AgentPath
 {
     public static StringComparer Comparer { get; } = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
+    public static IEnumerable<DirectoryInfo> ProjectDirectories(DirectoryInfo workingDirectory, DirectoryInfo workspaceRoot)
+    {
+        var relativePath = Path.GetRelativePath(workspaceRoot.FullName, workingDirectory.FullName);
+        if (Path.IsPathRooted(relativePath) || relativePath == ".." ||
+            relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+        {
+            // An explicit --workspace-root can be outside the working directory.
+            workingDirectory = workspaceRoot;
+        }
+
+        for (var directory = workingDirectory; directory is not null; directory = directory.Parent)
+        {
+            yield return directory;
+            if (Path.GetRelativePath(workspaceRoot.FullName, directory.FullName) == ".")
+            {
+                yield break;
+            }
+        }
+    }
+
     public static string? GetOverride(string variable, CliExecutionContext executionContext, IEnvironment environment)
         => environment.GetEnvironmentVariable(variable) is { Length: > 0 } value
             ? Expand(value, executionContext)

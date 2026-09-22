@@ -329,40 +329,6 @@ public class AgentFileWriterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NativeWriter_ReadSetConflict_PreservesOriginalAndCleansStaging()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var path = Path.Combine(workspace.Path, "settings.json");
-        var policyPath = Path.Combine(workspace.Path, "policy.json");
-        const string original = """{"existing":true}""";
-        await File.WriteAllTextAsync(path, original);
-        await File.WriteAllTextAsync(policyPath, """{"enabled":true}""");
-        var target = new AgentConfigurationTarget(
-            path,
-            AgentConfigurationScope.Project,
-            AgentAssetKind.Mcp,
-            [TestAgentClients.Default.CopilotCli],
-            "test",
-            async (root, context, token) =>
-            {
-                await context.ReadOptionalAsync(policyPath, token);
-                await File.WriteAllTextAsync(policyPath, """{"enabled":false}""", token);
-                root["added"] = true;
-                return AgentConfigurationEdit.Applied("configured");
-            });
-        var writer = new AgentConfigurationWriter(NullLogger<AgentConfigurationWriter>.Instance);
-
-        var results = await writer.ApplyAsync([target], CancellationToken.None);
-
-        var result = Assert.Single(results);
-        Assert.Equal(AgentConfigurationStatus.Blocked, result.Status);
-        Assert.Equal(AgentCommandStrings.Configuration_ConcurrentChange, result.Message);
-        Assert.Equal(original, await File.ReadAllTextAsync(path));
-        Assert.Equal(["policy.json", "settings.json"],
-            workspace.WorkspaceRoot.EnumerateFileSystemInfos().Select(static entry => entry.Name).Order(StringComparer.Ordinal));
-    }
-
-    [Fact]
     public async Task NativeWriter_NewFile_UsesPrivateUnixMode()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

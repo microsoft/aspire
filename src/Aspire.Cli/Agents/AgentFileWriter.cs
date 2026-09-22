@@ -8,6 +8,19 @@ namespace Aspire.Cli.Agents;
 /// </summary>
 internal static class AgentFileWriter
 {
+    public static async Task<byte[]?> ReadExistingAsync(string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await File.ReadAllBytesAsync(path, cancellationToken);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            // Missing files can be initialized; unreadable files must still fail the update.
+            return null;
+        }
+    }
+
     public static async Task WriteAsync(
         string physicalPath,
         bool destinationExists,

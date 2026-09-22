@@ -92,11 +92,6 @@
         <target state="new">Aspire MCP configuration is present. The client controls trust, policy, and server startup.</target>
         <note />
       </trans-unit>
-      <trans-unit id="Configuration_ObjectRequired">
-        <source>The configuration must contain a JSON object; the file was left unchanged.</source>
-        <target state="new">The configuration must contain a JSON object; the file was left unchanged.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="Configuration_OpenCodeCatalogVersionUnsupported">
         <source>The detected OpenCode version ({0}) does not support skills.urls catalogs. Upgrade to OpenCode {1} or later; the catalog configuration was left unchanged.</source>
         <target state="new">The detected OpenCode version ({0}) does not support skills.urls catalogs. Upgrade to OpenCode {1} or later; the catalog configuration was left unchanged.</target>
@@ -140,11 +135,6 @@
       <trans-unit id="Configuration_UnsafeLink">
         <source>The configuration link '{0}' could not be resolved safely; it was left unchanged.</source>
         <target state="new">The configuration link '{0}' could not be resolved safely; it was left unchanged.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="Configuration_UnsupportedOverride">
-        <source>This client configuration override cannot be resolved safely offline. Configure this target in the client; no guessed path was written.</source>
-        <target state="new">This client configuration override cannot be resolved safely offline. Configure this target in the client; no guessed path was written.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeprecatedConfigFix">
@@ -267,14 +257,9 @@
         <target state="new">Configure the Aspire MCP server for selected clients (y/n or true/false; default: no)</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_NoAssetsSelected">
-        <source>No agent assets selected. Existing configuration was left unchanged.</source>
-        <target state="new">No agent assets selected. Existing configuration was left unchanged.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_NoClientsSelected">
-        <source>No clients selected. Existing configuration was left unchanged.</source>
-        <target state="new">No clients selected. Existing configuration was left unchanged.</target>
+      <trans-unit id="InitCommand_NoConfigurationSelected">
+        <source>No agent configuration selected. Existing configuration was left unchanged.</source>
+        <target state="new">No agent configuration selected. Existing configuration was left unchanged.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightAsset">

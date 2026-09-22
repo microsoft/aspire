@@ -5,7 +5,6 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.VsCode;
-using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Agents.Copilot;
@@ -85,7 +84,7 @@ internal sealed class CopilotAgentEnvironmentScanner(
             {
                 var settings = await AgentConfigurationJson.ReadSettingsAsync(context, CopilotPaths.PluginSettings(request, executionContext, environment), cancellationToken);
                 var managed = await AgentConfigurationJson.ReadSettingsAsync(context, CopilotPaths.ManagedSettings(executionContext, environment), cancellationToken);
-                if (McpConfiguration.CheckPolicy(settings, managed, managedAllowlistOnly: true) is { } policy)
+                if (AspireMcpConfiguration.CheckPolicy(settings, managed, managedAllowlistOnly: true) is { } policy)
                 {
                     return policy;
                 }
@@ -97,38 +96,28 @@ internal sealed class CopilotAgentEnvironmentScanner(
                         Path.Combine(request.WorkspaceRoot.FullName, ".mcp.json")
                     ], cancellationToken))
                 {
-                    if (McpConfiguration.CheckPolicy([other]) is { } disabled)
+                    if (AspireMcpConfiguration.CheckPolicy([other]) is { } disabled)
                     {
                         return disabled;
                     }
 
-                    var servers = McpConfiguration.UsesBareServers(other) ? other : AgentConfigurationJson.OptionalObject(other, "mcpServers");
-                    if (servers?.ContainsKey(McpConfiguration.ServerName) is true)
+                    var servers = AspireMcpConfiguration.UsesBareServers(other) ? other : AgentConfigurationJson.OptionalObject(other, "mcpServers");
+                    if (AspireMcpConfiguration.CheckExistingEntry(servers, commandArray: false,
+                        () => AspireMcpConfiguration.UsesBareServers(root) ? root : AgentConfigurationJson.OptionalObject(root, "mcpServers")) is { } existing)
                     {
-                        var existing = McpConfiguration.Apply(servers, "", commandArray: false, "stdio", bare: true);
-                        if (existing.Status is AgentConfigurationStatus.Blocked or AgentConfigurationStatus.Skipped)
-                        {
-                            return existing;
-                        }
-
-                        var ownServers = McpConfiguration.UsesBareServers(root) ? root : AgentConfigurationJson.OptionalObject(root, "mcpServers");
-                        if (ownServers?.ContainsKey(McpConfiguration.ServerName) is not true &&
-                            !McpConfiguration.IsDefaultEntry(servers[McpConfiguration.ServerName]!.AsObject(), commandArray: false))
-                        {
-                            return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_ExistingMcpCustomization);
-                        }
+                        return existing;
                     }
                 }
 
                 var addCopilotDefaults = copilotEnvironment &&
-                    AgentConfigurationJson.OptionalObject(root, "mcpServers")?.ContainsKey(McpConfiguration.ServerName) is not true;
-                var edit = McpConfiguration.Apply(root, "mcpServers", commandArray: false, "stdio",
-                    bare: scope is AgentConfigurationScope.Project && McpConfiguration.UsesBareServers(root));
+                    AgentConfigurationJson.OptionalObject(root, "mcpServers")?.ContainsKey(AspireMcpConfiguration.ServerName) is not true;
+                var edit = AspireMcpConfiguration.Apply(root, "mcpServers", commandArray: false, "stdio",
+                    bare: scope is AgentConfigurationScope.Project && AspireMcpConfiguration.UsesBareServers(root));
                 if (addCopilotDefaults && edit.Status is AgentConfigurationStatus.Configured)
                 {
                     // Copilot does not inherit arbitrary environment variables for local MCP
                     // servers. Preserve Aspire's existing DOTNET_ROOT pass-through contract.
-                    var server = root["mcpServers"]![McpConfiguration.ServerName]!.AsObject();
+                    var server = root["mcpServers"]![AspireMcpConfiguration.ServerName]!.AsObject();
                     server["env"] = new JsonObject { ["DOTNET_ROOT"] = "${DOTNET_ROOT}" };
                     server["tools"] = new JsonArray("*");
                 }

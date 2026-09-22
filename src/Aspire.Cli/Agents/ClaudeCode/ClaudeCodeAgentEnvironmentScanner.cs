@@ -43,33 +43,11 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner(
     }
 
     private bool HasProjectConfiguration(DirectoryInfo startDirectory, DirectoryInfo repositoryRoot)
-    {
-        var relativePath = Path.GetRelativePath(repositoryRoot.FullName, startDirectory.FullName);
-        if (Path.IsPathRooted(relativePath) || relativePath == ".." ||
-            relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-        {
-            // An explicit --workspace-root can be outside the current working directory.
-            startDirectory = repositoryRoot;
-        }
-
-        for (var currentDirectory = startDirectory; currentDirectory is not null; currentDirectory = currentDirectory.Parent)
-        {
-            // The home .claude directory contains user settings, not evidence of project usage.
-            if (Path.GetRelativePath(executionContext.HomeDirectory.FullName, currentDirectory.FullName) != "." &&
-                (Directory.Exists(Path.Combine(currentDirectory.FullName, ".claude")) ||
-                 File.Exists(Path.Combine(currentDirectory.FullName, ".mcp.json"))))
-            {
-                return true;
-            }
-
-            if (Path.GetRelativePath(repositoryRoot.FullName, currentDirectory.FullName) == ".")
-            {
-                break;
-            }
-        }
-
-        return false;
-    }
+        // Home settings alone are not evidence of project usage.
+        => AgentPath.ProjectDirectories(startDirectory, repositoryRoot).Any(directory =>
+            Path.GetRelativePath(executionContext.HomeDirectory.FullName, directory.FullName) != "." &&
+            (Directory.Exists(Path.Combine(directory.FullName, ".claude")) ||
+             File.Exists(Path.Combine(directory.FullName, ".mcp.json"))));
 
     public IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request)
     {
@@ -94,7 +72,7 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner(
         AgentConfigurationTarget McpTarget(string path, AgentConfigurationScope scope)
             => new(path, scope, AgentAssetKind.Mcp, [client], "mcpServers:aspire", async (root, context, cancellationToken) =>
             {
-                if (scope is AgentConfigurationScope.Project && McpConfiguration.UsesBareServers(root))
+                if (scope is AgentConfigurationScope.Project && AspireMcpConfiguration.UsesBareServers(root))
                 {
                     // Copilot accepts a bare server map; Claude does not. Mixing a wrapper
                     // into that document would make Copilot stop seeing its other servers.
@@ -131,30 +109,21 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner(
                 }
 
                 var managed = await AgentConfigurationJson.ReadSettingsAsync(context, ManagedSettings(executionContext, environment), cancellationToken);
-                if (McpConfiguration.CheckPolicy(settings, managed, managedAllowlistOnly: false) is { } policy)
+                if (AspireMcpConfiguration.CheckPolicy(settings, managed, managedAllowlistOnly: false) is { } policy)
                 {
                     return policy;
                 }
 
                 foreach (var config in settings)
                 {
-                    if (AgentConfigurationJson.OptionalObject(config, "mcpServers") is { } servers && servers.ContainsKey(McpConfiguration.ServerName))
+                    if (AspireMcpConfiguration.CheckExistingEntry(AgentConfigurationJson.OptionalObject(config, "mcpServers"), commandArray: false,
+                        () => AgentConfigurationJson.OptionalObject(root, "mcpServers")) is { } existing)
                     {
-                        var existing = McpConfiguration.Apply(servers, "", commandArray: false, "stdio", bare: true);
-                        if (existing.Status is AgentConfigurationStatus.Blocked or AgentConfigurationStatus.Skipped)
-                        {
-                            return existing;
-                        }
-
-                        if (AgentConfigurationJson.OptionalObject(root, "mcpServers")?.ContainsKey(McpConfiguration.ServerName) is not true &&
-                            !McpConfiguration.IsDefaultEntry(servers[McpConfiguration.ServerName]!.AsObject(), commandArray: false))
-                        {
-                            return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_ExistingMcpCustomization);
-                        }
+                        return existing;
                     }
                 }
 
-                return McpConfiguration.Apply(root, "mcpServers", commandArray: false, "stdio");
+                return AspireMcpConfiguration.Apply(root, "mcpServers", commandArray: false, "stdio");
             });
     }
 

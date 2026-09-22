@@ -403,20 +403,11 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to No agent assets selected. Existing configuration was left unchanged..
+        ///   Looks up a localized string similar to No agent configuration selected. Existing configuration was left unchanged..
         /// </summary>
-        internal static string InitCommand_NoAssetsSelected {
+        internal static string InitCommand_NoConfigurationSelected {
             get {
-                return ResourceManager.GetString("InitCommand_NoAssetsSelected", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No clients selected. Existing configuration was left unchanged..
-        /// </summary>
-        internal static string InitCommand_NoClientsSelected {
-            get {
-                return ResourceManager.GetString("InitCommand_NoClientsSelected", resourceCulture);
+                return ResourceManager.GetString("InitCommand_NoConfigurationSelected", resourceCulture);
             }
         }
 
@@ -628,15 +619,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The configuration must contain a JSON object; the file was left unchanged..
-        /// </summary>
-        internal static string Configuration_ObjectRequired {
-            get {
-                return ResourceManager.GetString("Configuration_ObjectRequired", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to The configuration is not valid JSON/JSONC; the file was left unchanged..
         /// </summary>
         internal static string Configuration_MalformedJson {
@@ -705,15 +687,6 @@ namespace Aspire.Cli.Resources {
         internal static string Configuration_OpenCodeMultipleFiles {
             get {
                 return ResourceManager.GetString("Configuration_OpenCodeMultipleFiles", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to This client configuration override cannot be resolved safely offline. Configure this target in the client; no guessed path was written..
-        /// </summary>
-        internal static string Configuration_UnsupportedOverride {
-            get {
-                return ResourceManager.GetString("Configuration_UnsupportedOverride", resourceCulture);
             }
         }
 

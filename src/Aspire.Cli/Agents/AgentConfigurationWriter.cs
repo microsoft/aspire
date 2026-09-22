@@ -222,7 +222,7 @@ internal sealed class AgentConfigurationWriter(ILogger<AgentConfigurationWriter>
             }
             catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
             {
-                throw new AgentConfigurationException(AgentCommandStrings.Configuration_UnsupportedOverride);
+                throw new AgentConfigurationException(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.Configuration_ReadWriteFailed, ex.Message));
             }
 
             _aliases[path] = physicalPath;
@@ -231,7 +231,7 @@ internal sealed class AgentConfigurationWriter(ILogger<AgentConfigurationWriter>
                 return existing;
             }
 
-            var bytes = await ReadBytesAsync(physicalPath, cancellationToken);
+            var bytes = await AgentFileWriter.ReadExistingAsync(physicalPath, cancellationToken);
             var root = bytes is null ? null : AgentConfigurationJson.ParseObject(bytes);
             var document = new Document(physicalPath, bytes, root);
             _documents.Add(physicalPath, document);
@@ -253,7 +253,7 @@ internal sealed class AgentConfigurationWriter(ILogger<AgentConfigurationWriter>
 
             foreach (var document in _documents.Values)
             {
-                var current = await ReadBytesAsync(document.Path, cancellationToken);
+                var current = await AgentFileWriter.ReadExistingAsync(document.Path, cancellationToken);
                 if (document.Bytes is null ? current is not null : current is null || !document.Bytes.AsSpan().SequenceEqual(current))
                 {
                     return false;
@@ -261,22 +261,6 @@ internal sealed class AgentConfigurationWriter(ILogger<AgentConfigurationWriter>
             }
 
             return true;
-        }
-
-        private static async Task<byte[]?> ReadBytesAsync(string path, CancellationToken cancellationToken)
-        {
-            try
-            {
-                return await File.ReadAllBytesAsync(path, cancellationToken);
-            }
-            catch (FileNotFoundException)
-            {
-                return null;
-            }
-            catch (DirectoryNotFoundException)
-            {
-                return null;
-            }
         }
 
         internal sealed record Document(string Path, byte[]? Bytes, JsonObject? Root);

@@ -15,37 +15,77 @@ namespace Aspire.Cli.Tests.Agents;
 
 public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
 {
-    [Fact]
-    public async Task InstallAsync_WhenNpmIsUnavailable_DoesNotProbeOrInstall()
+    private readonly FakeNpmRunner _npmRunner = new() { ResolveResult = new NpmPackageInfo { Version = new SemVersion(0, 1, 7) } };
+    private readonly FakePlaywrightCliRunner _playwrightRunner = new();
+    private readonly FakeNpmProvenanceChecker _provenanceChecker = new();
+
+    [Theory]
+    [InlineData("npm", 0, 0, 0, 0, 0, 0)]
+    [InlineData("resolve", 1, 0, 0, 0, 0, 0)]
+    [InlineData("pack", 1, 1, 1, 0, 0, 0)]
+    [InlineData("install", 1, 1, 1, 1, 1, 0)]
+    [InlineData("generate", 1, 1, 1, 1, 1, 1)]
+    [InlineData("generate-error", 1, 1, 1, 1, 1, 1)]
+    [InlineData("resolve-error", 1, 0, 0, 0, 0, 0)]
+    public async Task InstallAsync_FailureStopsLaterStagesAndCleansOwnedDirectories(
+        string failure, int resolves, int probes, int packs, int verifications, int installs, int generations)
     {
-        var npmRunner = new FakeNpmRunner { IsAvailable = false };
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(npmRunner, playwrightRunner);
+        _playwrightRunner.OnInstallSkills = directory =>
+        {
+            File.WriteAllText(Path.Combine(directory, "partial.txt"), "partial output");
+            if (failure == "generate-error")
+            {
+                throw new IOException("generator failed");
+            }
+        };
+        switch (failure)
+        {
+            case "npm":
+                _npmRunner.IsAvailable = false;
+                break;
+            case "resolve":
+                _npmRunner.ResolveResult = null;
+                break;
+            case "pack":
+                _npmRunner.PackResult = null;
+                break;
+            case "install":
+                _npmRunner.InstallGlobalResult = false;
+                break;
+            case "generate":
+                _playwrightRunner.InstallSkillsResult = false;
+                break;
+            case "resolve-error":
+                _npmRunner.OnResolvePackage = _ => throw new HttpRequestException("registry unavailable");
+                break;
+        }
 
-        var result = await installer.InstallAsync(CancellationToken.None);
+        var result = await CreateInstaller().InstallAsync(CancellationToken.None);
 
-        Assert.Equal(PlaywrightInstallStatus.Skipped, result.Status);
-        Assert.Equal(AgentCommandStrings.InitCommand_PlaywrightCliSkipped, result.Message);
+        Assert.Equal(failure == "npm" ? PlaywrightInstallStatus.Skipped : PlaywrightInstallStatus.Failed, result.Status);
+        Assert.NotEmpty(result.Message!);
         Assert.Empty(result.Files);
-        Assert.Equal(0, npmRunner.ResolveCallCount);
-        Assert.Equal(0, playwrightRunner.GetVersionCallCount);
-        Assert.Equal(0, playwrightRunner.InstallSkillsCallCount);
-    }
-
-    [Fact]
-    public async Task InstallAsync_WhenNpmResolveReturnsNull_ReturnsErrorMessage()
-    {
-        var npmRunner = new FakeNpmRunner();
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(npmRunner, playwrightRunner);
-
-        var result = await installer.InstallAsync(CancellationToken.None);
-
-        Assert.Equal(PlaywrightInstallStatus.Failed, result.Status);
-        Assert.NotNull(result.Message);
-        Assert.Empty(result.Files);
-        Assert.Equal(0, npmRunner.PackCallCount);
-        Assert.Equal(0, playwrightRunner.InstallSkillsCallCount);
+        Assert.Equal(resolves, _npmRunner.ResolveCallCount);
+        Assert.Equal(probes, _playwrightRunner.GetVersionCallCount);
+        Assert.Equal(packs, _npmRunner.PackCallCount);
+        Assert.Equal(verifications, _provenanceChecker.CallCount);
+        Assert.Equal(installs, _npmRunner.InstallGlobalCallCount);
+        Assert.Equal(generations, _playwrightRunner.InstallSkillsCallCount);
+        Assert.False(Directory.Exists(_npmRunner.PackOutputDirectory));
+        Assert.False(Directory.Exists(_playwrightRunner.InstallSkillsWorkingDirectory));
+        if (failure == "generate-error")
+        {
+            Assert.Contains("generator failed", result.Message);
+        }
+        if (failure == "resolve-error")
+        {
+            Assert.Contains("registry unavailable", result.Message);
+        }
+        if (failure is "npm" or "generate")
+        {
+            Assert.Equal(failure == "npm" ? AgentCommandStrings.InitCommand_PlaywrightCliSkipped :
+                AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles, result.Message);
+        }
     }
 
     [Theory]
@@ -53,103 +93,57 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
     [InlineData("0.2.0")]
     public async Task InstallAsync_WhenSuitableVersionIsInstalled_SkipsInstallAndGeneratesSkills(string installedVersion)
     {
-        var npmRunner = CreateNpmRunner();
-        var provenanceChecker = new FakeNpmProvenanceChecker();
-        var playwrightRunner = new FakePlaywrightCliRunner
-        {
-            InstalledVersion = SemVersion.Parse(installedVersion, SemVersionStyles.Strict)
-        };
-        var installer = CreateInstaller(npmRunner, playwrightRunner, provenanceChecker);
+        _playwrightRunner.InstalledVersion = SemVersion.Parse(installedVersion, SemVersionStyles.Strict);
+        var installer = CreateInstaller();
 
         var result = await installer.InstallAsync(CancellationToken.None);
 
         Assert.Equal(PlaywrightInstallStatus.Installed, result.Status);
-        Assert.Equal(1, npmRunner.ResolveCallCount);
-        Assert.Equal(1, playwrightRunner.GetVersionCallCount);
-        Assert.Equal(1, playwrightRunner.InstallSkillsCallCount);
-        Assert.Equal(0, npmRunner.PackCallCount);
-        Assert.Equal(0, npmRunner.InstallGlobalCallCount);
-        Assert.Equal(0, provenanceChecker.CallCount);
-        Assert.False(Directory.Exists(playwrightRunner.InstallSkillsWorkingDirectory));
-    }
-
-    [Fact]
-    public async Task InstallAsync_WhenPackFails_ReturnsErrorMessage()
-    {
-        var npmRunner = CreateNpmRunner();
-        npmRunner.PackResult = null;
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(npmRunner, playwrightRunner);
-
-        var result = await installer.InstallAsync(CancellationToken.None);
-
-        Assert.Equal(PlaywrightInstallStatus.Failed, result.Status);
-        Assert.NotNull(result.Message);
-        Assert.Empty(result.Files);
-        Assert.Equal(1, npmRunner.PackCallCount);
-        Assert.Equal(0, npmRunner.InstallGlobalCallCount);
-        Assert.Equal(0, playwrightRunner.InstallSkillsCallCount);
-        Assert.False(Directory.Exists(npmRunner.PackOutputDirectory));
+        Assert.Equal(1, _npmRunner.ResolveCallCount);
+        Assert.Equal(1, _playwrightRunner.GetVersionCallCount);
+        Assert.Equal(1, _playwrightRunner.InstallSkillsCallCount);
+        Assert.Equal(0, _npmRunner.PackCallCount);
+        Assert.Equal(0, _npmRunner.InstallGlobalCallCount);
+        Assert.Equal(0, _provenanceChecker.CallCount);
+        Assert.False(Directory.Exists(_playwrightRunner.InstallSkillsWorkingDirectory));
     }
 
     [Fact]
     public async Task InstallAsync_VerifiesDownloadedTarballBeforeInstallingGlobally()
     {
-        var npmRunner = CreateNpmRunner();
-        npmRunner.TarballContent = [10, 20, 30, 40, 50];
-        var provenanceChecker = new FakeNpmProvenanceChecker();
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(npmRunner, playwrightRunner, provenanceChecker);
+        _npmRunner.TarballContent = [10, 20, 30, 40, 50];
+        var installer = CreateInstaller();
 
         var result = await installer.InstallAsync(CancellationToken.None);
 
         Assert.Equal(PlaywrightInstallStatus.Installed, result.Status);
-        Assert.Equal(1, npmRunner.PackCallCount);
-        Assert.Equal(1, provenanceChecker.CallCount);
-        Assert.Equal(1, npmRunner.InstallGlobalCallCount);
-        Assert.Equal(1, playwrightRunner.InstallSkillsCallCount);
-        Assert.Equal(npmRunner.PackedTarballPath, npmRunner.InstalledTarballPath);
-        Assert.Equal(PlaywrightCliInstaller.PackageName, provenanceChecker.CapturedPackageName);
-        Assert.Equal("0.1.7", provenanceChecker.CapturedVersion);
-        Assert.Equal(PlaywrightCliInstaller.ExpectedSourceRepository, provenanceChecker.CapturedExpectedSourceRepository);
-        Assert.Equal(PlaywrightCliInstaller.ExpectedWorkflowPath, provenanceChecker.CapturedExpectedWorkflowPath);
-        Assert.Equal(PlaywrightCliInstaller.ExpectedBuildType, provenanceChecker.CapturedExpectedBuildType);
-        Assert.Equal($"sha512-{Convert.ToBase64String(SHA512.HashData(npmRunner.TarballContent))}", provenanceChecker.CapturedSriIntegrity);
-        Assert.False(Directory.Exists(npmRunner.PackOutputDirectory));
-        Assert.False(Directory.Exists(playwrightRunner.InstallSkillsWorkingDirectory));
-    }
-
-    [Fact]
-    public async Task InstallAsync_WhenGlobalInstallFails_ReturnsErrorMessage()
-    {
-        var npmRunner = CreateNpmRunner();
-        npmRunner.InstallGlobalResult = false;
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(npmRunner, playwrightRunner);
-
-        var result = await installer.InstallAsync(CancellationToken.None);
-
-        Assert.Equal(PlaywrightInstallStatus.Failed, result.Status);
-        Assert.NotNull(result.Message);
-        Assert.Empty(result.Files);
-        Assert.Equal(1, npmRunner.InstallGlobalCallCount);
-        Assert.Equal(0, playwrightRunner.InstallSkillsCallCount);
-        Assert.False(Directory.Exists(npmRunner.PackOutputDirectory));
+        Assert.Equal(1, _npmRunner.PackCallCount);
+        Assert.Equal(1, _provenanceChecker.CallCount);
+        Assert.Equal(1, _npmRunner.InstallGlobalCallCount);
+        Assert.Equal(1, _playwrightRunner.InstallSkillsCallCount);
+        Assert.Equal(_npmRunner.PackedTarballPath, _npmRunner.InstalledTarballPath);
+        Assert.Equal(PlaywrightCliInstaller.PackageName, _provenanceChecker.CapturedPackageName);
+        Assert.Equal("0.1.7", _provenanceChecker.CapturedVersion);
+        Assert.Equal(PlaywrightCliInstaller.ExpectedSourceRepository, _provenanceChecker.CapturedExpectedSourceRepository);
+        Assert.Equal(PlaywrightCliInstaller.ExpectedWorkflowPath, _provenanceChecker.CapturedExpectedWorkflowPath);
+        Assert.Equal(PlaywrightCliInstaller.ExpectedBuildType, _provenanceChecker.CapturedExpectedBuildType);
+        Assert.Equal($"sha512-{Convert.ToBase64String(SHA512.HashData(_npmRunner.TarballContent))}", _provenanceChecker.CapturedSriIntegrity);
+        Assert.False(Directory.Exists(_npmRunner.PackOutputDirectory));
+        Assert.False(Directory.Exists(_playwrightRunner.InstallSkillsWorkingDirectory));
     }
 
     [Fact]
     public async Task InstallAsync_WhenOlderVersionInstalled_PerformsUpgrade()
     {
-        var npmRunner = CreateNpmRunner();
-        var playwrightRunner = new FakePlaywrightCliRunner { InstalledVersion = new SemVersion(0, 1, 3) };
-        var installer = CreateInstaller(npmRunner, playwrightRunner);
+        _playwrightRunner.InstalledVersion = new SemVersion(0, 1, 3);
+        var installer = CreateInstaller();
 
         var result = await installer.InstallAsync(CancellationToken.None);
 
         Assert.Equal(PlaywrightInstallStatus.Installed, result.Status);
-        Assert.Equal(1, npmRunner.PackCallCount);
-        Assert.Equal(1, npmRunner.InstallGlobalCallCount);
-        Assert.Equal(1, playwrightRunner.InstallSkillsCallCount);
+        Assert.Equal(1, _npmRunner.PackCallCount);
+        Assert.Equal(1, _npmRunner.InstallGlobalCallCount);
+        Assert.Equal(1, _playwrightRunner.InstallSkillsCallCount);
     }
 
     [Fact]
@@ -173,15 +167,14 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
     [InlineData("refs/heads/main", false)]
     public async Task InstallAsync_WorkflowRefValidator_OnlyAcceptsMatchingReleaseTags(string workflowRef, bool expected)
     {
-        var provenanceChecker = new FakeNpmProvenanceChecker();
-        var installer = CreateInstaller(CreateNpmRunner(), new FakePlaywrightCliRunner(), provenanceChecker);
+        var installer = CreateInstaller();
 
         var result = await installer.InstallAsync(CancellationToken.None);
 
         Assert.Equal(PlaywrightInstallStatus.Installed, result.Status);
-        Assert.NotNull(provenanceChecker.CapturedValidateWorkflowRef);
+        Assert.NotNull(_provenanceChecker.CapturedValidateWorkflowRef);
         Assert.True(WorkflowRefInfo.TryParse(workflowRef, out var parsedRef));
-        Assert.Equal(expected, provenanceChecker.CapturedValidateWorkflowRef(parsedRef!));
+        Assert.Equal(expected, _provenanceChecker.CapturedValidateWorkflowRef(parsedRef!));
     }
 
     [Theory]
@@ -198,61 +191,56 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
     [InlineData((int)ProvenanceVerificationOutcome.WorkflowRefMismatch)]
     public async Task InstallAsync_WhenVerificationFails_DoesNotInstallOrGenerate(int outcome)
     {
-        var npmRunner = CreateNpmRunner();
-        var provenanceChecker = new FakeNpmProvenanceChecker { ProvenanceOutcome = (ProvenanceVerificationOutcome)outcome };
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(npmRunner, playwrightRunner, provenanceChecker);
+        _provenanceChecker.ProvenanceOutcome = (ProvenanceVerificationOutcome)outcome;
+        var installer = CreateInstaller();
 
         var result = await installer.InstallAsync(CancellationToken.None);
 
         Assert.Equal(PlaywrightInstallStatus.Failed, result.Status);
         Assert.NotNull(result.Message);
         Assert.Empty(result.Files);
-        Assert.Equal(1, provenanceChecker.CallCount);
-        Assert.Equal(1, npmRunner.PackCallCount);
-        Assert.Equal(0, npmRunner.InstallGlobalCallCount);
-        Assert.Equal(0, playwrightRunner.InstallSkillsCallCount);
-        Assert.False(Directory.Exists(npmRunner.PackOutputDirectory));
+        Assert.Equal(1, _provenanceChecker.CallCount);
+        Assert.Equal(1, _npmRunner.PackCallCount);
+        Assert.Equal(0, _npmRunner.InstallGlobalCallCount);
+        Assert.Equal(0, _playwrightRunner.InstallSkillsCallCount);
+        Assert.False(Directory.Exists(_npmRunner.PackOutputDirectory));
     }
 
     [Fact]
     public async Task InstallAsync_WhenValidationDisabled_SkipsAllValidationChecks()
     {
-        var npmRunner = CreateNpmRunner();
-        var provenanceChecker = new FakeNpmProvenanceChecker { ProvenanceOutcome = ProvenanceVerificationOutcome.AttestationFetchFailed };
-        var playwrightRunner = new FakePlaywrightCliRunner();
+        _provenanceChecker.ProvenanceOutcome = ProvenanceVerificationOutcome.AttestationFetchFailed;
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 [PlaywrightCliInstaller.DisablePackageValidationKey] = "true"
             })
             .Build();
-        var installer = CreateInstaller(npmRunner, playwrightRunner, provenanceChecker, configuration);
+        var installer = CreateInstaller(configuration);
 
         var result = await installer.InstallAsync(CancellationToken.None);
 
         Assert.Equal(PlaywrightInstallStatus.Installed, result.Status);
-        Assert.Equal(0, provenanceChecker.CallCount);
-        Assert.Equal(1, npmRunner.PackCallCount);
-        Assert.Equal(1, npmRunner.InstallGlobalCallCount);
-        Assert.Equal(1, playwrightRunner.InstallSkillsCallCount);
+        Assert.Equal(0, _provenanceChecker.CallCount);
+        Assert.Equal(1, _npmRunner.PackCallCount);
+        Assert.Equal(1, _npmRunner.InstallGlobalCallCount);
+        Assert.Equal(1, _playwrightRunner.InstallSkillsCallCount);
     }
 
     [Fact]
     public async Task InstallAsync_WhenVersionOverrideConfigured_UsesOverrideVersion()
     {
-        var npmRunner = CreateNpmRunner();
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 [PlaywrightCliInstaller.VersionOverrideKey] = "0.2.0"
             })
             .Build();
-        var installer = CreateInstaller(npmRunner, new FakePlaywrightCliRunner(), configuration: configuration);
+        var installer = CreateInstaller(configuration);
 
         await installer.InstallAsync(CancellationToken.None);
 
-        Assert.Equal("0.2.0", npmRunner.ResolvedVersionRange);
+        Assert.Equal("0.2.0", _npmRunner.ResolvedVersionRange);
     }
 
     [Theory]
@@ -263,14 +251,13 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
     [InlineData("v0.2.0")]
     public async Task InstallAsync_WhenVersionOverrideIsNotStrictSemVer_ReturnsFailed(string invalidVersion)
     {
-        var npmRunner = CreateNpmRunner();
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 [PlaywrightCliInstaller.VersionOverrideKey] = invalidVersion
             })
             .Build();
-        var installer = CreateInstaller(npmRunner, new FakePlaywrightCliRunner(), configuration: configuration);
+        var installer = CreateInstaller(configuration);
 
         var result = await installer.InstallAsync(CancellationToken.None);
 
@@ -278,38 +265,36 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
         Assert.NotNull(result.Message);
         Assert.Contains(invalidVersion, result.Message);
         Assert.Empty(result.Files);
-        Assert.Equal(0, npmRunner.ResolveCallCount);
+        Assert.Equal(0, _npmRunner.ResolveCallCount);
     }
 
     [Fact]
     public async Task InstallAsync_WhenNoVersionOverride_UsesDefaultRange()
     {
-        var npmRunner = CreateNpmRunner();
-        var installer = CreateInstaller(npmRunner, new FakePlaywrightCliRunner());
+        var installer = CreateInstaller();
 
         await installer.InstallAsync(CancellationToken.None);
 
-        Assert.Equal(PlaywrightCliInstaller.VersionRange, npmRunner.ResolvedVersionRange);
-        Assert.Equal(PlaywrightCliInstaller.PackageName, npmRunner.ResolvedPackageName);
+        Assert.Equal(PlaywrightCliInstaller.VersionRange, _npmRunner.ResolvedVersionRange);
+        Assert.Equal(PlaywrightCliInstaller.PackageName, _npmRunner.ResolvedPackageName);
     }
 
     [Fact]
     public async Task InstallAsync_CapturesCompleteSkillFromIsolatedWorkspace()
     {
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        playwrightRunner.OnInstallSkills = directory =>
+        _playwrightRunner.OnInstallSkills = directory =>
         {
             Assert.Empty(Directory.EnumerateFileSystemEntries(directory));
             Directory.CreateDirectory(Path.Combine(directory, ".playwright"));
             Directory.CreateDirectory(Path.Combine(directory, ".github", "skills", "unselected"));
         };
-        var installer = CreateInstaller(CreateNpmRunner(), playwrightRunner);
+        var installer = CreateInstaller();
 
         var result = await installer.InstallAsync(CancellationToken.None);
 
         Assert.Equal(PlaywrightInstallStatus.Installed, result.Status);
-        Assert.Equal(1, playwrightRunner.InstallSkillsCallCount);
-        Assert.False(Directory.Exists(playwrightRunner.InstallSkillsWorkingDirectory));
+        Assert.Equal(1, _playwrightRunner.InstallSkillsCallCount);
+        Assert.False(Directory.Exists(_playwrightRunner.InstallSkillsWorkingDirectory));
         var content = string.Join("\n\n", result.Files.Select(static file =>
             $"{file.RelativePath.Replace('\\', '/')}\n{Encoding.UTF8.GetString(file.Content)}"));
         await Verify(content, "txt");
@@ -318,11 +303,10 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task InstallAsync_PreservesBinarySupportingFiles()
     {
-        var playwrightRunner = new FakePlaywrightCliRunner();
         var relativePath = Path.Combine("assets", "example.bin");
         byte[] bytes = [0, 255, 128, 1, 13, 10];
-        playwrightRunner.SkillFiles[relativePath] = bytes;
-        var installer = CreateInstaller(CreateNpmRunner(), playwrightRunner);
+        _playwrightRunner.SkillFiles[relativePath] = bytes;
+        var installer = CreateInstaller();
 
         var result = await installer.InstallAsync(CancellationToken.None);
 
@@ -330,44 +314,24 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal(bytes, Assert.Single(result.Files, file => file.RelativePath == relativePath).Content);
     }
 
-    [Fact]
-    public async Task InstallAsync_WhenGenerationFails_ReturnsFailedAndCleansWorkspace()
-    {
-        var playwrightRunner = new FakePlaywrightCliRunner { InstallSkillsResult = false };
-        playwrightRunner.OnInstallSkills = directory =>
-        {
-            var partialDirectory = Directory.CreateDirectory(Path.Combine(directory, ".claude", "skills"));
-            File.WriteAllText(Path.Combine(partialDirectory.FullName, "partial.txt"), "partial output");
-        };
-        var installer = CreateInstaller(CreateNpmRunner(), playwrightRunner);
-
-        var result = await installer.InstallAsync(CancellationToken.None);
-
-        Assert.Equal(PlaywrightInstallStatus.Failed, result.Status);
-        Assert.Equal(AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles, result.Message);
-        Assert.Empty(result.Files);
-        Assert.False(Directory.Exists(playwrightRunner.InstallSkillsWorkingDirectory));
-    }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task InstallAsync_WhenGeneratedSkillIsMissingOrEmpty_ReturnsFailed(bool emptyFile)
     {
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        playwrightRunner.SkillFiles.Clear();
+        _playwrightRunner.SkillFiles.Clear();
         if (emptyFile)
         {
-            playwrightRunner.SkillFiles["SKILL.md"] = [];
+            _playwrightRunner.SkillFiles["SKILL.md"] = [];
         }
-        var installer = CreateInstaller(CreateNpmRunner(), playwrightRunner);
+        var installer = CreateInstaller();
 
         var result = await installer.InstallAsync(CancellationToken.None);
 
         Assert.Equal(PlaywrightInstallStatus.Failed, result.Status);
         Assert.Equal(AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles, result.Message);
         Assert.Empty(result.Files);
-        Assert.False(Directory.Exists(playwrightRunner.InstallSkillsWorkingDirectory));
+        Assert.False(Directory.Exists(_playwrightRunner.InstallSkillsWorkingDirectory));
     }
 
     [Fact]
@@ -376,14 +340,13 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var externalPath = Path.Combine(workspace.Path, "external.md");
         await File.WriteAllTextAsync(externalPath, "user content");
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        playwrightRunner.OnInstallSkills = directory =>
+        _playwrightRunner.OnInstallSkills = directory =>
         {
             var skillDirectory = Directory.CreateDirectory(Path.Combine(
                 directory, PlaywrightCliInstaller.s_primarySkillBaseDirectory, PlaywrightCliInstaller.PlaywrightCliSkillName));
             TestSymlinkHelper.TryCreateSymlink(Path.Combine(skillDirectory.FullName, "linked.md"), externalPath, isDirectory: false);
         };
-        var installer = CreateInstaller(CreateNpmRunner(), playwrightRunner);
+        var installer = CreateInstaller();
 
         var result = await installer.InstallAsync(CancellationToken.None);
 
@@ -391,42 +354,7 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
         Assert.NotNull(result.Message);
         Assert.Empty(result.Files);
         Assert.Equal("user content", await File.ReadAllTextAsync(externalPath));
-        Assert.False(Directory.Exists(playwrightRunner.InstallSkillsWorkingDirectory));
-    }
-
-    [Fact]
-    public async Task InstallAsync_WhenGenerationThrows_ReturnsFailedAndCleansWorkspace()
-    {
-        var playwrightRunner = new FakePlaywrightCliRunner
-        {
-            OnInstallSkills = _ => throw new IOException("generator failed")
-        };
-        var installer = CreateInstaller(CreateNpmRunner(), playwrightRunner);
-
-        var result = await installer.InstallAsync(CancellationToken.None);
-
-        Assert.Equal(PlaywrightInstallStatus.Failed, result.Status);
-        Assert.NotNull(result.Message);
-        Assert.Contains("generator failed", result.Message);
-        Assert.Empty(result.Files);
-        Assert.False(Directory.Exists(playwrightRunner.InstallSkillsWorkingDirectory));
-    }
-
-    [Fact]
-    public async Task InstallAsync_WhenResolutionThrows_ReturnsFailed()
-    {
-        var npmRunner = CreateNpmRunner();
-        npmRunner.OnResolvePackage = _ => throw new HttpRequestException("registry unavailable");
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(npmRunner, playwrightRunner);
-
-        var result = await installer.InstallAsync(CancellationToken.None);
-
-        Assert.Equal(PlaywrightInstallStatus.Failed, result.Status);
-        Assert.NotNull(result.Message);
-        Assert.Contains("registry unavailable", result.Message);
-        Assert.Empty(result.Files);
-        Assert.Equal(0, playwrightRunner.InstallSkillsCallCount);
+        Assert.False(Directory.Exists(_playwrightRunner.InstallSkillsWorkingDirectory));
     }
 
     [Fact]
@@ -434,46 +362,27 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper outputHelper)
     {
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
-        var npmRunner = CreateNpmRunner();
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(npmRunner, playwrightRunner);
+        var installer = CreateInstaller();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => installer.InstallAsync(cancellation.Token));
 
-        Assert.Equal(0, npmRunner.ResolveCallCount);
-        Assert.Equal(0, playwrightRunner.GetVersionCallCount);
+        Assert.Equal(0, _npmRunner.ResolveCallCount);
+        Assert.Equal(0, _playwrightRunner.GetVersionCallCount);
     }
 
     [Fact]
     public async Task InstallAsync_WhenCancelledDuringGeneration_PropagatesAndCleansWorkspace()
     {
         using var cancellation = new CancellationTokenSource();
-        var playwrightRunner = new FakePlaywrightCliRunner
-        {
-            OnInstallSkills = _ => cancellation.Cancel()
-        };
-        var installer = CreateInstaller(CreateNpmRunner(), playwrightRunner);
+        _playwrightRunner.OnInstallSkills = _ => cancellation.Cancel();
+        var installer = CreateInstaller();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => installer.InstallAsync(cancellation.Token));
 
-        Assert.False(Directory.Exists(playwrightRunner.InstallSkillsWorkingDirectory));
+        Assert.False(Directory.Exists(_playwrightRunner.InstallSkillsWorkingDirectory));
     }
 
-    private static FakeNpmRunner CreateNpmRunner() => new()
-    {
-        ResolveResult = new NpmPackageInfo { Version = new SemVersion(0, 1, 7) }
-    };
-
-    private static PlaywrightCliInstaller CreateInstaller(
-        FakeNpmRunner npmRunner,
-        FakePlaywrightCliRunner playwrightRunner,
-        FakeNpmProvenanceChecker? provenanceChecker = null,
-        IConfiguration? configuration = null) =>
-        new(
-            npmRunner,
-            provenanceChecker ?? new FakeNpmProvenanceChecker(),
-            playwrightRunner,
-            new TestInteractionService(),
-            configuration ?? new ConfigurationBuilder().Build(),
-            NullLogger<PlaywrightCliInstaller>.Instance);
+    private PlaywrightCliInstaller CreateInstaller(IConfiguration? configuration = null)
+        => new(_npmRunner, _provenanceChecker, _playwrightRunner, new TestInteractionService(),
+            configuration ?? new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 }

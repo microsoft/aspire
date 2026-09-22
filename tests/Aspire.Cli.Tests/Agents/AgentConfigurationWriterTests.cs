@@ -4,6 +4,7 @@
 using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -103,13 +104,20 @@ public class AgentConfigurationWriterTests(ITestOutputHelper output)
         Assert.Equal([path], Directory.EnumerateFiles(context.Project.FullName));
     }
 
-    [Fact]
-    public async Task PolicyChangedDuringMutation_PreventsWritingTheDependentTarget()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PolicyChangedDuringMutation_PreventsWritingTheDependentTarget(bool destinationExists)
     {
         using var context = new AgentConfigurationTestContext(output);
         var path = Path.Combine(context.Project.FullName, "settings.json");
         var policyPath = Path.Combine(context.Project.FullName, "policy.json");
         await AgentConfigurationTestContext.WriteAsync(policyPath, "{}").DefaultTimeout();
+        const string original = """{"existing":true}""";
+        if (destinationExists)
+        {
+            await File.WriteAllTextAsync(path, original).DefaultTimeout();
+        }
         var target = new AgentConfigurationTarget(path, AgentConfigurationScope.Project, AgentAssetKind.AspireSkills,
             [TestAgentClients.Default.ClaudeCode], "plugin", async (root, mutation, cancellationToken) =>
             {
@@ -122,8 +130,15 @@ public class AgentConfigurationWriterTests(ITestOutputHelper output)
         var results = await context.Writer.ApplyAsync([target], CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(AgentConfigurationStatus.Blocked, Assert.Single(results).Status);
-        Assert.False(File.Exists(path));
-        Assert.Equal([policyPath], Directory.EnumerateFiles(context.Project.FullName));
+        Assert.Equal(AgentCommandStrings.Configuration_ConcurrentChange, results[0].Message);
+        Assert.Equal(destinationExists, File.Exists(path));
+        if (destinationExists)
+        {
+            Assert.Equal(original, await File.ReadAllTextAsync(path).DefaultTimeout());
+        }
+        Assert.Equal(
+            (destinationExists ? new[] { policyPath, path } : [policyPath]).Order(),
+            Directory.EnumerateFiles(context.Project.FullName).Order());
     }
 
     [Fact]

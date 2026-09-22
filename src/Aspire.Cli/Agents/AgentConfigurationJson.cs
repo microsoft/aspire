@@ -26,7 +26,7 @@ internal static class AgentConfigurationJson
             }
 
             var root = JsonNode.Parse(content, documentOptions: ConfigurationHelper.ParseOptions) as JsonObject
-                ?? throw new AgentConfigurationException(AgentCommandStrings.Configuration_ObjectRequired);
+                ?? throw Shape("$");
             Materialize(root);
 
             return root;

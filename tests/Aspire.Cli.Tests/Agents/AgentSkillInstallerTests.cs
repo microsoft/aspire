@@ -2,14 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.DotnetInspect;
-using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
-using Aspire.Cli.Tests.Utils;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
 
 namespace Aspire.Cli.Tests.Agents;
@@ -24,14 +19,10 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     [InlineData(true, true, true)]
     public async Task InstallAsync_WhenNoManagedWorkIsSelected_DoesNotWriteOrProbe(bool playwright, bool dotnetInspect, bool noClients)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var npmRunner = CreateNpmRunner();
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(project, home, npmRunner, playwrightRunner);
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var installer = context.CreateManagedSkillInstaller();
         var request = new AgentInitRequest(
-            project,
+            context.Project,
             new AgentAssetSelection(Mcp: true, playwright, dotnetInspect, AspireSkills: true),
             noClients ? [] : [TestAgentClients.Default.CopilotCli],
             []);
@@ -39,11 +30,11 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
         Assert.Empty(results);
-        Assert.Empty(project.EnumerateFileSystemInfos());
-        Assert.Empty(home.EnumerateFileSystemInfos());
-        Assert.Equal(0, npmRunner.ResolveCallCount);
-        Assert.Equal(0, playwrightRunner.GetVersionCallCount);
-        Assert.Equal(0, playwrightRunner.InstallSkillsCallCount);
+        Assert.Empty(context.Project.EnumerateFileSystemInfos());
+        Assert.Empty(context.Home.EnumerateFileSystemInfos());
+        Assert.Equal(0, context.Npm.ResolveCallCount);
+        Assert.Equal(0, context.Playwright.GetVersionCallCount);
+        Assert.Equal(0, context.Playwright.InstallSkillsCallCount);
     }
 
     [Theory]
@@ -54,12 +45,9 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     [InlineData("claude-code", ".claude")]
     public async Task InstallAsync_DotnetInspectBeforeAppHost_WritesOnlySelectedClientLocations(string clientId, string nativeDirectory)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = new DirectoryInfo(Path.Combine(workspace.Path, "project"));
-        var home = workspace.CreateDirectory("home");
-        var npmRunner = CreateNpmRunner();
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(project, home, npmRunner, playwrightRunner);
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var project = new DirectoryInfo(Path.Combine(context.Workspace.Path, "project"));
+        var installer = context.CreateManagedSkillInstaller(project, context.Home);
         var client = TestAgentClients.Default.All.Single(client => client.Id == clientId);
         var request = CreateRequest(project, [client], playwright: false);
 
@@ -75,50 +63,46 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         });
         Assert.Empty(project.EnumerateFiles());
         Assert.Equal([nativeDirectory], project.EnumerateDirectories().Select(static directory => directory.Name));
-        Assert.Equal([nativeDirectory], home.EnumerateDirectories().Select(static directory => directory.Name));
+        Assert.Equal([nativeDirectory], context.Home.EnumerateDirectories().Select(static directory => directory.Name));
         foreach (var result in results)
         {
             Assert.Equal(DotnetInspectSkill.Content,
                 await File.ReadAllTextAsync(Path.Combine(result.TargetPath, "SKILL.md")));
         }
-        Assert.Equal(0, npmRunner.ResolveCallCount);
-        Assert.Equal(0, playwrightRunner.GetVersionCallCount);
-        Assert.Equal(0, playwrightRunner.InstallSkillsCallCount);
+        Assert.Equal(0, context.Npm.ResolveCallCount);
+        Assert.Equal(0, context.Playwright.GetVersionCallCount);
+        Assert.Equal(0, context.Playwright.InstallSkillsCallCount);
     }
 
     [Fact]
     public async Task InstallAsync_AllClients_InstallsAndGeneratesPlaywrightOnceForBothScopes()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var npmRunner = CreateNpmRunner();
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(project, home, npmRunner, playwrightRunner);
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp, TestAgentClients.Default.ClaudeCode, TestAgentClients.Default.VsCode, TestAgentClients.Default.OpenCode]);
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp, TestAgentClients.Default.ClaudeCode, TestAgentClients.Default.VsCode, TestAgentClients.Default.OpenCode]);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
         Assert.Equal(8, results.Count);
         Assert.All(results, static result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
-        Assert.Equal(1, npmRunner.ResolveCallCount);
-        Assert.Equal(1, npmRunner.PackCallCount);
-        Assert.Equal(1, npmRunner.InstallGlobalCallCount);
-        Assert.Equal(1, playwrightRunner.InstallSkillsCallCount);
-        Assert.False(Directory.Exists(playwrightRunner.InstallSkillsWorkingDirectory));
-        Assert.NotEqual(project.FullName, playwrightRunner.InstallSkillsWorkingDirectory);
-        Assert.NotEqual(home.FullName, playwrightRunner.InstallSkillsWorkingDirectory);
+        Assert.Equal(1, context.Npm.ResolveCallCount);
+        Assert.Equal(1, context.Npm.PackCallCount);
+        Assert.Equal(1, context.Npm.InstallGlobalCallCount);
+        Assert.Equal(1, context.Playwright.InstallSkillsCallCount);
+        Assert.False(Directory.Exists(context.Playwright.InstallSkillsWorkingDirectory));
+        Assert.NotEqual(context.Project.FullName, context.Playwright.InstallSkillsWorkingDirectory);
+        Assert.NotEqual(context.Home.FullName, context.Playwright.InstallSkillsWorkingDirectory);
 
         foreach (var result in results.Where(static result => result.Asset is AgentAssetKind.Playwright))
         {
-            foreach (var (relativePath, content) in playwrightRunner.SkillFiles)
+            foreach (var (relativePath, content) in context.Playwright.SkillFiles)
             {
                 Assert.Equal(content, await File.ReadAllBytesAsync(Path.Combine(result.TargetPath, relativePath)));
             }
         }
 
-        var files = Directory.GetFiles(workspace.Path, "*", SearchOption.AllDirectories)
-            .Select(path => Path.GetRelativePath(workspace.Path, path).Replace('\\', '/'))
+        var files = Directory.GetFiles(context.Workspace.Path, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(context.Workspace.Path, path).Replace('\\', '/'))
             .Order(StringComparer.Ordinal);
         await Verify(string.Join("\n", files), "txt");
     }
@@ -126,33 +110,27 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task InstallAsync_CopilotAppAndCli_DeduplicatesSharedTargetsAndClientIds()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var npmRunner = CreateNpmRunner();
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(project, home, npmRunner, playwrightRunner);
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp, TestAgentClients.Default.CopilotCli]);
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp, TestAgentClients.Default.CopilotCli]);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
         Assert.Equal(4, results.Count);
         Assert.All(results, static result => Assert.Equal([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp], result.Clients));
         Assert.Equal(4, results.Select(static result => result.TargetPath).Distinct(StringComparers.FileSystemPath).Count());
-        Assert.Equal([".agents"], project.EnumerateDirectories().Select(static directory => directory.Name));
-        Assert.Equal([".agents"], home.EnumerateDirectories().Select(static directory => directory.Name));
-        Assert.Equal(1, npmRunner.InstallGlobalCallCount);
-        Assert.Equal(1, playwrightRunner.InstallSkillsCallCount);
+        Assert.Equal([".agents"], context.Project.EnumerateDirectories().Select(static directory => directory.Name));
+        Assert.Equal([".agents"], context.Home.EnumerateDirectories().Select(static directory => directory.Name));
+        Assert.Equal(1, context.Npm.InstallGlobalCallCount);
+        Assert.Equal(1, context.Playwright.InstallSkillsCallCount);
     }
 
     [Fact]
     public async Task InstallAsync_OverlappingProjectAndHome_DeduplicatesScopes()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var npmRunner = CreateNpmRunner();
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(workspace.WorkspaceRoot, workspace.WorkspaceRoot, npmRunner, playwrightRunner);
-        var request = CreateRequest(workspace.WorkspaceRoot, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp]);
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var installer = context.CreateManagedSkillInstaller(context.Workspace.WorkspaceRoot, context.Workspace.WorkspaceRoot);
+        var request = CreateRequest(context.Workspace.WorkspaceRoot, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp]);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -163,18 +141,18 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
             Assert.Equal(AgentConfigurationStatus.Configured, result.Status);
             Assert.Equal([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp], result.Clients);
         });
-        Assert.Equal(1, npmRunner.InstallGlobalCallCount);
-        Assert.Equal(1, playwrightRunner.InstallSkillsCallCount);
+        Assert.Equal(1, context.Npm.InstallGlobalCallCount);
+        Assert.Equal(1, context.Playwright.InstallSkillsCallCount);
     }
 
     [Fact]
     public async Task InstallAsync_CaseInsensitiveRoots_DeduplicatesMissingSkillDirectories()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("MixedCase");
-        var home = new DirectoryInfo(Path.Combine(workspace.Path, "mixedcase"));
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var project = context.Workspace.CreateDirectory("MixedCase");
+        var home = new DirectoryInfo(Path.Combine(context.Workspace.Path, "mixedcase"));
         Assert.SkipWhen(!home.Exists, "The test volume is case-sensitive.");
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), new FakePlaywrightCliRunner());
+        var installer = context.CreateManagedSkillInstaller(project, home);
         var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
@@ -187,12 +165,12 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task InstallAsync_CaseSensitiveRoots_PreservesDistinctTargets()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("MixedCase");
-        var home = new DirectoryInfo(Path.Combine(workspace.Path, "mixedcase"));
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var project = context.Workspace.CreateDirectory("MixedCase");
+        var home = new DirectoryInfo(Path.Combine(context.Workspace.Path, "mixedcase"));
         Assert.SkipWhen(home.Exists, "The test volume is case-insensitive.");
         home.Create();
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), new FakePlaywrightCliRunner());
+        var installer = context.CreateManagedSkillInstaller(project, home);
         var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
@@ -205,19 +183,15 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task InstallAsync_SymlinkedSkillDirectories_DeduplicatesPhysicalTargets()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        foreach (var root in new[] { project, home })
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        foreach (var root in new[] { context.Project, context.Home })
         {
             var sharedSkills = root.CreateSubdirectory(Path.Combine(".agents", "skills"));
             var claude = root.CreateSubdirectory(".claude");
             TestSymlinkHelper.TryCreateSymlink(Path.Combine(claude.FullName, "skills"), sharedSkills.FullName);
         }
-        var npmRunner = CreateNpmRunner();
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(project, home, npmRunner, playwrightRunner);
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode]);
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode]);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -227,52 +201,47 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
             Assert.Equal([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode], result.Clients);
             Assert.Equal(AgentConfigurationStatus.Configured, result.Status);
         });
-        Assert.Equal(1, npmRunner.InstallGlobalCallCount);
-        Assert.Equal(1, playwrightRunner.InstallSkillsCallCount);
-        Assert.NotNull(new DirectoryInfo(Path.Combine(project.FullName, ".claude", "skills")).LinkTarget);
-        Assert.NotNull(new DirectoryInfo(Path.Combine(home.FullName, ".claude", "skills")).LinkTarget);
+        Assert.Equal(1, context.Npm.InstallGlobalCallCount);
+        Assert.Equal(1, context.Playwright.InstallSkillsCallCount);
+        Assert.NotNull(new DirectoryInfo(Path.Combine(context.Project.FullName, ".claude", "skills")).LinkTarget);
+        Assert.NotNull(new DirectoryInfo(Path.Combine(context.Home.FullName, ".claude", "skills")).LinkTarget);
     }
 
     [Fact]
     public async Task InstallAsync_ClaudeOnly_DoesNotCreateSharedClientDirectories()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), playwrightRunner);
-        var request = CreateRequest(project, [TestAgentClients.Default.ClaudeCode]);
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.ClaudeCode]);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
         Assert.Equal(4, results.Count);
         Assert.All(results, static result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
-        Assert.Equal([".claude"], project.EnumerateDirectories().Select(static directory => directory.Name));
-        Assert.Equal([".claude"], home.EnumerateDirectories().Select(static directory => directory.Name));
-        Assert.Equal(1, playwrightRunner.InstallSkillsCallCount);
+        Assert.Equal([".claude"], context.Project.EnumerateDirectories().Select(static directory => directory.Name));
+        Assert.Equal([".claude"], context.Home.EnumerateDirectories().Select(static directory => directory.Name));
+        Assert.Equal(1, context.Playwright.InstallSkillsCallCount);
     }
 
     [Fact]
     public async Task InstallAsync_ClaudeConfigOverride_ChangesOnlyUserLocation()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var workingDirectory = workspace.CreateDirectory("working");
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var configDirectory = Path.Combine(workspace.Path, "claude-config");
-        var environment = new TestEnvironment(new Dictionary<string, string?> { ["CLAUDE_CONFIG_DIR"] = configDirectory });
-        var installer = CreateInstaller(workingDirectory, home, CreateNpmRunner(), new FakePlaywrightCliRunner(), environment);
-        var request = CreateRequest(project, [TestAgentClients.Default.ClaudeCode], playwright: false);
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var workingDirectory = context.Workspace.CreateDirectory("working");
+        var configDirectory = Path.Combine(context.Workspace.Path, "claude-config");
+        context.SetVariable("CLAUDE_CONFIG_DIR", configDirectory);
+        var installer = context.CreateManagedSkillInstaller(workingDirectory, context.Home);
+        var request = CreateRequest(context.Project, [TestAgentClients.Default.ClaudeCode], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
         Assert.Equal(
-            Canonical(Path.Combine(project.FullName, ".claude", "skills", "dotnet-inspect")),
+            Canonical(Path.Combine(context.Project.FullName, ".claude", "skills", "dotnet-inspect")),
             Assert.Single(results, static result => result.Scope is AgentConfigurationScope.Project).TargetPath);
         Assert.Equal(
             Canonical(Path.Combine(configDirectory, "skills", "dotnet-inspect")),
             Assert.Single(results, static result => result.Scope is AgentConfigurationScope.User).TargetPath);
-        Assert.Empty(home.EnumerateFileSystemInfos());
+        Assert.Empty(context.Home.EnumerateFileSystemInfos());
         Assert.Empty(workingDirectory.EnumerateFileSystemInfos());
     }
 
@@ -283,15 +252,13 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     [InlineData(@"~\custom-claude")]
     public async Task InstallAsync_ClaudeConfigOverride_ResolvesAgainstNativeRoot(string overrideKind)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var workingDirectory = workspace.CreateDirectory("working");
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var workingDirectory = context.Workspace.CreateDirectory("working");
         var value = overrideKind == "relative" ? "custom-claude" : overrideKind;
-        var configRoot = overrideKind == "relative" ? workingDirectory.FullName : home.FullName;
-        var environment = new TestEnvironment(new Dictionary<string, string?> { ["CLAUDE_CONFIG_DIR"] = value });
-        var installer = CreateInstaller(workingDirectory, home, CreateNpmRunner(), new FakePlaywrightCliRunner(), environment);
-        var request = CreateRequest(project, [TestAgentClients.Default.ClaudeCode], playwright: false);
+        var configRoot = overrideKind == "relative" ? workingDirectory.FullName : context.Home.FullName;
+        context.SetVariable("CLAUDE_CONFIG_DIR", value);
+        var installer = context.CreateManagedSkillInstaller(workingDirectory, context.Home);
+        var request = CreateRequest(context.Project, [TestAgentClients.Default.ClaudeCode], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -299,46 +266,39 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal(AgentConfigurationStatus.Configured, userTarget.Status);
         var directory = overrideKind == "~" ? configRoot : Path.Combine(configRoot, "custom-claude");
         Assert.Equal(Canonical(Path.Combine(directory, "skills", "dotnet-inspect")), userTarget.TargetPath);
-        Assert.Equal([".claude"], project.EnumerateDirectories().Select(static directory => directory.Name));
+        Assert.Equal([".claude"], context.Project.EnumerateDirectories().Select(static directory => directory.Name));
     }
 
     [Fact]
     public async Task InstallAsync_CommonSkillLocation_DoesNotCreateNativeConfigDirectories()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var environment = new TestEnvironment(new Dictionary<string, string?>
-        {
-            ["COPILOT_HOME"] = Path.Combine(workspace.Path, "copilot-config"),
-            ["OPENCODE_CONFIG_DIR"] = Path.Combine(workspace.Path, "opencode-config"),
-            ["CLAUDE_CONFIG_DIR"] = Path.Combine(workspace.Path, "claude-config")
-        });
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), new FakePlaywrightCliRunner(), environment);
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotApp, TestAgentClients.Default.VsCode, TestAgentClients.Default.OpenCode], playwright: false);
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        context.SetVariable("COPILOT_HOME", Path.Combine(context.Workspace.Path, "copilot-config"));
+        context.SetVariable("OPENCODE_CONFIG_DIR", Path.Combine(context.Workspace.Path, "opencode-config"));
+        context.SetVariable("CLAUDE_CONFIG_DIR", Path.Combine(context.Workspace.Path, "claude-config"));
+        var installer = context.CreateManagedSkillInstaller(context.Project, context.Home);
+        var request = CreateRequest(context.Project, [TestAgentClients.Default.CopilotApp, TestAgentClients.Default.VsCode, TestAgentClients.Default.OpenCode], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
         Assert.Equal(2, results.Count);
-        Assert.Equal(["home", "project"], workspace.WorkspaceRoot.EnumerateDirectories().Select(static directory => directory.Name).Order(StringComparer.Ordinal));
-        Assert.Equal([".agents"], project.EnumerateDirectories().Select(static directory => directory.Name));
-        Assert.Equal([".agents"], home.EnumerateDirectories().Select(static directory => directory.Name));
+        Assert.Equal(["home", "project"], context.Workspace.WorkspaceRoot.EnumerateDirectories().Select(static directory => directory.Name).Order(StringComparer.Ordinal));
+        Assert.Equal([".agents"], context.Project.EnumerateDirectories().Select(static directory => directory.Name));
+        Assert.Equal([".agents"], context.Home.EnumerateDirectories().Select(static directory => directory.Name));
     }
 
     [Fact]
     public async Task InstallAsync_PreservesUnselectedAndUnownedSkillFilesAndCaches()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
+        using var context = new AgentConfigurationTestContext(outputHelper);
         var existingFiles = new Dictionary<string, string>
         {
-            [Path.Combine(project.FullName, ".claude", "skills", "playwright-cli", "SKILL.md")] = "user's Claude skill",
-            [Path.Combine(home.FullName, ".claude", "skills", "dotnet-inspect", "SKILL.md")] = "user's global Claude skill",
-            [Path.Combine(project.FullName, ".github", "skills", "aspire", "SKILL.md")] = "legacy GitHub skill",
-            [Path.Combine(project.FullName, ".agents", "skills", "aspire", "SKILL.md")] = "legacy Aspire skill",
-            [Path.Combine(project.FullName, ".agents", "skills", "playwright-cli", "notes.md")] = "personal notes",
-            [Path.Combine(home.FullName, ".aspire", "cache", "aspire-skills", "cache.dat")] = "existing cache"
+            [Path.Combine(context.Project.FullName, ".claude", "skills", "playwright-cli", "SKILL.md")] = "user's Claude skill",
+            [Path.Combine(context.Home.FullName, ".claude", "skills", "dotnet-inspect", "SKILL.md")] = "user's global Claude skill",
+            [Path.Combine(context.Project.FullName, ".github", "skills", "aspire", "SKILL.md")] = "legacy GitHub skill",
+            [Path.Combine(context.Project.FullName, ".agents", "skills", "aspire", "SKILL.md")] = "legacy Aspire skill",
+            [Path.Combine(context.Project.FullName, ".agents", "skills", "playwright-cli", "notes.md")] = "personal notes",
+            [Path.Combine(context.Home.FullName, ".aspire", "cache", "aspire-skills", "cache.dat")] = "existing cache"
         };
         foreach (var (path, content) in existingFiles)
         {
@@ -346,8 +306,8 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
             await File.WriteAllTextAsync(path, content);
         }
         var timestamps = existingFiles.Keys.ToDictionary(static path => path, File.GetLastWriteTimeUtc);
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), new FakePlaywrightCliRunner());
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli]);
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli]);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -362,15 +322,12 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task InstallAsync_PlaywrightSupportingFiles_IncludeBinaryContentAtEveryTarget()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var playwrightRunner = new FakePlaywrightCliRunner();
+        using var context = new AgentConfigurationTestContext(outputHelper);
         byte[] bytes = [0, 128, 255, 13, 10];
         var relativePath = Path.Combine("assets", "example.bin");
-        playwrightRunner.SkillFiles[relativePath] = bytes;
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), playwrightRunner);
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode], dotnetInspect: false);
+        context.Playwright.SkillFiles[relativePath] = bytes;
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode], dotnetInspect: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -385,15 +342,12 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task InstallAsync_UnchangedContent_PreservesTimestamps()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var playwrightRunner = new FakePlaywrightCliRunner { InstalledVersion = new SemVersion(0, 1, 7) };
-        var npmRunner = CreateNpmRunner();
-        var installer = CreateInstaller(project, home, npmRunner, playwrightRunner);
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode]);
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        context.Playwright.InstalledVersion = new SemVersion(0, 1, 7);
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode]);
         var first = await installer.InstallAsync(request, CancellationToken.None);
-        var files = Directory.GetFiles(workspace.Path, "*", SearchOption.AllDirectories);
+        var files = Directory.GetFiles(context.Workspace.Path, "*", SearchOption.AllDirectories);
         foreach (var path in files)
         {
             File.SetLastWriteTimeUtc(path, new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc));
@@ -408,19 +362,17 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         {
             Assert.Equal(timestamps[path], File.GetLastWriteTimeUtc(path));
         }
-        Assert.Equal(0, npmRunner.InstallGlobalCallCount);
-        Assert.Equal(2, playwrightRunner.InstallSkillsCallCount);
+        Assert.Equal(0, context.Npm.InstallGlobalCallCount);
+        Assert.Equal(2, context.Playwright.InstallSkillsCallCount);
     }
 
     [Fact]
     public async Task InstallAsync_ChangedReference_UpdatesOnlyThatFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var playwrightRunner = new FakePlaywrightCliRunner { InstalledVersion = new SemVersion(0, 1, 7) };
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), playwrightRunner);
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli], dotnetInspect: false);
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        context.Playwright.InstalledVersion = new SemVersion(0, 1, 7);
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], dotnetInspect: false);
         var first = await installer.InstallAsync(request, CancellationToken.None);
         var projectTarget = Assert.Single(first, static result => result.Scope is AgentConfigurationScope.Project);
         var skillPath = Path.Combine(projectTarget.TargetPath, "SKILL.md");
@@ -433,20 +385,18 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal(AgentConfigurationStatus.Configured, Assert.Single(second, static result => result.Scope is AgentConfigurationScope.Project).Status);
         Assert.Equal(AgentConfigurationStatus.Unchanged, Assert.Single(second, static result => result.Scope is AgentConfigurationScope.User).Status);
         Assert.Equal(skillTimestamp, File.GetLastWriteTimeUtc(skillPath));
-        Assert.Equal(playwrightRunner.SkillFiles[Path.Combine("references", "commands.md")], await File.ReadAllBytesAsync(referencePath));
+        Assert.Equal(context.Playwright.SkillFiles[Path.Combine("references", "commands.md")], await File.ReadAllBytesAsync(referencePath));
     }
 
     [Fact]
     public async Task InstallAsync_PlaywrightCopyFailure_ReportsAffectedTargetAndContinues()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var skillDirectory = project.CreateSubdirectory(Path.Combine(".agents", "skills", "playwright-cli"));
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var skillDirectory = context.Project.CreateSubdirectory(Path.Combine(".agents", "skills", "playwright-cli"));
         var blocker = Path.Combine(skillDirectory.FullName, "references");
         await File.WriteAllTextAsync(blocker, "user file");
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), new FakePlaywrightCliRunner());
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli]);
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli]);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -463,12 +413,10 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task InstallAsync_DotnetInspectCopyFailure_ReportsAffectedTargetAndContinues()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var blocker = project.CreateSubdirectory(Path.Combine(".agents", "skills", "dotnet-inspect", "SKILL.md"));
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), new FakePlaywrightCliRunner());
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli], playwright: false);
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var blocker = context.Project.CreateSubdirectory(Path.Combine(".agents", "skills", "dotnet-inspect", "SKILL.md"));
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -482,15 +430,13 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task InstallAsync_LinkedSupportingFileOutsideTarget_PreservesUserFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var references = project.CreateSubdirectory(Path.Combine(".agents", "skills", "playwright-cli", "references"));
-        var userFile = Path.Combine(workspace.Path, "user.md");
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var references = context.Project.CreateSubdirectory(Path.Combine(".agents", "skills", "playwright-cli", "references"));
+        var userFile = Path.Combine(context.Workspace.Path, "user.md");
         await File.WriteAllTextAsync(userFile, "user-owned reference");
         TestSymlinkHelper.TryCreateSymlink(Path.Combine(references.FullName, "commands.md"), userFile, isDirectory: false);
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), new FakePlaywrightCliRunner());
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli], dotnetInspect: false);
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], dotnetInspect: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -503,12 +449,10 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task InstallAsync_InvalidClaudeUserRoot_DoesNotPreventProjectInstall()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var environment = new TestEnvironment(new Dictionary<string, string?> { ["CLAUDE_CONFIG_DIR"] = "invalid\0path" });
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), new FakePlaywrightCliRunner(), environment);
-        var request = CreateRequest(project, [TestAgentClients.Default.ClaudeCode], playwright: false);
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        context.SetVariable("CLAUDE_CONFIG_DIR", "invalid\0path");
+        var installer = context.CreateManagedSkillInstaller(context.Project, context.Home);
+        var request = CreateRequest(context.Project, [TestAgentClients.Default.ClaudeCode], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -516,20 +460,20 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal(AgentConfigurationStatus.Failed, failure.Status);
         Assert.NotNull(failure.Message);
         Assert.Equal(AgentConfigurationStatus.Configured, Assert.Single(results, static result => result.Scope is AgentConfigurationScope.Project).Status);
-        Assert.Empty(home.EnumerateFileSystemInfos());
+        Assert.Empty(context.Home.EnumerateFileSystemInfos());
     }
 
     [Fact]
     public async Task InstallAsync_UnwritableRoots_ReportFailuresWithoutRemovingExistingFiles()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectPath = Path.Combine(workspace.Path, "project");
-        var homePath = Path.Combine(workspace.Path, "home");
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var projectPath = Path.Combine(context.Workspace.Path, "blocked-project");
+        var homePath = Path.Combine(context.Workspace.Path, "blocked-home");
         await File.WriteAllTextAsync(projectPath, "project blocker");
         await File.WriteAllTextAsync(homePath, "home blocker");
         var project = new DirectoryInfo(projectPath);
         var home = new DirectoryInfo(homePath);
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), new FakePlaywrightCliRunner());
+        var installer = context.CreateManagedSkillInstaller(project, home);
         var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.CopilotApp]);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
@@ -545,112 +489,83 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal("home blocker", await File.ReadAllTextAsync(homePath));
     }
 
-    [Fact]
-    public async Task InstallAsync_PlaywrightVerificationFailure_FailsAffectedTargetsButInstallsDotnetInspect()
+    [Theory]
+    [InlineData("provenance", true)]
+    [InlineData("missing-skill", false)]
+    [InlineData("npm", true)]
+    public async Task InstallAsync_PlaywrightFailureDoesNotBlockOtherSelectedAssets(string failure, bool dotnetInspect)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var npmRunner = CreateNpmRunner();
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var provenanceChecker = new FakeNpmProvenanceChecker { ProvenanceOutcome = ProvenanceVerificationOutcome.PackageDigestMismatch };
-        var installer = CreateInstaller(project, home, npmRunner, playwrightRunner, provenanceChecker: provenanceChecker);
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode]);
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        switch (failure)
+        {
+            case "provenance":
+                context.Provenance.ProvenanceOutcome = ProvenanceVerificationOutcome.PackageDigestMismatch;
+                break;
+            case "missing-skill":
+                context.Playwright.SkillFiles.Clear();
+                break;
+            case "npm":
+                context.Npm.IsAvailable = false;
+                break;
+        }
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([context.CopilotCli, context.ClaudeCode], dotnetInspect: dotnetInspect);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
-        Assert.Equal(8, results.Count);
-        Assert.All(results.Where(static result => result.Asset is AgentAssetKind.Playwright), static result =>
+        Assert.Equal(dotnetInspect ? 8 : 4, results.Count);
+        Assert.All(results.Where(result => result.Asset is AgentAssetKind.Playwright), result =>
         {
-            Assert.Equal(AgentConfigurationStatus.Failed, result.Status);
+            Assert.Equal(failure == "npm" ? AgentConfigurationStatus.Blocked : AgentConfigurationStatus.Failed, result.Status);
             Assert.NotNull(result.Message);
             Assert.False(Directory.Exists(result.TargetPath));
+            if (failure is "npm" or "missing-skill")
+            {
+                Assert.Equal(failure == "npm" ? AgentCommandStrings.InitCommand_PlaywrightCliSkipped :
+                    AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles, result.Message);
+            }
         });
-        Assert.All(results.Where(static result => result.Asset is AgentAssetKind.DotnetInspect),
-            static result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
-        Assert.Equal(0, npmRunner.InstallGlobalCallCount);
-        Assert.Equal(0, playwrightRunner.InstallSkillsCallCount);
-    }
-
-    [Fact]
-    public async Task InstallAsync_PlaywrightMissingGeneratedOutput_FailsAllSelectedTargets()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        playwrightRunner.SkillFiles.Clear();
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), playwrightRunner);
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode], dotnetInspect: false);
-
-        var results = await installer.InstallAsync(request, CancellationToken.None);
-
-        Assert.Equal(4, results.Count);
-        Assert.All(results, static result =>
+        Assert.All(results.Where(result => result.Asset is AgentAssetKind.DotnetInspect),
+            result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
+        Assert.Equal(failure == "missing-skill" ? 1 : 0, context.Npm.InstallGlobalCallCount);
+        Assert.Equal(failure == "missing-skill" ? 1 : 0, context.Playwright.InstallSkillsCallCount);
+        Assert.False(Directory.Exists(context.Playwright.InstallSkillsWorkingDirectory));
+        if (failure == "npm")
         {
-            Assert.Equal(AgentConfigurationStatus.Failed, result.Status);
-            Assert.Equal(AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles, result.Message);
-        });
-        Assert.Equal(1, playwrightRunner.InstallSkillsCallCount);
-        Assert.Empty(project.EnumerateFileSystemInfos());
-        Assert.Empty(home.EnumerateFileSystemInfos());
-        Assert.False(Directory.Exists(playwrightRunner.InstallSkillsWorkingDirectory));
-    }
-
-    [Fact]
-    public async Task InstallAsync_NpmUnavailable_BlocksPlaywrightWithoutBlockingDotnetInspect()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var npmRunner = new FakeNpmRunner { IsAvailable = false };
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(project, home, npmRunner, playwrightRunner);
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli]);
-
-        var results = await installer.InstallAsync(request, CancellationToken.None);
-
-        Assert.All(results.Where(static result => result.Asset is AgentAssetKind.Playwright), static result =>
+            Assert.Equal(0, context.Npm.ResolveCallCount);
+            Assert.Equal(0, context.Playwright.GetVersionCallCount);
+        }
+        if (!dotnetInspect)
         {
-            Assert.Equal(AgentConfigurationStatus.Blocked, result.Status);
-            Assert.Equal(AgentCommandStrings.InitCommand_PlaywrightCliSkipped, result.Message);
-        });
-        Assert.All(results.Where(static result => result.Asset is AgentAssetKind.DotnetInspect),
-            static result => Assert.Equal(AgentConfigurationStatus.Configured, result.Status));
-        Assert.Equal(0, npmRunner.ResolveCallCount);
-        Assert.Equal(0, playwrightRunner.GetVersionCallCount);
+            Assert.Empty(context.Project.EnumerateFileSystemInfos());
+            Assert.Empty(context.Home.EnumerateFileSystemInfos());
+        }
     }
 
     [Fact]
     public async Task InstallAsync_Cancellation_DoesNotWriteOrProbe()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var context = new AgentConfigurationTestContext(outputHelper);
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var npmRunner = CreateNpmRunner();
-        var playwrightRunner = new FakePlaywrightCliRunner();
-        var installer = CreateInstaller(project, home, npmRunner, playwrightRunner);
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli]);
+        var installer = context.CreateManagedSkillInstaller(context.Project, context.Home);
+        var request = CreateRequest(context.Project, [TestAgentClients.Default.CopilotCli]);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => installer.InstallAsync(request, cancellation.Token));
 
-        Assert.Equal(0, npmRunner.ResolveCallCount);
-        Assert.Equal(0, playwrightRunner.GetVersionCallCount);
-        Assert.Empty(project.EnumerateFileSystemInfos());
-        Assert.Empty(home.EnumerateFileSystemInfos());
+        Assert.Equal(0, context.Npm.ResolveCallCount);
+        Assert.Equal(0, context.Playwright.GetVersionCallCount);
+        Assert.Empty(context.Project.EnumerateFileSystemInfos());
+        Assert.Empty(context.Home.EnumerateFileSystemInfos());
     }
 
     [Fact]
     public async Task InstallAsync_RepointedSharedAlias_FailsTargetWithoutUpdatingEitherDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var shared = project.CreateSubdirectory(Path.Combine(".agents", "skills"));
-        var redirected = workspace.CreateDirectory("redirected");
-        var claude = project.CreateSubdirectory(".claude");
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var shared = context.Project.CreateSubdirectory(Path.Combine(".agents", "skills"));
+        var redirected = context.Workspace.CreateDirectory("redirected");
+        var claude = context.Project.CreateSubdirectory(".claude");
         var link = Path.Combine(claude.FullName, "skills");
         TestSymlinkHelper.TryCreateSymlink(link, shared.FullName);
         foreach (var directory in new[] { shared, redirected })
@@ -658,16 +573,13 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
             var skill = directory.CreateSubdirectory("playwright-cli");
             await File.WriteAllTextAsync(Path.Combine(skill.FullName, "SKILL.md"), "existing user skill");
         }
-        var playwrightRunner = new FakePlaywrightCliRunner
+        context.Playwright.OnInstallSkills = _ =>
         {
-            OnInstallSkills = _ =>
-            {
-                Directory.Delete(link);
-                Directory.CreateSymbolicLink(link, redirected.FullName);
-            }
+            Directory.Delete(link);
+            Directory.CreateSymbolicLink(link, redirected.FullName);
         };
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), playwrightRunner);
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode], dotnetInspect: false);
+        var installer = context.CreateManagedSkillInstaller(context.Project, context.Home);
+        var request = CreateRequest(context.Project, [TestAgentClients.Default.CopilotCli, TestAgentClients.Default.ClaudeCode], dotnetInspect: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -688,17 +600,15 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task InstallAsync_LinkedSkillDirectories_DeduplicatesLeafDirectoryLinks()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var physicalSkill = workspace.CreateDirectory("shared-skill");
-        foreach (var root in new[] { project, home })
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var physicalSkill = context.Workspace.CreateDirectory("shared-skill");
+        foreach (var root in new[] { context.Project, context.Home })
         {
             var skills = root.CreateSubdirectory(Path.Combine(".agents", "skills"));
             TestSymlinkHelper.TryCreateSymlink(Path.Combine(skills.FullName, "dotnet-inspect"), physicalSkill.FullName);
         }
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), new FakePlaywrightCliRunner());
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli], playwright: false);
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -706,22 +616,20 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         Assert.Equal(AgentConfigurationStatus.Configured, result.Status);
         Assert.Equal(Canonical(physicalSkill.FullName), result.TargetPath);
         Assert.Equal(DotnetInspectSkill.Content, await File.ReadAllTextAsync(Path.Combine(physicalSkill.FullName, "SKILL.md")));
-        Assert.All(new[] { project, home }, static root =>
+        Assert.All(new[] { context.Project, context.Home }, static root =>
             Assert.NotNull(new DirectoryInfo(Path.Combine(root.FullName, ".agents", "skills", "dotnet-inspect")).LinkTarget));
     }
 
     [Fact]
     public async Task InstallAsync_DanglingSkillDirectory_DoesNotInitializeLinkTarget()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var shared = project.CreateSubdirectory(".agents");
-        var missing = Path.Combine(workspace.Path, "missing");
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var shared = context.Project.CreateSubdirectory(".agents");
+        var missing = Path.Combine(context.Workspace.Path, "missing");
         var link = Path.Combine(shared.FullName, "skills");
         TestSymlinkHelper.TryCreateSymlink(link, missing);
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), new FakePlaywrightCliRunner());
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli], playwright: false);
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -734,16 +642,14 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task InstallAsync_LinkedSkillFileInsideTarget_ReplacesPhysicalFileAndPreservesLink()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var skill = project.CreateSubdirectory(Path.Combine(".agents", "skills", "dotnet-inspect"));
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var skill = context.Project.CreateSubdirectory(Path.Combine(".agents", "skills", "dotnet-inspect"));
         var physicalPath = Path.Combine(skill.FullName, "content.md");
         await File.WriteAllTextAsync(physicalPath, "old skill");
         var link = Path.Combine(skill.FullName, "SKILL.md");
         TestSymlinkHelper.TryCreateSymlink(link, physicalPath, isDirectory: false);
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), new FakePlaywrightCliRunner());
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli], playwright: false);
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -762,14 +668,12 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
             return;
         }
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var skill = project.CreateSubdirectory(Path.Combine(".agents", "skills", "dotnet-inspect"));
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var skill = context.Project.CreateSubdirectory(Path.Combine(".agents", "skills", "dotnet-inspect"));
         var path = Path.Combine(skill.FullName, "SKILL.md");
         await File.WriteAllTextAsync(path, "working skill");
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), new FakePlaywrightCliRunner());
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli], playwright: false);
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], playwright: false);
 
         // Permit the optimistic byte reads but not replacement/deletion of the destination.
         using (var locked = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
@@ -795,16 +699,14 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
             return;
         }
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = workspace.CreateDirectory("project");
-        var home = workspace.CreateDirectory("home");
-        var skill = project.CreateSubdirectory(Path.Combine(".agents", "skills", "dotnet-inspect"));
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var skill = context.Project.CreateSubdirectory(Path.Combine(".agents", "skills", "dotnet-inspect"));
         var path = Path.Combine(skill.FullName, "SKILL.md");
         await File.WriteAllTextAsync(path, "working skill");
         var mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.GroupWrite;
         File.SetUnixFileMode(path, mode);
-        var installer = CreateInstaller(project, home, CreateNpmRunner(), new FakePlaywrightCliRunner());
-        var request = CreateRequest(project, [TestAgentClients.Default.CopilotCli], playwright: false);
+        var installer = context.CreateManagedSkillInstaller();
+        var request = context.ManagedRequest([TestAgentClients.Default.CopilotCli], playwright: false);
 
         var results = await installer.InstallAsync(request, CancellationToken.None);
 
@@ -820,43 +722,6 @@ public class AgentSkillInstallerTests(ITestOutputHelper outputHelper)
         bool playwright = true,
         bool dotnetInspect = true) =>
         new(project, new AgentAssetSelection(Mcp: false, playwright, dotnetInspect, AspireSkills: false), clients, []);
-
-    private static FakeNpmRunner CreateNpmRunner() => new()
-    {
-        ResolveResult = new NpmPackageInfo { Version = new SemVersion(0, 1, 7) }
-    };
-
-    private static AgentSkillInstaller CreateInstaller(
-        DirectoryInfo workingDirectory,
-        DirectoryInfo home,
-        FakeNpmRunner npmRunner,
-        FakePlaywrightCliRunner playwrightRunner,
-        IEnvironment? environment = null,
-        FakeNpmProvenanceChecker? provenanceChecker = null)
-    {
-        var context = new CliExecutionContext(
-            workingDirectory,
-            new DirectoryInfo(Path.Combine(home.FullName, "hives")),
-            new DirectoryInfo(Path.Combine(home.FullName, "cache")),
-            new DirectoryInfo(Path.Combine(home.FullName, "sdks")),
-            new DirectoryInfo(Path.Combine(home.FullName, "logs")),
-            Path.Combine(home.FullName, "logs", "test.log"),
-            "test",
-            homeDirectory: home);
-        var playwrightInstaller = new PlaywrightCliInstaller(
-            npmRunner,
-            provenanceChecker ?? new FakeNpmProvenanceChecker(),
-            playwrightRunner,
-            new TestInteractionService(),
-            new ConfigurationBuilder().Build(),
-            NullLogger<PlaywrightCliInstaller>.Instance);
-
-        return new AgentSkillInstaller(
-            playwrightInstaller,
-            context,
-            environment ?? new TestEnvironment(),
-            NullLogger<AgentSkillInstaller>.Instance);
-    }
 
     private static string Canonical(string path) => AgentPath.Resolve(path);
 }

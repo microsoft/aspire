@@ -4,7 +4,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.DotnetInspect;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;

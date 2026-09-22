@@ -75,7 +75,7 @@ internal sealed class TelemetryHookInstaller : ITelemetryHookInstaller
         // Skip the write when the content already matches so a running hook isn't disturbed and the
         // file mtime stays stable across repeated `agent init` runs.
         var physicalPath = AgentPath.Resolve(path);
-        var existing = await ReadExistingAsync(physicalPath, cancellationToken);
+        var existing = await AgentFileWriter.ReadExistingAsync(physicalPath, cancellationToken);
         var bytes = s_utf8NoBom.GetBytes(content);
         if (existing is not null && existing.AsSpan().SequenceEqual(bytes))
         {
@@ -98,27 +98,11 @@ internal sealed class TelemetryHookInstaller : ITelemetryHookInstaller
                 throw new IOException(AgentCommandStrings.Configuration_ConcurrentChange);
             }
 
-            var current = await ReadExistingAsync(physicalPath, token);
+            var current = await AgentFileWriter.ReadExistingAsync(physicalPath, token);
             if (existing is null ? current is not null : current is null || !existing.AsSpan().SequenceEqual(current))
             {
                 throw new IOException(AgentCommandStrings.Configuration_ConcurrentChange);
             }
-        }
-    }
-
-    private static async Task<byte[]?> ReadExistingAsync(string path, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await File.ReadAllBytesAsync(path, cancellationToken);
-        }
-        catch (FileNotFoundException)
-        {
-            return null;
-        }
-        catch (DirectoryNotFoundException)
-        {
-            return null;
         }
     }
 

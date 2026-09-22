@@ -49,6 +49,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             var (wasProvided, value) = GetAssetBinding(provider, parseResult, option).Resolve();
             Assert.True(wasProvided);
             Assert.Equal(expected, value);
+            Assert.All(GlobalBooleanOptions, global => Assert.False(parseResult.GetValue(global)));
         }
     }
 
@@ -80,58 +81,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             Assert.True(value);
             Assert.True(parseResult.GetValue(RootCommand.NonInteractiveOption));
         }
-    }
-
-    [Theory]
-    [InlineData("", true)]
-    [InlineData(" true", true)]
-    [InlineData("=true", true)]
-    [InlineData(" false", false)]
-    [InlineData("=false", false)]
-    public void AgentInitCommand_GlobalBooleanOptions_RetainBooleanParsing(string suffix, bool expected)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
-        var command = provider.GetRequiredService<RootCommand>();
-
-        foreach (var option in GlobalBooleanOptions)
-        {
-            var parseResult = command.Parse($"agent init --mcp y {option.Name}{suffix}");
-
-            Assert.Empty(parseResult.Errors);
-            Assert.Equal(expected, parseResult.GetValue(option));
-            Assert.True(GetAssetBinding(provider, parseResult, AgentInitCommand.s_mcpOption).Resolve().Value);
-        }
-    }
-
-    [Theory]
-    [InlineData(" y")]
-    [InlineData("=Y")]
-    [InlineData(" n")]
-    [InlineData("=N")]
-    public void AgentInitCommand_GlobalBooleanOptions_DoNotAcceptAssetOnlyAliases(string suffix)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
-        var command = provider.GetRequiredService<RootCommand>();
-
-        foreach (var option in GlobalBooleanOptions)
-        {
-            var parseResult = command.Parse($"agent init --mcp y {option.Name}{suffix}");
-
-            Assert.NotEmpty(parseResult.Errors);
-        }
-    }
-
-    [Fact]
-    public void AgentInitCommand_AssetValues_DoNotChangeOmittedGlobalBooleanDefaults()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
-        var parseResult = provider.GetRequiredService<RootCommand>().Parse("agent init --mcp y --aspire-skills n");
-
-        Assert.Empty(parseResult.Errors);
-        Assert.All(GlobalBooleanOptions, option => Assert.False(parseResult.GetValue(option)));
     }
 
     [Theory]

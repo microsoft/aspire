@@ -9,7 +9,7 @@ namespace Aspire.Cli.Agents;
 /// <summary>
 /// Conservative MCP entry creation and selected-target repair of the old "aspire mcp start" command.
 /// </summary>
-internal static class McpConfiguration
+internal static class AspireMcpConfiguration
 {
     internal const string ServerName = "aspire";
 
@@ -106,6 +106,30 @@ internal static class McpConfiguration
 
     public static AgentConfigurationEdit? CheckPolicy(IEnumerable<JsonObject> settings)
         => CheckPolicy(settings, [], managedAllowlistOnly: false);
+
+    public static AgentConfigurationEdit? CheckExistingEntry(
+        JsonObject? servers,
+        bool commandArray,
+        Func<JsonObject?> getCurrentServers)
+    {
+        if (servers?.ContainsKey(ServerName) is not true)
+        {
+            return null;
+        }
+
+        var existing = Apply(servers, "", commandArray, commandArray ? "local" : "stdio", bare: true);
+        if (existing.Status is AgentConfigurationStatus.Blocked or AgentConfigurationStatus.Skipped)
+        {
+            return existing;
+        }
+
+        // Inspect the destination only after validating the existing scope. Adding defaults
+        // must not shadow its custom arguments, environment, or tool restrictions.
+        return getCurrentServers()?.ContainsKey(ServerName) is not true &&
+            !IsDefaultEntry(servers[ServerName]!.AsObject(), commandArray)
+                ? AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_ExistingMcpCustomization)
+                : null;
+    }
 
     public static AgentConfigurationEdit? CheckPolicy(
         IEnumerable<JsonObject> settings,

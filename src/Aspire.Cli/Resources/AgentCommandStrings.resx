@@ -174,11 +174,8 @@
   <data name="InitCommand_ConfigureAspireSkillsPrompt" xml:space="preserve">
     <value>Register Aspire skills and supported canvases?</value>
   </data>
-  <data name="InitCommand_NoAssetsSelected" xml:space="preserve">
-    <value>No agent assets selected. Existing configuration was left unchanged.</value>
-  </data>
-  <data name="InitCommand_NoClientsSelected" xml:space="preserve">
-    <value>No clients selected. Existing configuration was left unchanged.</value>
+  <data name="InitCommand_NoConfigurationSelected" xml:space="preserve">
+    <value>No agent configuration selected. Existing configuration was left unchanged.</value>
   </data>
   <data name="InitCommand_ProjectScope" xml:space="preserve">
     <value>project</value>
@@ -249,9 +246,6 @@
   <data name="Configuration_UnexpectedShape" xml:space="preserve">
     <value>The configuration has an unsupported JSON shape at '{0}'; this entry was left unchanged.</value>
   </data>
-  <data name="Configuration_ObjectRequired" xml:space="preserve">
-    <value>The configuration must contain a JSON object; the file was left unchanged.</value>
-  </data>
   <data name="Configuration_MalformedJson" xml:space="preserve">
     <value>The configuration is not valid JSON/JSONC; the file was left unchanged.</value>
   </data>
@@ -276,9 +270,6 @@
   </data>
   <data name="Configuration_OpenCodeMultipleFiles" xml:space="preserve">
     <value>Multiple OpenCode configuration files apply at this scope. Consolidate them before configuring Aspire.</value>
-  </data>
-  <data name="Configuration_UnsupportedOverride" xml:space="preserve">
-    <value>This client configuration override cannot be resolved safely offline. Configure this target in the client; no guessed path was written.</value>
   </data>
   <data name="Configuration_HookConfigured" xml:space="preserve">
     <value>The user-level Aspire usage hook is configured. Telemetry opt-out settings still apply.</value>

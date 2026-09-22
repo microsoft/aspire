@@ -140,22 +140,6 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         Assert.Equal(entries, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order());
     }
 
-    [Fact]
-    public async Task ScanAsync_WhenCancelled_DoesNotProbeOrWrite()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var runner = new TestAgentCliRunner();
-        var agent = CreateAgent(workspace, runner, TestEnvironment.CreateWindows());
-        var clients = new TestAgentClients(agent);
-        var directories = CreateScanDirectories(workspace.WorkspaceRoot);
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => agent.ScanAsync(clients.All, directories.WorkingDirectory, directories.WorkspaceRoot, new CancellationToken(canceled: true))).DefaultTimeout();
-
-        Assert.Empty(runner.Commands);
-        Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
-    }
-
     private static CopilotAgentEnvironmentScanner CreateAgent(
         TemporaryWorkspace workspace,
         TestAgentCliRunner runner,

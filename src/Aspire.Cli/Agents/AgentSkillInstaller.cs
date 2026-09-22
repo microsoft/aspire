@@ -3,7 +3,6 @@
 
 using System.Globalization;
 using Aspire.Cli.Agents.ClaudeCode;
-using Aspire.Cli.Agents.DotnetInspect;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
@@ -168,7 +167,7 @@ internal sealed class AgentSkillInstaller(
                 cancellationToken.ThrowIfCancellationRequested();
                 ValidateTargetPath(target);
                 var path = ResolveSkillFile(target, file.RelativePath);
-                var existing = await ReadExistingAsync(path, cancellationToken);
+                var existing = await AgentFileWriter.ReadExistingAsync(path, cancellationToken);
                 if (existing is not null && existing.AsSpan().SequenceEqual(file.Content))
                 {
                     await ValidateBeforePublishAsync(cancellationToken);
@@ -192,7 +191,7 @@ internal sealed class AgentSkillInstaller(
                         throw new IOException(AgentCommandStrings.Configuration_ConcurrentChange);
                     }
 
-                    var current = await ReadExistingAsync(path, token);
+                    var current = await AgentFileWriter.ReadExistingAsync(path, token);
                     if (existing is null ? current is not null : current is null || !existing.AsSpan().SequenceEqual(current))
                     {
                         throw new IOException(AgentCommandStrings.Configuration_ConcurrentChange);
@@ -237,22 +236,6 @@ internal sealed class AgentSkillInstaller(
         }
 
         return physicalPath;
-    }
-
-    private static async Task<byte[]?> ReadExistingAsync(string path, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await File.ReadAllBytesAsync(path, cancellationToken);
-        }
-        catch (FileNotFoundException)
-        {
-            return null;
-        }
-        catch (DirectoryNotFoundException)
-        {
-            return null;
-        }
     }
 
     private static string GetSkillName(AgentAssetKind asset) => asset switch

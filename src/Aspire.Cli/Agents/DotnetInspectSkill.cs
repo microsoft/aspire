@@ -3,7 +3,7 @@
 
 using System.Text;
 
-namespace Aspire.Cli.Agents.DotnetInspect;
+namespace Aspire.Cli.Agents;
 
 /// <summary>
 /// Contains the CLI-managed dotnet-inspect bootstrap.
