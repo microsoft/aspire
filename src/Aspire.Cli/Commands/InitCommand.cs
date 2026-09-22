@@ -5,7 +5,6 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Aspire.Cli.Agents;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -31,23 +30,6 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class InitCommand : BaseCommand
 {
-    internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
-
-    protected override bool UpdateNotificationsEnabled => true;
-
-    internal override bool PrefetchesTemplatePackageMetadata => true;
-
-    private readonly CliExecutionContext _executionContext;
-    private readonly ILanguageService _languageService;
-    private readonly ISolutionLocator _solutionLocator;
-    private readonly AgentInitCommand _agentInitCommand;
-    private readonly IDotNetCliRunner _runner;
-    private readonly ICertificateService _certificateService;
-    private readonly IScaffoldingService _scaffoldingService;
-    private readonly ILanguageDiscovery _languageDiscovery;
-    private readonly TemplateNuGetConfigService _templateNuGetConfigService;
-    private readonly IPackagingService _packagingService;
-
     private static readonly Option<string?> s_sourceOption = new("--source", "-s")
     {
         Description = "Deprecated. Accepted for compatibility but no longer affects `aspire init`; this option will be removed in a future version.",
@@ -62,6 +44,16 @@ internal sealed class InitCommand : BaseCommand
         Hidden = true
     };
 
+    private readonly CliExecutionContext _executionContext;
+    private readonly ILanguageService _languageService;
+    private readonly ISolutionLocator _solutionLocator;
+    private readonly AgentInitCommand _agentInitCommand;
+    private readonly IDotNetCliRunner _runner;
+    private readonly ICertificateService _certificateService;
+    private readonly IScaffoldingService _scaffoldingService;
+    private readonly ILanguageDiscovery _languageDiscovery;
+    private readonly TemplateNuGetConfigService _templateNuGetConfigService;
+    private readonly IPackagingService _packagingService;
     private readonly Option<string?> _channelOption;
     private readonly Option<string?> _languageOption;
     private readonly Option<bool> _fileBasedOption;
@@ -111,9 +103,14 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(_languageOption);
         Options.Add(_fileBasedOption);
         Options.Add(NewCommand.s_suppressAgentInitOption);
-        Options.Add(AgentInitCommand.s_skillLocationsOption);
-        Options.Add(AgentInitCommand.s_skillsOption);
+        _agentInitCommand.AddOptions(this, includeMcp: false, includeWorkspaceRoot: false);
     }
+
+    internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
+
+    protected override bool UpdateNotificationsEnabled => true;
+
+    internal override bool PrefetchesTemplatePackageMetadata => true;
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
@@ -168,45 +165,23 @@ internal sealed class InitCommand : BaseCommand
             _ = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
         }
 
-        // Step 4: Chain to aspire agent init for skill configuration.
-        // MCP remains an explicit opt-in through standalone `aspire agent init`.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
-        var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
-        var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
-        // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
-        // (which includes aspireify as the natural follow-up wiring skill). This chained flow
-        // never registers `--mcp`, so MCP configuration is unavailable here by construction —
-        // it remains reachable only through standalone `aspire agent init`.
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
             InteractionService,
             CliExitCodes.Success,
             workspaceRoot,
             agentInitBinding,
-            skillLocationsBinding,
-            skillsBinding,
+            _agentInitCommand.CreateBindings(parseResult, includeMcp: false),
             cancellationToken);
 
-        // Step 5: Print follow-up commands only when the user selected the one-time init skill.
         if (agentInitResult.ExitCode == CliExitCodes.Success &&
-            agentInitResult.SelectedSkills.Any(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName)))
+            agentInitResult.RegisteredEnvironments.Count > 0)
         {
-            var commands = GetAspireifyCommands(agentInitResult.SelectedLocations);
-            if (commands.Count > 0)
-            {
-                InteractionService.DisplayEmptyLine();
-                InteractionService.DisplayMessage(
-                    KnownEmojis.Dizzy,
-                    commands.Count == 1
-                        ? InitCommandStrings.AppHostCreatedRunOne
-                        : InitCommandStrings.AppHostCreatedRunOneOf);
-                InteractionService.DisplayEmptyLine();
-
-                foreach (var command in commands)
-                {
-                    InteractionService.DisplaySubtleMessage($"  {command}");
-                }
-            }
+            var clients = string.Join(", ", agentInitResult.RegisteredEnvironments.Select(client => client.DisplayName));
+            InteractionService.DisplayEmptyLine();
+            InteractionService.DisplayMessage(KnownEmojis.Dizzy,
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_AspireifyHandoff, clients));
         }
 
         return CommandResult.FromExitCode(agentInitResult.ExitCode);
@@ -227,23 +202,6 @@ internal sealed class InitCommand : BaseCommand
                 KnownEmojis.Warning,
                 string.Format(CultureInfo.CurrentCulture, InitCommandStrings.DeprecatedOptionWarning, optionName));
         }
-    }
-
-    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<SkillLocation> selectedLocations)
-    {
-        var commands = new List<string>();
-
-        if (selectedLocations.Contains(SkillLocation.ClaudeCode))
-        {
-            commands.Add("claude \"run the aspireify skill\"");
-        }
-
-        if (selectedLocations.Contains(SkillLocation.OpenCode))
-        {
-            commands.Add("opencode --prompt \"run the aspireify skill\"");
-        }
-
-        return commands;
     }
 
     private async Task<int> DropCSharpSkeletonAsync(DirectoryInfo workingDirectory, FileInfo? solutionFile, CancellationToken cancellationToken)

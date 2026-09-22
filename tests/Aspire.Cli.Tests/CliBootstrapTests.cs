@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Agents;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -78,6 +79,18 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
 
         Assert.NotNull(reader);
         Assert.IsType<IdentityChannelReader>(reader);
+    }
+
+    [Fact]
+    public async Task BuildApplication_RegistersConfigurationEnvironmentScanners()
+    {
+        using var host = await BuildHostAsync();
+        var environments = host.Services.GetServices<IAgentEnvironmentScanner>().ToArray();
+
+        Assert.Equal(
+            ["copilot", "vscode", "claude", "opencode"],
+            environments.Select(environment => environment.Id));
+        Assert.Equal(environments, host.Services.GetServices<IAgentEnvironmentScanner>());
     }
 
     [Fact]

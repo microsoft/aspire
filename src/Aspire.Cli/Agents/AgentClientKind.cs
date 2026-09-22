@@ -4,7 +4,7 @@
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Identifies an agent client (CLI/editor) that Aspire can configure during <c>aspire agent init</c>.
+/// Identifies a detected agent client independently of its configuration environment.
 /// </summary>
 internal enum AgentClientKind
 {

@@ -23,21 +23,6 @@ internal sealed record FeatureMetadata(string Name, string Description, bool Def
 // this is a copy of Shared/KnownResourceNames.cs
 internal static class KnownFeatures
 {
-    public static string FeaturePrefix => "features";
-    public static string UpdateNotificationsEnabled => "updateNotificationsEnabled";
-    public static string ShowDeprecatedPackages => "showDeprecatedPackages";
-    public static string StagingChannelEnabled => "stagingChannelEnabled";
-    public static string DefaultWatchEnabled => "defaultWatchEnabled";
-    public static string ShowAllTemplates => "showAllTemplates";
-    public static string ExperimentalPolyglotRust => "experimentalPolyglot:rust";
-    public static string ExperimentalPolyglotJava => "experimentalPolyglot:java";
-    public static string ExperimentalPolyglotGo => "experimentalPolyglot:go";
-    public static string ExperimentalPolyglotPython => "experimentalPolyglot:python";
-    public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
-    public static string AspireSkillsRemoteFetchEnabled => "aspireSkillsRemoteFetchEnabled";
-    public static string TerminalCommandsEnabled => "terminalCommandsEnabled";
-    public static string PolyglotIntegrationFilterEnabled => "polyglotIntegrationFilterEnabled";
-
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
     {
         [UpdateNotificationsEnabled] = new(
@@ -90,15 +75,6 @@ internal static class KnownFeatures
             "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
             DefaultValue: true),
 
-        [AspireSkillsRemoteFetchEnabled] = new(
-            AspireSkillsRemoteFetchEnabled,
-            "(Preview) Allow the Aspire CLI to download the aspire-skills bundle from GitHub. When disabled (the 13.4 default), the CLI only uses the cached bundle and the embedded snapshot baked into the CLI; toggle on to opt in to the remote fetch path.",
-            DefaultValue: false,
-            // Hidden from discovery while the remote-fetch path is preview-only: the CLI ships with a
-            // trusted SHA-512 embedded snapshot, and the remote path stays off by default. The flag is
-            // still honored if set directly in config.
-            Hidden: true),
-
         [TerminalCommandsEnabled] = new(
             TerminalCommandsEnabled,
             "(Experimental) Enable the 'aspire terminal' command group ('aspire terminal ps', 'aspire terminal attach', 'aspire terminal tape play'). Used in conjunction with the experimental WithTerminal() API (ASPIRETERMINAL001). Hidden by default while the API surface is in preview.",
@@ -109,6 +85,20 @@ internal static class KnownFeatures
             "(Experimental) Restrict 'aspire add', 'aspire integration list', and 'aspire integration search' in non-C# AppHosts to integrations carrying the 'polyglot' NuGet tag. Disabled by default because no remote feed resolves the tag usefully today: Azure DevOps Artifacts feeds ignore 'tags:' query scoping, and nuget.org returns no first-party integrations for it. The filter fails closed, so enabling it against a remote feed hides every integration. Enable it only against a local package source or hive, where the tag is read from the nuspec.",
             DefaultValue: false)
     };
+
+    public static string FeaturePrefix => "features";
+    public static string UpdateNotificationsEnabled => "updateNotificationsEnabled";
+    public static string ShowDeprecatedPackages => "showDeprecatedPackages";
+    public static string StagingChannelEnabled => "stagingChannelEnabled";
+    public static string DefaultWatchEnabled => "defaultWatchEnabled";
+    public static string ShowAllTemplates => "showAllTemplates";
+    public static string ExperimentalPolyglotRust => "experimentalPolyglot:rust";
+    public static string ExperimentalPolyglotJava => "experimentalPolyglot:java";
+    public static string ExperimentalPolyglotGo => "experimentalPolyglot:go";
+    public static string ExperimentalPolyglotPython => "experimentalPolyglot:python";
+    public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
+    public static string TerminalCommandsEnabled => "terminalCommandsEnabled";
+    public static string PolyglotIntegrationFilterEnabled => "polyglotIntegrationFilterEnabled";
 
     /// <summary>
     /// Gets metadata for a specific feature.

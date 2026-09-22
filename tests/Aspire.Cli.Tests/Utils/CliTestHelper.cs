@@ -5,7 +5,6 @@ using System.Text;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.Hooks;
-using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
@@ -172,11 +171,16 @@ internal static class CliTestHelper
         services.AddSingleton<NuGetPackagePrefetcher>();
         services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<NuGetPackagePrefetcher>());
         services.AddSingleton(options.AuxiliaryBackchannelMonitorFactory);
-        services.AddSingleton(options.AgentEnvironmentDetectorFactory);
+        services.AddSingleton(options.AgentEnvironmentFactory);
+        services.AddSingleton(sp => new TestAgentEnvironments(sp.GetRequiredService<TestAgentEnvironmentScanner>()));
+        services.AddSingleton<IAgentEnvironmentScanner>(sp => sp.GetRequiredService<TestAgentEnvironments>().Copilot);
+        services.AddSingleton<IAgentEnvironmentScanner>(sp => sp.GetRequiredService<TestAgentEnvironments>().VsCode);
+        services.AddSingleton<IAgentEnvironmentScanner>(sp => sp.GetRequiredService<TestAgentEnvironments>().ClaudeCode);
+        services.AddSingleton<IAgentEnvironmentScanner>(sp => sp.GetRequiredService<TestAgentEnvironments>().OpenCode);
+        services.AddSingleton(options.AgentInitServiceFactory);
         services.AddSingleton(options.GitRepositoryFactory);
         services.AddSingleton(options.NpmRunnerFactory);
         services.AddSingleton(options.NpmProvenanceCheckerFactory);
-        services.AddSingleton(options.AspireSkillsInstallerFactory);
         services.AddSingleton(options.PlaywrightCliRunnerFactory);
         services.AddSingleton<PlaywrightCliInstaller>();
         services.AddSingleton<ITelemetryHookInstaller, TelemetryHookInstaller>();
@@ -669,10 +673,14 @@ internal sealed class CliServiceCollectionTestOptions
         return new TestAuxiliaryBackchannelMonitor();
     };
 
-    public Func<IServiceProvider, IAgentEnvironmentDetector> AgentEnvironmentDetectorFactory { get; set; } = (IServiceProvider serviceProvider) =>
+    public Func<IServiceProvider, TestAgentEnvironmentScanner> AgentEnvironmentFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
-        return new AgentEnvironmentDetector([]);
+        // Chained new/init tests get a deterministic client without probing the host.
+        // Tests for the unattended --environments requirement explicitly supply an empty detector.
+        return new TestAgentEnvironmentScanner(new AgentClientDetection(AgentClientKind.CopilotCli, Version: null, IsInsiders: false));
     };
+
+    public Func<IServiceProvider, IAgentInitService> AgentInitServiceFactory { get; set; } = _ => new TestAgentInitService();
 
     public Func<IServiceProvider, IGitRepository> GitRepositoryFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
@@ -686,13 +694,10 @@ internal sealed class CliServiceCollectionTestOptions
 
     public Func<IServiceProvider, INpmProvenanceChecker> NpmProvenanceCheckerFactory { get; set; } = _ => new FakeNpmProvenanceChecker();
 
-    public Func<IServiceProvider, IAspireSkillsInstaller> AspireSkillsInstallerFactory { get; set; } = serviceProvider => new FakeAspireSkillsInstaller(serviceProvider.GetRequiredService<CliExecutionContext>());
-
     public Func<IServiceProvider, IPlaywrightCliRunner> PlaywrightCliRunnerFactory { get; set; } = _ => new FakePlaywrightCliRunner();
 
-    // Defaults to the real configurator (resolving ITelemetryHookInstaller/CliExecutionContext/IEnvironment
-    // from DI) so agent-init tests exercise the shipped behavior; a test can override it to simulate a
-    // failure and assert hook installation never aborts `agent init`.
+    // Hook tests can resolve the real configurator explicitly. Command tests use the isolated
+    // IAgentInitService fake so configuring agents never reaches the host's native settings.
     public Func<IServiceProvider, ITelemetryHookConfigurator> TelemetryHookConfiguratorFactory { get; set; }
         = serviceProvider => ActivatorUtilities.CreateInstance<TelemetryHookConfigurator>(serviceProvider);
 
