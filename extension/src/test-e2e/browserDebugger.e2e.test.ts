@@ -11,10 +11,10 @@ import {
     waitForResourceState,
     waitForWorkspaceAppHost,
 } from './helpers/assertions';
-import { executeE2eControlCommand, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { executeE2eControlCommand, reloadWorkspaceForE2E, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { acceptModalDialog, openAspireView } from './helpers/vscode';
-import { blazorWasmDebugProofResponseAllowanceMs, blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofControlTimeoutMs, proveBlazorScenario } from './helpers';
+import { blazorWasmDebugProofResponseAllowanceMs, blazorWasmDebugProofTimeoutMs, ensureBlazorWasmDebuggerReady, getBlazorWasmDebugProofControlTimeoutMs, proveBlazorScenario } from './helpers';
 
 // ExTester loads these tests in Node, not in the extension host. Keep the expected
 // contract independent of production modules that import the VS Code API.
@@ -38,6 +38,7 @@ suite('Aspire Blazor browser debugger E2E', function () {
     const standaloneProjectPath = path.join(workspaceRoot, 'StandaloneClient', 'StandaloneClient.csproj');
     const browser = process.env.ASPIRE_EXTENSION_E2E_BROWSER === 'msedge' ? 'msedge' : 'chrome';
     const expectedBrowser = browser === 'msedge' ? 'edge' : 'chrome';
+    const startupTimeoutMs = 600000;
     const serverTransitionTimeoutMs = 90000;
     const browserStateTimeoutMs = 10000;
     const scenarioTimeoutMs = 2 * serverTransitionTimeoutMs
@@ -45,8 +46,25 @@ suite('Aspire Blazor browser debugger E2E', function () {
         + browserStateTimeoutMs
         + blazorWasmDebugProofResponseAllowanceMs;
 
+    suiteSetup('prepares the C# WebAssembly debugger before starting the AppHost', async function () {
+        this.timeout(startupTimeoutMs + blazorWasmDebugProofResponseAllowanceMs);
+        if (!shouldRunBrowserDebuggerE2E()) {
+            this.skip();
+        }
+
+        const deadline = Date.now() + startupTimeoutMs;
+        const remaining = () => Math.max(1, deadline - Date.now());
+        await openAspireView();
+        await ensureBlazorWasmDebuggerReady({
+            prepare: async () => (await executeE2eControlCommand(
+                { name: 'prepareBlazorWasmDebugger' }, { timeoutMs: remaining() })).result,
+            reloadWindow: async () => await reloadWorkspaceForE2E(remaining()),
+            onRetry: attempt => console.warn(
+                `VSWebAssemblyBridge was not installed during C# activation ${attempt}; reloading the isolated extension host to retry dependency setup.`),
+        });
+    });
+
     suiteSetup(async function () {
-        const startupTimeoutMs = 600000;
         this.timeout(startupTimeoutMs + blazorWasmDebugProofResponseAllowanceMs);
         if (!shouldRunBrowserDebuggerE2E()) {
             this.skip();
@@ -165,6 +183,7 @@ suite('Aspire Blazor browser debugger E2E', function () {
         },
     ] as const;
 
+    const browserProfiles = new Set<string>();
     for (const scenario of scenarios) {
         test(`hits a managed breakpoint for ${scenario.resourceName}`, async function () {
             this.timeout(scenarioTimeoutMs);
@@ -185,6 +204,10 @@ suite('Aspire Blazor browser debugger E2E', function () {
                     closeMode: scenario.closeMode,
                     timeoutMs: blazorWasmDebugProofTimeoutMs,
                 });
+                const profile = proof.rootSession.configuration.userDataDir;
+                assert.ok(typeof profile === 'string');
+                assert.strictEqual(browserProfiles.has(profile), false, 'Each scenario must use its own browser profile.');
+                browserProfiles.add(profile);
                 await waitForNoBrowserDebugSessions(browserStateTimeoutMs);
 
                 const proofSessionIds = new Set([proof.rootSession.id, proof.browserSession.id, proof.managedSession.id]);

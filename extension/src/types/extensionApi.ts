@@ -276,6 +276,7 @@ export type AspireExtensionE2EControlCommand =
         csharpExtensionVersion?: string | null;
     }
     | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; resourceRequestPath?: string; timeoutMs?: number }
+    | { name: 'prepareBlazorWasmDebugger' }
     | {
         name: 'proveBlazorWasmDebugging';
         appHostPath: string;
