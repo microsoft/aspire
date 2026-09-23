@@ -23,8 +23,10 @@ public sealed class DashboardOptions
     public UIOptions UI { get; set; } = new();
     public DashboardDataOptions Data { get; set; } = new();
 
-    internal string GetApplicationNameOrDefault() =>
-        string.IsNullOrWhiteSpace(ApplicationName) ? DefaultApplicationName : ApplicationName;
+    internal string GetApplicationNameOrDefault() => GetApplicationNameOrDefault(ApplicationName);
+
+    internal static string GetApplicationNameOrDefault(string? applicationName) =>
+        string.IsNullOrWhiteSpace(applicationName) ? DefaultApplicationName : applicationName;
 }
 
 public sealed class DashboardDataOptions
