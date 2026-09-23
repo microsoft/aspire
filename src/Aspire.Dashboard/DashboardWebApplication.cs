@@ -64,7 +64,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     /// </summary>
     public const int ExitCodeAddressInUse = DashboardExitCodes.AddressInUse;
 
-    private const string DashboardAntiForgeryCookieName = ".Aspire.Dashboard.Antiforgery";
+    private const string DashboardAntiForgeryCookieNamePrefix = ".Aspire.Dashboard.Antiforgery";
     private const string OtlpExporterEndpointConfigurationKey = "OTEL_EXPORTER_OTLP_ENDPOINT";
     // Blazor discovers routed pages and layouts as Type values, then activates them and assigns
     // component parameters and [Inject] properties through reflection.
@@ -423,7 +423,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         builder.Services.AddAntiforgery(options =>
         {
-            options.Cookie.Name = DashboardAntiForgeryCookieName;
+            var applicationNameKey = DashboardApplicationNameKey.Create(dashboardOptions.GetApplicationNameOrDefault());
+            options.Cookie.Name = $"{DashboardAntiForgeryCookieNamePrefix}.{applicationNameKey}";
         });
 
         _app = builder.Build();
