@@ -140,6 +140,15 @@ public class EntraIdApplicationResource : Resource, IResourceWithEnvironment
     /// </remarks>
     public string? AzureRegion { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether to send the <c>x5c</c> claim (the public key of the certificate) with the token request.
+    /// </summary>
+    /// <remarks>
+    /// Sending <c>x5c</c> enables easy certificate rollover, but it is only meaningful for certificate-based
+    /// credentials and increases request size, so it is opt-in via <c>WithSendX5C()</c>.
+    /// </remarks>
+    public bool SendX5C { get; set; }
+
     // ── Web API ────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -396,7 +405,11 @@ public sealed class EntraIdFileCertificateCredential : EntraIdClientCredential
     /// <summary>
     /// Gets or sets the password for the certificate file, if password-protected.
     /// </summary>
-    public string? Password { get; set; }
+    /// <remarks>
+    /// This is a <see cref="ParameterResource"/> rather than a <see cref="string"/> so the value flows through
+    /// Aspire's parameter pipeline and is redacted in logs and the dashboard like any other secret.
+    /// </remarks>
+    public ParameterResource? Password { get; set; }
 
     /// <inheritdoc />
     internal override void EmitEnvironmentVariables(IDictionary<string, object> envVars, string prefix)

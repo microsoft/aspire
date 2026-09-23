@@ -30,7 +30,7 @@ public static class EntraIdResourceExtensions
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
     /// var entraApi = builder.AddEntraIdApplication("entra-api")
-    ///     .AsExisting(
+    ///     .AsExistingApplication(
     ///         tenantId: builder.AddParameter("EntraTenantId"),
     ///         clientId: builder.AddParameter("EntraApiClientId"));
     ///
@@ -134,8 +134,13 @@ public static class EntraIdResourceExtensions
     /// Unlike ARM resources that can be identified by name and resource group, Entra ID app registrations
     /// live in a specific tenant directory and are uniquely identified by their client ID within that tenant.
     /// </para>
+    /// <para>
+    /// This is deliberately not named <c>AsExisting</c>. Aspire's Azure resources use
+    /// <c>AsExisting(name, resourceGroup)</c>, so reusing that name here would give the same call shape
+    /// two different meanings once this resource participates in Azure provisioning.
+    /// </para>
     /// </remarks>
-    public static IResourceBuilder<EntraIdApplicationResource> AsExisting(
+    public static IResourceBuilder<EntraIdApplicationResource> AsExistingApplication(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         IResourceBuilder<ParameterResource> tenantId,
         IResourceBuilder<ParameterResource> clientId)
@@ -162,8 +167,13 @@ public static class EntraIdResourceExtensions
     /// Unlike ARM resources that can be identified by name and resource group, Entra ID app registrations
     /// live in a specific tenant directory and are uniquely identified by their client ID within that tenant.
     /// </para>
+    /// <para>
+    /// This is deliberately not named <c>AsExisting</c>. Aspire's Azure resources use
+    /// <c>AsExisting(name, resourceGroup)</c>, so reusing that name here would give the same call shape
+    /// two different meanings once this resource participates in Azure provisioning.
+    /// </para>
     /// </remarks>
-    public static IResourceBuilder<EntraIdApplicationResource> AsExisting(
+    public static IResourceBuilder<EntraIdApplicationResource> AsExistingApplication(
         this IResourceBuilder<EntraIdApplicationResource> builder,
         string tenantId,
         string clientId)
@@ -444,6 +454,24 @@ public static class EntraIdResourceExtensions
     }
 
     /// <summary>
+    /// Sends the <c>x5c</c> claim (the public key of the certificate) with token requests.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <remarks>
+    /// Sending <c>x5c</c> enables certificate rollover without redeploying the application. It only applies
+    /// to certificate-based credentials and increases the size of each token request, so it is opt-in.
+    /// </remarks>
+    public static IResourceBuilder<EntraIdApplicationResource> WithSendX5C(
+        this IResourceBuilder<EntraIdApplicationResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.SendX5C = true;
+        return builder;
+    }
+
+    /// <summary>
     /// Adds an extra query parameter to send to the identity provider.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
@@ -504,7 +532,7 @@ public static class EntraIdResourceExtensions
     /// <example>
     /// <code lang="csharp">
     /// var entraApi = builder.AddEntraIdApplication("entra-api")
-    ///     .AsExisting(
+    ///     .AsExistingApplication(
     ///         tenantId: tenantId,
     ///         clientId: clientId);
     ///
@@ -555,8 +583,12 @@ public static class EntraIdResourceExtensions
                 context.EnvironmentVariables[$"{prefix}__AppHomeTenantId"] = entra.AppHomeTenantId;
             }
 
-            // Always send X5C for easy certificate rollover
-            context.EnvironmentVariables[$"{prefix}__SendX5C"] = "true";
+            // Send the x5c claim only when explicitly requested. It enables certificate rollover but
+            // is only meaningful for certificate credentials, so it is opt-in via WithSendX5C().
+            if (entra.SendX5C)
+            {
+                context.EnvironmentVariables[$"{prefix}__SendX5C"] = "true";
+            }
 
             // Token acquisition
             if (entra.AzureRegion is not null)

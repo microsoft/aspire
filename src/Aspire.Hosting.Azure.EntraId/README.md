@@ -26,7 +26,7 @@ var tenantId = builder.AddParameter("EntraTenantId");
 var apiClientId = builder.AddParameter("EntraApiClientId");
 
 var entraApi = builder.AddEntraIdApplication("entra-api")
-                      .AsExisting(tenantId: tenantId, clientId: apiClientId);
+                      .AsExistingApplication(tenantId: tenantId, clientId: apiClientId);
 
 var api = builder.AddProject<Projects.Api>("api")
                  .WithReference(entraApi);
@@ -38,7 +38,7 @@ To inject into a different configuration section, pass the section name when add
 
 ```csharp
 var entraApi = builder.AddEntraIdApplication("entra-api", "AzureAdApi")
-                      .AsExisting(tenantId: tenantId, clientId: apiClientId);
+                      .AsExistingApplication(tenantId: tenantId, clientId: apiClientId);
 ```
 
 ## Client credentials
@@ -51,7 +51,7 @@ An application that acquires tokens for itself needs a client credential. Each `
 var webSecret = builder.AddParameter("EntraWebClientSecret", secret: true);
 
 var entraWeb = builder.AddEntraIdApplication("entra-web")
-                      .AsExisting(tenantId: tenantId, clientId: webClientId)
+                      .AsExistingApplication(tenantId: tenantId, clientId: webClientId)
                       .WithClientSecret(webSecret);
 ```
 
@@ -63,7 +63,7 @@ For deployed applications, use a federated identity credential so that no secret
 
 ```csharp
 var entraWeb = builder.AddEntraIdApplication("entra-web")
-                      .AsExisting(tenantId: tenantId, clientId: webClientId)
+                      .AsExistingApplication(tenantId: tenantId, clientId: webClientId)
                       .WithFicMsi();
 ```
 
@@ -73,7 +73,7 @@ Pass a client ID to use a user-assigned managed identity instead of the system-a
 
 ```csharp
 var entraWeb = builder.AddEntraIdApplication("entra-web")
-                      .AsExisting(tenantId: tenantId, clientId: webClientId)
+                      .AsExistingApplication(tenantId: tenantId, clientId: webClientId)
                       .WithCertificateFromKeyVault("https://myvault.vault.azure.net", "MyCert");
 ```
 
@@ -81,7 +81,7 @@ var entraWeb = builder.AddEntraIdApplication("entra-web")
 
 ```csharp
 var entraWeb = builder.AddEntraIdApplication("entra-web")
-                      .AsExisting(tenantId: tenantId, clientId: webClientId)
+                      .AsExistingApplication(tenantId: tenantId, clientId: webClientId)
                       .WithCertificateThumbprint("CurrentUser/My", "ABC123...");
 ```
 
@@ -93,7 +93,7 @@ For credential types without a dedicated method, use `WithCredential`:
 
 ```csharp
 var entraWeb = builder.AddEntraIdApplication("entra-web")
-                      .AsExisting(tenantId: tenantId, clientId: webClientId)
+                      .AsExistingApplication(tenantId: tenantId, clientId: webClientId)
                       .WithCredential(new EntraIdSignedAssertionFileCredential());
 ```
 
@@ -104,7 +104,7 @@ To target a sovereign cloud instance such as Azure Government:
 ```csharp
 var entraApi = builder.AddEntraIdApplication("entra-api")
                       .WithInstance("https://login.microsoftonline.us/")
-                      .AsExisting(tenantId: tenantId, clientId: apiClientId);
+                      .AsExistingApplication(tenantId: tenantId, clientId: apiClientId);
 ```
 
 ## Additional documentation
