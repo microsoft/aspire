@@ -141,6 +141,7 @@
     <Compile Include="$(SharedDir)AspireHomeDirectory.cs" Link="Utils\AspireHomeDirectory.cs" />
     <Compile Include="$(SharedDir)DirectoryHelper.cs" Link="Utils\DirectoryHelper.cs" />
     <Compile Include="$(SharedDir)SocketPermissionHelper.cs" Link="Utils\SocketPermissionHelper.cs" />
+    <Compile Include="$(SharedDir)SocketDirectoryNames.cs" Link="Utils\SocketDirectoryNames.cs" />
     <Compile Include="$(SharedDir)KnownAspNetCoreConfigNames.cs" Link="Utils\KnownAspNetCoreConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
     <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="Utils\IntegrationPackageProbeManifest.cs" />

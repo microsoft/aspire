@@ -43,7 +43,7 @@ internal static class SocketPermissionHelper
             string.Equals(directory.FullName, Path.TrimEndingDirectorySeparator(userProfileDirectory), comparison) ||
             string.Equals(Path.TrimEndingDirectorySeparator(directory.FullName), tempRoot, comparison))
         {
-            throw new IOException($"The socket directory '{path}' must use an Aspire socket directory layout (.aspire/cli/bch, .aspire/trmnl, or .aspire/pty).");
+            throw new IOException($"The socket directory '{path}' must use an Aspire socket directory layout ({SocketDirectoryNames.Aspire}/{SocketDirectoryNames.Cli}/{SocketDirectoryNames.Backchannels}, {SocketDirectoryNames.Aspire}/{SocketDirectoryNames.Terminals}, or {SocketDirectoryNames.Aspire}/{SocketDirectoryNames.Pty}).");
         }
 
         // Validate the entire configurable suffix, not just the leaf: .aspire or cli
@@ -84,22 +84,22 @@ internal static class SocketPermissionHelper
             return false;
         }
 
-        if (string.Equals(parent.Name, ".aspire", comparison))
+        if (string.Equals(parent.Name, SocketDirectoryNames.Aspire, comparison))
         {
-            return string.Equals(directory.Name, "trmnl", comparison) ||
-                string.Equals(directory.Name, "pty", comparison);
+            return string.Equals(directory.Name, SocketDirectoryNames.Terminals, comparison) ||
+                string.Equals(directory.Name, SocketDirectoryNames.Pty, comparison);
         }
 
-        if (string.Equals(directory.Name, "bch", comparison) &&
-            string.Equals(parent.Name, "cli", comparison) &&
-            string.Equals(parent.Parent?.Name, ".aspire", comparison))
+        if (string.Equals(directory.Name, SocketDirectoryNames.Backchannels, comparison) &&
+            string.Equals(parent.Name, SocketDirectoryNames.Cli, comparison) &&
+            string.Equals(parent.Parent?.Name, SocketDirectoryNames.Aspire, comparison))
         {
             return true;
         }
 
         // DCP session directories are allocated by ITempFileSystemService, not a socket override.
-        return directory.Name.StartsWith("aspire-dcp", comparison) &&
-            directory.Name.Length > "aspire-dcp".Length &&
+        return directory.Name.StartsWith(SocketDirectoryNames.DcpPrefix, comparison) &&
+            directory.Name.Length > SocketDirectoryNames.DcpPrefix.Length &&
             string.Equals(parent.FullName, tempRoot, comparison);
     }
 

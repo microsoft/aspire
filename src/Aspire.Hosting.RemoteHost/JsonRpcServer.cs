@@ -50,7 +50,7 @@ internal sealed class JsonRpcServer : BackgroundService
             {
                 throw new InvalidOperationException("Cannot determine the user profile for the remote AppHost socket.");
             }
-            socketPath = Path.Combine(home, ".aspire", "cli", "bch", "remote-app-host.sock");
+            socketPath = Path.Combine(home, SocketDirectoryNames.Aspire, SocketDirectoryNames.Cli, SocketDirectoryNames.Backchannels, "remote-app-host.sock");
         }
         _socketPath = socketPath;
     }
