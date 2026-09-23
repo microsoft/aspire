@@ -135,19 +135,20 @@ public class OtlpHttpServiceTests
         Assert.Equal(string.Empty, await responseMessage.Content.ReadAsStringAsync().DefaultTimeout());
     }
 
-    [Fact]
-    public async Task Configuration_OtlpHttpEndPoint_NullSecondaryApiKeyInJson_FailsValidation()
+    [Theory]
+    [InlineData("null", false)]
+    [InlineData("\"\"", true)]
+    public async Task Configuration_OtlpHttpEndPoint_SecondaryApiKeyInJson_Validation(string secondaryApiKeyJson, bool isEmpty)
     {
-        // Arrange
         var tempDirectory = Directory.CreateTempSubdirectory();
         var configFilePath = Path.Combine(tempDirectory.FullName, "appsettings.json");
-        const string configJson = """
+        var configJson = $$"""
             {
               "Dashboard": {
                 "Otlp": {
                   "AuthMode": "ApiKey",
                   "PrimaryApiKey": "TestKey123!",
-                  "SecondaryApiKey": null
+                  "SecondaryApiKey": {{secondaryApiKeyJson}}
                 }
               }
             }
@@ -161,11 +162,18 @@ public class OtlpHttpServiceTests
                 config[KnownConfigNames.DashboardConfigFilePath] = configFilePath;
             });
 
-            // Act
-            var exception = Assert.Throws<OptionsValidationException>(() => _ = app.DashboardOptionsMonitor.CurrentValue);
-
-            // Assert
-            Assert.Contains($"SecondaryApiKey must not be empty when OTLP authentication mode is API key. Remove {DashboardConfigNames.DashboardOtlpSecondaryApiKeyName.ConfigKey} or specify a non-empty value.", exception.Failures);
+            if (isEmpty)
+            {
+                var exception = Assert.Throws<OptionsValidationException>(() => _ = app.DashboardOptionsMonitor.CurrentValue);
+                Assert.Contains($"SecondaryApiKey must not be empty when OTLP authentication mode is API key. Remove {DashboardConfigNames.DashboardOtlpSecondaryApiKeyName.ConfigKey} or specify a non-empty value.", exception.Failures);
+            }
+            else
+            {
+                var options = app.DashboardOptionsMonitor.CurrentValue.Otlp;
+                Assert.Equal(OtlpAuthMode.ApiKey, options.AuthMode);
+                Assert.Equal("TestKey123!", options.PrimaryApiKey);
+                Assert.Null(options.SecondaryApiKey);
+            }
         }
         finally
         {
