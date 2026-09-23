@@ -56,7 +56,7 @@ await builder.build().run();
 
 Before resources start, Aspire collects projects with compatible SDK and environment contexts into
 generated MSBuild traversal projects under the AppHost's intermediate output. Build groups run serially, while projects within
-each traversal group can build in parallel. File-based apps use serialized direct builds so their
+each traversal group share one NuGet graph restore and can build in parallel. File-based apps use serialized direct builds so their
 `#:project` references cannot build shared outputs concurrently. Launch-profile and `WithEnvironment`
 values are runtime configuration and do not prevent projects from sharing a traversal build. Each
 traditional project is then launched with the `RunCommand` and `RunArguments` resolved from the
@@ -67,6 +67,42 @@ project-based resources. Use the Rebuild command after source changes to rebuild
 
 Endpoints, environment variables, and service discovery are configured from the project's
 `launchSettings.json` and Kestrel configuration, matching `AddProject<T>`.
+
+### Restoring projects individually
+
+Coordinated project builds restore all projects in a compatible group together, without introducing
+solution-specific MSBuild properties. This avoids repeatedly restoring overlapping project graphs.
+Like solution-level restore, it does not invoke each root project's `Restore` target separately.
+Custom targets attached directly to that target, such as `BeforeTargets="Restore"` or
+`AfterTargets="Restore"`, therefore do not run for each project.
+
+Individual restore is a supported alternative for projects that depend on those hooks.
+Set `Aspire:Dotnet:RestoreProjectsIndividually` to `true` in the **AppHost's configuration**.
+For example, set `Aspire__Dotnet__RestoreProjectsIndividually=true` in the
+environment before starting the AppHost, or add the following to its `appsettings.json`:
+
+```json
+{
+  "Aspire": {
+    "Dotnet": {
+      "RestoreProjectsIndividually": true
+    }
+  }
+}
+```
+
+The setting defaults to `false` and is read when the build plan is created. It applies to every
+generated traversal in that AppHost; it is not a resource runtime environment variable. With
+individual restore, each root project's restore runs serially while builds remain parallel.
+
+A traversal also uses the per-project restore path when the selected NuGet restore targets are
+unavailable or its top-level MSBuild context enables `RestoreUseStaticGraphEvaluation`. NuGet's
+static restore requires a restore-capable entry project, which the generated SDK-less traversal is
+not. The reason for selecting individual restore is reported in the build resource's logs. Restore
+failures are not retried using another strategy.
+
+Direct builds for file-based apps and project-specific build environments, individual Rebuild
+commands, and publishing are unchanged.
 
 ### Select a launch profile
 
@@ -192,6 +228,14 @@ conventions. See the [SDK archive publishing documentation](https://learn.micros
 Call `PublishAsDockerFile(...)` or `publishAsDockerFile(...)` to use an explicit Dockerfile instead of .NET SDK
 container publishing. Call `ExcludeFromManifest()` or `excludeFromManifest()` when the resource is intentionally
 available only during local orchestration.
+
+## Migrating from legacy project resources
+
+For C# and TypeScript AppHosts targeting Aspire 13.6 or newer, the
+[`aspire-project-v2-migration` agent skill](https://github.com/microsoft/aspire-skills/tree/main/skills/aspire-project-v2-migration)
+assesses existing project resources and proposes a migration for approval before editing.
+It preserves supported resource configuration and identifies unsupported patterns, including
+Azure Functions and custom integrations tied to `ProjectResource`. It does not upgrade the AppHost's Aspire version.
 
 ## Additional documentation
 

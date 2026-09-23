@@ -9,20 +9,43 @@
     {
         <div class="metrics-filters-section">
             <h5>@Loc[nameof(ControlsStrings.ChartContainerFiltersHeader)]</h5>
-            <FluentDataGrid Class="aspire-spaced-grid" Items="@Queryable.AsQueryable(DimensionFilters)"
+            <FluentDataGrid Class="aspire-spaced-grid" ItemsProvider="@EnumerableGridItemsProvider.Create(() => DimensionFilters)"
+                            ItemKey="@(filter => filter.Name)"
                             GridTemplateColumns="200px 1fr auto"
                             GenerateHeader="DataGridGeneratedHeaderType.None"
                             RowSize="DataGridRowSize.Medium">
                 <ChildContent>
                     <AspirePropertyColumn Tooltip="true" TooltipText="@(c => c.Name)" Property="@(c => c.Name)"/>
                     <AspireTemplateColumn>
-                        <ChartFilterTags @key="context" Filter="context" OnSelectionChanged="OnDimensionValuesChanged" />
+                        <ChartFilterTags @key="context"
+                                         Filter="context"
+                                         OnSelectionChanged="OnDimensionValuesChanged"
+                                         OnShowPopover="ShowPopup" />
                     </AspireTemplateColumn>
                     <AspireTemplateColumn>
-                        <ChartFilterPopover @key="context" Filter="context" OnSelectionChanged="OnDimensionValuesChanged" />
+                        <span class="chart-filter-button-container">
+                            <FluentButton id="@GetFilterButtonId(context)"
+                                          Class="chart-filter-button"
+                                          Style="@($"anchor-name: --{GetFilterButtonId(context)}")"
+                                          IconOnly="true"
+                                          Appearance="@(context.AreAllValuesSelected is true ? ButtonAppearance.Transparent : ButtonAppearance.Primary)"
+                                          @onclick="() => TogglePopup(context)"
+                                          aria-label="@(context.AreAllValuesSelected is true ? Loc[nameof(ControlsStrings.ChartContainerAllTags)] : Loc[nameof(ControlsStrings.ChartContainerFilteredTags)])">
+                                <FluentIcon Value="@(new Icons.Regular.Size20.Filter())" Color="Color.Custom" CustomColor="@(context.AreAllValuesSelected is true ? "var(--colorBrandForeground1)" : "currentColor")" />
+                            </FluentButton>
+                        </span>
                     </AspireTemplateColumn>
                 </ChildContent>
             </FluentDataGrid>
+            @foreach (var filter in DimensionFilters)
+            {
+                <ChartFilterPopover @key="filter.Name"
+                                    AnchorId="@GetFilterButtonId(filter)"
+                                    Filter="filter"
+                                    Opened="@IsPopupOpen(filter)"
+                                    OpenedChanged="@(opened => SetPopupOpen(filter, opened))"
+                                    OnSelectionChanged="OnFilterSelectionChangedAsync" />
+            }
         </div>
     }
     @if (InstrumentType == OtlpInstrumentType.Histogram)

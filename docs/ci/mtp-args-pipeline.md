@@ -81,6 +81,12 @@ For split test projects, the "uncollected" bucket (tests not in any named partit
 
 Consumed by Arcade's `Microsoft.Testing.Platform.targets` for direct assembly execution (`TestAssembly.exe <args>`). This is the Helix/AzDO path.
 
+The repository's `eng/Xunit3/Microsoft.Testing.Platform.targets` adds XML, HTML,
+and TRX reporting options. xUnit v4 uses `--report-xunit-xml` and
+`--report-xunit-xml-filename` for the xUnit XML report; the former
+`--report-xunit` options fail argument parsing before any tests execute.
+`MicrosoftTestingPlatformTests` checks these options against the current test host.
+
 Assembled in `eng/Testing.props` from:
 - `--filter-not-trait "category=failing"`
 - Filter args (quarantine/outerloop exclusions)

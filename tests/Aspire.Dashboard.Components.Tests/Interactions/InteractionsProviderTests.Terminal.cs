@@ -35,7 +35,7 @@ public partial class InteractionsProviderTests
             return Task.CompletedTask;
         });
         SetupInteractionProviderServices(client, dialogs);
-        var cut = RenderComponent<Components.Interactions.InteractionsProvider>();
+        var cut = Render<Components.Interactions.InteractionsProvider>();
         await updates.Writer.WriteAsync(new WatchInteractionsResponseUpdate
         {
             InteractionId = 1,
@@ -94,7 +94,7 @@ public partial class InteractionsProviderTests
             return Task.CompletedTask;
         });
         SetupInteractionProviderServices(client, dialogs);
-        var cut = RenderComponent<Components.Interactions.InteractionsProvider>();
+        var cut = Render<Components.Interactions.InteractionsProvider>();
         await updates.Writer.WriteAsync(new WatchInteractionsResponseUpdate
         {
             InteractionId = 1, PromptProgress = new InteractionPromptProgress()

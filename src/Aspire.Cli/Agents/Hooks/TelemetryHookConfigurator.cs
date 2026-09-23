@@ -66,7 +66,7 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
         // configured here even though they are detected/marked. The Copilot App and CLI share the
         // same ~/.copilot hook location, so prefer the App display name when both are detected.
         // This identifies the configuration target, not the hook event's client-name: the canonical
-        // v0.0.2 scripts report App events as copilot-cli. See https://github.com/microsoft/aspire-skills/issues/71.
+        // scripts currently report App events as copilot-cli. See https://github.com/microsoft/aspire-skills/issues/71.
         var supported = new List<AgentClientKind>();
         if (detectedClients.Contains(AgentClientKind.CopilotApp))
         {

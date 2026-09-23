@@ -18,5 +18,8 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "tsx": "^4.23.13"
+  },
+  "overrides": {
+    "qs": "6.16.0"
   }
 }

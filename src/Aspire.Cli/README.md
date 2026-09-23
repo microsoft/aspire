@@ -300,6 +300,18 @@ completion generator has no completion-specific opt-out; custom installer flags
 do not apply to Homebrew. No installer should change machine-wide profiles or
 shell execution policies.
 
+## Browser certificate trust configuration
+
+On Linux, the NSS databases used to trust the Aspire development certificate can be configured locally or in the user-level Aspire configuration:
+
+```bash
+aspire config set --global certificates.nssDbPaths "firefox=/path/to/firefox/profile:chromium=/path/to/chromium/nssdb"
+```
+
+Prefix a path with `firefox=` or `chromium=` to apply the trust settings expected by that browser family.
+
+The `certificates.nssDbPaths` setting takes precedence over the upstream `DOTNET_DEV_CERTS_NSSDB_PATHS` environment variable. When the Aspire setting has no value, the CLI preserves the upstream behavior.
+
 ## Additional documentation
 
 * [CLI output formats](../../docs/specs/cli-output-formats.md)

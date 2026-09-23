@@ -51,7 +51,7 @@ public partial class TerminalDockTests : DashboardTestContext
         Services.AddSingleton<NavigationManager>(new TestNavigationManager($"https://dashboard.example{pathBase}/"));
         TerminalSetupHelpers.SetupTerminalComponents(this, client, pathBase);
         Services.GetRequiredService<NavigationManager>().NavigateTo("consolelogs/resource/other");
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
 
         cut.WaitForAssertion(() =>
@@ -89,7 +89,7 @@ public partial class TerminalDockTests : DashboardTestContext
             OnResourceSubscriptionDisposed = () => resourcesStopped.TrySetResult()
         };
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         cut.WaitForAssertion(() => Assert.Equal(["first"],
             cut.FindAll(".terminal-dock-resource-links a").Select(link => link.TextContent)));
@@ -138,7 +138,7 @@ public partial class TerminalDockTests : DashboardTestContext
         Services.AddSingleton<NavigationManager>(new TestNavigationManager($"https://dashboard.example{pathBase}/"));
         TerminalSetupHelpers.SetupTerminalComponents(this, client, pathBase);
         Services.GetRequiredService<NavigationManager>().NavigateTo("consolelogs/resource/other");
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
 
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot(terminalId));
@@ -159,7 +159,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
@@ -198,7 +198,7 @@ public partial class TerminalDockTests : DashboardTestContext
     {
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient();
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         var height = cut.Find(".terminal-dock").GetAttribute("style");
 
@@ -217,7 +217,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
 
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         Assert.Equal("No docked terminals", cut.Find(".terminal-dock-panel-heading").TextContent);
@@ -272,7 +272,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         if (previouslyOpened)
         {
             await cut.InvokeAsync(cut.Instance.ToggleAsync);
@@ -315,7 +315,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var processed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         client.OnTerminalUpdateProcessed = _ => processed.TrySetResult();
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         if (previouslyOpened)
         {
             await cut.InvokeAsync(cut.Instance.ToggleAsync);
@@ -347,7 +347,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second", "third"));
         cut.WaitForAssertion(() =>
@@ -401,7 +401,7 @@ public partial class TerminalDockTests : DashboardTestContext
             terminalChannelProvider: () => updates,
             closeTerminal: (_, _) => completion.Task);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         string[] ids = ["first", "second", "third"];
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot(ids));
@@ -434,7 +434,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Activated, "first"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[role=tab]")));
 
@@ -463,7 +463,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second", "third"));
         cut.WaitForAssertion(() => Assert.Equal(3, cut.FindAll(".terminal-dock-tab").Count));
@@ -492,9 +492,9 @@ public partial class TerminalDockTests : DashboardTestContext
             terminalChannelProvider: () => updates,
             closeTerminal: (_, _) => completion.Task);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var toasts = RenderComponent<FluentToastProvider>();
+        var toasts = Render<FluentToastProvider>();
         var notifications = Services.GetRequiredService<INotificationService>();
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         var snapshot = TerminalSetupHelpers.Snapshot("terminal-id");
         snapshot.Snapshot.Terminals[0].Title = "Setup shell";
@@ -534,7 +534,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
         cut.WaitForAssertion(() =>
@@ -603,7 +603,7 @@ public partial class TerminalDockTests : DashboardTestContext
                 return Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             });
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("terminal"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".terminal-dock-tab")));
@@ -628,8 +628,8 @@ public partial class TerminalDockTests : DashboardTestContext
             terminalChannelProvider: () => updates,
             closeTerminal: (_, _) => completion.Task);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var toasts = RenderComponent<FluentToastProvider>();
-        var cut = RenderComponent<TerminalDock>();
+        var toasts = Render<FluentToastProvider>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("terminal"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".terminal-dock-tab")));
@@ -656,7 +656,7 @@ public partial class TerminalDockTests : DashboardTestContext
         Services.AddSingleton<NavigationManager>(new TestNavigationManager($"http://localhost{pathBase}/"));
         TerminalSetupHelpers.SetupTerminalComponents(this, client, pathBase);
         Services.GetRequiredService<NavigationManager>().NavigateTo("consolelogs/resource/first");
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", terminalId));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
@@ -703,7 +703,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Activated, "detached"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
         await cut.InvokeAsync(() => cut.FindComponent<TerminalView>().Instance.OnTerminalStateChanged(new TerminalToolbarState
@@ -743,7 +743,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
@@ -786,7 +786,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Activated, "terminal"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
         Assert.True(cut.Find(".terminal-dock-detach").HasAttribute("disabled"));

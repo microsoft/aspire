@@ -4,6 +4,12 @@ void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         // 1) addAzurePostgresFlexibleServer - main factory method
         var pg = builder.addAzurePostgresFlexibleServer("pg");
+        pg.configureInfrastructure(infrastructure -> {
+            var server = infrastructure.getPostgreSqlFlexibleServer();
+            var backup = server.backup();
+            backup.setBackupRetentionDays(14);
+            var _backupRetention = backup.backupRetentionDays();
+        });
         // 2) addDatabase - child resource
         var db = pg.addDatabase("mydb", "appdb");
         // 3) withPasswordAuthentication - configures password auth (auto KeyVault)

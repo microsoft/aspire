@@ -63,11 +63,11 @@
                                   aria-label="@(FitLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)])"
                                   OnClick="FitToContainerAsync">@(FitLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)])</FluentButton>
                     <FluentSelect TOption="TerminalSizePreset" TValue="string" Class="terminal-size-select aspire-input" Items="@DisplayedSizePresets"
+                                  Placeholder="@(TerminalDimensionsLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSize)])"
                                   OptionValue="@(p => p.Value)"
                                   OptionText="@(p => p.Label)"
                                   Value="@_state.SizeKey" ValueChanged="@(value => SetSizeModeAsync(value ?? string.Empty))"
-                                  Disabled="@(!_state.SizeSelectEnabled || ReadOnly)"
-                                  aria-label="@(TerminalDimensionsLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSize)])" />
+                                  Disabled="@(!_state.SizeSelectEnabled || ReadOnly)" />
                 }
             </div>
         </div>

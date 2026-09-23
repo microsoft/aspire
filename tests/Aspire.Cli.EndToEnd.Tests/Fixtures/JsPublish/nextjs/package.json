@@ -20,6 +20,7 @@
   "overrides": {
     "postcss": "8.5.28",
     "nanoid": "3.3.18",
-    "sharp": "0.35.4"
+    "sharp": "0.35.4",
+    "baseline-browser-mapping": "2.11.0"
   }
 }

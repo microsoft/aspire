@@ -146,7 +146,7 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
     {
         try
         {
-            var moduleUri = new Uri(new Uri(NavigationManager.BaseUri), "js/app-terminalwindow.js");
+            var moduleUri = new Uri(new Uri(NavigationManager.BaseUri), Assets["js/app-terminalwindow.js"]);
             _windowModule ??= await JS.InvokeAsync<IJSObjectReference>("import", moduleUri.PathAndQuery);
             if (_disposed || generation != _watchGeneration)
             {

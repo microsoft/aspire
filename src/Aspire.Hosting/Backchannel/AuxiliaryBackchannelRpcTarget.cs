@@ -638,10 +638,10 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// </summary>
     private AppHostTerminalSummary[] CollectAppHostTerminals()
     {
-        var terminalService = serviceProvider.GetRequiredService<Aspire.Hosting.Terminals.TerminalService>();
+        var terminalService = serviceProvider.GetRequiredService<TerminalService>();
 
         return [.. terminalService.ListAll()
-            .Where(t => t.Owner == Aspire.Hosting.Terminals.TerminalOwner.AppHost)
+            .Where(t => t.Owner == TerminalOwner.AppHost)
             .Select(t => new AppHostTerminalSummary
             {
                 TerminalId = t.Id,

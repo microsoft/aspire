@@ -400,6 +400,7 @@ internal sealed class TracingSqliteConnection(string connectionString, string da
             public override decimal GetDecimal(int ordinal) => reader.GetDecimal(ordinal);
             public override double GetDouble(int ordinal) => reader.GetDouble(ordinal);
             public override IEnumerator GetEnumerator() => reader.GetEnumerator();
+            [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicFields)]
             public override Type GetFieldType(int ordinal) => reader.GetFieldType(ordinal);
             public override T GetFieldValue<T>(int ordinal) => reader.GetFieldValue<T>(ordinal);
             public override float GetFloat(int ordinal) => reader.GetFloat(ordinal);
@@ -409,6 +410,7 @@ internal sealed class TracingSqliteConnection(string connectionString, string da
             public override long GetInt64(int ordinal) => reader.GetInt64(ordinal);
             public override string GetName(int ordinal) => reader.GetName(ordinal);
             public override int GetOrdinal(string name) => reader.GetOrdinal(name);
+            [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties | DynamicallyAccessedMemberTypes.PublicFields)]
             public override Type GetProviderSpecificFieldType(int ordinal) => reader.GetProviderSpecificFieldType(ordinal);
             public override object GetProviderSpecificValue(int ordinal) => reader.GetProviderSpecificValue(ordinal);
             public override int GetProviderSpecificValues(object[] values) => reader.GetProviderSpecificValues(values);

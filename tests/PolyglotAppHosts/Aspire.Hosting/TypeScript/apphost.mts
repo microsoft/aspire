@@ -218,6 +218,11 @@ await subnet.allowInbound({ port: "443", from: AzureServiceTags.AzureLoadBalance
 await subnet.denyInbound({ from: AzureServiceTags.Internet });
 
 const aks = await builder.addAzureKubernetesEnvironment("aks");
+await aks.configureInfrastructure(async infrastructure => {
+    const cluster = await infrastructure.getContainerServiceManagedCluster();
+    await cluster.isRbacEnabled.set(true);
+    const _rbacEnabled = await cluster.isRbacEnabled.get();
+});
 await aks.addNodePool("system", { vmSize: AksNodeVmSizes.StandardDSv5.StandardD2sV5 });
 const aksVolume = await aks.addPersistentVolume("aks-data");
 await aksVolume.withCapacity("20Gi");

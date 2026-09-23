@@ -122,7 +122,7 @@
                                                     ColumnOrder="@_manager.ColumnOrder"
                                                     GridTemplateColumns="@_manager.GetGridTemplateColumns()"
                                                     RowSize="DataGridRowSize.Small"
-                                                    OverscanCount="100"
+                                                    OverscanCount="50"
                                                     ShowHover="true"
                                                     ItemKey="@(r => r.Span.SpanId)"
                                                     OnRowClick="@(r => r.ExecuteOnDefault(d => OnShowPropertiesAsync(d, focusElementId: ScrollContainerId)))">
@@ -278,7 +278,7 @@
                                                                 *@
                                                                 @if (htmlTooltip)
                                                                 {
-                                                                    <FluentTooltip Anchor="@buttonId" Class="log-tooltip">
+                                                                    <FluentTooltip Anchor="@buttonId" MaxWidth="350px" Style="flex-direction: column;">
                                                                         <div class="log-tooltip-title-container">
                                                                             <span class="log-tooltip-title">@eventName</span> <span class="log-tooltip-subtitle">@item.LogEntry.ScopeName</span><br />
                                                                         </div>
