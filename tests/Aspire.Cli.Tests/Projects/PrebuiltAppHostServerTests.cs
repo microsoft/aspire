@@ -323,6 +323,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var feedDirectory = workspace.CreateDirectory("feed");
         CreateDependencyPackage(feedDirectory, "Shared.Dependency", "1.0.0");
         CreateDependencyPackage(feedDirectory, "Shared.Dependency", "2.0.0");
+        // This package is used only by the referenced project so the test cannot pass merely because
+        // the generated root happened to populate the shared package cache before graph evaluation.
+        CreateDependencyPackage(feedDirectory, "Project.Dependency", "1.0.0");
         CreateDependencyPackage(
             feedDirectory,
             "Direct.Integration",
@@ -341,8 +344,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <TargetFramework>net10.0</TargetFramework>
+                <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(AspireIntegrationPackageSources)</RestoreAdditionalProjectSources>
               </PropertyGroup>
               <ItemGroup>
+                <PackageReference Include="Project.Dependency" Version="1.0.0" />
                 <PackageReference Include="Shared.Dependency" Version="2.0.0" />
               </ItemGroup>
               <Target Name="RejectInheritedRuntimeIdentifier"
@@ -383,6 +388,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var restoreConfiguration = await restorePlan.ApplyProjectRestoreConfigurationAsync(
             IntegrationClosureBuilder.GetAppHostIntegrationPolicyDirectory(workspace.WorkspaceRoot),
             TestContext.Current.CancellationToken);
+        var integrationPackageSources = IntegrationClosureBuilder.CreateRestoreAdditionalProjectSourcesValue(
+            existingValue: null,
+            restoreConfiguration.PackageSourceHints);
 
         var generatedProjectPath = Path.Combine(generatedProjectDirectory.FullName, "IntegrationRestore.csproj");
         var projectContent = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
@@ -426,6 +434,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             UseShellExecute = false
         };
         startInfo.Environment.Remove("MSBuildSDKsPath");
+        if (integrationPackageSources is not null)
+        {
+            startInfo.Environment[PrebuiltAppHostServer.IntegrationPackageSourcesPropertyName] = integrationPackageSources;
+        }
         startInfo.ArgumentList.Add("build");
         startInfo.ArgumentList.Add(generatedProjectPath);
         startInfo.ArgumentList.Add("--nologo");
@@ -441,6 +453,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.True(process.ExitCode == 0, output);
             using var assets = JsonDocument.Parse(await File.ReadAllTextAsync(
                 Path.Combine(restoreDirectory.FullName, "obj", IntegrationClosureBuilder.ProjectAssetsFileName)));
+            Assert.True(assets.RootElement.GetProperty("libraries").TryGetProperty("Project.Dependency/1.0.0", out _));
             Assert.True(assets.RootElement.GetProperty("libraries").TryGetProperty("Shared.Dependency/2.0.0", out _));
             Assert.False(assets.RootElement.GetProperty("libraries").TryGetProperty("Shared.Dependency/1.0.0", out _));
 
