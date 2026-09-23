@@ -21,7 +21,7 @@
     <MicrosoftTestingPlatformVersion>2.4.0</MicrosoftTestingPlatformVersion>
     <MicrosoftNETTestSdkVersion>18.10.0</MicrosoftNETTestSdkVersion>
     <!-- Enable to remove prerelease label. -->
-    <StabilizePackageVersion Condition="'$(StabilizePackageVersion)' == ''">true</StabilizePackageVersion>
+    <StabilizePackageVersion Condition="'$(StabilizePackageVersion)' == ''">false</StabilizePackageVersion>
     <DotNetFinalVersionKind Condition="'$(StabilizePackageVersion)' == 'true'">release</DotNetFinalVersionKind>
   </PropertyGroup>
   <PropertyGroup>
