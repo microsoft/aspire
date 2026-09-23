@@ -36,7 +36,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private TerminalViewSession? _viewSession;
     private string? _sessionEndpoint;
     private int _paletteResetVersion;
-    private static readonly string[] s_paletteChoices = ["dashboard", "light", "dark"];
+    private static readonly string[] s_paletteChoices = ["light", "dark"];
 
     /// <summary>Gets or sets the display name of the resource that owns the terminal.</summary>
     [Parameter]
@@ -392,7 +392,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     {
         "light" => nameof(Resources.TerminalStrings.TerminalPaletteLight),
         "dark" => nameof(Resources.TerminalStrings.TerminalPaletteDark),
-        _ => nameof(Resources.TerminalStrings.TerminalPaletteFollow)
+        _ => throw new ArgumentException("Unknown terminal palette.", nameof(palette))
     }];
 
     private IReadOnlyList<TerminalSizePreset> DisplayedSizePresets => _state.Cols > 0 && _state.Rows > 0 &&
@@ -598,8 +598,8 @@ public sealed record TerminalToolbarState
     public string SizeMode { get; init; } = "font";
     /// <summary>The selected preset key, or auto.</summary>
     public string SizeKey { get; init; } = "auto";
-    /// <summary>The saved palette preference: dashboard, light or dark.</summary>
-    public string Palette { get; init; } = "dashboard";
+    /// <summary>The saved palette preference: light or dark.</summary>
+    public string Palette { get; init; } = "dark";
     /// <summary>The font size in CSS pixels.</summary>
     public int FontPx { get; init; }
     /// <summary>Whether font controls are available.</summary>

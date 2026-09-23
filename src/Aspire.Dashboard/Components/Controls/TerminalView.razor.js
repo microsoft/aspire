@@ -106,22 +106,26 @@ export function getTerminalPalette() {
     try {
         const stored = localStorage.getItem(TERMINAL_PALETTE_STORAGE_KEY);
         if (stored === null) {
-            return "dashboard";
+            return "dark";
         }
         // This non-sensitive browser preference is stored as JSON, e.g. "dark".
         const value = JSON.parse(stored);
-        if (value === "dashboard" || value === "dark" || value === "light") {
+        if (value === "dark" || value === "light") {
             return value;
         }
-        console.warn("Invalid Dashboard terminal palette preference; following Dashboard theme.");
+        // The former theme-following preference now resolves to the default explicit palette.
+        if (value === "dashboard") {
+            return "dark";
+        }
+        console.warn("Invalid Dashboard terminal palette preference; using Dark.");
     } catch (error) {
-        console.warn("Could not read Dashboard terminal palette preference; following Dashboard theme.", error);
+        console.warn("Could not read Dashboard terminal palette preference; using Dark.", error);
     }
-    return "dashboard";
+    return "dark";
 }
 
 export function setTerminalPalette(value) {
-    if (value !== "dashboard" && value !== "dark" && value !== "light") {
+    if (value !== "dark" && value !== "light") {
         throw new TypeError("Invalid terminal palette preference.");
     }
     // Persist before applying so a failed write can be reported without a false success.
@@ -135,12 +139,9 @@ function updateAppearance(state) {
     if (state.disposed) {
         return;
     }
-    // "dashboard" follows the resolved page theme, not the OS preference or a local control theme.
     const preference = getTerminalPalette();
     state.palette = preference;
-    state.colorMode = preference === "dashboard"
-        ? (document.documentElement.dataset.theme === "light" ? "light" : "dark")
-        : preference;
+    state.colorMode = preference;
     const palette = state.colorMode === "light" ? lightPalette : darkPalette;
     state.viewElement.style.setProperty("--terminal-background", palette.background);
     state.client?.setColorMode(state.colorMode);

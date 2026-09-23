@@ -123,9 +123,6 @@
   <data name="TerminalPalette" xml:space="preserve">
     <value>Terminal palette</value>
   </data>
-  <data name="TerminalPaletteFollow" xml:space="preserve">
-    <value>Follow Dashboard</value>
-  </data>
   <data name="TerminalPaletteLight" xml:space="preserve">
     <value>Light</value>
   </data>

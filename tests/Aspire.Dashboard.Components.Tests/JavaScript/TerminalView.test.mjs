@@ -381,6 +381,7 @@ for (const [name, ranges, text, visible] of [
 for (const [theme, background] of [["light", "#d5d0df"], ["dark", "#312e3c"]]) {
     test(`terminal mounts with the Aspire ${theme} palette and unchanged neutral and selection colors`, async () => {
         document.documentElement.dataset.theme = theme;
+        terminal.setTerminalPalette(theme);
         const { view } = mount();
         const attempt = attempts[0];
         assert.equal(attempt.options.colorMode, theme);
@@ -465,7 +466,7 @@ test("palette override updates every view including pending and hidden mounts wi
     assert.equal(client.selectionClears, 0);
     assert.deepEqual(client.sizingCalls, []);
     assert.equal(attempts.length, 2);
-    terminal.setTerminalPalette("dashboard");
+    terminal.setTerminalPalette("dark");
     assert.equal(client.colorMode, "dark");
     terminal.reconnectTerminal(first.id, "wss://dashboard/api/terminal?resource=app&replica=1");
     assert.equal(attempts[2].options.colorMode, "dark");
@@ -499,13 +500,33 @@ test("cross-window storage changes and cleared preferences update palettes and s
     assert.deepEqual(client.colorModeCalls, calls);
 });
 
-test("unavailable or corrupt palette storage logs a warning and follows Dashboard", () => {
+for (const stored of [null, '"dashboard"']) {
+    test(`missing or former theme-following preference (${stored}) uses Dark independently of site theme`, async () => {
+        if (stored !== null) {
+            localStorage.setItem("Aspire.TerminalPalette", stored);
+        }
+        document.documentElement.dataset.theme = "light";
+        const { id } = mount();
+        attempts[0].resolve();
+        await settle();
+        assert.equal(terminal.getToolbarState(id).palette, "dark");
+        assert.equal(attempts[0].client.colorMode, "dark");
+        for (const theme of ["dark", "light"]) {
+            document.documentElement.dataset.theme = theme;
+            themeObservers[0].callback();
+            assert.equal(attempts[0].client.colorMode, "dark");
+        }
+        assert.equal(console.warn.mock.calls.length, 0);
+    });
+}
+
+test("unavailable or corrupt palette storage logs a warning and uses Dark", () => {
     for (const value of ["invalid-json", '"unknown"', "null", "1"]) {
         localStorage.setItem("Aspire.TerminalPalette", value);
-        assert.equal(terminal.getTerminalPalette(), "dashboard");
+        assert.equal(terminal.getTerminalPalette(), "dark");
     }
     mock.method(localStorage, "getItem", () => { throw new Error("Storage disabled"); });
-    assert.equal(terminal.getTerminalPalette(), "dashboard");
+    assert.equal(terminal.getTerminalPalette(), "dark");
     assert.equal(console.warn.mock.calls.length, 5);
 });
 
@@ -514,6 +535,7 @@ test("failed or invalid palette writes do not change the mounted palette", async
     attempts[0].resolve();
     await settle();
     assert.throws(() => terminal.setTerminalPalette("invalid"), TypeError);
+    assert.throws(() => terminal.setTerminalPalette("dashboard"), TypeError);
     mock.method(localStorage, "setItem", () => { throw new Error("Storage disabled"); });
     assert.throws(() => terminal.setTerminalPalette("light"), /Storage disabled/);
     assert.equal(attempts[0].client.colorMode, "dark");
@@ -548,7 +570,7 @@ test("footer palette save failure preserves selection, surfaces a dismissible er
     const { id } = mount();
     const setter = mock.method(localStorage, "setItem", () => { throw new Error("Storage disabled"); });
     terminal.setPaletteFromHost(id, "light");
-    assert.equal(terminal.getToolbarState(id).palette, "dashboard");
+    assert.equal(terminal.getToolbarState(id).palette, "dark");
     assert.equal(terminal.getToolbarState(id).error, "palette-failed");
     terminal.dismissError(id);
     assert.equal(terminal.getToolbarState(id).error, null);
@@ -560,7 +582,7 @@ test("footer palette save failure preserves selection, surfaces a dismissible er
     assert.equal(attempts.length, 1);
 });
 
-test("theme and contrast changes update palettes and replace the complete overlay without reconnecting", async () => {
+test("palette, theme and contrast changes replace the complete overlay without reconnecting", async () => {
     const { id, view } = mount();
     const attempt = attempts[0];
     const initial = attempt.options.scrollbar;
@@ -573,6 +595,7 @@ test("theme and contrast changes update palettes and replace the complete overla
     // Include a theme change before the asynchronous mount has returned its handle.
     document.documentElement.dataset.theme = "light";
     themeObservers[0].callback();
+    terminal.setTerminalPalette("light");
     attempt.resolve();
     await settle();
     assert.notEqual(attempt.client.scrollbar.render, initial.render);
@@ -582,6 +605,7 @@ test("theme and contrast changes update palettes and replace the complete overla
     const focusCalls = attempt.client.focusCalls;
     const selection = attempt.client.selection;
     for (const [theme, palette] of [["dark", attempt.options.darkModePalette], ["light", attempt.options.lightModePalette]]) {
+        terminal.setTerminalPalette(theme);
         document.documentElement.dataset.theme = theme;
         themeObservers[0].callback();
         assert.equal(attempt.client.colorMode, theme);
@@ -614,9 +638,10 @@ test("theme and contrast changes update palettes and replace the complete overla
     assert.equal(attempts[2].options.colorMode, "light");
 });
 
-test("a hidden terminal mounts with the latest Dashboard palette when revealed", () => {
+test("a hidden terminal mounts with the latest selected palette when revealed", () => {
     const { element, view } = mount({ visible: false });
     document.documentElement.dataset.theme = "light";
+    terminal.setTerminalPalette("light");
     themeObservers[0].callback();
     assert.equal(attempts.length, 0);
     assert.equal(view.style["--terminal-background"], "#d5d0df");
@@ -964,7 +989,7 @@ test("init returns an id while mount waits for its first connected frame", async
         title: "", workingDirectory: null, workingDirectoryUri: null,
         progressState: "none", progressPercentage: null,
         isPrimary: false, canTakeControl: true, sizeMode: "font", sizeKey: "100x30",
-        palette: "dashboard",
+        palette: "dark",
         fontPx: 13, fontControlsEnabled: true, sizeSelectEnabled: true,
         fitEnabled: true,
         canDecreaseFontSize: true, canIncreaseFontSize: true,

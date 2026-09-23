@@ -99,7 +99,7 @@ public class TerminalViewTests : DashboardTestContext
         Assert.Equal("dark", select.Instance.Value);
         Assert.False(select.Instance.Disabled);
         Assert.Equal(Resources.TerminalStrings.TerminalPalette, select.Instance.AriaLabel);
-        Assert.Equal(["Follow Dashboard", "Light", "Dark"], select.Instance.Items!.Select(select.Instance.OptionText!));
+        Assert.Equal(["Light", "Dark"], select.Instance.Items!.Select(select.Instance.OptionText!));
         Assert.Equal("terminal-palette-select aspire-input", cut.Find(".terminal-controls").LastElementChild!.ClassName);
 
         await cut.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync("light"));
@@ -111,10 +111,10 @@ public class TerminalViewTests : DashboardTestContext
         Assert.Equal("dark", select.Instance.Value);
         Assert.Equal(Resources.TerminalStrings.TerminalPaletteSaveFailed, cut.Find("[role=alert]").TextContent);
         Assert.Equal(Resources.TerminalStrings.TerminalDismissError, cut.Find(".terminal-error fluent-button").TextContent.Trim());
-        var failedSave = module.Setup<bool>("setPaletteFromHost", 1, "dashboard");
+        var failedSave = module.Setup<bool>("setPaletteFromHost", 1, "light");
         failedSave.SetResult(false);
         var originalSelect = select.Instance;
-        await cut.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync("dashboard"));
+        await cut.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync("light"));
         var restoredSelect = cut.FindComponent<FluentSelect<string, string>>();
         Assert.NotSame(originalSelect, restoredSelect.Instance);
         Assert.Equal("dark", restoredSelect.Instance.Value);

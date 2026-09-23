@@ -147,11 +147,6 @@
         <target state="new">Dark</target>
         <note />
       </trans-unit>
-      <trans-unit id="TerminalPaletteFollow">
-        <source>Follow Dashboard</source>
-        <target state="new">Follow Dashboard</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TerminalPaletteLight">
         <source>Light</source>
         <target state="new">Light</target>

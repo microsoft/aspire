@@ -57,12 +57,6 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
-        public static string TerminalPaletteFollow {
-            get {
-                return ResourceManager.GetString("TerminalPaletteFollow", resourceCulture);
-            }
-        }
-
         public static string TerminalPaletteLight {
             get {
                 return ResourceManager.GetString("TerminalPaletteLight", resourceCulture);

@@ -101,7 +101,7 @@ workers through the CSP worker-source fallback; its production
 
 ### Terminal palettes
 
-By default, the terminal follows the Dashboard's resolved light/dark theme using Aspire variants
+The terminal offers explicit Light and Dark palettes using Aspire variants
 of **Hex1b Light** and **Hex1b Dark**: light lavender `#d5d0df` and dark
 purple-neutral `#312e3c` backgrounds, with richer chromatic ANSI slots. These
 increase OKLCH chroma by up to 25% in dark mode and 10% in light mode, preserving
@@ -113,12 +113,13 @@ Default foreground, neutral ANSI slots and selection colors retain the Hex1b
 defaults. Colors are precomputed constants, not runtime transformations.
 The frame and overlay track share the
 active palette background. Mounting passes both palettes and `colorMode`;
-theme changes call `setColorMode` on the existing client, including changes that
+palette changes call `setColorMode` on the existing client, including changes that
 occur while mounting or while a dock pane is hidden.
 
 The **Terminal palette** dropdown to the right of the footer's dimensions selector
-can pin terminal content to **Dark** or **Light**
-independently of the site, or restore **Follow Dashboard**. This non-sensitive
+selects **Dark** or **Light** independently of the site. **Dark** is the default,
+including for the former **Follow Dashboard** preference. Site theme changes do
+not change the selected terminal palette. This non-sensitive
 preference is stored in browser local storage and applies to all terminal surfaces,
 including detached windows. Changes update existing clients without reconnecting;
 other windows observe storage events. The terminal frame and overlay track match
