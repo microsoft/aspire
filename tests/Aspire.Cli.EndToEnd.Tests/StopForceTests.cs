@@ -8,13 +8,13 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// End-to-end tests for Aspire CLI stop --force cleanup.
+/// End-to-end tests for Aspire CLI stop --force cleanup, including opt-in volume removal.
 /// </summary>
 public sealed class StopForceTests(ITestOutputHelper output)
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task StopForceCleansUpPersistentContainer()
+    public async Task StopForcePreservesVolumesUnlessRequested()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -27,6 +27,7 @@ public sealed class StopForceTests(ITestOutputHelper output)
         var projectSuffix = Guid.NewGuid().ToString("N")[..6].ToLowerInvariant();
         var projectName = $"StopForce{projectSuffix}";
         var resourceName = $"cleanupcache{projectSuffix}";
+        var preexistingVolumeName = $"preexisting-{projectSuffix}";
         using var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
@@ -51,8 +52,10 @@ public sealed class StopForceTests(ITestOutputHelper output)
 
             var builder = DistributedApplication.CreateBuilder(args);
 
-            builder.AddContainer("{{resourceName}}", "redis")
-                .WithContainerName("{{resourceName}}")
+            var cache = builder.AddContainer("{{resourceName}}", "redis")
+                .WithContainerName("{{resourceName}}");
+            cache.WithVolume(VolumeNameGenerator.Generate(cache, "data"), "/data")
+                .WithVolume("{{preexistingVolumeName}}", "/preexisting")
                 .WithPersistentLifetime();
 
             builder.Build().Run();
@@ -62,11 +65,23 @@ public sealed class StopForceTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
+        await auto.TypeAsync($"docker volume create {preexistingVolumeName}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
         await auto.AspireStartAsync(counter, TimeSpan.FromMinutes(5), skipDashboardCheck: true);
 
         await auto.TypeAsync($"found=0; for i in $(seq 1 24); do if docker ps -a --format '{{{{.Names}}}}' | grep -qx '{resourceName}'; then found=1; break; fi; sleep 5; done; if [ \"$found\" -eq 1 ]; then true; else docker ps -a; false; fi");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        await auto.TypeAsync($"docker inspect --format '{{{{range .Mounts}}}}{{{{println .Name .Destination}}}}{{{{end}}}}' {resourceName} | grep -qx '{preexistingVolumeName} /preexisting'");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync($"volume_name=$(docker volume ls --format '{{{{.Name}}}}' | grep -E -- '-{resourceName}-data$'); test -n \"$volume_name\"");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire stop --force");
         await auto.EnterAsync();
@@ -76,5 +91,32 @@ public sealed class StopForceTests(ITestOutputHelper output)
         await auto.TypeAsync($"removed=0; for i in $(seq 1 24); do if ! docker ps -a --format '{{{{.Names}}}}' | grep -qx '{resourceName}'; then removed=1; break; fi; sleep 5; done; if [ \"$removed\" -eq 1 ]; then true; else docker ps -a --filter name={resourceName}; false; fi");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        await auto.TypeAsync("docker volume inspect \"$volume_name\" >/dev/null");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync($"docker volume inspect {preexistingVolumeName} >/dev/null");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.AspireStartAsync(counter, TimeSpan.FromMinutes(5), skipDashboardCheck: true);
+
+        await auto.TypeAsync($"found=0; for i in $(seq 1 24); do if docker ps -a --format '{{{{.Names}}}}' | grep -qx '{resourceName}'; then found=1; break; fi; sleep 5; done; if [ \"$found\" -eq 1 ]; then true; else docker ps -a; false; fi");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        await auto.TypeAsync("aspire stop --force --volumes");
+        await auto.EnterAsync();
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
+
+        await auto.TypeAsync("removed=0; for i in $(seq 1 24); do if ! docker volume inspect \"$volume_name\" >/dev/null 2>&1; then removed=1; break; fi; sleep 5; done; if [ \"$removed\" -eq 1 ]; then true; else docker volume inspect \"$volume_name\"; false; fi");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        await auto.TypeAsync($"docker volume inspect {preexistingVolumeName} >/dev/null && docker volume rm {preexistingVolumeName}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }

@@ -283,6 +283,12 @@
     <trans-unit id="aspire-vscode.strings.appHostDebuggingPipelineStepDescription">
       <source xml:lang="en">Debugging pipeline step...</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.csharpExtensionMissingForBlazorDebugging">
+      <source xml:lang="en">Debugging this Blazor client requires {0} version {1} or later. Install the C# extension, then start debugging again.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.csharpExtensionOutdatedForBlazorDebugging">
+      <source xml:lang="en">Debugging this Blazor client requires {0} version {2} or later. Installed version: {1}. Update the C# extension, then start debugging again.</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.welcome.description">
       <source xml:lang="en">Define your distributed app in code, run it from VS Code, and see the whole system in the Aspire Dashboard.</source>
     </trans-unit>
@@ -391,6 +397,9 @@
     <trans-unit id="aspire-vscode.strings.denoInspectorPortAllocationFailed">
       <source xml:lang="en">Failed to allocate a Deno inspector port.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.failedToCleanUpMsBuildTemporaryDirectory">
+      <source xml:lang="en">Failed to clean up temporary MSBuild directory &apos;{0}&apos;: {1}</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.failedToConfigureLaunchJson">
       <source xml:lang="en">Failed to configure launch.json: {0}.</source>
     </trans-unit>
@@ -420,6 +429,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireCliOutputParseFailed">
       <source xml:lang="en">Failed to parse {0} output: {1}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.failedToGetProjectRunProperties">
+      <source xml:lang="en">Failed to resolve the run command for project {0}: {1}</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.failedToShowPromptEmpty">
       <source xml:lang="en">Failed to show prompt, text was empty.</source>
@@ -697,8 +709,8 @@
     <trans-unit id="aspire-vscode.strings.processExitedWithCode">
       <source xml:lang="en">Process exited with code {0}.</source>
     </trans-unit>
-    <trans-unit id="aspire-vscode.strings.dotNetRunFallbackDisablesDebugger">
-      <source xml:lang="en">Project output {0} is not directly runnable; launching {1} with dotnet run without debugger attach. Breakpoints will not be hit for this resource.</source>
+    <trans-unit id="aspire-vscode.strings.resolvedRunCommandDisablesDebugger">
+      <source xml:lang="en">Project output {0} is not directly runnable; launching the resolved run command for {1} without debugger attach. Breakpoints will not be hit for this resource.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostPublishActionLabel">
       <source xml:lang="en">Publish AppHost</source>
@@ -943,6 +955,9 @@
     <trans-unit id="views.appHosts.errorWelcome">
       <source xml:lang="en">The Aspire panel workspace view requires Aspire CLI 13.2.0 or newer and an AppHost that references Aspire.Hosting 13.2.0 or newer. Install or update the Aspire CLI and update your AppHost package to get started.&#10;[Update Aspire CLI](command:aspire-vscode.updateSelf)&#10;[Refresh](command:aspire-vscode.globalRefreshAppHosts)</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.missingBlazorClientProject">
+      <source xml:lang="en">The Blazor client project &apos;{0}&apos; does not exist. Restore or rebuild the AppHost, then start debugging again.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.denoAppHostRunCommandMissing">
       <source xml:lang="en">The Deno AppHost command does not contain the required &apos;run&apos; subcommand.</source>
     </trans-unit>
@@ -966,6 +981,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.dotNetRunFileBasedExecutableProfileFallback">
       <source xml:lang="en">The default launch profile &apos;{0}&apos; is an Executable profile, so dotnet run-api does not return the file-based app {1}; launching it with dotnet run without debugger attach. Breakpoints will not be hit for this resource.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.prebuiltProjectOutputMissing">
+      <source xml:lang="en">The expected prebuilt output {1} for project {0} does not exist. Aspire will not rebuild the project because building is suppressed.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.debuggerInstalledRestartAppHost">
       <source xml:lang="en">The extensions required for {0} debugging are installed. Restart the AppHost to enable debugging.</source>
@@ -1152,6 +1170,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.rustBuildProducedMultipleExecutables">
       <source xml:lang="en">cargo build in {0} could not determine which target to debug. Available targets: {1}. Call WithCargoBinTarget to specify one.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.invalidMsBuildRunCommandResponse">
+      <source xml:lang="en">dotnet msbuild returned an invalid run-command response.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireCliCommandTimedOut">
       <source xml:lang="en">timed out after {0}ms</source>

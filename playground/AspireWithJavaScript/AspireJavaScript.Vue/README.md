@@ -23,6 +23,10 @@ See [Vite Configuration Reference](https://vitejs.dev/config/).
 
 ## Project Setup
 
+Use Node.js 20.19.x (or a later 20.x release), or Node.js 22.13 or later.
+Keep `npm-run-all2` on the 8.x line to preserve that support; version 9 requires
+newer Node.js versions.
+
 ```sh
 npm install
 ```

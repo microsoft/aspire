@@ -1,0 +1,14 @@
+﻿[
+  [
+    create,
+    mytunnel,
+    --json,
+    --nologo
+  ],
+  [
+    update,
+    mytunnel,
+    --json,
+    --nologo
+  ]
+]

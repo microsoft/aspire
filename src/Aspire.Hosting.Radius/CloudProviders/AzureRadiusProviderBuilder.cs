@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Aspire.Hosting.Radius.CloudProviders;
 
@@ -14,6 +15,7 @@ namespace Aspire.Hosting.Radius.CloudProviders;
 /// <see cref="AzureRadiusProviderConfig"/> by <c>WithAzureProvider</c> after
 /// the user callback returns.
 /// </summary>
+[Experimental("ASPIRERADIUS003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 internal sealed class AzureRadiusProviderBuilder : IAzureRadiusProviderBuilder
 {
     private readonly ILogger _logger;

@@ -32,7 +32,7 @@ public enum CauseKind
     /// <summary>A changed file matched a <c>path_rules</c> glob (<see cref="Cause.Trigger"/> is the file; <see cref="Cause.Reason"/> is the rule's <c>reason</c>).</summary>
     PathRule,
 
-    /// <summary>An affected production project matched an <c>affected_project_rules</c> glob (<see cref="Cause.Trigger"/> is the project name).</summary>
+    /// <summary>An affected production/non-test project matched an <c>affected_project_rules</c> glob (<see cref="Cause.Trigger"/> is the project name).</summary>
     AffectedProject,
 
     /// <summary>The Layer 1 MSBuild graph marked this test project affected by a changed source file (<see cref="Cause.Trigger"/> is the project name).</summary>
@@ -110,6 +110,7 @@ public sealed class TestSelector
     private readonly string _mapPath;
     private readonly IReadOnlyCollection<string> _allTestProjects;
     private readonly IReadOnlyCollection<string> _projectDirectories;
+    private readonly IReadOnlySet<string> _affectedTestProjectNames;
 
     /// <param name="mapPath">Path to <c>eng/github-ci/test-trigger-map.yml</c>.</param>
     /// <param name="allTestProjects">All matrix test project names — the universe an <c>ALL</c> selection expands to.</param>
@@ -119,22 +120,27 @@ public sealed class TestSelector
     /// under one of these dirs is attributed by the graph, so it never triggers the run-all
     /// fallback. May be empty (then no file is treated as owned).
     /// </param>
+    /// <param name="affectedTestProjectNames">
+    /// Affected test project names from the current Layer 1 graph result (graph projects under <c>tests/</c>).
+    /// These names are excluded from affected production-project rules.
+    /// </param>
     public TestSelector(
         string mapPath,
         IReadOnlyCollection<string> allTestProjects,
-        IReadOnlyCollection<string> projectDirectories)
+        IReadOnlyCollection<string> projectDirectories,
+        IReadOnlySet<string> affectedTestProjectNames)
     {
         _mapPath = mapPath;
         _allTestProjects = allTestProjects;
         _projectDirectories = projectDirectories;
+        _affectedTestProjectNames = affectedTestProjectNames;
     }
 
     /// <param name="changedFiles">Repo-relative, '/'-separated paths changed in the PR.</param>
     /// <param name="layer1Affected">
-    /// The full affected project set reported by the graph tool — production <em>and</em> test
-    /// project names (the union of its <em>changed</em> and <em>affected</em> sets). Test names are
-    /// intersected with the matrix and selected; production names drive <c>project_rules</c>. May be
-    /// empty.
+    /// The full affected project set reported by the graph tool. The selector splits this by
+    /// current CI boundaries: matrix test projects are intersected and selected; production/non-test
+    /// project names drive <c>affected_project_rules</c>. May be empty.
     /// </param>
     /// <param name="options">Selection overrides (kill switch).</param>
     /// <param name="layer1AttributedPaths">
@@ -240,9 +246,8 @@ public sealed class TestSelector
             reason ??= $"run-all fallback: '{file}' is neither Layer-1-owned nor matched by a Layer 2 rule";
         }
 
-        // Layer 1: the graph tool reports the full affected set (production + test projects). The
-        // affected TEST projects are always part of the answer; the production names drive
-        // project_rules below.
+        // Layer 1 reports the full affected set. Affected matrix test projects are always part of the
+        // answer; production/non-test project names drive affected_project_rules below.
         foreach (var project in layer1Affected)
         {
             if (_allTestProjects.Contains(project))
@@ -259,7 +264,7 @@ public sealed class TestSelector
             }
         }
 
-        // affected_project_rules: an affected PRODUCTION project (matched by name glob) pulls in
+        // affected_project_rules: an affected production/non-test project (matched by name glob) pulls in
         // jobs/tests. This replaces the duplicated src/<Project>/** path globs the job rules used to
         // carry, and follows the graph's transitive closure (a dependency change marks the project
         // affected). Keyed on the affected-project set, so it contributes nothing when Layer 1
@@ -272,7 +277,7 @@ public sealed class TestSelector
         // typescript-api-compat / deployment-e2e) for a TEST-ONLY change. See test-trigger-map.yml's
         // affected_project_rules comment ("matched against the affected PRODUCTION projects").
         var affectedProductionProjects = layer1Affected
-            .Where(name => !_allTestProjects.Contains(name))
+            .Where(name => !_affectedTestProjectNames.Contains(name))
             .ToList();
         foreach (var rule in map.AffectedProjectRules)
         {

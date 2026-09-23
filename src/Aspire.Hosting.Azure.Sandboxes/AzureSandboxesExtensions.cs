@@ -3,11 +3,13 @@
 
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREAZURE001
+#pragma warning disable ASPIREPIPELINES001
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Sandboxes.Provisioning;
+using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
 using Azure.Provisioning.Authorization;
 using Azure.Provisioning.ContainerRegistry;
@@ -26,6 +28,7 @@ public static class AzureSandboxesExtensions
 {
     // https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#container-apps-sandboxgroup-data-owner
     private const string SandboxGroupDataOwnerRoleId = "c24cf47c-5077-412d-a19c-45202126392c";
+    private const string ValidateSandboxPublishersStepName = "validate-azure-sandbox-publishers";
 
     /// <summary>
     /// Adds an Azure Container Apps sandbox group resource to the application model.
@@ -139,30 +142,27 @@ public static class AzureSandboxesExtensions
     }
 
     /// <summary>
-    /// Publishes the specified compute resource as an Azure sandbox container.
+    /// Configures the specified compute resource when it is published as an Azure sandbox container.
     /// </summary>
     /// <typeparam name="T">The compute resource type.</typeparam>
     /// <param name="builder">The compute resource builder.</param>
-    /// <param name="sandboxGroup">The Azure sandbox group that hosts the resource.</param>
     /// <param name="options">The sandbox runtime options.</param>
     /// <returns>The resource builder.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="sandboxGroup"/> is null.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when a configured option is invalid.</exception>
     /// <remarks>
-    /// This method assigns the compute resource to <paramref name="sandboxGroup"/> and configures all sandbox-specific
-    /// runtime options in one call.
+    /// When the application model contains a single compute environment, Aspire assigns the resource to that environment
+    /// automatically. When multiple compute environments exist, call <c>WithComputeEnvironment</c> before this method.
     /// </remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("publishComputeResourceAsAzureSandbox", MethodName = "publishAsAzureSandbox")]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> PublishAsAzureSandbox<T>(
         this IResourceBuilder<T> builder,
-        IResourceBuilder<AzureSandboxGroupResource> sandboxGroup,
         AzureSandboxOptions? options = null)
         where T : IComputeResource
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(sandboxGroup);
 
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
@@ -171,34 +171,32 @@ public static class AzureSandboxesExtensions
 
         var sandboxOptions = options ?? new AzureSandboxOptions();
         ValidateSandboxOptions(sandboxOptions);
+        EnsureSandboxPublisherValidationAdded(builder.ApplicationBuilder);
 
         var copiedOptions = CopyAzureSandboxOptions(sandboxOptions);
 
-        return builder
-            .WithComputeEnvironment(sandboxGroup)
-            .WithAnnotation(new AzureSandboxContainerOptionsAnnotation(copiedOptions), ResourceAnnotationMutationBehavior.Replace);
+        return builder.WithAnnotation(
+            new AzureSandboxContainerOptionsAnnotation(copiedOptions),
+            ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>
-    /// Publishes the specified compute resource as an Azure sandbox container.
+    /// Configures the specified compute resource when it is published as an Azure sandbox container.
     /// </summary>
     /// <typeparam name="T">The compute resource type.</typeparam>
     /// <param name="builder">The compute resource builder.</param>
-    /// <param name="sandboxGroup">The Azure sandbox group that hosts the resource.</param>
     /// <param name="configure">The callback that configures sandbox runtime options.</param>
     /// <returns>The resource builder.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/>, <paramref name="sandboxGroup"/>, or <paramref name="configure"/> is null.</exception>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="configure"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when a configured option is invalid.</exception>
     [AspireExportIgnore(Reason = "Use the AzureSandboxOptions overload from ATS.")]
     [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> PublishAsAzureSandbox<T>(
         this IResourceBuilder<T> builder,
-        IResourceBuilder<AzureSandboxGroupResource> sandboxGroup,
         Action<AzureSandboxOptions> configure)
         where T : IComputeResource
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(sandboxGroup);
         ArgumentNullException.ThrowIfNull(configure);
 
         if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
@@ -209,7 +207,7 @@ public static class AzureSandboxesExtensions
         var options = new AzureSandboxOptions();
         configure(options);
 
-        return builder.PublishAsAzureSandbox(sandboxGroup, options);
+        return builder.PublishAsAzureSandbox(options);
     }
 
     /// <summary>
@@ -319,7 +317,6 @@ public static class AzureSandboxesExtensions
             AutoDeleteEnabled = options.AutoDeleteEnabled,
             AutoDeleteInterval = options.AutoDeleteInterval,
             AutoDeleteTrigger = options.AutoDeleteTrigger,
-            PublicEndpointReadyTimeout = options.PublicEndpointReadyTimeout,
             Endpoints = options.Endpoints?.Select(static endpoint => new AzureSandboxEndpointOptions
             {
                 Name = endpoint.Name,
@@ -376,10 +373,6 @@ public static class AzureSandboxesExtensions
         ValidateOptionalEnum(options.AutoSuspendMode, nameof(AzureSandboxOptions.AutoSuspendMode));
         ValidateOptionalWholeSecondDuration(options.AutoDeleteInterval, nameof(AzureSandboxOptions.AutoDeleteInterval));
         ValidateOptionalEnum(options.AutoDeleteTrigger, nameof(AzureSandboxOptions.AutoDeleteTrigger));
-        ValidateOptionalPositiveDuration(
-            options.PublicEndpointReadyTimeout,
-            nameof(AzureSandboxOptions.PublicEndpointReadyTimeout),
-            TimeSpan.FromSeconds(int.MaxValue));
 
         if (options.AutoSuspendEnabled is null &&
             (options.AutoSuspendInterval is not null || options.AutoSuspendMode is not null))
@@ -445,19 +438,6 @@ public static class AzureSandboxesExtensions
         }
     }
 
-    private static void ValidateOptionalPositiveDuration(TimeSpan? value, string paramName, TimeSpan? maximum = null)
-    {
-        if (value is not null && value <= TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(paramName, "The value must be positive.");
-        }
-
-        if (maximum is not null && value > maximum)
-        {
-            throw new ArgumentOutOfRangeException(paramName, $"The value cannot exceed {maximum}.");
-        }
-    }
-
     private static void ValidateOptionalEnum<TEnum>(TEnum? value, string paramName)
         where TEnum : struct, Enum
     {
@@ -465,6 +445,59 @@ public static class AzureSandboxesExtensions
         {
             throw new ArgumentException($"'{value}' is not a valid {typeof(TEnum).Name} value.", paramName);
         }
+    }
+
+    private static void EnsureSandboxPublisherValidationAdded(IDistributedApplicationBuilder builder)
+    {
+        if (builder.Services.Any(static descriptor => descriptor.ServiceType == typeof(AzureSandboxPipelineStepMarker)))
+        {
+            return;
+        }
+
+        builder.Services.AddSingleton<AzureSandboxPipelineStepMarker>();
+        builder.Pipeline.AddStep(
+            name: ValidateSandboxPublishersStepName,
+            action: static context =>
+            {
+                if (!context.ExecutionContext.IsPublishMode)
+                {
+                    return Task.CompletedTask;
+                }
+
+                var sandboxGroups = context.Model.Resources
+                    .OfType<AzureSandboxGroupResource>()
+                    .Where(static group => !group.IsExcludedFromPublish())
+                    .ToHashSet();
+
+                foreach (var resource in context.Model.GetComputeResources())
+                {
+                    if (!resource.HasAnnotationOfType<AzureSandboxContainerOptionsAnnotation>())
+                    {
+                        continue;
+                    }
+
+                    if (sandboxGroups.Count == 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"Resource '{resource.Name}' is configured to publish as an Azure sandbox, but there are no '{nameof(AzureSandboxGroupResource)}' resources. " +
+                            $"Ensure you have added one by calling '{nameof(AddAzureSandboxGroup)}'.");
+                    }
+
+                    var computeEnvironment = resource.GetComputeEnvironment();
+                    if (computeEnvironment is not null &&
+                        (computeEnvironment is not AzureSandboxGroupResource sandboxGroup ||
+                         !sandboxGroups.Contains(sandboxGroup)))
+                    {
+                        throw new InvalidOperationException(
+                            $"Resource '{resource.Name}' is configured to publish as an Azure sandbox, but it is assigned to compute environment '{computeEnvironment.Name}', which is not an active Azure sandbox group. " +
+                            $"Assign it to an '{nameof(AzureSandboxGroupResource)}' by calling 'WithComputeEnvironment'.");
+                    }
+                }
+
+                return Task.CompletedTask;
+            },
+            dependsOn: WellKnownPipelineSteps.ValidateComputeEnvironments,
+            requiredBy: WellKnownPipelineSteps.BeforeStart);
     }
 
     private static void ApplyManagedServiceIdentity(
@@ -501,4 +534,6 @@ public static class AzureSandboxesExtensions
 
         return resource;
     }
+
+    private sealed class AzureSandboxPipelineStepMarker;
 }

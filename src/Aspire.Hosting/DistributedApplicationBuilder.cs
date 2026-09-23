@@ -48,6 +48,8 @@ using OpenTelemetry.Exporter;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
+#pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
+
 namespace Aspire.Hosting;
 
 /// <summary>
@@ -467,6 +469,20 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<SecretRedactionHistory>();
         _innerBuilder.Services.AddSingleton<AppHostRpcTarget>();
         _innerBuilder.Services.AddSingleton<IInteractionFileUploadStore, Dashboard.InteractionFileUploadStore>();
+        // Constructed explicitly rather than by DI activation: TerminalService is public (so AppHost code can
+        // resolve it) but its constructor is internal, and the DI container only activates public constructors.
+        _innerBuilder.Services.AddSingleton(sp =>
+        {
+            var logger = sp.GetRequiredService<ILogger<TerminalService>>();
+
+            return new TerminalService(logger, sp.GetRequiredService<IConfiguration>())
+            {
+                // Terminals belonging to resources are discovered from the model rather than registered, so the
+                // service is given a catalog to consult instead of owning their lifetime.
+                ResourceTerminals = new ResourceTerminalCatalog(sp.GetRequiredService<DistributedApplicationModel>(), logger)
+            };
+        });
+        _innerBuilder.Services.AddHostedService<TerminalServiceHost>();
 
         ConfigureHealthChecks();
 
@@ -580,6 +596,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // DCP stuff
             _innerBuilder.Services.AddSingleton<DcpAppResourceStore>();
             _innerBuilder.Services.AddSingleton<ProxylessEndpointPortAllocator>();
+            _innerBuilder.Services.AddSingleton<ContainerNetworkEndpointProvisioner>();
             _innerBuilder.Services.AddSingleton<ExecutableConfigurationResolver>();
             _innerBuilder.Services.AddSingleton<ExecutableLaunchPolicy>();
             _innerBuilder.Services.AddSingleton<ExecutableCreator>();
@@ -604,6 +621,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>(KnownContainerRuntimes.Docker);
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>(KnownContainerRuntimes.Podman);
         _innerBuilder.Services.AddSingleton<IContainerRuntimeResolver, ContainerRuntimeResolver>();
+        _innerBuilder.Services.AddSingleton<ContainerRuntimeReadiness>();
         _innerBuilder.Services.AddSingleton<IResourceContainerImageManager, ResourceContainerImageManager>();
         _innerBuilder.Services.AddSingleton<PipelineActivityReporter>();
         _innerBuilder.Services.AddSingleton<IPipelineActivityReporter, PipelineActivityReporter>(sp => sp.GetRequiredService<PipelineActivityReporter>());

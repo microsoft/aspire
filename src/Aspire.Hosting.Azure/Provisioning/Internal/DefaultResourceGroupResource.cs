@@ -5,6 +5,7 @@ using Azure;
 using Azure.Core;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Resources;
+using Azure.ResourceManager.Resources.Deployments;
 
 namespace Aspire.Hosting.Azure.Provisioning.Internal;
 

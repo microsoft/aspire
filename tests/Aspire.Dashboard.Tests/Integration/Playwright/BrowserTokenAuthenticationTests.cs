@@ -168,6 +168,53 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
 }
 
 [RequiresFeature(TestFeature.Playwright)]
+public sealed class BrowserTokenAuthenticationApplicationNameTests(PlaywrightFixture playwrightFixture) : IClassFixture<PlaywrightFixture>
+{
+    private const string BrowserToken = "VALID_TOKEN";
+
+    [Theory]
+    [InlineData("Same application", "Same application", true)]
+    [InlineData("First application", "Second application", false)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task BrowserToken_ApplicationName_ScopesAuthentication(string firstApplicationName, string secondApplicationName, bool canAccessBoth)
+    {
+        await using var firstDashboard = CreateDashboard(firstApplicationName);
+        await using var secondDashboard = CreateDashboard(secondApplicationName);
+        await firstDashboard.StartAsync();
+        await secondDashboard.StartAsync();
+
+        var firstBaseUrl = firstDashboard.FrontendSingleEndPointAccessor().GetResolvedAddress();
+        var secondBaseUrl = secondDashboard.FrontendSingleEndPointAccessor().GetResolvedAddress();
+
+        // Browser cookies are scoped to the loopback host rather than the port, so both dashboards
+        // must be accessed from the same browser context to reproduce localhost cookie sharing.
+        await using var context = await playwrightFixture.Browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+
+        var firstResponse = await page.GotoAsync($"{firstBaseUrl}/login?t={BrowserToken}").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        Assert.Equal("/", new Uri(firstResponse!.Url).AbsolutePath);
+
+        var secondResponse = await page.GotoAsync(secondBaseUrl).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        Assert.Equal(canAccessBoth ? "/" : "/login", new Uri(secondResponse!.Url).AbsolutePath);
+    }
+
+    private static DashboardWebApplication CreateDashboard(string applicationName)
+    {
+        var configuration = new Dictionary<string, string?>
+        {
+            [DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "http://127.0.0.1:0",
+            [DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = "http://127.0.0.1:0",
+            [DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey] = nameof(OtlpAuthMode.Unsecured),
+            [DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = nameof(FrontendAuthMode.BrowserToken),
+            [DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = BrowserToken,
+            [DashboardConfigNames.DashboardApplicationName.ConfigKey] = applicationName
+        };
+
+        return DashboardServerFixture.CreateDashboardApp(configuration);
+    }
+}
+
+[RequiresFeature(TestFeature.Playwright)]
 public class BrowserTokenAuthenticationHttpAndHttpsTests : PlaywrightTestsBase<BrowserTokenAuthenticationTests.BrowserTokenDashboardServerWithHttpAndHttpsFixture>
 {
     public BrowserTokenAuthenticationHttpAndHttpsTests(BrowserTokenAuthenticationTests.BrowserTokenDashboardServerWithHttpAndHttpsFixture dashboardServerFixture)

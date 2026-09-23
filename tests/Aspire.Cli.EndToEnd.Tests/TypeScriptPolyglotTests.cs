@@ -75,7 +75,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // Using --template vanilla-ts for a minimal TypeScript Vite app
         // Use -y to skip npm prompts and -- to pass args to create-vite
         // Use --no-interactive to skip vite's interactive prompts (rolldown, install now, etc.)
-        await auto.TypeAsync("npm create -y vite@latest viteapp -- --template vanilla-ts --no-interactive");
+        await auto.TypeAsync(ViteTestHelpers.GetCreateCommand("viteapp"));
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
@@ -190,7 +190,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
             CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
         }
 
-        await auto.TypeAsync("npm create -y vite@latest viteapp -- --template vanilla-ts --no-interactive");
+        await auto.TypeAsync(ViteTestHelpers.GetCreateCommand("viteapp"));
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
@@ -439,7 +439,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        await auto.TypeAsync("npm create -y vite@latest . -- --template vanilla-ts --no-interactive");
+        await auto.TypeAsync(ViteTestHelpers.GetCreateCommand("."));
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 

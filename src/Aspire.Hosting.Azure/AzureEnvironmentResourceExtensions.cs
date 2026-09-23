@@ -40,6 +40,7 @@ public static class AzureEnvironmentResourceExtensions
         if (builder.ExecutionContext.IsRunMode)
         {
             var resourceBuilder = builder.AddResource(resource)
+                .WithIconName("CloudCube")
                 .OnInitializeResource(ProvisionAzureResourcesAsync)
                 .WithInitialState(new CustomResourceSnapshot
                 {
@@ -79,6 +80,7 @@ public static class AzureEnvironmentResourceExtensions
         // needs to show up in the app model during run mode so that we can discover
         // the pipeline step annotations on it but it needs to be hidden from the end-user.
         return builder.AddResource(resource)
+            .WithIconName("CloudCube")
             .ExcludeFromManifest()
             .WithInitialState(new()
             {

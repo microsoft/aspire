@@ -22,6 +22,7 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
     private const string ExposePropertiesPropertyName = "ExposeProperties";
     private const string MethodNamePropertyName = "MethodName";
     private const string DescriptionPropertyName = "Description";
+    private const string AspireExportProviderAttributeMetadataName = "Aspire.Hosting.AspireExportProviderAttribute";
 
     // Matches: valid method name (camelCase identifier, may contain dots for namespacing)
     // Examples: addRedis, addContainer, Dictionary.set
@@ -157,7 +158,9 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
         // type-level exports; member-level exports flip it from the symbol actions below.
         // Writing 'true' from concurrent symbol actions is safe because the value is monotonic.
         var assemblyHasAspireExport = new StrongBox<bool>(
-            currentAssemblyExportedTypes.Count > 0 || HasAnyAspireExportAttribute(context.Compilation.Assembly, aspireExportAttribute));
+            currentAssemblyExportedTypes.Count > 0 ||
+            HasAnyAspireExportAttribute(context.Compilation.Assembly, aspireExportAttribute) ||
+            HasGeneratedAspireExports(context.Compilation.Assembly));
 
         context.RegisterSymbolAction(
             c => AnalyzeMethod(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, aspireUnionAttribute, currentAssemblyExportedTypes, exportsByKey, capabilityIds, generatedMethodNames, assemblyHasAspireExport),
@@ -224,6 +227,13 @@ internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
                     inlineDelegateInvocationCache),
                 OperationKind.Invocation);
         });
+    }
+
+    private static bool HasGeneratedAspireExports(IAssemblySymbol assembly)
+    {
+        return assembly.GetAttributes().Any(static attribute =>
+            attribute.AttributeClass?.GetAttributes().Any(static providerAttribute =>
+                providerAttribute.AttributeClass?.ToDisplayString() == AspireExportProviderAttributeMetadataName) == true);
     }
 
     private static void AnalyzeMethod(

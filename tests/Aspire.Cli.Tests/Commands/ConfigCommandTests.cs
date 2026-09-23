@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
@@ -163,6 +164,45 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("http://localhost:4321/llms-small.txt", DocsSourceConfiguration.GetLlmsTxtUrl(configuration));
         Assert.Equal("http://localhost:4321/sitemap-0.xml", ApiDocsSourceConfiguration.GetSitemapUrl(configuration));
+    }
+
+    [Fact]
+    public async Task NssDbPaths_CanBeConfiguredGloballyViaAspireConfig()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse("config set certificates.nssDbPaths firefox=/profiles/firefox --global");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, exitCode);
+
+        var configurationService = provider.GetRequiredService<IConfigurationService>();
+        var settingsPath = configurationService.GetSettingsFilePath(isGlobal: true);
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(settingsPath))?.AsObject();
+
+        Assert.NotNull(settings);
+        Assert.Equal("firefox=/profiles/firefox", settings["certificates"]?["nssDbPaths"]?.ToString());
+
+        var reloadedServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var reloadedProvider = reloadedServices.BuildServiceProvider();
+        var configuration = reloadedProvider.GetRequiredService<IConfiguration>();
+
+        Assert.Equal("firefox=/profiles/firefox", configuration[CertificateConfiguration.NssDbPathsConfigPath]);
+    }
+
+    [Fact]
+    public void ConfigInfo_AdvertisesNssDbPaths()
+    {
+        var schema = Aspire.Cli.Commands.SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
+
+        var certificates = Assert.Single(schema.Properties, property => property.Name == "certificates");
+        var nssDbPaths = Assert.Single(certificates.SubProperties!, property => property.Name == "nssDbPaths");
+
+        Assert.Equal("string", nssDbPaths.Type);
+        Assert.Contains("NSS database paths", nssDbPaths.Description);
     }
 
     [Fact]

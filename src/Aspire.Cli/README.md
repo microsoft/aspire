@@ -73,6 +73,14 @@ aspire <command> [options]
 
 ## Examples
 
+To initialize an empty C# AppHost without discovering incidental `.sln` or `.slnx` files, run this from the repository root:
+
+```bash
+aspire init --file-based --language csharp
+```
+
+This creates `apphost.cs` and its supporting configuration in the current directory instead of creating a solution-based AppHost project. `--file-based` requires C#: it reports an error before scaffolding if another language is selected explicitly, configured, or chosen at the language prompt. Omit `--file-based` (or pass `--file-based false`) to use normal non-C# scaffolding. It does not overwrite existing AppHosts or suppress agent setup.
+
 ```bash
 # Create a new Aspire application
 aspire new
@@ -112,6 +120,18 @@ aspire docs api search "RunAsEmulator" --language csharp
 # Search Aspire documentation
 aspire docs search "redis"
 ```
+
+## Browser certificate trust configuration
+
+On Linux, the NSS databases used to trust the Aspire development certificate can be configured locally or in the user-level Aspire configuration:
+
+```bash
+aspire config set --global certificates.nssDbPaths "firefox=/path/to/firefox/profile:chromium=/path/to/chromium/nssdb"
+```
+
+Prefix a path with `firefox=` or `chromium=` to apply the trust settings expected by that browser family.
+
+The `certificates.nssDbPaths` setting takes precedence over the upstream `DOTNET_DEV_CERTS_NSSDB_PATHS` environment variable. When the Aspire setting has no value, the CLI preserves the upstream behavior.
 
 ## Additional documentation
 

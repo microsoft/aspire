@@ -11,6 +11,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.Ats;
+using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Testing;
@@ -908,7 +909,10 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "build-projectName");
         builder.Services.AddSingleton<IContainerRuntime, FakeContainerRuntime>();
         builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(output: ["/app"]);
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
 
         // Create a test container resource that implements IResourceWithContainerFiles
         var sourceContainerResource = new TestContainerFilesResource("source");
@@ -938,11 +942,12 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         await app.StartAsync();
         await app.WaitForShutdownAsync();
 
-        var mockImageBuilder = (MockImageBuilder)app.Services.GetRequiredService<IResourceContainerImageManager>();
-        Assert.True(mockImageBuilder.BuildImageCalled);
-        var builtImage = Assert.Single(mockImageBuilder.BuildImageResources);
-        Assert.Equal("projectName", builtImage.Name);
-        Assert.False(mockImageBuilder.PushImageCalled);
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            publish => Assert.Equal("publish", publish.ArgumentList![0]),
+            workingDirectory => Assert.Contains(
+                "-getProperty:ContainerWorkingDirectory",
+                workingDirectory.ArgumentList!));
 
         Assert.True(fakeContainerRuntime.WasTagImageCalled);
         var tagCall = Assert.Single(fakeContainerRuntime.TagImageCalls);
@@ -961,6 +966,33 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         var removeCall = Assert.Single(fakeContainerRuntime.RemoveImageCalls);
         Assert.StartsWith("projectname:temp-", removeCall);
         Assert.Equal(tagCall.targetImageName, removeCall);
+    }
+
+    [Fact]
+    public async Task ProjectResourceWithContainerFilesAndCustomImageManagerDelegatesCompleteBuild()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "build-projectName");
+        var containerRuntime = new FakeContainerRuntime(isRunning: false);
+        builder.Services.AddSingleton<IContainerRuntime>(containerRuntime);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        var sourceContainer = builder.AddResource(new TestContainerFilesResource("source"))
+            .WithImage("myimage")
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/app/dist" });
+        builder.AddProject<TestProject>("projectName", launchProfileName: null)
+            .PublishWithContainerFiles(sourceContainer, "./wwwroot");
+
+        using var app = builder.Build();
+        await app.StartAsync();
+        await app.WaitForShutdownAsync();
+
+        var imageManager = (MockImageBuilder)app.Services.GetRequiredService<IResourceContainerImageManager>();
+        Assert.True(imageManager.BuildImageCalled);
+        Assert.Equal("projectName", Assert.Single(imageManager.BuildImageResources).Name);
+        Assert.False(containerRuntime.WasHealthCheckCalled);
+        Assert.False(containerRuntime.WasTagImageCalled);
+        Assert.False(containerRuntime.WasBuildImageCalled);
     }
 
     [Fact]

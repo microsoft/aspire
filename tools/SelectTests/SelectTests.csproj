@@ -2,9 +2,9 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <!-- net10.0: Microsoft.Build 18.3.x (used by the Layer 1 ProjectGraph) ships only net10.0/net472
-         managed assets, and the graph is loaded from the repo-local net10.0 SDK via MSBuildLocator. -->
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- Run on the repo SDK's runtime. Microsoft.Build 18.3.x supplies compatible net10.0 managed
+         assets, and the graph is loaded from the repo-local SDK via MSBuildLocator. -->
+    <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

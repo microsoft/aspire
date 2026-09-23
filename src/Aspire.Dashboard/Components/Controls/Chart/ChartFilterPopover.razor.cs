@@ -8,6 +8,8 @@ namespace Aspire.Dashboard.Components;
 
 public partial class ChartFilterPopover : IDisposable
 {
+    private readonly Guid _idSuffix = Guid.NewGuid();
+
     [Parameter, EditorRequired]
     public required DimensionFilterViewModel Filter { get; set; }
 

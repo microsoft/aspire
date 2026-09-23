@@ -52,7 +52,7 @@ const api = await builder
     .withExternalHttpEndpoints();
 await api.withReference(outlook);
 
-const publishedApi = await api.publishAsAzureSandbox(sandboxes, {
+const publishedApi = await api.publishAsAzureSandbox({
     tier: AzureSandboxTier.Large,
     autoSuspendEnabled: true,
     autoSuspendInterval: 900_000,
@@ -60,7 +60,6 @@ const publishedApi = await api.publishAsAzureSandbox(sandboxes, {
     autoDeleteEnabled: true,
     autoDeleteInterval: 3_600_000,
     autoDeleteTrigger: AzureSandboxAutoDeleteTrigger.AfterSuspend,
-    publicEndpointReadyTimeout: 120_000,
     endpoints: [
         {
             name: "http",

@@ -374,12 +374,12 @@ internal sealed class DirectExecutableLaunchRecipe : IExecutableLaunchRecipe
             return [];
         }
 
-        if (debugSupport.LaunchConfigurationType is KnownLaunchConfigurationTypes.Project &&
+        if (KnownLaunchConfigurationTypes.IsProject(debugSupport.LaunchConfigurationType) &&
             !context.Resource.TryGetProjectMetadata(out _))
         {
             throw new FailedToApplyEnvironmentException(
-                $"Resource '{context.Resource.Name}' declares \"project\" debug launch support (WithDebugSupport) but has no project metadata. " +
-                $"The \"project\" launch configuration type is reserved for .NET project resources; use a resource that carries {nameof(IProjectMetadata)} or a different launch configuration type.");
+                $"Resource '{context.Resource.Name}' declares \"{debugSupport.LaunchConfigurationType}\" debug launch support (WithDebugSupport) but has no project metadata. " +
+                $"The \"{debugSupport.LaunchConfigurationType}\" launch configuration type is reserved for .NET project resources; use a resource that carries {nameof(IProjectMetadata)} or a different launch configuration type.");
         }
 
         var launchConfiguration = await ProduceLaunchConfigurationAsync(context, debugSupport).ConfigureAwait(false);
@@ -541,7 +541,8 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
             launchConfigurations.Add(JsonSerializer.SerializeToElement(
                 ProjectLaunchConfigurationFactory.Create(resource, projectMetadata, context.Decision.ProjectLaunchMode)));
 
-            if (context.Decision.DebugSupport is { LaunchConfigurationType: not KnownLaunchConfigurationTypes.Project } customDebugSupport)
+            if (context.Decision.DebugSupport is { } customDebugSupport &&
+                !KnownLaunchConfigurationTypes.IsProject(customDebugSupport.LaunchConfigurationType))
             {
                 try
                 {
@@ -596,7 +597,7 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
         launchConfiguration.ValueKind == JsonValueKind.Object &&
         launchConfiguration.TryGetProperty("type", out var type) &&
         type.ValueKind == JsonValueKind.String &&
-        type.GetString() is KnownLaunchConfigurationTypes.Project;
+        KnownLaunchConfigurationTypes.IsProject(type.GetString());
 
     private static void AddDefaultProjectProcessArguments(
         List<string> projectArguments,

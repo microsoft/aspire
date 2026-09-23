@@ -26,14 +26,18 @@ public static class TestCertificateLoader
     {
         // On Windows, applications should not import PFX files in parallel to avoid a known system-level
         // race condition bug in native code which can cause crashes/corruption of the certificate state.
-        if (s_importPfxMutex != null && !s_importPfxMutex.WaitOne(s_mutexTimeout))
+        if (s_importPfxMutex is not null && !s_importPfxMutex.WaitOne(s_mutexTimeout))
         {
             throw new InvalidOperationException("Cannot acquire the global certificate mutex.");
         }
 
         try
         {
+#if NET9_0_OR_GREATER
+            return X509CertificateLoader.LoadPkcs12FromFile(GetCertPath(certName), password);
+#else
             return new X509Certificate2(GetCertPath(certName), password);
+#endif
         }
         finally
         {

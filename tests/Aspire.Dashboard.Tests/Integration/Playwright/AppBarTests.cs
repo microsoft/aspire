@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.TestUtilities;
@@ -27,9 +28,9 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
         {
             await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
 
-            await SetAndVerifyTheme(Dialogs.SettingsDialogSystemTheme, null).DefaultTimeout(); // don't guess system theme
-            await SetAndVerifyTheme(Dialogs.SettingsDialogLightTheme, "light").DefaultTimeout();
-            await SetAndVerifyTheme(Dialogs.SettingsDialogDarkTheme, "dark").DefaultTimeout();
+            await SetAndVerifyTheme(Dialogs.SettingsDialogSystemTheme, null); // don't guess system theme
+            await SetAndVerifyTheme(Dialogs.SettingsDialogLightTheme, "light");
+            await SetAndVerifyTheme(Dialogs.SettingsDialogDarkTheme, "dark");
 
             async Task SetAndVerifyTheme(string checkboxText, string? expected)
             {
@@ -37,7 +38,7 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
                 await settingsButton.ClickAsync();
 
                 // Set theme
-                var checkbox = page.GetByRole(AriaRole.Radio).And(page.GetByText(checkboxText)).First;
+                var checkbox = await GetThemeRadioAsync();
                 await checkbox.ClickAsync();
 
                 if (expected != null)
@@ -54,88 +55,82 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
                 // Re-open settings and assert that the correct checkbox is checked.
                 await settingsButton.ClickAsync();
 
-                checkbox = page.GetByRole(AriaRole.Radio).And(page.GetByText(checkboxText)).First;
+                checkbox = await GetThemeRadioAsync();
 
                 await AsyncTestHelpers.AssertIsTrueRetryAsync(
-                    async () => await checkbox.IsCheckedAsync(),
+                    async () => await checkbox.EvaluateAsync<bool>("element => element.checked"),
                     "Checkbox isn't immediately checked.");
 
                 await closeButton.First.ClickAsync();
+
+                async Task<ILocator> GetThemeRadioAsync()
+                {
+                    var label = page.GetByText(checkboxText, new PageGetByTextOptions { Exact = true }).First;
+                    var radioId = await label.GetAttributeAsync("for");
+                    Assert.False(string.IsNullOrEmpty(radioId));
+                    return page.Locator($"fluent-radio[id='{radioId}']");
+                }
             }
         });
     }
 
-    [Theory]
+    [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    [InlineData("Light", "rgb(81, 43, 212)", "rgb(116, 85, 221)")]
-    [InlineData("Dark", "rgb(185, 170, 238)", "rgb(220, 213, 246)")]
-    public async Task AppBar_AccentColors_UseFluentDesignTokens(string theme, string expectedRest, string expectedHover)
+    public async Task AppBar_ContentIsArrangedInOneRow()
     {
         await RunTestAsync(async page =>
         {
             await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
 
-            await page.EvaluateAsync(
+            var header = page.Locator(".layout > header");
+            await Assertions.Expect(header).ToBeVisibleAsync();
+
+            var layout = await header.EvaluateAsync<string>(
                 """
-                theme => import('/js/app-theme.js').then(module => module.updateTheme(theme))
-                """,
-                theme).DefaultTimeout();
+                header => {
+                    const bounds = header.getBoundingClientRect();
+                    const rect = selector => header.querySelector(selector).getBoundingClientRect();
+                    const brand = rect('.brand-logo');
+                    const application = rect('a.logo:not(.brand-logo)');
+                    const title = rect('.page-title-slot');
+                    const actions = [...header.querySelectorAll('.header-button')]
+                        .map(element => element.getBoundingClientRect());
+                    const visibleChildren = [...header.children]
+                        .map(element => element.getBoundingClientRect())
+                        .filter(child => child.width > 0 && child.height > 0);
 
-            await Assertions
-                .Expect(page.Locator("html"))
-                .ToHaveAttributeAsync("data-theme", theme.ToLowerInvariant());
-
-            var colors = await page.EvaluateAsync<string[]>(
-                """
-                async () => {
-                    const fluent = await import('/_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js');
-                    const root = document.body;
-                    const style = getComputedStyle(root);
-
-                    function normalize(color) {
-                        const probe = document.createElement('span');
-                        probe.style.color = color;
-                        document.body.appendChild(probe);
-                        const normalized = getComputedStyle(probe).color;
-                        probe.remove();
-                        return normalized;
-                    }
-
-                    return [
-                        normalize(fluent.accentFillRest.getValueFor(root).createCSS()),
-                        normalize(fluent.accentForegroundRest.getValueFor(root).createCSS()),
-                        normalize(fluent.accentStrokeControlRest.getValueFor(root).createCSS()),
-                        normalize(style.getPropertyValue('--accent-fill-rest')),
-                        normalize(style.getPropertyValue('--accent-foreground-rest')),
-                        normalize(style.getPropertyValue('--accent-stroke-control-rest')),
-                        normalize(fluent.accentFillHover.getValueFor(root).createCSS()),
-                        normalize(fluent.accentForegroundHover.getValueFor(root).createCSS()),
-                        normalize(fluent.accentStrokeControlHover.getValueFor(root).createCSS()),
-                        normalize(style.getPropertyValue('--accent-fill-hover')),
-                        normalize(style.getPropertyValue('--accent-foreground-hover')),
-                        normalize(style.getPropertyValue('--accent-stroke-control-hover')),
-                        normalize(fluent.accentFillActive.getValueFor(root).createCSS()),
-                        normalize(fluent.accentForegroundActive.getValueFor(root).createCSS()),
-                        normalize(fluent.accentStrokeControlActive.getValueFor(root).createCSS()),
-                        normalize(style.getPropertyValue('--accent-fill-active')),
-                        normalize(style.getPropertyValue('--accent-foreground-active')),
-                        normalize(style.getPropertyValue('--accent-stroke-control-active')),
-                        normalize(fluent.accentFillFocus.getValueFor(root).createCSS()),
-                        normalize(fluent.accentForegroundFocus.getValueFor(root).createCSS()),
-                        normalize(fluent.accentStrokeControlFocus.getValueFor(root).createCSS()),
-                        normalize(style.getPropertyValue('--accent-fill-focus')),
-                        normalize(style.getPropertyValue('--accent-foreground-focus')),
-                        normalize(style.getPropertyValue('--accent-stroke-control-focus')),
-                        normalize(style.getPropertyValue('--dash-focus-ring-color')),
-                    ];
+                    return JSON.stringify({
+                        height: bounds.height,
+                        sameRow: visibleChildren.every(child =>
+                            Math.abs((child.top + child.height / 2) - (bounds.top + bounds.height / 2)) < 1),
+                        brandLeft: brand.left,
+                        brandRight: brand.right,
+                        applicationLeft: application.left,
+                        applicationRight: application.right,
+                        titleLeft: title.left,
+                        titleRight: title.right,
+                        firstActionLeft: actions[0].left,
+                        widestAction: Math.max(...actions.map(action => action.width)),
+                        lastActionRight: actions[actions.length - 1].right,
+                        headerRight: bounds.right
+                    });
                 }
-                """).DefaultTimeout();
+                """);
 
-            Assert.All(colors[..6], color => Assert.Equal(expectedRest, color));
-            Assert.All(colors[6..12], color => Assert.Equal(expectedHover, color));
-            Assert.All(colors[12..18], color => Assert.Equal(expectedRest, color));
-            Assert.All(colors[18..24], color => Assert.Equal(expectedRest, color));
-            Assert.Equal(expectedRest, colors[24]);
+            using var document = JsonDocument.Parse(layout);
+            var root = document.RootElement;
+
+            Assert.InRange(root.GetProperty("height").GetDouble(), 50, 54);
+            Assert.True(root.GetProperty("sameRow").GetBoolean());
+            Assert.True(root.GetProperty("brandRight").GetDouble() <= root.GetProperty("applicationLeft").GetDouble());
+            Assert.True(root.GetProperty("applicationRight").GetDouble() <= root.GetProperty("titleLeft").GetDouble());
+            Assert.True(root.GetProperty("titleRight").GetDouble() <= root.GetProperty("firstActionLeft").GetDouble());
+            Assert.InRange(root.GetProperty("widestAction").GetDouble(), 38, 42);
+            Assert.InRange(
+                root.GetProperty("headerRight").GetDouble() - root.GetProperty("lastActionRight").GetDouble(),
+                0,
+                20);
         });
     }
+
 }

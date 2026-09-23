@@ -20,4 +20,14 @@ public partial class TreeGenAISelector
 
     [Inject]
     public required IStringLocalizer<Resources.Dialogs> Loc { get; init; }
+
+    private string GetSelectedTreeItemId()
+    {
+        return SelectedItem is { } item ? GetItemTreeItemId(item.Index) : "genai-span";
+    }
+
+    private static string GetItemTreeItemId(int index)
+    {
+        return $"genai-item-{index}";
+    }
 }

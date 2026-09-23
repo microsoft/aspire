@@ -3,6 +3,12 @@ import aspire.*;
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var storage = builder.addAzureStorage("storage");
+        storage.configureInfrastructure((infrastructure) -> {
+            var account = infrastructure.getStorageAccount();
+            account.tags().set("provisioning-proxy", "java");
+            var immutabilityPolicy = infrastructure.createAccountImmutabilityPolicy();
+            immutabilityPolicy.setImmutabilityPeriodSinceCreationInDays(30);
+        });
         storage.runAsEmulator();
         storage.withStorageRoleAssignments(storage, new AzureStorageRole[] { AzureStorageRole.STORAGE_BLOB_DATA_CONTRIBUTOR, AzureStorageRole.STORAGE_QUEUE_DATA_CONTRIBUTOR });
         // Callbacks are currently not working

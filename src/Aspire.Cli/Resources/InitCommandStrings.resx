@@ -102,6 +102,12 @@
   <data name="LanguageOptionDescription" xml:space="preserve">
     <value>The programming language for the AppHost (csharp, typescript)</value>
   </data>
+  <data name="FileBasedOptionDescription" xml:space="preserve">
+    <value>Create apphost.cs in the current directory, skipping .NET solution discovery. Requires C#.</value>
+  </data>
+  <data name="FileBasedRequiresCSharp" xml:space="preserve">
+    <value>The --file-based option requires C#. Select --language csharp or omit --file-based.</value>
+  </data>
   <data name="AppHostCreatedRunOne" xml:space="preserve">
     <value>Aspire AppHost created! To complete setup, run:</value>
   </data>

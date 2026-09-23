@@ -5,7 +5,6 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -13,11 +12,10 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class UrlsColumnDisplayTests : DashboardTestContext
 {
     [Fact]
-    public void Render_MoreThanMaxUrls_CapsRenderedOverflowItems()
+    public void Render_MoreThanMaxRenderedItems_RendersBoundedPayload()
     {
         // Arrange
         const int totalUrls = 30;
-        const int maxRenderedUrls = 20;
 
         JSInterop.Mode = JSRuntimeMode.Loose;
         FluentUISetupHelpers.SetupFluentOverflow(this);
@@ -35,8 +33,17 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         });
 
         // Assert
-        var overflowItems = cut.FindComponents<FluentOverflowItem>();
-        Assert.Equal(maxRenderedUrls, overflowItems.Count);
+        var overflow = cut.Find("fluent-overflow");
+        var overflowItems = cut.FindAll("fluent-overflow > div:not(.fluent-overflow-more)");
+        Assert.Equal("10", overflow.GetAttribute("pre-overflow-count"));
+        Assert.Equal("0", overflow.GetAttribute("threshold"));
+        Assert.Equal("ellipsis", overflowItems[0].GetAttribute("behavior"));
+        Assert.All(overflowItems.Skip(1), item => Assert.Null(item.GetAttribute("behavior")));
+        Assert.Equal(20, overflowItems.Count);
+        Assert.Equal("+10", cut.Find(".fluent-overflow-more fluent-button").TextContent.Trim());
+
+        var popupItems = cut.FindAll(".url-overflow-popover .url-link");
+        Assert.Equal(displayedUrls.Skip(20).Select(url => url.Text), popupItems.Select(item => item.TextContent.Trim()));
     }
 
     [Fact]
@@ -61,7 +68,7 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         });
 
         // Assert
-        var overflowItems = cut.FindComponents<FluentOverflowItem>();
+        var overflowItems = cut.FindAll("fluent-overflow > div:not(.fluent-overflow-more)");
         Assert.Equal(totalUrls, overflowItems.Count);
     }
 

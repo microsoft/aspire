@@ -14,5 +14,7 @@ internal static class KnownAspNetCoreConfigNames
     public const string HttpsPort = "ASPNETCORE_HTTPS_PORT";
     public const string Urls = "ASPNETCORE_URLS";
     public const string KestrelCertificatesDefaultPath = "Kestrel__Certificates__Default__Path";
+    public const string KestrelCertificatesDefaultKeyPath = "Kestrel__Certificates__Default__KeyPath";
     public const string KestrelCertificatesDefaultPassword = "Kestrel__Certificates__Default__Password";
+    public const string KestrelCertificatesDefaultSubject = "Kestrel__Certificates__Default__Subject";
 }

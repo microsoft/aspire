@@ -22,17 +22,20 @@ aspire add Aspire.Hosting.Azure.Sandboxes
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add an Azure sandbox group and publish a compute resource to it using the following methods:
+Then, in the AppHost, add an Azure sandbox group. When it is the only compute environment, Aspire automatically deploys compute resources to it:
 
 ```csharp
 #pragma warning disable ASPIREAZURE001 // Azure Container Apps Sandboxes APIs are experimental.
 
-var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+builder.AddAzureSandboxGroup("sandboxes");
+var api = builder.AddProject<Projects.ApiService>("api");
+```
 
-builder.AddProject<Projects.ApiService>("api")
-    .WithHttpEndpoint(name: "http", targetPort: 8080)
-    .WithExternalHttpEndpoints()
-    .PublishAsAzureSandbox(sandboxGroup, new AzureSandboxOptions
+Use `PublishAsAzureSandbox` only to customize sandbox runtime options:
+
+```csharp
+api.WithExternalHttpEndpoints()
+    .PublishAsAzureSandbox(new AzureSandboxOptions
     {
         Tier = AzureSandboxTier.Medium,
         AutoSuspendEnabled = true,
@@ -59,14 +62,14 @@ import {
 } from "./.aspire/modules/aspire.mjs";
 
 const builder = await createBuilder();
-const sandboxGroup = await builder.addAzureSandboxGroup("sandboxes");
+await builder.addAzureSandboxGroup("sandboxes");
 
 const api = await builder
     .addContainer("api", "nginx", "alpine")
     .withHttpEndpoint({ name: "http", targetPort: 80 })
     .withExternalHttpEndpoints();
 
-await api.publishAsAzureSandbox(sandboxGroup, {
+await api.publishAsAzureSandbox({
     tier: AzureSandboxTier.Medium,
     autoSuspendEnabled: true,
     autoSuspendInterval: 900_000,
@@ -74,10 +77,16 @@ await api.publishAsAzureSandbox(sandboxGroup, {
     endpoints: [{ name: "http", anonymous: true }]
 });
 
+await builder
+    .addContainer("frontend", "nginx", "alpine")
+    .withReference(api);
+
 await builder.build().run();
 ```
 
-Endpoints are not exposed unless they are marked external. External endpoints require an explicit `Anonymous = true` opt-in for anonymous access. Sandbox egress is configured with full inspection and deny-by-default behavior.
+Sandbox ports are created only for endpoints explicitly marked external, such as with `WithExternalHttpEndpoints`. External endpoints are Entra ID-authenticated by default. The authenticated port enables the Sandbox Entra ID provider without an allow-list, so any authenticated Entra ID user can access it. When an external .NET project has the usual paired HTTP and HTTPS endpoints on the same target port, Aspire exposes one sandbox HTTP port: the sandbox proxy terminates TLS, forwards HTTP to the container on port `8080`, and resolves references to either app-model endpoint to the same HTTPS URL. Endpoint access options apply to the shared target port, and conflicting policies are rejected. External endpoints require an explicit `Anonymous = true` opt-in for anonymous access. Sandbox egress is configured with full inspection and deny-by-default behavior.
+
+When an AppHost contains multiple compute environments, assign each compute resource explicitly with `WithComputeEnvironment`. `PublishAsAzureSandbox` uses that assignment and does not select an environment.
 
 Images are resolved to immutable Linux/amd64 digests before import. Images hosted by the configured Azure Container Registry are imported with a dedicated user-assigned identity that has `AcrPull`; public registry images are imported without that ACR identity. Deployment state stores sandbox, disk-image, endpoint, and endpoint-security metadata, but does not persist registry credentials. Stable ownership labels are derived from the AppHost and Azure deployment scope so a later deploy or destroy can find resources after `--clear-cache`; the scope and application identity remain part of the label to prevent resource-name-only sweeping across apps.
 
@@ -94,7 +103,7 @@ To keep endpoint references usable during an ordinary redeploy of the same immut
 ## Publish, deploy, and destroy behavior
 
 * `aspire publish` emits reviewable Bicep for the sandbox group, registry, managed identities, and role assignments. Sandbox instances, disk images, ports, and data-plane URLs are deploy-time resources and are not created by publish.
-* `aspire deploy` provisions the ARM resources, builds or resolves the workload image to an immutable Linux/amd64 digest, creates the ADC disk image and sandbox, configures lifecycle and ports, and records IDs, URLs, ownership, scope, and security metadata in deployment state. Public URLs are shown in the deployment summary.
+* `aspire deploy` provisions the ARM resources, builds or resolves the workload image to an immutable Linux/amd64 digest, creates the ADC disk image and sandbox, configures lifecycle and ports, and records IDs, URLs, ownership, scope, and security metadata in deployment state. Public URLs and a direct link to each sandbox group's dashboard are shown in the deployment summary.
 * `aspire destroy` removes the current and labeled retained sandbox generations and disk images before Azure resource-group cleanup. Stable ownership labels allow cleanup after deployment state is cleared when the same AppHost and Azure sandbox group scope are still configured.
 * Existing sandbox groups use the subscription, resource group, location, and name from the group's actual Azure outputs rather than the ambient deployment resource group.
 

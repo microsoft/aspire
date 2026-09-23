@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
 
@@ -12,7 +13,10 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
     public bool IsEnabled => IsReadOnly || currentClient.IsEnabled;
     public bool IsReadOnly => dataSource.IsReadOnly;
     public DashboardConnectionState ConnectionState => IsReadOnly ? DashboardConnectionState.Connected : currentClient.ConnectionState;
-    public string ApplicationName => dataSource.SelectedRun.ApplicationName ?? currentClient.ApplicationName;
+    // Current runs must retain the resource service's name rather than the startup configuration stored in metadata.
+    public string ApplicationName => IsReadOnly
+        ? DashboardOptions.GetApplicationNameOrDefault(dataSource.SelectedRun.ApplicationName)
+        : currentClient.ApplicationName;
     public string? MinRequiredVersion => IsReadOnly ? null : currentClient.MinRequiredVersion;
 
     public event Action<DashboardConnectionState>? ConnectionStateChanged
@@ -68,6 +72,27 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
     {
         EnsureWritable();
         return currentClient.UploadFileAsync(fileStream, fileName, expectedSize, interactionId, inputName, cancellationToken);
+    }
+
+    public Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken)
+    {
+        EnsureWritable();
+        return currentClient.AttachTerminalAsync(terminalId, cancellationToken);
+    }
+
+    public IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync(CancellationToken cancellationToken) =>
+        IsReadOnly ? EmptyTerminalsAsync() : currentClient.SubscribeTerminalsAsync(cancellationToken);
+
+    public Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken)
+    {
+        EnsureWritable();
+        return currentClient.CloseTerminalAsync(terminalId, cancellationToken);
+    }
+
+    private static async IAsyncEnumerable<WatchTerminalsUpdate> EmptyTerminalsAsync()
+    {
+        await Task.CompletedTask.ConfigureAwait(false);
+        yield break;
     }
 
     private void EnsureWritable()

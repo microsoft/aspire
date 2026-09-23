@@ -50,6 +50,39 @@ func main() {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
+	// Test 11: Test WithBindIpAll
+	builder.AddMongoDB("mongo-bind-all").WithBindIpAll()
+
+	// Test 12: Initialize a single-member replica set with the resource name and a generated keyfile.
+	singleDB := builder.AddMongoDB("mongo-single").WithReplicaSet().AddDatabase("single-db")
+	if err = singleDB.Err(); err != nil {
+		log.Fatal(aspire.FormatError(err))
+	}
+
+	// Test 13: Initialize a single-member replica set with an explicit set name.
+	namedSingleDB := builder.AddMongoDB("mongo-single-named").WithReplicaSet(&aspire.WithReplicaSetOptions{Name: aspire.StringPtr("app-rs")}).AddDatabase("single-named-db")
+	if err = namedSingleDB.Err(); err != nil {
+		log.Fatal(aspire.FormatError(err))
+	}
+
+	// Test 14: Supply a keyfile before initialization; TLS options are separate export coverage, not prerequisites.
+	keyFileParam := builder.AddParameter("rs-keyfile", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true), Value: aspire.StringPtr("bW9uZ29kYmtleWZpbGUxMjM0")})
+	mongoConfigured := builder.AddMongoDB("mongo-rs-configured").WithKeyFile(keyFileParam, &aspire.WithKeyFileOptions{KeyFilePath: aspire.StringPtr("/etc/rs.key")}).WithReplicaSet(&aspire.WithReplicaSetOptions{Name: aspire.StringPtr("configured-rs")}).WithTlsMode().WithTlsAllowInvalidCertificates()
+	if err = mongoConfigured.Err(); err != nil {
+		log.Fatal(aspire.FormatError(err))
+	}
+
+	// Test 15: Advanced local multi-member experiments use plain servers, not WithReplicaSet single-member sets.
+	// NOTE: The members are not given a key file of their own here. WithMember gives them the replica set's shared one,
+	// and a member carrying a different key file is rejected.
+	mongo1 := builder.AddMongoDB("mongo-rs-1")
+	mongo2 := builder.AddMongoDB("mongo-rs-2")
+
+	replicaSet := builder.AddMongoDBReplicaSet("rs0").WithMember(mongo1).WithMember(mongo2)
+	if err = replicaSet.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+
 	_ = mongo.PrimaryEndpoint()
 	_ = mongo.Host()
 	_ = mongo.Port()

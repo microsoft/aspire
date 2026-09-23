@@ -49,7 +49,13 @@ import type * as vscode from 'vscode';
  * catalog tracks (event, property) pairs — every common property duplicates
  * into a row for every event. The set is deliberately tiny.
  */
-export type CommonTelemetryProperty = 'apphost_languages' | 'apphost_target_versions' | 'apphost_present';
+export type CommonTelemetryProperty =
+    | 'apphost_languages'
+    | 'apphost_target_versions'
+    | 'apphost_present'
+    | 'is_microsoft_internal'
+    | 'microsoft_internal_alias'
+    | 'microsoft_internal_domain';
 
 /**
  * Per-event schema. Each entry lists the event-specific properties and

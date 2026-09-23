@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+#pragma warning disable ASPIRECERTIFICATES001 // Certificate APIs are experimental.
+#pragma warning disable ASPIREMONGODB001 // MongoDB replica set APIs are experimental.
 
 using Aspire.TestUtilities;
 using Aspire.Hosting.Utils;
@@ -97,6 +99,92 @@ public class MongoDbFunctionalTests(ITestOutputHelper testOutputHelper)
         {
             var mongoDatabase = host.Services.GetRequiredService<IMongoDatabase>();
 
+            await CreateTestDataAsync(mongoDatabase, token);
+        }, cts.Token);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.DevCert)]
+    public async Task VerifyMongoExpressConnectsWhenMongoDBUsesTls()
+    {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        // NOTE: The retry budget has to cover Mongo Express starting up, which happens after its container is already
+        // reported as running, and which is not fast on a cold agent.
+        var pipeline = new ResiliencePipelineBuilder()
+            .AddRetry(new() { MaxRetryAttempts = 30, Delay = TimeSpan.FromSeconds(3) })
+            .Build();
+
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+
+        // NOTE: Mongo Express speaks plain TCP unless it is told otherwise, so this is what catches a MongoDB server that
+        // serves TLS while its companion admin UI has not been configured for it.
+        var mongoExpress = null as IResourceBuilder<MongoExpressContainerResource>;
+        var mongodb = builder.AddMongoDB("mongodb")
+            .WithHttpsDeveloperCertificate()
+            .WithMongoExpress(configureContainer: c => mongoExpress = c);
+
+        Assert.NotNull(mongoExpress);
+
+        using var app = builder.Build();
+        await app.StartAsync(cts.Token);
+
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(mongodb.Resource.Name, cts.Token);
+        Assert.True(mongodb.Resource.TlsEnabled);
+
+        await app.ResourceNotifications.WaitForResourceAsync(mongoExpress.Resource.Name, KnownResourceStates.Running, cts.Token);
+
+        var endpoint = mongoExpress.Resource.GetEndpoint("http");
+        using var httpClient = new HttpClient { BaseAddress = new Uri(endpoint.Url) };
+
+        // NOTE: Mongo Express connects to MongoDB while it starts up and gives up if it cannot, so being able to serve its
+        // database listing is what proves the TLS connection was actually established.
+        await pipeline.ExecuteAsync(async token =>
+        {
+            using var response = await httpClient.GetAsync("/", token);
+            response.EnsureSuccessStatusCode();
+        }, cts.Token);
+
+        await app.StopAsync();
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.DevCert)]
+    public async Task VerifyMongoDBWithTls()
+    {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        var pipeline = new ResiliencePipelineBuilder()
+            .AddRetry(new() { MaxRetryAttempts = 10, Delay = TimeSpan.FromSeconds(1) })
+            .Build();
+
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+
+        // NOTE: MongoDB serves TLS whenever a certificate is available for it; opting in to the developer certificate
+        // explicitly makes the test independent of whether that is also the ambient default on this machine.
+        var mongodb = builder.AddMongoDB("mongodb")
+            .WithHttpsDeveloperCertificate();
+        var db = mongodb.AddDatabase("testdb");
+        using var app = builder.Build();
+
+        await app.StartAsync();
+
+        var hb = Host.CreateApplicationBuilder();
+        hb.AddTestLogging(testOutputHelper);
+
+        var connectionString = await db.Resource.ConnectionStringExpression.GetValueAsync(default);
+        hb.Configuration[$"ConnectionStrings:{db.Resource.Name}"] = connectionString;
+        Assert.Contains("tls=true", connectionString, StringComparison.OrdinalIgnoreCase);
+
+        hb.AddMongoDBClient(db.Resource.Name);
+
+        using var host = hb.Build();
+
+        await host.StartAsync();
+
+        await pipeline.ExecuteAsync(async token =>
+        {
+            var mongoDatabase = host.Services.GetRequiredService<IMongoDatabase>();
             await CreateTestDataAsync(mongoDatabase, token);
         }, cts.Token);
     }
@@ -473,6 +561,16 @@ public class MongoDbFunctionalTests(ITestOutputHelper testOutputHelper)
 }
 
 public class Movie
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string? Id { get; set; }
+
+    [BsonElement("name")]
+    public string? Name { get; set; }
+}
+
+public class Director
 {
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]

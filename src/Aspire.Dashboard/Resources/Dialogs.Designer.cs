@@ -406,6 +406,15 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("GenAILLMBadgeText", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Generative AI messages.
+        /// </summary>
+        public static string GenAIMessageTreeLabel {
+            get {
+                return ResourceManager.GetString("GenAIMessageTreeLabel", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Message.
@@ -838,7 +847,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HelpDialogTogglePanelOrientation", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Toggle terminal.
+        /// </summary>
+        public static string HelpDialogToggleTerminalDock {
+            get {
+                return ResourceManager.GetString("HelpDialogToggleTerminalDock", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Cancel.
         /// </summary>

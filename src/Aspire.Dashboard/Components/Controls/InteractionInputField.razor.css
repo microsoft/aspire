@@ -1,0 +1,4 @@
+.input-label-required {
+    padding-inline-start: 4px;
+    color: var(--error);
+}

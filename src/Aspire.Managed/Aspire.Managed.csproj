@@ -19,7 +19,7 @@
     <!-- Don't generate web.config or include IIS hosting -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
 
-    <!-- CreateLayout copies only the managed executable, so native dependencies must be embedded in the single file. -->
+    <!-- Native libraries are embedded except for Hex1b's Windows PTY sidecars, which CreateLayout copies together. -->
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 
@@ -34,7 +34,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Aspire.Dashboard\Aspire.Dashboard.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.RemoteHost\Aspire.Hosting.RemoteHost.csproj" />
     <ProjectReference Include="..\Aspire.TerminalHost\Aspire.TerminalHost.csproj" />
   </ItemGroup>
@@ -54,6 +53,7 @@
   <ItemGroup>
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Shared\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Shared\BundleVersionLease.cs" />
+    <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Shared\HeldFileLease.cs" />
     <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="NuGet\IntegrationPackageProbeManifest.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Shared\KnownConfigNames.cs" />
     <Compile Include="$(SharedDir)ParentProcessWatchdog.cs" Link="Shared\ParentProcessWatchdog.cs" />
@@ -80,7 +80,7 @@
 
   <Target Name="ValidateSingleFilePublishConfiguration" BeforeTargets="PrepareForPublish">
     <Error Condition="'$(PublishSingleFile)' == 'true' and '$(IncludeNativeLibrariesForSelfExtract)' != 'true'"
-           Text="Aspire.Managed single-file publishing must embed native libraries because CreateLayout copies only the managed executable." />
+           Text="Aspire.Managed single-file publishing must embed native libraries other than the explicitly copied Windows PTY sidecars." />
   </Target>
 
 </Project>

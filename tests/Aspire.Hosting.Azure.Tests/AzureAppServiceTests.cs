@@ -4,6 +4,7 @@
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE003
+#pragma warning disable ASPIREDOTNETPROJECT001
 
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
@@ -23,7 +24,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddContainerAppEnvironmentAddsDeploymentTargetWithContainerAppToProjectResources()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var env = builder.AddAzureAppServiceEnvironment("env");
 
@@ -58,9 +59,27 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddAppServiceEnvironmentAddsDeploymentTargetToDotnetProjectResource()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+        var environment = builder.AddAzureAppServiceEnvironment("env");
+        var project = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        Assert.Same(environment.Resource, target.ComputeEnvironment);
+        Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+    }
+
+    [Fact]
     public async Task AddContainerAppEnvironmentAddsEnvironmentResource()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 
@@ -81,7 +100,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceWithDelegatedSubnet()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("vnet");
         var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24");
@@ -122,7 +141,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceWithDelegatedSubnetWithoutDeploymentSlot()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("vnet");
         var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24");
@@ -162,7 +181,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsAzureAppServiceWebsite_CanOverrideEnvironmentDelegatedSubnet()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("vnet");
         var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24");
@@ -191,11 +210,11 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PublishToAppService_WithDashedConnectionStringName_FailsValidationInPipeline()
+    public async Task PublishToAppService_WithDashedConnectionStringName_UsesPortableAlias()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "validate-appservice-config-env");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper, workspace.Path, step: "validate-appservice-config-env");
 
         builder.Services.AddSingleton(outputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
@@ -204,10 +223,11 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
 
         var cs = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
 
-        builder.AddProject<Project>("api", launchProfileName: null)
+        var project = builder.AddProject<Project>("api", launchProfileName: null)
             .WithHttpEndpoint()
             .WithExternalHttpEndpoints()
             .WithReference(cs)
+            .WithEnvironment("ConnectionStrings__my-db", "Host=override")
             .PublishAsAzureAppServiceWebsite(configure: (_, _) => { });
 
         using var app = builder.Build();
@@ -216,23 +236,54 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
         var reporter = app.Services.GetRequiredService<IPipelineActivityReporter>() as TestPipelineActivityReporter;
         Assert.NotNull(reporter);
 
-        // Run the app - validation happens during the pipeline execution
-        // The pipeline catches exceptions and reports them via the activity reporter
         await app.RunAsync();
 
-        // Verify the step completed with error
+        Assert.Contains(reporter.CompletedSteps, step =>
+            step.StepTitle == "validate-appservice-config-env" &&
+            step.CompletionState == CompletionState.Completed);
+
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        var website = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+        var (_, bicep) = await GetManifestWithBicep(website);
+
+        await Verify(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task PublishToAppService_WithUnrelatedDashedEnvironmentVariable_FailsValidation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper, workspace.Path, step: "validate-appservice-config-env");
+
+        builder.Services.AddSingleton(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        builder.AddAzureAppServiceEnvironment("env");
+
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithEnvironment("INVALID-NAME", "value")
+            .PublishAsAzureAppServiceWebsite(configure: (_, _) => { });
+
+        using var app = builder.Build();
+        var reporter = app.Services.GetRequiredService<IPipelineActivityReporter>() as TestPipelineActivityReporter;
+        Assert.NotNull(reporter);
+
+        await app.RunAsync();
+
         Assert.Contains(reporter.CompletedSteps, step =>
             step.StepTitle == "validate-appservice-config-env" &&
             step.CompletionState == CompletionState.CompletedWithError);
-
-        // Verify the error message was logged with details about the problematic connection string
         Assert.Contains(reporter.LoggedMessages, log =>
-            log.Message.Contains("ConnectionStrings__my-db") &&
+            log.Message.Contains("INVALID-NAME", StringComparison.Ordinal) &&
             log.LogLevel == LogLevel.Error);
     }
 
     [Fact]
-    public async Task PublishToAppService_WithDashedConnectionStringName_CanBeIgnored()
+    public async Task PublishToAppService_WithDashedEnvironmentVariable_CanBeIgnored()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -243,12 +294,10 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
 
         builder.AddAzureAppServiceEnvironment("env");
 
-        var cs = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
-
         builder.AddProject<Project>("api", launchProfileName: null)
             .WithHttpEndpoint()
             .WithExternalHttpEndpoints()
-            .WithReference(cs)
+            .WithEnvironment("INVALID-NAME", "value")
             .PublishAsAzureAppServiceWebsite(configure: (_, _) => { })
             .SkipEnvironmentVariableNameChecks();
 
@@ -267,7 +316,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task KeyvaultReferenceHandling()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 
@@ -307,7 +356,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EndpointReferencesAreResolvedAcrossProjects()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 
@@ -342,7 +391,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EndpointReferenceToFoundryHostedAgentIsResolvedAcrossComputeEnvironments()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var appServiceEnv = builder.AddAzureAppServiceEnvironment("env");
 
@@ -395,7 +444,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AzureAppServiceSupportBaitAndSwitchResources()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 
@@ -427,7 +476,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddDockerfileWithAppServiceInfrastructureAddsDeploymentTargetWithAppServiceToContainerResources()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 
@@ -463,7 +512,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UnknownManifestExpressionProviderIsHandledWithAllocateParameter()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 
@@ -498,7 +547,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void AzureAppServiceEnvironmentHasNameOutputReference()
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(outputHelper);
         var env = builder.AddAzureAppServiceEnvironment("env");
 
         // Verify that the NameOutputReference property exists and returns the expected value
@@ -510,7 +559,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AzureAppServiceEnvironmentCanReferenceExistingAppServicePlan()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var nameParameter = builder.AddParameter("appServicePlanName", "existing-plan-name");
         var resourceGroupParameter = builder.AddParameter("appServicePlanResourceGroup", "existing-rg");
@@ -541,7 +590,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper, workspace.Path);
 
         var nameParameter = builder.AddParameter("appServicePlanName", "existing-plan-name");
         var resourceGroupParameter = builder.AddParameter("appServicePlanResourceGroup", "existing-rg");
@@ -580,7 +629,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
         // Existing App Service Plan + existing ACR should reference both pre-provisioned resources.
         // Without WithAcrPullIdentity, Aspire still emits a new identity and AcrPull role assignment
         // for image pulls. Disable the dashboard so the snapshot focuses on plan/ACR behavior.
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var planName = builder.AddParameter("appServicePlanName");
         var registryName = builder.AddParameter("registryName");
@@ -607,7 +656,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
         // Bicep should NOT declare an env_mi resource or an AcrPull role assignment - the
         // identity id/client id should flow into the env module via parameters and be emitted as
         // AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID/CLIENT_ID.
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var mi = builder.AddAzureUserAssignedIdentity("shared-mi");
 
@@ -626,7 +675,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
         // Existing App Service Plan + existing ACR + BYO identity that already has AcrPull on the ACR.
         // Disable the dashboard so the env module references the pre-provisioned resources without
         // emitting a new ACR-pull identity, AcrPull role assignment, dashboard, or dashboard contributor identity.
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var planName = builder.AddParameter("appServicePlanName");
         var registryName = builder.AddParameter("registryName");
@@ -656,7 +705,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [InlineData(false)]
     public async Task WithDashboardControlsDashboardUrlPrintStep(bool enableDashboard)
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var env = builder.AddAzureAppServiceEnvironment("env")
             .WithDashboard(enableDashboard);
@@ -672,7 +721,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void AzureAppServiceEnvironmentImplementsIAzureComputeEnvironmentResource()
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(outputHelper);
         var env = builder.AddAzureAppServiceEnvironment("env");
 
         Assert.IsAssignableFrom<IAzureComputeEnvironmentResource>(env.Resource);
@@ -683,9 +732,9 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11818", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task PublishAsAzureAppServiceWebsite_ThrowsIfNoEnvironment()
     {
-        static async Task RunTest(Action<IDistributedApplicationBuilder> action)
+        async Task RunTest(Action<IDistributedApplicationBuilder> action)
         {
-            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
             // Do not add AddAzureAppServiceEnvironment
 
             action(builder);
@@ -719,7 +768,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
         // If a compute resource still ends up with an AzureAppServiceWebsiteCustomizationAnnotation
         // (e.g. via WithAnnotation), the validation step should not throw at 'aspire run' time —
         // PublishAs* customizations are only meaningful at publish/deploy time.
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 
@@ -737,7 +786,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "publish-manifest");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper, workspace.Path, step: "publish-manifest");
 
         var env1 = builder.AddAzureAppServiceEnvironment("env1");
         var env2 = builder.AddAzureAppServiceEnvironment("env2");
@@ -767,7 +816,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper, workspace.Path);
 
         var env1 = builder.AddAzureAppServiceEnvironment("env");
 
@@ -798,7 +847,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceEnvironmentWithoutDashboardAddsEnvironmentResource()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env").WithDashboard(false);
 
@@ -819,7 +868,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceToEnvironmentWithoutDashboard()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env").WithDashboard(false);
 
@@ -854,7 +903,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceWithArgs()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 
@@ -890,18 +939,18 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceWithTargetPort()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 
         // Add 2 projects with endpoints
         var project1 = builder.AddProject<Project>("project1", launchProfileName: null)
-            .WithHttpsEndpoint(targetPort:8000)
+            .WithHttpsEndpoint(targetPort: 8000)
             .WithHttpEndpoint(targetPort: 8000)
             .WithExternalHttpEndpoints();
 
         var project2 = builder.AddProject<Project>("project2", launchProfileName: null)
-            .WithHttpEndpoint(targetPort:9000)
+            .WithHttpEndpoint(targetPort: 9000)
             .WithExternalHttpEndpoints()
             .WithReference(project1);
 
@@ -926,7 +975,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CanPreserveHttpSchemeUsingWithHttpsUpgrade()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env")
                .WithHttpsUpgrade(false);
@@ -964,7 +1013,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceWithTargetPortMultipleEndpoints()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 
@@ -999,7 +1048,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceWithMultipleTargetPortsThrowsNotSupportedException()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 
@@ -1024,7 +1073,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceWithMixedNullAndExplicitTargetPortsThrowsNotSupportedException()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 
@@ -1045,7 +1094,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceProjectWithoutTargetPortUsesContainerPort()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 
@@ -1076,7 +1125,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceContainerWithoutTargetPortUsesDefaultPort()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 
@@ -1107,7 +1156,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetHostAddressExpression()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var env = builder.AddAzureAppServiceEnvironment("env");
 
@@ -1136,7 +1185,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [InlineData(EndpointProperty.TlsEnabled, "True")]
     public async Task GetEndpointPropertyExpression_ReturnsAppServiceEndpointPropertyExpression(EndpointProperty property, string expected)
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var env = builder.AddAzureAppServiceEnvironment("env");
         env.Resource.Outputs["webSiteSuffix"] = "website123";
@@ -1156,7 +1205,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceWithApplicationInsightsLocation()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env").WithAzureApplicationInsights("westus");
 
@@ -1177,7 +1226,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceWithApplicationInsightsDefaultLocation()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env").WithAzureApplicationInsights();
 
@@ -1198,7 +1247,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceWithApplicationInsightsNormalizesBicepIdentifiers()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env-1").WithAzureApplicationInsights();
 
@@ -1218,7 +1267,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceWithApplicationInsightsLocationParam()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var appInsightsParam = builder.AddParameter("appInsightsLocation", "westus");
         builder.AddAzureAppServiceEnvironment("env").WithAzureApplicationInsights(appInsightsParam);
@@ -1240,7 +1289,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceWithExistingApplicationInsights()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var appInsights = builder.AddAzureApplicationInsights("existingAppInsights");
         builder.AddAzureAppServiceEnvironment("env").WithAzureApplicationInsights(appInsights);
@@ -1262,7 +1311,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceProjectWithApplicationInsightsSetsAppSettings()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env").WithAzureApplicationInsights();
 
@@ -1293,7 +1342,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceWithDeploymentSlot()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env").WithDeploymentSlot("stage");
 
@@ -1324,7 +1373,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddAppServiceWithDeploymentSlotParameter()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var slotParam = builder.AddParameter("deploymentSlot", "stage");
         builder.AddAzureAppServiceEnvironment("env").WithDeploymentSlot(slotParam);
@@ -1356,7 +1405,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConditionalExpressionWithParameterCondition()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureAppServiceEnvironment("env");
 

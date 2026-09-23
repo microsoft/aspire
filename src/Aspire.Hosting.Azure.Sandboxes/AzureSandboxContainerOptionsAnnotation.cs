@@ -51,11 +51,6 @@ public sealed class AzureSandboxOptions
     public AzureSandboxAutoDeleteTrigger? AutoDeleteTrigger { get; set; }
 
     /// <summary>
-    /// Gets or sets how long to wait for an exposed HTTP endpoint to become ready.
-    /// </summary>
-    public TimeSpan? PublicEndpointReadyTimeout { get; set; }
-
-    /// <summary>
     /// Gets or sets endpoint-specific sandbox option overrides.
     /// </summary>
     public AzureSandboxEndpointOptions[]? Endpoints { get; set; }

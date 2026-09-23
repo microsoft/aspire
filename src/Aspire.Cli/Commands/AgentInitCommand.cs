@@ -50,6 +50,7 @@ internal sealed class AgentInitCommand : BaseCommand
         Options.Add(s_workspaceRootOption);
         Options.Add(s_skillLocationsOption);
         Options.Add(s_skillsOption);
+        Options.Add(s_mcpOption);
     }
 
     private static readonly Option<string?> s_workspaceRootOption = new("--workspace-root")
@@ -76,6 +77,19 @@ internal sealed class AgentInitCommand : BaseCommand
     };
 
     /// <summary>
+    /// Confirms whether standalone <c>aspire agent init</c> configures the Aspire MCP server for
+    /// detected agent environments. This option is only registered on this command — <c>aspire
+    /// new</c> and <c>aspire init</c> do not add it, so MCP configuration is unavailable from
+    /// those chained flows by construction. Omitting the option defaults to "no"; passing
+    /// <c>--mcp</c> opts in, and <c>--mcp=false</c> is an explicit opt-out.
+    /// </summary>
+    internal static readonly Option<bool?> s_mcpOption = new("--mcp")
+    {
+        Description = AgentCommandStrings.InitCommand_McpOptionDescription,
+        Recursive = true
+    };
+
+    /// <summary>
     /// Public entry point for executing the init command.
     /// This allows McpInitCommand to delegate to this implementation.
     /// </summary>
@@ -87,10 +101,10 @@ internal sealed class AgentInitCommand : BaseCommand
     /// <summary>
     /// Prompts the user to run agent init after a successful command, then chains into agent init if accepted.
     /// Used by commands (e.g. <c>aspire init</c>, <c>aspire new</c>) to offer agent init as a follow-up step.
-    /// When <paramref name="selectByDefault"/> is <see langword="null"/> every bundle-sourced skill is
-    /// pre-selected, which is what <c>aspire init</c> wants because aspireify is the natural follow-up.
-    /// Other callers (e.g. <c>aspire new</c>) can pass a predicate to additionally filter out skills that
-    /// don't fit their context (such as one-time setup skills after a template has already produced the AppHost).
+    /// Every bundle-sourced skill is pre-selected, including aspireify.
+    /// Chained flows never register <c>--mcp</c> and never offer MCP server configuration: this
+    /// method always executes agent init with MCP configuration unavailable, so MCP remains an
+    /// explicit opt-in reachable only through standalone <c>aspire agent init</c>.
     /// Callers that expose <c>--skill-locations</c> and <c>--skills</c> can pass
     /// <paramref name="skillLocationsBinding"/> and <paramref name="skillsBinding"/> so the chained
     /// execution reuses the same non-interactive selection semantics as standalone <c>aspire agent init</c>.
@@ -102,7 +116,6 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<bool> agentInitBinding,
         PromptBinding<string?> skillLocationsBinding,
         PromptBinding<string?> skillsBinding,
-        Func<SkillDefinition, bool>? selectByDefault,
         CancellationToken cancellationToken)
     {
         if (previousResultExitCode != CliExitCodes.Success)
@@ -120,7 +133,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (runAgentInit)
         {
-            return await ExecuteAgentInitAsync(workspaceRoot, selectByDefault, skillLocationsBinding, skillsBinding, cancellationToken);
+            return await ExecuteAgentInitAsync(workspaceRoot, skillLocationsBinding, skillsBinding, mcpBinding: null, cancellationToken);
         }
 
         return new(CliExitCodes.Success, [], []);
@@ -129,40 +142,12 @@ internal sealed class AgentInitCommand : BaseCommand
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var workspaceRoot = await PromptForWorkspaceRootAsync(parseResult, cancellationToken);
-        // Standalone `aspire agent init` is typically run against an existing project, so don't
-        // pre-select the one-time aspireify wiring skill even though every other bundle skill
-        // is default-on. Users can still opt into it from the prompt or via --skills.
         var skillLocationsBinding = PromptBinding.Create(parseResult, s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, s_skillsOption);
-        var result = await ExecuteAgentInitAsync(workspaceRoot, ExcludeOneTimeSetupSkillsFromDefaults, skillLocationsBinding, skillsBinding, cancellationToken);
+        var mcpBinding = PromptBinding.CreateBoolConfirm(parseResult, s_mcpOption, defaultValue: false);
+        var result = await ExecuteAgentInitAsync(workspaceRoot, skillLocationsBinding, skillsBinding, mcpBinding, cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
-
-    /// <summary>
-    /// Names of bundle skills that perform one-time workspace setup and should NOT be
-    /// pre-selected after a workspace was just produced by a template flow such as
-    /// <c>aspire new</c> or after standalone <c>aspire agent init</c> (typically run
-    /// against an existing project).
-    /// </summary>
-    /// <remarks>
-    /// This is the single source of truth the CLI consults when filtering bundle skills out
-    /// of the auto-preselection set. All bundle skills are default-on, so if the bundle ships
-    /// a new wiring or bootstrap-style skill that should NOT auto-run in an already-bootstrapped
-    /// workspace, add its name here.
-    /// </remarks>
-    internal static readonly IReadOnlySet<string> s_oneTimeSetupSkillNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        CommonAgentApplicators.AspireifySkillName,
-    };
-
-    /// <summary>
-    /// Default-skill predicate used by flows that do not want one-time setup skills
-    /// pre-selected — namely <c>aspire new</c> (template already created the AppHost) and
-    /// standalone <c>aspire agent init</c> (typically run against an existing project).
-    /// Skills filtered here remain available to opt into from the prompt or via <c>--skills</c>.
-    /// </summary>
-    internal static bool ExcludeOneTimeSetupSkillsFromDefaults(SkillDefinition skill)
-        => skill.IsDefault && !s_oneTimeSetupSkillNames.Contains(skill.Name);
 
     private async Task<DirectoryInfo> PromptForWorkspaceRootAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
@@ -196,9 +181,9 @@ internal sealed class AgentInitCommand : BaseCommand
 
     private async Task<AgentInitExecutionResult> ExecuteAgentInitAsync(
         DirectoryInfo workspaceRoot,
-        Func<SkillDefinition, bool>? selectByDefault,
         PromptBinding<string?> skillLocationsBinding,
         PromptBinding<string?> skillsBinding,
+        PromptBinding<bool>? mcpBinding,
         CancellationToken cancellationToken)
     {
         var context = new AgentEnvironmentScanContext
@@ -247,12 +232,10 @@ internal sealed class AgentInitCommand : BaseCommand
             echoSelected: false,
             cancellationToken: cancellationToken);
 
-        // --- Phase 2: Skill and MCP server selection (only if locations were selected) ---
+        // --- Phase 2: Skill selection (only if locations were selected) ---
         IReadOnlyList<SkillDefinition> selectedSkills = [];
         AspireSkillsBundle? aspireSkillsBundle = null;
         string? bundleInstallFailureMessage = null;
-        AgentEnvironmentApplicator? combinedMcpApplicator = null;
-        var mcpApplicators = userChoices.Where(a => a.PromptGroup == McpInitPromptGroup.AgentEnvironments).ToList();
 
         if (selectedLocations.Count > 0)
         {
@@ -273,31 +256,7 @@ internal sealed class AgentInitCommand : BaseCommand
             // --skills parsing used elsewhere.
             availableSkills = [.. availableSkills.OrderBy(static s => s.Name, StringComparer.OrdinalIgnoreCase)];
 
-            // Build prompt items: skills first, then MCP as a separate non-default item
-            var skillChoices = new List<object>();
-            skillChoices.AddRange(availableSkills);
-
-            if (mcpApplicators.Count > 0)
-            {
-                combinedMcpApplicator = new AgentEnvironmentApplicator(
-                    AgentCommandStrings.InitCommand_ConfigureMcpServer,
-                    async ct =>
-                    {
-                        foreach (var mcp in mcpApplicators)
-                        {
-                            await mcp.ApplyAsync(ct);
-                            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, mcp.Description);
-                        }
-                    },
-                    promptGroup: McpInitPromptGroup.AdditionalOptions);
-                skillChoices.Add(combinedMcpApplicator);
-            }
-
-            var preSelectedItems = new List<object>();
-            var defaultSkills = GetDefaultSkills(availableSkills, selectByDefault);
-            preSelectedItems.AddRange(defaultSkills);
-            // MCP is intentionally NOT pre-selected
-
+            var defaultSkills = availableSkills.Where(static s => s.IsDefault).ToList();
             var defaultSkillNames = string.Join(",", defaultSkills.Select(s => s.Name));
             var skillsBindingWithDefault = skillsBinding.WithDefault(defaultSkillNames);
 
@@ -316,32 +275,35 @@ internal sealed class AgentInitCommand : BaseCommand
                 }
             }
 
-            var selectedItems = await InteractionService.PromptForSelectionsAsync(
+            selectedSkills = await InteractionService.PromptForSelectionsAsync(
                 AgentCommandStrings.InitCommand_SelectSkills,
-                skillChoices,
-                item => item switch
-                {
-                    SkillDefinition skill => $"{skill.Name.EscapeMarkup()} — {SimplifyDescription(skill.Description).EscapeMarkup()}",
-                    AgentEnvironmentApplicator app => $"[bold]{app.Description}[/] [dim]{AgentCommandStrings.InitCommand_ConfiguresDetectedAgentEnvironments}[/]",
-                    _ => item.ToString()!
-                },
-                preSelected: preSelectedItems,
+                availableSkills,
+                skill => $"{skill.Name.EscapeMarkup()} — {SimplifyDescription(skill.Description).EscapeMarkup()}",
+                preSelected: defaultSkills,
                 optional: true,
                 binding: skillsBindingWithDefault,
-                // The MCP applicator participates in the interactive multi-select prompt for UX,
-                // but it is not a skill and must not be addressable via `--skills`. Restrict
-                // non-interactive validation to the actual SkillDefinition catalog.
-                bindingChoices: availableSkills.Cast<object>(),
                 echoSelected: false,
                 cancellationToken: cancellationToken);
+        }
 
-            selectedSkills = selectedItems.OfType<SkillDefinition>().ToList();
+        // --- Phase 2b: MCP server configuration ---
+        // `mcpBinding` is only supplied by standalone `aspire agent init` (see s_mcpOption).
+        // Chained flows (`aspire new`, `aspire init`) never construct a binding for it, so MCP
+        // configuration is unreachable from those flows by construction rather than by a runtime
+        // visibility flag. The Aspire MCP server is the only server the CLI configures today, so
+        // this is a plain confirmation rather than a selection; the confirmed choice is applied to
+        // every detected configuration target in Phase 5.
+        var configureMcp = false;
+        var mcpConfigurationTargets = mcpBinding is not null
+            ? userChoices.Where(a => a.PromptGroup == McpInitPromptGroup.AgentEnvironments).ToList()
+            : [];
 
-            // Clear MCP applicator if it was not selected by the user.
-            if (combinedMcpApplicator is not null && !selectedItems.Contains(combinedMcpApplicator))
-            {
-                combinedMcpApplicator = null;
-            }
+        if (mcpBinding is not null && mcpConfigurationTargets.Count > 0)
+        {
+            configureMcp = await InteractionService.PromptConfirmAsync(
+                AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt,
+                binding: mcpBinding,
+                cancellationToken: cancellationToken);
         }
 
         // --- Phase 3: Apply skill files for selected locations × skills ---
@@ -435,26 +397,31 @@ internal sealed class AgentInitCommand : BaseCommand
             }
         }
 
-        // --- Phase 5: Apply MCP server configuration if selected ---
-        if (combinedMcpApplicator is not null)
+        // --- Phase 5: Apply MCP server configuration if the user confirmed ---
+        // Apply the confirmed configuration to every detected target exactly once.
+        if (configureMcp)
         {
-            try
+            foreach (var target in mcpConfigurationTargets)
             {
-                await combinedMcpApplicator.ApplyAsync(cancellationToken);
-            }
-            // InvalidOperationException is thrown by scanner-generated applicators
-            // (e.g., MCP config writers) when the underlying operation fails.
-            // JsonException as InnerException indicates a malformed config file
-            // (e.g., invalid JSON in .copilot/mcp-config.json or .vscode/mcp.json).
-            catch (InvalidOperationException ex)
-            {
-                InteractionService.DisplayError(ex.Message);
-                if (ex.InnerException is JsonException)
+                try
                 {
-                    InteractionService.DisplaySubtleMessage(
-                        string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.SkippedMalformedConfigFile, combinedMcpApplicator.Description));
+                    await target.ApplyAsync(cancellationToken);
+                    InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, target.Description);
                 }
-                hasErrors = true;
+                // InvalidOperationException is thrown by scanner-generated applicators
+                // (e.g., MCP config writers) when the underlying operation fails.
+                // JsonException as InnerException indicates a malformed config file
+                // (e.g., invalid JSON in .copilot/mcp-config.json or .vscode/mcp.json).
+                catch (InvalidOperationException ex)
+                {
+                    InteractionService.DisplayError(ex.Message);
+                    if (ex.InnerException is JsonException)
+                    {
+                        InteractionService.DisplaySubtleMessage(
+                            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.SkippedMalformedConfigFile, target.Description));
+                    }
+                    hasErrors = true;
+                }
             }
         }
 
@@ -682,16 +649,6 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         return simplified;
-    }
-
-    private static IReadOnlyList<SkillDefinition> GetDefaultSkills(IEnumerable<SkillDefinition> availableSkills, Func<SkillDefinition, bool>? selectByDefault)
-    {
-        // When the caller doesn't customize default selection, fall back to SkillDefinition.IsDefault.
-        // Bundle-sourced skills are uniformly IsDefault=true; CLI-defined skills (playwright-cli,
-        // dotnet-inspect) are IsDefault=false so they stay opt-in. Callers like `aspire new` pass
-        // a predicate to additionally filter out skills that don't fit their flow.
-        var predicate = selectByDefault ?? (static skill => skill.IsDefault);
-        return availableSkills.Where(predicate).ToList();
     }
 
     /// <summary>

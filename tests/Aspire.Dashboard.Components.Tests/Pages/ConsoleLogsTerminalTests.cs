@@ -1,10 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
+using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
@@ -89,6 +91,53 @@ public partial class ConsoleLogsTests
         await Task.CompletedTask;
     }
 
+    [Theory]
+    [InlineData("", "terminal-resource", "terminal-resource", 0)]
+    [InlineData("/aspire/nested", "terminal-resource", "terminal-resource", 0)]
+    [InlineData("", "terminal #1/?%+", "terminal%20%231%2F%3F%25%2B", 2)]
+    [InlineData("/aspire/nested", "terminal #1/?%+", "terminal%20%231%2F%3F%25%2B", 2)]
+    public async Task TerminalResource_OpenWindow_CarriesCurrentFontAndKeepsInlineView(
+        string pathBase, string resourceName, string escapedResourceName, int replicaIndex)
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var resource = CreateTerminalResource(resourceName, replicaIndex, replicaCount: replicaIndex + 1, state: KnownResourceState.Running);
+        var client = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [resource]);
+        Services.AddSingleton<NavigationManager>(new TestNavigationManager($"http://localhost{pathBase}/"));
+        SetupConsoleLogsServices(client);
+        TerminalSetupHelpers.SetupTerminalView(this, pathBase);
+        TerminalSetupHelpers.SetupTerminalDock(this, pathBase);
+        Services.GetRequiredService<NavigationManager>().NavigateTo($"{pathBase}{DashboardUrls.ConsoleLogsUrl(resource: resource.Name)}");
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder => builder
+            .Add(p => p.ResourceName, resource.Name)
+            .Add(p => p.ViewportInformation, viewport));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
+        var terminal = cut.FindComponent<TerminalView>().Instance;
+        await cut.InvokeAsync(() => terminal.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Connected = true, FontPx = 17
+        }));
+
+        var open = cut.Find(".terminal-titlebar .terminal-open-window");
+        Assert.Equal($"resource:{resourceName}:{replicaIndex}", open.GetAttribute("data-terminal-window-key"));
+        Assert.Equal($"http://localhost{pathBase}/terminal-window/resource/{escapedResourceName}/{replicaIndex}?fontSize=17",
+            open.GetAttribute("data-terminal-window-url"));
+        Assert.Equal(Resources.TerminalStrings.TerminalToolbarOpenInWindow, open.GetAttribute("aria-label"));
+        Assert.False(open.HasAttribute("disabled"));
+        var launcher = TerminalSetupHelpers.GetWindowLauncher(this, cut);
+        await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync($"resource:{resourceName}:{replicaIndex}", "opened"));
+        var moduleImport = Assert.Single(JSInterop.Invocations, i => i.Identifier == "import"
+            && i.Arguments[0] is string path && path.EndsWith("/js/app-terminalwindow.js", StringComparison.Ordinal));
+        Assert.Equal($"{pathBase}/js/app-terminalwindow.js", moduleImport.Arguments[0]);
+        Assert.Same(terminal, cut.FindComponent<TerminalView>().Instance);
+    }
+
     [Fact]
     public async Task TerminalResource_ViewPicker_MarksActiveViewAsChecked()
     {
@@ -121,22 +170,43 @@ public partial class ConsoleLogsTests
         cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
         cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
 
-        // The view-toggle items are the first two entries in the menu, added in
-        // Console-then-Terminal order (see UpdateMenuButtons). Both are modeled as
-        // checkable menu items so assistive technology can announce the selection;
-        // the live resource defaults to Terminal, so only the Terminal item is
-        // checked.
+        // In the Terminal view the menu contains only the two view-toggle items.
+        // Both toggles are modeled as checkable menu items so assistive technology can
+        // announce the selection, and the live resource defaults to Terminal, so only
+        // the Terminal item is checked.
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
-        Assert.Equal(MenuItemRole.MenuItemCheckbox, instance.LogsMenuItemsForTest[0].Role);
-        Assert.Equal(MenuItemRole.MenuItemCheckbox, instance.LogsMenuItemsForTest[1].Role);
-        Assert.False(instance.LogsMenuItemsForTest[0].Checked);
-        Assert.True(instance.LogsMenuItemsForTest[1].Checked);
+        Assert.Collection(
+            instance.LogsMenuItemsForTest,
+            item =>
+            {
+                Assert.Equal(MenuItemRole.Checkbox, item.Role);
+                Assert.False(item.Checked);
+            },
+            item =>
+            {
+                Assert.Equal(MenuItemRole.Checkbox, item.Role);
+                Assert.True(item.Checked);
+            });
+        Assert.Single(cut.FindAll(".terminal-titlebar .terminal-open-window"));
 
         // Switching to Console moves the checked state to the Console item.
         await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Console)));
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
         Assert.True(instance.LogsMenuItemsForTest[0].Checked);
         Assert.False(instance.LogsMenuItemsForTest[1].Checked);
+        Assert.Empty(cut.FindAll(".terminal-open-window"));
+        var logViewer = cut.FindComponent<LogViewer>().Instance;
+        Assert.Equal([
+            Resources.ConsoleLogs.ConsoleLogsViewConsoleOption,
+            Resources.ConsoleLogs.ConsoleLogsViewTerminalOption,
+            Resources.ConsoleLogs.DownloadLogs,
+            logViewer.ShowTimestamp ? Resources.ConsoleLogs.ConsoleLogsTimestampHide : Resources.ConsoleLogs.ConsoleLogsTimestampShow,
+            Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc,
+            logViewer.NoWrapLogs ? Resources.ConsoleLogs.ConsoleLogsWrapLogs : Resources.ConsoleLogs.ConsoleLogsNoWrapLogs
+        ], instance.LogsMenuItemsForTest.Where(item => !item.IsDivider).Select(item => item.Text));
+        Assert.Single(cut.FindComponents<TerminalView>());
+        await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Terminal)));
+        Assert.Single(cut.FindAll(".terminal-titlebar .terminal-open-window"));
     }
 
     [Fact]
@@ -434,8 +504,8 @@ public partial class ConsoleLogsTests
             });
         };
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        var innerSelect = resourceSelect.Find("fluent-select");
-        innerSelect.Change("plain-resource");
+        var selectedResource = resourceSelect.Instance.Resources!.Single(resource => resource.Name == "plain-resource");
+        await resourceSelect.InvokeAsync(() => resourceSelect.Instance.SelectedResourceChanged.InvokeAsync(selectedResource));
 
         cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == plainResource.Name);
         // For a non-terminal resource the TerminalView is not mounted at all
@@ -487,7 +557,7 @@ public partial class ConsoleLogsTests
         // resource restores the filter UI.
         await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Terminal)));
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
-        Assert.Empty(cut.FindComponents<FluentSearch>());
+        Assert.Empty(cut.FindComponents<FluentTextInput>());
 
         navigationManager.LocationChanged += (sender, e) =>
         {
@@ -497,8 +567,9 @@ public partial class ConsoleLogsTests
             });
         };
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        var innerSelect = resourceSelect.Find("fluent-select");
-        innerSelect.Change("plain-resource");
+        var selectedResource = resourceSelect.Instance.Resources!.Single(resource => resource.Name == "plain-resource");
+        var innerSelect = resourceSelect.FindComponent<FluentSelect<SelectViewModel<ResourceTypeDetails>, SelectViewModel<ResourceTypeDetails>>>();
+        await innerSelect.InvokeAsync(() => innerSelect.Instance.ValueChanged.InvokeAsync(selectedResource));
 
         cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == plainResource.Name);
         cut.WaitForState(() => cut.FindComponents<LogViewer>().Count > 0);
@@ -509,7 +580,7 @@ public partial class ConsoleLogsTests
         ]);
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".log-content").Count));
 
-        var search = Assert.Single(cut.FindComponents<FluentSearch>());
+        var search = Assert.Single(cut.FindComponents<FluentTextInput>());
         await cut.InvokeAsync(() => search.Instance.ValueChanged.InvokeAsync("filtered"));
 
         cut.WaitForAssertion(() =>
@@ -583,7 +654,10 @@ public partial class ConsoleLogsTests
     [Fact]
     public void TerminalView_InitialRender_ReconnectsWhenResourceChangesDuringInitialization()
     {
-        var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
+        TerminalSetupHelpers.SetupTerminalWindows(this);
         var initTerminal = module.Setup<int>("initTerminal", _ => true);
         var reconnectTerminal = module.Setup<int>("reconnectTerminal", _ => true);
         reconnectTerminal.SetResult(2);
@@ -592,12 +666,22 @@ public partial class ConsoleLogsTests
         {
             builder.Add(p => p.ResourceName, "first-resource");
             builder.Add(p => p.ReplicaIndex, 0);
+            builder.Add(p => p.DecreaseFontSizeLabel, "Decrease font size");
+            builder.Add(p => p.IncreaseFontSizeLabel, "Increase font size");
+            builder.Add(p => p.TerminalDimensionsLabel, "Terminal dimensions");
+            builder.Add(p => p.FitLabel, "Fit");
+            builder.Add(p => p.FocusControlsHintLabel, "F6: Focus terminal controls");
         });
 
         cut.SetParametersAndRender(builder =>
         {
             builder.Add(p => p.ResourceName, "second-resource");
             builder.Add(p => p.ReplicaIndex, 1);
+            builder.Add(p => p.DecreaseFontSizeLabel, "Decrease font size");
+            builder.Add(p => p.IncreaseFontSizeLabel, "Increase font size");
+            builder.Add(p => p.TerminalDimensionsLabel, "Terminal dimensions");
+            builder.Add(p => p.FitLabel, "Fit");
+            builder.Add(p => p.FocusControlsHintLabel, "F6: Focus terminal controls");
         });
 
         initTerminal.SetResult(1);
@@ -608,9 +692,15 @@ public partial class ConsoleLogsTests
             var reconnect = Assert.Single(reconnectTerminal.Invocations);
             var initUrl = Assert.IsType<string>(init.Arguments[1]);
             var reconnectUrl = Assert.IsType<string>(reconnect.Arguments[1]);
+            var labels = JsonSerializer.SerializeToElement(init.Arguments[3], JsonSerializerOptions.Web);
 
             Assert.Contains("resource=first-resource", initUrl);
             Assert.Contains("replica=0", initUrl);
+            Assert.Equal("Decrease font size", labels.GetProperty("decreaseFontSize").GetString());
+            Assert.Equal("Increase font size", labels.GetProperty("increaseFontSize").GetString());
+            Assert.Equal("Terminal dimensions", labels.GetProperty("terminalDimensions").GetString());
+            Assert.Equal("Fit", labels.GetProperty("fit").GetString());
+            Assert.Equal("F6: Focus terminal controls", labels.GetProperty("focusControlsHint").GetString());
             Assert.Equal(1, reconnect.Arguments[0]);
             Assert.Contains("resource=second-resource", reconnectUrl);
             Assert.Contains("replica=1", reconnectUrl);
@@ -663,13 +753,8 @@ public partial class ConsoleLogsTests
         // reaching its assertions. The stubs return harmless defaults — the
         // assertions in these tests are about render-branch selection, not
         // about runtime terminal behaviour.
-        var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
-        module.Setup<int>("initTerminal", _ => true).SetResult(1);
-        module.Setup<int>("reconnectTerminal", _ => true).SetResult(2);
-        module.SetupVoid("disposeTerminal", _ => true).SetVoidResult();
-        module.SetupVoid("refreshLayout", _ => true).SetVoidResult();
-        module.SetupVoid("refreshToolbarState", _ => true).SetVoidResult();
-        module.Setup<TerminalSizePreset[]>("getSizePresets").SetResult([]);
+        TerminalSetupHelpers.SetupTerminalView(this);
+        TerminalSetupHelpers.SetupTerminalWindows(this);
     }
 
     private static ResourceViewModel CreateTerminalResource(string resourceName, int replicaIndex, int replicaCount, KnownResourceState state = KnownResourceState.Running)

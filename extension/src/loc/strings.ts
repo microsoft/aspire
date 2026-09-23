@@ -56,6 +56,7 @@ export const noWatchTask = vscode.l10n.t('No watch task found. Please ensure a w
 export const buildFailedWithExitCode = (exitCode: number | string) => vscode.l10n.t('Build failed with exit code {0}.', exitCode);
 export const noOutputFromMsbuild = vscode.l10n.t('No output from msbuild.');
 export const failedToGetTargetPath = (err: string) => vscode.l10n.t('Failed to get TargetPath: {0}.', err);
+export const prebuiltProjectOutputMissing = (projectPath: string, outputPath: string) => vscode.l10n.t('The expected prebuilt output {1} for project {0} does not exist. Aspire will not rebuild the project because building is suppressed.', projectPath, outputPath);
 export const unsupportedResourceType = (type: string) => vscode.l10n.t('Attempted to start unsupported resource type: {0}.', type);
 export const rpcServerNotInitialized = vscode.l10n.t('RPC server is not initialized.');
 export const extensionContextNotInitialized = vscode.l10n.t('Extension context is not initialized.');
@@ -192,10 +193,14 @@ export const updateAspireCliAction = vscode.l10n.t({ message: 'Update Aspire CLI
 export const invalidLaunchConfiguration = (projectPath: string) => vscode.l10n.t('Invalid launch configuration for {0}.', projectPath);
 export const denoInspectorAddressUnavailable = vscode.l10n.t('Could not reserve a loopback address for the Deno inspector.');
 export const denoAppHostRunCommandMissing = vscode.l10n.t("The Deno AppHost command does not contain the required 'run' subcommand.");
+export const failedToCleanUpMsBuildTemporaryDirectory = (directoryPath: string, error: string) => vscode.l10n.t("Failed to clean up temporary MSBuild directory '{0}': {1}", directoryPath, error);
 export const browserDisplayName = (url: string) => vscode.l10n.t('Browser: {0}', url);
 export const browserLabel = vscode.l10n.t('Browser');
 export const unsupportedBrowserDebugTarget = (browser: string, url: string, supportedBrowsers: string) => vscode.l10n.t("Browser '{0}' cannot be debugged for '{1}'. Supported browsers are: {2}.", browser, url, supportedBrowsers);
 export const unsupportedBrowserDebugTargetWithoutUrl = (browser: string, supportedBrowsers: string) => vscode.l10n.t("Browser '{0}' cannot be debugged. Supported browsers are: {1}.", browser, supportedBrowsers);
+export const csharpExtensionMissingForBlazorDebugging = (extensionId: string, minimumVersion: string) => vscode.l10n.t('Debugging this Blazor client requires {0} version {1} or later. Install the C# extension, then start debugging again.', extensionId, minimumVersion);
+export const csharpExtensionOutdatedForBlazorDebugging = (extensionId: string, installedVersion: string, minimumVersion: string) => vscode.l10n.t('Debugging this Blazor client requires {0} version {2} or later. Installed version: {1}. Update the C# extension, then start debugging again.', extensionId, installedVersion, minimumVersion);
+export const missingBlazorClientProject = (projectPath: string) => vscode.l10n.t("The Blazor client project '{0}' does not exist. Restore or rebuild the AppHost, then start debugging again.", projectPath);
 export const goDisplayName = (program: string) => `Go: ${program}`;
 export const goLabel = 'Go';
 export const rustDisplayName = (program: string) => vscode.l10n.t('Rust: {0}', program);
@@ -241,7 +246,9 @@ export const authorizationHeaderRequired = vscode.l10n.t('Authorization header i
 export const testRunSessionManagerNotInitialized = vscode.l10n.t('Test run session manager has not been initialized with DCP server connection information.');
 export const buildFailedForProjectWithError = (project: string, error: string) => vscode.l10n.t('Build failed for project {0} with error: {1}.', project, error);
 export const failedToInspectRuntimeConfig = (outputPath: string, error: string) => vscode.l10n.t('Failed to inspect runtimeconfig for {0}: {1}', outputPath, error);
-export const dotNetRunFallbackDisablesDebugger = (outputPath: string, projectPath: string) => vscode.l10n.t('Project output {0} is not directly runnable; launching {1} with dotnet run without debugger attach. Breakpoints will not be hit for this resource.', outputPath, projectPath);
+export const resolvedRunCommandDisablesDebugger = (outputPath: string, projectPath: string) => vscode.l10n.t('Project output {0} is not directly runnable; launching the resolved run command for {1} without debugger attach. Breakpoints will not be hit for this resource.', outputPath, projectPath);
+export const failedToGetProjectRunProperties = (project: string, error: string) => vscode.l10n.t('Failed to resolve the run command for project {0}: {1}', project, error);
+export const invalidMsBuildRunCommandResponse = vscode.l10n.t('dotnet msbuild returned an invalid run-command response.');
 export const dotNetRunFileBasedExecutableProfileFallback = (profileName: string, projectPath: string) => vscode.l10n.t('The default launch profile \'{0}\' is an Executable profile, so dotnet run-api does not return the file-based app {1}; launching it with dotnet run without debugger attach. Breakpoints will not be hit for this resource.', profileName, projectPath);
 export const executableLaunchProfileMissingExecutablePath = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' uses commandName \'Executable\' but does not specify an executablePath. Add an executablePath to the launch profile.', profileName);
 export const explicitLaunchProfileNotResolved = (profileName: string) => vscode.l10n.t('Launch profile \'{0}\' could not be uniquely resolved from the project launch settings.', profileName);

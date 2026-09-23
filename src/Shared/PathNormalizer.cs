@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Aspire.Hosting.Utils;
 
 internal static class PathNormalizer
@@ -85,6 +87,15 @@ internal static class PathNormalizer
 
             try
             {
+                if (!TryCreateCaseVariant(segment, out var caseVariant) ||
+                    !Path.Exists(Path.Combine(current, caseVariant)))
+                {
+                    // If an alternate casing does not resolve, this directory is case-sensitive for the
+                    // segment and the existing candidate already has authoritative filesystem casing.
+                    current = candidate;
+                    continue;
+                }
+
                 string? exactMatch = null;
                 string? caseInsensitiveMatch = null;
                 foreach (var entry in Directory.EnumerateFileSystemEntries(current))
@@ -116,6 +127,27 @@ internal static class PathNormalizer
         }
 
         return current;
+    }
+
+    private static bool TryCreateCaseVariant(string segment, [NotNullWhen(true)] out string? caseVariant)
+    {
+        for (var index = 0; index < segment.Length; index++)
+        {
+            var character = segment[index];
+            var replacement = char.IsUpper(character)
+                ? char.ToLowerInvariant(character)
+                : char.ToUpperInvariant(character);
+            if (replacement != character)
+            {
+                var characters = segment.ToCharArray();
+                characters[index] = replacement;
+                caseVariant = new string(characters);
+                return true;
+            }
+        }
+
+        caseVariant = null;
+        return false;
     }
 
     /// <summary>

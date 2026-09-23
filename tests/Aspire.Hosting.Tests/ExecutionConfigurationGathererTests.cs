@@ -109,6 +109,41 @@ public class ExecutionConfigurationGathererTests
         Assert.Equal("async-arg", context.Arguments[0]);
     }
 
+    [Fact]
+    public async Task GetReferencesFindsEndpointReferencesAcrossExecutionConfigurationValues()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var target = builder.AddExecutable("target", "target.exe", ".")
+            .WithEndpoint(name: "environment", targetPort: 5000)
+            .WithEndpoint(name: "argument", targetPort: 5001)
+            .WithEndpoint(name: "launch-tool", targetPort: 5002);
+        var environmentReference = target.GetEndpoint("environment", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+        var argumentReference = target.GetEndpoint("argument", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+        var launchToolReference = target.GetEndpoint("launch-tool", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+
+#pragma warning disable ASPIREEXTENSION001
+        var consumer = builder.AddExecutable("consumer", "consumer.exe", ".")
+            .WithEnvironment("TARGET_ENVIRONMENT", environmentReference)
+            .WithArgs(argumentReference)
+            .WithLaunchToolArgs(context => context.Args.Add(launchToolReference))
+            .Resource;
+#pragma warning restore ASPIREEXTENSION001
+
+        await builder.BuildAsync();
+
+        var context = new ExecutionConfigurationGathererContext();
+        await new ArgumentsExecutionConfigurationGatherer()
+            .GatherAsync(context, consumer, NullLogger.Instance, builder.ExecutionContext);
+        await new EnvironmentVariablesExecutionConfigurationGatherer()
+            .GatherAsync(context, consumer, NullLogger.Instance, builder.ExecutionContext);
+
+        var references = context.GetReferences<EndpointReference>();
+
+        Assert.Equal(
+            [argumentReference, environmentReference, launchToolReference],
+            references.OrderBy(reference => reference.EndpointName));
+    }
+
     #endregion
 
     #region EnvironmentVariablesExecutionConfigurationGatherer Tests

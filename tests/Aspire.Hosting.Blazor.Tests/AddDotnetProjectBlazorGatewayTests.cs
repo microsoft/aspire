@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREDOTNETPROJECT001 // AddDotnetProject and the DotnetProjectResource-backed gateway are experimental
+#pragma warning disable ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
@@ -60,12 +61,13 @@ public class AddDotnetProjectBlazorGatewayTests(ITestOutputHelper testOutputHelp
     }
 
     [Fact]
-    public void AddDotnetProjectBlazorGateway_InPublishMode_Throws()
+    public void AddDotnetProjectBlazorGateway_InPublishMode_ConfiguresSdkPublishing()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        // Publishing a DotnetProjectResource-backed gateway is not supported yet because the resource
-        // is not an IContainerFilesDestinationResource, so the WASM static-asset merge would be skipped.
-        Assert.Throws<NotSupportedException>(() => builder.AddDotnetProjectBlazorGateway("gateway"));
+        var gateway = builder.AddDotnetProjectBlazorGateway("gateway");
+
+        Assert.True(gateway.Resource.SupportsDotnetProgramPublishing());
+        Assert.IsAssignableFrom<IContainerFilesDestinationResource>(gateway.Resource);
     }
 }

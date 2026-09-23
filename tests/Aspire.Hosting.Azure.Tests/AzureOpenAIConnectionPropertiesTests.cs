@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureOpenAIConnectionPropertiesTests
+public class AzureOpenAIConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureOpenAIResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var openai = builder.AddAzureOpenAI("openai");
 
         var resource = Assert.Single(builder.Resources.OfType<AzureOpenAIResource>());

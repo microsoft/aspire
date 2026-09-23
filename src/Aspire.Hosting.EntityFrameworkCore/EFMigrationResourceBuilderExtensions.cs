@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // PipelineStepAnnotation is experimental; used to wire migration-bundle pipeline steps.
+#pragma warning disable ASPIRECONNECTIONSTRINGS001
+#pragma warning disable ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.EntityFrameworkCore;
@@ -262,7 +264,9 @@ public static class EFMigrationResourceBuilderExtensions
     public static IResourceBuilder<EFMigrationResource> WithMigrationsProject<TProject>(this IResourceBuilder<EFMigrationResource> builder)
         where TProject : IProjectMetadata, new()
     {
-        builder.Resource.MigrationsProjectPath = new TProject().ProjectPath;
+        var metadata = new TProject();
+        builder.Resource.MigrationsProjectPath = metadata.ProjectPath;
+        builder.Resource.MigrationsProjectMetadata = metadata;
         return builder;
     }
 
@@ -272,7 +276,7 @@ public static class EFMigrationResourceBuilderExtensions
     [AspireExport("withMigrationsProject")]
     internal static IResourceBuilder<EFMigrationResource> WithMigrationsProjectForPolyglot(
         this IResourceBuilder<EFMigrationResource> builder,
-        [AspireUnion(typeof(string), typeof(IResourceBuilder<ProjectResource>))] object? migrationsProject = null)
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<IDotnetProgramResource>))] object? migrationsProject = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
@@ -280,9 +284,27 @@ public static class EFMigrationResourceBuilderExtensions
         {
             null => builder,
             string projectPath => builder.WithMigrationsProject(projectPath),
-            IResourceBuilder<ProjectResource> projectBuilder => builder.WithMigrationsProject(projectBuilder.Resource.GetProjectMetadata().ProjectPath),
+            IResourceBuilder<IDotnetProgramResource> projectBuilder => WithMigrationsProjectResource(builder, projectBuilder.Resource),
             _ => throw new ArgumentException("Migrations project must be omitted, a project path string, or a project resource builder.", nameof(migrationsProject))
         };
+    }
+
+    private static IResourceBuilder<EFMigrationResource> WithMigrationsProjectResource(
+        IResourceBuilder<EFMigrationResource> builder,
+        IDotnetProgramResource projectResource)
+    {
+        var metadata = projectResource.GetProjectMetadata();
+        if (metadata.IsFileBasedApp)
+        {
+            throw new InvalidOperationException(
+                $"EF Core migrations require a project file. Resource '{projectResource.Name}' is a file-based app.");
+        }
+
+        builder.WithMigrationsProject(metadata.ProjectPath);
+        // A path alone loses the build-readiness capability and configured providers on this resource.
+        builder.Resource.MigrationsProjectResource = projectResource;
+        builder.Resource.MigrationsProjectMetadata = metadata;
+        return builder;
     }
 
     // Base image repositories used when publishing the migration bundle as a container. The
@@ -298,8 +320,6 @@ public static class EFMigrationResourceBuilderExtensions
     // Suffix appended to the image tag for Windows-based containers (nanoserver is the smallest
     // Windows image that includes cmd.exe for shell-form ENTRYPOINT env-var expansion).
     private const string WindowsImageTagSuffix = "-nanoserver-ltsc2022";
-    private const string ConnectionStringEnvVarPrefix = "ConnectionStrings__";
-
     // Mirrors Aspire.Dashboard.Model.KnownRelationshipTypes.Reference, which is internal to
     // Aspire.Hosting and not visible from this project. Kept in sync with that constant.
     private const string ReferenceRelationshipType = "Reference";
@@ -332,8 +352,9 @@ public static class EFMigrationResourceBuilderExtensions
         builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((@event, _) =>
         {
             var connectionStringResource = GetSingleConnectionStringResource(migrationResource);
-            var envVar = connectionStringResource.ConnectionStringEnvironmentVariable
-                ?? ConnectionStringEnvVarPrefix + connectionStringResource.Name;
+            var envVar = ConnectionStringEnvironmentVariableNames
+                .Create(connectionStringResource, connectionStringResource.Name)
+                .PortableName;
 
             migrationResource.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
             {
@@ -518,8 +539,9 @@ public static class EFMigrationResourceBuilderExtensions
     {
         var primary = GetSingleConnectionStringResource(migrationResource);
 
-        var envVarName = primary.ConnectionStringEnvironmentVariable
-            ?? ConnectionStringEnvVarPrefix + primary.Name;
+        var envVarName = ConnectionStringEnvironmentVariableNames
+            .Create(primary, primary.Name)
+            .PortableName;
 
         var baseImage = ResolveBaseImage(migrationResource);
         var bundleFileName = EFResourceBuilderExtensions.GetBundleFileName(migrationResource);

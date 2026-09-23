@@ -24,10 +24,20 @@ internal sealed class CliTagEnrichmentProcessor : BaseProcessor<Activity>
     public override void OnEnd(Activity activity)
     {
         var tags = _tagsSource.GetResolvedTags();
+        var suppressInternalIdentity = activity.OperationName == TelemetryConstants.Activities.InternalMicrosoftDetector;
 
         // Add tags to the activity itself.
         foreach (var tag in tags)
         {
+            // The detector activity reports only bounded outcome metadata. Alias and domain are
+            // already attached to ordinary reported activities and must not be duplicated onto
+            // the detector-health event that measures whether those values were available.
+            if (suppressInternalIdentity &&
+                tag.Key is TelemetryConstants.Tags.InternalMicrosoftAlias or TelemetryConstants.Tags.InternalMicrosoftDomain)
+            {
+                continue;
+            }
+
             activity.SetTag(tag.Key, tag.Value);
         }
     }

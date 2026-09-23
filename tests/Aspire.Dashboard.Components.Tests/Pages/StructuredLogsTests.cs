@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -15,6 +16,7 @@ using Aspire.Dashboard.Utils;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
@@ -219,11 +221,17 @@ public partial class StructuredLogsTests : DashboardTestContext
         });
 
         var scrollContainer = cut.Find("#structuredLogsScrollContainer");
+        var scrollButton = Assert.Single(scrollContainer.QuerySelectorAll(":scope > aspire-scroll-to-bottom"));
+        Assert.True(scrollButton.HasAttribute("hidden"));
+        var controlsLoc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.ControlsStrings>>();
+        Assert.Equal(controlsLoc[nameof(Dashboard.Resources.ControlsStrings.ScrollToBottom)].Value, scrollButton.GetAttribute("data-scroll-to-bottom-label"));
+        var grid = cut.FindComponent<AspireFluentDataGrid<LogSummary>>();
         var loc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.StructuredLogs>>();
 
         Assert.Equal("0", scrollContainer.GetAttribute("tabindex"));
         Assert.Equal("region", scrollContainer.GetAttribute("role"));
         Assert.Equal(loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsHeader)].Value, scrollContainer.GetAttribute("aria-label"));
+        Assert.Equal(VirtualizeAnchorMode.End, grid.Instance.AnchorMode);
         cut.WaitForAssertion(() =>
         {
             Assert.Contains(JSInterop.Invocations, invocation =>
@@ -232,6 +240,62 @@ public partial class StructuredLogsTests : DashboardTestContext
                 string.Equals(invocation.Arguments[0]?.ToString(), "structuredLogsScrollContainer", StringComparison.Ordinal) &&
                 string.Equals(invocation.Arguments[1]?.ToString(), bool.TrueString, StringComparison.OrdinalIgnoreCase));
         });
+    }
+
+    [Fact]
+    public async Task ItemsProvider_ZeroCountRefresh_ReturnsData()
+    {
+        SetupStructureLogsServices();
+
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(),
+                        LogRecords =
+                        {
+                            CreateLogRecord(),
+                            CreateLogRecord(),
+                            CreateLogRecord(),
+                            CreateLogRecord(),
+                            CreateLogRecord(),
+                            CreateLogRecord()
+                        }
+                    }
+                }
+            }
+        });
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        var cut = RenderComponent<StructuredLogs>(builder => builder.Add(p => p.ViewportInformation, viewport));
+        var grid = cut.FindComponent<AspireFluentDataGrid<LogSummary>>();
+        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+
+        var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<LogSummary>
+        {
+            StartIndex = 0,
+            Count = 0
+        }).AsTask());
+        var refreshedResult = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<LogSummary>
+        {
+            StartIndex = 0,
+            Count = 0
+        }).AsTask());
+
+        Assert.Equal(6, result.TotalItemCount);
+        Assert.Equal(6, result.Items.Count);
+        var itemComparer = Assert.IsAssignableFrom<IEqualityComparer<LogSummary>>(grid.Instance.ItemComparer);
+        var items = result.Items.ToArray();
+        var refreshedItems = refreshedResult.Items.ToArray();
+        Assert.NotSame(items[0], refreshedItems[0]);
+        Assert.True(itemComparer.Equals(items[0], refreshedItems[0]));
+        Assert.False(itemComparer.Equals(items[0], items[1]));
     }
 
     [Fact]
@@ -249,8 +313,7 @@ public partial class StructuredLogsTests : DashboardTestContext
             builder.Add(p => p.ViewportInformation, viewport);
         });
 
-        // FluentSearch writes the autocomplete attribute through JS interop, so bUnit can only verify the component parameter.
-        var search = Assert.Single(cut.FindComponents<FluentSearch>());
+        var search = Assert.Single(cut.FindComponents<FluentTextInput>());
         Assert.Equal("off", search.Instance.AutoComplete);
     }
 
@@ -285,20 +348,11 @@ public partial class StructuredLogsTests : DashboardTestContext
     [InlineData(true, 0)]
     public async Task Render_AtLogLimit_LimitMessageOnlyDisplayedForLiveRun(bool isReadOnly, int expectedMessageCount)
     {
-        var messageCount = 0;
-        var messageService = new TestMessageService(_ =>
-        {
-            messageCount++;
-            return Task.FromResult(new Message());
-        });
-
         SetupStructureLogsServices();
-        Services.AddSingleton<IMessageService>(messageService);
         Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions
         {
             TelemetryLimits = { MaxLogCount = 1 }
         }));
-
         await FluentUISetupHelpers.ConfigureTelemetryRepository(this, isReadOnly, telemetryRepository => telemetryRepository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
@@ -314,12 +368,13 @@ public partial class StructuredLogsTests : DashboardTestContext
                 }
             }
         }));
-
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
-        var cut = RenderComponent<StructuredLogs>(builder => builder.Add(p => p.ViewportInformation, viewport));
+        var cut = FluentUISetupHelpers.RenderMessageBarProviderWithPage<StructuredLogs>(this, viewport);
 
-        cut.WaitForAssertion(() => Assert.Equal(expectedMessageCount, messageCount));
+        var grid = cut.FindComponent<AspireFluentDataGrid<LogSummary>>();
+        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        cut.WaitForAssertion(() => Assert.Equal(expectedMessageCount, cut.FindComponents<DashboardMessageBar>().Count));
     }
 
     private void SetupStructureLogsServices()
@@ -334,7 +389,6 @@ public partial class StructuredLogsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentToolbar(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
-        JSInterop.SetupVoid("initializeContinuousScroll").SetVoidResult();
         JSInterop.SetupVoid("focusElement", _ => true);
 
         FluentUISetupHelpers.AddCommonDashboardServices(this);

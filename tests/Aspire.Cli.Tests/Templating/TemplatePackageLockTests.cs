@@ -49,7 +49,7 @@ public class TemplatePackageLockTests
 
         Assert.True(overrides.TryGetProperty("minimatch@3.1.5", out var minimatchOverride));
         Assert.Equal(
-            "2.1.3",
+            "2.1.4",
             minimatchOverride.GetProperty("brace-expansion").GetString());
         Assert.False(overrides.TryGetProperty("brace-expansion@1", out _));
     }

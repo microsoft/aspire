@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREDOTNETPROJECT001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Resources;
@@ -260,12 +261,17 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         var param1 = builder.AddParameter("param1", secret: true);
         var cs = builder.AddConnectionString("api-cs", ReferenceExpression.Create($"Url={param0}, Secret={param1}"));
         var csPlain = builder.AddConnectionString("api-cs2", ReferenceExpression.Create($"host.local:80"));
+        var manualAlias = builder.AddConnectionString("manual-db", ReferenceExpression.Create($"unused"));
 
         var param3 = builder.AddResource(ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder, "param3"));
         builder.AddProject<TestProject>("SpeciaL-ApP", launchProfileName: null)
             .WithEnvironment("param3", param3)
             .WithReference(cs)
-            .WithReference(csPlain);
+            .WithReference(csPlain)
+            .WithEnvironment("ConnectionStrings__api-cs2", "override")
+            .WithReferenceEnvironment(ReferenceEnvironmentInjectionFlags.ConnectionProperties)
+            .WithReference(manualAlias)
+            .WithEnvironment("ConnectionStrings__manual-db", "manual");
 
         var app = builder.Build();
 
@@ -323,7 +329,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         builder
             .AddProject<TestProject>("project1", launchProfileName: null)
             .WithHttpsEndpoint()
-            .WithHttpProbe(ProbeType.Readiness,"/ready", initialDelaySeconds: 60)
+            .WithHttpProbe(ProbeType.Readiness, "/ready", initialDelaySeconds: 60)
             .WithHttpProbe(ProbeType.Liveness, "/health");
 #pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
@@ -737,6 +743,25 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         }
 
         await settingsTask;
+    }
+
+    [Fact]
+    public async Task KubernetesWithDotnetProjectUsesImageParameterAndProjectEndpoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env");
+        builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint();
+        using var app = builder.Build();
+
+        app.Run();
+
+        await Verify(File.ReadAllText(Path.Combine(workspace.Path, "Chart.yaml")), "yaml")
+            .AppendContentAsFile(File.ReadAllText(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(File.ReadAllText(Path.Combine(workspace.Path, "templates", "api", "deployment.yaml")), "yaml")
+            .AppendContentAsFile(File.ReadAllText(Path.Combine(workspace.Path, "templates", "api", "service.yaml")), "yaml")
+            .AppendContentAsFile(File.ReadAllText(Path.Combine(workspace.Path, "templates", "api", "config.yaml")), "yaml");
     }
 
     [Fact]

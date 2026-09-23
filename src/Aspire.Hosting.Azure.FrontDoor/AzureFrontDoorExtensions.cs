@@ -120,13 +120,18 @@ public static class AzureFrontDoorExtensions
                 };
                 infrastructure.Add(originGroup);
 
-                // Origin
                 var origin = new FrontDoorOrigin($"{originBicepId}Origin")
                 {
                     Parent = originGroup,
                     HostName = hostParam,
                     OriginHostHeader = hostParam
                 };
+                // The same Aspire resource can resolve to a different backend hostname between deployments.
+                // Include the hostname in the resource-group-scoped hash so a backend change creates a new
+                // origin instead of reusing the existing origin's Azure identity.
+                origin.Name = BicepFunction.Take(
+                    BicepFunction.Interpolate($"{originBicepId.Replace('_', '-')}Origin-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id, hostParam)}"),
+                    origin.GetResourceNameRequirements().MaxLength);
                 infrastructure.Add(origin);
 
                 // Route
