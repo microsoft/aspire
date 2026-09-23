@@ -38,7 +38,7 @@ public partial class TerminalDockTests
         await telemetryService.InitializeAsync();
         Assert.Equal(Enumerable.Repeat(TelemetryEndpoints.TelemetryPostProperty,
             telemetryEnabled ? telemetryService._defaultProperties.Count : 0), DrainTelemetryEvents(sender));
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         Assert.Null(cut.Instance.TelemetryContext);
 
         var renderCount = cut.RenderCount;
