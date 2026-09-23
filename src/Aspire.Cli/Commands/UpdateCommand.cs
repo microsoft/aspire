@@ -40,6 +40,7 @@ internal sealed class UpdateCommand : BaseCommand
     private readonly IConfiguration _configuration;
     private readonly IEnumerable<IMigration> _migrations;
     private readonly IProcessPathProvider _processPathProvider;
+    private readonly RepositoryToolUpdater _repositoryToolUpdater;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", UpdateCommandStrings.ProjectArgumentDescription);
     private static readonly Option<bool> s_selfOption = new("--self")
@@ -73,6 +74,7 @@ internal sealed class UpdateCommand : BaseCommand
         IConfiguration configuration,
         IEnumerable<IMigration> migrations,
         IProcessPathProvider processPathProvider,
+        RepositoryToolUpdater repositoryToolUpdater,
         CommonCommandServices services)
         : base("update", UpdateCommandStrings.Description, services)
     {
@@ -88,6 +90,7 @@ internal sealed class UpdateCommand : BaseCommand
         _configuration = configuration;
         _migrations = migrations;
         _processPathProvider = processPathProvider;
+        _repositoryToolUpdater = repositoryToolUpdater;
 
         Options.Add(s_appHostOption);
         Options.Add(s_selfOption);
@@ -197,23 +200,43 @@ internal sealed class UpdateCommand : BaseCommand
             // rewriting that pin is precisely what this command does. Prefer the settings
             // lookup, which does not MSBuild-validate the path, and only fall through to the
             // strict discovery path when no AppHost is recorded in settings.
-            FileInfo? projectFile;
-            if (passedAppHostProjectFile is not null)
+            FileInfo? projectFile = null;
+            IReadOnlyList<RepositoryToolManifest>? toolManifests = null;
+            try
             {
-                projectFile = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, createSettingsFile: true, cancellationToken);
+                if (passedAppHostProjectFile is not null)
+                {
+                    projectFile = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, createSettingsFile: true, cancellationToken);
+                }
+                else
+                {
+                    projectFile = await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken)
+                        ?? await _projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true, cancellationToken);
+                }
             }
-            else
+            catch (ProjectLocatorException ex) when (passedAppHostProjectFile is null && ex.FailureReason == ProjectLocatorFailureReason.NoProjectFileFound)
             {
-                projectFile = await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken)
-                    ?? await _projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true, cancellationToken);
+                toolManifests = await _repositoryToolUpdater.FindManifestsAsync(ExecutionContext.WorkingDirectory, cancellationToken);
+                if (toolManifests.Count == 0)
+                {
+                    throw;
+                }
             }
-            if (projectFile is null)
+
+            if (projectFile is null && passedAppHostProjectFile is not null)
             {
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
 
-            var project = _projectFactory.GetProject(projectFile);
-            var isProjectReferenceMode = project.IsUsingProjectReferences(projectFile);
+            var updateDirectory = projectFile?.Directory ?? ExecutionContext.WorkingDirectory;
+            toolManifests ??= await _repositoryToolUpdater.FindManifestsAsync(updateDirectory, cancellationToken);
+            if (projectFile is null && toolManifests.Count == 0)
+            {
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject);
+            }
+
+            var project = projectFile is not null ? _projectFactory.GetProject(projectFile) : null;
+            var isProjectReferenceMode = project is not null && projectFile is not null && project.IsUsingProjectReferences(projectFile);
 
             // Resolve the channel using the documented precedence:
             //   1. explicit --channel / hidden --quality
@@ -238,8 +261,7 @@ internal sealed class UpdateCommand : BaseCommand
             var channelFromConfig = false;
             if (string.IsNullOrWhiteSpace(channelName))
             {
-                var configLookupDirectory = projectFile.Directory ?? ExecutionContext.WorkingDirectory;
-                channelName = await _configurationService.GetConfigurationFromDirectoryAsync("channel", configLookupDirectory, cancellationToken: cancellationToken);
+                channelName = await _configurationService.GetConfigurationFromDirectoryAsync("channel", updateDirectory, cancellationToken: cancellationToken);
                 channelFromConfig = !string.IsNullOrWhiteSpace(channelName);
             }
 
@@ -348,20 +370,32 @@ internal sealed class UpdateCommand : BaseCommand
             // so by this point --yes is always explicitly provided in non-interactive mode.
             // defaultValue: true means the interactive prompt defaults to "yes" (accept).
             var confirmBinding = PromptBinding.Create(parseResult, s_yesOption, defaultValue: true);
-            var nugetConfigDirBinding = PromptBinding.Create(parseResult, s_nugetConfigDirOption);
-            var updateContext = new UpdatePackagesContext
+            var hasRepositoryTools = toolManifests.Count > 0;
+            if (projectFile is null || project is null)
             {
-                AppHostFile = projectFile,
-                Channel = channel,
-                ConfirmBinding = confirmBinding,
-                NuGetConfigDirBinding = nugetConfigDirBinding
-            };
-            var cliUpdateResult = await TryUpdateCliBeforeGuestProjectUpdateAsync(project, projectFile, channel, confirmBinding, parseResult, cancellationToken);
+                await _repositoryToolUpdater.UpdateAsync(toolManifests, channel, confirmBinding, cancellationToken);
+                return CommandResult.Success();
+            }
+
+            // A repository-pinned CLI is updated through its manifest, not by replacing the
+            // executable currently running (which may be in a shared package cache).
+            var (cliUpdateResult, skipRepositoryToolUpdates) = await TryUpdateCliBeforeGuestProjectUpdateAsync(
+                project, projectFile, channel, confirmBinding, parseResult, toolManifests, cancellationToken);
             if (cliUpdateResult is not null)
             {
                 return cliUpdateResult;
             }
 
+            var toolUpdateStep = skipRepositoryToolUpdates ? null :
+                await _repositoryToolUpdater.GetUpdateStepAsync(toolManifests, channel, cancellationToken);
+            var updateContext = new UpdatePackagesContext
+            {
+                AppHostFile = projectFile,
+                Channel = channel,
+                ConfirmBinding = confirmBinding,
+                NuGetConfigDirBinding = PromptBinding.Create(parseResult, s_nugetConfigDirOption),
+                AdditionalUpdateSteps = toolUpdateStep is null ? [] : [toolUpdateStep]
+            };
             await project.UpdatePackagesAsync(updateContext, cancellationToken);
 
             // The package update may have moved the project onto a newer Aspire version whose
@@ -375,7 +409,8 @@ internal sealed class UpdateCommand : BaseCommand
 
             // After successful project update, check if CLI update is available and prompt
             // Only prompt if the channel supports CLI downloads (has a non-null CliDownloadBaseUrl)
-            if (_cliDownloader is not null &&
+            if (!hasRepositoryTools &&
+                _cliDownloader is not null &&
                 _updateNotifier.IsUpdateAvailable() &&
                 !string.IsNullOrEmpty(channel.CliDownloadBaseUrl))
             {
@@ -422,7 +457,7 @@ internal sealed class UpdateCommand : BaseCommand
         catch (ProjectLocatorException ex)
         {
             // Check if this is a "no project found" error and prompt for self-update
-            if (string.Equals(ex.Message, ErrorStrings.NoProjectFileFound, StringComparisons.CliInputOrOutput))
+            if (ex.FailureReason == ProjectLocatorFailureReason.NoProjectFileFound)
             {
                 // dotnet tool and npm installs have package-manager-specific update commands, so
                 // this recovery path does not prompt for archive self-update in those cases. Nix
@@ -553,20 +588,20 @@ internal sealed class UpdateCommand : BaseCommand
         }
     }
 
-    private async Task<CommandResult?> TryUpdateCliBeforeGuestProjectUpdateAsync(
+    private async Task<(CommandResult? Result, bool SkipRepositoryToolUpdates)> TryUpdateCliBeforeGuestProjectUpdateAsync(
         IAppHostProject project,
         FileInfo projectFile,
         PackageChannel channel,
         PromptBinding<bool> confirmBinding,
         ParseResult parseResult,
+        IReadOnlyList<RepositoryToolManifest> toolManifests,
         CancellationToken cancellationToken)
     {
-        if (_cliDownloader is null ||
-            string.IsNullOrEmpty(channel.CliDownloadBaseUrl) ||
+        if ((toolManifests.Count == 0 && (_cliDownloader is null || string.IsNullOrEmpty(channel.CliDownloadBaseUrl))) ||
             project.LanguageId.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase) ||
             projectFile.Directory is not { } projectDirectory)
         {
-            return null;
+            return (null, false);
         }
 
         var targetSdkVersion = await GetLatestGuestSdkVersionAsync(channel, projectDirectory, cancellationToken);
@@ -574,7 +609,26 @@ internal sealed class UpdateCommand : BaseCommand
             !SemVersion.TryParse(ExecutionContext.IdentitySdkVersion, SemVersionStyles.Strict, out var currentCliVersion) ||
             SemVersion.PrecedenceComparer.Compare(targetSdkVersion, currentCliVersion) <= 0)
         {
-            return null;
+            return (null, false);
+        }
+
+        if (toolManifests.Count > 0)
+        {
+            // Guest SDK generation still needs a compatible CLI. Update the repository pin
+            // and let the user restore it and re-run rather than overwriting
+            // the running executable or generating code with an incompatible CLI.
+            var toolUpdateResult = await _repositoryToolUpdater.UpdateAsync(toolManifests, channel, confirmBinding, cancellationToken);
+            if (toolUpdateResult == RepositoryToolUpdateResult.Declined)
+            {
+                // Continue the project update without asking to change the same CLI pins again.
+                return (null, true);
+            }
+            if (toolUpdateResult == RepositoryToolUpdateResult.NoChanges)
+            {
+                _repositoryToolUpdater.DisplayRestoreGuidance(toolManifests);
+            }
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
+            return (CommandResult.Success(), false);
         }
 
         var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
@@ -584,7 +638,7 @@ internal sealed class UpdateCommand : BaseCommand
 
         if (!shouldUpdateCli)
         {
-            return null;
+            return (null, false);
         }
 
         var dotNetToolUpdateCommand = GetDotNetToolUpdateCommand();
@@ -593,7 +647,7 @@ internal sealed class UpdateCommand : BaseCommand
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
             InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
-            return CommandResult.Success();
+            return (CommandResult.Success(), false);
         }
 
         var npmUpdateCommand = GetNpmUpdateCommand();
@@ -602,7 +656,7 @@ internal sealed class UpdateCommand : BaseCommand
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.NpmSelfUpdateMessage);
             InteractionService.DisplayPlainText($"  {npmUpdateCommand}");
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
-            return CommandResult.Success();
+            return (CommandResult.Success(), false);
         }
 
         var selfUpdateResult = await ExecuteSelfUpdateAsync(parseResult, channel.Name, cancellationToken);
@@ -611,7 +665,7 @@ internal sealed class UpdateCommand : BaseCommand
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
         }
 
-        return selfUpdateResult;
+        return (selfUpdateResult, false);
     }
 
     private async Task<SemVersion?> GetLatestGuestSdkVersionAsync(PackageChannel channel, DirectoryInfo projectDirectory, CancellationToken cancellationToken)

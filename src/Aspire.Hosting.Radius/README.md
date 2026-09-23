@@ -326,6 +326,8 @@ Runtime validation codes:
 
 A variable that `WithReference` itself injected is exempt from `ASPIRERADIUS070` — receiving the recipe's credential is the whole point of the reference. That exemption is decided from the variable name the connection-property splat produces for a reference the resource actually declares (`CACHE_PASSWORD`, or `ADMIN_PASSWORD` for `WithReference(cache, "admin")`), not from the value: an AppHost author can construct a value identical to an injected connection property, and such a variable *is* silently replaced by the recipe credential, so it is reported rather than exempted.
 
+Connection-property prefixes use the reference's logical name, independently of portable connection-string aliases. For example, `WithReference(sql, "db__primary")` emits `DB__PRIMARY_PASSWORD` alongside `ConnectionStrings__db_primary`; a user-authored `DB_PRIMARY_PASSWORD` is not an injected property of that reference.
+
 ### Known limitations
 
 * For `ASPIRERADIUS011`, AWS access-key credential conflicts are compared by the Aspire parameter name that supplies the access-key ID, not by the resolved access-key value. Two environments that use different parameter names for the same key can be flagged as a false conflict, while the same parameter name with different values is not flagged.

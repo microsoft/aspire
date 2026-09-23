@@ -2,11 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Net;
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
+using Azure.Provisioning.Primitives;
 using Xunit;
 
 namespace Aspire.Hosting.Azure.Provisioning.Tests;
@@ -117,6 +119,148 @@ public class BicepValueProxyTests
         Assert.True(assigned.IsSecure);
         Assert.Equal(BicepValueKind.Literal, assigned.Kind);
         Assert.Equal("secret", assigned.LiteralValue);
+    }
+
+    [Theory]
+    [InlineData("192.0.2.1")]
+    [InlineData("2001:db8::1")]
+    public void ConvertParsesIPAddressAndRoundTripsThroughProxy(string address)
+    {
+        var converted = BicepValueProxy.Convert<IPAddress>(address);
+        var proxy = BicepValueProxy.Create(converted, isSecure: true);
+        var roundTripped = BicepValueProxy.Convert<IPAddress>(proxy);
+
+        var assigned = (IBicepValue)roundTripped;
+        Assert.Equal(BicepValueKind.Literal, assigned.Kind);
+        Assert.Equal(IPAddress.Parse(address), assigned.LiteralValue);
+        Assert.True(assigned.IsSecure);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("not-an-address")]
+    [InlineData("192.0.2.999")]
+    [InlineData("2001:db8::invalid")]
+    public void ConvertRejectsInvalidIPAddress(string address)
+    {
+        Assert.Throws<FormatException>(() => BicepValueProxy.Convert<IPAddress>(address));
+    }
+
+    [Theory]
+    [InlineData("192.0.2.1")]
+    [InlineData("2001:db8::1")]
+    public void ConvertParsesStringFactoryIPAddress(string address)
+    {
+        var proxy = CreateInfrastructure().Create().String(address);
+
+        var converted = BicepValueProxy.Convert<IPAddress>(proxy);
+
+        Assert.Equal(BicepValueKind.Literal, ((IBicepValue)converted).Kind);
+        Assert.Equal(IPAddress.Parse(address), converted.Value);
+    }
+
+    [Theory]
+    [InlineData("192.0.2.1")]
+    [InlineData("2001:db8::1")]
+    public void AssignToParsesSecureStringIPAddress(string address)
+    {
+        var proxy = BicepValueProxy.Create(new BicepValue<string>(address), isSecure: true);
+        var target = new BicepValue<IPAddress>(IPAddress.Loopback);
+
+        proxy.AssignTo(target);
+
+        var assigned = (IBicepValue)target;
+        Assert.Equal(BicepValueKind.Literal, assigned.Kind);
+        Assert.Equal(IPAddress.Parse(address), assigned.LiteralValue);
+        Assert.True(assigned.IsSecure);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("not-an-address")]
+    [InlineData("192.0.2.999")]
+    [InlineData("2001:db8::invalid")]
+    public void AssignToRejectsInvalidStringIPAddressWithoutChangingTarget(string address)
+    {
+        var proxy = CreateInfrastructure().Create().String(address);
+        var target = new BicepValue<IPAddress>(IPAddress.Loopback);
+
+        Assert.Throws<FormatException>(() => BicepValueProxy.Convert<IPAddress>(proxy));
+        Assert.Throws<FormatException>(() => proxy.AssignTo(target));
+        Assert.Equal(IPAddress.Loopback, target.Value);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ConvertPreservesStringFactoryIPAddressExpressionAndSecurity(bool useReferenceExpression)
+    {
+        var factory = CreateInfrastructure().Create();
+        var builder = DistributedApplication.CreateBuilder();
+        var parameter = builder.AddParameter("address", "192.0.2.1", secret: true);
+        var proxy = useReferenceExpression
+            ? factory.ReferenceExpression(ReferenceExpression.Create($"{parameter}"), "ipAddress", isSecure: true)
+            : factory.Parameter(parameter, "ipAddress");
+
+        var converted = BicepValueProxy.Convert<IPAddress>(proxy);
+        var roundTripped = BicepValueProxy.Convert<IPAddress>(BicepValueProxy.Create(converted));
+
+        var assigned = (IBicepValue)roundTripped;
+        Assert.Equal(BicepValueKind.Expression, assigned.Kind);
+        Assert.Equal("ipAddress", roundTripped.ToBicepExpression().ToString());
+        Assert.True(assigned.IsSecure);
+    }
+
+    [Fact]
+    public void ConvertPreservesStringIPAddressSourceReference()
+    {
+        var parameter = new ProvisioningParameter("ipAddress", typeof(string)) { IsSecure = true };
+        BicepValue<string> source = parameter;
+        var reference = new BicepValueReference(parameter, "Value");
+        ((IBicepValue)source).Self = reference;
+        var proxy = BicepValueProxy.Create(source);
+
+        var converted = BicepValueProxy.Convert<IPAddress>(proxy);
+
+        var assigned = (IBicepValue)converted;
+        Assert.Same(reference, assigned.Source);
+        Assert.Equal(source.ToBicepExpression().ToString(), converted.ToBicepExpression().ToString());
+        Assert.True(assigned.IsSecure);
+    }
+
+    [Fact]
+    public void ConvertPreservesIPAddressExpressionAndSecurity()
+    {
+        var proxy = BicepValueProxy.Create(
+            new BicepValue<IPAddress>(new IdentifierExpression("ipAddress")),
+            isSecure: true);
+
+        var converted = BicepValueProxy.Convert<IPAddress>(proxy);
+        var assigned = (IBicepValue)converted;
+        Assert.Equal(BicepValueKind.Expression, assigned.Kind);
+        Assert.Equal("ipAddress", converted.ToBicepExpression().ToString());
+        Assert.True(assigned.IsSecure);
+    }
+
+    [Fact]
+    public void ConvertAllowsUntypedExpressionForIPAddress()
+    {
+        var proxy = BicepValueProxy.CreateExpression(new IdentifierExpression("ipAddress"), isSecure: false);
+
+        var converted = BicepValueProxy.Convert<IPAddress>(proxy);
+
+        Assert.Equal(BicepValueKind.Expression, ((IBicepValue)converted).Kind);
+        Assert.Equal("ipAddress", converted.ToBicepExpression().ToString());
+    }
+
+    [Fact]
+    public void ConvertRejectsIncompatibleIPAddressProxy()
+    {
+        var proxy = BicepValueProxy.Create(new BicepValue<int>(42));
+
+        var exception = Assert.Throws<ArgumentException>(() => BicepValueProxy.Convert<IPAddress>(proxy));
+
+        Assert.Equal("A literal of type Int32 cannot be assigned to a BicepValue<IPAddress>.", exception.Message);
     }
 
     [Fact]

@@ -7,6 +7,8 @@
     "experimentalPolyglot:go": true
   },
   "packages": {
+    "Aspire.Hosting.Azure.Kubernetes": "",
+    "Aspire.Hosting.Azure.Provisioning.ContainerService": "",
     "Aspire.Hosting": "",
     "Aspire.Hosting.Redis": ""
   }

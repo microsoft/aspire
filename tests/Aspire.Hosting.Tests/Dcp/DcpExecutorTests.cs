@@ -3962,6 +3962,153 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(desiredTargetPort, int.Parse(envVarVal, CultureInfo.InvariantCulture));
     }
 
+    [Fact]
+    public async Task OlderPendingServiceWatchEventDoesNotRegressAllocatedAddressBeforeWorkloadCreation()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var database = builder.AddContainer("database", "image")
+            .WithEndpoint(name: "tcp", targetPort: 5432, isProxied: true);
+
+        // DcpExecutor starts a long-lived service watch before creating services, then starts a second
+        // watch to wait for address allocation. Hold the original pending event until the allocation
+        // watch has applied a newer Ready event, then deliver the pending event before workloads are
+        // created. This forces the same out-of-order observation without relying on thread timing.
+        var longLivedWatchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var olderPendingEventBlocked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseOlderPendingEvent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var startupWatchObservedPendingEvent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var startupWatchAppliedAllocatedEvent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var olderPendingEventApplied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var newerAllocatedEventBlocked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseNewerAllocatedEvent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var containerNetworkCreationBlocked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseContainerNetworkCreation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var kubernetesService = new TestKubernetesService(
+            beforeCreate: resource =>
+            {
+                if (resource is Service service)
+                {
+                    service.Status = new ServiceStatus
+                    {
+                        EffectiveAddress = KnownHostNames.Localhost,
+                        EffectivePort = 0,
+                        State = ServiceState.NotReady
+                    };
+                }
+            },
+            beforeCreateAsync: async (resource, cancellationToken) =>
+            {
+                if (resource is Service)
+                {
+                    await longLivedWatchStarted.Task.WaitAsync(cancellationToken);
+                }
+                else if (resource is ContainerNetwork)
+                {
+                    containerNetworkCreationBlocked.TrySetResult();
+                    await releaseContainerNetworkCreation.Task.WaitAsync(cancellationToken);
+                }
+            },
+            allocateServiceAddresses: false,
+            watchStarted: (resourceType, watchIndex) =>
+            {
+                if (resourceType == typeof(Service) && watchIndex == 1)
+                {
+                    longLivedWatchStarted.TrySetResult();
+                }
+            },
+            beforeWatchEventAsync: async (context, cancellationToken) =>
+            {
+                if (context.ResourceType != typeof(Service))
+                {
+                    return;
+                }
+
+                var service = (Service)context.Resource;
+                if (context.WatchIndex == 1 &&
+                    context.EventType == k8s.WatchEventType.Added &&
+                    service.Status?.EffectivePort == 0)
+                {
+                    olderPendingEventBlocked.TrySetResult();
+                    await releaseOlderPendingEvent.Task.WaitAsync(cancellationToken);
+                }
+                else if (context.WatchIndex == 2 &&
+                    context.EventType == k8s.WatchEventType.Added &&
+                    service.Status?.EffectivePort == 0)
+                {
+                    startupWatchObservedPendingEvent.TrySetResult();
+                }
+                else if (context.WatchIndex == 1 &&
+                    context.EventType == k8s.WatchEventType.Modified &&
+                    service.Status?.EffectivePort > 0)
+                {
+                    newerAllocatedEventBlocked.TrySetResult();
+                    await releaseNewerAllocatedEvent.Task.WaitAsync(cancellationToken);
+                }
+            },
+            afterWatchEventAsync: (context, _) =>
+            {
+                if (context.ResourceType == typeof(Service))
+                {
+                    var service = (Service)context.Resource;
+                    if (context.WatchIndex == 1 &&
+                        context.EventType == k8s.WatchEventType.Added &&
+                        service.Status?.EffectivePort == 0)
+                    {
+                        olderPendingEventApplied.TrySetResult();
+                    }
+                    else if (context.WatchIndex == 2 &&
+                        context.EventType == k8s.WatchEventType.Modified &&
+                        service.Status?.EffectivePort > 0)
+                    {
+                        startupWatchAppliedAllocatedEvent.TrySetResult();
+                    }
+                }
+
+                return Task.CompletedTask;
+            });
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await using var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        var runTask = appExecutor.RunApplicationAsync();
+
+        try
+        {
+            await olderPendingEventBlocked.Task.DefaultTimeout();
+            await startupWatchObservedPendingEvent.Task.DefaultTimeout();
+            await containerNetworkCreationBlocked.Task.DefaultTimeout();
+
+            var service = Assert.Single(kubernetesService.CreatedResources.OfType<Service>());
+            service.Status = new ServiceStatus
+            {
+                EffectiveAddress = KnownHostNames.Localhost,
+                EffectivePort = TestKubernetesService.StartOfAutoPortRange,
+                State = ServiceState.Ready
+            };
+            kubernetesService.PushResourceModified(service);
+
+            await startupWatchAppliedAllocatedEvent.Task.DefaultTimeout();
+            releaseOlderPendingEvent.TrySetResult();
+            await olderPendingEventApplied.Task.DefaultTimeout();
+            await newerAllocatedEventBlocked.Task.DefaultTimeout();
+
+            releaseContainerNetworkCreation.TrySetResult();
+
+            await runTask.DefaultTimeout();
+
+            var allocatedEndpoint = database.Resource.GetEndpoint("tcp").AllocatedEndpoint;
+            Assert.NotNull(allocatedEndpoint);
+            Assert.Equal(TestKubernetesService.StartOfAutoPortRange, allocatedEndpoint.Port);
+        }
+        finally
+        {
+            releaseOlderPendingEvent.TrySetResult();
+            releaseNewerAllocatedEvent.TrySetResult();
+            releaseContainerNetworkCreation.TrySetResult();
+        }
+    }
+
     /// <summary>
     /// Verifies that applying unsupported endpoint port configuration to Containers results in an error.
     /// </summary>
@@ -7665,13 +7812,22 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal("project", launchConfigs[0].Type);
     }
 
-    [Fact]
-    public async Task FileBasedProjectResource_InDebugSession_UsesIdeWithoutProcessFallback()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FileBasedProjectResource_InCapabilitylessDebugSession_UsesProcessExecution(bool addProjectDebugSupport)
     {
         var builder = DistributedApplication.CreateBuilder();
         var projectPath = Path.Combine("src", "app.cs");
-        builder.AddResource(new ProjectResource("file-project"))
+        var fileProject = builder.AddResource(new ProjectResource("file-project"))
             .WithAnnotation(new TestFileBasedProject(projectPath));
+
+        if (addProjectDebugSupport)
+        {
+            fileProject.WithDebugSupport(
+                mode => new ProjectLaunchConfiguration { ProjectPath = projectPath, Mode = mode },
+                KnownLaunchConfigurationTypes.Project);
+        }
 
         var configDict = new Dictionary<string, string?>
         {
@@ -7688,9 +7844,58 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         await appExecutor.RunApplicationAsync();
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "file-project");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.NotNull(exe.Spec.Args);
+        Assert.Equal("run", exe.Spec.Args[0]);
+        Assert.Equal("--file", exe.Spec.Args[1]);
+        Assert.Equal(projectPath, exe.Spec.Args[2]);
+        Assert.Equal("--no-cache", exe.Spec.Args[3]);
+        Assert.Contains("--no-launch-profile", exe.Spec.Args);
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
+
+        Assert.True(exe.TryGetProjectLaunchConfiguration(out var launchConfiguration));
+        Assert.Equal(projectPath, launchConfiguration.ProjectPath);
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfiguration.Type);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FileBasedProjectResource_WithExplicitProjectCapability_UsesIdeWithoutProcessFallback(bool addProjectDebugSupport)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var projectPath = Path.Combine("src", "app.cs");
+        var fileProject = builder.AddResource(new ProjectResource("file-project"))
+            .WithAnnotation(new TestFileBasedProject(projectPath));
+
+        if (addProjectDebugSupport)
+        {
+            fileProject.WithDebugSupport(
+                mode => new ProjectLaunchConfiguration { ProjectPath = projectPath, Mode = mode },
+                KnownLaunchConfigurationTypes.Project);
+        }
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
+            {
+                ProtocolsSupported = ["test"],
+                SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.Project]
+            }),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "file-project");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
-        // File-based projects used to keep a `dotnet run --file` candidate for Process fallback.
-        // IDE-only launch is now intentional, so no second command remains in the rendered spec.
         Assert.Null(exe.Spec.Args);
         Assert.Null(exe.Spec.FallbackExecutionTypes);
 

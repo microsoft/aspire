@@ -16,10 +16,12 @@ namespace Aspire.Cli.Tests.TestServices;
 /// </summary>
 internal sealed class FakeNpmRunner : INpmRunner
 {
-    public bool IsAvailable => true;
+    public bool IsAvailable { get; set; } = true;
+
+    public Func<string, string, CancellationToken, Task<NpmPackageInfo?>>? ResolvePackageAsyncCallback { get; set; }
 
     public Task<NpmPackageInfo?> ResolvePackageAsync(string packageName, string versionRange, CancellationToken cancellationToken)
-        => Task.FromResult<NpmPackageInfo?>(null);
+        => ResolvePackageAsyncCallback?.Invoke(packageName, versionRange, cancellationToken) ?? Task.FromResult<NpmPackageInfo?>(null);
 
     public Task<string?> PackAsync(string packageName, string version, string outputDirectory, CancellationToken cancellationToken)
         => Task.FromResult<string?>(null);

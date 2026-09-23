@@ -28,5 +28,6 @@ internal sealed class RepositoryFactory(IServiceProvider serviceProvider) : IRep
         new SqliteResourceRepository(
             database,
             serviceProvider.GetRequiredService<IKnownPropertyLookup>(),
-            serviceProvider.GetRequiredService<ILoggerFactory>());
+            serviceProvider.GetRequiredService<ILoggerFactory>(),
+            serviceProvider.GetRequiredService<IOptions<DashboardOptions>>());
 }

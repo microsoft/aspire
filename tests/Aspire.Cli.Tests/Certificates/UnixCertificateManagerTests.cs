@@ -4,10 +4,10 @@
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Hosting;
 using System.Diagnostics;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 
@@ -140,14 +140,14 @@ public class UnixCertificateManagerTests
     }
 
     [Fact]
-    public void ResolveNssDbs_RecognizesAspireOverride()
+    public void ResolveNssDbs_RecognizesAspireConfiguration()
     {
         RunWithTemporaryHome(homeDirectory =>
         {
             var profileDirectory = CreateDirectory(homeDirectory, "custom-browser", "profile");
-            var manager = CreateManager(new Dictionary<string, string?>
+            var manager = CreateManager(configurationValues: new Dictionary<string, string?>
             {
-                [KnownConfigNames.CliDevCertsNssDbPaths] = $"firefox={profileDirectory}"
+                [CertificateConfiguration.NssDbPathsConfigPath] = $"firefox={profileDirectory}"
             });
 
             var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
@@ -158,36 +158,44 @@ public class UnixCertificateManagerTests
     }
 
     [Fact]
-    public void ResolveNssDbs_AspireOverrideTakesPrecedence()
+    public void ResolveNssDbs_AspireConfigurationTakesPrecedence()
     {
         RunWithTemporaryHome(homeDirectory =>
         {
-            var aspireProfileDirectory = CreateDirectory(homeDirectory, "aspire-browser", "profile");
+            var configuredProfileDirectory = CreateDirectory(homeDirectory, "configured-browser", "profile");
             var dotnetProfileDirectory = CreateDirectory(homeDirectory, "dotnet-browser", "profile");
-            var manager = CreateManager(new Dictionary<string, string?>
-            {
-                [KnownConfigNames.CliDevCertsNssDbPaths] = $"firefox={aspireProfileDirectory}",
-                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = $"chromium={dotnetProfileDirectory}"
-            });
+            var manager = CreateManager(
+                new Dictionary<string, string?>
+                {
+                    ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = $"chromium={dotnetProfileDirectory}"
+                },
+                new Dictionary<string, string?>
+                {
+                    [CertificateConfiguration.NssDbPathsConfigPath] = $"firefox={configuredProfileDirectory}"
+                });
 
             var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
 
-            Assert.Equal(aspireProfileDirectory, nssDb.Path);
+            Assert.Equal(configuredProfileDirectory, nssDb.Path);
             AssertFirefoxNssDb(nssDb);
         });
     }
 
     [Fact]
-    public void ResolveNssDbs_EmptyAspireOverrideFallsBackToDotnetOverride()
+    public void ResolveNssDbs_EmptyAspireConfigurationFallsBackToDotnetOverride()
     {
         RunWithTemporaryHome(homeDirectory =>
         {
             var dotnetProfileDirectory = CreateDirectory(homeDirectory, "dotnet-browser", "profile");
-            var manager = CreateManager(new Dictionary<string, string?>
-            {
-                [KnownConfigNames.CliDevCertsNssDbPaths] = string.Empty,
-                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = $"chromium={dotnetProfileDirectory}"
-            });
+            var manager = CreateManager(
+                new Dictionary<string, string?>
+                {
+                    ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = $"chromium={dotnetProfileDirectory}"
+                },
+                new Dictionary<string, string?>
+                {
+                    [CertificateConfiguration.NssDbPathsConfigPath] = string.Empty
+                });
 
             var nssDb = Assert.Single(manager.GetNssDbs(homeDirectory.FullName));
 
@@ -197,18 +205,24 @@ public class UnixCertificateManagerTests
     }
 
     [Fact]
-    public void ResolveNssDbs_AspireOverrideNamesAspireVariableInDiagnostics()
+    public void ResolveNssDbs_AspireConfigurationNamesConfigurationKeyInDiagnostics()
     {
         RunWithTemporaryHome(homeDirectory =>
         {
             var missingProfileDirectory = Path.Combine(homeDirectory.FullName, "missing-profile");
             var sink = new TestSink();
             var logger = new TestLogger(nameof(UnixCertificateManager), sink, enabled: true);
-            var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
-            {
-                [KnownConfigNames.CliDevCertsNssDbPaths] = missingProfileDirectory
-            });
-            var manager = new UnixCertificateManager(logger, environment);
+            var environment = TestEnvironment.CreateLinux();
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [CertificateConfiguration.NssDbPathsConfigPath] = missingProfileDirectory
+                })
+                .Build();
+            var manager = new UnixCertificateManager(
+                logger,
+                environment,
+                CertificateConfiguration.ResolveNssDbOverride(configuration));
 
             var nssDbs = manager.GetNssDbs(homeDirectory.FullName);
 
@@ -216,10 +230,48 @@ public class UnixCertificateManagerTests
             Assert.Collection(
                 sink.Writes,
                 write => Assert.Equal(
-                    $"Reading NSS database locations from {KnownConfigNames.CliDevCertsNssDbPaths}.",
+                    $"Reading NSS database locations from {CertificateConfiguration.NssDbPathsConfigKey}.",
                     write.Message),
                 write => Assert.Equal(
-                    $"The NSS database '{missingProfileDirectory}' provided via {KnownConfigNames.CliDevCertsNssDbPaths} does not exist.",
+                    $"The NSS database '{missingProfileDirectory}' provided via {CertificateConfiguration.NssDbPathsConfigKey} does not exist.",
+                    write.Message));
+        });
+    }
+
+    [Fact]
+    public void ResolveNssDbs_EmptyAspireConfigurationNamesDotnetVariableInDiagnostics()
+    {
+        RunWithTemporaryHome(homeDirectory =>
+        {
+            const string dotnetVariableName = "DOTNET_DEV_CERTS_NSSDB_PATHS";
+            var missingProfileDirectory = Path.Combine(homeDirectory.FullName, "missing-profile");
+            var sink = new TestSink();
+            var logger = new TestLogger(nameof(UnixCertificateManager), sink, enabled: true);
+            var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+            {
+                [dotnetVariableName] = missingProfileDirectory
+            });
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [CertificateConfiguration.NssDbPathsConfigPath] = string.Empty
+                })
+                .Build();
+            var manager = new UnixCertificateManager(
+                logger,
+                environment,
+                CertificateConfiguration.ResolveNssDbOverride(configuration));
+
+            var nssDbs = manager.GetNssDbs(homeDirectory.FullName);
+
+            Assert.Empty(nssDbs);
+            Assert.Collection(
+                sink.Writes,
+                write => Assert.Equal(
+                    $"Reading NSS database locations from {dotnetVariableName}.",
+                    write.Message),
+                write => Assert.Equal(
+                    $"The NSS database '{missingProfileDirectory}' provided via {dotnetVariableName} does not exist.",
                     write.Message));
         });
     }
@@ -368,7 +420,7 @@ public class UnixCertificateManagerTests
                 ["SSL_CERT_DIR"] = tempDirectory.FullName,
                 ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = nssDbDirectory.FullName
             });
-            var manager = new UnixCertificateManager(NullLogger.Instance, environment, startInfo =>
+            var manager = new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride: null, startInfo =>
             {
                 startInfo.FileName = certUtilFile.FullName;
             });
@@ -414,7 +466,7 @@ public class UnixCertificateManagerTests
                 ["SSL_CERT_DIR"] = tempDirectory.FullName,
                 ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = nssDbDirectory.FullName
             });
-            var manager = new UnixCertificateManager(NullLogger.Instance, environment, startInfo =>
+            var manager = new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride: null, startInfo =>
             {
                 startInfo.FileName = certUtilFile.FullName;
             });
@@ -448,7 +500,7 @@ public class UnixCertificateManagerTests
                 ["SSL_CERT_DIR"] = openSslDirectory.FullName,
                 ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = Path.Combine(openSslDirectory.FullName, "missing-nss-db")
             });
-            var manager = new UnixCertificateManager(NullLogger.Instance, environment);
+            var manager = new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride: null);
             using var certificate = manager.CreateAspNetCoreHttpsDevelopmentCertificate(
                 DateTimeOffset.UtcNow.AddDays(-1),
                 DateTimeOffset.UtcNow.AddDays(365));
@@ -483,7 +535,7 @@ public class UnixCertificateManagerTests
                 ["SSL_CERT_DIR"] = string.Join(Path.PathSeparator, corruptOpenSslDirectory.FullName, validOpenSslDirectory.FullName),
                 ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = Path.Combine(corruptOpenSslDirectory.FullName, "missing-nss-db")
             });
-            var manager = new UnixCertificateManager(logger, environment);
+            var manager = new UnixCertificateManager(logger, environment, nssDbOverride: null);
             using var certificate = manager.CreateAspNetCoreHttpsDevelopmentCertificate(
                 DateTimeOffset.UtcNow.AddDays(-1),
                 DateTimeOffset.UtcNow.AddDays(365));
@@ -518,7 +570,7 @@ public class UnixCertificateManagerTests
                 ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = Path.Combine(openSslDirectory.FullName, "missing-nss-db"),
                 [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = openSslDirectory.FullName
             });
-            var manager = new UnixCertificateManager(NullLogger.Instance, environment);
+            var manager = new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride: null);
             using var certificate = manager.CreateAspNetCoreHttpsDevelopmentCertificate(
                 DateTimeOffset.UtcNow.AddDays(-1),
                 DateTimeOffset.UtcNow.AddDays(365));
@@ -553,7 +605,7 @@ public class UnixCertificateManagerTests
                 ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = nssDbDirectory.FullName,
                 [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = openSslDirectory.FullName
             });
-            var manager = new UnixCertificateManager(NullLogger.Instance, environment);
+            var manager = new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride: null);
             using var certificate = manager.CreateAspNetCoreHttpsDevelopmentCertificate(
                 DateTimeOffset.UtcNow.AddDays(-1),
                 DateTimeOffset.UtcNow.AddDays(365));
@@ -618,8 +670,18 @@ public class UnixCertificateManagerTests
         return certUtilFile;
     }
 
-    private static UnixCertificateManager CreateManager(IReadOnlyDictionary<string, string?>? variables = null)
-        => new(NullLogger.Instance, TestEnvironment.CreateLinux(variables));
+    private static UnixCertificateManager CreateManager(
+        IReadOnlyDictionary<string, string?>? variables = null,
+        IReadOnlyDictionary<string, string?>? configurationValues = null)
+    {
+        var environment = TestEnvironment.CreateLinux(variables);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(configurationValues)
+            .Build();
+        var nssDbOverride = CertificateConfiguration.ResolveNssDbOverride(configuration);
+
+        return new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride);
+    }
 
     private static string CreateDirectory(DirectoryInfo homeDirectory, params string[] pathSegments)
     {

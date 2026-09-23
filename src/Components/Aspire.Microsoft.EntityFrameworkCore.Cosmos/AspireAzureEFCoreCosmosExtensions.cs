@@ -43,7 +43,7 @@ public static class AspireAzureEFCoreCosmosExtensions
         ArgumentException.ThrowIfNullOrEmpty(connectionName);
 
         string? databaseName = null;
-        if (builder.Configuration.GetConnectionString(connectionName) is string connectionString)
+        if (builder.Configuration.TryGetConnectionString(connectionName, out var connectionString))
         {
             var cosmosConnectionInfo = CosmosUtils.ParseConnectionString(connectionString);
             databaseName = cosmosConnectionInfo.DatabaseName;
@@ -95,7 +95,7 @@ public static class AspireAzureEFCoreCosmosExtensions
             (settings, section) => section.Bind(settings)
         );
 
-        if (builder.Configuration.GetConnectionString(connectionName) is string connectionString)
+        if (builder.Configuration.TryGetConnectionString(connectionName, out var connectionString))
         {
             var cosmosConnectionInfo = CosmosUtils.ParseConnectionString(connectionString);
 

@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
+#pragma warning disable ASPIRECONNECTIONSTRINGS001 // Connection-string reference metadata is experimental.
 
 using System.Globalization;
 using System.Net.Sockets;
@@ -399,6 +400,8 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 await c.Callback(context).ConfigureAwait(false);
             }
 
+            RemoveGeneratedOriginalConnectionStringAliases(context.EnvironmentVariables);
+
             // Remove HTTPS service discovery variables — containers in Kubernetes don't have TLS certificates.
             // TLS termination is handled externally by ingress controllers or service mesh.
             // This matches the Docker Compose behavior in RemoveHttpsServiceDiscoveryVariables.
@@ -433,6 +436,28 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                         ProcessEnvironmentDefaultValue(value, key, resource.Name);
                         break;
                 }
+            }
+        }
+    }
+
+    private static void RemoveGeneratedOriginalConnectionStringAliases(Dictionary<string, object> environmentVariables)
+    {
+        // Snapshot the references before projecting aliases in the same dictionary.
+        foreach (var reference in environmentVariables.Values.OfType<ConnectionStringReference>().Distinct().ToArray())
+        {
+            if (reference.EnvironmentVariableNames is not { } names ||
+                string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
+                !environmentVariables.ContainsKey(names.PortableName))
+            {
+                continue;
+            }
+
+            // Kubernetes projects environment values through normalized Helm paths. Keeping both generated
+            // aliases would map them to the same values key, so deploy only the portable physical name. The
+            // original name wins when both aliases are present, so retain any later override of its value.
+            if (environmentVariables.Remove(names.OriginalName, out var originalValue))
+            {
+                environmentVariables[names.PortableName] = originalValue;
             }
         }
     }
@@ -556,7 +581,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             if (value is ConnectionStringReference cs)
             {
-                value = cs.Resource.ConnectionStringExpression;
+                value = cs.ConnectionStringExpression;
                 continue;
             }
 
@@ -853,7 +878,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             EndpointReference => false,
             EndpointReferenceExpression => false,
             ParameterResource => false,
-            ConnectionStringReference cs => IsUnresolvedAtPublishTime(cs.Resource.ConnectionStringExpression),
+            ConnectionStringReference cs => IsUnresolvedAtPublishTime(cs.ConnectionStringExpression),
             IResourceWithConnectionString csrs => IsUnresolvedAtPublishTime(csrs.ConnectionStringExpression),
             ReferenceExpression expr => expr.ValueProviders.Any(IsUnresolvedAtPublishTime),
             // Any other IManifestExpressionProvider that also implements IValueProvider

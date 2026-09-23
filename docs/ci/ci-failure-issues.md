@@ -7,6 +7,11 @@ nobody necessarily owns it. This mechanism files a single deduplicated GitHub
 issue per branch when a push is red, and **closes it automatically** when a later
 push to the same branch is green.
 
+This reporter is separate from the Copilot-based
+[`Analyze CI Failure`](analyze-ci-failure.md) workflow, which attributes failed
+runs, reports PR-caused failures, tracks recurring causes, and files
+`[Main CI Failure]` issues.
+
 It is a consumer of the shared, repo-agnostic tracking-issue engine
 ([`tracking-issue.js`](../../.github/workflows/tracking-issue.js)), alongside the
 [scheduled-workflow scanner](monitor-scheduled-workflows.md), the
