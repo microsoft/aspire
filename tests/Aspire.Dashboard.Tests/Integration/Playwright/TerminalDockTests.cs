@@ -16,16 +16,13 @@ namespace Aspire.Dashboard.Tests.Integration.Playwright;
 
 [RequiresFeature(TestFeature.Playwright)]
 public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardServerFixture fixture)
-    : PlaywrightTestsBase<TerminalDockTests.TerminalDockDashboardServerFixture>(fixture), IAsyncDisposable
+    : PlaywrightTestsBase<TerminalDockTests.TerminalDockDashboardServerFixture>(fixture)
 {
-    private static readonly SemaphoreSlim s_testGate = new(1, 1);
-    private bool _ownsTestGate;
-
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task EmptyDock_ResizingPreservesContentInPriorityOrder()
     {
-        await RunTerminalDockTestAsync(async page =>
+        await RunTestAsync(async page =>
         {
             await fixture.StartSessionAsync();
             await page.SetViewportSizeAsync(1280, 900);
@@ -106,7 +103,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ResizeHandle_KeyboardAndPointerResizingRespectFocusAndBounds()
     {
-        await RunTerminalDockTestAsync(async page =>
+        await RunTestAsync(async page =>
         {
             await OpenDockAsync(page);
             var terminals = await page.Locator(".terminal-dock textarea").ElementHandlesAsync();
@@ -176,7 +173,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ResizeHandle_ViewportChangesKeepTheHandleReachable()
     {
-        await RunTerminalDockTestAsync(async page =>
+        await RunTestAsync(async page =>
         {
             await OpenDockAsync(page);
             var handle = page.GetByRole(AriaRole.Separator, new() { Name = "Terminals", Exact = true });
@@ -201,7 +198,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task KeyboardNavigation_SelectsTabsWithoutInterceptingTerminalInput()
     {
-        await RunTerminalDockTestAsync(async page =>
+        await RunTestAsync(async page =>
         {
             await OpenDockAsync(page);
             var terminals = await page.Locator(".terminal-dock textarea").ElementHandlesAsync();
@@ -261,7 +258,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task CloseTab_RestoresFocusOnlyAfterRemovalIncludingLastTab()
     {
-        await RunTerminalDockTestAsync(async page =>
+        await RunTestAsync(async page =>
         {
             var (updates, closes) = await OpenDockAsync(page);
             await Tab(page, "second").ClickAsync();
@@ -316,7 +313,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task Removal_DoesNotStealFocusAfterMovingElsewhere(bool hideDock)
     {
-        await RunTerminalDockTestAsync(async page =>
+        await RunTestAsync(async page =>
         {
             var (updates, closes) = await OpenDockAsync(page);
             await Tab(page, "first").FocusAsync();
@@ -363,29 +360,6 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
         await Tab(page, "first").ClickAsync();
         await Assertions.Expect(page.Locator(".terminal-dock textarea")).ToHaveCountAsync(3);
         return channels;
-    }
-
-    private async Task RunTerminalDockTestAsync(Func<IPage, Task> test)
-    {
-        await s_testGate.WaitAsync();
-        _ownsTestGate = true;
-        await RunTestAsync(test);
-    }
-
-    async ValueTask IAsyncDisposable.DisposeAsync()
-    {
-        try
-        {
-            await base.DisposeAsync();
-        }
-        finally
-        {
-            if (_ownsTestGate)
-            {
-                _ownsTestGate = false;
-                s_testGate.Release();
-            }
-        }
     }
 
     private static ILocator Tab(IPage page, string name) => page.GetByRole(AriaRole.Tab, new() { Name = name, Exact = true });

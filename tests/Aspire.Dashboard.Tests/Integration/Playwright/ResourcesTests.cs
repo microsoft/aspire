@@ -215,7 +215,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
             // Attempt a large drag from the cog. D3's drag behavior is attached to the ancestor
             // resource group, so this verifies the cog stops the initiating pointer event.
-            await page.WaitForTimeoutAsync(300);
+            await WaitForPositionToStabilizeAsync(node);
             var nodeBoundsBefore = await node.BoundingBoxAsync();
             var cogBounds = await cog.BoundingBoxAsync();
             Assert.NotNull(nodeBoundsBefore);
@@ -293,6 +293,38 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await Assertions.Expect(page.Locator(".details-header-title")).ToHaveCountAsync(0);
             await Assertions.Expect(cog).ToBeFocusedAsync();
         });
+    }
+
+    private static async Task WaitForPositionToStabilizeAsync(ILocator locator)
+    {
+        await locator.EvaluateAsync(
+            """
+            element => new Promise(resolve => {
+                let previousBounds;
+                let stableFrames = 0;
+
+                const checkPosition = () => {
+                    const bounds = element.getBoundingClientRect();
+                    if (previousBounds &&
+                        Math.abs(bounds.x - previousBounds.x) <= 0.5 &&
+                        Math.abs(bounds.y - previousBounds.y) <= 0.5) {
+                        stableFrames++;
+                    } else {
+                        stableFrames = 0;
+                    }
+
+                    if (stableFrames >= 3) {
+                        resolve();
+                        return;
+                    }
+
+                    previousBounds = bounds;
+                    requestAnimationFrame(checkPosition);
+                };
+
+                requestAnimationFrame(checkPosition);
+            })
+            """).DefaultTimeout();
     }
 
     [Fact]

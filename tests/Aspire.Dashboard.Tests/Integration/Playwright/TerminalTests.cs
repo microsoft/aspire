@@ -16,12 +16,10 @@ namespace Aspire.Dashboard.Tests.Integration.Playwright;
 
 [RequiresFeature(TestFeature.Playwright)]
 public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture fixture)
-    : PlaywrightTestsBase<TerminalTests.TerminalDashboardServerFixture>(fixture), IAsyncDisposable
+    : PlaywrightTestsBase<TerminalTests.TerminalDashboardServerFixture>(fixture)
 {
     private const string ResourceName = "terminal-resource";
     private const string Endpoint = "/api/terminal?resource=terminal-resource&replica=0";
-    private static readonly SemaphoreSlim s_testGate = new(1, 1);
-    private bool _ownsTestGate;
 
     [Theory]
     [InlineData(false, false)]
@@ -31,7 +29,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ReadOnly_BlocksKeyboardAndPasteWithoutInterruptingOutput(bool initialReadOnly, bool chromeless)
     {
-        await RunTerminalTestAsync(async page =>
+        await RunTestAsync(async page =>
         {
             await fixture.TerminalResolver.DiscardPendingConnectionsAsync();
             await page.GotoAsync("/").DefaultTimeout();
@@ -130,7 +128,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task TerminalFocusNavigation_MovesToExpectedControlsWithoutForwardingInput()
     {
-        await RunTerminalTestAsync(async page =>
+        await RunTestAsync(async page =>
         {
             await using var connection = await OpenTerminalAsync(page);
             var input = page.GetByRole(AriaRole.Textbox, new() { Name = "Interactive terminal input", Exact = true });
@@ -165,7 +163,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task SecondaryTypingAndPaste_PreservePrimaryAndProducerDimensions()
     {
-        await RunTerminalTestAsync(async page =>
+        await RunTestAsync(async page =>
         {
             await using var connection = await OpenTerminalAsync(page);
             await MountObserverAsync(page, requestPrimary: true);
@@ -187,7 +185,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task InitialConnection_UsesProducerDimensions()
     {
-        await RunTerminalTestAsync(async page =>
+        await RunTestAsync(async page =>
         {
             await using var connection = await OpenTerminalAsync(page);
             await ExpectProducerDimensionsAsync(page);
@@ -198,7 +196,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ExplicitSizing_TakesPrimaryAndAppliesRequestedGrid()
     {
-        await RunTerminalTestAsync(async page =>
+        await RunTestAsync(async page =>
         {
             await using var connection = await OpenTerminalAsync(page);
             await MountObserverAsync(page, requestPrimary: true);
@@ -220,7 +218,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task FontSizeControls_TakePrimaryAndRespectPackageBounds(string name, int bound, int delta)
     {
-        await RunTerminalTestAsync(async page =>
+        await RunTestAsync(async page =>
         {
             await using var connection = await OpenTerminalAsync(page);
             await MountObserverAsync(page, requestPrimary: true);
@@ -241,7 +239,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ProducerOutput_RendersInCanvasAndPublicClientSnapshot()
     {
-        await RunTerminalTestAsync(async page =>
+        await RunTestAsync(async page =>
         {
             await using var connection = await OpenTerminalAsync(page);
             await MountObserverAsync(page, requestPrimary: false);
@@ -264,7 +262,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ModifiedF6_DoesNotMoveFocusFromTerminal()
     {
-        await RunTerminalTestAsync(async page =>
+        await RunTestAsync(async page =>
         {
             await using var connection = await OpenTerminalAsync(page);
             var input = page.GetByRole(AriaRole.Textbox, new() { Name = "Interactive terminal input", Exact = true });
@@ -330,29 +328,6 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
                 element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
             }
             """, text);
-
-    private async Task RunTerminalTestAsync(Func<IPage, Task> test)
-    {
-        await s_testGate.WaitAsync();
-        _ownsTestGate = true;
-        await RunTestAsync(test);
-    }
-
-    async ValueTask IAsyncDisposable.DisposeAsync()
-    {
-        try
-        {
-            await base.DisposeAsync();
-        }
-        finally
-        {
-            if (_ownsTestGate)
-            {
-                _ownsTestGate = false;
-                s_testGate.Release();
-            }
-        }
-    }
 
     private static async Task WaitForConnectedAsync(IPage page, int terminalId)
     {

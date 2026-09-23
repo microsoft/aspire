@@ -118,7 +118,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
     {
         var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
 
-        await using var context = await PlaywrightFixture.Browser.NewContextAsync(new BrowserNewContextOptions
+        await using var context = await PlaywrightFixture.CreateContextAsync(new BrowserNewContextOptions
         {
             IgnoreHTTPSErrors = true,
             BaseURL = baseUrl,
@@ -160,7 +160,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
     {
         var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
 
-        await using var context = await PlaywrightFixture.Browser.NewContextAsync(new BrowserNewContextOptions
+        await using var context = await PlaywrightFixture.CreateContextAsync(new BrowserNewContextOptions
         {
             IgnoreHTTPSErrors = true,
             BaseURL = baseUrl,
@@ -263,7 +263,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
     {
         var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
 
-        await using var context = await PlaywrightFixture.Browser.NewContextAsync(new BrowserNewContextOptions
+        await using var context = await PlaywrightFixture.CreateContextAsync(new BrowserNewContextOptions
         {
             IgnoreHTTPSErrors = true,
             BaseURL = baseUrl,
@@ -314,7 +314,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
     {
         var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
 
-        await using var context = await PlaywrightFixture.Browser.NewContextAsync(new BrowserNewContextOptions
+        await using var context = await PlaywrightFixture.CreateContextAsync(new BrowserNewContextOptions
         {
             IgnoreHTTPSErrors = true,
             BaseURL = baseUrl,
@@ -421,7 +421,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
                 // metrics/rendering are stable for the scan (the dashboard ships a custom body font).
                 await document.fonts.ready;
             }
-            """).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+            """).DefaultTimeout();
     }
 
     private static Task WaitForPageContentAsync(IPage page, string relativeUrl)

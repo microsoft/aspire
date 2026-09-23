@@ -106,23 +106,27 @@ public class AspireMenuTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task UnanchoredAspireMenu_RepeatedOpenResetsFluentMenuState()
+    public async Task UnanchoredAspireMenu_RepeatedOpenIgnoresResetCloseNotification()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
+        var openChanges = new List<bool>();
         var menuHost = RenderComponent<AspireMenu>(builder =>
         {
             builder.Add(p => p.Anchor, "menu-anchor");
             builder.Add(p => p.Anchored, false);
+            builder.Add(p => p.OpenChanged, EventCallback.Factory.Create<bool>(this, openChanges.Add));
             builder.Add(p => p.Items, new[] { new MenuButtonItem { Text = "Item" } });
         });
 
         await menuHost.InvokeAsync(() => menuHost.Instance.OpenAsync(123, 456));
         menuHost.WaitForAssertion(() => Assert.Single(JSInterop.Invocations,
             invocation => invocation.Identifier == "Microsoft.FluentUI.Blazor.Components.Menu.OpenMenu"));
+        var menu = menuHost.FindComponent<FluentMenu>().Instance;
+        await menuHost.InvokeAsync(() => menu.OnOpenedChangedAsync(true));
         var closeCount = JSInterop.Invocations.Count(
             invocation => invocation.Identifier == "Microsoft.FluentUI.Blazor.Components.Menu.CloseMenu");
 
@@ -135,6 +139,18 @@ public class AspireMenuTests : DashboardTestContext
             Assert.Equal(closeCount + 1, JSInterop.Invocations.Count(
                 invocation => invocation.Identifier == "Microsoft.FluentUI.Blazor.Components.Menu.CloseMenu"));
         });
+
+        var changeCount = openChanges.Count;
+        await menuHost.InvokeAsync(() => menu.OnOpenedChangedAsync(false));
+        Assert.True(menuHost.Instance.Open);
+        Assert.Equal(changeCount, openChanges.Count);
+
+        await menuHost.InvokeAsync(() => menu.OnOpenedChangedAsync(true));
+        Assert.True(menuHost.Instance.Open);
+
+        await menuHost.InvokeAsync(() => menu.OnOpenedChangedAsync(false));
+        Assert.False(menuHost.Instance.Open);
+        Assert.False(openChanges[^1]);
     }
 
     [Fact]
