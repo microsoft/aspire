@@ -71,6 +71,8 @@
     <MicrosoftAspNetCoreTestHostNet11Version>11.0.0-rc.1.26425.128</MicrosoftAspNetCoreTestHostNet11Version>
     <MicrosoftExtensionsCachingMemoryNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsCachingMemoryNet11Version>
     <MicrosoftExtensionsConfigurationBinderNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsConfigurationBinderNet11Version>
+    <MicrosoftExtensionsConfigurationEnvironmentVariablesNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsConfigurationEnvironmentVariablesNet11Version>
+    <MicrosoftExtensionsFileSystemGlobbingNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsFileSystemGlobbingNet11Version>
     <MicrosoftExtensionsHttpNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsHttpNet11Version>
     <MicrosoftExtensionsLoggingNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsLoggingNet11Version>
   </PropertyGroup>

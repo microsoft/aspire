@@ -111,7 +111,7 @@ public sealed class AspireFluentDataGridTests : DashboardTestContext
             new("beta", "2", fromSpec: true),
             new("alpha", "1", fromSpec: true)
         };
-        var cut = RenderComponent<PropertyGrid<EnvironmentVariableViewModel>>(builder => builder.Add(component => component.Items, items));
+        var cut = Render<PropertyGrid<EnvironmentVariableViewModel>>(builder => builder.Add(component => component.Items, items));
         var grid = cut.FindComponent<FluentDataGrid<EnvironmentVariableViewModel>>();
         var nameColumn = cut.FindComponents<AspireTemplateColumn<EnvironmentVariableViewModel>>()[0];
 
@@ -119,7 +119,7 @@ public sealed class AspireFluentDataGridTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal(["alpha", "beta"], cut.FindAll("td.nameColumn").Select(cell => cell.TextContent.Trim())));
 
         items.Add(new("aardvark", "0", fromSpec: true));
-        cut.SetParametersAndRender(builder => builder.Add(component => component.Items, items));
+        cut.Render(builder => builder.Add(component => component.Items, items));
         cut.WaitForAssertion(() => Assert.Equal(["aardvark", "alpha", "beta"], cut.FindAll("td.nameColumn").Select(cell => cell.TextContent.Trim())));
 
         await cut.InvokeAsync(grid.Instance.RemoveSortByColumnAsync);
@@ -137,7 +137,7 @@ public sealed class AspireFluentDataGridTests : DashboardTestContext
             new EnvironmentVariableViewModel("visible", "a", fromSpec: true) { IsValueMasked = false },
             new EnvironmentVariableViewModel("masked", "z", fromSpec: true)
         };
-        var cut = RenderComponent<PropertyGrid<EnvironmentVariableViewModel>>(builder => builder.Add(component => component.Items, items));
+        var cut = Render<PropertyGrid<EnvironmentVariableViewModel>>(builder => builder.Add(component => component.Items, items));
         var grid = cut.FindComponent<FluentDataGrid<EnvironmentVariableViewModel>>();
         var valueColumn = cut.FindComponents<AspireTemplateColumn<EnvironmentVariableViewModel>>()[1];
 
@@ -155,7 +155,7 @@ public sealed class AspireFluentDataGridTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentDataGrid(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
         var items = new[] { new EnvironmentVariableViewModel("beta", "2", fromSpec: true), new EnvironmentVariableViewModel("alpha", "1", fromSpec: true) };
-        var cut = RenderComponent<PropertyGrid<EnvironmentVariableViewModel>>(builder => builder
+        var cut = Render<PropertyGrid<EnvironmentVariableViewModel>>(builder => builder
             .Add(component => component.Items, items)
             .Add(component => component.IsNameSortable, false)
             .Add(component => component.IsValueSortable, false));
@@ -170,7 +170,7 @@ public sealed class AspireFluentDataGridTests : DashboardTestContext
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentDataGrid(this);
 
-        var cut = RenderComponent<AspireFluentDataGrid<string>>(builder => builder
+        var cut = Render<AspireFluentDataGrid<string>>(builder => builder
             .Add(component => component.Loading, true));
 
         var stack = cut.FindComponent<FluentStack>().Instance;

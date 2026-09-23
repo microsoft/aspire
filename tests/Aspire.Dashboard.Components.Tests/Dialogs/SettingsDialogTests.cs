@@ -20,7 +20,7 @@ public sealed class SettingsDialogTests : DashboardTestContext
         FluentUISetupHelpers.AddCommonDashboardServices(this, themeManager: themeManager);
         FluentUISetupHelpers.SetupFluentList(this);
 
-        var cut = RenderComponent<SettingsDialog>();
+        var cut = Render<SettingsDialog>();
 
         Assert.Collection(
             cut.FindAll("fluent-radio-group label"),

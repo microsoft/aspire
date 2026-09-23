@@ -61,7 +61,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -114,7 +114,7 @@ public partial class ConsoleLogsTests
         Services.GetRequiredService<NavigationManager>().NavigateTo($"{pathBase}{DashboardUrls.ConsoleLogsUrl(resource: resource.Name)}");
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder => builder
+        var cut = Render<Components.Pages.ConsoleLogs>(builder => builder
             .Add(p => p.ResourceName, resource.Name)
             .Add(p => p.ViewportInformation, viewport));
         cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
@@ -160,7 +160,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -231,7 +231,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -286,7 +286,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -335,7 +335,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -388,7 +388,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -442,7 +442,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -479,7 +479,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -498,7 +498,7 @@ public partial class ConsoleLogsTests
         // production selection-changed pipeline, not a direct parameter set.
         navigationManager.LocationChanged += (sender, e) =>
         {
-            cut.SetParametersAndRender(builder =>
+            cut.Render(builder =>
             {
                 builder.Add(m => m.ResourceName, "plain-resource");
             });
@@ -541,7 +541,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -561,7 +561,7 @@ public partial class ConsoleLogsTests
 
         navigationManager.LocationChanged += (sender, e) =>
         {
-            cut.SetParametersAndRender(builder =>
+            cut.Render(builder =>
             {
                 builder.Add(m => m.ResourceName, "plain-resource");
             });
@@ -623,7 +623,7 @@ public partial class ConsoleLogsTests
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "terminal-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -662,7 +662,7 @@ public partial class ConsoleLogsTests
         var reconnectTerminal = module.Setup<int>("reconnectTerminal", _ => true);
         reconnectTerminal.SetResult(2);
 
-        var cut = RenderComponent<TerminalView>(builder =>
+        var cut = Render<TerminalView>(builder =>
         {
             builder.Add(p => p.ResourceName, "first-resource");
             builder.Add(p => p.ReplicaIndex, 0);
@@ -673,7 +673,7 @@ public partial class ConsoleLogsTests
             builder.Add(p => p.FocusControlsHintLabel, "F6: Focus terminal controls");
         });
 
-        cut.SetParametersAndRender(builder =>
+        cut.Render(builder =>
         {
             builder.Add(p => p.ResourceName, "second-resource");
             builder.Add(p => p.ReplicaIndex, 1);
@@ -698,7 +698,7 @@ public partial class ConsoleLogsTests
             Assert.Contains("replica=0", initUrl);
             Assert.Equal("Decrease font size", labels.GetProperty("decreaseFontSize").GetString());
             Assert.Equal("Increase font size", labels.GetProperty("increaseFontSize").GetString());
-            Assert.Equal("Terminal dimensions", labels.GetProperty("terminalDimensions").GetString());
+            Assert.Equal("Terminal dimensions", cut.Find("fluent-dropdown").GetAttribute("placeholder"));
             Assert.Equal("Fit", labels.GetProperty("fit").GetString());
             Assert.Equal("F6: Focus terminal controls", labels.GetProperty("focusControlsHint").GetString());
             Assert.Equal(1, reconnect.Arguments[0]);

@@ -48,7 +48,7 @@ public sealed class AspireMenuLayoutTests : PlaywrightTestsBase<DashboardServerF
             await page.SetViewportSizeAsync(1024, 400);
             await page.GotoAsync("/structuredlogs");
 
-            var trigger = page.Locator(".grid-action-container > fluent-button[aria-label='Actions']").First;
+            var trigger = page.Locator(".grid-action-container fluent-button[title='Actions']").First;
             await Assertions.Expect(trigger).ToBeVisibleAsync();
 
             var cell = trigger.Locator("xpath=ancestor::td");

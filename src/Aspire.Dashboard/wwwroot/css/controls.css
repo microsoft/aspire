@@ -646,6 +646,17 @@ body {
     overflow: hidden;
 }
 
+.aspire-menu-button {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    position: relative;
+}
+
+.aspire-menu-button > .aspire-menu-container {
+    position: absolute;
+}
+
 :is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) {
     --colorNeutralBackground1Hover: var(--aspire-menu-item-hover-background);
 }
@@ -667,6 +678,8 @@ body {
     grid-template-columns: minmax(32px, auto) 0 minmax(0, 1fr) minmax(32px, auto);
     height: 28px;
     min-height: 28px;
+    box-sizing: border-box;
+    inline-size: calc(100% - 8px);
     margin-inline: 4px;
     padding: 0;
     border-radius: var(--aspire-control-radius);
