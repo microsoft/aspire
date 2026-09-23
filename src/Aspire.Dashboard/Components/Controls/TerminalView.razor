@@ -67,7 +67,7 @@
                                   OptionValue="@(p => p.Value)"
                                   OptionText="@(p => p.Label)"
                                   Value="@_state.SizeKey" ValueChanged="@(value => SetSizeModeAsync(value ?? string.Empty))"
-                                             Disabled="@(!_state.SizeSelectEnabled || ReadOnly)" />
+                                  Disabled="@(!_state.SizeSelectEnabled || ReadOnly)" />
                 }
             </div>
         </div>
