@@ -173,18 +173,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         {
             ("Aspire.Hosting.JavaScript", "9.4.0")
         };
-        var packageHash = BundleNuGetService.ComputePackageHash(
-            packageList,
-            "net10.0",
-            runtimeIdentifier: null,
-            BundleNuGetService.GetRestoreToolPath());
-        var manifestPath = Path.Combine(
-            workspace.WorkspaceRoot.FullName,
-            ".aspire",
-            "integrations",
-            "package-restore",
-            packageHash,
-            "integration-package-probe-manifest.json");
+        var manifestPath = Path.Combine(GetRestoreDirectory(workspace, packageList), ManifestFileName);
         Directory.CreateDirectory(Path.GetDirectoryName(manifestPath)!);
         File.WriteAllText(manifestPath, """{"managedAssemblies":[],"nativeLibraries":[]}""");
         var nuGetClient = new FakeNuGetClient();
@@ -197,6 +186,92 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(manifestPath, result);
         Assert.Equal(0, nuGetClient.RestoreCallCount);
         Assert.Equal(0, nuGetClient.WriteManifestCallCount);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_RegeneratesInvalidCachedManifest()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var packageList = new List<(string Id, string Version)>
+        {
+            ("Aspire.Hosting.JavaScript", "9.4.0")
+        };
+        var manifestPath = Path.Combine(GetRestoreDirectory(workspace, packageList), ManifestFileName);
+        Directory.CreateDirectory(Path.GetDirectoryName(manifestPath)!);
+        File.WriteAllText(manifestPath, "{ invalid json");
+        var nuGetClient = new FakeNuGetClient();
+        var service = CreateService(nuGetClient);
+
+        var result = await service.RestorePackagesAsync(
+            packageList,
+            workingDirectory: appHostDirectory.FullName);
+
+        Assert.Equal(manifestPath, result);
+        Assert.Equal(1, nuGetClient.RestoreCallCount);
+        Assert.Equal(1, nuGetClient.WriteManifestCallCount);
+        Assert.Equal("""{"managedAssemblies":[],"nativeLibraries":[]}""", File.ReadAllText(manifestPath));
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_SharesRestoreCacheAcrossAppHostsInSameWorkspace()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var firstAppHost = workspace.CreateDirectory(Path.Combine("apps", "api"));
+        var secondAppHost = workspace.CreateDirectory(Path.Combine("apps", "web"));
+        var nuGetClient = new FakeNuGetClient();
+        var service = CreateService(nuGetClient);
+        var restoreRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "package-restore");
+
+        var firstManifest = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: firstAppHost.FullName);
+        var secondManifest = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: secondAppHost.FullName);
+
+        Assert.StartsWith(restoreRoot, firstManifest, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(firstManifest, secondManifest);
+        Assert.Equal(1, nuGetClient.RestoreCallCount);
+
+        // A different package set must not collide with the shared entry even though the workspace is shared.
+        var divergedManifest = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.Python", "9.4.0")],
+            workingDirectory: secondAppHost.FullName);
+
+        Assert.StartsWith(restoreRoot, divergedManifest, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual(secondManifest, divergedManifest);
+        Assert.Equal(2, nuGetClient.RestoreCallCount);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_IgnoresLockedLegacyLibsDirectory()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var packageList = new List<(string Id, string Version)>
+        {
+            ("Aspire.Hosting.JavaScript", "9.4.0")
+        };
+        var restoreDirectory = GetRestoreDirectory(workspace, packageList);
+
+        // Older CLIs copied package assets into a libs directory next to the manifest, and an AppHost that is
+        // still running can hold those files open. Restore must neither clean up nor rebuild that directory.
+        var legacyLibsDirectory = Directory.CreateDirectory(Path.Combine(restoreDirectory, "libs"));
+        var lockedFilePath = Path.Combine(legacyLibsDirectory.FullName, "Microsoft.Extensions.DependencyInjection.xml");
+        File.WriteAllText(lockedFilePath, "legacy");
+        var nuGetClient = new FakeNuGetClient();
+        var service = CreateService(nuGetClient);
+
+        using var lockedFile = new FileStream(lockedFilePath, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var result = await service.RestorePackagesAsync(
+            packageList,
+            workingDirectory: appHostDirectory.FullName);
+
+        Assert.Equal(Path.Combine(restoreDirectory, ManifestFileName), result);
+        Assert.Equal(1, nuGetClient.RestoreCallCount);
+        Assert.Equal(1, nuGetClient.WriteManifestCallCount);
     }
 
     [Fact]
@@ -237,10 +312,32 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(1, nuGetClient.WriteManifestCallCount);
     }
 
+    private const string ManifestFileName = "integration-package-probe-manifest.json";
+
     private static BundleNuGetService CreateService(INuGetClient nuGetClient)
     {
         return new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance,
             nuGetClient);
+    }
+
+    /// <summary>
+    /// Returns the cache directory <see cref="BundleNuGetService.RestorePackagesAsync"/> uses for the packages
+    /// with the default framework, no runtime identifier, and no explicit sources.
+    /// </summary>
+    private static string GetRestoreDirectory(TemporaryWorkspace workspace, List<(string Id, string Version)> packages)
+    {
+        var packageHash = BundleNuGetService.ComputePackageHash(
+            packages,
+            "net10.0",
+            runtimeIdentifier: null,
+            BundleNuGetService.GetRestoreToolPath());
+
+        return Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            ".aspire",
+            "integrations",
+            "package-restore",
+            packageHash);
     }
 }

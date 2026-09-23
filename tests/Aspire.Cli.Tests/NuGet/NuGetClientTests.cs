@@ -408,8 +408,8 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
                 nugetConfigPath,
                 workspace.WorkspaceRoot.FullName,
                 TestContext.Current.CancellationToken);
-        var restoredPackages = ReadRestoredPackages(restoreDirectory.FullName,
-            nugetConfigPath, workspace.WorkspaceRoot.FullName);
+            var restoredPackages = ReadRestoredPackages(restoreDirectory.FullName,
+                nugetConfigPath, workspace.WorkspaceRoot.FullName);
             packageRoot = Path.GetDirectoryName(restoredPackages[0].InstallPath);
             var manifestPath = Path.Combine(restoreDirectory.FullName, IntegrationPackageProbeManifest.FileName);
             await client.WriteManifestAsync(
@@ -419,6 +419,9 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
                 "win-x64",
                 TestContext.Current.CancellationToken);
 
+            // The manifest points at assets in the global packages folder; older CLIs copied them into a libs
+            // directory beside it instead.
+            Assert.False(Directory.Exists(Path.Combine(restoreDirectory.FullName, "libs")));
             var manifest = IntegrationPackageProbeManifest.Load(manifestPath);
             Assert.Equal(
                 Path.Combine(
@@ -532,6 +535,61 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void RestoreAsync_RespectsNuGetConfigGlobalPackagesFolder()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feedDirectory = workspace.CreateDirectory("feed");
+        var configPackagesDirectory = workspace.CreateDirectory("config-packages");
+        var restoreDirectory = workspace.CreateDirectory("restore");
+        var packageId = $"Aspire.Test.Package.{Guid.NewGuid():N}";
+        CreatePackage(feedDirectory.FullName, packageId);
+        var nugetConfigPath = CreateLocalFeedConfig(workspace, feedDirectory, configPackagesDirectory);
+
+        // NUGET_PACKAGES takes precedence over globalPackagesFolder, and the test host often sets it to a shared
+        // cache, so the restore runs in a child process without it. The variable is cleared inside the child
+        // as well, for the same reason the NUGET_PACKAGES test sets it there.
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment.Remove("NUGET_PACKAGES");
+
+        RemoteExecutor.Invoke(
+            static async (packageId, configPath, restorePath, workingDirectory) =>
+            {
+                Environment.SetEnvironmentVariable("NUGET_PACKAGES", null);
+
+                var client = new NuGetClient(
+                    new TestFeatures(),
+                    new TestEnvironment(),
+                    NullLogger<NuGetClient>.Instance);
+
+                await client.RestoreAsync(
+                    [(packageId, "[1.0.0]")],
+                    "net10.0",
+                    runtimeIdentifier: null,
+                    restorePath,
+                    [],
+                    configPath,
+                    workingDirectory,
+                    CancellationToken.None);
+            },
+            packageId,
+            nugetConfigPath,
+            restoreDirectory.FullName,
+            workspace.WorkspaceRoot.FullName,
+            options).Dispose();
+
+        var assets = new LockFileFormat().Read(Path.Combine(restoreDirectory.FullName, LockFileFormat.AssetsFileName));
+        Assert.Contains(
+            assets.PackageFolders,
+            folder => string.Equals(
+                Path.TrimEndingDirectorySeparator(folder.Path),
+                Path.TrimEndingDirectorySeparator(configPackagesDirectory.FullName),
+                StringComparison.OrdinalIgnoreCase));
+        Assert.True(
+            Directory.Exists(Path.Combine(configPackagesDirectory.FullName, packageId.ToLowerInvariant(), "1.0.0")),
+            $"Expected '{packageId}' to be installed under the configured globalPackagesFolder.");
+    }
+
+    [Fact]
     public async Task RestoreAndWriteManifestAsync_UsesRuntimeGraphFallbackAssets()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -579,6 +637,106 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             Path.Combine("runtimes", "unix-x64", "lib", "net10.0", "UnixFallback.dll"),
             manifest.TryGetManagedAssemblyPath(new("UnixFallback")),
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RestoreAndWriteManifestAsync_WritesCanonicalPackageIdForLowercaseRequest()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feedDirectory = workspace.CreateDirectory("feed");
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        var restoreDirectory = workspace.CreateDirectory("restore");
+        var packageId = $"Aspire.Test.Package.{Guid.NewGuid():N}";
+        CreatePackage(
+            feedDirectory.FullName,
+            packageId,
+            additionalEntries: new Dictionary<string, string>
+            {
+                ["lib/net10.0/Aspire.Test.Package.xml"] = "<doc />"
+            });
+        var nugetConfigPath = CreateLocalFeedConfig(workspace, feedDirectory, packagesDirectory);
+        using var restoredPackageScope = new RestoredPackageScope(
+            GetEffectiveGlobalPackagesFolder(nugetConfigPath, workspace.WorkspaceRoot.FullName),
+            packageId);
+
+        var client = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<NuGetClient>.Instance);
+
+        // Package IDs are case-insensitive, so a request may use any casing. The manifest's package ID must
+        // come from the restored package, not from the request.
+        await client.RestoreAsync(
+            [(packageId.ToLowerInvariant(), "1.0.0")],
+            "net10.0",
+            runtimeIdentifier: null,
+            restoreDirectory.FullName,
+            [],
+            nugetConfigPath,
+            workspace.WorkspaceRoot.FullName,
+            TestContext.Current.CancellationToken);
+        var restoredPackage = Assert.Single(ReadRestoredPackages(restoreDirectory.FullName,
+            nugetConfigPath, workspace.WorkspaceRoot.FullName));
+        var manifestPath = Path.Combine(restoreDirectory.FullName, IntegrationPackageProbeManifest.FileName);
+        await client.WriteManifestAsync(
+            Path.Combine(restoreDirectory.FullName, LockFileFormat.AssetsFileName),
+            manifestPath,
+            "net10.0",
+            runtimeIdentifier: null,
+            TestContext.Current.CancellationToken);
+
+        // Without a runtime identifier, the assets selected depend on the RID of the machine running the test,
+        // so check every entry rather than a fixed list.
+        var manifest = IntegrationPackageProbeManifest.Load(manifestPath);
+        Assert.NotEmpty(manifest.ManagedAssemblies);
+        Assert.All(manifest.ManagedAssemblies, assembly =>
+        {
+            Assert.Equal(packageId, assembly.PackageId);
+            Assert.StartsWith(restoredPackage.InstallPath, assembly.Path, StringComparison.OrdinalIgnoreCase);
+            Assert.EndsWith(".dll", assembly.Path, StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    [Fact]
+    public async Task RestoreAsync_AppendsExplicitSourcesToConfiguredSources()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configuredFeed = workspace.CreateDirectory("configured-feed");
+        var explicitFeed = workspace.CreateDirectory("explicit-feed");
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        var restoreDirectory = workspace.CreateDirectory("restore");
+        var configuredPackageId = $"Aspire.Test.Configured.{Guid.NewGuid():N}";
+        var explicitPackageId = $"Aspire.Test.Explicit.{Guid.NewGuid():N}";
+        CreatePackage(configuredFeed.FullName, configuredPackageId);
+        CreatePackage(explicitFeed.FullName, explicitPackageId);
+        var nugetConfigPath = CreateLocalFeedConfig(workspace, configuredFeed, packagesDirectory);
+        using var restoredPackageScope = new RestoredPackageScope(
+            GetEffectiveGlobalPackagesFolder(nugetConfigPath, workspace.WorkspaceRoot.FullName),
+            configuredPackageId,
+            explicitPackageId);
+
+        var client = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<NuGetClient>.Instance);
+
+        // Each package exists on only one feed, so the restore succeeds only if the explicit source is used in
+        // addition to the configured one rather than in place of it.
+        await client.RestoreAsync(
+            [(configuredPackageId, "1.0.0"), (explicitPackageId, "1.0.0")],
+            "net10.0",
+            runtimeIdentifier: null,
+            restoreDirectory.FullName,
+            [explicitFeed.FullName],
+            nugetConfigPath,
+            workspace.WorkspaceRoot.FullName,
+            TestContext.Current.CancellationToken);
+        var restoredPackages = ReadRestoredPackages(restoreDirectory.FullName,
+            nugetConfigPath, workspace.WorkspaceRoot.FullName);
+
+        Assert.Equal(
+            [configuredPackageId, explicitPackageId],
+            restoredPackages.Select(package => package.Id).Order(StringComparer.Ordinal).ToArray());
     }
 
     [Fact]
