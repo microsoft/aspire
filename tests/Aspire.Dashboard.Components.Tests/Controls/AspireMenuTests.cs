@@ -114,7 +114,7 @@ public class AspireMenuTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
         var openChanges = new List<bool>();
-        var menuHost = RenderComponent<AspireMenu>(builder =>
+        var menuHost = Render<AspireMenu>(builder =>
         {
             builder.Add(p => p.Anchor, "menu-anchor");
             builder.Add(p => p.Anchored, false);
