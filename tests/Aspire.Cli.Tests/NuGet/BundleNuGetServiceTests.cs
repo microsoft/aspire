@@ -199,6 +199,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             additionalSensitiveSources: [sensitiveSource]));
 
         Assert.DoesNotContain("secret", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret", exception.ToString(), StringComparison.Ordinal);
         Assert.Contains("example.com/v3/index.json", exception.Message, StringComparison.Ordinal);
         Assert.Equal(0, nuGetClient.WriteManifestCallCount);
     }

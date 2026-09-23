@@ -10,6 +10,7 @@ using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using NuGet.Configuration;
 using NuGet.ProjectModel;
 using NuGet.Packaging;
@@ -210,6 +211,37 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var lines = exception.Output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
         Assert.Contains(lines, line => line.StartsWith("ERROR: ", StringComparison.Ordinal) && line.Contains(packageId, StringComparison.OrdinalIgnoreCase));
         Assert.Contains(lines, line => line.StartsWith("Error: Restore failed: ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RestoreAsync_UnexpectedFailureDoesNotRetainOriginalException()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var restoreDirectory = workspace.CreateDirectory("restore");
+        const string invalidVersion = "not-a-version";
+        var logger = new FakeLogger<NuGetClient>();
+        var client = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            logger);
+
+        var exception = await Assert.ThrowsAsync<NuGetOperationException>(() => client.RestoreAsync(
+            [("Aspire.Test.Package", invalidVersion)],
+            "net10.0",
+            runtimeIdentifier: null,
+            restoreDirectory.FullName,
+            sources: [],
+            nugetConfigPaths: [],
+            workspace.WorkspaceRoot.FullName,
+            globalPackagesFolderOverride: null,
+            sensitiveSources: [],
+            TestContext.Current.CancellationToken));
+
+        Assert.Null(exception.InnerException);
+        Assert.Contains(invalidVersion, exception.Output, StringComparison.Ordinal);
+        Assert.Contains(
+            logger.Collector.GetSnapshot(),
+            record => record.Message.Contains(invalidVersion, StringComparison.Ordinal));
     }
 
     // The tests below observe process-wide state -- the real environment and NuGet's static credential service -- so
