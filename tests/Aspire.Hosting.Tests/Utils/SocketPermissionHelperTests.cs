@@ -174,12 +174,88 @@ public sealed class SocketPermissionHelperTests
         }
     }
 
-    [Fact]
-    public void CreateDirectory_RejectsWorkingDirectoryAndUserProfile()
+    [Theory]
+    [InlineData("working")]
+    [InlineData("profile")]
+    [InlineData("temp")]
+    public void CreateDirectory_RejectsSuppliedEnvironmentDirectoryWithoutChangingPermissions(string environmentDirectory)
     {
-        Assert.Throws<IOException>(() => SocketPermissionHelper.CreateDirectory("."));
-        Assert.Throws<IOException>(() => SocketPermissionHelper.CreateDirectory(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)));
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            // Use an otherwise accepted layout so rejection exercises the environment checks.
+            var directory = Path.Combine(root.FullName, ".aspire", "pty");
+            MakePermissiveDirectory(directory);
+            var originalPermissions = OperatingSystem.IsWindows()
+                ? new DirectoryInfo(directory).GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.All)
+                : File.GetUnixFileMode(directory).ToString();
+            var currentDirectory = environmentDirectory == "working" ? directory : root.FullName;
+            var userProfileDirectory = environmentDirectory == "profile" ? directory : root.FullName;
+            var tempDirectory = environmentDirectory == "temp" ? directory : root.FullName;
+
+            Assert.Throws<IOException>(() => SocketPermissionHelper.CreateDirectory(
+                environmentDirectory == "working" ? "." : directory,
+                currentDirectory, userProfileDirectory, tempDirectory));
+
+            var actualPermissions = OperatingSystem.IsWindows()
+                ? new DirectoryInfo(directory).GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.All)
+                : File.GetUnixFileMode(directory).ToString();
+            Assert.Equal(originalPermissions, actualPermissions);
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CreateDirectory_ResolvesRelativePathAgainstSuppliedWorkingDirectory()
+    {
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            var directory = SocketPermissionHelper.CreateDirectory(
+                Path.Combine(".aspire", "pty"), root.FullName, root.FullName, root.FullName);
+
+            Assert.Equal(Path.Combine(root.FullName, ".aspire", "pty"), directory.FullName);
+            AssertDirectoryPermissions(directory.FullName);
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CreateDirectory_DcpLayoutUsesSuppliedTempDirectory(bool underTempDirectory)
+    {
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            var tempDirectory = Path.Combine(root.FullName, "temp");
+            var directory = Path.Combine(underTempDirectory ? tempDirectory : root.FullName, "aspire-dcp-test");
+
+            if (underTempDirectory)
+            {
+                var created = SocketPermissionHelper.CreateDirectory(
+                    directory, root.FullName, root.FullName, tempDirectory);
+
+                Assert.Equal(directory, created.FullName);
+                AssertDirectoryPermissions(directory);
+            }
+            else
+            {
+                Assert.Throws<IOException>(() => SocketPermissionHelper.CreateDirectory(
+                    directory, root.FullName, root.FullName, tempDirectory));
+                Assert.False(Directory.Exists(directory));
+            }
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
     }
 
     [Fact]

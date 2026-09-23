@@ -21,18 +21,27 @@ internal static class SocketPermissionHelper
     /// Creates or repairs a dedicated socket directory before any sockets are bound in it.
     /// </summary>
     internal static DirectoryInfo CreateDirectory(string path)
+        => CreateDirectory(path, Environment.CurrentDirectory,
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Path.GetTempPath());
+
+    /// <summary>
+    /// Creates or repairs a socket directory using explicitly supplied environment paths.
+    /// </summary>
+    internal static DirectoryInfo CreateDirectory(
+        string path, string currentDirectory, string userProfileDirectory, string tempDirectory)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
+        ArgumentException.ThrowIfNullOrEmpty(currentDirectory);
+        ArgumentException.ThrowIfNullOrEmpty(tempDirectory);
 
-        var directory = new DirectoryInfo(path);
+        var directory = new DirectoryInfo(Path.GetFullPath(path, currentDirectory));
+        var tempRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(tempDirectory, currentDirectory));
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        if (!IsSocketDirectory(directory, comparison) ||
+        if (!IsSocketDirectory(directory, tempRoot, comparison) ||
             directory.Parent is null ||
-            string.Equals(directory.FullName, Path.TrimEndingDirectorySeparator(Environment.CurrentDirectory), comparison) ||
-            string.Equals(directory.FullName, Path.TrimEndingDirectorySeparator(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)), comparison) ||
-            string.Equals(Path.TrimEndingDirectorySeparator(directory.FullName),
-                Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath())), comparison))
+            string.Equals(directory.FullName, Path.TrimEndingDirectorySeparator(currentDirectory), comparison) ||
+            string.Equals(directory.FullName, Path.TrimEndingDirectorySeparator(userProfileDirectory), comparison) ||
+            string.Equals(Path.TrimEndingDirectorySeparator(directory.FullName), tempRoot, comparison))
         {
             throw new IOException($"The socket directory '{path}' must use an Aspire socket directory layout (.aspire/cli/bch, .aspire/trmnl, or .aspire/pty).");
         }
@@ -42,7 +51,7 @@ internal static class SocketPermissionHelper
         for (var current = directory; current is not null; current = current.Parent)
         {
             // System temporary roots can themselves be aliases (for example /var on macOS).
-            if (string.Equals(current.FullName, Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath())), comparison))
+            if (string.Equals(current.FullName, tempRoot, comparison))
             {
                 break;
             }
@@ -59,15 +68,15 @@ internal static class SocketPermissionHelper
         }
 
         // A configured endpoint must not cause chmod on a shared sticky directory such as /var/tmp.
-        if (directory.Exists && (File.GetUnixFileMode(path) & UnixFileMode.StickyBit) != 0)
+        if (directory.Exists && (File.GetUnixFileMode(directory.FullName) & UnixFileMode.StickyBit) != 0)
         {
             throw new IOException($"The socket directory '{path}' must not be a shared sticky directory.");
         }
 
-        return DirectoryHelper.CreateWithOwnerOnlyPermissions(path);
+        return DirectoryHelper.CreateWithOwnerOnlyPermissions(directory.FullName);
     }
 
-    private static bool IsSocketDirectory(DirectoryInfo directory, StringComparison comparison)
+    private static bool IsSocketDirectory(DirectoryInfo directory, string tempRoot, StringComparison comparison)
     {
         var parent = directory.Parent;
         if (parent is null)
@@ -91,7 +100,7 @@ internal static class SocketPermissionHelper
         // DCP session directories are allocated by ITempFileSystemService, not a socket override.
         return directory.Name.StartsWith("aspire-dcp", comparison) &&
             directory.Name.Length > "aspire-dcp".Length &&
-            string.Equals(parent.FullName, Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath())), comparison);
+            string.Equals(parent.FullName, tempRoot, comparison);
     }
 
     /// <summary>
