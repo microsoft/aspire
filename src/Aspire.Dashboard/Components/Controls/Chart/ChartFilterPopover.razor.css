@@ -1,9 +1,10 @@
 .chart-filter-popover-container ::deep .chart-filter-popover::part(dialog) {
     position-anchor: var(--chart-filter-anchor);
-    top: anchor(bottom);
-    right: anchor(right);
-    bottom: auto;
-    left: auto;
+    /* Fluent sets the dialog insets inline; the anchor position must override them. */
+    top: anchor(bottom) !important;
+    right: anchor(right) !important;
+    bottom: auto !important;
+    left: auto !important;
     position-try-fallbacks: flip-block;
     box-sizing: border-box;
     max-width: 400px;
