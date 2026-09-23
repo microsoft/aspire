@@ -521,7 +521,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     {
         var optOut = environment?.GetValueOrDefault("ASPIRE_CLI_TELEMETRY_OPTOUT");
         var nativeArgs = optOut == "1" || string.Equals(optOut, "true", StringComparison.OrdinalIgnoreCase)
-            ? null : AgentTelemetryHook.Classify(payload, environment?.GetValueOrDefault("COPILOT_CLI"));
+            ? null : AgentTelemetryHook.Classify(payload, environment?.GetValueOrDefault("COPILOT_CLI"), AgentTelemetryHook.DefaultMaxPayloadCharacters);
         if (scriptArgs is null)
         {
             Assert.Null(nativeArgs);

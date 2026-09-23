@@ -12,6 +12,13 @@ namespace Aspire.Cli.Agents.Hooks;
 /// </summary>
 internal static class AgentTelemetryHook
 {
+    internal const string PayloadLimitEnvironmentVariable = "ASPIRE_AGENT_TELEMETRY_MAX_PAYLOAD_CHARACTERS";
+    // Bound memory before JSON parsing; TextReader counts UTF-16 characters, not bytes.
+    internal const int DefaultMaxPayloadCharacters = 64 * 1024;
+    internal const int MaximumPayloadCharacters = 1024 * 1024;
+    private const string ContinueResponse = """{"continue":true}""";
+    private static readonly string[] s_mcpPrefixes = ["aspire-", "mcp__aspire__", "mcp_aspire_"];
+
     internal static (string Command, string[] Args) GetCommand(string mode)
     {
         var command = Environment.ProcessPath ?? throw new InvalidOperationException("Could not resolve the CLI executable.");
@@ -23,50 +30,6 @@ internal static class AgentTelemetryHook
         return (command, args);
     }
 
-    // Keep these privacy allowlists equivalent to the canonical bundled hooks. Script parity tests
-    // cover classification, and the allowlist test catches additions made by bundle synchronization.
-    internal static readonly string[] s_skills = ["aspire", "aspire-init", "aspireify", "aspire-orchestration", "aspire-deployment", "aspire-monitoring"];
-    internal static readonly string[] s_tools =
-    [
-        "doctor", "execute_resource_command", "get_doc", "list_apphosts", "list_console_logs",
-        "list_docs", "list_integrations", "list_resources", "list_structured_logs",
-        "list_trace_structured_logs", "list_traces", "refresh_tools", "search_docs", "select_apphost"
-    ];
-    internal static readonly string[] s_references =
-    [
-        "aspire-deployment/references/aws.md",
-        "aspire-deployment/references/azure.md",
-        "aspire-deployment/references/cicd.md",
-        "aspire-deployment/references/docker-compose.md",
-        "aspire-deployment/references/github-actions-azure-csharp.yml",
-        "aspire-deployment/references/github-actions-azure-typescript.yml",
-        "aspire-deployment/references/javascript.md",
-        "aspire-deployment/references/kubernetes.md",
-        "aspire-deployment/references/preflight.md",
-        "aspire-init/references/init-workflow.md",
-        "aspire-init/references/templates.md",
-        "aspire-monitoring/references/diagnostics-bridge.md",
-        "aspire-monitoring/references/monitoring.md",
-        "aspire-monitoring/references/playwright-handoff.md",
-        "aspire-orchestration/references/agent-workflows.md",
-        "aspire-orchestration/references/app-commands.md",
-        "aspire-orchestration/references/detection.md",
-        "aspire-orchestration/references/resource-management.md",
-        "aspire-orchestration/references/safety-guardrails.md",
-        "aspire/references/aspire-13-3-breaking-changes.md",
-        "aspire/references/aspire-13-5-breaking-changes.md",
-        "aspireify/references/apphost-wiring.md",
-        "aspireify/references/csharp-authoring.md",
-        "aspireify/references/docker-compose.md",
-        "aspireify/references/full-solution-apphosts.md",
-        "aspireify/references/javascript-apps.md",
-        "aspireify/references/opentelemetry.md",
-        "aspireify/references/scan-and-propose.md",
-        "aspireify/references/service-defaults.md",
-        "aspireify/references/typescript-authoring.md",
-        "aspireify/references/validation.md"
-    ];
-
     internal static async Task<int> RunAsync(TextReader input, TextWriter output, Func<string[], Task<int>> execute)
     {
         try
@@ -77,7 +40,19 @@ internal static class AgentTelemetryHook
                 return 0;
             }
 
-            var buffer = new char[65537];
+            int maxPayloadCharacters;
+            try
+            {
+                maxPayloadCharacters = GetMaxPayloadCharacters(Environment.GetEnvironmentVariable(PayloadLimitEnvironmentVariable));
+            }
+            catch (ArgumentException ex)
+            {
+                await Console.Error.WriteLineAsync(ex.Message).ConfigureAwait(false);
+                return 0;
+            }
+
+            // One sentinel distinguishes a payload exactly at the limit from an oversized one.
+            var buffer = new char[maxPayloadCharacters + 1];
             var length = await input.ReadBlockAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
             if (length == buffer.Length)
             {
@@ -87,7 +62,7 @@ internal static class AgentTelemetryHook
                 return 0;
             }
 
-            var args = Classify(new string(buffer, 0, length), Environment.GetEnvironmentVariable("COPILOT_CLI"));
+            var args = Classify(new string(buffer, 0, length), Environment.GetEnvironmentVariable("COPILOT_CLI"), maxPayloadCharacters);
             if (args is not null)
             {
                 await execute(args).ConfigureAwait(false);
@@ -101,15 +76,30 @@ internal static class AgentTelemetryHook
         }
         finally
         {
-            await output.WriteLineAsync("{\"continue\":true}").ConfigureAwait(false);
+            await output.WriteLineAsync(ContinueResponse).ConfigureAwait(false);
         }
 
         return 0;
     }
 
-    internal static string[]? Classify(string payload, string? copilotCli)
+    internal static int GetMaxPayloadCharacters(string? configuredValue)
     {
-        if (payload.Length is 0 or > 65536)
+        if (configuredValue is null)
+        {
+            return DefaultMaxPayloadCharacters;
+        }
+        if (int.TryParse(configuredValue, NumberStyles.None, CultureInfo.InvariantCulture, out var limit)
+            && limit is > 0 and <= MaximumPayloadCharacters)
+        {
+            return limit;
+        }
+
+        throw new ArgumentException($"{PayloadLimitEnvironmentVariable} must be an integer between 1 and {MaximumPayloadCharacters} UTF-16 characters.");
+    }
+
+    internal static string[]? Classify(string payload, string? copilotCli, int maxPayloadCharacters)
+    {
+        if (payload.Length == 0 || payload.Length > maxPayloadCharacters)
         {
             return null;
         }
@@ -129,9 +119,7 @@ internal static class AgentTelemetryHook
             var input = Property(data, "toolArgs") ?? Property(data, "tool_input") ?? default;
             using var nested = ParseInput(input);
             input = nested?.RootElement ?? input;
-            string? eventType = null;
-            string? dimension = null;
-            string? value = null;
+            (string EventType, string Dimension, string Value)? trackedEvent = null;
             if (tool.Equals("skill", StringComparison.OrdinalIgnoreCase))
             {
                 var skill = Text(input, "skill") ?? "";
@@ -139,9 +127,9 @@ internal static class AgentTelemetryHook
                 {
                     skill = skill[7..];
                 }
-                if (s_skills.Contains(skill, StringComparer.OrdinalIgnoreCase))
+                if (AgentTelemetryCatalog.Bundled.Skills.Contains(skill))
                 {
-                    (eventType, dimension, value) = ("skill_invocation", "--skill-name", skill);
+                    trackedEvent = ("skill_invocation", "--skill-name", skill);
                 }
             }
             else if (tool.Equals("view", StringComparison.OrdinalIgnoreCase)
@@ -158,15 +146,15 @@ internal static class AgentTelemetryHook
                     }
                     var skill = segments[i + 1];
                     var relativePath = string.Join('/', segments[(i + 1)..]);
-                    if (s_skills.Contains(skill, StringComparer.OrdinalIgnoreCase))
+                    if (AgentTelemetryCatalog.Bundled.Skills.Contains(skill))
                     {
                         if (segments[^1].Equals("SKILL.md", StringComparison.OrdinalIgnoreCase))
                         {
-                            (eventType, dimension, value) = ("skill_invocation", "--skill-name", skill);
+                            trackedEvent = ("skill_invocation", "--skill-name", skill);
                         }
-                        else if (s_references.Contains(relativePath, StringComparer.OrdinalIgnoreCase))
+                        else if (AgentTelemetryCatalog.Bundled.References.Contains(relativePath))
                         {
-                            (eventType, dimension, value) = ("reference_file_read", "--file-reference", relativePath);
+                            trackedEvent = ("reference_file_read", "--file-reference", relativePath);
                         }
                     }
                     break;
@@ -174,17 +162,17 @@ internal static class AgentTelemetryHook
             }
             else
             {
-                foreach (var prefix in new[] { "aspire-", "mcp__aspire__", "mcp_aspire_" })
+                foreach (var prefix in s_mcpPrefixes)
                 {
-                    if (tool.StartsWith(prefix, StringComparison.Ordinal) && s_tools.Contains(tool[prefix.Length..], StringComparer.OrdinalIgnoreCase))
+                    if (tool.StartsWith(prefix, StringComparison.Ordinal) && AgentTelemetryCatalog.Bundled.Tools.Contains(tool[prefix.Length..]))
                     {
-                        (eventType, dimension, value) = ("tool_invocation", "--tool-name", tool);
+                        trackedEvent = ("tool_invocation", "--tool-name", tool);
                         break;
                     }
                 }
             }
 
-            if (eventType is null)
+            if (trackedEvent is not { } telemetryEvent)
             {
                 return null;
             }
@@ -195,9 +183,9 @@ internal static class AgentTelemetryHook
                     : Property(data, "toolArgs") is not null ? "copilot-cli" : "unknown";
             var args = new List<string>
             {
-                "agent", "telemetry", "--event-type", eventType, "--client-name", client,
+                "agent", "telemetry", "--event-type", telemetryEvent.EventType, "--client-name", client,
                 "--timestamp", DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
-                dimension!, value!
+                telemetryEvent.Dimension, telemetryEvent.Value
             };
             var session = Text(data, "sessionId") ?? Text(data, "session_id");
             if (session?.Length == 36 && Guid.TryParseExact(session, "D", out _))

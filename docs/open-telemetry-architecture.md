@@ -65,6 +65,10 @@ Agent usage reporting is separate from application OTLP telemetry. `aspire agent
 
 The native hook receives every invocation but only reports the existing allowlisted Aspire skill, reference-file, and MCP-tool events. Unrelated invocations return before CLI host initialization, without launching PowerShell or Bash. Neither wildcard coverage nor event sampling is reduced.
 
+The native classifier reads its allowlists from the embedded canonical hook shipped by the skills bundle, not from a second list of names or the mutable installed scripts. Bundle updates therefore update classification automatically; tests reject unsupported declaration formats rather than silently losing telemetry.
+
+`ASPIRE_AGENT_TELEMETRY_MAX_PAYLOAD_CHARACTERS` controls the native hook's input memory bound before JSON parsing. Its default is 65,536 UTF-16 characters, matching the legacy PowerShell hook; valid values range from 1 to 1,048,576. Larger input is drained without being retained or reported. Invalid configuration is reported on stderr without interrupting the agent. This environment setting is read before CLI host initialization to keep unrelated invocations inexpensive.
+
 Eligible events pass through the existing `aspire agent telemetry` command and are persisted to Azure Monitor Exporter's disk-backed storage before the hook returns. Uploading is not on the hook's critical path. An independent CLI uploader keeps the exporter alive while there is pending data, using the exporter's own batching, retry, and cross-process lease recovery. No additional queue format or ingestion client is used.
 
 The uploader survives the originating agent process and exits when storage is drained. A failed launch leaves persisted data for a later invocation to recover. An interrupted upload may remain leased for several minutes before retry; delivery is at-least-once, so a crash after acceptance can result in duplicates. Disk access failures, exporter storage limits, permanent ingestion errors, and retention still limit delivery. Persistence/launch failures are recorded in CLI logs without breaking the agent.
