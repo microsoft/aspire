@@ -254,6 +254,10 @@ extends:
             enablePublishBuildArtifacts: false
             enablePublishTestResults: false
             enableSourceIndex: true
+            sourceIndexParams:
+              # Use the repository wrapper so standalone restore receives its NuGet
+              # audit warning policy; Arcade's default command bypasses that wrapper.
+              sourceIndexBuildCommand: .\build.cmd -restore -build -binarylog -ci
             workspace:
               clean: all
             jobs: []

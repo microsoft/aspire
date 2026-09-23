@@ -60,7 +60,7 @@ internal class ExpressionResolver(CancellationToken cancellationToken)
         // We are substituting our own logic for ConnectionStringReference's GetValueAsync.
         // However, ConnectionStringReference#GetValueAsync will throw if the connection string is not optional but is not present.
         // so we need to do the same here.
-        var value = await ResolveInternalAsync(cs.Resource.ConnectionStringExpression, context).ConfigureAwait(false);
+        var value = await ResolveInternalAsync(cs.ConnectionStringExpression, context).ConfigureAwait(false);
 
         // Throw if the connection string is required but not present
         if (string.IsNullOrEmpty(value.Value) && !cs.Optional)

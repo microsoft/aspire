@@ -114,14 +114,20 @@ internal sealed class ResourceLogSource<TResource>(
             var startupStderrStreamTask = Task.Run(() => StreamLogsAsync(startupStderrStream, isError: false, parseDcpLogs: false), cancellationToken);
             streamTasks.Add(startupStderrStreamTask);
 
-            var stdoutStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdOut, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
-            var stderrStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdErr, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
+            // Terminal-backed Executables bridge stdout/stderr through the PTY instead of DCP log files.
+            // DCP rejects those sources while keeping startup and system logs available.
+            // https://github.com/microsoft/dcp/blob/main/internal/logs/stdiologs/stdio_log_streamer.go
+            if (resource is not Executable { Spec.Terminal: not null })
+            {
+                var stdoutStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdOut, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
+                var stderrStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdErr, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
 
-            var stdoutStreamTask = Task.Run(() => StreamLogsAsync(stdoutStream, isError: false, parseDcpLogs: false), cancellationToken);
-            streamTasks.Add(stdoutStreamTask);
+                var stdoutStreamTask = Task.Run(() => StreamLogsAsync(stdoutStream, isError: false, parseDcpLogs: false), cancellationToken);
+                streamTasks.Add(stdoutStreamTask);
 
-            var stderrStreamTask = Task.Run(() => StreamLogsAsync(stderrStream, isError: true, parseDcpLogs: false), cancellationToken);
-            streamTasks.Add(stderrStreamTask);
+                var stderrStreamTask = Task.Run(() => StreamLogsAsync(stderrStream, isError: true, parseDcpLogs: false), cancellationToken);
+                streamTasks.Add(stderrStreamTask);
+            }
 
             var systemStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeSystem, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
 

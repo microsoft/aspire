@@ -258,11 +258,10 @@ public class ToolboxTests
         var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
             builder.ExecutionContext,
             hostedAgent,
-            agent.Resource,
             NullLogger<ToolboxTests>.Instance,
             cts.Token);
 
-        Assert.Equal("https://project.example.com/toolboxes/field-tools/versions/7/mcp?api-version=v1", envVars["ConnectionStrings__field-tools"]);
+        Assert.Equal("https://project.example.com/toolboxes/field-tools/versions/7/mcp?api-version=v1", envVars["ConnectionStrings__field_tools"]);
     }
 
     [Fact]

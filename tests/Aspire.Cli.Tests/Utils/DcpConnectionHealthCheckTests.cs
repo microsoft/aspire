@@ -149,7 +149,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
             }
         };
         var checker = new DcpConnectionChecker(
-            CertificateManager.Create(NullLogger.Instance, new HostEnvironment()),
+            CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), nssDbOverride: null),
             processExecutionFactory,
             CreateExecutionContext(workspace),
             new HostEnvironment(),
@@ -292,7 +292,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
 
         RemoteExecutor.Invoke(static homePath =>
         {
-            var certificateManager = CertificateManager.Create(NullLogger.Instance, new HostEnvironment());
+            var certificateManager = CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), nssDbOverride: null);
             using var certificate = certificateManager.CreateAspNetCoreHttpsDevelopmentCertificate(
                 DateTimeOffset.UtcNow.AddDays(-1),
                 DateTimeOffset.UtcNow.AddDays(30));

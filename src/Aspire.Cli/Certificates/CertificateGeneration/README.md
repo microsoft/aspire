@@ -11,14 +11,14 @@ This directory contains code vendored from the ASP.NET Core repository's shared 
 ## Local modifications
 
 - Replaced `EventSource`-based logging with `ILogger`/`CertificateManagerLogger` wrapper (AOT-compatible)
-- Removed static `Instance` pattern; uses `CertificateManager.Create(ILogger)` factory
+- Removed static `Instance` pattern; uses `CertificateManager.Create(ILogger, IEnvironment, CertificateConfiguration.NssDbOverride?)` factory
 - Added instance `Log` property backed by `ILogger`
 - Changed `GetDescription` and `ToCertificateDescription` from `static` to instance methods
 - Removed `catch when (Log.IsEnabled())` filter pattern (incompatible with ILogger)
 - Replaced `new X509Certificate2(...)` with `X509CertificateLoader.LoadPkcs12FromFile(...)` (fixes SYSLIB0057)
 - Adapted .NET 11 `Process.Run` and `StandardOutputHandle` usage to `CertificateProcessRunner`, which concurrently drains redirected output on .NET 10
 - Retained support for both the HRESULT and raw Win32 error-code forms of Windows trust cancellation
-- Added `ASPIRE_CLI_DEV_CERTS_NSSDB_PATHS` as an Aspire-first alias for `DOTNET_DEV_CERTS_NSSDB_PATHS`
+- Added Aspire CLI configuration for NSS database overrides. `certificates.nssDbPaths` takes precedence over the upstream `DOTNET_DEV_CERTS_NSSDB_PATHS` environment variable.
 
 ## Updating
 

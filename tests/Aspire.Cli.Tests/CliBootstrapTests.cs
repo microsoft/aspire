@@ -2,10 +2,17 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using System.Text.Json;
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Certificates;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
+using Microsoft.AspNetCore.Certificates.Generation;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -24,11 +31,12 @@ namespace Aspire.Cli.Tests;
 /// <see cref="IIdentityChannelReader"/>, registered in DI by
 /// <see cref="Aspire.Cli.Program.BuildApplicationAsync"/>.
 /// </summary>
+[Collection(EnvVarMutatingTestCollection.Name)]
 public class CliBootstrapTests(ITestOutputHelper outputHelper)
 {
     private static readonly string[] s_fixedChannels = ["stable", "staging", "daily", "local"];
 
-    private static async Task<IHost> BuildHostAsync()
+    private static async Task<IHost> BuildHostAsync(Dictionary<string, string?>? configurationValues = null)
     {
         var loggingOptions = Program.ParseLoggingOptions([]);
         var errorWriter = new TestStartupErrorWriter();
@@ -36,7 +44,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter, logBufferContext);
         var identityChannelReader = new IdentityChannelReader(typeof(Program).Assembly);
         var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(finalDrainBudget: Timeout.InfiniteTimeSpan), identityChannelReader);
-        return await Program.BuildApplicationAsync([], startupContext);
+        return await Program.BuildApplicationAsync([], startupContext, configurationValues);
     }
 
     private static string GetBakedEntryAssemblyChannel()
@@ -113,6 +121,51 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var context = host.Services.GetRequiredService<CliExecutionContext>();
 
         Assert.Equal(bakedChannel, context.IdentityChannel);
+    }
+
+    [Fact]
+    public async Task BuildApplication_ConfigurationValuesOverrideGlobalSettingsFile()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var aspireHome = workspace.CreateDirectory("aspire-home");
+        var ambientNssDbDirectory = workspace.CreateDirectory("ambient-nssdb");
+        var configuredNssDbDirectory = workspace.CreateDirectory("configured-nssdb");
+        var globalConfig = JsonSerializer.Serialize(new
+        {
+            certificates = new
+            {
+                nssDbPaths = $"firefox={ambientNssDbDirectory.FullName}"
+            }
+        });
+        File.WriteAllText(Path.Combine(aspireHome.FullName, AspireConfigFile.FileName), globalConfig);
+
+        using var aspireHomeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome.FullName);
+        using var host = await BuildHostAsync(new Dictionary<string, string?>
+        {
+            [CertificateConfiguration.NssDbPathsConfigPath] = $"firefox={configuredNssDbDirectory.FullName}"
+        });
+
+        var configuration = host.Services.GetRequiredService<IConfiguration>();
+
+        Assert.Equal($"firefox={configuredNssDbDirectory.FullName}", configuration[CertificateConfiguration.NssDbPathsConfigPath]);
+    }
+
+    [Fact]
+    public async Task BuildApplication_ConfiguresCertificateManagerWithNssDbPaths()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "NSS certificate trust is only configured on Linux.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var nssDbDirectory = workspace.CreateDirectory("nssdb");
+        using var host = await BuildHostAsync(new Dictionary<string, string?>
+        {
+            [CertificateConfiguration.NssDbPathsConfigPath] = $"firefox={nssDbDirectory.FullName}"
+        });
+
+        var manager = Assert.IsType<UnixCertificateManager>(host.Services.GetRequiredService<CertificateManager>());
+        var nssDb = Assert.Single(manager.GetNssDbs(workspace.WorkspaceRoot.FullName));
+
+        Assert.Equal(nssDbDirectory.FullName, nssDb.Path);
     }
 
     [Fact]
