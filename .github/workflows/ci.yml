@@ -1,15 +1,8 @@
 name: CI
 
 on:
-  pull_request:
-    branches:
-      - main
-      - 'release/**'
-
-  push:
-    branches:
-      - main
-      - 'release/**'
+  # Investigation branch only: run the explicit Windows reproduction instead of full PR CI.
+  workflow_dispatch: {}
 
 permissions:
   contents: read

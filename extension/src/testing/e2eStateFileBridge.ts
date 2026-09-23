@@ -28,6 +28,7 @@ import { getSupportedCapabilities, javaLanguageExtensionId, useCsharpExtensionVe
 import { getCliPathTargetKey, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { isEnabledCommand } from '../views/treePresentation';
 import { blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofCleanupTimeoutMs } from './blazorWasmDebugProofTimeouts';
+import { installWasmInvestigationProbe } from './wasmInvestigationProbe';
 
 let atomicWriteSequence = 0;
 
@@ -51,6 +52,7 @@ export function createE2eStateFileBridge(
   }
 
   const extensionHostSessionId = randomUUID();
+  context.subscriptions.push(installWasmInvestigationProbe(context.logUri.fsPath));
   const commandInvocations: AspireExtensionE2ECommandInvocation[] = [];
   const terminalCommands: AspireExtensionE2ETerminalCommand[] = [];
   const debugLaunches: AspireExtensionE2EDebugLaunch[] = [];
