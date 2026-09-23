@@ -28,7 +28,7 @@ public partial class ChartFilters
     [Parameter]
     public EventCallback<DimensionFilterViewModel> OnDimensionValuesChanged { get; set; }
 
-    private string GetFilterButtonId(DimensionFilterViewModel filter) => $"typeFilterButton-{filter.SanitizedHtmlId}-{_idSuffix}";
+    private string GetFilterButtonId(DimensionFilterViewModel filter) => $"typeFilterButton-{filter.SanitizedHtmlId}-{filter.NameHash}-{_idSuffix}";
 
     private bool IsPopupOpen(DimensionFilterViewModel filter) => _openFilterNames.Contains(filter.Name);
 
