@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixes dashboard menu reopen behavior and terminal focus regressions from the Fluent UI v5 migration; also updates Playwright test coverage",
+  "mergedAt": "2026-09-23T09:56:18Z",
+  "number": 20341,
+  "runDate": "2026-09-23T12:11:46Z",
+  "status": "included",
+  "title": "Fix dashboard Playwright tests after Fluent UI v5 migration"
+}

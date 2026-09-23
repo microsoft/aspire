@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Scopes dashboard auth/antiforgery cookies and collapsed-resource storage keys by application name to prevent cross-dashboard cookie collisions on the same hostname",
+  "mergedAt": "2026-09-23T06:21:43Z",
+  "number": 20299,
+  "runDate": "2026-09-23T12:11:38Z",
+  "status": "included",
+  "title": "Scope dashboard cookies and resource state by application name"
+}

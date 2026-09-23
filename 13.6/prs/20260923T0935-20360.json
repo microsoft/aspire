@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only change: upgrades bUnit to resolve NU1902 AngleSharp advisory and migrates component tests to bUnit 2 APIs; no production dashboard behavior change",
+  "mergedAt": "2026-09-23T09:35:02Z",
+  "number": 20360,
+  "runDate": "2026-09-23T12:11:46Z",
+  "status": "excluded",
+  "title": "Fix AngleSharp warning in dashboard component tests"
+}

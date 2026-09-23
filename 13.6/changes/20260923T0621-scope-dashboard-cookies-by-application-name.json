@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Dashboard authentication and antiforgery cookie names, and collapsed-resource storage keys, are now scoped by the configured application name so multiple dashboards on the same hostname no longer interfere with each other's cookies or resource-expansion state.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🍪",
+  "firstMergedAt": "2026-09-23T06:21:43Z",
+  "lastMergedAt": "2026-09-23T06:21:43Z",
+  "name": "Scope dashboard cookies by application name",
+  "owner": "JamesNK",
+  "prs": [
+    20299
+  ]
+}

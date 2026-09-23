@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Security fix: rejects empty OTLP API keys so an empty secondary key cannot authenticate a request with an empty header",
+  "mergedAt": "2026-09-23T06:41:01Z",
+  "number": 20363,
+  "runDate": "2026-09-23T12:11:46Z",
+  "status": "included",
+  "title": "Reject empty OTLP API keys"
+}

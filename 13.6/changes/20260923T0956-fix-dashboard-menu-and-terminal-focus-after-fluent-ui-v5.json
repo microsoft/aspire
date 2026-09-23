@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed dashboard regressions introduced by the Fluent UI v5 migration: resource graph context menus now reopen reliably right after pressing Escape or clicking away, and terminal auto-fit sizing no longer steals keyboard focus from the control the user is actively using.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🖱️",
+  "firstMergedAt": "2026-09-23T09:56:18Z",
+  "lastMergedAt": "2026-09-23T09:56:18Z",
+  "name": "Fix dashboard menu reopen and terminal focus after Fluent UI v5 migration",
+  "owner": "JamesNK",
+  "prs": [
+    20341
+  ]
+}
