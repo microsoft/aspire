@@ -32,20 +32,20 @@ public partial class AppHostAnalyzer
             isEnabledByDefault: true,
             helpLinkUri: $"https://aka.ms/aspire/diagnostics/{ContainerResourceCannotBeProjectedId}");
 
-        private const string ConnectionStringExpressionMustBeResolvedId = "ASPIRE013";
-        internal static readonly DiagnosticDescriptor s_connectionStringExpressionMustBeResolved = new(
-            id: ConnectionStringExpressionMustBeResolvedId,
-            title: "Resolve connection-string expressions through the effective resource",
-            messageFormat: "Direct access to 'ConnectionStringExpression' may ignore a selected resource projection. Use 'GetConnectionStringExpression()' to prefer the projection, or pass 'preferOwner: true' when owner precedence is intentional.",
+        private const string ConnectionStringAccessMustBeResolvedId = "ASPIRE013";
+        internal static readonly DiagnosticDescriptor s_connectionStringAccessMustBeResolved = new(
+            id: ConnectionStringAccessMustBeResolvedId,
+            title: "Resolve connection-string access through the effective resource",
+            messageFormat: "Direct use of '{0}' may ignore a selected resource projection; {1}",
             category: "Usage",
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
-            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{ConnectionStringExpressionMustBeResolvedId}");
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{ConnectionStringAccessMustBeResolvedId}");
 
         public static readonly ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics = ImmutableArray.Create(
             s_modelNameMustBeValid,
             s_containerResourceCannotBeProjected,
-            s_connectionStringExpressionMustBeResolved
+            s_connectionStringAccessMustBeResolved
         );
     }
 }

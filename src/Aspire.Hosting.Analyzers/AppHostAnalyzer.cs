@@ -40,11 +40,18 @@ public partial class AppHostAnalyzer : DiagnosticAnalyzer
                 modelNameOperations = new ConcurrentDictionary<ModelNameOperation, byte>();
             }
 
+            var connectionStringAccesses = new ConcurrentQueue<ConnectionStringAccess>();
+
             context.RegisterOperationAction(c => DoOperationAnalysis(c, modelNameOperations), OperationKind.Invocation);
+            context.RegisterOperationAction(
+                c => CollectConnectionStringAccess(c, wellKnownTypes, connectionStringAccesses),
+                OperationKind.PropertyReference,
+                OperationKind.Invocation);
 
             context.RegisterOperationBlockEndAction(c =>
             {
                 DetectInvalidModelNames(c, modelNameOperations);
+                DetectDirectConnectionStringAccesses(c, wellKnownTypes, connectionStringAccesses);
 
                 // Return to the pool.
                 modelNameOperations.Clear();
@@ -55,7 +62,6 @@ public partial class AppHostAnalyzer : DiagnosticAnalyzer
         // Reported per invocation rather than per operation block: the diagnostic depends only on the type
         // argument at the call site, so it needs none of the block-level state the model name rule collects.
         context.RegisterOperationAction(c => DetectContainerResourceProjection(c, wellKnownTypes), OperationKind.Invocation);
-        context.RegisterOperationAction(c => DetectDirectConnectionStringExpressionAccess(c, wellKnownTypes), OperationKind.PropertyReference);
 
         void DoOperationAnalysis(OperationAnalysisContext context, ConcurrentDictionary<ModelNameOperation, byte> modelNameOperations)
         {
