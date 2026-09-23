@@ -33,9 +33,7 @@ suite('Aspire AppHost tree E2E', function () {
         const label = getTreeAppHostLabel(stateFile.state);
         await openAspireView();
 
-        console.log(`[issue #20335 baseline] Looking up workspace AppHost: ${label}`);
         assert.deepStrictEqual(await waitForAppHostsTreePath([label, 'Run AppHost']), [label, 'Run AppHost']);
-        console.log('[issue #20335 baseline] Existing workspace AppHost label assertion passed.');
         assert.ok(stateFile.state.workspaceAppHostCandidatePaths.length >= 1);
     });
 
