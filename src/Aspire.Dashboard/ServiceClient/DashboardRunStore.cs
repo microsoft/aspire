@@ -201,7 +201,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             SchemaVersion = SchemaVersion,
             RunId = runId,
             StartedAtUtc = startedAt,
-            ApplicationName = options.Value.ApplicationName,
+            ApplicationName = applicationName,
             DatabaseFileName = Path.GetFileName(DatabasePath)
         };
         _runs = new(LoadRuns);
@@ -602,7 +602,8 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             metadata.StartedAtUtc,
             metadata.EndedAtUtc,
             metadata.CleanShutdown,
-            metadata.ApplicationName,
+            // Older runs can contain an unset or blank name despite using the default application's disk key.
+            DashboardOptions.GetApplicationNameOrDefault(metadata.ApplicationName),
             Path.Combine(runDirectory, metadata.DatabaseFileName),
             isCurrent)
         {
