@@ -576,7 +576,7 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
     [InlineData("Service", "Configured", "Service")]
     public async Task ApplicationName_ServiceNameFallsBackToConfiguredName(string serviceName, string? configuredName, string expected)
     {
-        await using var instance = CreateResourceServiceClient(configuredName);
+        await using var instance = CreateResourceServiceClient(applicationName: configuredName);
         instance.SetDashboardServiceClient(new MockDashboardServiceClient { ApplicationName = serviceName });
 
         await instance.WhenConnected.DefaultTimeout();
@@ -1278,22 +1278,7 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
     private DashboardClient CreateResourceServiceClient(
         DashboardActivitySource? activitySource = null,
         IResourceRepositoryWriter? resourceRepositoryWriter = null,
-        ResourceServiceClientCertificateOptions? clientCertificate = null,
-        Action<SocketsHttpHandler>? configureHttpHandler = null)
-    {
-        return CreateResourceServiceClient(_loggerFactory, activitySource, resourceRepositoryWriter);
-    }
-
-    private DashboardClient CreateResourceServiceClient(string? applicationName)
-    {
-        return CreateResourceServiceClient(_loggerFactory, activitySource: null, resourceRepositoryWriter: null, applicationName);
-    }
-
-    private static DashboardClient CreateResourceServiceClient(
-        ILoggerFactory loggerFactory,
-        DashboardActivitySource? activitySource,
-        IResourceRepositoryWriter? resourceRepositoryWriter,
-        string? applicationName,
+        string? applicationName = null,
         ResourceServiceClientCertificateOptions? clientCertificate = null,
         Action<SocketsHttpHandler>? configureHttpHandler = null)
     {
@@ -1316,7 +1301,7 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
 
         return new DashboardClient(
             activitySource ?? new DashboardActivitySource(),
-            loggerFactory,
+            _loggerFactory,
             new ConfigurationManager(),
             Options.Create(options),
             new MockKnownPropertyLookup(),
