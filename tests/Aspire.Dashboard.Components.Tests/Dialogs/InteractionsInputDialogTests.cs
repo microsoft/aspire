@@ -685,7 +685,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         }
     }
 
-    private Func<IRenderedFragment> SetUpDialog(out DashboardDialogService dialogService)
+    private Func<IRenderedComponent<IComponent>> SetUpDialog(out DashboardDialogService dialogService)
     {
         FluentUISetupHelpers.SetupFluentInputLabel(this);
         FluentUISetupHelpers.SetupFluentTextField(this);

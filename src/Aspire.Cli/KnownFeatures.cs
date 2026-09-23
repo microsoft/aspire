@@ -87,7 +87,7 @@ internal static class KnownFeatures
 
         [NuGetSignatureVerificationEnabled] = new(
             NuGetSignatureVerificationEnabled,
-            "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
+            "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for NuGet operations",
             DefaultValue: true),
 
         [AspireSkillsRemoteFetchEnabled] = new(

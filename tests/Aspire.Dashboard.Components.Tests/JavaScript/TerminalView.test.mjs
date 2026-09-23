@@ -209,7 +209,9 @@ function mount({ visible = true, dotNetRef, options = {} } = {}) {
         } },
         { label: "Localized terminal input", ...options, viewId }, template, footer);
     ids.push(id);
-    return { id, element, controls, footer, footerControls, viewId };
+    return {
+        id, element, controls, footer, footerControls, viewId,
+    };
 }
 
 async function settle() {
@@ -555,7 +557,7 @@ test("a mount becoming ready after another terminal does not steal its focus", a
     assert.equal(attempts[0].client.focusCalls, 0);
 });
 
-test("inactive dock panes wait for activation before focusing and do not remount", async () => {
+test("inactive dock panes wait for activation without stealing tab focus or remounting", async () => {
     const { id, element } = mount({ options: { showDimensions: false } });
     const pane = {};
     element.closest = selector => selector === "[inert]" ? pane : null;
@@ -566,11 +568,11 @@ test("inactive dock panes wait for activation before focusing and do not remount
     element.closest = () => null;
     document.activeElement = { tagName: "BUTTON" };
     terminal.setAutoFit(id, true);
-    assert.equal(attempts[0].client.focusCalls, 1);
-    assert.equal(document.activeElement, attempts[0].client.element);
+    assert.equal(attempts[0].client.focusCalls, 0);
+    assert.equal(document.activeElement.tagName, "BUTTON");
     terminal.setAutoFit(id, true);
     observers[0].callback();
-    assert.equal(attempts[0].client.focusCalls, 1);
+    assert.equal(attempts[0].client.focusCalls, 0);
     assert.equal(attempts.length, 1);
 });
 

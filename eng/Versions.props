@@ -1,11 +1,13 @@
 <Project>
   <PropertyGroup>
     <!-- This repo version -->
-    <MajorVersion>13</MajorVersion>
-    <MinorVersion>6</MinorVersion>
+    <MajorVersion>14</MajorVersion>
+    <MinorVersion>0</MinorVersion>
     <PatchVersion>0</PatchVersion>
     <VersionPrefix>$(MajorVersion).$(MinorVersion).$(PatchVersion)</VersionPrefix>
     <PreReleaseVersionLabel>preview.1</PreReleaseVersionLabel>
+    <!-- The advance 14.0 branch precedes its dashboard image. Remove this override once the 14.0 tag is published. -->
+    <AspireDashboardImageTag>13.6</AspireDashboardImageTag>
     <DefaultTargetFramework>net8.0</DefaultTargetFramework>
     <AllTargetFrameworks>$(DefaultTargetFramework);net9.0;net10.0</AllTargetFrameworks>
     <!-- dotnet versions for running template tests -->
@@ -58,6 +60,11 @@
     <AzureMonitorOpenTelemetryExporterVersion>1.8.3</AzureMonitorOpenTelemetryExporterVersion>
     <!-- Aspire.Cli uses a preview version of StreamJsonRpc which is needed for native AOT support. -->
     <StreamJsonRpcPackageVersionForCli>2.23.32-alpha</StreamJsonRpcPackageVersionForCli>
+    <!-- Aspire.Cli runs NuGet restore in-process in a native AOT binary, which needs newer NuGet.*
+         builds than the stable versions the rest of the repo uses (see Directory.Packages.props).
+         These prereleases come from the dotnet11 feed, which does not carry the stable versions,
+         so NuGet.config maps NuGet.* to both feeds. -->
+    <NuGetPackageVersionForCli>7.12.0-rc.25</NuGetPackageVersionForCli>
     <!-- MicroBuild.Core version for VS Code extension signing -->
     <MicrosoftVisualStudioEngMicroBuildCoreVersion>1.0.0</MicrosoftVisualStudioEngMicroBuildCoreVersion>
   </PropertyGroup>
@@ -69,6 +76,8 @@
     <MicrosoftAspNetCoreTestHostNet11Version>11.0.0-rc.1.26425.128</MicrosoftAspNetCoreTestHostNet11Version>
     <MicrosoftExtensionsCachingMemoryNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsCachingMemoryNet11Version>
     <MicrosoftExtensionsConfigurationBinderNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsConfigurationBinderNet11Version>
+    <MicrosoftExtensionsConfigurationEnvironmentVariablesNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsConfigurationEnvironmentVariablesNet11Version>
+    <MicrosoftExtensionsFileSystemGlobbingNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsFileSystemGlobbingNet11Version>
     <MicrosoftExtensionsHttpNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsHttpNet11Version>
     <MicrosoftExtensionsLoggingNet11Version>11.0.0-rc.1.26425.128</MicrosoftExtensionsLoggingNet11Version>
   </PropertyGroup>

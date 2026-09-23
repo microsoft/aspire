@@ -41,7 +41,7 @@ public partial class MainLayoutTests
         TerminalSetupHelpers.SetupTerminalDock(this);
         SetupMainLayoutServices(dashboardClient: client);
 
-        var cut = RenderComponent<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
+        var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
             new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
         var label = Services.GetRequiredService<IStringLocalizer<Resources.TerminalStrings>>()[
             isDesktop ? nameof(Resources.TerminalStrings.MainLayoutToggleTerminalDock) : nameof(Resources.TerminalStrings.TerminalTitle)].Value;
@@ -109,7 +109,7 @@ public partial class MainLayoutTests
             selection.SelectRun("historical");
         }
 
-        var cut = RenderComponent<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
+        var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
             new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
         var shortcuts = Services.GetRequiredService<ShortcutManager>();
         var label = Services.GetRequiredService<IStringLocalizer<Resources.TerminalStrings>>()[
@@ -177,7 +177,7 @@ public partial class MainLayoutTests
         TerminalSetupHelpers.SetupTerminalDock(this);
         SetupMainLayoutServices(dashboardClient: client);
 
-        var cut = RenderComponent<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
+        var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
             new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false)));
         var label = Services.GetRequiredService<IStringLocalizer<Resources.TerminalStrings>>()[nameof(Resources.TerminalStrings.TerminalTitle)].Value;
         var dock = cut.FindComponent<TerminalDock>().Instance;

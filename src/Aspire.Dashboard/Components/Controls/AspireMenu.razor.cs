@@ -19,6 +19,7 @@ public partial class AspireMenu : FluentComponentBase
     private FluentMenu? _menu;
     private IReadOnlyList<MenuButtonItem>? _renderedItems;
     private bool _refreshMenuAfterRender;
+    private bool _reopenInProgress;
     private bool? _appliedOpen;
     private int _cursorLeft;
     private int _cursorTop;
@@ -98,10 +99,15 @@ public partial class AspireMenu : FluentComponentBase
                 {
                     // Trigger identifies either the button anchor or the cursor anchor. The parameterless
                     // path leaves placement to Fluent's CSS anchor positioning and viewport fallbacks.
+                    if (_reopenInProgress)
+                    {
+                        await _menu.CloseMenuAsync();
+                    }
                     await _menu.OpenMenuAsync();
                 }
                 else
                 {
+                    _reopenInProgress = false;
                     await _menu.CloseMenuAsync();
                 }
 
@@ -127,8 +133,10 @@ public partial class AspireMenu : FluentComponentBase
                 .AddStyle("min-width", "64px")
                 .Build();
 
-            // Escape and light-dismiss can close the browser popover without raising OpenedChanged.
-            // Treat every cursor request as a new open/position request even when Open is still true.
+            // Escape and light-dismiss update the browser popover before their asynchronous
+            // OpenedChanged notification reaches this component. Treat every cursor request as a
+            // new open/position request even when Open is still true.
+            _reopenInProgress = Open;
             _refreshMenuAfterRender = true;
             await SetOpenAsync(true);
 
@@ -186,6 +194,18 @@ public partial class AspireMenu : FluentComponentBase
 
     private async Task OnOpenChanged(bool open)
     {
+        // Fluent reports native popover toggles through asynchronous JS callbacks. During a deliberate
+        // close-and-reopen, ignore the reset's close notification until the following open is confirmed.
+        if (_reopenInProgress)
+        {
+            if (!open)
+            {
+                return;
+            }
+
+            _reopenInProgress = false;
+        }
+
         _appliedOpen = open;
         await SetOpenAsync(open);
     }

@@ -298,11 +298,6 @@ public class Program
         };
         settings.Configuration.AddEnvironmentVariables();
 
-        if (configurationValues is not null)
-        {
-            settings.Configuration.AddInMemoryCollection(configurationValues);
-        }
-
         var builder = Host.CreateEmptyApplicationBuilder(settings);
 
         // Set up settings with appropriate paths.
@@ -310,6 +305,13 @@ public class Program
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
         ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile);
+
+        if (configurationValues is not null)
+        {
+            // These values are injected by tests and must override ambient user and workspace settings
+            // so the test outcome does not depend on configuration files on the developer's machine.
+            builder.Configuration.AddInMemoryCollection(configurationValues);
+        }
 
         TrySetLocaleOverride(LocaleHelpers.GetLocaleOverride(builder.Configuration), startupContext.Logger, startupContext.ErrorWriter);
         WarnIfGlobalSettingsContainAppHostPath(globalSettingsFile, startupContext.ErrorWriter);
@@ -464,7 +466,17 @@ public class Program
         builder.Services.AddTransient<OrphanedAppHostCollector>();
 
         // Register certificate tool runner - uses native CertificateManager directly (no subprocess needed)
-        builder.Services.AddSingleton(sp => CertificateManager.Create(sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>(), sp.GetRequiredService<IEnvironment>()));
+        builder.Services.AddSingleton(sp =>
+        {
+            var environment = sp.GetRequiredService<IEnvironment>();
+            var nssDbOverride = CertificateConfiguration.ResolveNssDbOverride(
+                sp.GetRequiredService<IConfiguration>());
+
+            return CertificateManager.Create(
+                sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>(),
+                environment,
+                nssDbOverride);
+        });
         builder.Services.AddSingleton<ICertificateToolRunner, NativeCertificateToolRunner>();
 
         builder.Services.AddTransient<IDotNetCliRunner, DotNetCliRunner>();
@@ -527,6 +539,7 @@ public class Program
         // Bundle layout services (for polyglot apphost without .NET SDK).
         // Registered before NuGetPackageCache so the factory can choose implementation.
         builder.Services.AddSingleton<ILayoutDiscovery, LayoutDiscovery>();
+        builder.Services.AddSingleton<INuGetClient, NuGetClient>();
         builder.Services.AddSingleton<BundleNuGetService>();
 
         // Git repository operations.

@@ -11,4 +11,12 @@ namespace Aspire.Hosting.Redis;
 /// <param name="name">The name of the resource.</param>
 public class RedisCommanderResource(string name) : ContainerResource(name)
 {
+    internal const string PrimaryEndpointName = "http";
+
+    private EndpointReference? _primaryEndpoint;
+
+    /// <summary>
+    /// Gets the primary endpoint for Redis Commander.
+    /// </summary>
+    public EndpointReference PrimaryEndpoint => _primaryEndpoint ??= new(this, PrimaryEndpointName);
 }

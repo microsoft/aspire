@@ -113,6 +113,17 @@ Treat a relaxed negative expectation as a signal to verify the consuming
 workflow's artifacts and execution lane. See `docs/ci/test-trigger-map.md` for
 the map vocabulary and maintenance guidance.
 
+### Official Azure Pipelines validation
+
+When reviewing official Azure Pipelines YAML changes, validate them by running
+the internal `microsoft-aspire` pipeline (definition 1602 in `dnceng/internal`)
+and checking the relevant stage's timeline, logs, and artifacts. A green GitHub
+PR check or a test that asserts the YAML's exact command string does not prove
+the pipeline behavior. Keep non-obvious rationale next to the YAML change
+instead of duplicating it in exact-string tests. Use the `azdo-internal` skill
+for validation; explicitly record stages excluded by personal-branch gating
+(such as source indexing on main) as unvalidated, not passed.
+
 ### Visual-only styling changes
 
 When reviewing a pull request, do not request automated tests solely for visual-only styling changes, including CSS selectors, colors, opacity, cursors, hover/focus/active appearance, or theme tokens. In particular, do not request Playwright assertions for computed styles or exact color values. Tests are appropriate when a styling change also affects functional interaction, DOM or accessibility semantics, state transitions, or whether a user can complete a workflow.

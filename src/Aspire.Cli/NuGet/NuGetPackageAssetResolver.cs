@@ -7,7 +7,7 @@ using NuGet.Frameworks;
 using NuGet.ProjectModel;
 using NuGet.RuntimeModel;
 
-namespace Aspire.Managed.NuGet.Commands;
+namespace Aspire.Cli.NuGet;
 
 internal sealed class NuGetPackageAssetResolution
 {

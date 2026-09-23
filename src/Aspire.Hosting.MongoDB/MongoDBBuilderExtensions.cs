@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.MongoDB;
 using Microsoft.Extensions.DependencyInjection;
@@ -243,9 +244,19 @@ public static class MongoDBBuilderExtensions
             .WithImageRegistry(MongoDBContainerImageTags.MongoExpressRegistry)
             .WithIconName("WindowDatabase")
             .WithEnvironment(context => ConfigureMongoExpressContainer(context, builder.Resource))
-            .WithHttpEndpoint(targetPort: 8081, name: "http")
+            .WithHttpEndpoint(targetPort: 8081, name: MongoExpressContainerResource.PrimaryEndpointName)
             .WithParentRelationship(builder)
+            .WithRelationship(builder.Resource, KnownRelationshipTypes.Manages)
             .ExcludeFromManifest();
+
+        resourceBuilder.WithHidden();
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
+        builder.WithUrlForEndpoint(mongoExpressContainer.PrimaryEndpoint, url =>
+        {
+            url.DisplayText = "Manage";
+            url.DisplayOrder = 1;
+        });
+#pragma warning restore CS0618
 
         configureContainer?.Invoke(resourceBuilder);
 

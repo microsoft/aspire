@@ -425,7 +425,6 @@ public class HostedAgentExtensionTests
         var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
             app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
             hostedAgent,
-            hostedAgent.Target,
             NullLogger.Instance,
             CancellationToken.None);
 
@@ -593,7 +592,6 @@ public class HostedAgentExtensionTests
         var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
             app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
             hostedAgent,
-            agent.Resource,
             NullLogger.Instance,
             CancellationToken.None);
 
@@ -601,6 +599,157 @@ public class HostedAgentExtensionTests
         Assert.DoesNotContain("AGENT_NAME", envVars.Keys);
         Assert.DoesNotContain("FOUNDRY_MODE", envVars.Keys);
         Assert.Equal("my-value", envVars["MY_VAR"]);
+    }
+
+    [Fact]
+    public async Task GetResolvedEnvironmentVariables_EvaluatesHostedAgentTarget()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        IResource? evaluatedResource = null;
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithEnvironment(context =>
+            {
+                evaluatedResource = context.Resource;
+                context.EnvironmentVariables["RESOURCE_NAME"] = context.Resource.Name;
+            });
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Same(hostedAgent.Target, evaluatedResource);
+        Assert.Equal(agent.Resource.Name, envVars["RESOURCE_NAME"]);
+    }
+
+    [Fact]
+    public async Task GetResolvedEnvironmentVariables_ProjectsGeneratedConnectionStringAliases()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithReference(connection)
+            .WithEnvironment("ConnectionStrings__my-db", "Host=override")
+            .WithEnvironment("custom-name", "custom-value");
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Collection(
+            envVars.OrderBy(static entry => entry.Key, StringComparer.Ordinal),
+            entry =>
+            {
+                Assert.Equal("ConnectionStrings__my_db", entry.Key);
+                Assert.Equal("Host=override", entry.Value);
+            },
+            entry =>
+            {
+                Assert.Equal("custom-name", entry.Key);
+                Assert.Equal("custom-value", entry.Value);
+            });
+
+        var configuration = new HostedAgentConfiguration("test-image")
+        {
+            EnvironmentVariables = envVars
+        };
+        var exception = Assert.Throws<DistributedApplicationException>(
+            () => configuration.ToProjectsAgentVersionCreationOptions(agent.Resource.Name));
+
+        Assert.Equal(
+            "Foundry hosted agent for target resource 'agent' contains environment variable names that are not supported by Foundry Hosted Agents. Environment variable names must contain only ASCII letters, digits, or underscores. Invalid name(s): 'custom-name'",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task GetResolvedEnvironmentVariables_PreservesStandaloneConnectionStringNames()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        var reference = new ConnectionStringReference(connection.Resource, optional: false);
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithEnvironment("ConnectionStrings__my-db", reference)
+            .WithEnvironment("ConnectionStrings__my_db", "Host=manual");
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["ConnectionStrings__my-db"] = "Host=example",
+                ["ConnectionStrings__my_db"] = "Host=manual"
+            },
+            envVars);
+    }
+
+    [Fact]
+    public async Task GetResolvedEnvironmentVariables_ResolvesSelectedConnectionStringExpression()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=primary"));
+#pragma warning disable ASPIRECONNECTIONSTRINGS001
+        var names = ConnectionStringEnvironmentVariableNames.Create(connection.Resource, "my-db-http");
+        var reference = new ConnectionStringReference(
+            connection.Resource, optional: false, names, "HttpConnectionStringExpression",
+            ReferenceExpression.Create($"Host=http"));
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithEnvironment(names.OriginalName, reference)
+            .WithEnvironment(names.PortableName, reference);
+#pragma warning restore ASPIRECONNECTIONSTRINGS001
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(
+            new Dictionary<string, string> { ["ConnectionStrings__my_db_http"] = "Host=http" },
+            envVars);
+    }
+
+    [Fact]
+    public async Task GetResolvedEnvironmentVariables_PreservesReplacedConnectionStringAliases()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithReference(connection)
+            .WithEnvironment("ConnectionStrings__my-db", "Host=original")
+            .WithEnvironment("ConnectionStrings__my_db", "Host=portable");
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["ConnectionStrings__my-db"] = "Host=original",
+                ["ConnectionStrings__my_db"] = "Host=portable"
+            },
+            envVars);
     }
 
     [Fact]
