@@ -207,7 +207,7 @@ internal sealed class Hmp1UdsServerListenerFilter : IHex1bTerminalPresentationFi
         var directory = Path.GetDirectoryName(socketPath);
         if (!string.IsNullOrWhiteSpace(directory))
         {
-            SocketPermissionHelper.CreateDirectory(directory);
+            SocketPermissionHelper.CreateDirectory(directory, repairExisting: false);
         }
 
         if (File.Exists(socketPath))

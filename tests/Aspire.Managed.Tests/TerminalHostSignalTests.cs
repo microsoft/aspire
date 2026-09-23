@@ -23,7 +23,7 @@ public partial class TerminalHostSignalTests
         var root = Directory.CreateTempSubdirectory();
         try
         {
-            var socketDirectory = Directory.CreateDirectory(Path.Combine(root.FullName, ".aspire", "trmnl"));
+            var socketDirectory = new DirectoryInfo(Path.Combine(root.FullName, "terminals"));
             var producerPath = Path.Combine(socketDirectory.FullName, "p.sock");
             var consumerPath = Path.Combine(socketDirectory.FullName, "h.sock");
             var controlPath = Path.Combine(socketDirectory.FullName, "c.sock");
@@ -97,7 +97,7 @@ public partial class TerminalHostSignalTests
         var root = Directory.CreateTempSubdirectory();
         try
         {
-            var socketDirectory = Directory.CreateDirectory(Path.Combine(root.FullName, ".aspire", "trmnl"));
+            var socketDirectory = new DirectoryInfo(Path.Combine(root.FullName, "terminals"));
             var parentProducerPath = Path.Combine(socketDirectory.FullName, "pp.sock");
             var parentConsumerPath = Path.Combine(socketDirectory.FullName, "ph.sock");
             var parentControlPath = Path.Combine(socketDirectory.FullName, "pc.sock");

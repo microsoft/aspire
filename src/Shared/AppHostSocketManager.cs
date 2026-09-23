@@ -62,7 +62,7 @@ internal static class AppHostSocketManager
         ArgumentNullException.ThrowIfNull(logger);
 
         var backchannelsDirectory = BackchannelConstants.GetBackchannelsDirectory(homeDirectory);
-        SocketPermissionHelper.CreateDirectory(backchannelsDirectory);
+        SocketPermissionHelper.CreateDirectory(backchannelsDirectory, repairExisting: true);
 
         string appHostId;
         if (string.IsNullOrEmpty(appHostPath))

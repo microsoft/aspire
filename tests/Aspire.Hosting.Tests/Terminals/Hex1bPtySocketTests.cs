@@ -6,6 +6,7 @@ using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
 
@@ -28,7 +29,7 @@ public class Hex1bPtySocketTests
             var root = Directory.CreateTempSubdirectory();
             try
             {
-                var directory = Path.Combine(root.FullName, ".aspire", "pty");
+                var directory = Path.Combine(root.FullName, "custom");
                 var value = bool.Parse(hasOverrideValue) ? directory : null;
                 Environment.SetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable, value);
 
@@ -59,23 +60,15 @@ public class Hex1bPtySocketTests
             var root = Directory.CreateTempSubdirectory();
             try
             {
-                var directory = Path.Combine(root.FullName, ".aspire", "pty");
+                var directory = Path.Combine(root.FullName, "custom");
                 if (bool.Parse(existingDirectoryValue))
                 {
-                    var info = Directory.CreateDirectory(directory);
-                    var security = info.GetAccessControl();
-                    security.AddAccessRule(new FileSystemAccessRule(
-                        new SecurityIdentifier(WellKnownSidType.WorldSid, null),
-                        FileSystemRights.FullControl,
-                        InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
-                        PropagationFlags.None,
-                        AccessControlType.Allow));
-                    info.SetAccessControl(security);
+                    SocketPermissionHelper.CreateDirectory(directory, repairExisting: false);
                 }
 
                 // Normalize an existing override without confusing it with the terminal child's environment.
                 Environment.SetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable,
-                    Path.Combine(directory, "..", "pty"));
+                    Path.Combine(directory, "..", "custom"));
                 await using (var service = TestTerminalService.Create())
                 {
                     await using var terminal = service.CreateTerminal(new TerminalLaunchOptions
@@ -143,6 +136,47 @@ public class Hex1bPtySocketTests
                 root.Delete(recursive: true);
             }
         }, sharedRoot.ToString()).Dispose();
+    }
+
+    [Fact]
+    [SupportedOSPlatform("windows")]
+    public void CreateTerminal_PermissiveOverride_FailsWithoutChangingPermissions()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows PTY socket permissions.");
+
+        RemoteExecutor.Invoke(static async () =>
+        {
+            var root = Directory.CreateTempSubdirectory();
+            try
+            {
+                var directory = Directory.CreateDirectory(Path.Combine(root.FullName, "custom"));
+                var security = directory.GetAccessControl();
+                security.AddAccessRule(new FileSystemAccessRule(
+                    new SecurityIdentifier(WellKnownSidType.WorldSid, null),
+                    FileSystemRights.FullControl,
+                    InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+                    PropagationFlags.None,
+                    AccessControlType.Allow));
+                directory.SetAccessControl(security);
+                var originalPermissions = directory.GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.All);
+                Environment.SetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable, directory.FullName);
+                await using var service = TestTerminalService.Create();
+
+                Assert.Throws<IOException>(() => service.CreateTerminal(new TerminalLaunchOptions
+                {
+                    Title = "Rejected terminal",
+                    Executable = "not-started"
+                }));
+
+                Assert.Empty(service.ListAll());
+                Assert.Equal(originalPermissions, directory.GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.All));
+                Assert.Empty(directory.EnumerateFileSystemInfos());
+            }
+            finally
+            {
+                root.Delete(recursive: true);
+            }
+        }).Dispose();
     }
 
     [Fact]

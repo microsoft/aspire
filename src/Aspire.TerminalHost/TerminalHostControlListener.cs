@@ -54,7 +54,7 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
         var dir = Path.GetDirectoryName(_socketPath);
         if (!string.IsNullOrEmpty(dir))
         {
-            SocketPermissionHelper.CreateDirectory(dir);
+            SocketPermissionHelper.CreateDirectory(dir, repairExisting: false);
         }
 
         if (File.Exists(_socketPath))
@@ -310,7 +310,10 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
 
         try
         {
-            File.Delete(_socketPath);
+            if (_socket is not null)
+            {
+                File.Delete(_socketPath);
+            }
         }
         catch
         {

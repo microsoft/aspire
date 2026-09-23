@@ -25,6 +25,7 @@ internal static class Hex1bPtySocketHelper
         lock (s_lock)
         {
             var directory = Environment.GetEnvironmentVariable(SocketDirectoryEnvironmentVariable);
+            var useDefaultDirectory = string.IsNullOrWhiteSpace(directory);
             if (string.IsNullOrWhiteSpace(directory))
             {
                 var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -36,7 +37,7 @@ internal static class Hex1bPtySocketHelper
                 directory = Path.Combine(home, SocketDirectoryNames.Aspire, SocketDirectoryNames.Pty);
             }
 
-            directory = SocketPermissionHelper.CreateDirectory(directory).FullName;
+            directory = SocketPermissionHelper.CreateDirectory(directory, repairExisting: useDefaultDirectory).FullName;
 
             // Hex1b reads the parent's process environment when the deferred PTY workload starts,
             // then passes the full socket path to hex1bpty via --socket. The workload's Environment
