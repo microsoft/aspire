@@ -1126,7 +1126,7 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
-    public void CollapsedResourceNames_FetchedAfterDashboardClientConnected_KeyIncludesApplicationName()
+    public void CollapsedResourceNames_FetchedAfterDashboardClientConnected_KeyIncludesApplicationNameAndHash()
     {
         // Arrange
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -1174,8 +1174,7 @@ public partial class ResourcesTests : DashboardTestContext
         });
 
         // Assert 1 - The key should include the application name
-        var expectedKey = BrowserStorageKeys.CollapsedResourceNamesKey(applicationName);
-        Assert.Equal(expectedKey, collapsedResourceNamesKeyUsed);
+        Assert.Matches("^Aspire_Resources_CollapsedResourceNames_mytestapplication-[a-f0-9]{16}$", collapsedResourceNamesKeyUsed);
 
         // Assert 2 - CollapsedResourceNames was only fetched after connection was completed
         var collapsedResourceNamesCall = getAsyncCallOrder.FirstOrDefault(c => c.Key.Contains(BrowserStorageKeys.CollapsedResourceNamesKeyPrefix));

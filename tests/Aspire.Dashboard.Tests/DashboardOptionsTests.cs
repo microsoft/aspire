@@ -8,6 +8,7 @@ using System.Text.Json;
 using Aspire.Dashboard.Authentication;
 using Aspire.Dashboard.Configuration;
 using Aspire.Hosting;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Http;
@@ -407,6 +408,21 @@ public sealed class DashboardOptionsTests
         var second = DashboardAuthenticationCookieNames.Create($"{new string('a', 32)}-second");
 
         Assert.NotEqual(first, second);
+    }
+
+    [Fact]
+    public async Task AntiforgeryCookieName_IncludesApplicationNameAndHash()
+    {
+        await using var app = new DashboardWebApplication(builder => builder.Configuration.AddInMemoryCollection(
+        [
+            new("ASPNETCORE_URLS", "http://localhost:8000/"),
+            new("ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL", "http://localhost:4319/"),
+            new(DashboardConfigNames.DashboardApplicationName.ConfigKey, "My application"),
+        ]));
+
+        var options = app.Services.GetRequiredService<IOptions<AntiforgeryOptions>>().Value;
+
+        Assert.Matches("^\\.Aspire\\.Dashboard\\.Antiforgery\\.my-application-[a-f0-9]{16}$", options.Cookie.Name);
     }
 
     [Fact]
