@@ -211,13 +211,15 @@ public class DotnetSdkVersionProviderTests(ITestOutputHelper outputHelper)
             workspace.Path,
             callerCancellationSource.Token);
         await processRunner.RunStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        var sharedCall = provider.TryGetVersionAsync(
+            workspace.Path,
+            TestContext.Current.CancellationToken);
         callerCancellationSource.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceledCall);
         processCompletion.SetResult(new ProcessResult(1));
-        Assert.True(SpinWait.SpinUntil(
-            () => Assert.Single(processRunner.Disposables).DisposeCallCount == 1,
-            TimeSpan.FromSeconds(1)));
+        Assert.Null(await sharedCall);
+        Assert.Equal(1, Assert.Single(processRunner.Disposables).DisposeCallCount);
 
         processRunner.EnqueueResult(output: ["11.0.100-rc.1"]);
         var retried = await provider.TryGetVersionAsync(

@@ -23,33 +23,29 @@ internal sealed class DotnetBuildCommandEventingSubscriber(
         return Task.CompletedTask;
     }
 
-    private async Task ConfigureMultiThreadedBuildAsync(
+    private Task ConfigureMultiThreadedBuildAsync(
         BeforeResourceStartedEvent @event,
         CancellationToken cancellationToken)
     {
         if (!IsAspireManagedDotnetBuild(@event.Resource) ||
-            @event.Resource.TryGetLastAnnotation<MultiThreadedBuildAnnotation>(out _))
+            @event.Resource.TryGetLastAnnotation<MultiThreadedBuildConfiguredAnnotation>(out _))
         {
-            return;
+            return Task.CompletedTask;
         }
 
         var executable = (ExecutableResource)@event.Resource;
-        if (!await versionProvider.SupportsMultiThreadedBuildAsync(
-            executable.WorkingDirectory,
-            cancellationToken).ConfigureAwait(false))
-        {
-            return;
-        }
-
         lock (executable.Annotations)
         {
-            if (executable.TryGetLastAnnotation<MultiThreadedBuildAnnotation>(out _))
+            if (executable.TryGetLastAnnotation<MultiThreadedBuildConfiguredAnnotation>(out _))
             {
-                return;
+                return Task.CompletedTask;
             }
 
-            executable.Annotations.Add(new CommandLineArgsCallbackAnnotation(static args =>
+            // DCP clears cached argument callback results before recreating a resource. Resolve SDK support inside
+            // the callback so changes to global.json are observed when arguments are reevaluated for the next start.
+            executable.Annotations.Add(new CommandLineArgsCallbackAnnotation(async context =>
             {
+                var args = context.Args;
                 if (args.Count < 2 ||
                     args[1] is not string buildTarget ||
                     buildTarget.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
@@ -62,10 +58,19 @@ internal sealed class DotnetBuildCommandEventingSubscriber(
                     return;
                 }
 
+                if (!await versionProvider.SupportsMultiThreadedBuildAsync(
+                    executable.WorkingDirectory,
+                    context.CancellationToken).ConfigureAwait(false))
+                {
+                    return;
+                }
+
                 args.Insert(Math.Min(2, args.Count), "-mt");
             }));
-            executable.Annotations.Add(MultiThreadedBuildAnnotation.Instance);
+            executable.Annotations.Add(MultiThreadedBuildConfiguredAnnotation.Instance);
         }
+
+        return Task.CompletedTask;
     }
 
     private static bool IsAspireManagedDotnetBuild(IResource resource)
@@ -80,8 +85,8 @@ internal sealed class DotnetBuildCommandEventingSubscriber(
             resource.Name.StartsWith($"{CoordinatedBuildResourceName}-", StringComparison.Ordinal);
     }
 
-    private sealed class MultiThreadedBuildAnnotation : IResourceAnnotation
+    private sealed class MultiThreadedBuildConfiguredAnnotation : IResourceAnnotation
     {
-        public static MultiThreadedBuildAnnotation Instance { get; } = new();
+        public static MultiThreadedBuildConfiguredAnnotation Instance { get; } = new();
     }
 }

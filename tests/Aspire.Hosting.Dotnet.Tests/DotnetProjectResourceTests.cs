@@ -542,16 +542,25 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
             "build",
             projectPath,
         };
-        if (projectFileName.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+        var isProjectBuild = projectFileName.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase);
+        if (isProjectBuild)
         {
             expected.Add("-mt");
         }
+
         expected.Add("--configuration");
         expected.Add("Release");
 
         Assert.Equal(expected, args);
-        Assert.Equal(1, versionProvider.CallCount);
-        Assert.Equal(rebuilder.WorkingDirectory, Assert.Single(versionProvider.WorkingDirectories));
+        Assert.Equal(isProjectBuild ? 1 : 0, versionProvider.CallCount);
+        if (isProjectBuild)
+        {
+            Assert.Equal(rebuilder.WorkingDirectory, Assert.Single(versionProvider.WorkingDirectories));
+        }
+        else
+        {
+            Assert.Empty(versionProvider.WorkingDirectories);
+        }
     }
 
     [Fact]
