@@ -106,6 +106,38 @@ public class AspireMenuTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task UnanchoredAspireMenu_RepeatedOpenResetsFluentMenuState()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var menuHost = RenderComponent<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Anchored, false);
+            builder.Add(p => p.Items, new[] { new MenuButtonItem { Text = "Item" } });
+        });
+
+        await menuHost.InvokeAsync(() => menuHost.Instance.OpenAsync(123, 456));
+        menuHost.WaitForAssertion(() => Assert.Single(JSInterop.Invocations,
+            invocation => invocation.Identifier == "Microsoft.FluentUI.Blazor.Components.Menu.OpenMenu"));
+        var closeCount = JSInterop.Invocations.Count(
+            invocation => invocation.Identifier == "Microsoft.FluentUI.Blazor.Components.Menu.CloseMenu");
+
+        await menuHost.InvokeAsync(() => menuHost.Instance.OpenAsync(456, 789));
+
+        menuHost.WaitForAssertion(() =>
+        {
+            Assert.Equal(2, JSInterop.Invocations.Count(
+                invocation => invocation.Identifier == "Microsoft.FluentUI.Blazor.Components.Menu.OpenMenu"));
+            Assert.Equal(closeCount + 1, JSInterop.Invocations.Count(
+                invocation => invocation.Identifier == "Microsoft.FluentUI.Blazor.Components.Menu.CloseMenu"));
+        });
+    }
+
+    [Fact]
     public async Task Header_LabelsMenuAndContributesToVerticalThreshold()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);

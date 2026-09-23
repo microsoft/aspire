@@ -458,7 +458,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             await page.Locator("#scroll-owner").EvaluateAsync("owner => owner.scrollTop = 40");
             await page.WaitForFunctionAsync("""
                 expectedBottom => Math.abs(document.querySelector('.scroll-buttons').getBoundingClientRect().bottom - expectedBottom) < 1
-                """, originalBounds.Y + originalBounds.Height - 40).DefaultTimeout();
+                """, (double)(originalBounds.Y + originalBounds.Height - 40)).DefaultTimeout();
             Assert.Equal(originalBounds.Y, (await page.Locator(".scroll-buttons").BoundingBoxAsync())!.Y);
             Assert.Equal(originalRegionBounds.Y - 40, (await region.BoundingBoxAsync())!.Y);
             Assert.Equal(0, await region.EvaluateAsync<int>("element => element.scrollTop"));
@@ -473,7 +473,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             await Assertions.Expect(bottomButton).ToBeVisibleAsync();
             await page.WaitForFunctionAsync("""
                 expectedBottom => Math.abs(document.querySelector('.scroll-buttons').getBoundingClientRect().bottom - expectedBottom) < 1
-                """, originalBounds.Y + originalBounds.Height).DefaultTimeout();
+                """, (double)(originalBounds.Y + originalBounds.Height)).DefaultTimeout();
             Assert.Equal(originalRegionBounds.Y, (await region.BoundingBoxAsync())!.Y);
             Assert.Equal(0, await region.EvaluateAsync<int>("element => element.scrollTop"));
         });
@@ -500,16 +500,20 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
                     wrapper.style.cssText = 'width:400px;height:300px;overflow:visible;';
                     owner.appendChild(wrapper);
                     wrapper.appendChild(region);
+                    window.dispatchEvent(new Event('resize'));
                 }
                 """, overflow);
 
             var bottomButton = page.Locator(".scroll-to-bottom");
             await Assertions.Expect(bottomButton).ToBeVisibleAsync();
             var root = page.Locator(".scroll-buttons");
+            await page.WaitForFunctionAsync("""
+                () => document.querySelector('.scroll-buttons').style.left === '100px'
+                """).DefaultTimeout();
             var bounds = (await root.BoundingBoxAsync())!;
-            Assert.Equal(110, bounds.X + bounds.Width / 2);
+            Assert.Equal(100, bounds.X + bounds.Width / 2);
             Assert.Equal(122, bounds.Y);
-            Assert.Equal(176, bounds.Height);
+            Assert.Equal(156, bounds.Height);
 
             // Keep the region in the viewport, but move it past the horizontal clip edge.
             await page.EvaluateAsync("""

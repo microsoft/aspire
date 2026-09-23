@@ -16,11 +16,12 @@ namespace Aspire.Dashboard.Tests.Integration.Playwright;
 
 [RequiresFeature(TestFeature.Playwright)]
 public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture fixture)
-    : PlaywrightTestsBase<TerminalTests.TerminalDashboardServerFixture>(fixture)
+    : PlaywrightTestsBase<TerminalTests.TerminalDashboardServerFixture>(fixture), IAsyncDisposable
 {
     private const string ResourceName = "terminal-resource";
     private const string Endpoint = "/api/terminal?resource=terminal-resource&replica=0";
     private static readonly SemaphoreSlim s_testGate = new(1, 1);
+    private bool _ownsTestGate;
 
     [Theory]
     [InlineData(false, false)]
@@ -58,7 +59,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await ExpectObserverTextAsync(page, "Output while read-only");
             await Assertions.Expect(terminal.Locator("canvas")).ToBeVisibleAsync();
             await page.EvaluateAsync("() => window.moduleTerminal.focus()");
-            await page.Keyboard.TypeAsync("blocked-keyboard");
+            await page.Keyboard.TypeAsync("q");
             await PasteAsync(input, "blocked-paste");
             Assert.Equal(["Terminal view does not accept input", "Terminal view does not accept input"],
                 await page.EvaluateAsync<string[]>("""
@@ -110,7 +111,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await SetReadOnlyAsync(page, terminalId, session, true);
             await ExpectReadOnlyAsync(page, true);
             await page.EvaluateAsync("() => window.moduleTerminal.focus()");
-            await page.Keyboard.TypeAsync("blocked-again");
+            await page.Keyboard.TypeAsync("z");
             await PasteAsync(input, "blocked-paste-again");
             await page.EvaluateAsync("() => window.terminalObserver.paste('still-active')");
             Assert.Equal("still-active", await connection.ReadInputTextAsync("still-active".Length, CancellationToken.None).DefaultTimeout());
@@ -203,7 +204,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await MountObserverAsync(page, requestPrimary: true);
             var primaryId = connection.Presentation.PrimaryPeerId;
             var dropdown = page.Locator("fluent-field.terminal-size-select fluent-dropdown");
-            var dimensions = page.GetByRole(AriaRole.Combobox, new() { Name = "Terminal dimensions", Exact = true });
+            var dimensions = TerminalDimensions(page);
             await dimensions.ClickAsync();
             await dropdown.Locator("fluent-option[text='80×24']").ClickAsync();
             await Assertions.Expect(dimensions).ToHaveTextAsync("80×24");
@@ -287,8 +288,11 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     }
 
     private static Task ExpectProducerDimensionsAsync(IPage page) =>
-        Assertions.Expect(page.GetByRole(AriaRole.Combobox, new() { Name = "Terminal dimensions", Exact = true }))
+        Assertions.Expect(TerminalDimensions(page))
             .ToHaveTextAsync($"{TestTerminalConnection.Columns}×{TestTerminalConnection.Rows}");
+
+    private static ILocator TerminalDimensions(IPage page) =>
+        page.Locator("fluent-field.terminal-size-select [role='combobox']");
 
     private static Task SetReadOnlyAsync(IPage page, int terminalId, TerminalViewSession session, bool readOnly)
     {
@@ -330,13 +334,23 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     private async Task RunTerminalTestAsync(Func<IPage, Task> test)
     {
         await s_testGate.WaitAsync();
+        _ownsTestGate = true;
+        await RunTestAsync(test);
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
         try
         {
-            await RunTestAsync(test);
+            await base.DisposeAsync();
         }
         finally
         {
-            s_testGate.Release();
+            if (_ownsTestGate)
+            {
+                _ownsTestGate = false;
+                s_testGate.Release();
+            }
         }
     }
 

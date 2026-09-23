@@ -636,8 +636,6 @@ export function setAutoFit(id, autoFit) {
     if (!autoFit) {
         state.pendingSizing = null;
         state.focusPending = false;
-    } else {
-        requestFocus(state);
     }
     applyAutoFit(state);
     applyPendingFocus(state);

@@ -59,7 +59,7 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
             var tokenTextBox = page.GetByRole(AriaRole.Textbox);
             await tokenTextBox.FillAsync("VALID_TOKEN").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
-            var submitButton = page.GetByRole(AriaRole.Button);
+            var submitButton = SubmitButton(page);
             await submitButton.ClickAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
             // Wait for navigation to complete after successful login.
@@ -90,7 +90,7 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
             var tokenTextBox = page.GetByRole(AriaRole.Textbox);
             await tokenTextBox.FillAsync(" VALID_TOKEN ").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
-            var submitButton = page.GetByRole(AriaRole.Button);
+            var submitButton = SubmitButton(page);
             await submitButton.ClickAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
             await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
@@ -119,7 +119,7 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
             var tokenTextBox = page.GetByRole(AriaRole.Textbox);
             await tokenTextBox.FillAsync("INVALID_TOKEN").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
-            var submitButton = page.GetByRole(AriaRole.Button);
+            var submitButton = SubmitButton(page);
             await submitButton.ClickAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
             // Assert
@@ -158,13 +158,15 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
             // Act
             await page.GotoAsync("/login?t=INVALID_TOKEN").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
-            var submitButton = page.GetByRole(AriaRole.Button);
+            var submitButton = SubmitButton(page);
             var name = await submitButton.GetAttributeAsync("name").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
             // Assert
             Assert.Equal("submit-token", name);
         });
     }
+
+    private static ILocator SubmitButton(IPage page) => page.Locator("fluent-button[name='submit-token']");
 }
 
 [RequiresFeature(TestFeature.Playwright)]

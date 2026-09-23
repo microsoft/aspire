@@ -19,6 +19,7 @@ public partial class AspireMenu : FluentComponentBase
     private FluentMenu? _menu;
     private IReadOnlyList<MenuButtonItem>? _renderedItems;
     private bool _refreshMenuAfterRender;
+    private bool _resetMenuBeforeOpen;
     private bool? _appliedOpen;
     private int _cursorLeft;
     private int _cursorTop;
@@ -98,10 +99,16 @@ public partial class AspireMenu : FluentComponentBase
                 {
                     // Trigger identifies either the button anchor or the cursor anchor. The parameterless
                     // path leaves placement to Fluent's CSS anchor positioning and viewport fallbacks.
+                    if (_resetMenuBeforeOpen)
+                    {
+                        await _menu.CloseMenuAsync();
+                    }
+                    _resetMenuBeforeOpen = false;
                     await _menu.OpenMenuAsync();
                 }
                 else
                 {
+                    _resetMenuBeforeOpen = false;
                     await _menu.CloseMenuAsync();
                 }
 
@@ -129,6 +136,7 @@ public partial class AspireMenu : FluentComponentBase
 
             // Escape and light-dismiss can close the browser popover without raising OpenedChanged.
             // Treat every cursor request as a new open/position request even when Open is still true.
+            _resetMenuBeforeOpen = Open;
             _refreshMenuAfterRender = true;
             await SetOpenAsync(true);
 

@@ -124,7 +124,7 @@ public class DashboardServerFixture : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        await DashboardApp.DisposeAsync();
         await PlaywrightFixture.DisposeAsync();
+        await DashboardApp.DisposeAsync();
     }
 }
