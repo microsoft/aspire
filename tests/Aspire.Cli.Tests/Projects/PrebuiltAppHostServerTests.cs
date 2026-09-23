@@ -27,6 +27,7 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 {
+    private const string InternalNuGetServiceIndexSource = "https://packagefeedproxy.microsoft.io/nuget/v3/index.json";
     private const string NuGetOrgSource = "https://api.nuget.org/v3/index.json";
     private static readonly byte[] s_sourceIdentityKey = new byte[NuGetSourceIdentity.KeySizeInBytes];
 
@@ -354,18 +355,44 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         var generatedProjectDirectory = workspace.CreateDirectory("generated-project");
         var restoreDirectory = workspace.CreateDirectory("integration-restore");
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config"),
+            """
+            <configuration>
+              <packageSources>
+                <clear />
+              </packageSources>
+            </configuration>
+            """);
+        var executionContext = workspace.CreateExecutionContext(
+            nugetServiceIndexOverride: InternalNuGetServiceIndexSource);
+        var (server, _) = CreatePackageReferenceServer(
+            workspace,
+            MockPackagingServiceFactory.Create(),
+            executionContext);
+        var restorePlan = await server.ResolveIntegrationRestorePlanAsync(
+            "13.4.0",
+            requestedChannel: null,
+            packageSourceOverride: feedDirectory.FullName,
+            packageSourceOverridePattern: "Direct.Integration",
+            TestContext.Current.CancellationToken);
+        var restoreConfiguration = await restorePlan.ApplyProjectRestoreConfigurationAsync(
+            IntegrationClosureBuilder.GetAppHostIntegrationPolicyDirectory(workspace.WorkspaceRoot),
+            TestContext.Current.CancellationToken);
+
         var generatedProjectPath = Path.Combine(generatedProjectDirectory.FullName, "IntegrationRestore.csproj");
         var projectContent = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
             [("Direct.Integration", "1.0.0")],
             [IntegrationReference.FromProject("ProjectIntegration", projectIntegrationPath)],
-            restoreDirectory.FullName);
+            restoreDirectory.FullName,
+            restoreConfiguration.RootAdditionalSources);
         await File.WriteAllTextAsync(generatedProjectPath, projectContent);
         await File.WriteAllTextAsync(
             Path.Combine(generatedProjectDirectory.FullName, "Directory.Build.props"),
             IntegrationClosureBuilder.CreateClosureDirectoryBuildProps(
                 restoreDirectory.FullName,
                 Path.Combine(restoreDirectory.FullName, "obj"),
-                workspace.WorkspaceRoot.FullName,
+                restoreConfiguration.RestoreRootConfigDirectory,
                 Path.Combine(workspace.WorkspaceRoot.FullName, "packages")).ToString());
         await File.WriteAllTextAsync(
             Path.Combine(generatedProjectDirectory.FullName, "Directory.Packages.props"),
@@ -376,16 +403,16 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
               </PropertyGroup>
             </Project>
             """);
-        await File.WriteAllTextAsync(
-            Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config"),
-            $$"""
-            <configuration>
-              <packageSources>
-                <clear />
-                <add key="test" value="{{feedDirectory.FullName}}" />
-              </packageSources>
-            </configuration>
-            """);
+        var restoreConfig = XDocument.Load(Path.Combine(
+            restoreConfiguration.RestoreRootConfigDirectory,
+            "NuGet.Config"));
+        var configuredSources = restoreConfig
+            .Descendants("packageSources")
+            .Elements("add")
+            .Select(static source => source.Attribute("value")!.Value)
+            .ToArray();
+        Assert.Contains(feedDirectory.FullName, configuredSources);
+        Assert.Contains(InternalNuGetServiceIndexSource, configuredSources);
 
         var startInfo = new ProcessStartInfo("dotnet")
         {
@@ -1886,7 +1913,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task PrepareAsync_WithPackageReferences_UsesPackageSourceOverride()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
+        var packageSourceOverride = workspace.CreateDirectory(
+            Path.Combine("aspire-pr-hive", "packages")).FullName;
         var (server, nuGetClient) = CreatePackageReferenceServer(workspace);
 
         var workingDirectory = GetWorkingDirectory(server);
@@ -1917,7 +1945,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     public async Task PrepareAsync_WithPackageSourceOverride_AddsNuGetOrgFallbackSource()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
+        var packageSourceOverride = workspace.CreateDirectory(
+            Path.Combine("aspire-pr-hive", "packages")).FullName;
         var (server, nuGetClient) = CreatePackageReferenceServer(workspace);
 
         var workingDirectory = GetWorkingDirectory(server);
