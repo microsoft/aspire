@@ -22,16 +22,31 @@ internal static class SocketPermissionHelper
 
         var directory = new DirectoryInfo(path);
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        if (directory.Parent is null ||
+        if (!IsSocketDirectory(directory, comparison) ||
+            directory.Parent is null ||
+            string.Equals(directory.FullName, Path.TrimEndingDirectorySeparator(Environment.CurrentDirectory), comparison) ||
+            string.Equals(directory.FullName, Path.TrimEndingDirectorySeparator(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)), comparison) ||
             string.Equals(Path.TrimEndingDirectorySeparator(directory.FullName),
                 Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath())), comparison))
         {
-            throw new IOException($"The socket directory '{path}' must be a dedicated subdirectory, not a filesystem or temporary root.");
+            throw new IOException($"The socket directory '{path}' must use an Aspire socket directory layout (.aspire/cli/bch, .aspire/trmnl, or .aspire/pty).");
         }
 
-        if (directory.LinkTarget is not null)
+        // Validate the entire configurable suffix, not just the leaf: .aspire or cli
+        // could otherwise redirect chmod/ACL replacement into an unrelated directory.
+        for (var current = directory; current is not null; current = current.Parent)
         {
-            throw new IOException($"The socket directory '{path}' must not be a symbolic link.");
+            // System temporary roots can themselves be aliases (for example /var on macOS).
+            if (string.Equals(current.FullName, Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath())), comparison))
+            {
+                break;
+            }
+
+            if (current.LinkTarget is not null)
+            {
+                throw new IOException($"The socket directory '{path}' must not traverse a symbolic link.");
+            }
         }
 
         if (OperatingSystem.IsWindows())
@@ -46,6 +61,33 @@ internal static class SocketPermissionHelper
         }
 
         return DirectoryHelper.CreateWithOwnerOnlyPermissions(path);
+    }
+
+    private static bool IsSocketDirectory(DirectoryInfo directory, StringComparison comparison)
+    {
+        var parent = directory.Parent;
+        if (parent is null)
+        {
+            return false;
+        }
+
+        if (string.Equals(parent.Name, ".aspire", comparison))
+        {
+            return string.Equals(directory.Name, "trmnl", comparison) ||
+                string.Equals(directory.Name, "pty", comparison);
+        }
+
+        if (string.Equals(directory.Name, "bch", comparison) &&
+            string.Equals(parent.Name, "cli", comparison) &&
+            string.Equals(parent.Parent?.Name, ".aspire", comparison))
+        {
+            return true;
+        }
+
+        // DCP session directories are allocated by ITempFileSystemService, not a socket override.
+        return directory.Name.StartsWith("aspire-dcp", comparison) &&
+            directory.Name.Length > "aspire-dcp".Length &&
+            string.Equals(parent.FullName, Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath())), comparison);
     }
 
     /// <summary>

@@ -20,7 +20,7 @@ public class AppHostBackchannelTests(ITestOutputHelper outputHelper)
         var root = Directory.CreateTempSubdirectory();
         try
         {
-            await CanConnectToBackchannelAsync(Path.Combine(root.FullName, "s", "cli.sock"));
+            await CanConnectToBackchannelAsync(Path.Combine(root.FullName, ".aspire", "cli", "bch", "cli.sock"));
         }
         finally
         {

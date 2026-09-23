@@ -15,7 +15,8 @@ namespace Aspire.Hosting.Tests;
 
 public class WithTerminalTests : IAsyncLifetime
 {
-    private readonly string _terminalDirectory = Directory.CreateTempSubdirectory("aspire-terminal-tests-").FullName;
+    private readonly string _terminalRoot = Directory.CreateTempSubdirectory().FullName;
+    private string _terminalDirectory => Path.Combine(_terminalRoot, ".aspire", "trmnl");
 
     [Fact]
     public void TerminalImplementationTypesAreInternal()
@@ -1393,13 +1394,17 @@ public class WithTerminalTests : IAsyncLifetime
         Assert.True(resource.Resource.HasAnnotationOfType<ForceProcessExecutionAnnotation>());
     }
 
-    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+    public ValueTask InitializeAsync()
+    {
+        Directory.CreateDirectory(_terminalDirectory);
+        return ValueTask.CompletedTask;
+    }
 
     public ValueTask DisposeAsync()
     {
-        if (Directory.Exists(_terminalDirectory))
+        if (Directory.Exists(_terminalRoot))
         {
-            Directory.Delete(_terminalDirectory, recursive: true);
+            Directory.Delete(_terminalRoot, recursive: true);
         }
 
         return ValueTask.CompletedTask;

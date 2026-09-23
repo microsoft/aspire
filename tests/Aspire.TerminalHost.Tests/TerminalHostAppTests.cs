@@ -39,14 +39,14 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
         int? rows = null)
     {
         var workspace = CreateSocketWorkspace();
-        var dcpDir = Path.Combine(workspace.Path, "dcp");
-        var hostDir = Path.Combine(workspace.Path, "host");
-        var ctrlDir = Path.Combine(workspace.Path, "ctl");
+        var dcpDir = Path.Combine(workspace.Path, ".aspire", "trmnl");
+        var hostDir = dcpDir;
+        var ctrlDir = dcpDir;
         Directory.CreateDirectory(dcpDir);
         Directory.CreateDirectory(hostDir);
         Directory.CreateDirectory(ctrlDir);
 
-        var producer = Path.Combine(dcpDir, "r.sock");
+        var producer = Path.Combine(dcpDir, "p.sock");
         var consumer = Path.Combine(hostDir, "r.sock");
         var control = Path.Combine(ctrlDir, "c.sock");
 
@@ -698,7 +698,8 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     public async Task ConsumerListenerBindFailureIsReportedBeforeTerminalStarts()
     {
         using var workspace = CreateSocketWorkspace();
-        var parentFile = Path.Combine(workspace.Path, "not-a-directory");
+        Directory.CreateDirectory(Path.Combine(workspace.Path, ".aspire"));
+        var parentFile = Path.Combine(workspace.Path, ".aspire", "trmnl");
         await File.WriteAllTextAsync(parentFile, "");
         await using var presentation = new Hmp1PresentationAdapter();
 
@@ -713,7 +714,7 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     public async Task ConsumerListenerWaitsForAcceptedClientHandshakeDuringTeardown()
     {
         using var workspace = CreateSocketWorkspace();
-        var socketPath = Path.Combine(workspace.Path, "consumer.sock");
+        var socketPath = Path.Combine(workspace.Path, ".aspire", "trmnl", "consumer.sock");
         await using var presentation = new Hmp1PresentationAdapter();
         var callbackStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1255,7 +1256,8 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     public async Task ProducerListenerBindFailureIsReported()
     {
         using var workspace = CreateSocketWorkspace();
-        var parentFile = Path.Combine(workspace.Path, "not-a-directory");
+        Directory.CreateDirectory(Path.Combine(workspace.Path, ".aspire"));
+        var parentFile = Path.Combine(workspace.Path, ".aspire", "trmnl");
         await File.WriteAllTextAsync(parentFile, "");
 
         await Assert.ThrowsAsync<IOException>(() => TerminalReplica.AcceptProducerAsync(

@@ -39,10 +39,18 @@ internal sealed class JsonRpcServer : BackgroundService
         _profilingTelemetry = profilingTelemetry;
 
         var socketPath = configuration["REMOTE_APP_HOST_SOCKET_PATH"];
-        if (string.IsNullOrEmpty(socketPath))
+        if (string.IsNullOrEmpty(socketPath) && OperatingSystem.IsWindows())
         {
-            var tempDir = Path.GetTempPath();
-            socketPath = Path.Combine(tempDir, "aspire", "remote-app-host.sock");
+            socketPath = Path.Combine(Path.GetTempPath(), "aspire", "remote-app-host.sock");
+        }
+        else if (string.IsNullOrEmpty(socketPath))
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (string.IsNullOrEmpty(home))
+            {
+                throw new InvalidOperationException("Cannot determine the user profile for the remote AppHost socket.");
+            }
+            socketPath = Path.Combine(home, ".aspire", "cli", "bch", "remote-app-host.sock");
         }
         _socketPath = socketPath;
     }

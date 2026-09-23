@@ -22,7 +22,7 @@ public sealed class SocketPermissionHelperTests
         var root = Directory.CreateTempSubdirectory();
         try
         {
-            var directory = Path.Combine(root.FullName, "s");
+            var directory = Path.Combine(root.FullName, ".aspire", "pty");
             if (existingDirectory)
             {
                 MakePermissiveDirectory(directory);
@@ -66,7 +66,7 @@ public sealed class SocketPermissionHelperTests
         var root = Directory.CreateTempSubdirectory();
         try
         {
-            var directory = Path.Combine(root.FullName, "s");
+            var directory = Path.Combine(root.FullName, ".aspire", "pty");
             MakePermissiveDirectory(directory);
             var socketPath = Path.Combine(directory, "occupied");
             File.WriteAllText(socketPath, "existing file");
@@ -90,7 +90,8 @@ public sealed class SocketPermissionHelperTests
         var root = Directory.CreateTempSubdirectory();
         try
         {
-            var directory = Path.Combine(root.FullName, "file");
+            Directory.CreateDirectory(Path.Combine(root.FullName, ".aspire"));
+            var directory = Path.Combine(root.FullName, ".aspire", "pty");
             File.WriteAllText(directory, "not a directory");
 
             using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
@@ -120,7 +121,8 @@ public sealed class SocketPermissionHelperTests
             var target = Path.Combine(root.FullName, "target");
             MakePermissiveDirectory(target);
             var originalMode = File.GetUnixFileMode(target);
-            var link = Path.Combine(root.FullName, "link");
+            Directory.CreateDirectory(Path.Combine(root.FullName, ".aspire"));
+            var link = Path.Combine(root.FullName, ".aspire", "pty");
             Directory.CreateSymbolicLink(link, target);
 
             Assert.Throws<IOException>(() => SocketPermissionHelper.CreateDirectory(link));
@@ -140,6 +142,74 @@ public sealed class SocketPermissionHelperTests
         Assert.Throws<IOException>(() => SocketPermissionHelper.CreateDirectory(Path.GetPathRoot(Path.GetTempPath())!));
     }
 
+    [Theory]
+    [InlineData(".")]
+    [InlineData("..")]
+    [InlineData("home")]
+    [InlineData("shared")]
+    [InlineData(".aspire")]
+    [InlineData(".aspire/cli")]
+    [InlineData(".aspire/pty/..")]
+    public void CreateDirectory_RejectsUnrelatedDirectoryWithoutChangingPermissions(string relativePath)
+    {
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            var directory = Path.GetFullPath(Path.Combine(root.FullName, "base", relativePath));
+            MakePermissiveDirectory(directory);
+            var originalPermissions = OperatingSystem.IsWindows()
+                ? new DirectoryInfo(directory).GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.All)
+                : File.GetUnixFileMode(directory).ToString();
+
+            Assert.Throws<IOException>(() => SocketPermissionHelper.CreateDirectory(directory));
+
+            var actualPermissions = OperatingSystem.IsWindows()
+                ? new DirectoryInfo(directory).GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.All)
+                : File.GetUnixFileMode(directory).ToString();
+            Assert.Equal(originalPermissions, actualPermissions);
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CreateDirectory_RejectsWorkingDirectoryAndUserProfile()
+    {
+        Assert.Throws<IOException>(() => SocketPermissionHelper.CreateDirectory("."));
+        Assert.Throws<IOException>(() => SocketPermissionHelper.CreateDirectory(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)));
+    }
+
+    [Fact]
+    public void CreateDirectory_RejectsLinkedAspireParentWithoutChangingTarget()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            var target = Directory.CreateDirectory(Path.Combine(root.FullName, "target"));
+            var directory = Path.Combine(target.FullName, "pty");
+            MakePermissiveDirectory(directory);
+            var originalMode = File.GetUnixFileMode(directory);
+            Directory.CreateSymbolicLink(Path.Combine(root.FullName, ".aspire"), target.FullName);
+
+            Assert.Throws<IOException>(() => SocketPermissionHelper.CreateDirectory(
+                Path.Combine(root.FullName, ".aspire", "pty")));
+
+            Assert.Equal(originalMode, File.GetUnixFileMode(directory));
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void CreateDirectory_RejectsSharedStickyDirectory()
     {
@@ -151,13 +221,14 @@ public sealed class SocketPermissionHelperTests
         var root = Directory.CreateTempSubdirectory();
         try
         {
+            var directory = Directory.CreateDirectory(Path.Combine(root.FullName, ".aspire", "pty")).FullName;
             var originalMode = DirectoryMode | UnixFileMode.StickyBit | UnixFileMode.OtherRead |
                 UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
-            File.SetUnixFileMode(root.FullName, originalMode);
+            File.SetUnixFileMode(directory, originalMode);
 
-            Assert.Throws<IOException>(() => SocketPermissionHelper.CreateDirectory(root.FullName));
+            Assert.Throws<IOException>(() => SocketPermissionHelper.CreateDirectory(directory));
 
-            Assert.Equal(originalMode, File.GetUnixFileMode(root.FullName));
+            Assert.Equal(originalMode, File.GetUnixFileMode(directory));
         }
         finally
         {
