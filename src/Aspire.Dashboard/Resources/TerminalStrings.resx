@@ -124,10 +124,10 @@
     <value>Terminal palette</value>
   </data>
   <data name="TerminalPaletteLight" xml:space="preserve">
-    <value>Light</value>
+    <value>Aspire light</value>
   </data>
   <data name="TerminalPaletteDark" xml:space="preserve">
-    <value>Dark</value>
+    <value>Aspire dark</value>
   </data>
   <data name="TerminalPaletteSaveFailed" xml:space="preserve">
     <value>Unable to save the terminal palette. Check that browser storage is available and try again.</value>

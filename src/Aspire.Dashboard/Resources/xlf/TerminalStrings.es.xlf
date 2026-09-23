@@ -143,13 +143,13 @@
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteDark">
-        <source>Dark</source>
-        <target state="new">Dark</target>
+        <source>Aspire dark</source>
+        <target state="new">Aspire dark</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteLight">
-        <source>Light</source>
-        <target state="new">Light</target>
+        <source>Aspire light</source>
+        <target state="new">Aspire light</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalPaletteSaveFailed">

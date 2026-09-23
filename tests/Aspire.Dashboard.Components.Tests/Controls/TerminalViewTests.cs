@@ -99,7 +99,7 @@ public class TerminalViewTests : DashboardTestContext
         Assert.Equal("dark", select.Instance.Value);
         Assert.False(select.Instance.Disabled);
         Assert.Equal(Resources.TerminalStrings.TerminalPalette, select.Instance.AriaLabel);
-        Assert.Equal(["Light", "Dark"], select.Instance.Items!.Select(select.Instance.OptionText!));
+        Assert.Equal(["Aspire light", "Aspire dark"], select.Instance.Items!.Select(select.Instance.OptionText!));
         Assert.Equal("terminal-palette-select aspire-input", cut.Find(".terminal-controls").LastElementChild!.ClassName);
 
         await cut.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync("light"));

@@ -101,7 +101,7 @@ workers through the CSP worker-source fallback; its production
 
 ### Terminal palettes
 
-The terminal offers explicit Light and Dark palettes using Aspire variants
+The terminal offers explicit Aspire light and Aspire dark palettes using Aspire variants
 of **Hex1b Light** and **Hex1b Dark**: light lavender `#d5d0df` and dark
 purple-neutral `#312e3c` backgrounds, with richer chromatic ANSI slots. These
 increase OKLCH chroma by up to 25% in dark mode and 10% in light mode, preserving
@@ -131,7 +131,7 @@ input and selection behavior; links also work in read-only views. Remote file
 paths and custom URI schemes are not enabled.
 
 The **Terminal palette** dropdown to the right of the footer's dimensions selector
-selects **Dark** or **Light** independently of the site. **Dark** is the default,
+selects **Aspire dark** or **Aspire light** independently of the site. **Aspire dark** is the default,
 including for the former **Follow Dashboard** preference. Site theme changes do
 not change the selected terminal palette. This non-sensitive
 preference is stored in browser local storage and applies to all terminal surfaces,
