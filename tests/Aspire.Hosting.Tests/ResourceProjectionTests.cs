@@ -1351,6 +1351,44 @@ public class ResourceProjectionTests
     }
 
     [Fact]
+    public async Task NestedConnectionStringAliasUsesTheSelectedProvider()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var resource = builder.AddResource(new ConnectionStringOwnerResource("db"));
+        var alias = builder.AddConnectionString(
+            "alias",
+            ReferenceExpression.Create($"{resource.Resource}"));
+
+        resource.WithContainerProjection(
+            DistributedApplicationOperation.Publish,
+            () => ConnectionStringProjection.CreateProjection(resource.Resource),
+            container => container.WithImage("contoso/db", "1.0"));
+
+        var context = new ValueProviderContext();
+        var direct = await ExpressionResolver.ResolveAsync(
+            new ConnectionStringReference(resource.Resource, optional: false),
+            context,
+            CancellationToken.None);
+        var resolvedAlias = await ExpressionResolver.ResolveAsync(
+            alias.Resource,
+            context,
+            CancellationToken.None);
+
+        Assert.Equal("Host=projection", direct.Value);
+        Assert.Equal("Host=projection", resolvedAlias.Value);
+        Assert.Equal(
+            "Host=projection",
+            await ((IResourceWithConnectionString)alias.Resource).GetConnectionStringAsync());
+
+        var resourceManifest = await ManifestUtils.GetManifest(resource.Resource.AsContainer()!);
+        var aliasManifest = await ManifestUtils.GetManifest(alias.Resource);
+
+        Assert.Equal("Host=projection", resourceManifest["connectionString"]?.ToString());
+        Assert.Equal("{db.connectionString}", aliasManifest["connectionString"]?.ToString());
+    }
+
+    [Fact]
     public async Task WithReferenceUsesOneEffectiveConnectionStringProvider()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

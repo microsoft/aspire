@@ -195,7 +195,9 @@ public class ReferenceExpression : IExpressionValue, IManifestExpressionProvider
             return await branch.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
         }
 
-        // NOTE: any logical changes to this method should also be made to ExpressionResolver.EvalExpressionAsync
+        // ExpressionResolver owns resource-aware provider dispatch, including lazy connection-string projection
+        // selection. Use it here as well so direct expression evaluation and hosted resolution cannot disagree
+        // when a resource is nested inside another expression.
         if (Format.Length == 0)
         {
             return null;
@@ -204,7 +206,8 @@ public class ReferenceExpression : IExpressionValue, IManifestExpressionProvider
         var args = new object?[ValueProviders.Count];
         for (var i = 0; i < ValueProviders.Count; i++)
         {
-            args[i] = await ValueProviders[i].GetValueAsync(context, cancellationToken).ConfigureAwait(false);
+            var resolved = await ExpressionResolver.ResolveAsync(ValueProviders[i], context, cancellationToken).ConfigureAwait(false);
+            args[i] = resolved.Value;
 
             // Apply string format if needed
             var stringFormat = _stringFormats[i];
