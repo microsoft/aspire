@@ -13,6 +13,10 @@ namespace Aspire.Shared;
 /// </summary>
 internal static class SocketPermissionHelper
 {
+    // Reuse DirectoryHelper for Unix directory permissions, but keep socket-specific path
+    // validation, Windows owner-only ACLs, and endpoint permissions here. DirectoryHelper
+    // does not apply Windows ACLs or socket-file permissions.
+
     /// <summary>
     /// Creates or repairs a dedicated socket directory before any sockets are bound in it.
     /// </summary>
