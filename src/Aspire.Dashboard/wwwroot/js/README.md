@@ -126,7 +126,8 @@ A 0.5px pinstripe at the padding's outer edge blends 10% foreground with the
 background to distinguish the terminal boundary without changing its dimensions.
 Forced-colors mode suppresses the decorative pattern and uses a system-color edge.
 
-Plain-text HTTP/HTTPS URLs use Hex1b's per-view link detection and open in a new
+Plain-text HTTP/HTTPS URLs use Hex1b's per-view link detection with dashed
+underlines to distinguish them from explicit OSC 8 links, and open in a new
 tab on Ctrl/Cmd-click with `noopener,noreferrer`. Explicit OSC 8 links retain
 Hex1b's default HTTP/HTTPS/mailto allowlist. Plain clicks and drags retain terminal
 input and selection behavior; links also work in read-only views. Remote file

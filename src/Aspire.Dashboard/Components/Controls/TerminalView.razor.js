@@ -604,6 +604,7 @@ async function mountClient(state, generation, controller) {
             links: {
                 detection: {
                     activation: "modifierClick",
+                    underlineStyle: "dashed",
                     rules: [{
                         id: "web",
                         builtin: "url",
