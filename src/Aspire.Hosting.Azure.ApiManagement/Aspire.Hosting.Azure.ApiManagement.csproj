@@ -23,7 +23,6 @@
     <PackageReference Include="Azure.Provisioning" />
     <PackageReference Include="Azure.Provisioning.CognitiveServices" />
     <PackageReference Include="Azure.Provisioning.Storage" />
-    <PackageReference Include="Azure.ResourceManager.Resources" />
   </ItemGroup>
 
   <ItemGroup>
