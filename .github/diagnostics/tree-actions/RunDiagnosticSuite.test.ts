@@ -43,9 +43,17 @@ test('workload and observer never inherit artifact or repository authority', () 
         actions_results_url: 'private-endpoint', INPUT_SCRIPT: 'private-script',
         'INPUT_GITHUB-TOKEN': 'secret', NUGET_PASSWORD: 'secret',
     });
+
     assert.deepEqual(result, {
         PATH: 'safe-path', ASPIRE_DCP_PATH: 'owned-dcp', TREE_ACTIONS_DIAGNOSTIC_CYCLES: '30',
     });
+});
+
+test('native environment arrays are omitted without altering process-identity records', () => {
+    const input = '{"msg":"Process details","Env":["KEY=value","OTHER=private"]}\n'
+        + '{"msg":"Stopping process tree...","PID":1856,"Tree":[1856,3444]}\n';
+    assert.equal(redact(input), '[omitted process environment record]\n'
+        + '{"msg":"Stopping process tree...","PID":1856,"Tree":[1856,3444]}\n');
 });
 
 test('snapshots redact an immutable copy without changing live diagnostics', () => {

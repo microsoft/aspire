@@ -42,6 +42,10 @@ export function redact(text: string): string {
     // emitted before its finally block: /login?t=abc..., "token":"abc...".
     return text
         .replace(/^::add-mask::.*$/gm, '::add-mask::<redacted>')
+        // Native DCP emits whole environment arrays in Process details records:
+        // {"msg":"Process details","Env":["NAME=value",...]}.
+        // Those records are not needed to diagnose PID relationships.
+        .replace(/^[^\r\n]*\\*"Env\\*"\s*:\s*\[[^\r\n]*$/gmi, '[omitted process environment record]')
         .replace(/\/login\?t=[^"'\s<>\\)]+/gi, '/login?t=<redacted>')
         .replace(/([?&]t=)[^"'\s<>\\)&]+/gi, '$1<redacted>')
         .replace(/(Setting up RPC server with token: )[^\r\n]+/gi, '$1<redacted>')
@@ -194,6 +198,17 @@ export async function runDiagnostics(options: DiagnosticOptions): Promise<Diagno
                     source: path.join(options.temporaryRoot, entry.name, 'aspire-home', 'logs'),
                     prefix: `cli/${entry.name}`,
                 });
+            }
+        }
+        const retainedStorage = path.join(options.extensionRoot, '.test-storage', shard);
+        if (fs.existsSync(retainedStorage)) {
+            for (const entry of fs.readdirSync(retainedStorage, { withFileTypes: true })) {
+                if (entry.isDirectory()) {
+                    sources.push(
+                        { source: path.join(retainedStorage, entry.name, 'aspire-home', 'logs'), prefix: `retained-cli/${entry.name}` },
+                        { source: path.join(retainedStorage, entry.name, 'settings', 'logs'), prefix: `vscode/${entry.name}` },
+                    );
+                }
             }
         }
         for (const { source, prefix } of sources) {

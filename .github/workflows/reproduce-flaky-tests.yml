@@ -324,9 +324,6 @@ jobs:
           name: tree-actions-stress-runner-${{ matrix.index }}-attempt${{ github.run_attempt }}
           path: |
             stress-results/
-            extension/.test-results/
-            extension/.test-storage/**/aspire-home/logs/**
-            extension/.test-storage/**/settings/logs/**
             extension/.test-storage/**/screenshots/**
           include-hidden-files: true
           if-no-files-found: error
