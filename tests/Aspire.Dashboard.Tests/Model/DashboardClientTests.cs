@@ -569,6 +569,21 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         await instance.InteractionWatchCompleteTask.DefaultTimeout();
     }
 
+    [Theory]
+    [InlineData("", null, "Aspire")]
+    [InlineData(" \t", "Configured", "Configured")]
+    [InlineData("", " ", "Aspire")]
+    [InlineData("Service", "Configured", "Service")]
+    public async Task ApplicationName_ServiceNameFallsBackToConfiguredName(string serviceName, string? configuredName, string expected)
+    {
+        await using var instance = CreateResourceServiceClient(configuredName);
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient { ApplicationName = serviceName });
+
+        await instance.WhenConnected.DefaultTimeout();
+
+        Assert.Equal(expected, instance.ApplicationName);
+    }
+
     [Fact]
     public async Task ConnectionState_InitialState_IsConnecting()
     {
@@ -1031,6 +1046,7 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         public bool FailOnGetApplicationInformation { get; init; }
         public bool FailOnExecuteResourceCommand { get; init; }
         public bool CancelExecuteResourceCommandOnCallCancellation { get; init; }
+        public string ApplicationName { get; init; } = "TestApplication";
         public string MinDashboardVersion { get; init; } = "";
         public IReadOnlyList<WatchResourceConsoleLogsUpdate> ConsoleLogUpdates { get; init; } = [];
         public IReadOnlyList<WatchResourcesUpdate> ResourceUpdates { get; init; } = [];
@@ -1087,7 +1103,7 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
             return new AsyncUnaryCall<ApplicationInformationResponse>(
                 Task.FromResult(new ApplicationInformationResponse
                 {
-                    ApplicationName = "TestApplication",
+                    ApplicationName = ApplicationName,
                     MinDashboardVersion = MinDashboardVersion
                 }),
                 Task.FromResult(new Metadata()),
@@ -1265,18 +1281,25 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         ResourceServiceClientCertificateOptions? clientCertificate = null,
         Action<SocketsHttpHandler>? configureHttpHandler = null)
     {
-        return CreateResourceServiceClient(_loggerFactory, activitySource, resourceRepositoryWriter, clientCertificate, configureHttpHandler);
+        return CreateResourceServiceClient(_loggerFactory, activitySource, resourceRepositoryWriter);
+    }
+
+    private DashboardClient CreateResourceServiceClient(string? applicationName)
+    {
+        return CreateResourceServiceClient(_loggerFactory, activitySource: null, resourceRepositoryWriter: null, applicationName);
     }
 
     private static DashboardClient CreateResourceServiceClient(
         ILoggerFactory loggerFactory,
         DashboardActivitySource? activitySource,
         IResourceRepositoryWriter? resourceRepositoryWriter,
+        string? applicationName,
         ResourceServiceClientCertificateOptions? clientCertificate = null,
         Action<SocketsHttpHandler>? configureHttpHandler = null)
     {
         var options = new DashboardOptions
         {
+            ApplicationName = applicationName,
             ResourceServiceClient =
             {
                 AuthMode = ResourceClientAuthMode.Unsecured,
