@@ -11,23 +11,6 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Cli.Projects;
 
 /// <summary>
-/// Represents one resolved source-policy snapshot shared by the polyglot integration restore paths.
-/// </summary>
-internal interface IIntegrationRestorePlan
-{
-    string? EffectivePackageSourceOverride { get; }
-
-    string GetRestoreVersion(string packageName, string version);
-
-    Task<IntegrationPackageRestoreConfiguration> CreatePackageRestoreConfigurationAsync(
-        CancellationToken cancellationToken);
-
-    Task<IntegrationProjectRestoreConfiguration> ApplyProjectRestoreConfigurationAsync(
-        DirectoryInfo policyDirectory,
-        CancellationToken cancellationToken);
-}
-
-/// <summary>
 /// Resolves channel and ambient NuGet state once for one AppHost preparation.
 /// </summary>
 internal sealed class IntegrationRestorePlanResolver(
@@ -36,7 +19,7 @@ internal sealed class IntegrationRestorePlanResolver(
     CliExecutionContext executionContext,
     ILogger logger)
 {
-    public async Task<IIntegrationRestorePlan> ResolveAsync(
+    public async Task<IntegrationRestorePlan> ResolveAsync(
         string appDirectoryPath,
         string sdkVersion,
         string? requestedChannel,
@@ -292,7 +275,7 @@ internal sealed class IntegrationRestorePlanResolver(
 /// <summary>
 /// Materializes restore-specific configuration from one resolved channel and NuGet settings snapshot.
 /// </summary>
-internal sealed class IntegrationRestorePlan : IIntegrationRestorePlan
+internal sealed class IntegrationRestorePlan
 {
     private readonly IntegrationRestoreSources _restoreSources;
     private readonly NuGetSettingsInfo _settings;

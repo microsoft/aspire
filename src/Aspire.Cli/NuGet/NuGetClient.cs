@@ -81,9 +81,8 @@ internal sealed record NuGetSearchResult(
 /// Reports a failed in-process NuGet operation.
 /// </summary>
 /// <param name="output">The diagnostic text the <c>aspire-managed nuget</c> helper would have written to stderr.</param>
-/// <param name="innerException">The exception that caused the failure, if any.</param>
-internal sealed class NuGetOperationException(string output, Exception? innerException = null)
-    : Exception("NuGet operation failed.", innerException)
+internal sealed class NuGetOperationException(string output)
+    : Exception("NuGet operation failed.")
 {
     /// <summary>
     /// Gets the text the helper would have written to stderr. Callers surface it exactly as they surfaced the
@@ -193,7 +192,10 @@ internal sealed class NuGetClient(
                 output.WriteLine(ex.ToString());
             }
 
-            throw new NuGetOperationException(output.Text, ex);
+            // The original exception can contain credential-bearing source URLs. Diagnostics,
+            // including the full exception when debug logging is enabled, are captured through the
+            // redacting operation output, so do not retain the unsafe object in the outer log chain.
+            throw new NuGetOperationException(output.Text);
         }
     }
 
@@ -349,10 +351,10 @@ internal sealed class NuGetClient(
             output.WriteLine($"Error: {ex.Message}");
             if (output.Verbose)
             {
-                output.WriteLine(ex.StackTrace ?? string.Empty);
+                output.WriteLine(ex.ToString());
             }
 
-            throw new NuGetOperationException(output.Text, ex);
+            throw new NuGetOperationException(output.Text);
         }
     }
 
@@ -396,10 +398,10 @@ internal sealed class NuGetClient(
             output.WriteLine($"Error: {ex.Message}");
             if (output.Verbose)
             {
-                output.WriteLine(ex.StackTrace ?? string.Empty);
+                output.WriteLine(ex.ToString());
             }
 
-            throw new NuGetOperationException(output.Text, ex);
+            throw new NuGetOperationException(output.Text);
         }
     }
 

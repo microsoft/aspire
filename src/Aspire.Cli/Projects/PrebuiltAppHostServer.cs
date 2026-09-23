@@ -202,7 +202,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
                 }
             }
 
-            IIntegrationRestorePlan? restorePlan = null;
+            IntegrationRestorePlan? restorePlan = null;
             if (packageRefs.Count > 0 || projectRefs.Count > 0)
             {
                 restorePlan = await ResolveIntegrationRestorePlanAsync(
@@ -339,7 +339,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     /// </summary>
     private async Task<string> RestoreNuGetPackagesAsync(
         List<IntegrationReference> packageRefs,
-        IIntegrationRestorePlan restorePlan,
+        IntegrationRestorePlan restorePlan,
         CancellationToken cancellationToken)
     {
         _logger.LogDebug("Restoring {Count} integration packages via bundled NuGet", packageRefs.Count);
@@ -457,7 +457,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         List<IntegrationReference> packageRefs,
         List<IntegrationReference> projectRefs,
         string sdkVersion,
-        IIntegrationRestorePlan restorePlan,
+        IntegrationRestorePlan restorePlan,
         CancellationToken cancellationToken)
     {
         var restoreDir = Path.Combine(_workingDirectory, "integration-restore");
@@ -618,7 +618,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         return channelName;
     }
 
-    internal Task<IIntegrationRestorePlan> ResolveIntegrationRestorePlanAsync(
+    internal Task<IntegrationRestorePlan> ResolveIntegrationRestorePlanAsync(
         string sdkVersion,
         string? requestedChannel,
         string? packageSourceOverride,

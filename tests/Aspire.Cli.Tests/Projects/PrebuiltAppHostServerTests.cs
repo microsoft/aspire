@@ -1758,13 +1758,12 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         string? packageSourceOverride = null,
         string? packageSourceOverridePattern = null)
     {
-        var restorePlan = Assert.IsType<IntegrationRestorePlan>(
-            await server.ResolveIntegrationRestorePlanAsync(
-                "13.4.0",
-                requestedChannel,
-                packageSourceOverride,
-                packageSourceOverridePattern,
-                CancellationToken.None));
+        var restorePlan = await server.ResolveIntegrationRestorePlanAsync(
+            "13.4.0",
+            requestedChannel,
+            packageSourceOverride,
+            packageSourceOverridePattern,
+            CancellationToken.None);
         return restorePlan.AdditionalSources.Count > 0
             ? restorePlan.AdditionalSources
             : null;
