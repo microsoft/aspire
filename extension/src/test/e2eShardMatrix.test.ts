@@ -5,7 +5,7 @@ import { load } from 'js-yaml';
 
 import { removeDirectorySafely } from './testHelpers';
 /**
- * The E2E suite runs one spec per workflow matrix row. This unit test is the signal for a spec that
+ * The E2E suite runs one or more specs per workflow matrix row. This unit test is the signal for a spec that
  * has no row, because an E2E shard cannot report that a different shard was never scheduled.
  */
 suite('E2E shard matrix', () => {
@@ -110,10 +110,23 @@ suite('E2E shard matrix', () => {
         }
     }
 
+    function expandSpecAlternatives(spec: string): string[] {
+        // Combined shards use explicit alternatives, e.g. "{first,second}.e2e.test.js".
+        // Expand the names rather than filtering existing files by the glob so a misspelled
+        // alternative still fails the exact coverage assertion instead of silently disappearing.
+        const match = /^([^{}]*)\{([^{}]*)\}(.*)$/.exec(spec);
+        if (!match) {
+            return [spec];
+        }
+
+        return match[2].split(',').flatMap(alternative =>
+            expandSpecAlternatives(match[3]).map(suffix => `${match[1]}${alternative}${suffix}`));
+    }
+
     function matrixSpecPaths(workflow: string): string[] {
-        return [...new Set(matrixRows(workflow).map(row => {
+        return [...new Set(matrixRows(workflow).flatMap(row => {
             assert.ok(row.spec, 'E2E matrix rows must include a non-empty spec.');
-            return row.spec;
+            return expandSpecAlternatives(row.spec);
         }))].sort();
     }
 
@@ -254,6 +267,33 @@ suite('E2E shard matrix', () => {
             `- { name: Windows, shardName: edge-cases, spec: ${spec} }`);
 
         assertMatrixMatchesSpecs(workflow, ['edgeCases.e2e.test.ts']);
+    });
+
+    test('accepts explicit spec alternatives on multiple platform rows', () => {
+        const spec = 'out/test-e2e/test-e2e/{cliPathRejectionNotification,usefulnessSurvey}.e2e.test.js';
+        const workflow = workflowWithRows(
+            `- name: Linux\n  shardName: notifications\n  spec: ${spec}`,
+            `- name: Windows\n  shardName: notifications\n  spec: ${spec}`);
+
+        assertMatrixMatchesSpecs(workflow, ['cliPathRejectionNotification.e2e.test.ts', 'usefulnessSurvey.e2e.test.ts']);
+    });
+
+    test('rejects a spec omitted from a combined shard', () => {
+        const workflow = workflowWithRows(
+            '- name: Linux\n  shardName: notifications\n  spec: out/test-e2e/test-e2e/{cliPathRejectionNotification,usefulnessSurvey}.e2e.test.js');
+
+        assert.throws(
+            () => assertMatrixMatchesSpecs(workflow, ['cliPathRejectionNotification.e2e.test.ts', 'usefulnessSurvey.e2e.test.ts', 'appHostTree.e2e.test.ts']),
+            assert.AssertionError);
+    });
+
+    test('rejects a nonexistent alternative even when every spec is otherwise scheduled', () => {
+        const workflow = workflowWithRows(
+            '- name: Linux\n  shardName: notifications\n  spec: out/test-e2e/test-e2e/{cliPathRejectionNotification,usefulnessSurvey,missing}.e2e.test.js');
+
+        assert.throws(
+            () => assertMatrixMatchesSpecs(workflow, ['cliPathRejectionNotification.e2e.test.ts', 'usefulnessSurvey.e2e.test.ts']),
+            assert.AssertionError);
     });
 
     test('does not treat nested or unrelated spec fields as matrix.spec', () => {
