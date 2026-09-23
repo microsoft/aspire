@@ -217,7 +217,7 @@ public class ChartFiltersTests : DashboardTestContext
         var firstFilter = new DimensionFilterViewModel { Name = "foo.bar" };
         var secondFilter = new DimensionFilterViewModel { Name = "foo/bar" };
         var cut = RenderChartFilters(firstFilter);
-        cut.SetParametersAndRender(builder => builder.Add(component => component.DimensionFilters, [firstFilter, secondFilter]));
+        cut.Render(builder => builder.Add(component => component.DimensionFilters, [firstFilter, secondFilter]));
 
         var buttons = cut.FindAll(".chart-filter-button");
         var popovers = cut.FindAll("fluent-popover-b.chart-filter-popover");
@@ -251,7 +251,7 @@ public class ChartFiltersTests : DashboardTestContext
         var updatedFilter = CreateDimensionFilter();
         updatedFilter.Values.Add(new DimensionValueViewModel { Text = "PUT", Value = "PUT", });
         updatedFilter.SetSelectedValues(updatedFilter.Values);
-        cut.SetParametersAndRender(builder => builder.Add(component => component.DimensionFilters, [updatedFilter]));
+        cut.Render(builder => builder.Add(component => component.DimensionFilters, [updatedFilter]));
 
         Assert.Same(popover, cut.FindComponent<ChartFilterPopover>().Instance);
         Assert.Same(updatedFilter, popover.Filter);
