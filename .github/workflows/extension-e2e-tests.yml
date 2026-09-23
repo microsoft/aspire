@@ -906,9 +906,8 @@ jobs:
         run: |
           corepack yarn compile
           corepack yarn compile-e2e
-          if (-not (Test-Path '${{ matrix.spec }}')) {
-            throw "Compiled E2E shard spec was not found: ${{ matrix.spec }}"
-          }
+          # run-e2e.js validates compiled spec matches, including brace globs that
+          # PowerShell Test-Path does not expand.
 
       - name: Install Deno
         if: ${{ matrix.installDeno }}
