@@ -267,22 +267,33 @@ function configureTerminalChrome(client) {
         throw new Error("Hex1b history chrome could not be configured.");
     }
     const style = document.createElement("style");
-    // Keep transparent default cells and the terminal padding solid; only the unused viewport is hatched.
+    // Paint the edge inside the existing padding so it neither resizes nor overlaps terminal cells.
+    // Keep transparent default cells solid; only the unused viewport is hatched.
     style.textContent = `
         .return-live { display: none !important; }
         .inspection-message[data-aspire-history-position] { display: none !important; }
         :host([data-aspire-pointer-input="true"]) .scrollbar-accessibility:focus-visible { outline: none; }
         .viewport {
+            background-color: color-mix(in srgb, var(--terminal-background) 92%, black);
             background-image: repeating-linear-gradient(135deg,
                 color-mix(in srgb, var(--terminal-foreground) 10%, transparent) 0 1px,
                 transparent 1px 8px);
         }
         .surface {
             background: var(--terminal-background);
-            box-shadow: 0 0 0 ${TERMINAL_PADDING}px var(--terminal-background);
+            box-shadow:
+                0 0 0 ${TERMINAL_PADDING - 1}px var(--terminal-background),
+                0 0 0 ${TERMINAL_PADDING}px color-mix(in srgb, var(--terminal-foreground) 25%, var(--terminal-background));
         }
         @media (forced-colors: active) {
-            .viewport { background-image: none; }
+            .viewport {
+                background-color: Canvas;
+                background-image: none;
+            }
+            .surface {
+                outline: 1px solid CanvasText;
+                outline-offset: ${TERMINAL_PADDING - 1}px;
+            }
         }
     `;
     shadow.append(style);

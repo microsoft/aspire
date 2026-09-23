@@ -117,9 +117,12 @@ palette changes call `setColorMode` on the existing client, including changes th
 occur while mounting or while a dock pane is hidden.
 
 Unused space around the terminal grid has a subtle diagonal hatch: 1px lines every
-8px, using the active palette foreground at 10% opacity over its background.
+8px, using the active palette foreground at 10% opacity over a base that mixes
+92% palette background with 8% black.
 The grid and its padding remain solid, including transparent default cells.
-Forced-colors mode suppresses the decorative pattern.
+A 1px pinstripe at the padding's outer edge blends 25% foreground with the
+background to distinguish the terminal boundary without changing its dimensions.
+Forced-colors mode suppresses the decorative pattern and uses a system-color edge.
 
 The **Terminal palette** dropdown to the right of the footer's dimensions selector
 selects **Dark** or **Light** independently of the site. **Dark** is the default,
