@@ -58,3 +58,15 @@ Aspire telemetry works best in environments that support OTLP. OTLP exporting is
 ## Non-.NET apps
 
 OTEL isn't limited to .NET projects. Apps and containers that include OTEL can be passed environment variables to configure exporting telemetry. For example, the dapr sidecar (written in golang) includes OTEL and standard OTEL environment variables can be used to enable telemetry.
+
+## Agent usage telemetry
+
+Agent usage reporting is separate from application OTLP telemetry. `aspire agent init` registers an all-tool hook for supported Copilot and Claude clients. Rerun initialization after updating the CLI to replace existing script registrations with direct executable registrations; unrelated user hooks are preserved.
+
+The native hook receives every invocation but only reports the existing allowlisted Aspire skill, reference-file, and MCP-tool events. Unrelated invocations return before CLI host initialization, without launching PowerShell or Bash. Neither wildcard coverage nor event sampling is reduced.
+
+Eligible events pass through the existing `aspire agent telemetry` command and are persisted to Azure Monitor Exporter's disk-backed storage before the hook returns. Uploading is not on the hook's critical path. An independent CLI uploader keeps the exporter alive while there is pending data, using the exporter's own batching, retry, and cross-process lease recovery. No additional queue format or ingestion client is used.
+
+The uploader survives the originating agent process and exits when storage is drained. A failed launch leaves persisted data for a later invocation to recover. An interrupted upload may remain leased for several minutes before retry; delivery is at-least-once, so a crash after acceptance can result in duplicates. Disk access failures, exporter storage limits, permanent ingestion errors, and retention still limit delivery. Persistence/launch failures are recorded in CLI logs without breaking the agent.
+
+`ASPIRE_CLI_TELEMETRY_OPTOUT` continues to suppress collection and uploader startup for opted-out invocations. Like other environment settings, it is inherited by processes at launch; changing a shell environment does not retroactively alter an already-running process.

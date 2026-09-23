@@ -1012,6 +1012,12 @@ public class Program
 
     public static async Task<int> Main(string[] args)
     {
+        if (args is ["agent", "telemetry", "--hook"])
+        {
+            return await Agents.Hooks.AgentTelemetryHook.RunAsync(Console.In, Console.Out, Main).ConfigureAwait(false);
+        }
+        TelemetryManager.ConfigureExporterForProcess(AgentTelemetryInvocation.Matches(args));
+
         // Re-enable CTRL+C delivery for ourselves and any process we subsequently spawn.
         // Per https://learn.microsoft.com/windows/console/setconsolectrlhandler, the "ignore
         // CTRL+C" state is process-level and inherited across CreateProcess. If our parent was
@@ -1202,7 +1208,16 @@ public class Program
                     }
 
                     // Parse commandline and invoke the handler.
-                    exitCode = await parseResult.InvokeAsync(invokeConfig, cancellationManager.Token).ConfigureAwait(false);
+                    if (args is ["agent", "telemetry", "--drain"] && telemetryManager.HasAzureMonitor)
+                    {
+                        await AgentTelemetryUploader.DrainAsync(TelemetryManager.GetTelemetryStoragePath(),
+                            AgentTelemetryUploader.LockPath, cancellationManager.Token).ConfigureAwait(false);
+                        exitCode = CliExitCodes.Success;
+                    }
+                    else
+                    {
+                        exitCode = await parseResult.InvokeAsync(invokeConfig, cancellationManager.Token).ConfigureAwait(false);
+                    }
 
                     // Set telemetry tags based on how the command completed.
                     profileCommandActivity.SetProcessExitCode(exitCode);
@@ -1280,19 +1295,25 @@ public class Program
             // lose the activity while the provider is flushing.
             await telemetry.CompleteInternalMicrosoftDiagnosticsAsync().ConfigureAwait(false);
 
-            // The agent telemetry command runs fire-and-forget from an agent hook and the process
-            // exits immediately after. The short Release shutdown flush window is not enough to
-            // reliably export its just-created activity, so flush after telemetry tag calculation
-            // has completed and the agent activity has been submitted to the reported provider.
+            // Agent telemetry flushes to durable exporter storage, not to the network. Persist after
+            // enrichment so the hook can return without losing its event or waiting for ingestion.
             if (isAgentTelemetryInvocation)
             {
                 try
                 {
-                    await telemetryManager.ForceFlushReportedAsync().ConfigureAwait(false);
+                    if (!await telemetryManager.ForceFlushReportedAsync().ConfigureAwait(false))
+                    {
+                        logger.LogWarning("Agent telemetry persistence did not complete before the flush timeout.");
+                    }
+                    if (telemetryManager.HasAzureMonitor && args is not ["agent", "telemetry", "--drain"])
+                    {
+                        await AgentTelemetryUploader.EnsureRunningAsync(app.Services).ConfigureAwait(false);
+                    }
                 }
-                catch
+                catch (Exception ex)
                 {
                     // A telemetry flush failure must never change the hook's exit code.
+                    logger.LogDebug(ex, "Failed to persist agent telemetry or start its uploader.");
                 }
             }
 

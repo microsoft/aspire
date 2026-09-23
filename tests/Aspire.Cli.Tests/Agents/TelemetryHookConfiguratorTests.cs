@@ -32,13 +32,13 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
         var entry = root["hooks"]!["postToolUse"]!.AsArray()[0]!.AsObject();
         Assert.Equal("command", (string)entry["type"]!);
+        Assert.False(entry.ContainsKey("matcher"));
         Assert.Equal(30, (int)entry["timeoutSec"]!);
-        Assert.Contains("track-telemetry.sh", (string)entry["bash"]!);
-        Assert.StartsWith("bash ", (string)entry["bash"]!);
-        Assert.Contains("track-telemetry.ps1", (string)entry["powershell"]!);
-        Assert.Contains("-File ", (string)entry["powershell"]!);
-        // Copilot CLI requires PowerShell 7+ on Windows, so the hook must invoke pwsh, not Windows PowerShell.
-        Assert.StartsWith("pwsh ", (string)entry["powershell"]!);
+        var (command, args) = AgentTelemetryHook.GetCommand("--hook");
+        Assert.Equal(command, (string)entry["exec"]!);
+        Assert.Equal(args, entry["args"]!.AsArray().Select(arg => (string)arg!));
+        Assert.False(entry.ContainsKey("bash"));
+        Assert.False(entry.ContainsKey("powershell"));
     }
 
     [Fact]
@@ -89,26 +89,15 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         var postToolUse = await ReadClaudePostToolUseAsync(home).DefaultTimeout();
         var ourGroups = CountAspireGroups(postToolUse);
         Assert.Equal(1, ourGroups);
+        Assert.Contains(postToolUse, group => (string?)group?["matcher"] == "*");
 
         var entry = FindAspireHook(postToolUse);
         Assert.Equal("command", (string)entry["type"]!);
         Assert.Equal(30, (int)entry["timeout"]!);
 
-        // Claude uses exec form (command + args): the executable is spawned directly and the script path is
-        // a discrete argument, not part of a shell command string.
-        var execCommand = (string)entry["command"]!;
-        var args = entry["args"]!.AsArray().Select(a => (string)a!).ToArray();
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Equal("pwsh", execCommand);
-            Assert.Contains("-File", args);
-            Assert.Contains(args, a => a.EndsWith("track-telemetry.ps1", StringComparison.OrdinalIgnoreCase));
-        }
-        else
-        {
-            Assert.Equal("bash", execCommand);
-            Assert.Contains(args, a => a.EndsWith("track-telemetry.sh", StringComparison.OrdinalIgnoreCase));
-        }
+        var (command, args) = AgentTelemetryHook.GetCommand("--hook");
+        Assert.Equal(command, (string)entry["command"]!);
+        Assert.Equal(args, entry["args"]!.AsArray().Select(arg => (string)arg!));
     }
 
     [Fact]
@@ -162,6 +151,27 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         var postToolUse = root["hooks"]!["PostToolUse"]!.AsArray();
         Assert.Contains(postToolUse, group => GroupContainsCommand(group, "echo existing"));
         Assert.Equal(1, CountAspireGroups(postToolUse));
+    }
+
+    [Fact]
+    public async Task ConfigureAsync_ReplacesLegacyScriptButPreservesSharedGroup()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var claude = Directory.CreateDirectory(Path.Combine(home.FullName, ".claude"));
+        await File.WriteAllTextAsync(Path.Combine(claude.FullName, "settings.json"),
+            """{"hooks":{"PostToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"pwsh","args":["-File","old/track-telemetry.ps1"]},{"type":"command","command":"echo keep"}]}]}}""");
+        var configurator = CreateConfigurator(workspace, home);
+
+        await configurator.ConfigureAsync([AgentClientKind.ClaudeCode], CancellationToken.None);
+        await configurator.ConfigureAsync([AgentClientKind.ClaudeCode], CancellationToken.None);
+
+        var groups = await ReadClaudePostToolUseAsync(home);
+        Assert.Equal(2, groups.Count);
+        Assert.Contains(groups, group => GroupContainsCommand(group, "echo keep"));
+        Assert.Equal(1, CountAspireGroups(groups));
+        Assert.Equal(AgentTelemetryHook.GetCommand("--hook").Args,
+            FindAspireHook(groups)["args"]!.AsArray().Select(arg => (string)arg!));
     }
 
     [Fact]
@@ -262,7 +272,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
                 || (ho["args"] is JsonArray args && args.Any(JsonValueHasTelemetryScript)));
 
     private static bool JsonValueHasTelemetryScript(JsonNode? node)
-        => node is JsonValue v && v.ToString().Contains("track-telemetry", StringComparison.OrdinalIgnoreCase);
+        => node is JsonValue v && (v.ToString().Contains("track-telemetry", StringComparison.OrdinalIgnoreCase) || v.ToString() == "--hook");
 
     private static bool GroupContainsCommand(JsonNode? group, string command)
         => group is JsonObject obj

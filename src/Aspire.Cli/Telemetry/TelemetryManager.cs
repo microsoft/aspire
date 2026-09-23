@@ -45,10 +45,8 @@ internal sealed class TelemetryManager : IDisposable
 #endif
     private const int ProfilingForceFlushTimeoutMilliseconds = 5000;
 
-    // The agent telemetry command runs fire-and-forget from an agent hook and exits immediately,
-    // so the short Release shutdown flush (200ms) is not enough to reliably export the single
-    // just-created span. The command path force-flushes the reported provider with this larger
-    // bound before exit so the event is not silently dropped.
+    // Agent hooks flush to durable exporter storage before returning. Give persistence its own
+    // budget rather than truncating it to the normal Release shutdown window.
     private const int ReportedForceFlushTimeoutMilliseconds = 3000;
 
     private readonly TracerProvider? _azureMonitorProvider;
@@ -56,6 +54,23 @@ internal sealed class TelemetryManager : IDisposable
     private readonly TracerProvider? _debugDiagnosticProvider;
 
     private bool _shuttingDown;
+
+    /// <summary>
+    /// Configures exporter persistence before any providers are created in the CLI process.
+    /// </summary>
+    internal static void ConfigureExporterForProcess(bool isAgentTelemetryInvocation)
+    {
+        // These switches are process-wide, so configure them only at the entry point, not in DI.
+        // Agent hooks must persist before exiting without waiting for ingestion. Keep ordinary
+        // commands' existing shutdown behavior; the exporter owns storage, leases, and retries.
+        // https://github.com/Azure/azure-sdk-for-net/blob/Azure.Monitor.OpenTelemetry.Exporter_1.9.0/sdk/monitor/Azure.Monitor.OpenTelemetry.Exporter/README.md#telemetry-delivery-on-shutdown
+        AppContext.SetSwitch("Azure.Monitor.OpenTelemetry.Exporter.PersistOnForceFlush", isAgentTelemetryInvocation);
+        AppContext.SetSwitch("Azure.Monitor.OpenTelemetry.Exporter.DisablePersistOnShutdown", !isAgentTelemetryInvocation);
+        if (isAgentTelemetryInvocation)
+        {
+            AppContext.SetData("Azure.Monitor.OpenTelemetry.Exporter.ShutdownDrainBudgetMilliseconds", 0);
+        }
+    }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TelemetryManager"/> class.
@@ -203,17 +218,16 @@ internal sealed class TelemetryManager : IDisposable
     /// Flushes reported telemetry without shutting down other telemetry providers.
     /// </summary>
     /// <remarks>
-    /// Used by the <c>aspire agent telemetry</c> command, which is invoked fire-and-forget from an
-    /// agent hook and exits immediately. The normal shutdown flush window is too short to reliably
-    /// drain a single just-created span, so this bounded flush ensures the event leaves the process.
+    /// Used by <c>aspire agent telemetry</c> to persist pending events before returning to the hook.
+    /// The exporter uploads from storage asynchronously, including on subsequent invocations.
     /// </remarks>
-    public Task ForceFlushReportedAsync()
+    public Task<bool> ForceFlushReportedAsync()
     {
         // See ForceFlushProfilingAsync for why this runs the synchronous, bounded
         // ForceFlush(int) on the thread pool rather than taking a CancellationToken.
         return Task.Run(() =>
         {
-            _azureMonitorProvider?.ForceFlush(ReportedForceFlushTimeoutMilliseconds);
+            return _azureMonitorProvider?.ForceFlush(ReportedForceFlushTimeoutMilliseconds) ?? true;
         });
     }
 
@@ -232,7 +246,7 @@ internal sealed class TelemetryManager : IDisposable
         });
     }
 
-    private static string GetTelemetryStoragePath()
+    internal static string GetTelemetryStoragePath()
     {
         var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         return Path.Combine(homeDirectory, ".aspire", "cli", "telemetrystorage");

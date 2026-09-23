@@ -497,7 +497,9 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
         var result = RunProcess("bash", [scripts.ShellScriptPath], payload, BuildEnvironment(recorderPath, capturePath, extraEnv));
 
-        return new HookRun(result, ReadCapturedArgs(capturePath));
+        var captured = ReadCapturedArgs(capturePath);
+        AssertNativeParity(payload, extraEnv, captured);
+        return new HookRun(result, captured);
     }
 
     private async Task<HookRun> RunPwshHookAsync(string payload, Dictionary<string, string?>? extraEnv = null)
@@ -510,7 +512,27 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         // -ExecutionPolicy Bypass so the locally created hook and recorder run on Windows agents.
         var result = RunProcess("pwsh", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scripts.PowerShellScriptPath], payload, BuildEnvironment(recorderPath, capturePath, extraEnv));
 
-        return new HookRun(result, ReadCapturedArgs(capturePath));
+        var captured = ReadCapturedArgs(capturePath);
+        AssertNativeParity(payload, extraEnv, captured);
+        return new HookRun(result, captured);
+    }
+
+    private static void AssertNativeParity(string payload, Dictionary<string, string?>? environment, string[]? scriptArgs)
+    {
+        var optOut = environment?.GetValueOrDefault("ASPIRE_CLI_TELEMETRY_OPTOUT");
+        var nativeArgs = optOut == "1" || string.Equals(optOut, "true", StringComparison.OrdinalIgnoreCase)
+            ? null : AgentTelemetryHook.Classify(payload, environment?.GetValueOrDefault("COPILOT_CLI"));
+        if (scriptArgs is null)
+        {
+            Assert.Null(nativeArgs);
+            return;
+        }
+        Assert.NotNull(nativeArgs);
+        // Timestamps are generated separately; compare all other emitted dimensions and their values.
+        static KeyValuePair<string, string>[] Tags(string[] args) => args.Skip(2).Chunk(2)
+            .Where(pair => pair[0] != "--timestamp")
+            .Select(pair => new KeyValuePair<string, string>(pair[0], pair[1])).OrderBy(pair => pair.Key).ToArray();
+        Assert.Equal(Tags(scriptArgs), Tags(nativeArgs));
     }
 
     private static async Task<TelemetryHookScripts> MaterializeScriptsAsync(TemporaryWorkspace workspace)
