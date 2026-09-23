@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <param name="innerResource">The inner resource used to store annotations.</param>
 public class AzureServiceBusEmulatorResource(AzureServiceBusResource innerResource)
-    : ContainerResource(innerResource.Name), IResource, IContainerProjection<AzureServiceBusResource, AzureServiceBusEmulatorResource>
+    : ContainerResource(innerResource.Name), IResource, IResourceWithConnectionString, IContainerProjection<AzureServiceBusResource, AzureServiceBusEmulatorResource>
 {
     // The path to the emulator configuration files in the container.
     internal const string EmulatorConfigFilesPath = "/ServiceBus_Emulator/ConfigFiles";
@@ -23,6 +23,22 @@ public class AzureServiceBusEmulatorResource(AzureServiceBusResource innerResour
 
     /// <inheritdoc />
     public override ResourceAnnotationCollection Annotations => _innerResource.Annotations;
+
+    ReferenceExpression IResourceWithConnectionString.ConnectionStringExpression => CreateConnectionString(_innerResource);
+
+    internal static ReferenceExpression CreateConnectionString(AzureServiceBusResource owner) =>
+        ReferenceExpression.Create($"Endpoint=sb://{owner.EmulatorEndpoint.Property(EndpointProperty.HostAndPort)};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;");
+
+    internal static IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties(AzureServiceBusResource owner)
+    {
+        yield return new("Host", ReferenceExpression.Create($"{owner.EmulatorEndpoint.Property(EndpointProperty.Host)}"));
+        yield return new("Port", ReferenceExpression.Create($"{owner.EmulatorEndpoint.Property(EndpointProperty.Port)}"));
+        yield return new("Uri", ReferenceExpression.Create($"sb://{owner.EmulatorEndpoint.Property(EndpointProperty.HostAndPort)}"));
+        yield return new("ConnectionString", CreateConnectionString(owner));
+    }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
+        GetConnectionProperties(_innerResource);
 
     /// <inheritdoc />
     public static AzureServiceBusEmulatorResource CreateProjection(AzureServiceBusResource owner) => new(owner);

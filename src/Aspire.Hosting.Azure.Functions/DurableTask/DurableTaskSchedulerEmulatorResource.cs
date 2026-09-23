@@ -19,10 +19,18 @@ namespace Aspire.Hosting.Azure.DurableTask;
 /// </remarks>
 [Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class DurableTaskSchedulerEmulatorResource(DurableTaskSchedulerResource scheduler)
-    : ContainerResource(scheduler.Name), IContainerProjection<DurableTaskSchedulerResource, DurableTaskSchedulerEmulatorResource>
+    : ContainerResource(scheduler.Name), IResourceWithConnectionString, IContainerProjection<DurableTaskSchedulerResource, DurableTaskSchedulerEmulatorResource>
 {
     /// <inheritdoc />
     public override ResourceAnnotationCollection Annotations => scheduler.Annotations;
+
+    ReferenceExpression IResourceWithConnectionString.ConnectionStringExpression => CreateConnectionString(scheduler);
+
+    internal static ReferenceExpression CreateConnectionString(DurableTaskSchedulerResource owner)
+    {
+        var grpcEndpoint = new EndpointReference(owner, "grpc");
+        return ReferenceExpression.Create($"Endpoint={grpcEndpoint.Property(EndpointProperty.Scheme)}://{grpcEndpoint.Property(EndpointProperty.Host)}:{grpcEndpoint.Property(EndpointProperty.Port)};Authentication=None");
+    }
 
     /// <inheritdoc />
     public static DurableTaskSchedulerEmulatorResource CreateProjection(DurableTaskSchedulerResource owner) => new(owner);

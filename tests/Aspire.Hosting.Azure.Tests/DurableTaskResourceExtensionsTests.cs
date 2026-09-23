@@ -29,7 +29,11 @@ public class DurableTaskResourceExtensionsTests
             });
 
         var connectionString = await dts.Resource.ConnectionStringExpression.GetValueAsync(default);
+        var provider = dts.Resource.GetEffectiveCapability<IResourceWithConnectionString>();
+        var projection = Assert.IsType<DurableTaskSchedulerEmulatorResource>(provider);
 
+        Assert.Same(dts.Resource, projection.GetOwnerOrSelf());
+        Assert.Equal(dts.Resource.ConnectionStringExpression.ValueExpression, provider.ConnectionStringExpression.ValueExpression);
         Assert.Equal(expectedConnectionString, connectionString);
     }
 

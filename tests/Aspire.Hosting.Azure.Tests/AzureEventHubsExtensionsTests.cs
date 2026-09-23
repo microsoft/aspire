@@ -21,6 +21,21 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
+    public void EmulatorProjectionProvidesChildConnectionStrings()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var eventHubs = builder.AddAzureEventHubs("eventhubs").RunAsEmulator();
+        var hub = eventHubs.AddHub("hub");
+        var consumerGroup = hub.AddConsumerGroup("consumer");
+
+        var provider = eventHubs.Resource.GetEffectiveCapability<IResourceWithConnectionString>();
+
+        Assert.IsType<AzureEventHubsEmulatorResource>(provider);
+        Assert.Equal($"{provider.ConnectionStringExpression.ValueExpression};EntityPath=hub", hub.Resource.ConnectionStringExpression.ValueExpression);
+        Assert.Equal($"{provider.ConnectionStringExpression.ValueExpression};EntityPath=hub;ConsumerGroup=consumer", consumerGroup.Resource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
     [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWaitForOnEventHubsEmulatorBlocksDependentResources()
     {

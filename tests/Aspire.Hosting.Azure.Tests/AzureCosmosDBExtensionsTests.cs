@@ -134,10 +134,12 @@ public class AzureCosmosDBExtensionsTests(ITestOutputHelper output)
         var db2 = cosmos1.AddCosmosDatabase("db2", "db");
         var container2 = db2.AddContainer("container2", "id", "container");
 
+        var provider = cosmos.Resource.GetEffectiveCapability<IResourceWithConnectionString>();
+        Assert.IsType<AzureCosmosDBEmulatorResource>(provider);
         Assert.DoesNotContain(";Database=db1", cosmos.Resource.ConnectionStringExpression.ValueExpression);
         Assert.DoesNotContain(";Database=db1;Container=container1", cosmos.Resource.ConnectionStringExpression.ValueExpression);
-        Assert.Contains(";Database=db1", db1.Resource.ConnectionStringExpression.ValueExpression);
-        Assert.Contains(";Database=db1;Container=container1", container1.Resource.ConnectionStringExpression.ValueExpression);
+        Assert.Equal($"{provider.ConnectionStringExpression.ValueExpression};Database=db1", db1.Resource.ConnectionStringExpression.ValueExpression);
+        Assert.Equal($"{provider.ConnectionStringExpression.ValueExpression};Database=db1;Container=container1", container1.Resource.ConnectionStringExpression.ValueExpression);
         // Validate behavior when resource name and container/database name are different
         Assert.Contains(";Database=db", db2.Resource.ConnectionStringExpression.ValueExpression);
         Assert.Contains(";Database=db;Container=container", container2.Resource.ConnectionStringExpression.ValueExpression);

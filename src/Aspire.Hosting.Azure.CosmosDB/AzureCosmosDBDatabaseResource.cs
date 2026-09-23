@@ -42,7 +42,8 @@ public class AzureCosmosDBDatabaseResource(string name, string databaseName, Azu
     // ensure Azure Functions projects can WithReference a CosmosDB database
     void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(IDictionary<string, object> target, string connectionName)
     {
-        if (Parent.IsEmulator || Parent.UseAccessKeyAuthentication)
+        var provider = Parent.GetEffectiveCapability<IResourceWithConnectionString>();
+        if (!ReferenceEquals(provider, Parent) || Parent.UseAccessKeyAuthentication)
         {
             Parent.SetConnectionString(target, connectionName, ConnectionStringExpression);
         }

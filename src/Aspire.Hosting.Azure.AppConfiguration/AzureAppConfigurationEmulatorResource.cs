@@ -12,12 +12,17 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <param name="innerResource">The inner resource used to store annotations.</param>
 public class AzureAppConfigurationEmulatorResource(AzureAppConfigurationResource innerResource)
-    : ContainerResource(innerResource.Name), IResource, IContainerProjection<AzureAppConfigurationResource, AzureAppConfigurationEmulatorResource>
+    : ContainerResource(innerResource.Name), IResource, IResourceWithConnectionString, IContainerProjection<AzureAppConfigurationResource, AzureAppConfigurationEmulatorResource>
 {
     private readonly AzureAppConfigurationResource _innerResource = innerResource ?? throw new ArgumentNullException(nameof(innerResource));
 
     /// <inheritdoc/>
     public override ResourceAnnotationCollection Annotations => _innerResource.Annotations;
+
+    ReferenceExpression IResourceWithConnectionString.ConnectionStringExpression => CreateConnectionString(_innerResource);
+
+    internal static ReferenceExpression CreateConnectionString(AzureAppConfigurationResource owner) =>
+        ReferenceExpression.Create($"Endpoint={owner.EmulatorEndpoint.Property(EndpointProperty.Url)};Id=anonymous;Secret=abcdefghijklmnopqrstuvwxyz1234567890;Anonymous=True");
 
     /// <inheritdoc/>
     public static AzureAppConfigurationEmulatorResource CreateProjection(AzureAppConfigurationResource owner) => new(owner);

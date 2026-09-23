@@ -82,10 +82,20 @@ public class AzureServiceBusResource(string name, Action<AzureResourceInfrastruc
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure Service Bus endpoint.
     /// </summary>
-    public ReferenceExpression ConnectionStringExpression =>
-        IsEmulator
-            ? ReferenceExpression.Create($"Endpoint=sb://{EmulatorEndpoint.Property(EndpointProperty.HostAndPort)};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;")
-            : ReferenceExpression.Create($"{ServiceBusEndpoint}");
+    public ReferenceExpression ConnectionStringExpression
+    {
+        get
+        {
+            // Direct owner access remains supported, but the selected projection is authoritative for connection behavior.
+            var provider = this.GetEffectiveCapability<IResourceWithConnectionString>();
+            if (!ReferenceEquals(provider, this))
+            {
+                return provider!.ConnectionStringExpression;
+            }
+
+            return ReferenceExpression.Create($"{ServiceBusEndpoint}");
+        }
+    }
 
     void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(IDictionary<string, object> target, string connectionName)
         => ApplyAzureFunctionsConfiguration(target, connectionName);
@@ -121,20 +131,21 @@ public class AzureServiceBusResource(string name, Action<AzureResourceInfrastruc
 
     internal ReferenceExpression GetConnectionString(string? queueOrTopicName, string? subscriptionName)
     {
+        var provider = this.GetEffectiveCapability<IResourceWithConnectionString>()!;
         if (string.IsNullOrEmpty(queueOrTopicName) && string.IsNullOrEmpty(subscriptionName))
         {
-            return ConnectionStringExpression;
+            return provider.ConnectionStringExpression;
         }
 
         var builder = new ReferenceExpressionBuilder();
 
-        if (IsEmulator)
+        if (ReferenceEquals(provider, this))
         {
-            builder.AppendFormatted(ConnectionStringExpression);
+            builder.Append($"Endpoint={ServiceBusEndpoint}");
         }
         else
         {
-            builder.Append($"Endpoint={ConnectionStringExpression}");
+            builder.AppendFormatted(provider.ConnectionStringExpression);
         }
 
         // Add EntityPath for child resources (queues, topics, subscriptions)
@@ -153,10 +164,11 @@ public class AzureServiceBusResource(string name, Action<AzureResourceInfrastruc
 
     internal void ApplyAzureFunctionsConfiguration(IDictionary<string, object> target, string connectionName, string? queueOrTopicName = null, string? subscriptionName = null)
     {
-        if (IsEmulator)
+        var provider = this.GetEffectiveCapability<IResourceWithConnectionString>()!;
+        if (!ReferenceEquals(provider, this))
         {
             // Injected to support Azure Functions listener initialization.
-            target[$"{connectionName}"] = ConnectionStringExpression;
+            target[$"{connectionName}"] = provider.ConnectionStringExpression;
             // Injected to support Aspire client integration for Service Bus in Azure Functions projects.
             target[$"Aspire__Azure__Messaging__ServiceBus__{connectionName}__ConnectionString"] = GetConnectionString(queueOrTopicName, subscriptionName);
         }
@@ -179,6 +191,17 @@ public class AzureServiceBusResource(string name, Action<AzureResourceInfrastruc
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
+        var provider = this.GetEffectiveCapability<IResourceWithConnectionString>();
+        if (!ReferenceEquals(provider, this))
+        {
+            foreach (var property in provider!.GetConnectionProperties())
+            {
+                yield return property;
+            }
+
+            yield break;
+        }
+
         yield return new("Host", HostName);
 
         if (Port is not null)
@@ -187,11 +210,6 @@ public class AzureServiceBusResource(string name, Action<AzureResourceInfrastruc
         }
 
         yield return new("Uri", UriExpression);
-
-        if (IsEmulator)
-        {
-            yield return new("ConnectionString", ConnectionStringExpression);
-        }
     }
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["namespace"];

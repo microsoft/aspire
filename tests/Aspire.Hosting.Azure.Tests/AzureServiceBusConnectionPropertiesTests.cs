@@ -36,8 +36,14 @@ public class AzureServiceBusConnectionPropertiesTests
         using var builder = TestDistributedApplicationBuilder.Create();
         var serviceBus = builder.AddAzureServiceBus("servicebus").RunAsEmulator();
 
-        var properties = ((IResourceWithConnectionString)serviceBus.Resource).GetConnectionProperties().ToArray();
+        var provider = serviceBus.Resource.GetEffectiveCapability<IResourceWithConnectionString>();
+        var projection = Assert.IsType<AzureServiceBusEmulatorResource>(provider);
+        var properties = provider.GetConnectionProperties().ToArray();
 
+        Assert.Same(serviceBus.Resource, projection.GetOwnerOrSelf());
+        Assert.Equal(
+            "Endpoint=sb://{servicebus.bindings.emulator.host}:{servicebus.bindings.emulator.port};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;",
+            provider.ConnectionStringExpression.ValueExpression);
         Assert.Collection(
             properties,
             property =>
@@ -60,5 +66,6 @@ public class AzureServiceBusConnectionPropertiesTests
                 Assert.Equal("ConnectionString", property.Key);
                 Assert.Equal("Endpoint=sb://{servicebus.bindings.emulator.host}:{servicebus.bindings.emulator.port};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;", property.Value.ValueExpression);
             });
+        Assert.Equal(provider.ConnectionStringExpression.ValueExpression, serviceBus.Resource.ConnectionStringExpression.ValueExpression);
     }
 }

@@ -20,6 +20,23 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
 {
     [Fact]
+    public void EmulatorProjectionProvidesChildConnectionStrings()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var serviceBus = builder.AddAzureServiceBus("servicebus").RunAsEmulator();
+        var queue = serviceBus.AddServiceBusQueue("queue");
+        var topic = serviceBus.AddServiceBusTopic("topic");
+        var subscription = topic.AddServiceBusSubscription("subscription");
+
+        var provider = serviceBus.Resource.GetEffectiveCapability<IResourceWithConnectionString>();
+
+        Assert.IsType<AzureServiceBusEmulatorResource>(provider);
+        Assert.Equal($"{provider.ConnectionStringExpression.ValueExpression};EntityPath=queue", queue.Resource.ConnectionStringExpression.ValueExpression);
+        Assert.Equal($"{provider.ConnectionStringExpression.ValueExpression};EntityPath=topic", topic.Resource.ConnectionStringExpression.ValueExpression);
+        Assert.Equal($"{provider.ConnectionStringExpression.ValueExpression};EntityPath=topic/Subscriptions/subscription", subscription.Resource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
     public async Task ResourceNamesCanBeDifferentThanAzureNames()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

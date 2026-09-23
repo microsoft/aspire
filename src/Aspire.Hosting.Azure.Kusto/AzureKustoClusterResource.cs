@@ -60,18 +60,14 @@ public class AzureKustoClusterResource : AzureProvisioningResource, IResourceWit
     {
         get
         {
-            // Check if this resource is marked as an emulator
-            if (IsEmulator)
+            // Direct owner access remains supported, but the selected projection is authoritative for connection behavior.
+            var provider = this.GetEffectiveCapability<IResourceWithConnectionString>();
+            if (!ReferenceEquals(provider, this))
             {
-                // For emulator, use the HTTP endpoint pattern
-                var endpoint = this.GetEndpoint("http");
-                return ReferenceExpression.Create($"{endpoint}");
+                return provider!.ConnectionStringExpression;
             }
-            else
-            {
-                // For Azure provisioned resources, use the cluster URI output
-                return ReferenceExpression.Create($"{ClusterUri}");
-            }
+
+            return ReferenceExpression.Create($"{ClusterUri}");
         }
     }
 
@@ -174,6 +170,17 @@ public class AzureKustoClusterResource : AzureProvisioningResource, IResourceWit
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
+        var provider = this.GetEffectiveCapability<IResourceWithConnectionString>();
+        if (!ReferenceEquals(provider, this))
+        {
+            foreach (var property in provider!.GetConnectionProperties())
+            {
+                yield return property;
+            }
+
+            yield break;
+        }
+
         yield return new("Uri", UriExpression);
     }
 }

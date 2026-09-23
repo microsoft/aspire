@@ -169,7 +169,7 @@ public static class AzureKustoBuilderExtensions
         // Mark this resource as an emulator for consistent resource identification and tooling support
         builder.WithAnnotation(new EmulatorResourceAnnotation());
 
-        // Add HTTP endpoint to the original resource so the connection string logic can detect emulator mode
+        // The projection builds its connection string from the owner's endpoint so references retain canonical identity.
         builder.WithHttpEndpoint(targetPort: AzureKustoEmulatorContainerDefaults.DefaultTargetPort, name: "http");
 
         return builder.RunAsContainerImage<AzureKustoClusterResource, AzureKustoEmulatorResource>(

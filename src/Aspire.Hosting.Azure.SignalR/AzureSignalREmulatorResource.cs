@@ -12,12 +12,25 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <param name="innerResource">The inner resource used to store annotations.</param>
 public class AzureSignalREmulatorResource(AzureSignalRResource innerResource)
-    : ContainerResource(innerResource.Name), IResource, IContainerProjection<AzureSignalRResource, AzureSignalREmulatorResource>
+    : ContainerResource(innerResource.Name), IResource, IResourceWithConnectionString, IContainerProjection<AzureSignalRResource, AzureSignalREmulatorResource>
 {
     private readonly AzureSignalRResource _innerResource = innerResource ?? throw new ArgumentNullException(nameof(innerResource));
 
     /// <inheritdoc/>
     public override ResourceAnnotationCollection Annotations => _innerResource.Annotations;
+
+    ReferenceExpression IResourceWithConnectionString.ConnectionStringExpression => CreateConnectionString(_innerResource);
+
+    internal static ReferenceExpression CreateConnectionString(AzureSignalRResource owner) =>
+        ReferenceExpression.Create($"Endpoint={owner.EmulatorEndpoint.Property(EndpointProperty.Url)};AccessKey=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGH;Version=1.0;");
+
+    internal static IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties(AzureSignalRResource owner)
+    {
+        yield return new("Uri", ReferenceExpression.Create($"{owner.EmulatorEndpoint.Property(EndpointProperty.Url)}"));
+    }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
+        GetConnectionProperties(_innerResource);
 
     /// <inheritdoc/>
     public static AzureSignalREmulatorResource CreateProjection(AzureSignalRResource owner) => new(owner);

@@ -123,16 +123,27 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure Cosmos DB resource.
     /// </summary>
-    public ReferenceExpression ConnectionStringExpression =>
-        IsEmulator ?
-            AzureCosmosDBEmulatorConnectionString.Create(EmulatorEndpoint, IsVNextEmulator) :
-            UseAccessKeyAuthentication ?
-                ReferenceExpression.Create($"{ConnectionStringSecretOutput}") :
-                ReferenceExpression.Create($"{ConnectionStringOutput}");
+    public ReferenceExpression ConnectionStringExpression
+    {
+        get
+        {
+            // Direct owner access remains supported, but the selected projection is authoritative for connection behavior.
+            var provider = this.GetEffectiveCapability<IResourceWithConnectionString>();
+            if (!ReferenceEquals(provider, this))
+            {
+                return provider!.ConnectionStringExpression;
+            }
+
+            return UseAccessKeyAuthentication
+                ? ReferenceExpression.Create($"{ConnectionStringSecretOutput}")
+                : ReferenceExpression.Create($"{ConnectionStringOutput}");
+        }
+    }
 
     void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(IDictionary<string, object> target, string connectionName)
     {
-        if (IsEmulator || UseAccessKeyAuthentication)
+        var provider = this.GetEffectiveCapability<IResourceWithConnectionString>();
+        if (!ReferenceEquals(provider, this) || UseAccessKeyAuthentication)
         {
             SetConnectionString(target, connectionName, ConnectionStringExpression);
         }
@@ -207,14 +218,29 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
 
     internal ReferenceExpression GetChildConnectionString(string childResourceName, string? databaseName = null, string? containerName = null)
     {
+        var provider = this.GetEffectiveCapability<IResourceWithConnectionString>()!;
         if (string.IsNullOrEmpty(databaseName) && string.IsNullOrEmpty(containerName))
         {
-            return ConnectionStringExpression;
+            return provider.ConnectionStringExpression;
         }
 
         var builder = new ReferenceExpressionBuilder();
 
-        if (UseAccessKeyAuthentication && !IsEmulator)
+        if (!ReferenceEquals(provider, this))
+        {
+            builder.AppendFormatted(provider.ConnectionStringExpression);
+
+            if (!string.IsNullOrEmpty(databaseName))
+            {
+                builder.Append($";Database={databaseName}");
+
+                if (!string.IsNullOrEmpty(containerName))
+                {
+                    builder.Append($";Container={containerName}");
+                }
+            }
+        }
+        else if (UseAccessKeyAuthentication)
         {
             var dbSecret = ConnectionStringSecretOutput.Resource.GetSecret(GetKeyValueSecretName(childResourceName));
             dbSecret.SecretOwner = ConnectionStringSecretOutput.SecretOwner;
@@ -222,15 +248,8 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
         }
         else
         {
-            if (IsEmulator)
-            {
-                builder.AppendFormatted(ConnectionStringExpression);
-            }
-            else
-            {
-                // The ConnectionString output contains the account endpoint URI.
-                builder.Append($"AccountEndpoint={ConnectionStringOutput}");
-            }
+            // The ConnectionString output contains the account endpoint URI.
+            builder.Append($"AccountEndpoint={ConnectionStringOutput}");
 
             if (!string.IsNullOrEmpty(databaseName))
             {
@@ -251,14 +270,24 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
+        var provider = this.GetEffectiveCapability<IResourceWithConnectionString>();
+        if (!ReferenceEquals(provider, this))
+        {
+            foreach (var property in provider!.GetConnectionProperties())
+            {
+                yield return property;
+            }
+
+            yield break;
+        }
+
         yield return new("Uri", ReferenceExpression.Create($"{UriExpression}"));
 
         if (AccountKey is not null)
         {
             yield return new("AccountKey", AccountKey);
         }
-
-        if (IsEmulator || UseAccessKeyAuthentication)
+        if (UseAccessKeyAuthentication)
         {
             yield return new("ConnectionString", ConnectionStringExpression);
         }

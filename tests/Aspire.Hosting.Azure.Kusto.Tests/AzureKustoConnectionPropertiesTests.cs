@@ -31,8 +31,12 @@ public class AzureKustoConnectionPropertiesTests
         using var builder = TestDistributedApplicationBuilder.Create();
         var kusto = builder.AddAzureKustoCluster("kusto").RunAsEmulator();
 
-        var properties = ((IResourceWithConnectionString)kusto.Resource).GetConnectionProperties().ToArray();
+        var provider = kusto.Resource.GetEffectiveCapability<IResourceWithConnectionString>();
+        var projection = Assert.IsType<AzureKustoEmulatorResource>(provider);
+        var properties = provider.GetConnectionProperties().ToArray();
 
+        Assert.Same(kusto.Resource, projection.GetOwnerOrSelf());
+        Assert.Equal("{kusto.bindings.http.url}", provider.ConnectionStringExpression.ValueExpression);
         Assert.Collection(
             properties,
             property =>
@@ -40,6 +44,7 @@ public class AzureKustoConnectionPropertiesTests
                 Assert.Equal("Uri", property.Key);
                 Assert.Equal("{kusto.bindings.http.url}", property.Value.ValueExpression);
             });
+        Assert.Equal(provider.ConnectionStringExpression.ValueExpression, kusto.Resource.ConnectionStringExpression.ValueExpression);
     }
 
     [Fact]

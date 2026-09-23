@@ -96,23 +96,24 @@ public class AzureEventHubsResource(string name, Action<AzureResourceInfrastruct
 
     internal ReferenceExpression GetConnectionString(string? eventHub = null, string? consumerGroup = null)
     {
+        // Direct owner and child access remains supported, but the selected projection owns the base connection string.
+        var provider = this.GetEffectiveCapability<IResourceWithConnectionString>()!;
+        if (eventHub is null && consumerGroup is null)
+        {
+            return ReferenceEquals(provider, this)
+                ? ReferenceExpression.Create($"{EventHubsEndpoint}")
+                : provider.ConnectionStringExpression;
+        }
+
         var builder = new ReferenceExpressionBuilder();
 
-        if (IsEmulator)
+        if (ReferenceEquals(provider, this))
         {
-            builder.Append($"Endpoint=sb://{EmulatorEndpoint.Property(EndpointProperty.HostAndPort)};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true");
+            builder.Append($"Endpoint={EventHubsEndpoint}");
         }
         else
         {
-            if (eventHub is null && consumerGroup is null)
-            {
-                // for backwards compatibility - if there is no event hub or consumer group, return just the endpoint
-                builder.AppendFormatted(EventHubsEndpoint);
-            }
-            else
-            {
-                builder.Append($"Endpoint={EventHubsEndpoint}");
-            }
+            builder.AppendFormatted(provider.ConnectionStringExpression);
         }
 
         if (eventHub is not null)
@@ -133,14 +134,15 @@ public class AzureEventHubsResource(string name, Action<AzureResourceInfrastruct
 
     internal void ApplyAzureFunctionsConfiguration(IDictionary<string, object> target, string connectionName, string? eventHub = null, string? consumerGroup = null)
     {
-        if (IsEmulator)
+        var provider = this.GetEffectiveCapability<IResourceWithConnectionString>()!;
+        if (!ReferenceEquals(provider, this))
         {
             // Injected to support Azure Functions listener initialization.
-            target[connectionName] = ConnectionStringExpression;
+            target[connectionName] = provider.ConnectionStringExpression;
             // Injected to support Aspire client integration for each EventHubs client in Azure Functions projects.
             foreach (var clientName in s_eventHubClientNames)
             {
-                target[$"{ConnectionKeyPrefix}__{clientName}__{connectionName}__ConnectionString"] = ConnectionStringExpression;
+                target[$"{ConnectionKeyPrefix}__{clientName}__{connectionName}__ConnectionString"] = provider.ConnectionStringExpression;
             }
         }
         else
@@ -199,6 +201,17 @@ public class AzureEventHubsResource(string name, Action<AzureResourceInfrastruct
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
+        var provider = this.GetEffectiveCapability<IResourceWithConnectionString>();
+        if (!ReferenceEquals(provider, this))
+        {
+            foreach (var property in provider!.GetConnectionProperties())
+            {
+                yield return property;
+            }
+
+            yield break;
+        }
+
         yield return new("Host", HostName);
 
         if (Port is not null)
@@ -207,11 +220,6 @@ public class AzureEventHubsResource(string name, Action<AzureResourceInfrastruct
         }
 
         yield return new("Uri", UriExpression);
-
-        if (IsEmulator)
-        {
-            yield return new("ConnectionString", ReferenceExpression.Create($"Endpoint={EmulatorEndpoint.Property(EndpointProperty.HostAndPort)};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"));
-        }
     }
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["namespace"];

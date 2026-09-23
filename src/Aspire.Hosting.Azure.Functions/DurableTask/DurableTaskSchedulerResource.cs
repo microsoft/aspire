@@ -29,11 +29,11 @@ public sealed class DurableTaskSchedulerResource(string name) : Resource(name), 
 
     private ReferenceExpression CreateConnectionString()
     {
-        if (IsEmulator)
+        // Direct owner access remains supported, but the selected projection is authoritative for connection behavior.
+        var provider = this.GetEffectiveCapability<IResourceWithConnectionString>();
+        if (!ReferenceEquals(provider, this))
         {
-            var grpcEndpoint = new EndpointReference(this, "grpc");
-
-            return ReferenceExpression.Create($"Endpoint={grpcEndpoint.Property(EndpointProperty.Scheme)}://{grpcEndpoint.Property(EndpointProperty.Host)}:{grpcEndpoint.Property(EndpointProperty.Port)};Authentication=None");
+            return provider!.ConnectionStringExpression;
         }
 
         if (this.TryGetLastAnnotation<DurableTaskSchedulerConnectionStringAnnotation>(out var connectionStringAnnotation))

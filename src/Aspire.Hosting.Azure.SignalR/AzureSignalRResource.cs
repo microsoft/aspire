@@ -55,10 +55,20 @@ public class AzureSignalRResource(string name, Action<AzureResourceInfrastructur
     /// <summary>
     /// Gets the connection string template for the manifest for Azure SignalR.
     /// </summary>
-    public ReferenceExpression ConnectionStringExpression =>
-        IsEmulator ?
-            ReferenceExpression.Create($"Endpoint={EmulatorEndpoint.Property(EndpointProperty.Url)};AccessKey=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGH;Version=1.0;"):
-            ReferenceExpression.Create($"Endpoint=https://{HostName};AuthType=azure");
+    public ReferenceExpression ConnectionStringExpression
+    {
+        get
+        {
+            // Direct owner access remains supported, but the selected projection is authoritative for connection behavior.
+            var provider = this.GetEffectiveCapability<IResourceWithConnectionString>();
+            if (!ReferenceEquals(provider, this))
+            {
+                return provider!.ConnectionStringExpression;
+            }
+
+            return ReferenceExpression.Create($"Endpoint=https://{HostName};AuthType=azure");
+        }
+    }
 
     /// <inheritdoc/>
     public override ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra)
@@ -91,6 +101,17 @@ public class AzureSignalRResource(string name, Action<AzureResourceInfrastructur
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
+        var provider = this.GetEffectiveCapability<IResourceWithConnectionString>();
+        if (!ReferenceEquals(provider, this))
+        {
+            foreach (var property in provider!.GetConnectionProperties())
+            {
+                yield return property;
+            }
+
+            yield break;
+        }
+
         yield return new("Uri", UriExpression);
     }
 

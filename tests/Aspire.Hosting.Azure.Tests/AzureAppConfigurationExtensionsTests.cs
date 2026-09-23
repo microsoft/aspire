@@ -140,4 +140,22 @@ public class AzureAppConfigurationExtensionsTests(ITestOutputHelper output)
             appConfiguration.Resource.Annotations,
             annotation => annotation is HealthCheckAnnotation healthCheck && healthCheck.Key == "appconfig_emulator_/health_200_check");
     }
+
+    [Fact]
+    public void RunAsEmulatorUsesProjectionConnectionString()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var appConfiguration = builder.AddAzureAppConfiguration("appconfig").RunAsEmulator();
+
+        var provider = appConfiguration.Resource.GetEffectiveCapability<IResourceWithConnectionString>();
+        var projection = Assert.IsType<AzureAppConfigurationEmulatorResource>(provider);
+
+        Assert.Same(appConfiguration.Resource, projection.GetOwnerOrSelf());
+        Assert.Equal(
+            "Endpoint={appconfig.bindings.emulator.url};Id=anonymous;Secret=abcdefghijklmnopqrstuvwxyz1234567890;Anonymous=True",
+            provider.ConnectionStringExpression.ValueExpression);
+        Assert.Equal(provider.ConnectionStringExpression.ValueExpression, appConfiguration.Resource.ConnectionStringExpression.ValueExpression);
+    }
+
 }

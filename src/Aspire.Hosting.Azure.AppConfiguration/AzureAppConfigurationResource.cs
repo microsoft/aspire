@@ -18,7 +18,7 @@ public class AzureAppConfigurationResource(string name, Action<AzureResourceInfr
     : AzureProvisioningResource(name, configureInfrastructure),
     IResourceWithConnectionString, IResourceWithEndpoints, IAzurePrivateEndpointTarget
 {
-    private EndpointReference EmulatorEndpoint => new(this, "emulator");
+    internal EndpointReference EmulatorEndpoint => new(this, "emulator");
 
     /// <summary>
     /// Gets a value indicating whether the Azure App Configuration resource is running in the local emulator.
@@ -43,10 +43,20 @@ public class AzureAppConfigurationResource(string name, Action<AzureResourceInfr
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure App Configuration resource.
     /// </summary>
-    public ReferenceExpression ConnectionStringExpression =>
-       IsEmulator
-        ? ReferenceExpression.Create($"Endpoint={EmulatorEndpoint.Property(EndpointProperty.Url)};Id=anonymous;Secret=abcdefghijklmnopqrstuvwxyz1234567890;Anonymous=True")
-        : ReferenceExpression.Create($"{Endpoint}");
+    public ReferenceExpression ConnectionStringExpression
+    {
+        get
+        {
+            // Direct owner access remains supported, but the selected projection is authoritative for connection behavior.
+            var provider = this.GetEffectiveCapability<IResourceWithConnectionString>();
+            if (!ReferenceEquals(provider, this))
+            {
+                return provider!.ConnectionStringExpression;
+            }
+
+            return ReferenceExpression.Create($"{Endpoint}");
+        }
+    }
 
     /// <inheritdoc/>
     public override ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra)

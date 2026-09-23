@@ -116,7 +116,8 @@ public class AzureCosmosDBContainerResource : Resource, IResourceWithParent<Azur
     // ensure Azure Functions projects can WithReference a CosmosDB database container
     void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(IDictionary<string, object> target, string connectionName)
     {
-        if (Parent.Parent.IsEmulator || Parent.Parent.UseAccessKeyAuthentication)
+        var provider = Parent.Parent.GetEffectiveCapability<IResourceWithConnectionString>();
+        if (!ReferenceEquals(provider, Parent.Parent) || Parent.Parent.UseAccessKeyAuthentication)
         {
             Parent.Parent.SetConnectionString(target, connectionName, ConnectionStringExpression);
         }

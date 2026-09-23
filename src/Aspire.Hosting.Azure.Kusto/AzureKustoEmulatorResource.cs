@@ -10,7 +10,7 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// A resource that represents a Kusto emulator running as a container.
 /// </summary>
-public class AzureKustoEmulatorResource : ContainerResource, IContainerProjection<AzureKustoClusterResource, AzureKustoEmulatorResource>
+public class AzureKustoEmulatorResource : ContainerResource, IResourceWithConnectionString, IContainerProjection<AzureKustoClusterResource, AzureKustoEmulatorResource>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureKustoEmulatorResource"/> class.
@@ -29,6 +29,19 @@ public class AzureKustoEmulatorResource : ContainerResource, IContainerProjectio
     /// Gets the wrapped Kusto resource.
     /// </summary>
     internal AzureKustoClusterResource InnerResource { get; }
+
+    ReferenceExpression IResourceWithConnectionString.ConnectionStringExpression => CreateConnectionString(InnerResource);
+
+    internal static ReferenceExpression CreateConnectionString(AzureKustoClusterResource owner) =>
+        ReferenceExpression.Create($"{owner.GetEndpoint("http")}");
+
+    internal static IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties(AzureKustoClusterResource owner)
+    {
+        yield return new("Uri", ReferenceExpression.Create($"{owner.GetEndpoint("http")}"));
+    }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
+        GetConnectionProperties(InnerResource);
 
     /// <inheritdoc />
     public static AzureKustoEmulatorResource CreateProjection(AzureKustoClusterResource owner) => new(owner);

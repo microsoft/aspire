@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <param name="innerResource">The inner resource used to store annotations.</param>
 public class AzureEventHubsEmulatorResource(AzureEventHubsResource innerResource)
-    : ContainerResource(innerResource.Name), IResource, IContainerProjection<AzureEventHubsResource, AzureEventHubsEmulatorResource>
+    : ContainerResource(innerResource.Name), IResource, IResourceWithConnectionString, IContainerProjection<AzureEventHubsResource, AzureEventHubsEmulatorResource>
 {
     // The path to the emulator configuration file in the container.
     // The path to the emulator configuration files in the container.
@@ -27,6 +27,22 @@ public class AzureEventHubsEmulatorResource(AzureEventHubsResource innerResource
 
     /// <inheritdoc />
     public override ResourceAnnotationCollection Annotations => _innerResource.Annotations;
+
+    ReferenceExpression IResourceWithConnectionString.ConnectionStringExpression => CreateConnectionString(_innerResource);
+
+    internal static ReferenceExpression CreateConnectionString(AzureEventHubsResource owner) =>
+        ReferenceExpression.Create($"Endpoint=sb://{owner.EmulatorEndpoint.Property(EndpointProperty.HostAndPort)};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true");
+
+    internal static IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties(AzureEventHubsResource owner)
+    {
+        yield return new("Host", ReferenceExpression.Create($"{owner.EmulatorEndpoint.Property(EndpointProperty.Host)}"));
+        yield return new("Port", ReferenceExpression.Create($"{owner.EmulatorEndpoint.Property(EndpointProperty.Port)}"));
+        yield return new("Uri", ReferenceExpression.Create($"sb://{owner.EmulatorEndpoint.Property(EndpointProperty.HostAndPort)}"));
+        yield return new("ConnectionString", ReferenceExpression.Create($"Endpoint={owner.EmulatorEndpoint.Property(EndpointProperty.HostAndPort)};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"));
+    }
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
+        GetConnectionProperties(_innerResource);
 
     /// <inheritdoc />
     public static AzureEventHubsEmulatorResource CreateProjection(AzureEventHubsResource owner) => new(owner);
