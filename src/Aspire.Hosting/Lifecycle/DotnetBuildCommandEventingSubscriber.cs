@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.ExceptionServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Utils;
@@ -58,8 +59,33 @@ internal sealed class DotnetBuildCommandEventingSubscriber(
                     return;
                 }
 
+                // DCP gathers arguments before environment variables. Resolve only the environment callbacks here so
+                // the SDK probe sees the same PATH and host overrides as the build process. The later environment
+                // gatherer reuses the cached annotation results instead of invoking those callbacks a second time.
+                var executionConfiguration = await ExecutionConfigurationBuilder.Create(executable)
+                    .WithEnvironmentVariablesConfig()
+                    .BuildAsync(
+                        context.ExecutionContext,
+                        context.Logger,
+                        context.CancellationToken)
+                    .ConfigureAwait(false);
+                if (executionConfiguration.Exception is { } exception)
+                {
+                    ExceptionDispatchInfo.Throw(exception);
+                }
+
+                var comparer = OperatingSystem.IsWindows()
+                    ? StringComparer.OrdinalIgnoreCase
+                    : StringComparer.Ordinal;
+                var buildEnvironment = new Dictionary<string, string>(comparer);
+                foreach (var (name, value) in executionConfiguration.EnvironmentVariables)
+                {
+                    buildEnvironment[name] = value;
+                }
+
                 if (!await versionProvider.SupportsMultiThreadedBuildAsync(
                     executable.WorkingDirectory,
+                    buildEnvironment,
                     context.CancellationToken).ConfigureAwait(false))
                 {
                     return;

@@ -63,6 +63,81 @@ public class DotnetSdkVersionProviderTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task SupportsMultiThreadedBuildAsyncUsesBuildEnvironment()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: ["11.0.100-rc.1"]);
+        var provider = CreateProvider(processRunner);
+        var buildEnvironment = new Dictionary<string, string>
+        {
+            ["PATH"] = "custom-dotnet-path",
+            ["DOTNET_NOLOGO"] = "false",
+        };
+
+        var supported = await provider.SupportsMultiThreadedBuildAsync(
+            workspace.Path,
+            buildEnvironment,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(supported);
+        var processSpec = Assert.Single(processRunner.ProcessSpecs);
+        Assert.Equal("custom-dotnet-path", processSpec.EnvironmentVariables["PATH"]);
+        Assert.Equal("false", processSpec.EnvironmentVariables["DOTNET_NOLOGO"]);
+        Assert.Equal("true", processSpec.EnvironmentVariables["DOTNET_CLI_TELEMETRY_OPTOUT"]);
+    }
+
+    [Fact]
+    public async Task SupportsMultiThreadedBuildAsyncCachesByEnvironmentContents()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: ["11.0.100-rc.1"]);
+        processRunner.EnqueueResult(output: ["10.0.999"]);
+        var provider = CreateProvider(processRunner);
+        var firstEnvironment = new Dictionary<string, string>
+        {
+            ["PATH"] = "first-dotnet-path",
+            ["BUILD_FLAVOR"] = "custom",
+        };
+        var equivalentEnvironment = new Dictionary<string, string>
+        {
+            ["BUILD_FLAVOR"] = "custom",
+            ["PATH"] = "first-dotnet-path",
+        };
+        var changedEnvironment = new Dictionary<string, string>
+        {
+            ["PATH"] = "second-dotnet-path",
+            ["BUILD_FLAVOR"] = "custom",
+        };
+
+        var first = await provider.SupportsMultiThreadedBuildAsync(
+            workspace.Path,
+            firstEnvironment,
+            TestContext.Current.CancellationToken);
+        var equivalent = await provider.SupportsMultiThreadedBuildAsync(
+            workspace.Path,
+            equivalentEnvironment,
+            TestContext.Current.CancellationToken);
+        var changed = await provider.SupportsMultiThreadedBuildAsync(
+            workspace.Path,
+            changedEnvironment,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(first);
+        Assert.True(equivalent);
+        Assert.False(changed);
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            processSpec => Assert.Equal(
+                "first-dotnet-path",
+                processSpec.EnvironmentVariables["PATH"]),
+            processSpec => Assert.Equal(
+                "second-dotnet-path",
+                processSpec.EnvironmentVariables["PATH"]));
+    }
+
+    [Fact]
     public async Task TryGetVersionAsyncCoalescesConcurrentRequests()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

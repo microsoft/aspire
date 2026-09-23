@@ -185,6 +185,74 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, processRunner.ProcessSpecs.Count);
     }
 
+    [Fact]
+    public async Task DirectBuildAndRebuilderProbeSdkUsingCurrentBuildEnvironment()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: ["11.0.100-rc.1"]);
+        processRunner.EnqueueResult(output: ["10.0.999"]);
+        builder.Services.AddSingleton<IDotnetSdkVersionProvider>(
+            new DotnetSdkVersionProvider(
+                processRunner,
+                NullLogger<DotnetSdkVersionProvider>.Instance,
+                CancellationToken.None));
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var firstDotnetPath = Path.Combine(workspace.Path, "first-sdk");
+        var secondDotnetPath = Path.Combine(workspace.Path, "second-sdk");
+        var dotnetPath = firstDotnetPath;
+        builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithBuildEnvironment(context => context.EnvironmentVariables["PATH"] = dotnetPath);
+        await using var app = builder.Build();
+
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var buildArguments = await ArgumentEvaluator.GetArgumentListAsync(
+            buildResource,
+            app.Services);
+        Assert.Equal(1, buildArguments.Count(argument => argument == "-mt"));
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0,
+            });
+
+        dotnetPath = secondDotnetPath;
+        ForgetCachedCallbackResults(rebuilder);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(rebuilder, app.Services),
+            TestContext.Current.CancellationToken);
+        var rebuildArguments = await ArgumentEvaluator.GetArgumentListAsync(
+            rebuilder,
+            app.Services);
+        Assert.Equal(0, rebuildArguments.Count(argument => argument == "-mt"));
+        await app.ResourceNotifications.PublishUpdateAsync(
+            rebuilder,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0,
+            });
+
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            processSpec => Assert.Equal(firstDotnetPath, processSpec.EnvironmentVariables["PATH"]),
+            processSpec => Assert.Equal(secondDotnetPath, processSpec.EnvironmentVariables["PATH"]));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
