@@ -35,7 +35,7 @@ public partial class TerminalDockTests
             OnTerminalUpdateProcessed = update => processed.Writer.TryWrite(update)
         };
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         var renderCount = cut.RenderCount;
         WatchTerminalsUpdate[] metadata =
         [
@@ -96,7 +96,7 @@ public partial class TerminalDockTests
     {
         var client = new TestDashboardClient(isEnabled: enabled, isReadOnly: readOnly);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
 
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask()).DefaultTimeout();
@@ -133,7 +133,7 @@ public partial class TerminalDockTests
         {
             import.SetResult(module);
         }
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         try
         {
             await cut.InvokeAsync(cut.Instance.ToggleAsync);
@@ -199,7 +199,7 @@ public partial class TerminalDockTests
         {
             import.SetResult(module);
         }
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         Task disposing = Task.CompletedTask;
         try
         {
@@ -250,7 +250,7 @@ public partial class TerminalDockTests
             BeforeInvokeAsync = identifier => identifier == failedStage ? Task.FromException(failure) : Task.CompletedTask
         };
         var import = TestJSObjectReference.SetupImport(this, "./Components/Layout/TerminalDock.razor.js");
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         var component = cut.Instance;
         await cut.InvokeAsync(component.ToggleAsync);
         if (failedStage == "import")

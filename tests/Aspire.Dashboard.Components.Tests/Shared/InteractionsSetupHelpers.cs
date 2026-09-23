@@ -17,18 +17,18 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class InteractionsSetupHelpers
 {
-    public static Func<IRenderedFragment> SetupDialog<TDialog, TContent>(
-        TestContext context, Expression<Func<TDialog, TContent>> contentParameter, out DashboardDialogService dialogService)
+    public static Func<IRenderedComponent<IComponent>> SetupDialog<TDialog, TContent>(
+        BunitContext context, Expression<Func<TDialog, TContent>> contentParameter, out DashboardDialogService dialogService)
         where TDialog : ComponentBase
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(context);
         FluentUISetupHelpers.SetupFluentButton(context);
 
-        IRenderedFragment? cut = null;
+        IRenderedComponent<IComponent>? cut = null;
         TestDialogService? testDialogService = null;
         testDialogService = new TestDialogService((content, _) =>
         {
-            cut = context.RenderComponent<CascadingValue<IDialogInstance>>(builder =>
+            cut = context.Render<CascadingValue<IDialogInstance>>(builder =>
             {
                 builder.Add(p => p.Value, testDialogService!.LastInstance!);
                 builder.AddChildContent<TDialog>(childBuilder =>
