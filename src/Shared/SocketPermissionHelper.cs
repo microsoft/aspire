@@ -38,22 +38,32 @@ internal static class SocketPermissionHelper
 
         var directory = new DirectoryInfo(Path.GetFullPath(path, currentDirectory));
         var tempRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(tempDirectory, currentDirectory));
+        var profileRoot = string.IsNullOrEmpty(userProfileDirectory)
+            ? null
+            : Path.TrimEndingDirectorySeparator(Path.GetFullPath(userProfileDirectory, currentDirectory));
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         if (directory.Parent is null ||
             string.Equals(directory.FullName, Path.TrimEndingDirectorySeparator(currentDirectory), comparison) ||
-            string.Equals(directory.FullName, Path.TrimEndingDirectorySeparator(userProfileDirectory), comparison) ||
+            string.Equals(directory.FullName, profileRoot, comparison) ||
             string.Equals(Path.TrimEndingDirectorySeparator(directory.FullName), tempRoot, comparison))
         {
             throw new IOException($"The socket directory '{path}' must be a dedicated directory, not the working directory, user profile, filesystem root, or temporary root.");
         }
 
-        // Validate the entire configurable suffix, not just the leaf: .aspire or cli
-        // could otherwise redirect chmod/ACL replacement into an unrelated directory.
+        // Home and temporary roots are trusted environment paths and may be aliases
+        // (for example /home/alice -> /mnt/home/alice or /var -> /private/var).
+        // Reject links below those bases: .aspire or cli must not redirect permission
+        // changes into an unrelated directory. Paths outside either base are checked to the root.
         for (var current = directory; current is not null; current = current.Parent)
         {
-            // System temporary roots can themselves be aliases (for example /var on macOS).
-            if (string.Equals(current.FullName, tempRoot, comparison))
+            if (string.Equals(current.FullName, profileRoot, comparison) ||
+                string.Equals(current.FullName, tempRoot, comparison))
             {
+                var resolvedBase = current.ResolveLinkTarget(returnFinalTarget: true) ?? current;
+                if (!Directory.Exists(resolvedBase.FullName))
+                {
+                    throw new IOException($"The socket directory base '{current.FullName}' must resolve to an existing directory.");
+                }
                 break;
             }
 

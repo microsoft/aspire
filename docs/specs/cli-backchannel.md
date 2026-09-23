@@ -28,8 +28,11 @@ Unsuitable permissions prevent startup with an error directing the caller to cor
 or choose a new dedicated directory. Socket binding never repairs existing directories.
 
 The working directory, profile root, filesystem root, and shared temporary root are rejected.
-Symbolic links in the configurable path are rejected as well. These checks are point-in-time
-validation; configured paths must have trusted ancestors that other users cannot replace.
+The configured user profile and temporary roots are trusted bases and may resolve through
+symbolic links to existing directories. Links below those bases are rejected, including
+links at `.aspire`, `cli`, or the socket directory itself. Paths outside either base are
+checked for links through all ancestors. These checks are point-in-time validation;
+configured paths must have trusted ancestors that other users cannot replace.
 Directory permissions do not isolate processes running as the same user or protect against
 privileged administrators.
 
