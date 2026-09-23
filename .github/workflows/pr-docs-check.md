@@ -6,10 +6,9 @@ description: |
   updates are required, it creates a draft PR with the changes following the
   doc-writer skill conventions. The draft PR targets the aspire.dev branch
   resolved from the source PR's release reasoning (PR milestone, linked-issue
-  milestone, then source PR base), using the matching release/* branch when it
-  already exists and falling back to aspire.dev main otherwise. It also
-  comments on the original PR with a link to the draft PR (or a "no docs
-  needed" message).
+  milestone, then source PR base). Changes merged to main without release
+  reasoning target release/14.0. It also comments on the original PR with a
+  link to the draft PR (or a "no docs needed" message).
 
 max-daily-ai-credits: -1
 
@@ -800,17 +799,16 @@ pre-agent-steps:
       # Policy (in priority order):
       #   1. exact_match: CANDIDATE is a release/* branch that exists on
       #      aspire.dev → use it as-is.
-      #   2. latest_release_fallback: aspire.dev has at least one release/*
-      #      branch → use the highest-versioned one. This covers both:
-      #        - CANDIDATE was `main` (no milestone/linked-issue/base-ref
-      #          signal) — docs for upcoming-release work should still land
-      #          on the staged release/* branch, not on aspire.dev's main.
-      #        - CANDIDATE was a release/* (e.g. release/13.3) that no
-      #          longer exists on aspire.dev (already shipped, branch
-      #          deleted). The docs site only keeps a release/* branch for
-      #          the upcoming release; older release-branch content is
-      #          merged into main on aspire.dev as those releases ship.
-      #   3. main_fallback: aspire.dev has no release/* at all → use main.
+      #   2. configured_main_target: CANDIDATE is `main` (no milestone,
+      #      linked-issue, or base-ref signal) → use release/14.0. Fail rather
+      #      than silently targeting an older release when that branch is not
+      #      available on aspire.dev.
+      #   3. latest_release_fallback: CANDIDATE was a release/* branch that no
+      #      longer exists on aspire.dev (already shipped, branch deleted) →
+      #      use the highest-versioned release branch. The docs site only keeps
+      #      a release/* branch for the upcoming release; older release-branch
+      #      content is merged into main on aspire.dev as those releases ship.
+      #   4. main_fallback: aspire.dev has no release/* at all → use main.
       #
       # Sort release branches with sort -V *after* stripping the
       # "release/" prefix so the numeric version compares cleanly:
@@ -829,17 +827,22 @@ pre-agent-steps:
 
       EFFECTIVE=""
       RESOLUTION=""
+      CONFIGURED_MAIN_TARGET="release/14.0"
       if [ "${CANDIDATE}" != "main" ] && grep -Fxq "${CANDIDATE}" "${RELEASE_BRANCHES_FILE}"; then
         EFFECTIVE="${CANDIDATE}"
         RESOLUTION="exact_match"
+      elif [ "${CANDIDATE}" = "main" ]; then
+        if ! grep -Fxq "${CONFIGURED_MAIN_TARGET}" "${RELEASE_BRANCHES_FILE}"; then
+          echo "ERROR: Configured main target ${CONFIGURED_MAIN_TARGET} does not exist on microsoft/aspire.dev." >&2
+          exit 1
+        fi
+        EFFECTIVE="${CONFIGURED_MAIN_TARGET}"
+        RESOLUTION="configured_main_target"
+        echo "Candidate was main; using configured aspire.dev release branch ${EFFECTIVE}"
       elif [ -n "${LATEST_RELEASE}" ]; then
         EFFECTIVE="${LATEST_RELEASE}"
         RESOLUTION="latest_release_fallback"
-        if [ "${CANDIDATE}" = "main" ]; then
-          echo "Candidate was main; using latest aspire.dev release branch ${EFFECTIVE}"
-        else
-          echo "Candidate ${CANDIDATE} not present on microsoft/aspire.dev; using latest release branch ${EFFECTIVE} instead"
-        fi
+        echo "Candidate ${CANDIDATE} not present on microsoft/aspire.dev; using latest release branch ${EFFECTIVE} instead"
       else
         EFFECTIVE="main"
         RESOLUTION="main_fallback"
@@ -1165,7 +1168,7 @@ Read `.pr-docs-check/target.json`. The fields you will use are:
 | `docs_work_branch` | The unique local branch already created from `effective_target_branch`; use it unchanged as the draft PR head branch. |
 | `candidate_source` | Why the candidate was chosen: `pr_milestone`, `linked_issue_milestone`, `pr_base`, or `fallback_main`. Use it in the PR description. |
 | `candidate_source_detail` | The raw milestone title or base ref that drove the choice. Use it in the PR description. |
-| `target_resolution` | How `effective_target_branch` was chosen: `exact_match`, `latest_release_fallback`, or `main_fallback`. Use it in the PR description. |
+| `target_resolution` | How `effective_target_branch` was chosen: `exact_match`, `configured_main_target`, `latest_release_fallback`, or `main_fallback`. Use it in the PR description. |
 
 The remaining fields (`candidate_target_branch`, `available_release_branches`,
 `enumeration_source`) are context only — don't second-guess the resolution.
@@ -1502,14 +1505,13 @@ string. Do not derive, rename, or replace it.
   `.pr-docs-check/target.json`. For example:
   - When `target_resolution` is `exact_match`: "Targeting `release/13.4`
     based on the source PR milestone `13.4`."
+  - When `target_resolution` is `configured_main_target`: "Targeting
+    `release/14.0` — the configured release branch for changes merged to
+    `main` without a milestone or linked-issue release target."
   - When `target_resolution` is `latest_release_fallback` and the candidate
     was a release branch: "Targeting `release/13.4` — the latest release
     branch on `microsoft/aspire.dev` — because `release/13.3` (from the
     source PR milestone `13.3`) does not exist there."
-  - When `target_resolution` is `latest_release_fallback` and the candidate
-    was `main`: "Targeting `release/13.4` — the latest release branch on
-    `microsoft/aspire.dev` — because the source PR has no milestone or
-    `release/*` base ref to derive a more specific target."
   - When `target_resolution` is `main_fallback`: "Falling back to `main`
     because `microsoft/aspire.dev` currently has no `release/*` branches."
 - Why this PR is needed (the significant change and the docs gap it addresses)
