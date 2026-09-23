@@ -1,0 +1,14 @@
+﻿{
+  Output: [
+    ⚠ Warning: 'aspire mcp' commands are deprecated and will be removed in a future release. Please use 'aspire agent' instead.,
+    ,
+    🤖 Detecting agent environments...,
+    Shared locations are configured once. Usage hooks are configured separately for detected supported clients, respecting policy and telemetry opt-out.,
+    Existing MCP configuration is disabled.,
+    ⚠️ Configuration completed with errors. Please fix the reported issues and re-run the command.
+  ],
+  Error:
+❌ Blocked Aspire MCP server for Claude Code (project): .mcp.json
+📄 See logs at <log-file>
+
+}

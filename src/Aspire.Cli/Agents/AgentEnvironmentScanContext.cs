@@ -4,75 +4,28 @@
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Context passed to agent environment scanners to collect detected applicators.
+/// Collects client detections during a read-only environment scan.
 /// </summary>
 internal sealed class AgentEnvironmentScanContext
 {
-    private readonly List<AgentEnvironmentApplicator> _applicators = [];
-    private readonly HashSet<string> _skillBaseDirectories = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<AgentClientKind> _detectedClients = [];
+    private readonly List<AgentClientDetection> _detectedClients = [];
 
-    /// <summary>
-    /// Gets the working directory being scanned.
-    /// </summary>
-    public required DirectoryInfo WorkingDirectory { get; init; }
-
-    /// <summary>
-    /// Gets the root directory of the repository/workspace.
-    /// This is typically the git repository root if available, otherwise the working directory.
-    /// Scanners should use this as the boundary for searches instead of searching up the directory tree.
-    /// </summary>
-    public required DirectoryInfo RepositoryRoot { get; init; }
-
-    /// <summary>
-    /// Gets or sets a value indicating whether a Playwright CLI applicator has been added.
-    /// This is used to ensure only one applicator for Playwright is added across all scanners.
-    /// </summary>
-    public bool PlaywrightApplicatorAdded { get; set; }
-
-    /// <summary>
-    /// Adds an applicator to the collection of detected agent environments.
-    /// </summary>
-    /// <param name="applicator">The applicator to add.</param>
-    public void AddApplicator(AgentEnvironmentApplicator applicator)
+    public AgentEnvironmentScanContext(DirectoryInfo workingDirectory, DirectoryInfo workspaceRoot)
     {
-        ArgumentNullException.ThrowIfNull(applicator);
-        _applicators.Add(applicator);
+        WorkingDirectory = workingDirectory;
+        WorkspaceRoot = workspaceRoot;
+        DetectedClients = _detectedClients.AsReadOnly();
     }
 
-    /// <summary>
-    /// Gets the collection of detected applicators.
-    /// </summary>
-    public IReadOnlyList<AgentEnvironmentApplicator> Applicators => _applicators;
+    public DirectoryInfo WorkingDirectory { get; }
+    public DirectoryInfo WorkspaceRoot { get; }
+    public IReadOnlyList<AgentClientDetection> DetectedClients { get; }
 
-    /// <summary>
-    /// Registers a skill base directory for an agent environment (e.g., ".claude/skills", ".github/skills").
-    /// These directories are used to mirror skill files across all detected agent environments.
-    /// </summary>
-    /// <param name="relativeSkillBaseDir">The relative path to the skill base directory from the repository root.</param>
-    public void AddSkillBaseDirectory(string relativeSkillBaseDir)
+    public void AddDetection(AgentClientDetection detection)
     {
-        _skillBaseDirectories.Add(relativeSkillBaseDir);
+        if (!_detectedClients.Contains(detection))
+        {
+            _detectedClients.Add(detection);
+        }
     }
-
-    /// <summary>
-    /// Gets the registered skill base directories for all detected agent environments.
-    /// </summary>
-    public IReadOnlyCollection<string> SkillBaseDirectories => _skillBaseDirectories;
-
-    /// <summary>
-    /// Records that an agent client was detected as present in the environment. Used to scope
-    /// telemetry hook registration to the clients the user actually has, independent of whether the
-    /// Aspire MCP server still needs configuring.
-    /// </summary>
-    /// <param name="client">The detected agent client.</param>
-    public void AddDetectedClient(AgentClientKind client)
-    {
-        _detectedClients.Add(client);
-    }
-
-    /// <summary>
-    /// Gets the set of agent clients detected as present in the environment.
-    /// </summary>
-    public IReadOnlyCollection<AgentClientKind> DetectedClients => _detectedClients;
 }

@@ -1,0 +1,10 @@
+﻿{
+  "editor.fontSize": 14,
+  "chat.plugins.marketplaces": [
+    "example/tools",
+    "microsoft/aspire-skills"
+  ],
+  "chat.pluginLocations": {
+    "/custom-plugin": false
+  }
+}

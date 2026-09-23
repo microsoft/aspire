@@ -1,26 +1,23 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
+using System.Globalization;
 using System.Text.Json.Nodes;
-using Aspire.Cli.Agents.Playwright;
+using System.Text.RegularExpressions;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Agents.VsCode;
 
 /// <summary>
-/// Scans for VS Code environments and provides an applicator to configure the Aspire MCP server.
+/// Discovers VS Code and configures its native MCP and plugin-marketplace settings.
 /// </summary>
 internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
 {
-    private const string VsCodeFolderName = ".vscode";
-    private const string McpConfigFileName = "mcp.json";
-    private const string AspireServerName = "aspire";
-    private static readonly string s_skillBaseDirectory = Path.Combine(".github", "skills");
+    internal const string ClientId = "vscode";
 
     private readonly IVsCodeCliRunner _vsCodeCliRunner;
-    private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly CliExecutionContext _executionContext;
     private readonly IEnvironment _environment;
     private readonly ILogger<VsCodeAgentEnvironmentScanner> _logger;
@@ -29,244 +26,348 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
     /// Initializes a new instance of <see cref="VsCodeAgentEnvironmentScanner"/>.
     /// </summary>
     /// <param name="vsCodeCliRunner">The VS Code CLI runner for checking if VS Code is installed.</param>
-    /// <param name="playwrightCliInstaller">The Playwright CLI installer for secure installation.</param>
-    /// <param name="executionContext">The CLI execution context for accessing environment variables and settings.</param>
+    /// <param name="executionContext">The CLI execution context for resolving workspace and user configuration paths.</param>
     /// <param name="environment">The environment abstraction for reading environment variables.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
-    public VsCodeAgentEnvironmentScanner(IVsCodeCliRunner vsCodeCliRunner, PlaywrightCliInstaller playwrightCliInstaller, CliExecutionContext executionContext, IEnvironment environment, ILogger<VsCodeAgentEnvironmentScanner> logger)
+    public VsCodeAgentEnvironmentScanner(
+        IVsCodeCliRunner vsCodeCliRunner,
+        CliExecutionContext executionContext,
+        IEnvironment environment,
+        ILogger<VsCodeAgentEnvironmentScanner> logger)
     {
         ArgumentNullException.ThrowIfNull(vsCodeCliRunner);
-        ArgumentNullException.ThrowIfNull(playwrightCliInstaller);
         ArgumentNullException.ThrowIfNull(executionContext);
         ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(logger);
         _vsCodeCliRunner = vsCodeCliRunner;
-        _playwrightCliInstaller = playwrightCliInstaller;
         _executionContext = executionContext;
         _environment = environment;
         _logger = logger;
     }
 
     /// <inheritdoc />
+    public string Id => ClientId;
+
+    public string DisplayName => AgentCommandStrings.Environment_VsCode;
+
+    public override string ToString() => Id;
+
+    /// <inheritdoc />
     public async Task ScanAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         _logger.LogDebug("Starting VS Code environment scan in directory: {WorkingDirectory}", context.WorkingDirectory.FullName);
-        _logger.LogDebug("Workspace root: {RepositoryRoot}", context.RepositoryRoot.FullName);
 
-        _logger.LogDebug("Searching for .vscode folder...");
-        var vsCodeFolder = FindVsCodeFolder(context.WorkingDirectory, context.RepositoryRoot);
-
-        if (vsCodeFolder is not null)
+        var hasProjectConfiguration = HasProjectConfiguration(context.WorkingDirectory, context.WorkspaceRoot);
+        var isVsCodeTerminal = _environment.GetEnvironmentVariable("TERM_PROGRAM") == "vscode";
+        if (hasProjectConfiguration || isVsCodeTerminal)
         {
-            _logger.LogDebug("Found .vscode folder at: {VsCodeFolder}", vsCodeFolder.FullName);
-
-            context.AddDetectedClient(AgentClientKind.VsCode);
-
-            // Check if the aspire server is already configured
-            if (!HasAspireServerConfigured(vsCodeFolder))
+            var version = isVsCodeTerminal ? _environment.GetEnvironmentVariable("TERM_PROGRAM_VERSION")?.Trim() : null;
+            if (string.IsNullOrEmpty(version))
             {
-                // Found a .vscode folder - add an applicator to configure MCP
-                _logger.LogDebug("Adding VS Code applicator for .vscode folder at: {VsCodeFolder}", vsCodeFolder.FullName);
-                context.AddApplicator(CreateAspireApplicator(vsCodeFolder));
-            }
-            else
-            {
-                _logger.LogDebug("Aspire MCP server is already configured in .vscode/mcp.json");
+                version = null;
             }
 
-            // Register Playwright CLI installation applicator
-            CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
-        }
-        else if (await IsVsCodeAvailableAsync(cancellationToken).ConfigureAwait(false))
-        {
-            _logger.LogDebug("No .vscode folder found, but VS Code is available on the system");
-
-            context.AddDetectedClient(AgentClientKind.VsCode);
-
-            // No .vscode folder found, but VS Code is available
-            // Use workspace root for new .vscode folder
-            var targetVsCodeFolder = new DirectoryInfo(Path.Combine(context.RepositoryRoot.FullName, VsCodeFolderName));
-            _logger.LogDebug("Adding VS Code applicator for new .vscode folder at: {VsCodeFolder}", targetVsCodeFolder.FullName);
-            context.AddApplicator(CreateAspireApplicator(targetVsCodeFolder));
-
-            // Register Playwright CLI installation applicator
-            CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
-        }
-        else
-        {
-            _logger.LogDebug("No .vscode folder found and VS Code is not available - skipping VS Code configuration");
-        }
-    }
-
-    /// <summary>
-    /// Checks if VS Code is available on the machine.
-    /// First checks for VS Code environment variables (low cost),
-    /// then falls back to checking for the CLI executables.
-    /// </summary>
-    /// <param name="cancellationToken">A token to cancel the operation.</param>
-    /// <returns>True if VS Code is available, false otherwise.</returns>
-    private async Task<bool> IsVsCodeAvailableAsync(CancellationToken cancellationToken)
-    {
-        // First check environment variables (low cost)
-        _logger.LogDebug("Checking for VS Code environment variables...");
-        if (HasVsCodeEnvironmentVariables())
-        {
-            _logger.LogDebug("Found VS Code environment variables");
-            return true;
+            // VS Code exposes e.g. "1.110.0" or "1.111.0-insider" in TERM_PROGRAM_VERSION.
+            // Retain that evidence for native user paths even when a project marker avoids CLI probes.
+            context.AddDetection(new(AgentClientKind.VsCode, version, IsInsiders: version?.Contains("-insider", StringComparison.OrdinalIgnoreCase) == true));
+            return;
         }
 
-        // Try VS Code stable
-        _logger.LogDebug("Checking for VS Code stable CLI...");
         var vsCodeVersion = await _vsCodeCliRunner.GetVersionAsync(new VsCodeRunOptions { UseInsiders = false }, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         if (vsCodeVersion is not null)
         {
             _logger.LogDebug("Found VS Code stable version: {Version}", vsCodeVersion);
-            return true;
+            context.AddDetection(new(AgentClientKind.VsCode, vsCodeVersion.ToString(), IsInsiders: false));
+            return;
         }
 
-        // Try VS Code Insiders
-        _logger.LogDebug("Checking for VS Code Insiders CLI...");
         var vsCodeInsidersVersion = await _vsCodeCliRunner.GetVersionAsync(new VsCodeRunOptions { UseInsiders = true }, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         if (vsCodeInsidersVersion is not null)
         {
             _logger.LogDebug("Found VS Code Insiders version: {Version}", vsCodeInsidersVersion);
-            return true;
+            context.AddDetection(new(AgentClientKind.VsCode, vsCodeInsidersVersion.ToString(), IsInsiders: true));
         }
-
-        _logger.LogDebug("VS Code not found on the system");
-        return false;
     }
 
     /// <summary>
-    /// Walks up the directory tree to find a .vscode folder.
-    /// Stops if we go above the workspace root.
-    /// Ignores the .vscode folder in the user's home directory (used for user settings, not workspace config).
+    /// Checks for .vscode within the workspace boundary, excluding the home directory used for extensions.
     /// </summary>
     /// <param name="startDirectory">The directory to start searching from.</param>
     /// <param name="repositoryRoot">The workspace root to use as the boundary for searches.</param>
-    private DirectoryInfo? FindVsCodeFolder(DirectoryInfo startDirectory, DirectoryInfo repositoryRoot)
+    private bool HasProjectConfiguration(DirectoryInfo startDirectory, DirectoryInfo repositoryRoot)
+        => AgentPath.ProjectDirectories(startDirectory, repositoryRoot).Any(directory =>
+            Path.GetRelativePath(_executionContext.HomeDirectory.FullName, directory.FullName) != "." &&
+            Directory.Exists(Path.Combine(directory.FullName, ".vscode")));
+
+    /// <inheritdoc />
+    public IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request)
     {
-        var currentDirectory = startDirectory;
-        var homeDirectory = _executionContext.HomeDirectory;
+        var editions = request.Detections.Where(detection => detection.Client is AgentClientKind.VsCode)
+            .Select(detection => detection.IsInsiders).Distinct().DefaultIfEmpty(false).ToArray();
 
-        while (currentDirectory is not null)
+        if (!request.Assets.AspireSkills && !request.Assets.Mcp)
         {
-            // Check for .vscode folder at current level, but ignore it if it's in the home directory
-            // (the home directory's .vscode folder is for user settings, not workspace config)
-            var vsCodePath = Path.Combine(currentDirectory.FullName, VsCodeFolderName);
-            if (Directory.Exists(vsCodePath) && !string.Equals(currentDirectory.FullName, homeDirectory.FullName, StringComparison.OrdinalIgnoreCase))
+            yield break;
+        }
+
+        if (request.Assets.Mcp)
+        {
+            yield return Target(Path.Combine(request.WorkspaceRoot.FullName, ".vscode", "mcp.json"), AgentConfigurationScope.Project);
+        }
+
+        foreach (var insiders in editions)
+        {
+            var userDirectory = GetUserDirectory(insiders, _executionContext, _environment);
+            foreach (var target in UserTargets(userDirectory))
             {
-                return new DirectoryInfo(vsCodePath);
+                yield return target;
             }
 
-            // Stop if we've reached the workspace root without finding .vscode
-            // (don't search above the workspace boundary)
-            if (string.Equals(currentDirectory.FullName, repositoryRoot.FullName, StringComparison.OrdinalIgnoreCase))
+            // Existing profiles have independent mcp.json resources. Never invent a profile
+            // or inspect client-owned storage to guess a --profile/--user-data-dir session.
+            // https://code.visualstudio.com/docs/agent-customization/mcp-servers
+            // https://github.com/microsoft/vscode/blob/main/src/vs/platform/userDataProfile/common/userDataProfile.ts
+            var profileDirectory = Path.Combine(userDirectory, "profiles");
+            string[] profiles = [];
+            string? error = null;
+            try
             {
-                return null;
+                if (Directory.Exists(profileDirectory))
+                {
+                    profiles = Directory.GetDirectories(profileDirectory);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                error = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.Configuration_ReadWriteFailed, ex.Message);
             }
 
-            currentDirectory = currentDirectory.Parent;
+            if (error is not null)
+            {
+                yield return new AgentConfigurationTarget(profileDirectory, AgentConfigurationScope.User,
+                    request.Assets.AspireSkills ? AgentAssetKind.AspireSkills : AgentAssetKind.Mcp,
+                    [this], "profiles:unavailable",
+                    (_, _, _) => Task.FromResult(new AgentConfigurationEdit(AgentConfigurationStatus.Failed, error)));
+            }
+
+            foreach (var profile in profiles.Order(AgentPath.Comparer))
+            {
+                // The reserved system-profile directory is not a user-selected profile.
+                if (Path.GetFileName(profile) != "builtin" &&
+                    (File.Exists(Path.Combine(profile, "settings.json")) || File.Exists(Path.Combine(profile, "mcp.json"))))
+                {
+                    foreach (var target in UserTargets(profile))
+                    {
+                        yield return target;
+                    }
+                }
+            }
+        }
+
+        IEnumerable<AgentConfigurationTarget> UserTargets(string directory)
+        {
+            if (request.Assets.AspireSkills)
+            {
+                yield return PluginTarget(Path.Combine(directory, "settings.json"));
+            }
+            if (request.Assets.Mcp)
+            {
+                yield return Target(Path.Combine(directory, "mcp.json"), AgentConfigurationScope.User);
+            }
+        }
+
+        AgentConfigurationTarget PluginTarget(string path)
+            => new(path, AgentConfigurationScope.User, AgentAssetKind.AspireSkills, [this], "marketplaces:aspire",
+                async (root, context, cancellationToken) =>
+                {
+                    // VS Code reads these workspace recommendations. Preserve their pins and
+                    // disabled choices, but leave writes to the Copilot/Claude environment.
+                    // https://code.visualstudio.com/docs/agent-customization/agent-plugins
+                    var workspace = request.WorkspaceRoot.FullName;
+                    var recommendations = await AgentConfigurationJson.ReadSettingsAsync(
+                        context, CopilotPaths.ProjectSettings(request.WorkspaceRoot), cancellationToken);
+                    var settingsPaths = editions.Select(edition => Path.Combine(GetUserDirectory(edition, _executionContext, _environment), "settings.json"))
+                        .Append(Path.Combine(workspace, ".vscode", "settings.json"))
+                        .Append(path);
+                    var settings = await AgentConfigurationJson.ReadSettingsAsync(context, settingsPaths, cancellationToken);
+                    var marketplaces = AgentConfigurationJson.OptionalStrings(root, "chat.plugins.marketplaces");
+                    var registeredMarketplace = marketplaces?.Select(value => AgentConfigurationJson.String(value)!).FirstOrDefault(IsAspireMarketplace);
+                    if (CheckPluginSettings(settings, registeredMarketplace ?? AspireSkillsPluginConfiguration.Repository) is { } blocked)
+                    {
+                        return blocked;
+                    }
+
+                    var nativePin = settings.SelectMany(settingsFile =>
+                            AgentConfigurationJson.OptionalStrings(settingsFile, "chat.plugins.marketplaces") ?? [])
+                        .Select(AgentConfigurationJson.String)
+                        .Any(source => source is not null && IsAspireMarketplace(source) && source.Contains('#'));
+                    var recommendation = new JsonObject();
+                    var registration = AspireSkillsPluginConfiguration.Apply(recommendation, recommendations);
+                    if (registration.Status is not AgentConfigurationStatus.Configured)
+                    {
+                        return registration;
+                    }
+
+                    if (registeredMarketplace is not null)
+                    {
+                        return registration;
+                    }
+                    var source = recommendation["extraKnownMarketplaces"]![AspireSkillsPluginConfiguration.MarketplaceName]!["source"]!.AsObject();
+                    if (nativePin || source.ContainsKey("ref") || source.ContainsKey("sha"))
+                    {
+                        return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_ExistingPluginPin);
+                    }
+
+                    if (marketplaces is null)
+                    {
+                        marketplaces = new JsonArray();
+                        root["chat.plugins.marketplaces"] = marketplaces;
+                    }
+                    marketplaces.Add((JsonNode)AspireSkillsPluginConfiguration.Repository);
+                    return registration;
+                });
+
+        AgentConfigurationTarget Target(string path, AgentConfigurationScope scope)
+            => new(path, scope, AgentAssetKind.Mcp, [this], "servers:aspire",
+                (root, _, _) =>
+                {
+                    var edit = AspireMcpConfiguration.Apply(root, "servers", commandArray: false, "stdio");
+                    return Task.FromResult(scope is AgentConfigurationScope.User && edit.Status is AgentConfigurationStatus.Configured
+                        ? edit with { Message = AgentCommandStrings.Configuration_ProfileLimitations }
+                        : edit);
+                });
+    }
+
+    private static AgentConfigurationEdit? CheckPluginSettings(IEnumerable<JsonObject> settings, string marketplace)
+    {
+        foreach (var settingsFile in settings)
+        {
+            if (AgentConfigurationJson.Boolean(settingsFile, "chat.plugins.enabled") is false)
+            {
+                return AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_Disabled);
+            }
+            // Per-plugin overrides are additive: an omitted key is not a denial.
+            // strictMarketplaces is null (unrestricted) or a source allowlist, e.g.
+            // [{"source":"github","repo":"microsoft/aspire-skills"}]; [] allows nothing.
+            // https://code.visualstudio.com/docs/enterprise/ai-settings#manage-agent-plugins-and-marketplaces
+            if (AgentConfigurationJson.OptionalObject(settingsFile, "chat.plugins.enabledPlugins") is { } plugins &&
+                AgentConfigurationJson.Boolean(plugins, AspireSkillsPluginConfiguration.PluginName) is false)
+            {
+                return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_PolicyBlocked);
+            }
+
+            if (settingsFile["chat.plugins.strictMarketplaces"] is { } strict)
+            {
+                if (strict is not JsonArray sources)
+                {
+                    throw AgentConfigurationJson.Shape("chat.plugins.strictMarketplaces");
+                }
+                if (!sources.Any(source => MatchesMarketplaceSource(source, marketplace)))
+                {
+                    return AgentConfigurationEdit.Blocked(AgentCommandStrings.Configuration_PolicyBlocked);
+                }
+            }
         }
 
         return null;
     }
 
-    /// <summary>
-    /// Checks if any VS Code environment variables are present.
-    /// </summary>
-    private bool HasVsCodeEnvironmentVariables()
+    private static bool MatchesMarketplaceSource(JsonNode? node, string marketplace)
     {
-        if (_environment.GetEnvironmentVariable("TERM_PROGRAM") == "vscode")
-        {
-            return true;
-        }
-        return false;
-    }
-
-    /// <summary>
-    /// Checks if the .vscode folder contains an mcp.json file with an "aspire" server configured.
-    /// </summary>
-    /// <param name="vsCodeFolder">The .vscode folder to check.</param>
-    /// <returns>True if the aspire server is already configured, false otherwise.</returns>
-    private static bool HasAspireServerConfigured(DirectoryInfo vsCodeFolder)
-    {
-        var mcpConfigPath = Path.Combine(vsCodeFolder.FullName, McpConfigFileName);
-
-        if (!File.Exists(mcpConfigPath))
+        if (node is not JsonObject source)
         {
             return false;
         }
 
-        try
+        // Match the same repository and case-sensitive ref as VS Code. In-repository
+        // paths cannot match a marketplace; local/npm sources cannot match this GitHub repo.
+        // https://github.com/microsoft/vscode/blob/main/src/vs/workbench/contrib/chat/common/plugins/strictKnownMarketplaces.ts
+        var kind = AgentConfigurationJson.String(source["source"]);
+        if (kind == "hostPattern" && AgentConfigurationJson.String(source["hostPattern"]) is { } pattern)
         {
-            var content = File.ReadAllText(mcpConfigPath);
-            var config = JsonNode.Parse(content)?.AsObject();
-
-            if (config is null)
+            try
             {
+                return Regex.IsMatch("github.com", pattern, RegexOptions.ECMAScript | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+            }
+            catch (Exception ex) when (ex is ArgumentException or RegexMatchTimeoutException)
+            {
+                // Native policy treats invalid patterns as nonmatching. The caller reports
+                // the blocked registration unless another entry permits this marketplace.
                 return false;
             }
+        }
 
-            if (config.TryGetPropertyValue("servers", out var serversNode) && serversNode is JsonObject servers)
+        var candidate = kind switch
+        {
+            "github" when !source.ContainsKey("path") => AgentConfigurationJson.String(source["repo"]),
+            "git" when !source.ContainsKey("path") => AgentConfigurationJson.String(source["url"]),
+            "url" => AgentConfigurationJson.String(source["url"]),
+            _ => null
+        };
+        if (candidate is null || !IsAspireMarketplace(candidate))
+        {
+            return false;
+        }
+
+        var explicitRef = AgentConfigurationJson.String(source["ref"]);
+        if (source.ContainsKey("ref") && explicitRef is null)
+        {
+            return false;
+        }
+        var candidateParts = candidate.Trim().Split('#', 2);
+        var marketplaceParts = marketplace.Trim().Split('#', 2);
+        var candidateRef = string.IsNullOrEmpty(explicitRef) ? candidateParts.Length == 2 ? candidateParts[1] : "" : explicitRef;
+        return string.Equals(candidateRef, marketplaceParts.Length == 2 ? marketplaceParts[1] : "", StringComparison.Ordinal);
+    }
+
+    private static bool IsAspireMarketplace(string value)
+    {
+        // Native marketplaces accept owner/repo, HTTPS and SCP-style git remotes.
+        // Preserve an existing ref fragment, e.g. "microsoft/aspire-skills#v0.0.2".
+        var source = value.Trim().Split('#', 2)[0].TrimEnd('/');
+        return source.Equals(AspireSkillsPluginConfiguration.Repository, StringComparison.OrdinalIgnoreCase) ||
+            source.Equals($"https://github.com/{AspireSkillsPluginConfiguration.Repository}", StringComparison.OrdinalIgnoreCase) ||
+            source.Equals($"https://github.com/{AspireSkillsPluginConfiguration.Repository}.git", StringComparison.OrdinalIgnoreCase) ||
+            source.Equals($"git@github.com:{AspireSkillsPluginConfiguration.Repository}.git", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static string GetUserDirectory(bool insiders, CliExecutionContext executionContext, IEnvironment environment)
+    {
+        // Follow VS Code's portable, appdata, and original-working-directory overrides.
+        // https://github.com/microsoft/vscode/blob/main/src/vs/platform/environment/node/userDataPath.ts
+        if (Override("VSCODE_PORTABLE") is { } portable)
+        {
+            return Path.Combine(portable, "user-data", "User");
+        }
+
+        var home = executionContext.HomeDirectory.FullName;
+        var appData = Override("VSCODE_APPDATA");
+        if (appData is null)
+        {
+            appData = environment.IsWindows()
+                ? AgentPath.GetOverride("APPDATA", executionContext, environment) ?? Path.Combine(home, "AppData", "Roaming")
+                : environment.IsMacOS()
+                    ? Path.Combine(home, "Library", "Application Support")
+                    : AgentPath.GetOverride("XDG_CONFIG_HOME", executionContext, environment) ?? Path.Combine(home, ".config");
+        }
+
+        var product = environment.GetEnvironmentVariable("VSCODE_DEV") is { Length: > 0 } ? "code-oss-dev"
+            : insiders ? "Code - Insiders" : "Code";
+
+        return Path.Combine(appData, product, "User");
+
+        string? Override(string variable)
+        {
+            if (environment.GetEnvironmentVariable(variable) is not { Length: > 0 } value)
             {
-                return servers.ContainsKey(AspireServerName);
+                return null;
             }
 
-            return false;
-        }
-        catch (JsonException)
-        {
-            // If the JSON is malformed, assume aspire is not configured
-            return false;
+            var workingDirectory = AgentPath.GetOverride("VSCODE_CWD", executionContext, environment) ?? executionContext.WorkingDirectory.FullName;
+            return AgentPath.Expand(value, executionContext.HomeDirectory.FullName, workingDirectory);
         }
     }
-
-    /// <summary>
-    /// Creates an applicator for configuring the Aspire MCP server in the specified .vscode folder.
-    /// </summary>
-    private static AgentEnvironmentApplicator CreateAspireApplicator(DirectoryInfo vsCodeFolder)
-    {
-        return new AgentEnvironmentApplicator(
-            VsCodeAgentEnvironmentScannerStrings.ApplicatorDescription,
-            async cancellationToken => await ApplyAspireMcpConfigurationAsync(vsCodeFolder, cancellationToken));
-    }
-
-    /// <summary>
-    /// Creates or updates the mcp.json file in the .vscode folder with Aspire MCP configuration.
-    /// </summary>
-    private static async Task ApplyAspireMcpConfigurationAsync(
-        DirectoryInfo vsCodeFolder,
-        CancellationToken cancellationToken)
-    {
-        // Ensure the .vscode folder exists
-        if (!vsCodeFolder.Exists)
-        {
-            vsCodeFolder.Create();
-        }
-
-        var mcpConfigPath = Path.Combine(vsCodeFolder.FullName, McpConfigFileName);
-        var config = await McpConfigFileHelper.ReadConfigAsync(mcpConfigPath, null, cancellationToken);
-
-        // Ensure "servers" object exists
-        if (!config.ContainsKey("servers") || config["servers"] is not JsonObject)
-        {
-            config["servers"] = new JsonObject();
-        }
-
-        var servers = config["servers"]!.AsObject();
-
-        // Add or update the "aspire" server configuration
-        servers[AspireServerName] = new JsonObject
-        {
-            ["type"] = "stdio",
-            ["command"] = "aspire",
-            ["args"] = new JsonArray("agent", "mcp")
-        };
-
-        // Write the updated config with indentation using AOT-compatible serialization
-        var jsonContent = JsonSerializer.Serialize(config, JsonSourceGenerationContext.Default.JsonObject);
-        await File.WriteAllTextAsync(mcpConfigPath, jsonContent, cancellationToken);
-    }
-
 }

@@ -1,26 +1,24 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
 using System.Text.Json.Nodes;
-using Aspire.Cli.Agents.Playwright;
+using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Agents.Copilot;
 
 /// <summary>
-/// Scans for GitHub Copilot App and CLI environments and provides their shared configuration applicators.
+/// Discovers Copilot App or CLI and configures their shared environment.
 /// </summary>
 internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
 {
-    private const string McpConfigFileName = "mcp-config.json";
-    private const string AspireServerName = "aspire";
-    private static readonly string s_skillBaseDirectory = Path.Combine(".github", "skills");
+    internal const string ClientId = "copilot";
+    internal const string HookEventName = "postToolUse";
 
     private readonly ICopilotCliRunner _copilotCliRunner;
     private readonly ICopilotAppInstallationDetector _copilotAppInstallationDetector;
-    private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly CliExecutionContext _executionContext;
     private readonly IEnvironment _environment;
     private readonly ILogger<CopilotAgentEnvironmentScanner> _logger;
@@ -30,31 +28,34 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
     /// </summary>
     /// <param name="copilotCliRunner">The Copilot CLI runner for checking if Copilot CLI is installed.</param>
     /// <param name="copilotAppInstallationDetector">The detector for checking if the Copilot App is installed.</param>
-    /// <param name="playwrightCliInstaller">The Playwright CLI installer for secure installation.</param>
-    /// <param name="executionContext">The CLI execution context for accessing environment variables and settings.</param>
+    /// <param name="executionContext">The CLI execution context for resolving workspace and user configuration paths.</param>
     /// <param name="environment">The environment abstraction for reading environment variables.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
     public CopilotAgentEnvironmentScanner(
         ICopilotCliRunner copilotCliRunner,
         ICopilotAppInstallationDetector copilotAppInstallationDetector,
-        PlaywrightCliInstaller playwrightCliInstaller,
         CliExecutionContext executionContext,
         IEnvironment environment,
         ILogger<CopilotAgentEnvironmentScanner> logger)
     {
         ArgumentNullException.ThrowIfNull(copilotCliRunner);
         ArgumentNullException.ThrowIfNull(copilotAppInstallationDetector);
-        ArgumentNullException.ThrowIfNull(playwrightCliInstaller);
         ArgumentNullException.ThrowIfNull(executionContext);
         ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(logger);
         _copilotCliRunner = copilotCliRunner;
         _copilotAppInstallationDetector = copilotAppInstallationDetector;
-        _playwrightCliInstaller = playwrightCliInstaller;
         _executionContext = executionContext;
         _environment = environment;
         _logger = logger;
     }
+
+    /// <inheritdoc />
+    public string Id => ClientId;
+
+    public string DisplayName => AgentCommandStrings.Environment_Copilot;
+
+    public override string ToString() => Id;
 
     /// <inheritdoc />
     public async Task ScanAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken)
@@ -62,141 +63,168 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
         cancellationToken.ThrowIfCancellationRequested();
         _logger.LogDebug("Starting GitHub Copilot environment scan");
 
-        var homeDirectory = _executionContext.HomeDirectory;
-        var copilotAppDetected = false;
         if (_copilotAppInstallationDetector.GetInstallationMarker() is { } installationMarker)
         {
             _logger.LogDebug("Detected GitHub Copilot App using installation marker {Marker}", installationMarker);
-            context.AddDetectedClient(AgentClientKind.CopilotApp);
-            copilotAppDetected = true;
+            context.AddDetection(new(AgentClientKind.CopilotApp, Version: null, IsInsiders: false));
         }
 
-        var copilotCliDetected = false;
-
-        // Check if we're running in a VSCode terminal.
-        var isVSCode = _environment.GetEnvironmentVariable("TERM_PROGRAM") == "vscode";
-        if (isVSCode)
+        // VS Code can supply an interactive Copilot installation shim. Do not invoke it during
+        // discovery, where an installation prompt could hang the enclosing command.
+        if (_environment.GetEnvironmentVariable("TERM_PROGRAM") == "vscode")
         {
-            _logger.LogDebug("Detected VSCode terminal environment. Assuming GitHub Copilot CLI is available to avoid potential hangs from interactive installation prompts.");
-            context.AddDetectedClient(AgentClientKind.CopilotCli);
-            copilotCliDetected = true;
+            _logger.LogDebug("Detected VS Code terminal environment. Skipping the Copilot CLI version probe.");
         }
         else
         {
-            _logger.LogDebug("Checking for GitHub Copilot CLI installation...");
-            var copilotVersion = await _copilotCliRunner.GetVersionAsync(cancellationToken).ConfigureAwait(false);
-            if (copilotVersion is not null)
+            var version = await _copilotCliRunner.GetVersionAsync(cancellationToken).ConfigureAwait(false);
+            if (version is not null)
             {
-                _logger.LogDebug("Found GitHub Copilot CLI version: {Version}", copilotVersion);
-                context.AddDetectedClient(AgentClientKind.CopilotCli);
-                copilotCliDetected = true;
-            }
-            else
-            {
-                _logger.LogDebug("GitHub Copilot CLI is not installed");
+                _logger.LogDebug("Found GitHub Copilot CLI version: {Version}", version);
+                context.AddDetection(new(AgentClientKind.CopilotCli, version.ToString(), IsInsiders: false));
             }
         }
 
-        if (!copilotAppDetected && !copilotCliDetected)
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    /// <inheritdoc />
+    public IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request)
+    {
+        foreach (var target in GetPluginTargets(request))
         {
-            _logger.LogDebug("No GitHub Copilot environments are installed - skipping");
+            yield return target;
+        }
+
+        var copilotDirectory = CopilotPaths.GetConfigDirectory(_executionContext, _environment);
+        if (request.Assets.Mcp)
+        {
+            var rootMcp = Path.Combine(request.WorkspaceRoot.FullName, ".mcp.json");
+            // Copilot accepts stdio and the root .mcp.json schema used by Claude. Share that
+            // physical entry when applicable; do not create an ineffective second overlay.
+            // https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers
+            var projectPath = File.Exists(rootMcp) || request.Environments.Any(client => client is ClaudeCodeAgentEnvironmentScanner)
+                ? rootMcp
+                : Path.Combine(request.WorkspaceRoot.FullName, ".github", "mcp.json");
+            yield return McpTarget(projectPath, AgentConfigurationScope.Project, copilotEnvironment: false);
+            yield return McpTarget(Path.Combine(copilotDirectory, "mcp-config.json"), AgentConfigurationScope.User, copilotEnvironment: true);
+        }
+
+        AgentConfigurationTarget McpTarget(string path, AgentConfigurationScope scope, bool copilotEnvironment)
+            => new(path, scope, AgentAssetKind.Mcp, [this], "mcpServers:aspire", async (root, context, cancellationToken) =>
+            {
+                var settings = await AgentConfigurationJson.ReadSettingsAsync(context, CopilotPaths.PluginSettings(request, _executionContext, _environment), cancellationToken);
+                var managed = await AgentConfigurationJson.ReadSettingsAsync(context, CopilotPaths.ManagedSettings(_executionContext, _environment), cancellationToken);
+                if (AspireMcpConfiguration.CheckPolicy(settings, managed, managedAllowlistOnly: true) is { } policy)
+                {
+                    return policy;
+                }
+
+                foreach (var other in await AgentConfigurationJson.ReadSettingsAsync(context,
+                    [
+                        Path.Combine(copilotDirectory, "mcp-config.json"),
+                        Path.Combine(request.WorkspaceRoot.FullName, ".github", "mcp.json"),
+                        Path.Combine(request.WorkspaceRoot.FullName, ".mcp.json")
+                    ], cancellationToken))
+                {
+                    if (AspireMcpConfiguration.CheckPolicy([other]) is { } disabled)
+                    {
+                        return disabled;
+                    }
+
+                    var servers = AspireMcpConfiguration.UsesBareServers(other) ? other : AgentConfigurationJson.OptionalObject(other, "mcpServers");
+                    if (AspireMcpConfiguration.CheckExistingEntry(servers, commandArray: false,
+                        () => AspireMcpConfiguration.UsesBareServers(root) ? root : AgentConfigurationJson.OptionalObject(root, "mcpServers")) is { } existing)
+                    {
+                        return existing;
+                    }
+                }
+
+                var addCopilotDefaults = copilotEnvironment &&
+                    AgentConfigurationJson.OptionalObject(root, "mcpServers")?.ContainsKey(AspireMcpConfiguration.ServerName) is not true;
+                var edit = AspireMcpConfiguration.Apply(root, "mcpServers", commandArray: false, "stdio",
+                    bare: scope is AgentConfigurationScope.Project && AspireMcpConfiguration.UsesBareServers(root));
+                if (addCopilotDefaults && edit.Status is AgentConfigurationStatus.Configured)
+                {
+                    // Copilot does not inherit arbitrary _environment variables for local MCP
+                    // servers. Preserve Aspire's existing DOTNET_ROOT pass-through contract.
+                    var server = root["mcpServers"]![AspireMcpConfiguration.ServerName]!.AsObject();
+                    server["env"] = new JsonObject { ["DOTNET_ROOT"] = "${DOTNET_ROOT}" };
+                    server["tools"] = new JsonArray("*");
+                }
+
+                return edit;
+            });
+    }
+
+    private IEnumerable<AgentConfigurationTarget> GetPluginTargets(AgentInitRequest request)
+    {
+        if (request.Assets.AspireSkills)
+        {
+            yield return Target(Path.Combine(request.WorkspaceRoot.FullName, ".github", "copilot", "settings.json"), AgentConfigurationScope.Project);
+            yield return Target(Path.Combine(CopilotPaths.GetConfigDirectory(_executionContext, _environment), "settings.json"), AgentConfigurationScope.User);
+        }
+
+        AgentConfigurationTarget Target(string path, AgentConfigurationScope scope)
+            => new(path, scope, AgentAssetKind.AspireSkills, [this], "plugins:aspire", async (root, context, cancellationToken) =>
+                AspireSkillsPluginConfiguration.Apply(root, await AgentConfigurationJson.ReadSettingsAsync(
+                    context, CopilotPaths.PluginSettings(request, _executionContext, _environment), cancellationToken)));
+    }
+
+    public AgentHookConfiguration? GetHookConfiguration(AgentInitRequest request)
+        => request.Detections.Any(detection => detection.Client is AgentClientKind.CopilotApp or AgentClientKind.CopilotCli)
+            ? new(
+                Path.Combine(CopilotPaths.GetConfigDirectory(_executionContext, _environment), "hooks", "aspire-telemetry.json"),
+                CopilotPaths.PluginSettings(request, _executionContext, _environment),
+                CopilotPaths.ExistingHookSettings(request, _executionContext, _environment),
+                ValidateHooks,
+                ApplyHook)
+            : null;
+
+    public static void ValidateHooks(JsonObject root)
+    {
+        if (root.TryGetPropertyValue("version", out var version) &&
+            (version is not JsonValue number || !number.TryGetValue<int>(out var value) || value != 1))
+        {
+            throw AgentConfigurationJson.Shape("version");
+        }
+
+        if (AgentConfigurationJson.OptionalObject(root, "hooks") is { } hooks &&
+            hooks.TryGetPropertyValue(HookEventName, out var entries) &&
+            (entries is not JsonArray array || array.Any(entry => entry is not JsonObject)))
+        {
+            throw AgentConfigurationJson.Shape($"hooks.{HookEventName}");
+        }
+    }
+
+    public static void ApplyHook(JsonObject root, TelemetryHookScripts scripts, Func<JsonNode?, bool> isAspireHook)
+    {
+        root["version"] = 1;
+        var hooks = AgentConfigurationJson.Object(root, "hooks");
+        var entries = hooks[HookEventName] as JsonArray ?? new JsonArray();
+        if (!hooks.ContainsKey(HookEventName))
+        {
+            hooks[HookEventName] = entries;
+        }
+
+        var desired = new JsonObject
+        {
+            ["type"] = "command",
+            ["bash"] = HookCommandFormatter.BuildBashCommand(scripts.ShellScriptPath),
+            ["powershell"] = HookCommandFormatter.BuildPwshCommand(scripts.PowerShellScriptPath),
+            ["timeoutSec"] = TelemetryHookConfigurator.HookTimeoutSeconds
+        };
+        var owned = entries.Where(isAspireHook).ToArray();
+        if (owned.Length == 1 && JsonNode.DeepEquals(owned[0], desired))
+        {
             return;
         }
 
-        // The Copilot App automatically loads MCP servers and skills configured for Copilot CLI.
-        // See https://docs.github.com/en/copilot/how-tos/github-copilot-app/customize-github-copilot-app.
-        // Configure the shared Copilot locations once when either client is present.
-        var configDirectory = CopilotPaths.GetConfigDirectory(homeDirectory, _environment);
-        _logger.LogDebug("Checking if Aspire MCP server is already configured in GitHub Copilot");
-        if (!HasAspireServerConfigured(configDirectory))
+        foreach (var entry in owned)
         {
-            _logger.LogDebug("Adding GitHub Copilot applicator for global MCP configuration");
-            context.AddApplicator(CreateApplicator(configDirectory));
-        }
-        else
-        {
-            _logger.LogDebug("Aspire MCP server is already configured in GitHub Copilot");
+            entries.Remove(entry);
         }
 
-        CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
+        entries.Add((JsonNode)desired);
     }
-
-    /// <summary>
-    /// Gets the path to the GitHub Copilot MCP configuration file.
-    /// </summary>
-    /// <param name="configDirectory">The GitHub Copilot configuration directory.</param>
-    private static string GetMcpConfigFilePath(string configDirectory)
-    {
-        return Path.Combine(configDirectory, McpConfigFileName);
-    }
-
-    /// <summary>
-    /// Checks if the GitHub Copilot global configuration has an "aspire" MCP server configured.
-    /// </summary>
-    /// <param name="configDirectory">The GitHub Copilot configuration directory.</param>
-    /// <returns>True if the aspire server is already configured, false otherwise.</returns>
-    private static bool HasAspireServerConfigured(string configDirectory)
-        => McpConfigFileHelper.HasServerConfigured(
-            GetMcpConfigFilePath(configDirectory),
-            "mcpServers",
-            AspireServerName);
-
-    /// <summary>
-    /// Creates an applicator for configuring the MCP server in the GitHub Copilot global configuration.
-    /// </summary>
-    /// <param name="configDirectory">The GitHub Copilot configuration directory.</param>
-    private static AgentEnvironmentApplicator CreateApplicator(string configDirectory)
-    {
-        return new AgentEnvironmentApplicator(
-            CopilotAgentEnvironmentScannerStrings.ApplicatorDescription,
-            ct => ApplyMcpConfigurationAsync(
-                configDirectory,
-                ct));
-    }
-
-    /// <summary>
-    /// Creates or updates the mcp-config.json file in the GitHub Copilot global configuration directory.
-    /// </summary>
-    /// <param name="configDirectory">The GitHub Copilot configuration directory.</param>
-    /// <param name="cancellationToken">A cancellation token.</param>
-    private static async Task ApplyMcpConfigurationAsync(
-        string configDirectory,
-        CancellationToken cancellationToken)
-    {
-        var configFilePath = GetMcpConfigFilePath(configDirectory);
-
-        // Ensure the .copilot directory exists
-        if (!Directory.Exists(configDirectory))
-        {
-            Directory.CreateDirectory(configDirectory);
-        }
-
-        var config = await McpConfigFileHelper.ReadConfigAsync(configFilePath, null, cancellationToken);
-
-        // Ensure "mcpServers" object exists
-        if (!config.ContainsKey("mcpServers") || config["mcpServers"] is not JsonObject)
-        {
-            config["mcpServers"] = new JsonObject();
-        }
-
-        var servers = config["mcpServers"]!.AsObject();
-
-        // Add or update the "aspire" server configuration with DOTNET_ROOT environment variable passthrough
-        servers[AspireServerName] = new JsonObject
-        {
-            ["type"] = "local",
-            ["command"] = "aspire",
-            ["args"] = new JsonArray("agent", "mcp"),
-            ["env"] = new JsonObject
-            {
-                ["DOTNET_ROOT"] = "${DOTNET_ROOT}"
-            },
-            ["tools"] = new JsonArray("*")
-        };
-
-        // Write the updated config using AOT-compatible serialization
-        var jsonContent = JsonSerializer.Serialize(config, JsonSourceGenerationContext.Default.JsonObject);
-        await File.WriteAllTextAsync(configFilePath, jsonContent, cancellationToken);
-    }
-
 }

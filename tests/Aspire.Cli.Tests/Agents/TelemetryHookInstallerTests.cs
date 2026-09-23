@@ -90,12 +90,18 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
 
         var first = await installer.EnsureInstalledAsync(CancellationToken.None).DefaultTimeout();
         var firstShellContent = await File.ReadAllTextAsync(first.ShellScriptPath).DefaultTimeout();
+        File.SetLastWriteTimeUtc(first.ShellScriptPath, new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        File.SetLastWriteTimeUtc(first.PowerShellScriptPath, new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        var shellTimestamp = File.GetLastWriteTimeUtc(first.ShellScriptPath);
+        var powerShellTimestamp = File.GetLastWriteTimeUtc(first.PowerShellScriptPath);
 
         var second = await installer.EnsureInstalledAsync(CancellationToken.None).DefaultTimeout();
         var secondShellContent = await File.ReadAllTextAsync(second.ShellScriptPath).DefaultTimeout();
 
         Assert.Equal(first.ShellScriptPath, second.ShellScriptPath);
         Assert.Equal(firstShellContent, secondShellContent);
+        Assert.Equal(shellTimestamp, File.GetLastWriteTimeUtc(second.ShellScriptPath));
+        Assert.Equal(powerShellTimestamp, File.GetLastWriteTimeUtc(second.PowerShellScriptPath));
     }
 
     [Fact]
@@ -133,6 +139,71 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
 
         var mode = File.GetUnixFileMode(scripts.ShellScriptPath);
         Assert.True(mode.HasFlag(UnixFileMode.UserExecute));
+    }
+
+    [Fact]
+    public async Task EnsureInstalledAsync_CancellationDoesNotCreateHookFiles()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            CreateInstaller(workspace, home).EnsureInstalledAsync(cancellation.Token)).DefaultTimeout();
+
+        Assert.False(Directory.Exists(Path.Combine(home.FullName, ".aspire", "hooks")));
+    }
+
+    [Fact]
+    public async Task EnsureInstalledAsync_LockedExistingScriptIsNotBlindlyOverwritten()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows file sharing is required.");
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var directory = Directory.CreateDirectory(Path.Combine(home.FullName, ".aspire", "hooks"));
+        var path = Path.Combine(directory.FullName, "track-telemetry.sh");
+        await File.WriteAllTextAsync(path, "existing").DefaultTimeout();
+        using (var locked = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            await Assert.ThrowsAnyAsync<IOException>(() =>
+                CreateInstaller(workspace, home).EnsureInstalledAsync(CancellationToken.None)).DefaultTimeout();
+        }
+
+        Assert.Equal("existing", await File.ReadAllTextAsync(path).DefaultTimeout());
+        Assert.Equal([path], Directory.EnumerateFiles(directory.FullName));
+    }
+
+    [Fact]
+    public async Task EnsureInstalledAsync_FailedReplacementCleansItsStagingFile()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows read-only replacement behavior is required.");
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var directory = Directory.CreateDirectory(Path.Combine(home.FullName, ".aspire", "hooks"));
+        var path = Path.Combine(directory.FullName, "track-telemetry.sh");
+        await File.WriteAllTextAsync(path, "existing").DefaultTimeout();
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+        try
+        {
+            var error = await Record.ExceptionAsync(() =>
+                CreateInstaller(workspace, home).EnsureInstalledAsync(CancellationToken.None)).DefaultTimeout();
+            Assert.True(error is IOException or UnauthorizedAccessException);
+            Assert.Equal("existing", await File.ReadAllTextAsync(path).DefaultTimeout());
+            Assert.Equal([path], Directory.EnumerateFiles(directory.FullName));
+        }
+        finally
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+        }
     }
 
     private static TelemetryHookInstaller CreateInstaller(TemporaryWorkspace workspace, DirectoryInfo home)
