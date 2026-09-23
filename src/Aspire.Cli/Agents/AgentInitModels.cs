@@ -16,7 +16,7 @@ internal enum AgentAssetKind
 }
 
 /// <summary>
-/// The independent asset choices made before selecting configuration environments.
+/// The independent asset choices made before selecting agents and scope.
 /// </summary>
 internal sealed record AgentAssetSelection(bool Mcp, bool Playwright, bool DotnetInspect, bool AspireSkills)
 {
@@ -24,11 +24,12 @@ internal sealed record AgentAssetSelection(bool Mcp, bool Playwright, bool Dotne
 }
 
 /// <summary>
-/// Selected configuration environments and independently detected clients.
+/// Selected agents and scope, with independently detected client evidence.
 /// </summary>
 internal sealed record AgentInitRequest(
     DirectoryInfo WorkspaceRoot,
     AgentAssetSelection Assets,
+    AgentConfigurationScope Scope,
     IReadOnlyList<IAgentEnvironmentScanner> Environments,
     IReadOnlyList<AgentClientDetection> Detections);
 

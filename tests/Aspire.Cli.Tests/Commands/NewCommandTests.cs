@@ -2284,7 +2284,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-empty --name TestApp --output ./output --environments none");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --agent none");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -2309,7 +2309,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-empty --name TestApp --output ./output --playwright y --dotnet-inspect n --aspire-skills false --environments claude,copilot");
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --playwright y --dotnet-inspect n --aspire-skills false --agent claude,copilot");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -3088,7 +3088,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false --scope project");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -3157,7 +3157,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false --scope project");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -3348,7 +3348,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--mcp")]
     [InlineData("--skills all")]
     [InlineData("--skill-locations standard")]
-    [InlineData("--environments unknown-client")]
+    [InlineData("--agent unknown-client")]
     public async Task NewCommand_RejectsUnsupportedAgentOptionsBeforeCreatingProject(string argument)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

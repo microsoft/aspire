@@ -27,8 +27,7 @@ internal sealed class TestAgentCliRunner : ICopilotCliRunner, IClaudeCodeCliRunn
     public IReadOnlyList<IAgentEnvironmentScanner> CreateScanners(CliExecutionContext executionContext, IEnvironment environment)
         => Array.AsReadOnly<IAgentEnvironmentScanner>(
         [
-            new CopilotAgentEnvironmentScanner(this, new CopilotAppInstallationDetector(environment, executionContext), executionContext, environment, NullLogger<CopilotAgentEnvironmentScanner>.Instance),
-            new VsCodeAgentEnvironmentScanner(this, executionContext, environment, NullLogger<VsCodeAgentEnvironmentScanner>.Instance),
+            new CopilotAgentEnvironmentScanner(this, new CopilotAppInstallationDetector(environment, executionContext), this, executionContext, environment, NullLogger<CopilotAgentEnvironmentScanner>.Instance),
             new ClaudeCodeAgentEnvironmentScanner(this, executionContext, environment, NullLogger<ClaudeCodeAgentEnvironmentScanner>.Instance),
             new OpenCodeAgentEnvironmentScanner(this, executionContext, environment, NullLogger<OpenCodeAgentEnvironmentScanner>.Instance)
         ]);

@@ -23,14 +23,15 @@ internal sealed class TelemetryHookConfigurator(
 
     public IEnumerable<AgentConfigurationTarget> Plan(AgentInitRequest request)
     {
-        if (!request.Assets.HasAssets || request.Environments.Count == 0)
+        if (request.Scope is not AgentConfigurationScope.User || !request.Assets.HasAssets || request.Environments.Count == 0)
         {
             yield break;
         }
 
         Task<TelemetryHookScripts>? installation = null;
-        // Hooks instrument detected clients independently of the assets and native client
-        // targets selected for setup. Selecting an undetected client must not create its hook.
+        // User-scoped setup instruments detected clients independently of the selected
+        // assets. Project-only setup must not register or repair files in the user's home.
+        // Selecting an undetected client must not create its hook.
         foreach (var scanner in environmentScanners)
         {
             if (scanner.GetHookConfiguration(request) is { } configuration)

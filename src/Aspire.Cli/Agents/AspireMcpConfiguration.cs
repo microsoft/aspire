@@ -107,6 +107,47 @@ internal static class AspireMcpConfiguration
     public static AgentConfigurationEdit? CheckPolicy(IEnumerable<JsonObject> settings)
         => CheckPolicy(settings, [], managedAllowlistOnly: false);
 
+    /// <summary>
+    /// Preserves editor and legacy project entries instead of introducing a competing portable entry.
+    /// </summary>
+    public static async Task<AgentConfigurationEdit?> CheckOtherProjectFilesAsync(
+        DirectoryInfo workspaceRoot,
+        AgentConfigurationWriter.ReadContext context,
+        CancellationToken cancellationToken)
+    {
+        var portablePath = AgentPath.Resolve(Path.Combine(workspaceRoot.FullName, ".mcp.json"));
+        foreach (var directory in new[] { ".github", ".vscode" })
+        {
+            var path = Path.Combine(workspaceRoot.FullName, directory, "mcp.json");
+            var config = await context.ReadOptionalAsync(path, cancellationToken);
+            if (config is null || AgentPath.Comparer.Equals(AgentPath.Resolve(path), portablePath))
+            {
+                continue;
+            }
+
+            if (CheckPolicy([config]) is { } policy)
+            {
+                return policy;
+            }
+
+            // .vscode/mcp.json uses {"servers": {...}}; legacy Copilot files use
+            // {"mcpServers": {...}} or a bare server map. Reads also track aliases and
+            // original bytes so a concurrent edit cannot invalidate this decision.
+            var servers = directory == ".vscode"
+                ? AgentConfigurationJson.OptionalObject(config, "servers")
+                : UsesBareServers(config) ? config : AgentConfigurationJson.OptionalObject(config, "mcpServers");
+            if (servers?.ContainsKey(ServerName) is true)
+            {
+                var existing = Apply(servers, "", commandArray: false, "stdio", bare: true);
+                return existing.Status is AgentConfigurationStatus.Configured
+                    ? AgentConfigurationEdit.Skipped(AgentCommandStrings.Configuration_ExistingMcpCustomization)
+                    : existing;
+            }
+        }
+
+        return null;
+    }
+
     public static AgentConfigurationEdit? CheckExistingEntry(
         JsonObject? servers,
         bool commandArray,

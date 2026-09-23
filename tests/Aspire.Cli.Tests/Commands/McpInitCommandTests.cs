@@ -29,7 +29,7 @@ public class McpInitCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            $"{commandName} --workspace-root \"{selectedRoot.FullName}\" --mcp Y --playwright false --dotnet-inspect true --aspire-skills n --environments copilot,claude");
+            $"{commandName} --workspace-root \"{selectedRoot.FullName}\" --mcp Y --playwright false --dotnet-inspect true --aspire-skills n --agent copilot,claude");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -61,7 +61,7 @@ public class McpInitCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var exitCode = await provider.GetRequiredService<RootCommand>()
-            .Parse("mcp init --mcp --aspire-skills n --environments claude").InvokeAsync().DefaultTimeout();
+            .Parse("mcp init --mcp --aspire-skills n --agent claude").InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Single(hooks.Requests);
@@ -84,7 +84,7 @@ public class McpInitCommandTests(ITestOutputHelper outputHelper)
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
 
         var exitCode = await provider.GetRequiredService<RootCommand>()
-            .Parse("mcp init --mcp --environments none").InvokeAsync().DefaultTimeout();
+            .Parse("mcp init --mcp --agent none").InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Empty(Assert.IsType<TestTelemetryHookConfigurator>(provider.GetRequiredService<ITelemetryHookConfigurator>()).Requests);

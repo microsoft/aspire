@@ -1,16 +1,17 @@
 ﻿Description:
-  Configure independent assets for selected client environments at project and user level
+  Configure independent assets for selected agents at project or user scope
 
 Usage:
   Aspire.Cli.Tests agent init [options]
 
 Options:
   --workspace-root <workspace-root>                                      Path to the workspace root directory
-  --mcp <false|n|true|y>                                                 Configure the Aspire MCP server for selected client environments (y/n or true/false; default: no)
-  --playwright <false|n|true|y>                                          Install Playwright CLI and its skills for the selected client environments (y/n or true/false; default: no)
-  --dotnet-inspect <false|n|true|y>                                      Install the dotnet-inspect bootstrap skill for the selected client environments (y/n or true/false; default: no)
-  --aspire-skills <false|n|true|y>                                       Register native Aspire skills and supported canvases for the selected client environments (y/n or true/false; default: yes)
-  --environments <environments>                                          Comma-separated client environments (copilot,vscode,claude,opencode), 'all', or 'none'. Defaults to detected environments, or 'none' when none are detected
+  --mcp <false|n|true|y>                                                 Configure the Aspire MCP server for selected agents (y/n or true/false; default: no)
+  --playwright <false|n|true|y>                                          Install Playwright CLI and its skills for the selected agents (y/n or true/false; default: no)
+  --dotnet-inspect <false|n|true|y>                                      Install the dotnet-inspect bootstrap skill for the selected agents (y/n or true/false; default: no)
+  --aspire-skills <false|n|true|y>                                       Register native Aspire skills and supported canvases for the selected agents (y/n or true/false; default: yes)
+  --agent <agent>                                                        Comma-separated agents (copilot,claude,opencode), 'all', or 'none'. Defaults to detected agents, or 'none' when none are detected
+  --scope <project|user>                                                 Configuration and skill scope: project or user (default: project)
   -?, -h, --help                                                         Show help and usage information
   -l, --log-level <Critical|Debug|Error|Information|None|Trace|Warning>  Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)
   --non-interactive                                                      Run the command in non-interactive mode, disabling all interactive prompts and spinners

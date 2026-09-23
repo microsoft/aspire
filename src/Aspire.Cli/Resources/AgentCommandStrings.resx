@@ -67,19 +67,19 @@
     <value>Start the MCP (Model Context Protocol) server</value>
   </data>
   <data name="InitCommand_Description" xml:space="preserve">
-    <value>Configure independent assets for selected client environments at project and user level</value>
+    <value>Configure independent assets for selected agents at project or user scope</value>
   </data>
   <data name="DeprecatedConfigWarning" xml:space="preserve">
     <value>{0} config uses deprecated 'mcp start' command</value>
   </data>
   <data name="DeprecatedConfigFix" xml:space="preserve">
-    <value>Run 'aspire agent init --mcp' and select the affected client environments to update configuration</value>
+    <value>Run 'aspire agent init --mcp' and select the affected agents and scope to update configuration</value>
   </data>
   <data name="ConfigurationCompletedWithErrors" xml:space="preserve">
     <value>Configuration completed with errors. Please fix the reported issues and re-run the command.</value>
   </data>
   <data name="InitCommand_ConfigureMcpServerPrompt" xml:space="preserve">
-    <value>Configure the Aspire MCP server for the selected client environments?</value>
+    <value>Configure the Aspire MCP server for the selected agents?</value>
   </data>
   <data name="InitCommand_InstalledPlaywrightCli" xml:space="preserve">
     <value>Installed Playwright CLI.</value>
@@ -124,7 +124,7 @@
     <value>Path to the workspace root directory</value>
   </data>
   <data name="InitCommand_McpOptionDescription" xml:space="preserve">
-    <value>Configure the Aspire MCP server for selected client environments (y/n or true/false; default: no)</value>
+    <value>Configure the Aspire MCP server for selected agents (y/n or true/false; default: no)</value>
   </data>
   <data name="AgentTelemetryCommand_Description" xml:space="preserve">
     <value>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</value>
@@ -151,39 +151,59 @@
     <value>The timestamp recorded for the event</value>
   </data>
   <data name="InitCommand_PlaywrightOptionDescription" xml:space="preserve">
-    <value>Install Playwright CLI and its skills for the selected client environments (y/n or true/false; default: no)</value>
+    <value>Install Playwright CLI and its skills for the selected agents (y/n or true/false; default: no)</value>
   </data>
   <data name="InitCommand_DotnetInspectOptionDescription" xml:space="preserve">
-    <value>Install the dotnet-inspect bootstrap skill for the selected client environments (y/n or true/false; default: no)</value>
+    <value>Install the dotnet-inspect bootstrap skill for the selected agents (y/n or true/false; default: no)</value>
   </data>
   <data name="InitCommand_AspireSkillsOptionDescription" xml:space="preserve">
-    <value>Register native Aspire skills and supported canvases for the selected client environments (y/n or true/false; default: yes)</value>
+    <value>Register native Aspire skills and supported canvases for the selected agents (y/n or true/false; default: yes)</value>
   </data>
   <data name="InitCommand_EnvironmentsOptionDescription" xml:space="preserve">
-    <value>Comma-separated client environments ({0}), '{1}', or '{2}'. Defaults to detected environments, or '{2}' when none are detected</value>
+    <value>Comma-separated agents ({0}), '{1}', or '{2}'. Defaults to detected agents, or '{2}' when none are detected</value>
   </data>
   <data name="InitCommand_EnvironmentSelectionNotice" xml:space="preserve">
-    <value>Shared locations are configured once. Usage hooks are configured separately for detected supported clients, respecting policy and telemetry opt-out.</value>
+    <value>Only the selected scope is configured. Shared locations are written once. User scope also configures usage hooks for detected supported clients, respecting policy and telemetry opt-out.</value>
   </data>
   <data name="InitCommand_EnvironmentLocationDescription" xml:space="preserve">
     <value>{0}: {1}</value>
-    <comment>{0} is the project or user scope; {1} lists its configuration or skill paths.</comment>
-  </data>
-  <data name="InitCommand_ScopeWithSharedAlternatives" xml:space="preserve">
-    <value>{0} (including shared alternatives)</value>
-    <comment>{0} is the project or user scope. Some paths are alternatives used when multiple environments share configuration.</comment>
+    <comment>{0} is the agent display name; {1} lists its configuration or skill paths in the selected scope.</comment>
   </data>
   <data name="Environment_Copilot" xml:space="preserve">
-    <value>GitHub Copilot (CLI and App)</value>
+    <value>GitHub Copilot</value>
   </data>
-  <data name="Environment_VsCode" xml:space="preserve">
-    <value>VS Code (native settings)</value>
+  <data name="Agent_CopilotPlatforms" xml:space="preserve">
+    <value>Copilot CLI, Copilot App, and Copilot in VS Code (Agent Host).</value>
+  </data>
+  <data name="Agent_ClaudePlatforms" xml:space="preserve">
+    <value>Claude Code CLI and Claude Code editor integrations; not Claude Desktop.</value>
+  </data>
+  <data name="Agent_OpenCodePlatforms" xml:space="preserve">
+    <value>OpenCode using its native configuration and skill locations.</value>
+  </data>
+  <data name="InitCommand_SelectAgentsPrompt" xml:space="preserve">
+    <value>Which agents do you want to configure?</value>
+  </data>
+  <data name="InitCommand_SelectScopePrompt" xml:space="preserve">
+    <value>Where do you want to configure the selected agents?</value>
+  </data>
+  <data name="InitCommand_ScopeOptionDescription" xml:space="preserve">
+    <value>Configuration and skill scope: project or user (default: project)</value>
+  </data>
+  <data name="InitCommand_InvalidScope" xml:space="preserve">
+    <value>Invalid scope '{0}'. Use 'project' or 'user'.</value>
+  </data>
+  <data name="InitCommand_DetectingAgents" xml:space="preserve">
+    <value>Detecting agents...</value>
+  </data>
+  <data name="InitCommand_ConfigurationComplete" xml:space="preserve">
+    <value>Agent configuration complete.</value>
   </data>
   <data name="InitCommand_InvalidAssetValue" xml:space="preserve">
     <value>Invalid value '{1}' for '{0}'. Use y/n or true/false.</value>
   </data>
   <data name="InitCommand_InvalidEnvironments" xml:space="preserve">
-    <value>Invalid client environment selection '{0}'. Use {1}, '{2}', or '{3}'.</value>
+    <value>Invalid agent selection '{0}'. Use {1}, '{2}', or '{3}'.</value>
   </data>
   <data name="InitCommand_ConfigureDotnetInspectPrompt" xml:space="preserve">
     <value>Install the dotnet-inspect bootstrap skill?</value>
@@ -252,7 +272,7 @@
     <value>An existing Aspire entry has a different source or command; it was not replaced.</value>
   </data>
   <data name="Configuration_ExistingMcpCustomization" xml:space="preserve">
-    <value>Existing Aspire MCP settings in another applicable scope were preserved. No default entry was added that could override or broaden those customizations.</value>
+    <value>Existing Aspire MCP settings in another applicable configuration were preserved. No default entry was added that could override or broaden those customizations.</value>
   </data>
   <data name="Configuration_ExistingPluginPin" xml:space="preserve">
     <value>A pinned Aspire plugin source was preserved. No unpinned source was added to another configuration scope.</value>
@@ -290,9 +310,6 @@
   </data>
   <data name="Configuration_ExistingProjectHook" xml:space="preserve">
     <value>An existing project-level Aspire usage hook was preserved. No additional user hook was added, to avoid duplicate events.</value>
-  </data>
-  <data name="Configuration_ProfileLimitations" xml:space="preserve">
-    <value>Aspire MCP configuration is present for this VS Code profile. Session-only --user-data-dir overrides and remote profiles must be configured in VS Code.</value>
   </data>
   <data name="PlaywrightCliInstaller_InstallationFailed" xml:space="preserve">
     <value>Failed to install Playwright CLI or generate its skill files: {0}</value>

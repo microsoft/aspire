@@ -66,7 +66,7 @@ public class AgentPathTests(ITestOutputHelper output) : IDisposable
         _context.SetVariable("COPILOT_HOME", alias);
 
         Assert.Equal(AgentPath.Resolve(projectDirectory.FullName), AgentPath.Resolve(alias));
-        var result = await _context.ConfigureNativeAsync(_context.Request([_context.Copilot])).DefaultTimeout();
+        var result = await _context.ConfigureNativeAsync(_context.Request(AgentConfigurationScope.Project, [_context.Copilot])).DefaultTimeout();
 
         var target = Assert.Single(result);
         Assert.Equal(AgentConfigurationStatus.Configured, target.Status);
@@ -123,7 +123,7 @@ public class AgentPathTests(ITestOutputHelper output) : IDisposable
         Assert.False(File.Exists(projectFile));
         Assert.Equal(AgentPath.Resolve(projectFile), AgentPath.Resolve(aliasFile));
 
-        var results = await _context.ConfigureNativeAsync(_context.Request([_context.Copilot])).DefaultTimeout();
+        var results = await _context.ConfigureNativeAsync(_context.Request(AgentConfigurationScope.Project, [_context.Copilot])).DefaultTimeout();
 
         Assert.Equal(AgentConfigurationStatus.Configured, Assert.Single(results).Status);
         Assert.True(File.Exists(projectFile));

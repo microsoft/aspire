@@ -804,7 +804,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var parseResult = command.Parse("init --non-interactive --environments none");
+        var parseResult = command.Parse("init --non-interactive --agent none");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -822,7 +822,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
-        var parseResult = command.Parse("init --non-interactive --aspire-skills n --dotnet-inspect y --environments copilot,claude");
+        var parseResult = command.Parse("init --non-interactive --aspire-skills n --dotnet-inspect y --agent copilot,claude");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -891,7 +891,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--mcp")]
     [InlineData("--skills all")]
     [InlineData("--skill-locations standard")]
-    [InlineData("--environments unknown-client")]
+    [InlineData("--agent unknown-client")]
     public async Task InitCommand_RejectsUnsupportedAgentOptionsBeforeCreatingAppHost(string argument)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

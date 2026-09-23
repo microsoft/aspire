@@ -94,7 +94,9 @@ Our verification chain relies on these trust anchors:
 
 ### Step 6: Generate and publish skill files
 
-**Action:** Run `playwright-cli install --skills` once in an owned temporary workspace, where it generates `.claude/skills/playwright-cli/`. Capture the complete payload, including supporting files, and publish it to the selected clients' deduplicated project and user skill directories. Copilot CLI/App, VS Code, and OpenCode share `.agents/skills/playwright-cli/`; Claude uses `.claude/skills/playwright-cli/` and honors its user configuration-directory override.
+**Action:** Run `playwright-cli install --skills` once in an owned temporary workspace, where it generates `.claude/skills/playwright-cli/`. Capture the complete payload, including supporting files, and publish it only to the selected agents' deduplicated skill directories in the requested scope (`--scope project|user`, default `project`). Copilot and OpenCode share `.agents/skills/playwright-cli/`; Claude uses `.claude/skills/playwright-cli/` and honors its user configuration-directory override. These common skill locations also work with compatible editor-hosted agents, without a separate VS Code installation target.
+
+Scope controls configuration and generated skill destinations. The verified Playwright CLI prerequisite remains a global npm tool installation; selecting project scope does not change that acquisition model.
 
 Each changed file is staged beside its destination, checked for concurrent changes, and replaced atomically. Unchanged files retain their timestamps, and user-owned extra files are not pruned. Generation cannot create unselected-client directories in the user's workspace. Acquisition, generation, and destination failures are reported separately from successful installation.
 

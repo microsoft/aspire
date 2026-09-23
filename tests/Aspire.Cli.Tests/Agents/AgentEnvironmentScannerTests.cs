@@ -19,11 +19,14 @@ public class AgentEnvironmentScannerTests(ITestOutputHelper output)
         context.SetVariable("VSCODE_APPDATA", "\0invalid");
 
         Assert.Equal(
-            ["copilot", "vscode", "claude", "opencode"],
+            ["copilot", "claude", "opencode"],
             context.Environments.Select(client => client.Id));
         Assert.Equal(
-            [AgentCommandStrings.Environment_Copilot, AgentCommandStrings.Environment_VsCode, "Claude Code", "OpenCode"],
+            [AgentCommandStrings.Environment_Copilot, "Claude Code", "OpenCode"],
             context.Environments.Select(client => client.DisplayName));
+        Assert.Equal(
+            [AgentCommandStrings.Agent_CopilotPlatforms, AgentCommandStrings.Agent_ClaudePlatforms, AgentCommandStrings.Agent_OpenCodePlatforms],
+            context.Environments.Select(client => client.Description));
         Assert.Empty(context.Project.EnumerateFileSystemInfos());
         Assert.Empty(context.Home.EnumerateFileSystemInfos());
         Assert.Empty(context.CliRunner.Commands);
@@ -31,7 +34,6 @@ public class AgentEnvironmentScannerTests(ITestOutputHelper output)
 
     [Theory]
     [InlineData("copilot")]
-    [InlineData("vscode")]
     [InlineData("claude")]
     [InlineData("opencode")]
     public async Task UndetectedEnvironment_CanConfigureWithoutClientEvidence(string clientId)
@@ -51,10 +53,10 @@ public class AgentEnvironmentScannerTests(ITestOutputHelper output)
         Assert.Empty(context.Home.EnumerateFileSystemInfos());
 
         var result = await context.ConfigureAsync(
-            context.Request([client], detections: scanContext.DetectedClients), CancellationToken.None).DefaultTimeout();
+            context.Request(AgentConfigurationScope.Project, [client], detections: scanContext.DetectedClients), CancellationToken.None).DefaultTimeout();
 
         Assert.False(result.HasErrors);
-        Assert.Equal(clientId == "vscode" ? 1 : 2, result.Targets.Count);
+        Assert.Single(result.Targets);
         Assert.All(result.Targets, target =>
         {
             Assert.Equal([client], target.Environments);

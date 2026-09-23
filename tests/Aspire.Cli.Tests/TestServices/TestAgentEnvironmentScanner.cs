@@ -21,6 +21,13 @@ internal sealed class TestAgentEnvironmentScanner : IAgentEnvironmentScanner
 
     public string Id { get; }
     public string DisplayName { get; }
+    public string Description => Id switch
+    {
+        "copilot" => AgentCommandStrings.Agent_CopilotPlatforms,
+        "claude" => AgentCommandStrings.Agent_ClaudePlatforms,
+        "opencode" => AgentCommandStrings.Agent_OpenCodePlatforms,
+        _ => string.Empty
+    };
     public IReadOnlyList<(DirectoryInfo WorkingDirectory, DirectoryInfo WorkspaceRoot, CancellationToken CancellationToken)> Calls => _calls.ToArray();
 
     public Func<AgentEnvironmentScanContext, CancellationToken, Task>? ScanAsyncCallback { get; set; }
@@ -29,8 +36,7 @@ internal sealed class TestAgentEnvironmentScanner : IAgentEnvironmentScanner
 
     public static TestAgentEnvironmentScanner[] CreateEnvironments(params AgentClientDetection[] detections) =>
     [
-        new("copilot", AgentCommandStrings.Environment_Copilot, detections.Where(d => d.Client is AgentClientKind.CopilotCli or AgentClientKind.CopilotApp).ToArray()),
-        new("vscode", AgentCommandStrings.Environment_VsCode, detections.Where(d => d.Client is AgentClientKind.VsCode).ToArray()),
+        new("copilot", AgentCommandStrings.Environment_Copilot, detections.Where(d => d.Client is AgentClientKind.CopilotCli or AgentClientKind.CopilotApp or AgentClientKind.VsCode).ToArray()),
         new("claude", "Claude Code", detections.Where(d => d.Client is AgentClientKind.ClaudeCode).ToArray()),
         new("opencode", "OpenCode", detections.Where(d => d.Client is AgentClientKind.OpenCode).ToArray())
     ];

@@ -6,12 +6,12 @@ using Aspire.Cli.Agents.Hooks;
 namespace Aspire.Cli.Agents;
 
 /// <summary>
-/// Owns discovery and native configuration for a client environment without writing during discovery.
+/// Owns discovery and native configuration for an agent without writing during discovery.
 /// </summary>
 internal interface IAgentEnvironmentScanner
 {
     /// <summary>
-    /// Gets the stable command-line identifier for this configuration environment.
+    /// Gets the stable command-line identifier for this agent.
     /// </summary>
     string Id { get; }
 
@@ -21,6 +21,11 @@ internal interface IAgentEnvironmentScanner
     string DisplayName { get; }
 
     /// <summary>
+    /// Gets the supported agent platforms shown during selection.
+    /// </summary>
+    string Description { get; }
+
+    /// <summary>
     /// Adds detected clients to the context without changing files or configuration.
     /// </summary>
     /// <param name="context">The workspace boundary and collected client detections.</param>
@@ -28,7 +33,7 @@ internal interface IAgentEnvironmentScanner
     Task ScanAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Gets edits for this selected environment, even when no client was detected.
+    /// Gets edits in the selected scope, even when no client was detected.
     /// </summary>
     IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request);
 

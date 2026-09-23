@@ -14,7 +14,7 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output) : IDisposable
     [
         ("claude", ".claude"),
         ("claude", ".mcp.json"),
-        ("vscode", ".vscode"),
+        ("copilot", ".vscode"),
         ("opencode", "opencode.json"),
         ("opencode", "opencode.jsonc"),
         ("opencode", @".opencode\opencode.json"),
@@ -50,7 +50,7 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output) : IDisposable
         await client.ScanAsync(scanContext, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(ExpectedDetection(clientId), Assert.Single(scanContext.DetectedClients));
-        Assert.Equal(clientId == "vscode" ? [] : new[] { clientId == "opencode" ? "opencode" : "claude" }, _context.CliRunner.Commands);
+        Assert.Equal([clientId], _context.CliRunner.Commands);
         Assert.Equal(entries, Directory.GetFileSystemEntries(_context.Workspace.Path, "*", SearchOption.AllDirectories).Order());
     }
 
@@ -92,7 +92,7 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output) : IDisposable
 
     [Theory]
     [InlineData("claude", ".claude")]
-    [InlineData("vscode", ".vscode")]
+    [InlineData("copilot", ".vscode")]
     public async Task ScanAsync_HomeDirectoriesAreNotProjectEvidence(string clientId, string marker)
     {
         await CreateMarkerAsync(_context.Home, marker);
@@ -108,7 +108,6 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output) : IDisposable
     [Theory]
     [InlineData("copilot")]
     [InlineData("claude")]
-    [InlineData("vscode")]
     [InlineData("opencode")]
     public async Task ScanAsync_NoEvidenceIsReadOnlyAndCancellationDoesNotProbe(string clientId)
     {
@@ -150,7 +149,7 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output) : IDisposable
         => new(clientId switch
         {
             "claude" => AgentClientKind.ClaudeCode,
-            "vscode" => AgentClientKind.VsCode,
+            "copilot" => AgentClientKind.VsCode,
             "opencode" => AgentClientKind.OpenCode,
             _ => throw new ArgumentOutOfRangeException(nameof(clientId))
         }, null, false);

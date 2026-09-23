@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.VsCode;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -11,7 +11,7 @@ using Semver;
 
 namespace Aspire.Cli.Tests.Agents;
 
-public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
+public class CopilotEditorDetectionTests(ITestOutputHelper outputHelper)
 {
     [Theory]
     [InlineData(false, false)]
@@ -34,7 +34,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         AgentClientDetection[] expected = stableInstalled ? [new(AgentClientKind.VsCode, "1.100.0", false)]
             : insidersInstalled ? [new(AgentClientKind.VsCode, "1.101.0-insider", true)] : [];
         Assert.Equal(expected, context.DetectedClients);
-        Assert.Equal(stableInstalled ? ["code"] : ["code", "code-insiders"], runner.Commands);
+        Assert.Equal(stableInstalled ? ["copilot", "code"] : ["copilot", "code", "code-insiders"], runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
     }
 
@@ -53,7 +53,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         await agent.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(new AgentClientDetection(AgentClientKind.VsCode, null, false), Assert.Single(context.DetectedClients));
-        Assert.Empty(runner.Commands);
+        Assert.Equal(["copilot"], runner.Commands);
     }
 
     [Theory]
@@ -118,8 +118,13 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         using var cancellationSource = new CancellationTokenSource();
         var runner = new TestAgentCliRunner
         {
-            GetVersionAsyncCallback = (_, _) =>
+            GetVersionAsyncCallback = (command, _) =>
             {
+                if (command == "copilot")
+                {
+                    return Task.FromResult<SemVersion?>(null);
+                }
+
                 cancellationSource.Cancel();
                 return Task.FromResult<SemVersion?>(new SemVersion(1, 100, 0));
             }
@@ -130,12 +135,13 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => agent.ScanAsync(context, cancellationSource.Token)).DefaultTimeout();
 
-        Assert.Equal(["code"], runner.Commands);
+        Assert.Equal(["copilot", "code"], runner.Commands);
     }
 
-    private static VsCodeAgentEnvironmentScanner CreateAgent(
+    private static CopilotAgentEnvironmentScanner CreateAgent(
         TestAgentCliRunner runner,
         CliExecutionContext executionContext,
         TestEnvironment environment)
-        => new(runner, executionContext, environment, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
+        => new(runner, new CopilotAppInstallationDetector(environment, executionContext), runner,
+            executionContext, environment, NullLogger<CopilotAgentEnvironmentScanner>.Instance);
 }

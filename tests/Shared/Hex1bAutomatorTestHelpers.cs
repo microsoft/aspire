@@ -499,8 +499,8 @@ internal static class Hex1bAutomatorTestHelpers
 
     /// <summary>
     /// Runs <c>aspire new</c> interactively up to and including accepting the chained agent init
-    /// confirmation prompt, landing on the first omitted asset or client selection prompt.
-    /// Explicit asset and <c>--environments</c> flags in <paramref name="extraArguments"/> skip their prompts.
+    /// confirmation prompt, landing on the first omitted asset, agent, or scope selection prompt.
+    /// Explicit asset, <c>--agent</c>, and <c>--scope</c> flags in <paramref name="extraArguments"/> skip their prompts.
     /// Used by tests that need to drive the chained agent-init flow instead of declining it via
     /// <see cref="AspireNewAsync"/>. <paramref name="beforeAcceptingAgentInit"/> runs after the
     /// project has been scaffolded but before the prompt is accepted, so callers can seed a

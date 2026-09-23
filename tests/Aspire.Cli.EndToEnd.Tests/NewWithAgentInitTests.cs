@@ -50,7 +50,7 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
         await auto.RunCommandAsync("export CLAUDE_CONFIG_DIR=\"$PWD/.client-config/claude\"", counter);
         await auto.AspireNewAcceptingAgentInitAsync(
             "StarterApp",
-            extraArguments: "--environments claude --playwright y --dotnet-inspect n --aspire-skills n");
+            extraArguments: "--agent claude --scope project --playwright y --dotnet-inspect n --aspire-skills n");
 
         // Wait for agent init to complete (downloads @playwright/cli from npm).
         // Explicit asset/client flags avoid native client detection or Aspire source acquisition.
@@ -72,8 +72,7 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // The one verified generation is distributed to both selected native scopes.
-        await auto.TypeAsync("ls StarterApp/.claude/skills/playwright-cli/SKILL.md .client-config/claude/skills/playwright-cli/SKILL.md");
+        await auto.TypeAsync("ls StarterApp/.claude/skills/playwright-cli/SKILL.md && test ! -e .client-config/claude/skills/playwright-cli");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SKILL.md", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);

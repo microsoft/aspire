@@ -18,7 +18,7 @@ internal interface IAgentSkillInstaller
 }
 
 /// <summary>
-/// Installs CLI-managed tool skills at the selected clients' shared project and user locations.
+/// Installs CLI-managed tool skills at the selected agents' shared locations in one scope.
 /// </summary>
 internal sealed class AgentSkillInstaller(
     PlaywrightCliInstaller playwrightInstaller,
@@ -75,57 +75,49 @@ internal sealed class AgentSkillInstaller(
     {
         Dictionary<string, SkillTarget> targets = new(AgentPath.Comparer);
         AgentAssetKind[] assets = [AgentAssetKind.Playwright, AgentAssetKind.DotnetInspect];
-        AgentConfigurationScope[] scopes = [AgentConfigurationScope.Project, AgentConfigurationScope.User];
-
         foreach (var client in request.Environments.Distinct())
         {
-            foreach (var scope in scopes)
+            var scope = request.Scope;
+            foreach (var asset in assets)
             {
-                foreach (var asset in assets)
+                if ((asset is AgentAssetKind.Playwright && !request.Assets.Playwright) ||
+                    (asset is AgentAssetKind.DotnetInspect && !request.Assets.DotnetInspect))
                 {
-                    if ((asset is AgentAssetKind.Playwright && !request.Assets.Playwright) ||
-                        (asset is AgentAssetKind.DotnetInspect && !request.Assets.DotnetInspect))
+                    continue;
+                }
+
+                var root = scope is AgentConfigurationScope.Project
+                    ? request.WorkspaceRoot.FullName
+                    : executionContext.HomeDirectory.FullName;
+                var logicalPath = root;
+                string physicalPath;
+                string? error = null;
+                try
+                {
+                    logicalPath = Path.GetFullPath(Path.Combine(GetSkillBaseDirectory(client, scope, request.WorkspaceRoot, executionContext, environment), GetSkillName(asset)));
+                    physicalPath = AgentPath.Resolve(logicalPath);
+                }
+                catch (Exception ex) when (ex is AgentConfigurationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+                {
+                    physicalPath = logicalPath;
+                    error = FormatInstallationError(asset, logicalPath, ex.Message);
+                }
+
+                // Several agents can share .agents/skills or resolve to the same
+                // physical directory. Publish and report that target only once.
+                var key = $"{asset}:{physicalPath}";
+                if (targets.TryGetValue(key, out var existing))
+                {
+                    if (!existing.Environments.Contains(client))
                     {
-                        continue;
+                        existing.Environments.Add(client);
                     }
 
-                    var root = scope is AgentConfigurationScope.Project
-                        ? request.WorkspaceRoot.FullName
-                        : executionContext.HomeDirectory.FullName;
-                    var logicalPath = root;
-                    string physicalPath;
-                    string? error = null;
-                    try
-                    {
-                        logicalPath = Path.GetFullPath(Path.Combine(GetSkillBaseDirectory(client, scope, request.WorkspaceRoot, executionContext, environment), GetSkillName(asset)));
-                        physicalPath = AgentPath.Resolve(logicalPath);
-                    }
-                    catch (Exception ex) when (ex is AgentConfigurationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-                    {
-                        physicalPath = logicalPath;
-                        error = FormatInstallationError(asset, logicalPath, ex.Message);
-                    }
-
-                    // Both scopes can resolve to the same directory, as can several clients
-                    // (.agents/skills is deliberately shared). Report and write that target once.
-                    var key = $"{asset}:{physicalPath}";
-                    if (targets.TryGetValue(key, out var existing))
-                    {
-                        if (!existing.Environments.Contains(client))
-                        {
-                            existing.Environments.Add(client);
-                        }
-
-                        existing.Aliases.Add(logicalPath);
-                        if (scope is AgentConfigurationScope.Project)
-                        {
-                            targets[key] = existing with { Scope = scope };
-                        }
-                    }
-                    else
-                    {
-                        targets.Add(key, new SkillTarget(asset, [client], physicalPath, scope, [logicalPath], error));
-                    }
+                    existing.Aliases.Add(logicalPath);
+                }
+                else
+                {
+                    targets.Add(key, new SkillTarget(asset, [client], physicalPath, scope, [logicalPath], error));
                 }
             }
         }
@@ -141,7 +133,7 @@ internal sealed class AgentSkillInstaller(
         // https://docs.github.com/en/copilot/concepts/agents/about-agent-skills
         // https://code.visualstudio.com/docs/agent-customization/agent-skills
         // https://opencode.ai/docs/skills/
-        if (client.Id is Copilot.CopilotAgentEnvironmentScanner.ClientId or VsCode.VsCodeAgentEnvironmentScanner.ClientId or OpenCode.OpenCodeAgentEnvironmentScanner.ClientId)
+        if (client.Id is Copilot.CopilotAgentEnvironmentScanner.ClientId or OpenCode.OpenCodeAgentEnvironmentScanner.ClientId)
         {
             var root = scope is AgentConfigurationScope.Project ? workspaceRoot.FullName : executionContext.HomeDirectory.FullName;
             return Path.Combine(root, ".agents", "skills");

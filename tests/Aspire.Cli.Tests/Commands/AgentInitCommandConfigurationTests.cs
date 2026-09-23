@@ -24,7 +24,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(_context.CopilotDirectory, "settings.json"), "{broken").DefaultTimeout();
 
         var result = await _context.ConfigureAsync(
-            _context.Request([_context.Copilot], skills: false, detections: [new(AgentClientKind.CopilotCli, null, false)]),
+            _context.Request(AgentConfigurationScope.User, [_context.Copilot], skills: false, detections: [new(AgentClientKind.CopilotCli, null, false)]),
             CancellationToken.None).DefaultTimeout();
 
         Assert.Empty(result.Targets);
@@ -38,7 +38,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
     {
 
         var result = await _context.ConfigureAsync(
-            _context.Request([], mcp: true, playwright: true, dotnetInspect: true,
+            _context.Request(AgentConfigurationScope.User, [], mcp: true, playwright: true, dotnetInspect: true,
                 detections: [new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.ClaudeCode, null, false)]),
             CancellationToken.None).DefaultTimeout();
 
@@ -50,18 +50,56 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
     }
 
     [Theory]
+    [InlineData("Project")]
+    [InlineData("User")]
+    public async Task AllAssets_OnlyWriteTheSelectedScope(string scopeName)
+    {
+        var scope = Enum.Parse<AgentConfigurationScope>(scopeName);
+        var request = _context.Request(scope, _context.Environments, mcp: true, playwright: true, dotnetInspect: true,
+            detections: [new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.ClaudeCode, null, false)]);
+
+        var result = await AgentInitCommand.ConfigureAsync(request, _context.Writer,
+            _context.CreateManagedSkillInstaller(), _context.Hooks, CancellationToken.None).DefaultTimeout();
+
+        Assert.False(result.HasErrors);
+        Assert.NotEmpty(result.Targets);
+        Assert.All(result.Targets, target => Assert.Equal(scope, target.Scope));
+        var untouched = scope is AgentConfigurationScope.Project ? _context.Home : _context.Project;
+        Assert.Empty(untouched.EnumerateFileSystemInfos());
+        Assert.Equal(scope is AgentConfigurationScope.User ? 1 : 0, _context.HookInstaller.Calls);
+        Assert.Equal(scope is AgentConfigurationScope.User ? 2 : 0, result.Targets.Count(target => target.Asset is AgentAssetKind.TelemetryHooks));
+        Assert.Equal(1, _context.Playwright.InstallSkillsCallCount);
+    }
+
+    [Fact]
+    public async Task EditorHint_DoesNotCreateCliHooksOrEditorSettings()
+    {
+        var request = _context.Request(AgentConfigurationScope.User, [_context.Copilot],
+            detections: [new(AgentClientKind.VsCode, "1.120.0", false)]);
+
+        var result = await _context.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
+
+        var target = Assert.Single(result.Targets);
+        Assert.Equal(AgentAssetKind.AspireSkills, target.Asset);
+        Assert.Equal(Path.Combine(_context.CopilotDirectory, "settings.json"), target.TargetPath);
+        Assert.Equal(0, _context.HookInstaller.Calls);
+        Assert.Empty(_context.Project.EnumerateFileSystemInfos());
+        Assert.Equal([".copilot"], _context.Home.EnumerateDirectories().Select(directory => directory.Name));
+    }
+
+    [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]
     [InlineData(true, true)]
     public async Task ToolSkills_UseOneManagedInvocationAndConfigureOnlyDetectedHooks(bool playwright, bool dotnetInspect)
     {
-        var request = _context.Request([_context.Copilot, _context.ClaudeCode],
+        var request = _context.Request(AgentConfigurationScope.User, [_context.Copilot, _context.ClaudeCode],
             skills: false, playwright: playwright, dotnetInspect: dotnetInspect,
             detections: [new(AgentClientKind.CopilotCli, null, false)]);
         _context.SkillInstaller.Results =
         [
             new(playwright ? AgentAssetKind.Playwright : AgentAssetKind.DotnetInspect, request.Environments,
-                Path.Combine(_context.Project.FullName, "managed-skill"), AgentConfigurationScope.Project, AgentConfigurationStatus.Configured, "test")
+                Path.Combine(_context.Home.FullName, "managed-skill"), AgentConfigurationScope.User, AgentConfigurationStatus.Configured, "test")
         ];
 
         var result = await _context.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
@@ -82,8 +120,8 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
     [Fact]
     public async Task NativeSkills_AreOfflineAndInstallOnlyOneSetOfEmbeddedHooks()
     {
-        var request = _context.Request(
-            [_context.Copilot, _context.ClaudeCode, _context.VsCode, _context.OpenCode],
+        var request = _context.Request(AgentConfigurationScope.User,
+            [_context.Copilot, _context.ClaudeCode, _context.OpenCode],
             detections: [new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.ClaudeCode, null, false)]);
 
         var result = await _context.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
@@ -107,7 +145,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
         await AgentConfigurationTestContext.WriteAsync(path, "{broken").DefaultTimeout();
 
         var result = await _context.ConfigureAsync(
-            _context.Request([_context.Copilot, _context.OpenCode],
+            _context.Request(AgentConfigurationScope.User, [_context.Copilot, _context.OpenCode],
                 detections: [new(AgentClientKind.CopilotCli, null, false)]),
             CancellationToken.None).DefaultTimeout();
 
@@ -134,7 +172,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
             """{"extraKnownMarketplaces":{"aspire-skills":{"source":{"source":"github","repo":"example/custom-skills"}}}}""").DefaultTimeout();
 
         var result = await _context.ConfigureAsync(
-            _context.Request([client], detections: [new(detectedClient, null, false)]),
+            _context.Request(AgentConfigurationScope.User, [client], detections: [new(detectedClient, null, false)]),
             CancellationToken.None).DefaultTimeout();
 
         Assert.True(result.HasErrors);
@@ -154,7 +192,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
         _context.HookInstaller.Error = new IOException("Hook directory is locked.");
 
         var result = await _context.ConfigureAsync(
-            _context.Request([_context.Copilot, _context.ClaudeCode],
+            _context.Request(AgentConfigurationScope.User, [_context.Copilot, _context.ClaudeCode],
                 detections: [new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.ClaudeCode, null, false)]),
             CancellationToken.None).DefaultTimeout();
 
@@ -182,7 +220,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
         var detectedClient = clientName == "copilot" ? AgentClientKind.CopilotCli : AgentClientKind.ClaudeCode;
 
         var result = await _context.ConfigureAsync(
-            _context.Request([client], skills: false, mcp: true, detections: [new(detectedClient, null, false)]),
+            _context.Request(AgentConfigurationScope.User, [client], skills: false, mcp: true, detections: [new(detectedClient, null, false)]),
             CancellationToken.None).DefaultTimeout();
 
         Assert.False(result.HasErrors);
@@ -197,7 +235,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
     [Fact]
     public async Task AlreadyConfiguredNativeSources_DoNotPreventAMissingDetectedClientHook()
     {
-        var request = _context.Request([_context.Copilot],
+        var request = _context.Request(AgentConfigurationScope.User, [_context.Copilot],
             detections: [new(AgentClientKind.CopilotCli, null, false)]);
         await _context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -213,7 +251,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
     {
         var path = Path.Combine(_context.ClaudeDirectory, "settings.json");
         await AgentConfigurationTestContext.WriteAsync(path, """{"model":"preserved","hooks":{"PreToolUse":[]}}""").DefaultTimeout();
-        var request = _context.Request([_context.ClaudeCode],
+        var request = _context.Request(AgentConfigurationScope.User, [_context.ClaudeCode],
             detections: [new(AgentClientKind.ClaudeCode, null, false)]);
 
         var first = await _context.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
@@ -237,7 +275,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
     [Fact]
     public async Task DetectedButUnselectedClients_ReceiveOnlyUserHooks()
     {
-        var request = _context.Request([_context.OpenCode],
+        var request = _context.Request(AgentConfigurationScope.User, [_context.OpenCode],
             detections: [new(AgentClientKind.CopilotCli, "1.0.0", false), new(AgentClientKind.ClaudeCode, "2.1.0", false), new(AgentClientKind.VsCode, "1.120.0", false)]);
 
         var result = await _context.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
@@ -264,10 +302,10 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
                 Assert.True(File.Exists(claude.TargetPath));
             });
         Assert.False(File.Exists(Path.Combine(_context.CopilotDirectory, "settings.json")));
-        Assert.False(Directory.Exists(_context.VsCodeUserDirectory(false)));
         var claudeSettings = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(_context.ClaudeDirectory, "settings.json")).DefaultTimeout())!.AsObject();
         Assert.Equal(["hooks"], claudeSettings.Select(property => property.Key));
-        Assert.Equal(["opencode.json"], _context.Project.EnumerateFileSystemInfos().Select(entry => entry.Name));
+        Assert.Empty(_context.Project.EnumerateFileSystemInfos());
+        Assert.Equal(["opencode.json"], Directory.EnumerateFiles(_context.OpenCodeDirectory).Select(Path.GetFileName));
     }
 
     [Theory]
@@ -277,11 +315,11 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
     {
         var client = _context.Environments.Single(client => client.Id == clientName);
 
-        var result = await _context.ConfigureAsync(_context.Request([client]), CancellationToken.None).DefaultTimeout();
+        var result = await _context.ConfigureAsync(_context.Request(AgentConfigurationScope.User, [client]), CancellationToken.None).DefaultTimeout();
 
         Assert.False(result.HasErrors);
         Assert.False(result.HasWarnings);
-        Assert.Equal(2, result.Targets.Count);
+        Assert.Single(result.Targets);
         Assert.All(result.Targets, target =>
         {
             Assert.Equal(AgentAssetKind.AspireSkills, target.Asset);
@@ -299,7 +337,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             _context.ConfigureAsync(
-                _context.Request([_context.Copilot], playwright: true, detections: [new(AgentClientKind.CopilotCli, null, false)]),
+                _context.Request(AgentConfigurationScope.User, [_context.Copilot], playwright: true, detections: [new(AgentClientKind.CopilotCli, null, false)]),
                 cancellation.Token)).DefaultTimeout();
 
         Assert.Empty(_context.SkillInstaller.Requests);
@@ -311,7 +349,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
         _context.SetVariable("COPILOT_HOME", "\0invalid");
 
         var result = await _context.ConfigureAsync(
-            _context.Request([_context.Copilot, _context.OpenCode],
+            _context.Request(AgentConfigurationScope.User, [_context.Copilot, _context.OpenCode],
                 detections: [new(AgentClientKind.CopilotCli, null, false)]),
             CancellationToken.None).DefaultTimeout();
 
@@ -336,21 +374,21 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
         _context.SkillInstaller.Results =
         [
             new(AgentAssetKind.DotnetInspect, [_context.OpenCode, _context.Copilot],
-                Path.Combine(_context.Project.FullName, ".agents", "skills", "dotnet-inspect"),
-                AgentConfigurationScope.Project, AgentConfigurationStatus.Configured, "test")
+                Path.Combine(_context.Home.FullName, ".agents", "skills", "dotnet-inspect"),
+                AgentConfigurationScope.User, AgentConfigurationStatus.Configured, "test")
         ];
-        var request = _context.Request([_context.OpenCode, _context.Copilot], mcp: true, dotnetInspect: true);
+        var request = _context.Request(AgentConfigurationScope.User, [_context.OpenCode, _context.Copilot], mcp: true, dotnetInspect: true);
 
         var result = await _context.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
 
         Assert.True(result.HasErrors);
         var openCode = result.Targets.Where(target => target.Environments.Contains(_context.OpenCode) &&
             target.Asset is AgentAssetKind.AspireSkills or AgentAssetKind.Mcp).ToArray();
-        Assert.Equal(4, openCode.Length);
+        Assert.Equal(2, openCode.Length);
         Assert.All(openCode, target => Assert.Equal(AgentConfigurationStatus.Blocked, target.Status));
         var copilot = result.Targets.Where(target => target.Environments.Contains(_context.Copilot) &&
             target.Asset is AgentAssetKind.AspireSkills or AgentAssetKind.Mcp).ToArray();
-        Assert.Equal(4, copilot.Length);
+        Assert.Equal(2, copilot.Length);
         Assert.All(copilot, target => Assert.Equal(AgentConfigurationStatus.Configured, target.Status));
         Assert.Same(request, Assert.Single(_context.SkillInstaller.Requests));
         Assert.Equal(_context.SkillInstaller.Results[0], Assert.Single(result.Targets, target => target.Asset is AgentAssetKind.DotnetInspect));
@@ -373,7 +411,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
         var expectedDirectory = relative.Length == 0 ? _context.Home.FullName : Path.Combine(_context.Home.FullName, relative);
 
         var result = await AgentInitCommand.ConfigureAsync(
-            _context.Request([_context.ClaudeCode], dotnetInspect: true), _context.Writer, managed, _context.Hooks, CancellationToken.None).DefaultTimeout();
+            _context.Request(AgentConfigurationScope.User, [_context.ClaudeCode], dotnetInspect: true), _context.Writer, managed, _context.Hooks, CancellationToken.None).DefaultTimeout();
 
         Assert.False(result.HasErrors);
         Assert.All(result.Targets, target => Assert.Equal(AgentConfigurationStatus.Configured, target.Status));
@@ -385,7 +423,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
             AgentPath.Resolve(skill.TargetPath));
         Assert.Equal(DotnetInspectSkill.Content,
             await File.ReadAllTextAsync(Path.Combine(skill.TargetPath, "SKILL.md")).DefaultTimeout());
-        Assert.Equal([".claude"], _context.Project.EnumerateDirectories().Select(directory => directory.Name));
+        Assert.Empty(_context.Project.EnumerateFileSystemInfos());
         Assert.Equal(0, npm.ResolveCallCount);
         Assert.Equal(0, npm.PackCallCount);
         Assert.Equal(0, npm.InstallGlobalCallCount);

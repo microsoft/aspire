@@ -21,7 +21,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
     /// 2. An Aspire project is created
     /// 3. <c>aspire agent init</c> is run with Claude Code explicitly selected
     /// 4. Playwright CLI is installed and available on PATH
-    /// 5. The generated skill is installed at both native project and user locations
+    /// 5. The generated skill is installed only at the selected user location
     /// </summary>
     [Fact]
     public async Task AgentInit_InstallsPlaywrightCli_AndGeneratesSkillFiles()
@@ -59,7 +59,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
 
         // Step 4: Run aspire agent init for Playwright only. This test is about
         // @playwright/cli acquisition, not native Aspire source registration.
-        await auto.TypeAsync("aspire agent init --workspace-root . --environments claude --playwright y --dotnet-inspect n --aspire-skills n --mcp n --non-interactive");
+        await auto.TypeAsync("aspire agent init --workspace-root . --agent claude --scope user --playwright y --dotnet-inspect n --aspire-skills n --mcp n --non-interactive");
         await auto.EnterAsync();
 
         // Wait for installation to complete (this downloads from npm, can take a while)
@@ -71,19 +71,17 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Both scopes receive the same complete payload, including supporting files.
-        await auto.TypeAsync("ls .claude/skills/playwright-cli/SKILL.md \"$CLAUDE_CONFIG_DIR/skills/playwright-cli/SKILL.md\"");
+        await auto.TypeAsync("ls \"$CLAUDE_CONFIG_DIR/skills/playwright-cli/SKILL.md\"");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SKILL.md", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.RunCommandAsync("diff -r .claude/skills/playwright-cli \"$CLAUDE_CONFIG_DIR/skills/playwright-cli\"", counter);
-        await auto.RunCommandAsync("test ! -e .agents/skills/playwright-cli && test ! -e .github/skills/playwright-cli", counter);
+        await auto.RunCommandAsync("test ! -e .claude/skills/playwright-cli && test ! -e .agents/skills/playwright-cli && test ! -e .github/skills/playwright-cli", counter);
     }
 
     /// <summary>
     /// Verifies that when <c>aspire agent init</c> is run from a different directory than the
     /// workspace root, the isolated Playwright generation is installed in the workspace
-    /// root and selected user directory, not the current working directory.
+    /// root, not the current working directory or the user directory.
     ///
     /// This is a regression test for https://github.com/microsoft/aspire/issues/15140 where
     /// the missing <c>WorkingDirectory</c> on <c>ProcessStartInfo</c> caused skill files
@@ -115,19 +113,16 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
 
         // Stay in the parent directory. The explicit workspace root and client selection
         // must control project destinations independently of generation's working directory.
-        await auto.TypeAsync("aspire agent init --workspace-root TestProject --environments claude --playwright y --dotnet-inspect n --aspire-skills n --mcp n --non-interactive");
+        await auto.TypeAsync("aspire agent init --workspace-root TestProject --agent claude --scope project --playwright y --dotnet-inspect n --aspire-skills n --mcp n --non-interactive");
         await auto.EnterAsync();
 
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Verify the project and user targets both contain the complete skill.
-        await auto.TypeAsync("ls TestProject/.claude/skills/playwright-cli/SKILL.md \"$CLAUDE_CONFIG_DIR/skills/playwright-cli/SKILL.md\"");
+        await auto.TypeAsync("ls TestProject/.claude/skills/playwright-cli/SKILL.md");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SKILL.md", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.RunCommandAsync("diff -r TestProject/.claude/skills/playwright-cli \"$CLAUDE_CONFIG_DIR/skills/playwright-cli\"", counter);
-
-        await auto.RunCommandAsync("test ! -e .claude/skills/playwright-cli && test ! -e .agents/skills/playwright-cli", counter);
+        await auto.RunCommandAsync("test ! -e .claude/skills/playwright-cli && test ! -e .agents/skills/playwright-cli && test ! -e \"$CLAUDE_CONFIG_DIR/skills/playwright-cli\"", counter);
     }
 }

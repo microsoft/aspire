@@ -88,7 +88,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var environments = host.Services.GetServices<IAgentEnvironmentScanner>().ToArray();
 
         Assert.Equal(
-            ["copilot", "vscode", "claude", "opencode"],
+            ["copilot", "claude", "opencode"],
             environments.Select(environment => environment.Id));
         Assert.Equal(environments, host.Services.GetServices<IAgentEnvironmentScanner>());
     }

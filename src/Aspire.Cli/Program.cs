@@ -554,7 +554,6 @@ public class Program
         builder.Services.AddSingleton<ICopilotCliRunner, CopilotCliRunner>();
         builder.Services.AddSingleton<ICopilotAppInstallationDetector, CopilotAppInstallationDetector>();
         builder.Services.AddSingleton<IAgentEnvironmentScanner, CopilotAgentEnvironmentScanner>();
-        builder.Services.AddSingleton<IAgentEnvironmentScanner, VsCodeAgentEnvironmentScanner>();
         builder.Services.AddSingleton<IAgentEnvironmentScanner, ClaudeCodeAgentEnvironmentScanner>();
         builder.Services.AddSingleton<IAgentEnvironmentScanner, OpenCodeAgentEnvironmentScanner>();
 

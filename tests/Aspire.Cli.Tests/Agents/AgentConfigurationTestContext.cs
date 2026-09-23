@@ -7,7 +7,6 @@ using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Agents.Playwright;
-using Aspire.Cli.Agents.VsCode;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Tests.TestServices;
@@ -54,7 +53,6 @@ internal sealed class AgentConfigurationTestContext : IDisposable
     public CliExecutionContext ExecutionContext { get; }
     public IReadOnlyList<IAgentEnvironmentScanner> Environments { get; }
     public IAgentEnvironmentScanner Copilot => Environments.Single(scanner => scanner.Id == "copilot");
-    public IAgentEnvironmentScanner VsCode => Environments.Single(scanner => scanner.Id == "vscode");
     public IAgentEnvironmentScanner ClaudeCode => Environments.Single(scanner => scanner.Id == "claude");
     public IAgentEnvironmentScanner OpenCode => Environments.Single(scanner => scanner.Id == "opencode");
     public TestAgentCliRunner CliRunner { get; }
@@ -79,21 +77,20 @@ internal sealed class AgentConfigurationTestContext : IDisposable
                 : TestExecutionContextHelper.CreateExecutionContext(workingDirectory ?? Project, homeDirectory: homeDirectory ?? Home),
             Environment, NullLogger<AgentSkillInstaller>.Instance);
 
-    public AgentInitRequest ManagedRequest(IReadOnlyList<IAgentEnvironmentScanner> clients, bool playwright = true, bool dotnetInspect = true)
-        => Request(clients, skills: false, playwright: playwright, dotnetInspect: dotnetInspect);
+    public AgentInitRequest ManagedRequest(AgentConfigurationScope scope, IReadOnlyList<IAgentEnvironmentScanner> clients, bool playwright = true, bool dotnetInspect = true)
+        => Request(scope, clients, skills: false, playwright: playwright, dotnetInspect: dotnetInspect);
 
     public void SetVariable(string name, string value) => _variables[name] = value;
 
-    public string VsCodeUserDirectory(bool insiders) => VsCodeAgentEnvironmentScanner.GetUserDirectory(insiders, ExecutionContext, Environment);
-
     public AgentInitRequest Request(
+        AgentConfigurationScope scope,
         IReadOnlyList<IAgentEnvironmentScanner> clients,
         bool skills = true,
         bool mcp = false,
         bool playwright = false,
         bool dotnetInspect = false,
         IReadOnlyList<AgentClientDetection>? detections = null)
-        => new(Project, new AgentAssetSelection(mcp, playwright, dotnetInspect, skills), clients, detections ?? []);
+        => new(Project, new AgentAssetSelection(mcp, playwright, dotnetInspect, skills), scope, clients, detections ?? []);
 
     public Task<IReadOnlyList<AgentTargetResult>> ConfigureNativeAsync(AgentInitRequest request, CancellationToken cancellationToken = default)
         => Writer.ApplyAsync(request.Environments.Distinct().SelectMany(environment => environment.GetTargets(request)), cancellationToken);

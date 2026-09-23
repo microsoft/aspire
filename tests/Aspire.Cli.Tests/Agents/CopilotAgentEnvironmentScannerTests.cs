@@ -44,7 +44,7 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
             expected.Add(new(AgentClientKind.CopilotCli, "1.2.3", false));
         }
         Assert.Equal(expected, context.DetectedClients);
-        Assert.Equal(["copilot"], runner.Commands);
+        Assert.Equal(appInstalled || cliInstalled ? ["copilot"] : ["copilot", "code", "code-insiders"], runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
     }
 
@@ -72,7 +72,9 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         await agent.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(appInstalled ? [new AgentClientDetection(AgentClientKind.CopilotApp, null, false)] : [], context.DetectedClients);
+        Assert.Equal(appInstalled
+            ? [new AgentClientDetection(AgentClientKind.CopilotApp, null, false)]
+            : [new AgentClientDetection(AgentClientKind.VsCode, "1.100.0", false)], context.DetectedClients);
         Assert.Empty(runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
     }
@@ -131,6 +133,7 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         => new(
             runner,
             new CopilotAppInstallationDetector(environment, workspace.CreateExecutionContext()),
+            runner,
             workspace.CreateExecutionContext(),
             environment,
             NullLogger<CopilotAgentEnvironmentScanner>.Instance);

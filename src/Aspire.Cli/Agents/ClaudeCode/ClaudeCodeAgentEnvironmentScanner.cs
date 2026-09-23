@@ -49,6 +49,8 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
 
     public string DisplayName => "Claude Code";
 
+    public string Description => AgentCommandStrings.Agent_ClaudePlatforms;
+
     public override string ToString() => Id;
 
     /// <inheritdoc />
@@ -83,16 +85,19 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
     public IEnumerable<AgentConfigurationTarget> GetTargets(AgentInitRequest request)
     {
         var mcpFile = GetMcpFile(_executionContext, _environment);
+        var scope = request.Scope;
         if (request.Assets.AspireSkills)
         {
-            yield return PluginTarget(Path.Combine(request.WorkspaceRoot.FullName, ".claude", "settings.json"), AgentConfigurationScope.Project);
-            yield return PluginTarget(Path.Combine(GetConfigDirectory(_executionContext, _environment), "settings.json"), AgentConfigurationScope.User);
+            yield return PluginTarget(scope is AgentConfigurationScope.Project
+                ? Path.Combine(request.WorkspaceRoot.FullName, ".claude", "settings.json")
+                : Path.Combine(GetConfigDirectory(_executionContext, _environment), "settings.json"), scope);
         }
 
         if (request.Assets.Mcp)
         {
-            yield return McpTarget(Path.Combine(request.WorkspaceRoot.FullName, ".mcp.json"), AgentConfigurationScope.Project);
-            yield return McpTarget(mcpFile, AgentConfigurationScope.User);
+            yield return McpTarget(scope is AgentConfigurationScope.Project
+                ? Path.Combine(request.WorkspaceRoot.FullName, ".mcp.json")
+                : mcpFile, scope);
         }
 
         AgentConfigurationTarget PluginTarget(string path, AgentConfigurationScope scope)
@@ -142,6 +147,12 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
                 if (AspireMcpConfiguration.CheckPolicy(settings, managed, managedAllowlistOnly: false) is { } policy)
                 {
                     return policy;
+                }
+
+                if (scope is AgentConfigurationScope.Project &&
+                    await AspireMcpConfiguration.CheckOtherProjectFilesAsync(request.WorkspaceRoot, context, cancellationToken) is { } projectEntry)
+                {
+                    return projectEntry;
                 }
 
                 foreach (var config in settings)
