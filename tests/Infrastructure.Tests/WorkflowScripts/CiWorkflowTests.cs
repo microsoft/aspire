@@ -85,6 +85,38 @@ public sealed class CiWorkflowTests
     }
 
     [Fact]
+    public void AcquisitionOuterloopTestsReceiveGitHubToken()
+    {
+        var properties = File.ReadAllText(Path.Combine(
+            RepoRoot.Path,
+            "eng",
+            "testing",
+            "CITestsProperties.props"));
+        Assert.Contains(
+            "<CITestsProperty Include=\"requiresGitHubToken\" MSBuildProp=\"RequiresGitHubToken\"",
+            properties);
+
+        var acquisitionTests = File.ReadAllText(Path.Combine(
+            RepoRoot.Path,
+            "tests",
+            "Aspire.Acquisition.Tests",
+            "Aspire.Acquisition.Tests.csproj"));
+        Assert.Contains("<RequiresGitHubToken>true</RequiresGitHubToken>", acquisitionTests);
+
+        var specializedRunner = ReadWorkflow("specialized-test-runner.yml");
+        var tokenCheck = GetStep(
+            GetJob(specializedRunner, "generate_tests_matrix"),
+            "Check if any test requires GitHub token");
+        Assert.Contains("steps.inject_properties.outputs.runsheet", tokenCheck);
+        Assert.Contains(".properties.requiresGitHubToken == true", tokenCheck);
+
+        var testRunner = GetJob(ReadWorkflow("run-tests.yml"), "test");
+        Assert.Contains(
+            "fromJson(inputs.properties).requiresGitHubToken == true",
+            testRunner);
+    }
+
+    [Fact]
     public void CiFailureTrackerCheckoutDoesNotPinMain()
     {
         var workflow = ReadWorkflow("ci.yml");
