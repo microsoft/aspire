@@ -49,32 +49,44 @@ internal sealed partial class MetricsService(MetricsChannel channel, ConfluentKa
 
                 tags.Add(new KeyValuePair<string, object?> (Tags.Type, statistics.Type));
 
+                var sentMessageTags = CreateMessageTags(tags, TagValues.SendOperationName);
+                var consumedMessageTags = CreateMessageTags(tags, TagValues.PollOperationName);
+
                 if (_state.TryGetValue(statistics.Name, out var previous))
                 {
                     metrics.Tx.Add(statistics.Tx - previous.Tx, tags);
                     metrics.TxBytes.Add(statistics.TxBytes - previous.TxBytes, tags);
-                    metrics.TxMessages.Add(statistics.TxMessages - previous.TxMessages, tags);
+                    metrics.TxMessages.Add(statistics.TxMessages - previous.TxMessages, sentMessageTags);
                     metrics.TxMessageBytes.Add(statistics.TxMessageBytes - previous.TxMessageBytes, tags);
                     metrics.Rx.Add(statistics.Rx - previous.Rx, tags);
                     metrics.RxBytes.Add(statistics.RxBytes - previous.RxBytes, tags);
-                    metrics.RxMessages.Add(statistics.RxMessages - previous.RxMessages, tags);
+                    metrics.RxMessages.Add(statistics.RxMessages - previous.RxMessages, consumedMessageTags);
                     metrics.RxMessageBytes.Add(statistics.RxMessageBytes - previous.RxMessageBytes, tags);
                 }
                 else
                 {
                     metrics.Tx.Add(statistics.Tx, tags);
                     metrics.TxBytes.Add(statistics.TxBytes, tags);
-                    metrics.TxMessages.Add(statistics.TxMessages, tags);
+                    metrics.TxMessages.Add(statistics.TxMessages, sentMessageTags);
                     metrics.TxMessageBytes.Add(statistics.TxMessageBytes, tags);
                     metrics.Rx.Add(statistics.Rx, tags);
                     metrics.RxBytes.Add(statistics.RxBytes, tags);
-                    metrics.RxMessages.Add(statistics.RxMessages, tags);
+                    metrics.RxMessages.Add(statistics.RxMessages, consumedMessageTags);
                     metrics.RxMessageBytes.Add(statistics.RxMessageBytes, tags);
                 }
 
                 _state[statistics.Name] = statistics;
             }
         }
+    }
+
+    private static TagList CreateMessageTags(TagList tags, string operationName)
+    {
+        // Accepting TagList by value intentionally creates a copy so operation-specific tags do not leak into other metrics.
+        tags.Add(Tags.MessagingSystem, TagValues.KafkaMessagingSystem);
+        tags.Add(Tags.OperationName, operationName);
+
+        return tags;
     }
 
     [LoggerMessage(LogLevel.Warning, EventId = 1, Message = "Invalid statistics json payload received: '{json}'")]
