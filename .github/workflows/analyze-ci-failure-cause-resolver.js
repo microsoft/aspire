@@ -89,34 +89,32 @@ function resolveCauses({
                 sameTestCanonicalExtras = sameTestPriorCauses.extras;
             }
         }
-        if (!proposedAlias) {
-            const retryPatternResolution = cause.type === 'infra-failure'
-                ? findPriorCauseByRetryPattern(
-                    jobEvidence,
-                    retryPatterns,
-                    priorById,
-                    priorByNormalizedId,
-                    priorAliases)
-                : undefined;
-            retryPatternMatch = retryPatternResolution?.cause;
-            matchingRetryPatterns = retryPatternResolution?.patterns ?? [];
-            explicitMatcherMatch = findPriorCauseByExplicitMatcher(evidence, priorCauses, priorById);
-            const crossMechanismMatches = uniqueById(
-                [testNameMatch, retryPatternMatch, explicitMatcherMatch].filter(Boolean));
+        const retryPatternResolution = cause.type === 'infra-failure'
+            ? findPriorCauseByRetryPattern(
+                jobEvidence,
+                retryPatterns,
+                priorById,
+                priorByNormalizedId,
+                priorAliases)
+            : undefined;
+        retryPatternMatch = retryPatternResolution?.cause;
+        matchingRetryPatterns = retryPatternResolution?.patterns ?? [];
+        explicitMatcherMatch = findPriorCauseByExplicitMatcher(evidence, priorCauses, priorById);
+        const crossMechanismMatches = uniqueById(
+            [testNameMatch, retryPatternMatch, explicitMatcherMatch].filter(Boolean));
 
-            if (crossMechanismMatches.length > 1) {
-                throw new Error(
-                    `Failure matched conflicting canonical prior causes: ${crossMechanismMatches.map(match => match.id).join(', ')}.`);
-            }
+        if (crossMechanismMatches.length > 1) {
+            throw new Error(
+                `Failure matched conflicting canonical prior causes: ${crossMechanismMatches.map(match => match.id).join(', ')}.`);
         }
 
-        // Normalized test identity converges compatible historical roots. An explicit alias is
-        // otherwise authoritative, while retry patterns and matchers cover cross-test root causes.
+        // Normalized test identity converges compatible historical roots. Trusted current
+        // evidence can redirect an alias proposal, while the alias remains the fallback identity.
         const canonicalPriorCause =
             testNameMatch ??
-            proposedAlias ??
             retryPatternMatch ??
             explicitMatcherMatch ??
+            proposedAlias ??
             findPriorCauseByExistingId(
                 cause,
                 priorById,
@@ -245,7 +243,11 @@ function resolveCauses({
             .sort();
         const aliases = unique([
             ...(canonicalPriorCause?.aliases ?? []),
-            ...(proposedAlias && proposedPriorCause.id !== canonicalId ? [proposedPriorCause.id] : []),
+            ...(proposedAlias &&
+                canonicalPriorCause?.id === proposedAlias.id &&
+                proposedPriorCause.id !== canonicalId
+                ? [proposedPriorCause.id]
+                : []),
             ...(priorCauseId && priorCauseId !== canonicalId ? [priorCauseId] : []),
             ...(supersededPriorCause
                 ? [supersededPriorCause.id, ...(supersededPriorCause.aliases ?? [])]

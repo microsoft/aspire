@@ -1109,64 +1109,49 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
             ReadStrings(FindOnlyCause(forward), "aliases"));
     }
 
+    [Theory]
+    [InlineData("retry-pattern")]
+    [InlineData("explicit-matcher")]
+    [RequiresTools(["node"])]
+    public async Task TrustedEvidenceRedirectsStoredAliasProposalWithoutClaimingAlias(string mechanism)
+    {
+        JsonElement result = await ResolveAsync(CreateStoredAliasProposalPayload(mechanism));
+
+        JsonElement cause = FindOnlyCause(result);
+        Assert.Equal("windows-init", cause.GetProperty("id").GetString());
+        Assert.Equal("https://github.com/microsoft/aspire/issues/1", cause.GetProperty("issue_url").GetString());
+        Assert.False(cause.TryGetProperty("aliases", out _));
+        Assert.Empty(result.GetProperty("priorCauseAliases").EnumerateArray());
+        Assert.Empty(result.GetProperty("priorCauseMigrations").EnumerateArray());
+    }
+
     [Fact]
     [RequiresTools(["node"])]
-    public async Task ExplicitAliasRemainsAuthoritativeWhenMatchersAreAmbiguous()
+    public async Task StoredAliasProposalFamilyJoinsRetryFamilyOnlyWithSharedSignature()
     {
-        const string canonicalCauseId = "canonical-infra-cause";
-        const string aliasCauseId = "canonical-infra-alias";
-        JsonElement result = await ResolveAsync(new
-        {
-            analysis = new
-            {
-                causes = new[] { aliasCauseId },
-                failed_jobs = new[]
-                {
-                    new
-                    {
-                        id = 1,
-                        name = "Tests / Sample / Sample (ubuntu-latest)",
-                        classification = "transient-infra",
-                        reason = "Shared deterministic failure token"
-                    }
-                },
-                failed_tests = Array.Empty<object>()
-            },
-            causes = new[]
-            {
-                new
-                {
-                    id = aliasCauseId,
-                    type = "infra-failure",
-                    title = "Current infrastructure cause",
-                    error_pattern = "Shared deterministic failure token",
-                    job_ids = new[] { 1 }
-                }
-            },
-            priorCauses = new object[]
-            {
-                new
-                {
-                    id = canonicalCauseId,
-                    type = "infra-failure",
-                    title = "Canonical infrastructure cause",
-                    error_pattern = "Shared deterministic failure token"
-                },
-                new
-                {
-                    id = aliasCauseId,
-                    canonical_id = canonicalCauseId,
-                    type = "infra-failure",
-                    title = "Canonical alias",
-                    error_pattern = "Shared deterministic failure token"
-                },
-                CreatePriorMatcherCause("first-matcher-cause"),
-                CreatePriorMatcherCause("second-matcher-cause")
-            },
-            retryPatterns = new { jobFailurePatterns = Array.Empty<object>() }
-        });
+        JsonElement result = await ResolveAsync(CreateStoredAliasProposalPayload(
+            "retry-pattern",
+            proposedFamilyErrorPattern: "Process completed with exit code -1073741502 (0xC0000142)."));
 
-        Assert.Equal(canonicalCauseId, FindOnlyCause(result).GetProperty("id").GetString());
+        JsonElement cause = FindOnlyCause(result);
+        Assert.Equal("windows-init", cause.GetProperty("id").GetString());
+        Assert.Equal(["dns-outage", "legacy-dns"], ReadStrings(cause, "aliases"));
+        JsonElement alias = Assert.Single(result.GetProperty("priorCauseAliases").EnumerateArray());
+        Assert.Equal("dns-outage", alias.GetProperty("legacy_id").GetString());
+        Assert.Equal("windows-init", alias.GetProperty("canonical_id").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task StoredAliasProposalFailsClosedWhenTrustedMatchersAreAmbiguous()
+    {
+        CommandResult result = await ExecuteHarnessAsync(CreateStoredAliasProposalPayload("ambiguous-matchers"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "Failure matched multiple canonical prior causes: first-matcher, second-matcher.",
+            result.Output,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -4393,6 +4378,95 @@ public sealed class AnalyzeCiFailureCauseResolverTests : IDisposable
         Assert.False(
             workflow.Contains("FIRST_JOB=$(jq -r '.failed_jobs[0].name", StringComparison.Ordinal),
             "Occurrence attribution must come from each cause's job references.");
+    }
+
+    private static object CreateStoredAliasProposalPayload(
+        string mechanism,
+        string proposedFamilyErrorPattern = "Could not resolve host")
+    {
+        const string failureLog = "Process completed with exit code -1073741502 (0xC0000142).";
+        object[] windowsMatchers = [new { kind = "error-literal", value = "0xC0000142" }];
+        var priorCauses = new List<object>
+        {
+            new
+            {
+                id = "windows-init",
+                type = "infra-failure",
+                title = "Windows process initialization failure",
+                error_pattern = "0xC0000142",
+                issue_url = "https://github.com/microsoft/aspire/issues/1",
+                matchers = mechanism == "explicit-matcher" ? windowsMatchers : null
+            },
+            new
+            {
+                id = "dns-outage",
+                type = "infra-failure",
+                title = "DNS outage",
+                error_pattern = proposedFamilyErrorPattern,
+                issue_url = "https://github.com/microsoft/aspire/issues/2",
+                aliases = new[] { "legacy-dns" }
+            },
+            new
+            {
+                id = "legacy-dns",
+                canonical_id = "dns-outage",
+                type = "infra-failure",
+                title = "Legacy DNS outage",
+                error_pattern = proposedFamilyErrorPattern
+            }
+        };
+        if (mechanism == "ambiguous-matchers")
+        {
+            foreach (string causeId in new[] { "first-matcher", "second-matcher" })
+            {
+                priorCauses.Add(new
+                {
+                    id = causeId,
+                    type = "infra-failure",
+                    title = causeId,
+                    error_pattern = "0xC0000142",
+                    matchers = windowsMatchers
+                });
+            }
+        }
+
+        return new
+        {
+            analysis = new
+            {
+                causes = new[] { "legacy-dns" },
+                failed_jobs = new[]
+                {
+                    new
+                    {
+                        id = 1,
+                        name = "Tests / Sample (windows-latest)",
+                        classification = "transient-infra",
+                        reason = failureLog
+                    }
+                },
+                failed_tests = Array.Empty<object>()
+            },
+            causes = new[]
+            {
+                new
+                {
+                    id = "legacy-dns",
+                    type = "infra-failure",
+                    title = "Windows process initialization failure",
+                    error_pattern = "0xC0000142",
+                    job_ids = new[] { 1 }
+                }
+            },
+            priorCauses,
+            retryPatterns = new
+            {
+                jobFailurePatterns = mechanism == "retry-pattern"
+                    ? new object[] { new { output = "0xC0000142", causeId = "windows-init" } }
+                    : Array.Empty<object>()
+            },
+            trustedJobLogs = new Dictionary<string, string> { ["1"] = failureLog }
+        };
     }
 
     private async Task<JsonElement> ResolveAsync(object payload)
