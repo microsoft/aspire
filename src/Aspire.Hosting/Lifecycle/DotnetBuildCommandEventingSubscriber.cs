@@ -48,14 +48,8 @@ internal sealed class DotnetBuildCommandEventingSubscriber(
             {
                 var args = context.Args;
                 if (args.Count < 2 ||
-                    args[1] is not string buildTarget ||
-                    buildTarget.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                    args[1] is not string buildTarget)
                 {
-                    // .NET 11 RC1 misroutes -mt when the build target is a file-based app, treating the .cs file
-                    // as an MSBuild project. The forwarding fix targets .NET 12, and multithreaded file-app builds
-                    // still have an open concurrency issue, so keep this optimization project-only for now.
-                    // https://github.com/dotnet/sdk/pull/56120
-                    // https://github.com/dotnet/sdk/issues/56238
                     return;
                 }
 
@@ -83,10 +77,18 @@ internal sealed class DotnetBuildCommandEventingSubscriber(
                     buildEnvironment[name] = value;
                 }
 
-                if (!await versionProvider.SupportsMultiThreadedBuildAsync(
-                    executable.WorkingDirectory,
-                    buildEnvironment,
-                    context.CancellationToken).ConfigureAwait(false))
+                // File-based apps need a later SDK because .NET 11 RC1 lacks both safe -mt forwarding and the
+                // compiler-client mutex mitigation. DotnetSdkUtils owns the verified compatibility boundaries.
+                var supportsMultiThreadedBuild = buildTarget.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                    ? await versionProvider.SupportsFileBasedMultiThreadedBuildAsync(
+                        executable.WorkingDirectory,
+                        buildEnvironment,
+                        context.CancellationToken).ConfigureAwait(false)
+                    : await versionProvider.SupportsMultiThreadedBuildAsync(
+                        executable.WorkingDirectory,
+                        buildEnvironment,
+                        context.CancellationToken).ConfigureAwait(false);
+                if (!supportsMultiThreadedBuild)
                 {
                     return;
                 }

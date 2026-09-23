@@ -39,6 +39,30 @@ public class DotnetSdkVersionProviderTests(ITestOutputHelper outputHelper)
         Assert.Equal(expected, DotnetSdkUtils.SupportsMultiThreadedBuild(parsedVersion));
     }
 
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("10.0.999", false)]
+    [InlineData("11.0.100-preview.7.25380.108", false)]
+    [InlineData("11.0.100-rc.1.26425.128", false)]
+    [InlineData("11.0.100-rc.2.1", false)]
+    [InlineData("11.0.100-rc.3.99999.1", false)]
+    [InlineData("11.0.100-rtm.26473.103", false)]
+    [InlineData("11.0.100-rtm.26473.104", true)]
+    [InlineData("11.0.100-rtm.26473.105", true)]
+    [InlineData("11.0.100-rtm.26473.104+build.42", true)]
+    [InlineData("11.0.100", true)]
+    [InlineData("11.0.101-servicing.1", true)]
+    [InlineData("11.0.200-preview.1", true)]
+    [InlineData("12.0.100-preview.1", true)]
+    public void SupportsFileBasedMultiThreadedBuildUsesVerifiedSdkFloor(string? version, bool expected)
+    {
+        var parsedVersion = version is null
+            ? null
+            : SemVersion.Parse(version, SemVersionStyles.Strict);
+
+        Assert.Equal(expected, DotnetSdkUtils.SupportsFileBasedMultiThreadedBuild(parsedVersion));
+    }
+
     [Fact]
     public async Task TryGetVersionAsyncRunsQuietVersionProbe()
     {
@@ -76,6 +100,31 @@ public class DotnetSdkVersionProviderTests(ITestOutputHelper outputHelper)
         };
 
         var supported = await provider.SupportsMultiThreadedBuildAsync(
+            workspace.Path,
+            buildEnvironment,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(supported);
+        var processSpec = Assert.Single(processRunner.ProcessSpecs);
+        Assert.Equal("custom-dotnet-path", processSpec.EnvironmentVariables["PATH"]);
+        Assert.Equal("false", processSpec.EnvironmentVariables["DOTNET_NOLOGO"]);
+        Assert.Equal("true", processSpec.EnvironmentVariables["DOTNET_CLI_TELEMETRY_OPTOUT"]);
+    }
+
+    [Fact]
+    public async Task SupportsFileBasedMultiThreadedBuildAsyncUsesBuildEnvironment()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: ["11.0.100-rtm.26473.104"]);
+        var provider = CreateProvider(processRunner);
+        var buildEnvironment = new Dictionary<string, string>
+        {
+            ["PATH"] = "custom-dotnet-path",
+            ["DOTNET_NOLOGO"] = "false",
+        };
+
+        var supported = await provider.SupportsFileBasedMultiThreadedBuildAsync(
             workspace.Path,
             buildEnvironment,
             TestContext.Current.CancellationToken);

@@ -394,19 +394,24 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         AssertBuildDependency(project.Resource, buildResource);
     }
 
-    [Fact]
-    public async Task FileOnlyModelCreatesDirectCoordinatedBuild()
+    [Theory]
+    [InlineData("11.0.100-rc.1.26425.128", false)]
+    [InlineData("11.0.100-rtm.26473.104", true)]
+    public async Task FileOnlyModelCreatesDirectCoordinatedBuild(
+        string sdkVersion,
+        bool supportsFileBasedMultiThreadedBuild)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
-        UseDotnetSdkVersion(builder, "11.0.100-rc.1");
+        UseDotnetSdkVersion(builder, sdkVersion);
         var filePath = Path.Combine(workspace.Path, "worker.cs");
         File.WriteAllText(filePath, "System.Console.WriteLine(\"Hello\");");
 
         var file = builder.AddDotnetProject("worker", filePath, options => options.ExcludeLaunchProfile = true);
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
         AssertBuildDependency(file.Resource, buildResource);
         await using var app = builder.Build();
 
@@ -426,8 +431,33 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             TestContext.Current.CancellationToken);
         var buildArgs = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
         var expectedBuildArgs = new List<string> { "build", filePath };
+        if (supportsFileBasedMultiThreadedBuild)
+        {
+            expectedBuildArgs.Add("-mt");
+        }
+
         AddExpectedConfiguration(builder, expectedBuildArgs);
         Assert.Equal(expectedBuildArgs, buildArgs);
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0,
+            });
+
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(rebuilder, app.Services),
+            TestContext.Current.CancellationToken);
+        var rebuildArgs = await ArgumentEvaluator.GetArgumentListAsync(rebuilder, app.Services);
+        var expectedRebuildArgs = new List<string> { "build", filePath };
+        if (supportsFileBasedMultiThreadedBuild)
+        {
+            expectedRebuildArgs.Add("-mt");
+        }
+
+        AddExpectedConfiguration(builder, expectedRebuildArgs);
+        Assert.Equal(expectedRebuildArgs, rebuildArgs);
 
         var fileArgs = await ArgumentEvaluator.GetArgumentListAsync(file.Resource, app.Services);
         var expectedFileArgs = new List<string> { "run", "--file", filePath, "--no-build" };
@@ -445,7 +475,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
-        var versionProvider = UseDotnetSdkVersion(builder, "11.0.100-rc.1");
+        var versionProvider = UseDotnetSdkVersion(builder, "11.0.100-rtm.26473.104");
         var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
         var fileDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "worker"));
         var filePath = Path.Combine(fileDirectory.FullName, "worker.cs");
@@ -515,7 +545,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         AddExpectedConfiguration(builder, expectedProjectBuildArgs);
         Assert.Equal(expectedProjectBuildArgs, projectBuildArgs);
         var fileBuildArgs = await ArgumentEvaluator.GetArgumentListAsync(fileBuild, app.Services);
-        var expectedFileBuildArgs = new List<string> { "build", fileBuildTarget };
+        var expectedFileBuildArgs = new List<string> { "build", fileBuildTarget, "-mt" };
         AddExpectedConfiguration(builder, expectedFileBuildArgs);
         Assert.Equal(expectedFileBuildArgs, fileBuildArgs);
 
