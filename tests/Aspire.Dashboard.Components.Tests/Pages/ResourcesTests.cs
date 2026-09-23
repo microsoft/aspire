@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Controls.Grid;
@@ -11,8 +12,10 @@ using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.BrowserStorage;
+using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Serialization;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.DashboardModel;
@@ -43,7 +46,7 @@ public partial class ResourcesTests : DashboardTestContext
         values["Container"] = true;
         values["Project"] = true;
 
-        var cut = RenderComponent<SelectResourceOptions<string>>(builder => builder
+        var cut = Render<SelectResourceOptions<string>>(builder => builder
             .Add(component => component.Values, values)
             .Add(component => component.OnAllValuesCheckedChangedAsync, () => Task.CompletedTask)
             .Add(component => component.OnValueVisibilityChangedAsync, (_, _) => Task.CompletedTask));
@@ -55,20 +58,20 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.NotNull(cut.Find("fluent-checkbox[title='Project']"));
 
         values["Container"] = false;
-        cut.SetParametersAndRender(builder => builder.Add(component => component.Values, values));
+        cut.Render(builder => builder.Add(component => component.Values, values));
 
         Assert.False(allCheckbox.Value);
         Assert.Null(allCheckbox.CheckState);
 
         values["Project"] = false;
-        cut.SetParametersAndRender(builder => builder.Add(component => component.Values, values));
+        cut.Render(builder => builder.Add(component => component.Values, values));
 
         Assert.False(allCheckbox.Value);
         Assert.False(allCheckbox.CheckState);
 
         values["Container"] = true;
         values["Project"] = true;
-        cut.SetParametersAndRender(builder => builder.Add(component => component.Values, values));
+        cut.Render(builder => builder.Add(component => component.Values, values));
 
         Assert.True(allCheckbox.Value);
         Assert.True(allCheckbox.CheckState);
@@ -96,7 +99,7 @@ public partial class ResourcesTests : DashboardTestContext
         };
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
-        var cut = RenderComponent<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
 
         var result = await cut.InvokeAsync(() => cut.Instance.GetData(new GridItemsProviderRequest<ResourceGridViewModel>()).AsTask());
 
@@ -121,7 +124,7 @@ public partial class ResourcesTests : DashboardTestContext
         };
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
-        var cut = RenderComponent<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
         var grid = cut.FindComponent<AspireFluentDataGrid<ResourceGridViewModel>>();
         var nameColumn = Assert.Single(
             cut.FindComponents<AspireTemplateColumn<ResourceGridViewModel>>(),
@@ -174,7 +177,7 @@ public partial class ResourcesTests : DashboardTestContext
             isReadOnly: true);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
 
-        var cut = RenderComponent<ResourceActions>(builder =>
+        var cut = Render<ResourceActions>(builder =>
         {
             builder.AddCascadingValue(viewport);
             builder.Add(component => component.CommandSelected, EventCallback.Factory.Create<CommandViewModel>(this, _ => Task.CompletedTask));
@@ -209,7 +212,7 @@ public partial class ResourcesTests : DashboardTestContext
             viewport,
             dashboardClient);
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -307,7 +310,7 @@ public partial class ResourcesTests : DashboardTestContext
             viewport,
             dashboardClient);
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -362,12 +365,16 @@ public partial class ResourcesTests : DashboardTestContext
 
         var resourceGraphModule = JSInterop.SetupModule("/js/app-resourcegraph.js");
         var initializeGraphInvocationHandler = resourceGraphModule.SetupVoid("initializeResourcesGraph", _ => true);
+        initializeGraphInvocationHandler.SetVoidResult();
+        var updateGraphInvocationHandler = resourceGraphModule.SetupVoid("updateResourcesGraph", _ => true);
+        updateGraphInvocationHandler.SetVoidResult();
+        resourceGraphModule.SetupVoid("updateResourcesGraphSelected", _ => true).SetVoidResult();
 
         var navigationManager = Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(DashboardUrls.ResourcesUrl(view: "Graph"));
 
         // Act
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -379,6 +386,18 @@ public partial class ResourcesTests : DashboardTestContext
         var focusInvocation = JSInterop.Invocations.Single(i => i.Identifier == "focusElement");
         Assert.Equal("resourcesGraphContainer", focusInvocation.Arguments[0]);
         Assert.Equal(true, focusInvocation.Arguments[1]);
+
+        var icons = Assert.IsType<GraphIconsDto>(initializeGraphInvocationHandler.Invocations.Single().Arguments[1]);
+        var serializedIcons = JsonSerializer.SerializeToElement(icons, DashboardJsonSerializerContext.Default.Options);
+        Assert.Equal(icons.Menu.Path, serializedIcons.GetProperty("menu").GetProperty("path").GetString());
+        Assert.Equal(icons.Menu.LabelFormat, serializedIcons.GetProperty("menu").GetProperty("labelFormat").GetString());
+        Assert.Equivalent(icons, serializedIcons.Deserialize(icons.GetType(), DashboardJsonSerializerContext.Default.Options), strict: true);
+
+        var resources = Assert.IsType<List<ResourceDto>>(updateGraphInvocationHandler.Invocations.Single().Arguments[0]);
+        var resource = Assert.Single(resources);
+        var serializedResources = JsonSerializer.SerializeToElement(resources, DashboardJsonSerializerContext.Default.Options);
+        Assert.Equal(resource.Name, serializedResources[0].GetProperty("name").GetString());
+        Assert.Equivalent(resources, serializedResources.Deserialize(resources.GetType(), DashboardJsonSerializerContext.Default.Options), strict: true);
     }
 
     [Fact]
@@ -406,7 +425,7 @@ public partial class ResourcesTests : DashboardTestContext
         var navigationManager = Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(DashboardUrls.ResourcesUrl(view: "Graph"));
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -438,7 +457,7 @@ public partial class ResourcesTests : DashboardTestContext
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -466,7 +485,7 @@ public partial class ResourcesTests : DashboardTestContext
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
         ResourceSetupHelpers.SetupResourcesPage(this, desktopViewport, dashboardClient);
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(desktopViewport);
         });
@@ -494,7 +513,7 @@ public partial class ResourcesTests : DashboardTestContext
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -528,7 +547,7 @@ public partial class ResourcesTests : DashboardTestContext
             viewport,
             dashboardClient);
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -576,7 +595,7 @@ public partial class ResourcesTests : DashboardTestContext
         };
 
         // Act and assert
-        var cut = RenderComponent<Components.Pages.Resources>(builder => { builder.AddCascadingValue(viewport); });
+        var cut = Render<Components.Pages.Resources>(builder => { builder.AddCascadingValue(viewport); });
 
         Assert.Collection(cut.Instance.PageViewModel.ResourceTypesToVisibility.OrderBy(kvp => kvp.Key),
             kvp =>
@@ -650,7 +669,7 @@ public partial class ResourcesTests : DashboardTestContext
 
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -695,7 +714,7 @@ public partial class ResourcesTests : DashboardTestContext
         var resource = CreateResource(resourceKey.GetCompositeName(), "Type1", "Running", null);
         Assert.NotNull(telemetryRepository.GetResourceByCompositeName(resource.Name));
 
-        var cut = RenderComponent<UnreadLogErrorsBadge>(builder =>
+        var cut = Render<UnreadLogErrorsBadge>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.UnviewedErrorCounts, unviewedErrorCounts);
@@ -785,7 +804,7 @@ public partial class ResourcesTests : DashboardTestContext
             dashboardClient);
 
         // Act
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -809,7 +828,7 @@ public partial class ResourcesTests : DashboardTestContext
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
 
         // Act
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -837,7 +856,7 @@ public partial class ResourcesTests : DashboardTestContext
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -867,7 +886,7 @@ public partial class ResourcesTests : DashboardTestContext
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -904,7 +923,7 @@ public partial class ResourcesTests : DashboardTestContext
         resourceGraphModule.SetupVoid("updateResourcesGraph", _ => true);
         resourceGraphModule.SetupVoid("updateResourcesGraphSelected", _ => true);
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -981,7 +1000,7 @@ public partial class ResourcesTests : DashboardTestContext
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -1009,7 +1028,7 @@ public partial class ResourcesTests : DashboardTestContext
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         var setCellTextClickHandler = JSInterop.SetupVoid("setCellTextClickHandler", _ => true);
 
-        RenderComponent<GridValue>(builder =>
+        Render<GridValue>(builder =>
         {
             builder.Add(p => p.Value, "https://example.com");
             builder.Add(p => p.ValueDescription, "Parameter value");
@@ -1043,7 +1062,7 @@ public partial class ResourcesTests : DashboardTestContext
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -1087,7 +1106,7 @@ public partial class ResourcesTests : DashboardTestContext
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
 
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -1107,7 +1126,7 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
-    public void CollapsedResourceNames_FetchedAfterDashboardClientConnected_KeyIncludesApplicationName()
+    public void CollapsedResourceNames_FetchedAfterDashboardClientConnected_KeyIncludesApplicationNameAndHash()
     {
         // Arrange
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -1149,14 +1168,13 @@ public partial class ResourcesTests : DashboardTestContext
         connectionTcs.SetResult();
 
         // Act - Render the component
-        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        var cut = Render<Components.Pages.Resources>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
 
         // Assert 1 - The key should include the application name
-        var expectedKey = BrowserStorageKeys.CollapsedResourceNamesKey(applicationName);
-        Assert.Equal(expectedKey, collapsedResourceNamesKeyUsed);
+        Assert.Matches("^Aspire_Resources_CollapsedResourceNames_mytestapplication-[a-f0-9]{16}$", collapsedResourceNamesKeyUsed);
 
         // Assert 2 - CollapsedResourceNames was only fetched after connection was completed
         var collapsedResourceNamesCall = getAsyncCallOrder.FirstOrDefault(c => c.Key.Contains(BrowserStorageKeys.CollapsedResourceNamesKeyPrefix));

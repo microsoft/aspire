@@ -113,7 +113,7 @@ public sealed class InteractionsTerminalDialogTests : DashboardTestContext
 
         // Remove the dialog through the renderer so Blazor disposes its entire component subtree.
         var host = Assert.IsAssignableFrom<IRenderedComponent<CascadingValue<IDialogInstance>>>(cut);
-        host.SetParametersAndRender(parameters => parameters
+        host.Render(parameters => parameters
             .Add(p => p.Value, host.Instance.Value)
             .AddChildContent(string.Empty));
 

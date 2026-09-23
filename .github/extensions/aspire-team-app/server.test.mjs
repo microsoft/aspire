@@ -159,6 +159,12 @@ test("an in-flight Health refresh preserves the saved order and complete card se
   process.env.GH_TOKEN = "test-token";
   delete process.env.GITHUB_TOKEN;
   process.env.PATH = "";
+  const copilotAccountEnv = Object.entries(process.env)
+    .filter(([key]) => key.startsWith("COPILOT_GH_ACCOUNT_"));
+  for (const [key] of copilotAccountEnv) delete process.env[key];
+  t.after(() => {
+    for (const [key, value] of copilotAccountEnv) process.env[key] = value;
+  });
 
   let gateArmed = false;
   let releaseTwo;
@@ -234,6 +240,78 @@ test("an in-flight Health refresh preserves the saved order and complete card se
   assert.deepEqual(final.dashboard.health.items.map((item) => item.id), [secondId, firstId]);
   assert.deepEqual(final.prefs.healthOrder.slice(0, 2), [secondId, firstId]);
   assert.equal(final.dashboard.loading, false);
+});
+
+test("resolveAuth re-probes when account preferences change during credential probing", async (t) => {
+  await resetTestHome({
+    mode: "health",
+    accounts: {
+      "acct:github.com/octo": { repos: ["microsoft/old"], active: true },
+    },
+  });
+  process.env.GH_TOKEN = "dotcom-token";
+  delete process.env.GITHUB_TOKEN;
+  const copilotAccountEnv = Object.entries(process.env)
+    .filter(([key]) => key.startsWith("COPILOT_GH_ACCOUNT_"));
+  for (const [key] of copilotAccountEnv) delete process.env[key];
+  process.env.COPILOT_GH_ACCOUNT_msft_2E_ghe_2E_com_octo = "proxima-token";
+  process.env.PATH = "";
+  t.after(() => {
+    for (const key of Object.keys(process.env)) {
+      if (key.startsWith("COPILOT_GH_ACCOUNT_")) delete process.env[key];
+    }
+    for (const [key, value] of copilotAccountEnv) process.env[key] = value;
+  });
+
+  let releaseProximaProbe;
+  let signalProximaProbe;
+  const proximaProbeStarted = new Promise((resolve) => { signalProximaProbe = resolve; });
+  const proximaProbeGate = new Promise((resolve) => { releaseProximaProbe = resolve; });
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url);
+    if (requestUrl.startsWith("http://127.0.0.1:")) return originalFetch(url, options);
+    const body = options.body ? JSON.parse(options.body) : {};
+    const query = body.query ?? "";
+    if (requestUrl === "https://api.github.com/" || requestUrl === "https://api.msft.ghe.com/") {
+      return jsonResponse({}, { headers: { "x-oauth-scopes": "read:org" } });
+    }
+    if (query.includes("viewer { login")) {
+      return jsonResponse({ data: { viewer: { login: "octo", avatarUrl: null } } });
+    }
+    if (requestUrl === "https://api.msft.ghe.com/graphql" && query.includes("coreai")) {
+      signalProximaProbe();
+      await proximaProbeGate;
+      return jsonResponse({ data: { r0: { nameWithOwner: "coreai/aspire-1p" } } });
+    }
+    if (query.includes("r0: repository")) {
+      const name = query.includes("microsoft/old") ? "microsoft/old" : "microsoft/new";
+      return jsonResponse({ data: { r0: { nameWithOwner: name } } });
+    }
+    throw new Error(`Unexpected fetch: ${requestUrl} ${query}`);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const server = await import(`./server.mjs?test=auth-preference-race-${Date.now()}`);
+  const entry = await server.startInstance("auth-preference-race-test", () => {});
+  t.after(() => server.stopInstance("auth-preference-race-test"));
+
+  const initialState = fetch(new URL("api/state", entry.url));
+  await proximaProbeStarted;
+
+  const mutation = postJson(entry.url, "api/account/repos", {
+    id: "acct:github.com/octo",
+    repos: ["microsoft/new"],
+  });
+  releaseProximaProbe();
+
+  const mutationDashboard = await (await mutation).json();
+  await (await initialState).json();
+  assert.deepEqual(
+    mutationDashboard.dashboard.activeAccounts
+      .find((account) => account.id === "acct:github.com/octo")
+      .repos,
+    ["microsoft/new"],
+  );
 });
 
 test("auto-apply preference is persisted without recomputing the dashboard", async (t) => {

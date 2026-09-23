@@ -21,7 +21,7 @@ public class TerminalTitleTests : DashboardTestContext
     [Fact]
     public void Metadata_IsRenderedAsTextAndClearsToFallback()
     {
-        var cut = RenderComponent<TerminalTitle>(builder => builder
+        var cut = Render<TerminalTitle>(builder => builder
             .Add(p => p.FallbackTitle, "shell")
             .Add(p => p.State, new TerminalToolbarState
             {
@@ -43,7 +43,7 @@ public class TerminalTitleTests : DashboardTestContext
         Assert.False(button.HasAttribute("title"));
         Assert.Single(cut.FindAll(".terminal-directory .copy-icon"));
         Assert.Empty(cut.FindAll("script, a"));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.State, new TerminalToolbarState
+        cut.Render(builder => builder.Add(p => p.State, new TerminalToolbarState
         {
             WorkingDirectory = "/a longer path/with spaces/and Unicode \u03bb",
         }));
@@ -51,7 +51,7 @@ public class TerminalTitleTests : DashboardTestContext
         Assert.Equal("/a longer path/with spaces/and Unicode \u03bb", cut.Find(".terminal-directory-measure").TextContent);
         Assert.Equal("Copy working directory: /a longer path/with spaces/and Unicode \u03bb", cut.Find(".terminal-directory").GetAttribute("aria-label"));
         Assert.Equal(button.Id, cut.Find(".terminal-directory").Id);
-        cut.SetParametersAndRender(builder => builder.Add(p => p.State, new TerminalToolbarState()));
+        cut.Render(builder => builder.Add(p => p.State, new TerminalToolbarState()));
         Assert.Equal("shell", cut.Find(".terminal-title").TextContent);
         Assert.Empty(cut.FindAll(".terminal-directory"));
     }
@@ -60,7 +60,7 @@ public class TerminalTitleTests : DashboardTestContext
     public void Title_CopiesFullLiveTitleAndFallbackWithIndependentFeedback()
     {
         var title = "build <worker> \u03bb with a long title";
-        var cut = RenderComponent<TerminalTitle>(builder => builder
+        var cut = Render<TerminalTitle>(builder => builder
             .Add(p => p.FallbackTitle, "shell")
             .Add(p => p.State, new TerminalToolbarState
             {
@@ -82,13 +82,13 @@ public class TerminalTitleTests : DashboardTestContext
         Assert.False(button.HasAttribute("disabled"));
         Assert.Empty(cut.FindAll("fluent-tooltip"));
 
-        cut.SetParametersAndRender(builder => builder.Add(p => p.State, new TerminalToolbarState { Title = "updated" }));
+        cut.Render(builder => builder.Add(p => p.State, new TerminalToolbarState { Title = "updated" }));
         Assert.Equal("updated", cut.Find(".terminal-title-button").GetAttribute("data-text"));
         Assert.Equal(id, cut.Find(".terminal-title-button").Id);
-        cut.SetParametersAndRender(builder => builder.Add(p => p.State, new TerminalToolbarState()));
+        cut.Render(builder => builder.Add(p => p.State, new TerminalToolbarState()));
         Assert.Equal("shell", cut.Find(".terminal-title-button").GetAttribute("data-text"));
         Assert.Equal("Copy terminal title: shell", cut.Find(".terminal-title-button").GetAttribute("aria-label"));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.FallbackTitle, ""));
+        cut.Render(builder => builder.Add(p => p.FallbackTitle, ""));
         Assert.Empty(cut.FindAll(".terminal-title-button"));
     }
 
@@ -100,7 +100,7 @@ public class TerminalTitleTests : DashboardTestContext
     [InlineData("/")]
     public void Directory_PreservesFullMeasurementAndCopyValue(string path)
     {
-        var cut = RenderComponent<TerminalTitle>(builder => builder.Add(p => p.State, new TerminalToolbarState
+        var cut = Render<TerminalTitle>(builder => builder.Add(p => p.State, new TerminalToolbarState
         {
             WorkingDirectory = path
         }));
@@ -120,7 +120,7 @@ public class TerminalTitleTests : DashboardTestContext
     [InlineData("warning", 75, "75", "75%", "TerminalProgressWarning")]
     public void Progress_ExposesAccessibleStateAndValue(string state, int? percentage, string? expectedValue, string expectedText, string label)
     {
-        var cut = RenderComponent<TerminalTitle>(builder => builder.Add(p => p.State, new TerminalToolbarState
+        var cut = Render<TerminalTitle>(builder => builder.Add(p => p.State, new TerminalToolbarState
         {
             Title = "shell", Connected = true, ProgressState = state, ProgressPercentage = percentage
         }));
@@ -149,7 +149,7 @@ public class TerminalTitleTests : DashboardTestContext
     [InlineData(false, "indeterminate")]
     public void InactiveProgress_IsHidden(bool connected, string state)
     {
-        var cut = RenderComponent<TerminalTitle>(builder => builder.Add(p => p.State, new TerminalToolbarState
+        var cut = Render<TerminalTitle>(builder => builder.Add(p => p.State, new TerminalToolbarState
         {
             Connected = connected, ProgressState = state, ProgressPercentage = 42
         }));

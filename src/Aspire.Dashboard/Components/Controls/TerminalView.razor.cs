@@ -224,7 +224,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
     private async Task InitializeTerminalCoreAsync(string endpoint)
     {
-        var moduleUri = new Uri(new Uri(NavigationManager.BaseUri), "Components/Controls/TerminalView.razor.js");
+        var moduleUri = new Uri(new Uri(NavigationManager.BaseUri), Assets["Components/Controls/TerminalView.razor.js"]);
         _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", moduleUri.PathAndQuery);
         if (_disposed)
         {
@@ -250,7 +250,6 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                 Label = Loc[nameof(Resources.TerminalStrings.TerminalInputLabel)],
                 DecreaseFontSize = DecreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)],
                 IncreaseFontSize = IncreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)],
-                TerminalDimensions = TerminalDimensionsLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSize)],
                 Fit = FitLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)],
                 FocusControlsHint = FocusControlsHintLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalFocusControlsHint)],
             }, _selectionTemplateElement, _footerElement);
@@ -561,8 +560,6 @@ public sealed record TerminalViewOptions
     public required string DecreaseFontSize { get; init; }
     /// <summary>The accessible increase-font-size label.</summary>
     public required string IncreaseFontSize { get; init; }
-    /// <summary>The accessible grid-size label.</summary>
-    public required string TerminalDimensions { get; init; }
     /// <summary>The localized automatic-sizing option.</summary>
     public required string Fit { get; init; }
     /// <summary>The localized focus-navigation hint.</summary>

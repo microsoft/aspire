@@ -23,7 +23,7 @@ public class HelpDialogTests : DashboardTestContext
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: isEnabled) { IsReadOnly = isReadOnly });
 
-        var cut = RenderComponent<HelpDialog>();
+        var cut = Render<HelpDialog>();
 
         var heading = Assert.Single(cut.FindAll("h6"), h => h.TextContent == Resources.Dialogs.HelpDialogCategoryNavigation);
         var navigationShortcuts = cut.Find($"dl[aria-labelledby='{heading.Id}']");

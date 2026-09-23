@@ -1079,7 +1079,7 @@ test("a mount becoming ready after another terminal does not steal its focus", a
     assert.equal(attempts[0].client.focusCalls, 0);
 });
 
-test("inactive dock panes wait for activation before focusing and do not remount", async () => {
+test("inactive dock panes wait for activation without stealing tab focus or remounting", async () => {
     const { id, element } = mount({ options: { showDimensions: false } });
     const pane = {};
     element.closest = selector => selector === "[inert]" ? pane : null;
@@ -1090,11 +1090,11 @@ test("inactive dock panes wait for activation before focusing and do not remount
     element.closest = () => null;
     document.activeElement = { tagName: "BUTTON" };
     terminal.setAutoFit(id, true);
-    assert.equal(attempts[0].client.focusCalls, 1);
-    assert.equal(document.activeElement, attempts[0].client.element);
+    assert.equal(attempts[0].client.focusCalls, 0);
+    assert.equal(document.activeElement.tagName, "BUTTON");
     terminal.setAutoFit(id, true);
     observers[0].callback();
-    assert.equal(attempts[0].client.focusCalls, 1);
+    assert.equal(attempts[0].client.focusCalls, 0);
     assert.equal(attempts.length, 1);
 });
 
@@ -1150,10 +1150,31 @@ test("missing WebGPU and ordinary HTTP leave renderer selection to the package",
     assert.equal(terminal.getToolbarState(second.id).error, null);
 });
 
+test("hidden initial mounts wait for visibility without consuming the first-frame timeout", async () => {
+    const { id, element } = mount({ visible: false });
+    assert.equal(attempts.length, 0);
+    element.clientWidth = 800;
+    element.clientHeight = 600;
+    terminal.refreshLayout(id);
+    assert.equal(attempts.length, 1);
+    observers[0].callback();
+    assert.equal(attempts.length, 1);
+    attempts[0].resolve();
+    await settle();
+    element.clientWidth = 0;
+    terminal.refreshLayout(id);
+    element.clientWidth = 800;
+    terminal.refreshLayout(id);
+    assert.equal(attempts.length, 1);
+    assert.equal(attempts[0].client.selectionRefreshes, 1);
+    assert.equal(attempts[0].client.primaryRequests, 0);
+    assert.deepEqual(attempts[0].client.sizingCalls, []);
+});
+
 for (const [browser, userAgent, renderer] of [
     ["Firefox desktop", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0", "webgl2"],
     ["Firefox Android", "Mozilla/5.0 (Android 15; Mobile; rv:142.0) Gecko/142.0 Firefox/142.0", "webgl2"],
-    ["Firefox iOS", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/142.0 Mobile/15E148 Safari/605.1.15", "webgl2"],
+    ["Firefox iOS", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/142.0 Mobile/15E148 Safari/605.1.15", "auto"],
     ["Chrome", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36", "auto"],
     ["Edge", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0", "auto"],
     ["Safari", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15", "auto"],
@@ -1191,27 +1212,6 @@ test("Firefox keeps WebGL2 on automatic retries and explicit reconnects", async 
     await settle();
     assert.equal(terminal.getToolbarState(id).connected, true);
     assert.equal(timers.size, 0);
-});
-
-test("hidden initial mounts wait for visibility without consuming the first-frame timeout", async () => {
-    const { id, element } = mount({ visible: false });
-    assert.equal(attempts.length, 0);
-    element.clientWidth = 800;
-    element.clientHeight = 600;
-    terminal.refreshLayout(id);
-    assert.equal(attempts.length, 1);
-    observers[0].callback();
-    assert.equal(attempts.length, 1);
-    attempts[0].resolve();
-    await settle();
-    element.clientWidth = 0;
-    terminal.refreshLayout(id);
-    element.clientWidth = 800;
-    terminal.refreshLayout(id);
-    assert.equal(attempts.length, 1);
-    assert.equal(attempts[0].client.selectionRefreshes, 1);
-    assert.equal(attempts[0].client.primaryRequests, 0);
-    assert.deepEqual(attempts[0].client.sizingCalls, []);
 });
 
 test("mount failure reports an error and retries with a fresh abortable generation", async () => {

@@ -20,7 +20,7 @@ public class AspireMenuButtonTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
 
-        var cut = RenderComponent<AspireMenuButton>(builder => builder
+        var cut = Render<AspireMenuButton>(builder => builder
             .Add(component => component.MenuButtonId, "disabled-menu-button")
             .Add(component => component.ItemsProvider, () => [new MenuButtonItem { Text = "Item" }])
             .Add(component => component.Disabled, true));
@@ -36,7 +36,7 @@ public class AspireMenuButtonTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
 
-        var cut = RenderComponent<AspireMenuButton>(builder =>
+        var cut = Render<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, "view-options-button");
             builder.Add(p => p.Text, "View options");
@@ -58,7 +58,7 @@ public class AspireMenuButtonTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
 
-        var cut = RenderComponent<AspireMenuButton>(builder =>
+        var cut = Render<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, "icon-only-button");
             builder.Add(p => p.ItemsProvider, () => [new MenuButtonItem { Text = "Action" }]);
@@ -75,7 +75,7 @@ public class AspireMenuButtonTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
 
-        var cut = RenderComponent<AspireMenuButton>(builder =>
+        var cut = Render<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, "icon-color-button");
             builder.Add(p => p.ItemsProvider, () => [new MenuButtonItem { Text = "Action" }]);
@@ -83,7 +83,7 @@ public class AspireMenuButtonTests : DashboardTestContext
 
         Assert.Equal(Color.Primary, cut.FindComponent<FluentIcon<Icon>>().Instance.Color);
 
-        cut.SetParametersAndRender(builder => builder.Add(p => p.IconColor, Color.Default));
+        cut.Render(builder => builder.Add(p => p.IconColor, Color.Default));
 
         Assert.Equal(Color.Default, cut.FindComponent<FluentIcon<Icon>>().Instance.Color);
     }
@@ -96,7 +96,7 @@ public class AspireMenuButtonTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
 
-        var cut = RenderComponent<AspireMenuButton>(builder =>
+        var cut = Render<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, "icon-only-button");
             builder.Add(p => p.IconStart, new Icons.Regular.Size16.Delete());
@@ -127,7 +127,7 @@ public class AspireMenuButtonTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentMenu(this);
 
         var providerInvocationCount = 0;
-        var cut = RenderComponent<AspireMenuButton>(builder =>
+        var cut = Render<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, "lazy-menu-button");
             builder.Add(p => p.Text, "View options");
@@ -179,7 +179,7 @@ public class AspireMenuButtonTests : DashboardTestContext
 
         var itemText = "First item";
         Func<IList<MenuButtonItem>> itemsProvider = () => [new MenuButtonItem { Text = itemText }];
-        var cut = RenderComponent<AspireMenuButton>(builder =>
+        var cut = Render<AspireMenuButton>(builder =>
         {
             builder.Add(p => p.MenuButtonId, "refresh-menu-button");
             builder.Add(p => p.Text, "View options");
@@ -190,7 +190,7 @@ public class AspireMenuButtonTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal("First item", cut.FindComponent<FluentMenuItem>().Instance.Label));
 
         itemText = "Second item";
-        cut.SetParametersAndRender(builder => builder.Add(p => p.Text, "Updated view options"));
+        cut.Render(builder => builder.Add(p => p.Text, "Updated view options"));
 
         cut.WaitForAssertion(() => Assert.Equal("Second item", cut.FindComponent<FluentMenuItem>().Instance.Label));
     }

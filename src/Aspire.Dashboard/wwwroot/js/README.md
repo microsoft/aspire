@@ -64,10 +64,12 @@ The temporary `nuget-hex1b` source in the repository's `NuGet.config` maps only
 `Hex1b`, `Hex1b.McpServer`, and `Hex1b.Tool` to nuget.org while these versions await
 mirroring. Other packages continue to use the existing feeds.
 
-Firefox terminals use `renderer: "webgl2"` to avoid a WebGPU performance issue,
-even when WebGPU is available. Detection recognizes the `Firefox/` and iOS
-`FxiOS/` user-agent tokens and applies to every shared terminal mount, including
-automatic retries and explicit reconnects.
+Desktop and Android Firefox terminals use `renderer: "webgl2"` until the
+[WebGPU performance issue](https://bugzilla.mozilla.org/show_bug.cgi?id=1870699)
+is resolved, even when WebGPU is available. Detection recognizes the `Firefox/`
+user-agent token and applies to every shared terminal mount, including automatic
+retries and explicit reconnects. Firefox on iOS (`FxiOS/`) uses WebKit rather
+than Gecko and retains automatic renderer selection.
 
 Other browsers use `renderer: "auto"`: WebGPU is preferred, with the package's
 WebGL2 compatibility backend used when WebGPU's secure context, API, adapter,

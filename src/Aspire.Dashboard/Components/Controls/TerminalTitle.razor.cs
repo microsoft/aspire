@@ -48,7 +48,7 @@ public partial class TerminalTitle : IAsyncDisposable
 
     private async Task InitializeAsync()
     {
-        _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Controls/TerminalTitle.razor.js");
+        _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"./{Assets["Components/Controls/TerminalTitle.razor.js"]}");
         if (!_disposed)
         {
             await _jsModule.InvokeVoidAsync("observePath", _metadataElement);

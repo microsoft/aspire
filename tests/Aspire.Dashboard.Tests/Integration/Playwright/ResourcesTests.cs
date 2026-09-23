@@ -28,7 +28,8 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         {
             await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
 
-            var viewOptionsButton = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = Dashboard.Resources.Resources.ResourcesChangeViewOptions, Exact = true });
+            var viewOptionsButton = page.Locator(
+                $"fluent-button[title='{Dashboard.Resources.Resources.ResourcesChangeViewOptions}']");
             await Assertions.Expect(viewOptionsButton).ToHaveAttributeAsync("aria-expanded", "false");
 
             await viewOptionsButton.ClickAsync();
@@ -138,7 +139,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await page.SetViewportSizeAsync(360, 720);
             await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
 
-            var tabs = page.Locator(".resources-tab-header[orientation='horizontal']");
+            var tabs = page.Locator(".resources-tab-header > fluent-tablist[orientation='horizontal']");
             await Assertions.Expect(tabs).ToBeVisibleAsync();
 
             var tableTab = page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = ControlsStrings.ResourcesContainerTableTab, Exact = true });
@@ -214,7 +215,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
             // Attempt a large drag from the cog. D3's drag behavior is attached to the ancestor
             // resource group, so this verifies the cog stops the initiating pointer event.
-            await page.WaitForTimeoutAsync(300);
+            await WaitForPositionToStabilizeAsync(node);
             var nodeBoundsBefore = await node.BoundingBoxAsync();
             var cogBounds = await cog.BoundingBoxAsync();
             Assert.NotNull(nodeBoundsBefore);
@@ -239,9 +240,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             Assert.InRange(Math.Abs(nodeBoundsAfter.Y - nodeBoundsBefore.Y), 0, 5);
             Assert.False((await node.GetAttributeAsync("class"))?.Split(' ').Contains("resource-group-selected"));
 
-            var menu = page.GetByRole(
-                AriaRole.Menu,
-                new PageGetByRoleOptions { Name = "TestResource", Exact = true });
+            var menu = page.Locator(".aspire-menu-container:has(#resource-context-menu-header) fluent-menu-list");
             await Assertions.Expect(menu).ToBeHiddenAsync();
 
             await node.HoverAsync();
@@ -250,6 +249,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await Assertions.Expect(cog).ToHaveAttributeAsync("aria-expanded", "true");
             Assert.False((await node.GetAttributeAsync("class"))?.Split(' ').Contains("resource-group-selected"));
 
+            await menu.GetByRole(AriaRole.Menuitem).First.FocusAsync();
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(menu).ToBeHiddenAsync();
             await Assertions.Expect(cog).ToHaveAttributeAsync("aria-expanded", "false");
@@ -265,8 +265,9 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await Assertions.Expect(header.Locator(".aspire-menu-header-text")).ToHaveTextAsync("TestResource");
             var headerBounds = await header.BoundingBoxAsync();
             Assert.NotNull(headerBounds);
-            Assert.InRange(headerBounds.Height, 39, 41);
+            Assert.InRange(headerBounds.Height, 35, 37);
 
+            await menu.GetByRole(AriaRole.Menuitem).First.FocusAsync();
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(menu).ToBeHiddenAsync();
             await Assertions.Expect(cog).ToHaveAttributeAsync("aria-expanded", "false");
@@ -280,7 +281,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                     Name = ControlsStrings.ActionViewDetailsText,
                     Exact = true
                 }).ClickAsync();
-            await Assertions.Expect(page.Locator(".details-header-title")).ToHaveTextAsync("TestResource");
+            await Assertions.Expect(page.Locator(".details-header-title")).ToHaveTextAsync("Project: TestResource");
 
             await page.GetByRole(
                 AriaRole.Button,
@@ -292,6 +293,38 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await Assertions.Expect(page.Locator(".details-header-title")).ToHaveCountAsync(0);
             await Assertions.Expect(cog).ToBeFocusedAsync();
         });
+    }
+
+    private static async Task WaitForPositionToStabilizeAsync(ILocator locator)
+    {
+        await locator.EvaluateAsync(
+            """
+            element => new Promise(resolve => {
+                let previousBounds;
+                let stableFrames = 0;
+
+                const checkPosition = () => {
+                    const bounds = element.getBoundingClientRect();
+                    if (previousBounds &&
+                        Math.abs(bounds.x - previousBounds.x) <= 0.5 &&
+                        Math.abs(bounds.y - previousBounds.y) <= 0.5) {
+                        stableFrames++;
+                    } else {
+                        stableFrames = 0;
+                    }
+
+                    if (stableFrames >= 3) {
+                        resolve();
+                        return;
+                    }
+
+                    previousBounds = bounds;
+                    requestAnimationFrame(checkPosition);
+                };
+
+                requestAnimationFrame(checkPosition);
+            })
+            """).DefaultTimeout();
     }
 
     [Fact]
@@ -322,7 +355,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 }
                 """);
 
-            var menu = page.Locator("fluent-menu.aspire-menu-container:not([trigger]) > fluent-menu-list");
+            var menu = page.Locator(".aspire-menu-container:has(#resource-context-menu-header) fluent-menu-list");
             await Assertions.Expect(menu).ToBeVisibleAsync();
             var menuBounds = await menu.BoundingBoxAsync();
             Assert.NotNull(menuBounds);
@@ -334,6 +367,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 "elements => elements.filter(element => element.getBoundingClientRect().width > 0 && element.getBoundingClientRect().height > 0).length");
             Assert.Equal(0, visibleBlockingIndicators);
 
+            await menu.GetByRole(AriaRole.Menuitem).First.FocusAsync();
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(menu).ToBeHiddenAsync();
 
@@ -366,6 +400,11 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 resourceName: "basketcache",
                 resourceType: KnownResourceTypes.Container,
                 state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource(
+                resourceName: "hidden-resource",
+                resourceType: KnownResourceTypes.Container,
+                state: KnownResourceState.Running,
+                hidden: true),
             ModelTestHelpers.CreateResource(
                 resourceName: "TestResource",
                 resourceType: KnownResourceTypes.Project,

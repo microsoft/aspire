@@ -2550,6 +2550,7 @@ function getE2eWorkspaceFolderEntries(folders: unknown): Array<{ uri: vscode.Uri
   if (typeof expectedWorkspaceRoot !== 'string' || expectedWorkspaceRoot.length === 0) {
     throw new Error('Aspire extension E2E setWorkspaceFolders requires ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT.');
   }
+  const allowedRoots = getE2eWorkspaceFolderRoots();
 
   return folders.map((folder, index) => {
     if (!folder || typeof folder !== 'object') {
@@ -2563,8 +2564,8 @@ function getE2eWorkspaceFolderEntries(folders: unknown): Array<{ uri: vscode.Uri
     if (!fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) {
       throw new Error(`Aspire extension E2E workspace folder ${index} requires an existing directory: ${folderPath}`);
     }
-    if (!isPathWithinDirectory(folderPath, expectedWorkspaceRoot)) {
-      throw new Error(`Aspire extension E2E workspace folder ${index} must stay inside the configured E2E workspace root.`);
+    if (!allowedRoots.some(root => isPathWithinDirectory(folderPath, root))) {
+      throw new Error(`Aspire extension E2E workspace folder ${index} must stay inside the configured E2E run root or workspace root.`);
     }
     if (name !== undefined && (typeof name !== 'string' || name.length === 0)) {
       throw new Error(`Aspire extension E2E workspace folder ${index} name must be a non-empty string when provided.`);
@@ -2673,16 +2674,18 @@ export function getE2eAddableWorkspaceFolderPath(folderPath: unknown): string {
     throw new Error(`Aspire extension E2E addWorkspaceFolder requires an existing folder: ${folderPath}`);
   }
 
-  const allowedRoots = [
-    process.env.ASPIRE_EXTENSION_E2E_RUN_ROOT,
-    process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT,
-  ].filter((root): root is string => typeof root === 'string' && root.length > 0);
-
-  if (!allowedRoots.some(root => isPathWithinDirectory(folderPath, root))) {
+  if (!getE2eWorkspaceFolderRoots().some(root => isPathWithinDirectory(folderPath, root))) {
     throw new Error('Aspire extension E2E addWorkspaceFolder can only add folders inside the configured E2E run root or workspace root.');
   }
 
   return folderPath;
+}
+
+function getE2eWorkspaceFolderRoots(): string[] {
+  return [
+    process.env.ASPIRE_EXTENSION_E2E_RUN_ROOT,
+    process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT,
+  ].filter((root): root is string => typeof root === 'string' && root.length > 0);
 }
 
 function getE2eBreakpointLine(line: unknown): number {

@@ -7,7 +7,6 @@
     <AspireDashboardDir>$([MSBuild]::EnsureTrailingSlash('$(AspireDashboardDir)'))</AspireDashboardDir>
     <AspireDashboardPath Condition=" '$(AspireDashboardPath)' == '' ">$([MSBuild]::NormalizePath($(AspireDashboardDir), 'Aspire.Dashboard'))</AspireDashboardPath>
     <AspireDashboardPath Condition=" '$(OS)' == 'Windows_NT' and !$(AspireDashboardPath.EndsWith('.exe')) ">$(AspireDashboardPath).exe</AspireDashboardPath>
-    <AspireDashboardPath Condition="$([MSBuild]::IsOsPlatform('OSX')) and !$(AspireDashboardPath.EndsWith('.dll'))">$(AspireDashboardPath).dll</AspireDashboardPath>
   </PropertyGroup>
 
   <ItemGroup>

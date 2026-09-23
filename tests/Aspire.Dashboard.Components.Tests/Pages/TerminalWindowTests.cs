@@ -23,8 +23,8 @@ public class TerminalWindowTests : DashboardTestContext
     public async Task WorkloadMetadata_UpdatesWindowTitleAndTitlebar()
     {
         TerminalSetupHelpers.SetupTerminalComponents(this, new TestDashboardClient());
-        var head = RenderComponent<HeadOutlet>();
-        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.ResourceName, "shell"));
+        var head = Render<HeadOutlet>();
+        var cut = Render<TerminalWindow>(builder => builder.Add(p => p.ResourceName, "shell"));
         var terminal = cut.FindComponent<TerminalView>().Instance;
         var state = new TerminalToolbarState
         {
@@ -53,7 +53,7 @@ public class TerminalWindowTests : DashboardTestContext
         var registration = module.Setup<bool>("registerDetachedTerminalWindow", _ => true);
         Services.GetRequiredService<NavigationManager>().NavigateTo(
             "terminal-window/apphost/terminal?fontSize=23&windowOwner=owner&windowGeneration=generation");
-        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
+        var cut = Render<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
         Assert.Empty(cut.FindComponents<TerminalView>());
         Assert.Equal([], JSInterop.Invocations.Where(i => i.Identifier == "initTerminal"));
         Assert.Single(registration.Invocations);
@@ -83,7 +83,7 @@ public class TerminalWindowTests : DashboardTestContext
         TerminalSetupHelpers.SetupTerminalComponents(this, new TestDashboardClient());
         Services.GetRequiredService<NavigationManager>().NavigateTo(
             "terminal-window/apphost/terminal?windowOwner=owner&windowGeneration=generation");
-        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
+        var cut = Render<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
         var registration = Assert.Single(JSInterop.Invocations, i => i.Identifier == "registerDetachedTerminalWindow");
         var id = Assert.IsType<string>(registration.Arguments[0]);
@@ -102,7 +102,7 @@ public class TerminalWindowTests : DashboardTestContext
         module.Setup<bool>("registerDetachedTerminalWindow", _ => true).SetException(new JSException("Storage denied"));
         Services.GetRequiredService<NavigationManager>().NavigateTo(
             "terminal-window/apphost/terminal?windowOwner=owner&windowGeneration=generation");
-        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
+        var cut = Render<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
         cut.WaitForAssertion(() => Assert.Equal(Resources.TerminalStrings.TerminalWindowTrackingFailed,
             cut.Find(".terminal-window-ended").TextContent));
         Assert.Empty(cut.FindComponents<TerminalView>());
@@ -121,7 +121,7 @@ public class TerminalWindowTests : DashboardTestContext
         TerminalSetupHelpers.SetupTerminalComponents(this, new TestDashboardClient(terminalChannelProvider: () => updates), pathBase);
         Services.GetRequiredService<NavigationManager>().NavigateTo($"terminal-window/apphost/{escapedTerminalId}");
 
-        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.TerminalId, terminalId));
+        var cut = Render<TerminalWindow>(builder => builder.Add(p => p.TerminalId, terminalId));
 
         cut.WaitForAssertion(() => TerminalSetupHelpers.AssertSingleTerminalConnection(this,
             $"wss://dashboard.example{pathBase}/api/apphost-terminal?terminalId={escapedTerminalId}"));
@@ -136,7 +136,7 @@ public class TerminalWindowTests : DashboardTestContext
         TerminalSetupHelpers.SetupTerminalComponents(this, new TestDashboardClient(terminalChannelProvider: () => updates));
         var path = appHost ? "/terminal-window/apphost/terminal" : "/terminal-window/resource/shell/2";
         Services.GetRequiredService<NavigationManager>().NavigateTo($"{path}?fontSize=19");
-        var cut = RenderComponent<TerminalWindow>(builder => builder
+        var cut = Render<TerminalWindow>(builder => builder
             .Add(p => p.TerminalId, appHost ? "terminal" : null)
             .Add(p => p.ResourceName, appHost ? null : "shell")
             .Add(p => p.ReplicaIndex, appHost ? 0 : 2));
@@ -158,12 +158,12 @@ public class TerminalWindowTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = new TestDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var head = RenderComponent<HeadOutlet>();
-        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
+        var head = Render<HeadOutlet>();
+        var cut = Render<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Retitled, "terminal", "Shell"));
         head.WaitForAssertion(() => Assert.Equal("Shell", head.Find("title").TextContent));
 
-        cut.SetParametersAndRender(builder => builder
+        cut.Render(builder => builder
             .Add(p => p.TerminalId, "terminal")
             .Add(p => p.ResourceName, "unused")
             .Add(p => p.ReplicaIndex, 3));
@@ -172,7 +172,7 @@ public class TerminalWindowTests : DashboardTestContext
 
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Removed, "terminal"));
         cut.WaitForAssertion(() => Assert.Equal("This terminal has ended.", cut.Find(".terminal-window-ended").TextContent));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.TerminalId, "terminal"));
+        cut.Render(builder => builder.Add(p => p.TerminalId, "terminal"));
         Assert.Equal("This terminal has ended.", cut.Find(".terminal-window-ended").TextContent);
         Assert.Equal(1, client.ActiveTerminalSubscriptionCount);
     }
@@ -188,8 +188,8 @@ public class TerminalWindowTests : DashboardTestContext
         var client = new TestDashboardClient(terminalChannelProvider: () =>
             Interlocked.Increment(ref subscriptions) == 1 ? firstUpdates : secondUpdates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var head = RenderComponent<HeadOutlet>();
-        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "first"));
+        var head = Render<HeadOutlet>();
+        var cut = Render<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "first"));
         await firstUpdates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Retitled, "first", "First shell"));
         head.WaitForAssertion(() => Assert.Equal("First shell", head.Find("title").TextContent));
         if (firstTerminalEnded)
@@ -226,8 +226,8 @@ public class TerminalWindowTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = new TestDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var head = RenderComponent<HeadOutlet>();
-        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
+        var head = Render<HeadOutlet>();
+        var cut = Render<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Retitled, "terminal", "Shell"));
         head.WaitForAssertion(() => Assert.Equal("Shell", head.Find("title").TextContent));
         if (firstTerminalEnded)
@@ -236,7 +236,7 @@ public class TerminalWindowTests : DashboardTestContext
             cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".terminal-window-ended")));
         }
 
-        cut.SetParametersAndRender(builder => builder
+        cut.Render(builder => builder
             .Add(p => p.TerminalId, null)
             .Add(p => p.ResourceName, "resource")
             .Add(p => p.ReplicaIndex, 2));
@@ -251,7 +251,7 @@ public class TerminalWindowTests : DashboardTestContext
             Assert.Equal("resource #2", head.Find("title").TextContent);
         });
 
-        cut.SetParametersAndRender(builder => builder.Add(p => p.ReplicaIndex, 3));
+        cut.Render(builder => builder.Add(p => p.ReplicaIndex, 3));
         Assert.Equal("resource #3", head.Find("title").TextContent);
         Assert.Equal(3, cut.FindComponent<TerminalView>().Instance.ReplicaIndex);
         Assert.Equal(1, client.TerminalSubscriptionCount);
@@ -294,8 +294,8 @@ public class TerminalWindowTests : DashboardTestContext
             }
         };
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var head = RenderComponent<HeadOutlet>();
-        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "first"));
+        var head = Render<HeadOutlet>();
+        var cut = Render<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "first"));
 
         try
         {
@@ -349,7 +349,7 @@ public class TerminalWindowTests : DashboardTestContext
             }
         };
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "first"));
+        var cut = Render<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "first"));
 
         try
         {
@@ -378,7 +378,7 @@ public class TerminalWindowTests : DashboardTestContext
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = new TestDashboardClient(terminalChannelProvider: () => updates);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
-        var cut = RenderComponent<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
+        var cut = Render<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("terminal"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
 

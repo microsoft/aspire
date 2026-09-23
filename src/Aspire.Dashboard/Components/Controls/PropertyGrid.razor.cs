@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -85,11 +86,11 @@ public partial class PropertyGrid<TItem> where TItem : IPropertyGridItem
 {
     private static readonly RenderFragment<TItem> s_emptyChildContent = _ => builder => { };
 
-    private static readonly GridSort<TItem> s_defaultNameSort = GridSort<TItem>.ByAscending(vm => vm.Name);
-    private static readonly GridSort<TItem> s_defaultValueSort = GridSort<TItem>.ByAscending(vm => vm.IsValueMasked ? null : vm.Value);
+    private static readonly EnumerableGridSort<TItem> s_defaultNameSort = EnumerableGridSort<TItem>.ByAscending(vm => vm.Name);
+    private static readonly EnumerableGridSort<TItem> s_defaultValueSort = EnumerableGridSort<TItem>.ByAscending(vm => vm.IsValueMasked ? null : vm.Value);
 
     [Parameter, EditorRequired]
-    public IQueryable<TItem>? Items { get; set; }
+    public IEnumerable<TItem>? Items { get; set; }
 
     [Parameter]
     public Func<TItem, object?> ItemKey { get; init; } = static item => item.Key;
@@ -110,13 +111,13 @@ public partial class PropertyGrid<TItem> where TItem : IPropertyGridItem
     /// Gets and sets the sorting behavior of the name column. Defaults to sorting on <see cref="IPropertyGridItem.Name"/>.
     /// </summary>
     [Parameter]
-    public GridSort<TItem> NameSort { get; set; } = s_defaultNameSort;
+    public IGridSort<TItem> NameSort { get; set; } = s_defaultNameSort;
 
     /// <summary>
     /// Gets and sets the sorting behavior of the value column. Defaults to sorting on <see cref="IPropertyGridItem.Value"/>.
     /// </summary>
     [Parameter]
-    public GridSort<TItem> ValueSort { get; set; } = s_defaultValueSort;
+    public IGridSort<TItem> ValueSort { get; set; } = s_defaultValueSort;
 
     [Parameter]
     public bool IsNameSortable { get; set; } = true;

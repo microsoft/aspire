@@ -69,11 +69,11 @@
                         <FluentIcon Icon="Icons.Regular.Size20.ArrowExpand" Width="16px" Color="Color.Primary" />
                     </FluentButton>
                     <FluentSelect TOption="TerminalSizePreset" TValue="string" Class="terminal-size-select aspire-input" Items="@DisplayedSizePresets"
+                                  Placeholder="@(TerminalDimensionsLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSize)])"
                                   OptionValue="@(p => p.Value)"
                                   OptionText="@(p => p.Label)"
                                   Value="@_state.SizeKey" ValueChanged="@(value => SetSizeModeAsync(value ?? string.Empty))"
-                                  Disabled="@(!_state.SizeSelectEnabled || ReadOnly)"
-                                  aria-label="@(TerminalDimensionsLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSize)])" />
+                                  Disabled="@(!_state.SizeSelectEnabled || ReadOnly)" />
                 }
                 <FluentSelect @key="_paletteResetVersion" TOption="string" TValue="string" Class="terminal-palette-select aspire-input"
                               Items="@s_paletteChoices" OptionText="@GetPaletteLabel"

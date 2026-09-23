@@ -146,6 +146,11 @@ internal static class DcpModelUtilities
             return;
         }
 
+        if (!observedService.HasCompleteAddress)
+        {
+            return;
+        }
+
         serviceResource.Service.ApplyAddressInfoFrom(observedService);
         if (!TryAddLocalhostAllocatedEndpoint(serviceResource, allowPending: true))
         {

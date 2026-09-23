@@ -10,7 +10,7 @@
 <FluentDialogBody Class="manage-data-dialog-body">
 <div style="height: 44vh; overflow-y: auto;">
     <AspireFluentDataGrid @ref="_dataGrid"
-                    Items="@GetGridItems()"
+                    ItemsProvider="@EnumerableGridItemsProvider.Create(GetGridItems)"
                     ItemSize="46"
                     Virtualize="@Virtualize"
                     GenerateHeader="DataGridGeneratedHeaderType.Sticky"

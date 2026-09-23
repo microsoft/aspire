@@ -14,8 +14,7 @@ public class PlaywrightFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        // Default timeout of 5000 ms could time out on slow CI servers.
-        Assertions.SetDefaultExpectTimeout(TestConstants.LongTimeoutDuration);
+        Assertions.SetDefaultExpectTimeout(TestConstants.DefaultTimeoutDuration);
 
         PlaywrightProvider.DetectAndSetInstalledPlaywrightDependenciesPath();
         Browser = await PlaywrightProvider.CreateBrowserAsync();
@@ -24,6 +23,20 @@ public class PlaywrightFixture : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         await Browser.CloseAsync();
+    }
+
+    public async Task<IBrowserContext> CreateContextAsync(BrowserNewContextOptions options)
+    {
+        var context = await Browser.NewContextAsync(options);
+        ConfigureTimeouts(context);
+        return context;
+    }
+
+    public static void ConfigureTimeouts(IBrowserContext context)
+    {
+        Assertions.SetDefaultExpectTimeout(TestConstants.DefaultTimeoutDuration);
+        context.SetDefaultTimeout(TestConstants.DefaultTimeoutDuration);
+        context.SetDefaultNavigationTimeout(TestConstants.DefaultTimeoutDuration);
     }
 
     public async Task GoToHomeAndWaitForDataGridLoad(IPage page)

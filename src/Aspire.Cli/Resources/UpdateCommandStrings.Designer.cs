@@ -50,7 +50,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Update integrations in the Aspire project.
+        ///   Looks up a localized string similar to Update integrations and repository Aspire CLI references.
         /// </summary>
         internal static string Description {
             get {
@@ -68,6 +68,16 @@ namespace Aspire.Cli.Resources {
         }
 
     internal static string SelectChannelPrompt => ResourceManager.GetString("SelectChannelPrompt", resourceCulture);
+    internal static string RepositoryToolUpdateFormat => ResourceManager.GetString("RepositoryToolUpdateFormat", resourceCulture);
+    internal static string RepositoryToolsUpToDate => ResourceManager.GetString("RepositoryToolsUpToDate", resourceCulture);
+    internal static string UpdateRepositoryTools => ResourceManager.GetString("UpdateRepositoryTools", resourceCulture);
+    internal static string RepositoryToolsUpdated => ResourceManager.GetString("RepositoryToolsUpdated", resourceCulture);
+    internal static string RestoreRepositoryDotNetTool => ResourceManager.GetString("RestoreRepositoryDotNetTool", resourceCulture);
+    internal static string RestoreRepositoryNpmTool => ResourceManager.GetString("RestoreRepositoryNpmTool", resourceCulture);
+    internal static string UnsupportedToolVersionFormat => ResourceManager.GetString("UnsupportedToolVersionFormat", resourceCulture);
+    internal static string ToolManifestChangedFormat => ResourceManager.GetString("ToolManifestChangedFormat", resourceCulture);
+    internal static string FailedResolveNpmToolFormat => ResourceManager.GetString("FailedResolveNpmToolFormat", resourceCulture);
+    internal static string FailedReadToolManifestFormat => ResourceManager.GetString("FailedReadToolManifestFormat", resourceCulture);
     internal static string AnalyzingProjectStatus => ResourceManager.GetString("AnalyzingProjectStatus", resourceCulture);
     internal static string ProjectUpToDateMessage => ResourceManager.GetString("ProjectUpToDateMessage", resourceCulture);
     internal static string PerformUpdatesPrompt => ResourceManager.GetString("PerformUpdatesPrompt", resourceCulture);

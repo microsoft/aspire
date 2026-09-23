@@ -266,7 +266,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is ConnectionStringReference cs)
         {
-            return ProcessValue(cs.Resource.ConnectionStringExpression, secretType: secretType, parent: parent);
+            return ProcessValue(cs.ConnectionStringExpression, secretType: secretType, parent: parent);
         }
 
         if (value is IResourceWithConnectionString csrs)

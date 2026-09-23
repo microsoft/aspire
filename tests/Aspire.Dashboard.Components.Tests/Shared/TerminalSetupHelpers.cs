@@ -11,6 +11,7 @@ using Aspire.DashboardService.Proto.V1;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.WellKnownTypes;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.JSInterop;
@@ -48,7 +49,7 @@ internal static class TerminalSetupHelpers
         return ModelTestHelpers.CreateResource(resourceName, state, displayName, properties: properties, hidden: hidden);
     }
 
-    public static void SetupTerminalComponents(TestContext context, TestDashboardClient client, string pathBase = "")
+    public static void SetupTerminalComponents(BunitContext context, TestDashboardClient client, string pathBase = "")
     {
         FluentUISetupHelpers.AddCommonDashboardServices(context);
         FluentUISetupHelpers.SetupFluentUIComponents(context);
@@ -59,14 +60,14 @@ internal static class TerminalSetupHelpers
         SetupTerminalDock(context, pathBase);
     }
 
-    public static void SetupTerminalView(TestContext context, string pathBase = "")
+    public static void SetupTerminalView(BunitContext context, string pathBase = "")
     {
         var module = SetupTerminalViewModule(context, $"{pathBase}/Components/Controls/TerminalView.razor.js");
         module.Setup<int>("initTerminal", _ => true).SetResult(1);
         module.SetupVoid("setReadOnly", _ => true).SetVoidResult();
     }
 
-    public static BunitJSModuleInterop SetupTerminalViewModule(TestContext context, string modulePath)
+    public static BunitJSModuleInterop SetupTerminalViewModule(BunitContext context, string modulePath)
     {
         SetupTerminalTitle(context);
         context.Services.TryAddSingleton<TerminalViewSessionRegistry>();
@@ -83,14 +84,14 @@ internal static class TerminalSetupHelpers
         return module;
     }
 
-    public static void SetupTerminalTitle(TestContext context)
+    public static void SetupTerminalTitle(BunitContext context)
     {
         var module = context.JSInterop.SetupModule("./Components/Controls/TerminalTitle.razor.js");
         module.SetupVoid("observePath", _ => true).SetVoidResult();
         module.SetupVoid("disconnectPath", _ => true).SetVoidResult();
     }
 
-    public static void SetupTerminalDock(TestContext context, string pathBase = "")
+    public static void SetupTerminalDock(BunitContext context, string pathBase = "")
     {
         var dock = context.JSInterop.SetupModule("./Components/Layout/TerminalDock.razor.js");
         dock.SetupVoid("registerResizeHandle", _ => true).SetVoidResult();
@@ -101,7 +102,7 @@ internal static class TerminalSetupHelpers
         SetupTerminalWindows(context, pathBase);
     }
 
-    public static BunitJSModuleInterop SetupTerminalWindows(TestContext context, string pathBase = "")
+    public static BunitJSModuleInterop SetupTerminalWindows(BunitContext context, string pathBase = "")
     {
         var windows = context.JSInterop.SetupModule($"{pathBase}/js/app-terminalwindow.js");
         windows.SetupVoid("registerTerminalWindowButton", _ => true).SetVoidResult();
@@ -115,7 +116,7 @@ internal static class TerminalSetupHelpers
         return windows;
     }
 
-    public static TerminalWindowLauncher GetWindowLauncher(TestContext context, IRenderedFragment component)
+    public static TerminalWindowLauncher GetWindowLauncher(BunitContext context, IRenderedComponent<IComponent> component)
     {
         // A terminal-watch update can render a child before that child's OnAfterRenderAsync registers its listener.
         component.WaitForAssertion(() => Assert.Single(context.JSInterop.Invocations, i => i.Identifier == "registerTerminalWindowButton"));
@@ -123,7 +124,7 @@ internal static class TerminalSetupHelpers
         return Assert.IsType<DotNetObjectReference<TerminalWindowLauncher>>(registration.Arguments[2]).Value;
     }
 
-    public static void AssertSingleTerminalConnection(TestContext context, string expectedWebSocketUrl)
+    public static void AssertSingleTerminalConnection(BunitContext context, string expectedWebSocketUrl)
     {
         var invocation = Assert.Single(context.JSInterop.Invocations, invocation => invocation.Identifier == "initTerminal");
         var options = Assert.IsType<TerminalViewOptions>(invocation.Arguments[3]);

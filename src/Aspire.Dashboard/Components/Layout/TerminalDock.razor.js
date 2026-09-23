@@ -8,6 +8,7 @@
 // at normal mouse speeds.
 
 const resizeRegistrations = new WeakMap();
+const updateIntervalMs = 100;
 
 export function registerResizeHandle(dockElement, dotNetRef, minimumHeight, maximumHeight) {
     unregisterResizeHandle(dockElement);
@@ -19,9 +20,10 @@ export function registerResizeHandle(dockElement, dotNetRef, minimumHeight, maxi
     let pointerId = null;
     let height = Math.round(dockElement.getBoundingClientRect().height);
     let viewportHeight = Math.max(1, window.innerHeight);
-    let frame = null;
-    let inFlight = false;
-    let pending = false;
+    let dragChanged = false;
+    let updateTimer = null;
+    let preserveFocusOnUpdate = false;
+    let handleWasFocused = document.activeElement === grabber;
     let disposed = false;
 
     const bounds = () => {
@@ -29,30 +31,33 @@ export function registerResizeHandle(dockElement, dotNetRef, minimumHeight, maxi
         return { min: Math.min(minimumHeight, max), max };
     };
 
-    // Coalesce a held key or pointer movement into at most one circuit call per frame, with only one call in
-    // flight. Accumulate the requested height locally so delayed renders cannot lose repeated arrow-key steps.
+    const updateServer = (preserveFocus = false) => {
+        if (disposed) {
+            return Promise.resolve();
+        }
+        return dotNetRef.invokeMethodAsync('SetHeightAsync', height, viewportHeight)
+            .then(() => {
+                if (preserveFocus && handleWasFocused && !disposed && (document.activeElement === document.body || document.activeElement === null)) {
+                    grabber.focus({ preventScroll: true });
+                }
+            })
+            .catch(error => {
+                if (!disposed) {
+                    console.error('Failed to resize the terminal dock.', error);
+                }
+            });
+    };
+
     const scheduleUpdate = () => {
-        pending = true;
-        if (disposed || inFlight || frame !== null) {
+        if (updateTimer !== null) {
             return;
         }
-        frame = requestAnimationFrame(() => {
-            frame = null;
-            pending = false;
-            inFlight = true;
-            dotNetRef.invokeMethodAsync('SetHeightAsync', height, viewportHeight)
-                .catch(error => {
-                    if (!disposed) {
-                        console.error('Failed to resize the terminal dock.', error);
-                    }
-                })
-                .finally(() => {
-                    inFlight = false;
-                    if (pending && !disposed) {
-                        scheduleUpdate();
-                    }
-                });
-        });
+        updateTimer = setTimeout(() => {
+            updateTimer = null;
+            dragChanged = false;
+            updateServer(preserveFocusOnUpdate);
+            preserveFocusOnUpdate = false;
+        }, updateIntervalMs);
     };
 
     const resizeTo = requestedHeight => {
@@ -60,8 +65,10 @@ export function registerResizeHandle(dockElement, dotNetRef, minimumHeight, maxi
         const nextHeight = Math.max(min, Math.min(max, Math.round(requestedHeight)));
         if (height !== nextHeight) {
             height = nextHeight;
-            scheduleUpdate();
+            dockElement.style.height = `${height}px`;
+            return true;
         }
+        return false;
     };
 
     const onPointerDown = e => {
@@ -69,6 +76,7 @@ export function registerResizeHandle(dockElement, dotNetRef, minimumHeight, maxi
             return;
         }
         pointerId = e.pointerId;
+        dragChanged = false;
         grabber.setPointerCapture(e.pointerId);
         grabber.focus({ preventScroll: true });
         e.preventDefault();
@@ -78,7 +86,10 @@ export function registerResizeHandle(dockElement, dotNetRef, minimumHeight, maxi
         if (pointerId !== e.pointerId || dockElement.inert) {
             return;
         }
-        resizeTo(viewportHeight - e.clientY);
+        dragChanged = resizeTo(viewportHeight - e.clientY) || dragChanged;
+        if (dragChanged) {
+            scheduleUpdate();
+        }
     };
 
     const end = e => {
@@ -88,6 +99,15 @@ export function registerResizeHandle(dockElement, dotNetRef, minimumHeight, maxi
         pointerId = null;
         if (grabber.hasPointerCapture(e.pointerId)) {
             grabber.releasePointerCapture(e.pointerId);
+        }
+        if (dragChanged) {
+            if (updateTimer !== null) {
+                clearTimeout(updateTimer);
+                updateTimer = null;
+            }
+            dragChanged = false;
+            updateServer(preserveFocusOnUpdate);
+            preserveFocusOnUpdate = false;
         }
     };
 
@@ -121,14 +141,21 @@ export function registerResizeHandle(dockElement, dotNetRef, minimumHeight, maxi
         }
         e.preventDefault();
         e.stopPropagation();
-        resizeTo(nextHeight);
+        if (resizeTo(nextHeight)) {
+            updateServer();
+        }
     };
 
     const onViewportResize = () => {
         viewportHeight = Math.max(1, window.innerHeight);
         resizeTo(height);
+        preserveFocusOnUpdate ||= handleWasFocused;
         // Bounds can change even if the current height still fits.
         scheduleUpdate();
+    };
+
+    const onDocumentFocusIn = e => {
+        handleWasFocused = e.target === grabber;
     };
 
     grabber.addEventListener('pointerdown', onPointerDown);
@@ -137,13 +164,16 @@ export function registerResizeHandle(dockElement, dotNetRef, minimumHeight, maxi
     grabber.addEventListener('pointercancel', end);
     grabber.addEventListener('lostpointercapture', end);
     grabber.addEventListener('keydown', onKeyDown);
+    document.addEventListener('focusin', onDocumentFocusIn);
     window.addEventListener('resize', onViewportResize);
-    onViewportResize();
+    resizeTo(height);
+    updateServer();
 
     resizeRegistrations.set(dockElement, () => {
         disposed = true;
-        if (frame !== null) {
-            cancelAnimationFrame(frame);
+        if (updateTimer !== null) {
+            clearTimeout(updateTimer);
+            updateTimer = null;
         }
         grabber.removeEventListener('pointerdown', onPointerDown);
         grabber.removeEventListener('pointermove', onPointerMove);
@@ -151,6 +181,7 @@ export function registerResizeHandle(dockElement, dotNetRef, minimumHeight, maxi
         grabber.removeEventListener('pointercancel', end);
         grabber.removeEventListener('lostpointercapture', end);
         grabber.removeEventListener('keydown', onKeyDown);
+        document.removeEventListener('focusin', onDocumentFocusIn);
         window.removeEventListener('resize', onViewportResize);
         if (pointerId !== null && grabber.hasPointerCapture(pointerId)) {
             grabber.releasePointerCapture(pointerId);

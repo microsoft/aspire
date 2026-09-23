@@ -87,6 +87,10 @@ public sealed class ValidateDashboardOptions : IValidateOptions<DashboardOptions
                     {
                         errorMessages.Add($"PrimaryApiKey is required when OTLP authentication mode is API key. Specify a {DashboardConfigNames.DashboardOtlpPrimaryApiKeyName.ConfigKey} value.");
                     }
+                    if (options.Otlp.SecondaryApiKey is { Length: 0 })
+                    {
+                        errorMessages.Add($"SecondaryApiKey must not be empty when OTLP authentication mode is API key. Remove {DashboardConfigNames.DashboardOtlpSecondaryApiKeyName.ConfigKey} or specify a non-empty value.");
+                    }
                     break;
                 case OtlpAuthMode.ClientCertificate:
                     for (var i = 0; i < options.Otlp.AllowedCertificates.Count; i++)

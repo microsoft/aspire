@@ -270,6 +270,11 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
     private async Task ProcessResourceChange<T>(WatchEventType watchEventType, T resource, ConcurrentDictionary<string, T> resourceByName, string resourceKind, Func<T, CustomResourceSnapshot, CustomResourceSnapshot> snapshotFactory) where T : CustomResource, IKubernetesStaticMetadata
     {
+        // Read the DCP state before replacing the cached object. The published snapshot can
+        // already say Waiting or Starting if a stopped handler has requested a restart.
+        var previousState = resourceByName.TryGetValue(resource.Metadata.Name, out var previousResource)
+            ? GetResourceStatus(previousResource).State
+            : null;
         var resourceChange = ProcessResourceChange(resourceByName, watchEventType, resource);
         if (resourceChange != ResourceChangeResult.Ignored)
         {
@@ -349,7 +354,9 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                         _allLogsFlushed.TryRemove(resource.Metadata.Name, out _);
                     }
 
-                    await _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownToken, resourceType, appModelResource, resource.Metadata.Name, status, s => snapshotFactory(resource, s))).ConfigureAwait(false);
+                    await _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownToken, resourceType, appModelResource, resource.Metadata.Name, status,
+                        resourceChange == ResourceChangeResult.Replaced ? null : previousState,
+                        s => snapshotFactory(resource, s))).ConfigureAwait(false);
 
                     if (logsAvailable)
                     {
@@ -953,7 +960,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                 _resourceState.ApplicationModel.TryGetValue(appModelResourceName, out var appModelResource))
             {
                 var status = GetResourceStatus(cr);
-                await _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownToken, resourceKind, appModelResource, resourceName, status, s =>
+                await _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownToken, resourceKind, appModelResource, resourceName, status, status.State, s =>
                 {
                     if (cr is Container container)
                     {

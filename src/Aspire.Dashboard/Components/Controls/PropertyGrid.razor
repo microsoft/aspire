@@ -6,7 +6,7 @@
 <div class="property-grid">
     <FluentDataGrid HeaderCellAsButtonWithMenu="true"
                     ResizeType="DataGridResizeType.Discrete"
-                    Items="@Items"
+                    ItemsProvider="@EnumerableGridItemsProvider.Create(() => Items)"
                     ItemKey="@ItemKey"
                     ResizableColumns="true"
                     Style="width:100%"
