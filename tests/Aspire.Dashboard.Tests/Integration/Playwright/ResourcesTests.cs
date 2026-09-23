@@ -34,6 +34,8 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await viewOptionsButton.ClickAsync();
             await Assertions.Expect(viewOptionsButton).ToHaveAttributeAsync("aria-expanded", "true");
 
+            await Assertions.Expect(page.GetByRole(AriaRole.Menuitem, new PageGetByRoleOptions { Name = Dashboard.Resources.Resources.ResourceCollapseAllChildren, Exact = true })).ToHaveCountAsync(0);
+            await Assertions.Expect(page.GetByRole(AriaRole.Menuitem, new PageGetByRoleOptions { Name = Dashboard.Resources.Resources.ResourceExpandAllChildren, Exact = true })).ToHaveCountAsync(0);
             var showResourceTypes = page.GetByRole(AriaRole.Menuitem, new PageGetByRoleOptions { Name = Dashboard.Resources.Resources.ResourcesShowTypes, Exact = true });
             await showResourceTypes.ClickAsync();
             await Assertions.Expect(viewOptionsButton).ToHaveAttributeAsync("aria-expanded", "false");

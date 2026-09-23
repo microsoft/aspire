@@ -16,7 +16,6 @@ public class DimensionFilterViewModel
     public required string Name { get; init; }
     public List<DimensionValueViewModel> Values { get; } = [];
     public IReadOnlySet<DimensionValueViewModel> SelectedValues => Volatile.Read(ref _selectedValues);
-    public bool PopupVisible { get; set; }
 
     /// <summary>
     /// Invoked when the filter state is modified externally (e.g., from the popover)
