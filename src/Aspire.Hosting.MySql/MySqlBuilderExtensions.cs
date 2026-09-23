@@ -6,6 +6,7 @@
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.MySql;
+using Aspire.Dashboard.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
@@ -247,6 +248,7 @@ public static class MySqlBuilderExtensions
         {
             var builderForExistingResource = builder.ApplicationBuilder.CreateResourceBuilder(existinghpMyAdminResource);
             configureContainer?.Invoke(builderForExistingResource);
+            builderForExistingResource.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
             return builder;
         }
 
@@ -256,9 +258,27 @@ public static class MySqlBuilderExtensions
         var phpMyAdminContainerBuilder = builder.ApplicationBuilder.AddResource(phpMyAdminContainer)
                                                 .WithImage(MySqlContainerImageTags.PhpMyAdminImage, MySqlContainerImageTags.PhpMyAdminTag)
                                                 .WithImageRegistry(MySqlContainerImageTags.Registry)
-                                                .WithHttpEndpoint(targetPort: 80, name: "http")
+                                                .WithHttpEndpoint(targetPort: 80, name: PhpMyAdminContainerResource.PrimaryEndpointName)
                                                 .WithIconName("WindowDatabase")
                                                 .ExcludeFromManifest();
+
+        phpMyAdminContainerBuilder.WithHidden();
+        builder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
+        {
+            foreach (var mySqlResource in @event.Model.Resources.OfType<MySqlServerResource>())
+            {
+                phpMyAdminContainerBuilder.WithRelationship(mySqlResource, KnownRelationshipTypes.Manages);
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
+                builder.ApplicationBuilder.CreateResourceBuilder(mySqlResource).WithUrlForEndpoint(phpMyAdminContainer.PrimaryEndpoint, url =>
+                {
+                    url.DisplayText = "Manage";
+                    url.DisplayOrder = 1;
+                });
+#pragma warning restore CS0618
+            }
+
+            return Task.CompletedTask;
+        });
 
         builder.ApplicationBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>(phpMyAdminContainer, async (e, ct) =>
         {
@@ -317,6 +337,8 @@ public static class MySqlBuilderExtensions
         });
 
         configureContainer?.Invoke(phpMyAdminContainerBuilder);
+
+        phpMyAdminContainerBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
 
         return builder;
     }

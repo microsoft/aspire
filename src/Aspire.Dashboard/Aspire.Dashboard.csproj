@@ -3,6 +3,7 @@
     <!-- This list of runtimes needs to match the set of runtimes specified in eng/workloads/workloads.csproj -->
     <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <TargetFramework>net11.0</TargetFramework>
+    <ApplicationIcon>$(MSBuildThisFileDirectory)..\Shared\Aspire.ico</ApplicationIcon>
     <PublishAot>true</PublishAot>
     <!-- .NET 11 persistent services serialize framework-owned state with the internal
          JsonSerializerOptionsProvider instead of CircuitOptions.JsonTypeInfoResolvers.
@@ -384,7 +385,6 @@
     <Compile Include="$(SharedDir)ConsoleLogs\LogPauseViewModel.cs" Link="Utils\ConsoleLogs\LogPauseViewModel.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\TimestampParser.cs" Link="Utils\ConsoleLogs\TimestampParser.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\UrlParser.cs" Link="Utils\ConsoleLogs\UrlParser.cs" />
-    <Compile Include="$(SharedDir)KnownUrls.cs" Link="Utils\KnownUrls.cs" />
     <Compile Include="$(SharedDir)InteractionHelpers.cs" Link="Utils\InteractionHelpers.cs" />
     <Compile Include="$(SharedDir)Model\Serialization\ResourceJson.cs" Link="Model\Serialization\ResourceJson.cs" />
     <Compile Include="$(SharedDir)DashboardUrls.cs" Link="Utils\DashboardUrls.cs" />

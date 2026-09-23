@@ -31,9 +31,15 @@ public class OtlpApiKeyAuthenticationHandler : AuthenticationHandler<OtlpApiKeyA
                 return Task.FromResult(AuthenticateResult.Fail($"Multiple '{ApiKeyHeaderName}' headers in request."));
             }
 
-            if (!CompareHelpers.CompareKey(options.GetPrimaryApiKeyBytes(), apiKey.ToString()))
+            var providedApiKey = apiKey.ToString();
+            if (string.IsNullOrEmpty(providedApiKey))
             {
-                if (options.GetSecondaryApiKeyBytes() is not { } secondaryBytes || !CompareHelpers.CompareKey(secondaryBytes, apiKey.ToString()))
+                return Task.FromResult(AuthenticateResult.Fail($"API key from '{ApiKeyHeaderName}' header is empty."));
+            }
+
+            if (!CompareHelpers.CompareKey(options.GetPrimaryApiKeyBytes(), providedApiKey))
+            {
+                if (options.GetSecondaryApiKeyBytes() is not { } secondaryBytes || !CompareHelpers.CompareKey(secondaryBytes, providedApiKey))
                 {
                     return Task.FromResult(AuthenticateResult.Fail($"Incoming API key from '{ApiKeyHeaderName}' header doesn't match configured API key."));
                 }

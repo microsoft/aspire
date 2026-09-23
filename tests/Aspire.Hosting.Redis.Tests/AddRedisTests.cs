@@ -305,10 +305,11 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
 
         foreach (var redis in new[] { redis1.Resource, redis2.Resource })
         {
-            var managementUrl = Assert.Single(redis.Annotations.OfType<ResourceUrlAnnotation>(), u => u.DisplayText == "Manage (Insights)");
+            var managementUrl = await GetManagementUrlAsync(redis, "Manage (Insights)");
             Assert.Equal(insight.Name, managementUrl.Endpoint?.Resource.Name);
             Assert.Equal("http", managementUrl.Endpoint?.EndpointName);
             Assert.Equal("/", managementUrl.Url);
+            Assert.Single(insight.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == redis);
         }
     }
 
@@ -330,10 +331,11 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
 
         foreach (var redis in new[] { redis1.Resource, redis2.Resource, redis3.Resource })
         {
-            var managementUrl = Assert.Single(redis.Annotations.OfType<ResourceUrlAnnotation>(), u => u.DisplayText == "Manage (Commander)");
+            var managementUrl = await GetManagementUrlAsync(redis, "Manage (Commander)");
             Assert.Equal(commander.Name, managementUrl.Endpoint?.Resource.Name);
             Assert.Equal("http", managementUrl.Endpoint?.EndpointName);
             Assert.Equal("/", managementUrl.Url);
+            Assert.Single(commander.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == redis);
         }
     }
 
@@ -1040,6 +1042,20 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         var connectionStringExpression = redis.Resource.ConnectionStringExpression;
         AssertContainsConditionalReference(connectionStringExpression.ValueExpression);
         Assert.DoesNotContain(",ssl=true", connectionStringExpression.ValueExpression);
+    }
+
+    private static async Task<ResourceUrlAnnotation> GetManagementUrlAsync(IResource resource, string displayText)
+    {
+        var context = new ResourceUrlsCallbackContext(
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            resource);
+
+        foreach (var callback in resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>())
+        {
+            await callback.Callback(context);
+        }
+
+        return Assert.Single(context.Urls, url => url.DisplayText == displayText);
     }
 
     private static X509Certificate2 CreateTestCertificate()
