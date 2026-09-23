@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
 using Aspire.Hosting.RemoteHost.Diagnostics;
+using Aspire.Hosting.RemoteHost.Language;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -242,10 +244,17 @@ public class ApiReferenceExportTests
         var services = new ServiceCollection().BuildServiceProvider();
         var resolver = new CodeGeneratorResolver(services, loader, NullLogger<CodeGeneratorResolver>.Instance);
         var atsContextFactory = new AtsContextFactory(loader, NullLogger<AtsContextFactory>.Instance, telemetry);
+        var externalCapabilityRegistry = new ExternalCapabilityRegistry(NullLogger<ExternalCapabilityRegistry>.Instance);
+        var languageResolver = new LanguageSupportResolver(services, loader, NullLogger<LanguageSupportResolver>.Instance);
+        var integrationHostLauncher = new IntegrationHostLauncher(
+            languageResolver, externalCapabilityRegistry, configuration, NullLogger<IntegrationHostLauncher>.Instance);
+        integrationHostLauncher.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
 
         return new CodeGenerationService(
             CreateAuthenticationState(authenticated),
             atsContextFactory,
+            externalCapabilityRegistry,
+            integrationHostLauncher,
             resolver,
             loader,
             NullLogger<CodeGenerationService>.Instance,

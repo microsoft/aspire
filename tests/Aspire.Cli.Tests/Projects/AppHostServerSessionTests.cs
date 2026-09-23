@@ -20,7 +20,9 @@ using Aspire.Tests;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -167,6 +169,61 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         Assert.Null(session.SocketPath);
         Assert.Null(session.Output);
         Assert.Null(session.ServerProcessId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetRpcClientAsync_WhenServerExitsBeforeConnecting_ReportsCapturedStartupOutput(bool hasOutput)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = new OutputCollector();
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            AttemptCallback = (_, _) =>
+            {
+                if (hasOutput)
+                {
+                    output.AppendOutput("Starting integration hosts.");
+                    output.AppendError("Integration host '@test/failed' exited with code 42 during startup.");
+                }
+                return (134, null);
+            }
+        };
+        var execution = executionFactory.CreateExecution(
+            "test-server", [], null, workspace.WorkspaceRoot, new ProcessInvocationOptions());
+        var project = new FakeSucceedingAppHostServerProject(workspace.WorkspaceRoot.FullName)
+        {
+            RunAsyncCallback = async () =>
+            {
+                await execution.StartAsync(TestContext.Current.CancellationToken);
+                return new AppHostServerRunResult(
+                    Path.Combine(workspace.WorkspaceRoot.FullName, "absent.sock"), output, execution);
+            }
+        };
+        var sink = new TestSink();
+        var logger = new TestLogger(nameof(AppHostServerSession), sink, _ => true);
+        await using var session = CreateSession(project, TestContext.Current.CancellationToken, logger: logger);
+        await session.StartAsync();
+        Assert.Equal(134, await session.WaitForExitAsync());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            session.GetRpcClientAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal("AppHost server process exited before the RPC connection could be established. Exit code: 134.", exception.Message);
+        if (hasOutput)
+        {
+            var message = Assert.Single(sink.Writes);
+            Assert.Equal(LogLevel.Error, message.LogLevel);
+            Assert.Equal(
+                "AppHost server startup output:\nStarting integration hosts." + Environment.NewLine +
+                "Integration host '@test/failed' exited with code 42 during startup.",
+                message.Message);
+        }
+        else
+        {
+            Assert.Empty(sink.Writes);
+        }
     }
 
     [Fact]
@@ -548,13 +605,14 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         ProfilingTelemetry? profilingTelemetry = null,
         IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler = null,
         IGracefulShutdownWindow? shutdownService = null,
-        bool isolateConsole = false) =>
+        bool isolateConsole = false,
+        ILogger? logger = null) =>
         new(
             project,
             environmentVariables,
             debug,
             new TestEnvironment(),
-            NullLogger<AppHostServerSession>.Instance,
+            logger ?? NullLogger<AppHostServerSession>.Instance,
             profilingTelemetry,
             gracefulShutdownSignaler,
             shutdownService,

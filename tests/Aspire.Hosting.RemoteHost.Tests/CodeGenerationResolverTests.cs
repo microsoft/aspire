@@ -87,6 +87,37 @@ public class CodeGenerationResolverTests
         Assert.NotNull(resolver.GetLanguageSupport("typescript/nodejs"));
     }
 
+    [Fact]
+    public void LanguageSupportResolver_ResolvesSerializedIntegrationHostSpec()
+    {
+        using var serviceProvider = CreateServiceProvider();
+        var resolver = new LanguageSupportResolver(
+            serviceProvider, CreateAssemblyLoader(), NullLogger<LanguageSupportResolver>.Instance);
+        var languageSupport = resolver.GetLanguageSupport("typescript/nodejs");
+        Assert.NotNull(languageSupport);
+
+        var spec = LanguageService.GetIntegrationHostSpec(languageSupport);
+
+        Assert.NotNull(spec);
+        Assert.Equal("npx", spec.Execute.Command);
+        Assert.Equal(["--no-install", "tsx", "{entryPoint}"], spec.Execute.Args);
+        Assert.NotNull(spec.InstallDependencies);
+        Assert.Equal("npm", spec.InstallDependencies.Command);
+        Assert.Equal(["install"], spec.InstallDependencies.Args);
+    }
+
+    [Fact]
+    public void LanguageSupportResolver_ProviderWithoutIntegrationHostHookReturnsNull()
+    {
+        using var serviceProvider = CreateServiceProvider();
+        var resolver = new LanguageSupportResolver(
+            serviceProvider, CreateAssemblyLoader(), NullLogger<LanguageSupportResolver>.Instance);
+        var languageSupport = resolver.GetLanguageSupport("go");
+        Assert.NotNull(languageSupport);
+
+        Assert.Null(LanguageService.GetIntegrationHostSpec(languageSupport));
+    }
+
     private static ServiceProvider CreateServiceProvider() => new ServiceCollection().BuildServiceProvider();
 
     private static AssemblyLoader CreateAssemblyLoader()
