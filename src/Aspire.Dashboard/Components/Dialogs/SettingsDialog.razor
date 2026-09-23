@@ -17,23 +17,6 @@
         </div>
 
         <div class="input-container">
-            <FluentRadioGroup TValue="string"
-                              Label="@Loc[nameof(Dialogs.SettingsDialogTerminalPalette)]"
-                              @bind-Value="@_terminalPalette"
-                              @bind-Value:after="TerminalPaletteChangedAsync"
-                              Disabled="@(_terminalModule is null)"
-                              Orientation="Orientation.Vertical">
-                <FluentRadio Value="@("dashboard")" Label="@Loc[nameof(Dialogs.SettingsDialogTerminalPaletteFollow)]" />
-                <FluentRadio Value="@("light")" Label="@Loc[nameof(Dialogs.SettingsDialogLightTheme)]" />
-                <FluentRadio Value="@("dark")" Label="@Loc[nameof(Dialogs.SettingsDialogDarkTheme)]" />
-            </FluentRadioGroup>
-            @if (_terminalPaletteSaveFailed)
-            {
-                <p role="alert">@Loc[nameof(Dialogs.SettingsDialogTerminalPaletteSaveFailed)]</p>
-            }
-        </div>
-
-        <div class="input-container">
                 @* Fluent's Label renders a standalone <label> that it does NOT associate with the
                     underlying <fluent-dropdown> combobox, so the combobox has no programmatic accessible
                name and fails axe's aria-input-field-name (WCAG 4.1.2). Pin the name explicitly with

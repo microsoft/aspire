@@ -35,6 +35,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private IReadOnlyList<TerminalSizePreset> _sizePresets = [];
     private TerminalViewSession? _viewSession;
     private string? _sessionEndpoint;
+    private int _paletteResetVersion;
+    private static readonly string[] s_paletteChoices = ["dashboard", "light", "dark"];
 
     /// <summary>Gets or sets the display name of the resource that owns the terminal.</summary>
     [Parameter]
@@ -365,6 +367,34 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// <summary>Fits the terminal grid to its container without changing the selected font size.</summary>
     public Task FitToContainerAsync() => InvokeTerminalAsync("fitToContainer");
 
+    private async Task SetPaletteAsync(string? palette)
+    {
+        if (palette is null || _disposed || _jsModule is null || _terminalId == 0)
+        {
+            return;
+        }
+        try
+        {
+            if (!await _jsModule.InvokeAsync<bool>("setPaletteFromHost", _terminalId, palette))
+            {
+                // Fluent updates its browser selection before ValueChanged. Recreate only after failure
+                // because assigning the unchanged saved Value doesn't restore the displayed choice.
+                _paletteResetVersion++;
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // Expected when the browser leaves this page.
+        }
+    }
+
+    private string GetPaletteLabel(string palette) => Loc[palette switch
+    {
+        "light" => nameof(Resources.TerminalStrings.TerminalPaletteLight),
+        "dark" => nameof(Resources.TerminalStrings.TerminalPaletteDark),
+        _ => nameof(Resources.TerminalStrings.TerminalPaletteFollow)
+    }];
+
     private IReadOnlyList<TerminalSizePreset> DisplayedSizePresets => _state.Cols > 0 && _state.Rows > 0 &&
         !_sizePresets.Any(p => p.Value == _state.SizeKey)
         ? [new(_state.SizeKey, $"{_state.Cols}\u00d7{_state.Rows}", _state.Cols, _state.Rows), .. _sizePresets]
@@ -423,6 +453,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         "disconnected" => nameof(Resources.TerminalStrings.TerminalDisconnected),
         "input-failed" => nameof(Resources.TerminalStrings.TerminalInputFailed),
         "sizing-failed" => nameof(Resources.TerminalStrings.TerminalSizingFailed),
+        "palette-failed" => nameof(Resources.TerminalStrings.TerminalPaletteSaveFailed),
         _ => nameof(Resources.TerminalStrings.TerminalMountFailed)
     }];
 
@@ -567,6 +598,8 @@ public sealed record TerminalToolbarState
     public string SizeMode { get; init; } = "font";
     /// <summary>The selected preset key, or auto.</summary>
     public string SizeKey { get; init; } = "auto";
+    /// <summary>The saved palette preference: dashboard, light or dark.</summary>
+    public string Palette { get; init; } = "dashboard";
     /// <summary>The font size in CSS pixels.</summary>
     public int FontPx { get; init; }
     /// <summary>Whether font controls are available.</summary>

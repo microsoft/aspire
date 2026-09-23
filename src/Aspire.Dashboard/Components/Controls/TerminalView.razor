@@ -33,7 +33,7 @@
             {
                 <div class="terminal-error">
                     <span role="alert">@GetErrorMessage()</span>
-                    @if (_terminalError is "input-failed" or "sizing-failed")
+                    @if (_terminalError is "input-failed" or "sizing-failed" or "palette-failed")
                     {
                         <FluentButton OnClick="DismissErrorAsync">@Loc[nameof(Resources.TerminalStrings.TerminalDismissError)]</FluentButton>
                     }
@@ -75,6 +75,12 @@
                                   Disabled="@(!_state.SizeSelectEnabled || ReadOnly)"
                                   aria-label="@(TerminalDimensionsLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSize)])" />
                 }
+                <FluentSelect @key="_paletteResetVersion" TOption="string" TValue="string" Class="terminal-palette-select aspire-input"
+                              Items="@s_paletteChoices" OptionText="@GetPaletteLabel"
+                              Value="@_state.Palette" ValueChanged="SetPaletteAsync"
+                              Disabled="@(_terminalId == 0)"
+                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalPalette)]"
+                              AriaLabel="@Loc[nameof(Resources.TerminalStrings.TerminalPalette)]" />
             </div>
         </div>
     </div>

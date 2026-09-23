@@ -80,6 +80,46 @@ public class TerminalViewTests : DashboardTestContext
         }
     }
 
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task PaletteSelector_UsesSavedStateAndRemainsAvailableWithoutResizeAuthority(bool readOnly, bool showDimensions)
+    {
+        var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
+        module.Setup<int>("initTerminal", _ => true).SetResult(1);
+        var save = module.Setup<bool>("setPaletteFromHost", 1, "light");
+        save.SetResult(true);
+        var cut = RenderComponent<TerminalView>(builder => builder
+            .Add(p => p.ResourceName, "shell")
+            .Add(p => p.ReadOnly, readOnly)
+            .Add(p => p.ShowDimensionsPicker, showDimensions));
+        var state = new TerminalToolbarState { TerminalId = 1, Generation = 1, Palette = "dark" };
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(state));
+        var select = cut.FindComponent<FluentSelect<string, string>>();
+        Assert.Equal("dark", select.Instance.Value);
+        Assert.False(select.Instance.Disabled);
+        Assert.Equal(Resources.TerminalStrings.TerminalPalette, select.Instance.AriaLabel);
+        Assert.Equal(["Follow Dashboard", "Light", "Dark"], select.Instance.Items!.Select(select.Instance.OptionText!));
+        Assert.Equal("terminal-palette-select aspire-input", cut.Find(".terminal-controls").LastElementChild!.ClassName);
+
+        await cut.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync("light"));
+        Assert.Single(save.Invocations);
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(state with { Palette = "light" }));
+        Assert.Equal("light", select.Instance.Value);
+
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(state with { Error = "palette-failed" }));
+        Assert.Equal("dark", select.Instance.Value);
+        Assert.Equal(Resources.TerminalStrings.TerminalPaletteSaveFailed, cut.Find("[role=alert]").TextContent);
+        Assert.Equal(Resources.TerminalStrings.TerminalDismissError, cut.Find(".terminal-error fluent-button").TextContent.Trim());
+        var failedSave = module.Setup<bool>("setPaletteFromHost", 1, "dashboard");
+        failedSave.SetResult(false);
+        var originalSelect = select.Instance;
+        await cut.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync("dashboard"));
+        var restoredSelect = cut.FindComponent<FluentSelect<string, string>>();
+        Assert.NotSame(originalSelect, restoredSelect.Instance);
+        Assert.Equal("dark", restoredSelect.Instance.Value);
+    }
+
     [Fact]
     public void Footer_UsesCustomLabelsForIconTooltipsAndAccessibleNames()
     {

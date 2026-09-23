@@ -75,12 +75,14 @@
 
 /* The select's field wrapper has an empty grid row that otherwise offsets its visible border. */
 .terminal-controls ::deep .toolbar-button,
-.terminal-controls ::deep .terminal-size-select {
+.terminal-controls ::deep .terminal-size-select,
+.terminal-controls ::deep .terminal-palette-select {
     height: var(--aspire-control-height);
     min-height: var(--aspire-control-height);
 }
 
-.terminal-controls ::deep .terminal-size-select {
+.terminal-controls ::deep .terminal-size-select,
+.terminal-controls ::deep .terminal-palette-select {
     width: auto;
 }
 

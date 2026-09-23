@@ -116,13 +116,16 @@ active palette background. Mounting passes both palettes and `colorMode`;
 theme changes call `setColorMode` on the existing client, including changes that
 occur while mounting or while a dock pane is hidden.
 
-**Settings > Terminal palette** can pin terminal content to **Dark** or **Light**
+The **Terminal palette** dropdown to the right of the footer's dimensions selector
+can pin terminal content to **Dark** or **Light**
 independently of the site, or restore **Follow Dashboard**. This non-sensitive
 preference is stored in browser local storage and applies to all terminal surfaces,
 including detached windows. Changes update existing clients without reconnecting;
 other windows observe storage events. The terminal frame and overlay track match
 the selected palette, while toolbars, dock tabs, headers and popups retain the site
-theme. Failed saves show an error rather than applying an unpersisted preference.
+theme. The dropdown also remains available on surfaces without a dimensions
+selector and in read-only views because palette changes do not affect the workload.
+Failed saves show a dismissible error rather than applying an unpersisted preference.
 
 Hex1b preserves default and indexed ANSI colors through the negotiated
 `indexed-v1` HWT extension, so existing content and retained scrollback recolor

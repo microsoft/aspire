@@ -265,6 +265,7 @@ function mount({ visible = true, dotNetRef, options = {} } = {}) {
         focus() { document.activeElement = this; },
     }));
     const footer = Object.assign(new EventTarget(), {
+        querySelector: () => null,
         querySelectorAll: () => footerControls,
         focus() { document.activeElement = this; },
     });
@@ -516,6 +517,47 @@ test("failed or invalid palette writes do not change the mounted palette", async
     mock.method(localStorage, "setItem", () => { throw new Error("Storage disabled"); });
     assert.throws(() => terminal.setTerminalPalette("light"), /Storage disabled/);
     assert.equal(attempts[0].client.colorMode, "dark");
+});
+
+test("footer labels the asynchronously generated palette combobox and disconnects its observer", () => {
+    const { id, footer } = mount();
+    const button = { setAttribute: mock.fn() };
+    footer.querySelector = () => ({
+        getAttribute: () => "Terminal palette",
+        querySelector: () => button,
+    });
+    const observer = themeObservers.find(o => o.element === footer);
+    observer.callback();
+    assert.deepEqual(button.setAttribute.mock.calls[0].arguments, ["aria-label", "Terminal palette"]);
+    terminal.disposeTerminal(id);
+    assert.equal(observer.disconnected, true);
+});
+
+test("footer palette changes update toolbar selections even for read-only and disconnected views", async () => {
+    const first = mount({ readOnly: true });
+    const second = mount({ visible: false });
+    terminal.setPaletteFromHost(first.id, "light");
+    assert.equal(terminal.getToolbarState(first.id).palette, "light");
+    assert.equal(terminal.getToolbarState(second.id).palette, "light");
+    assert.equal(attempts.length, 1);
+    assert.deepEqual(attempts[0].client.sizingCalls, []);
+    assert.equal(localStorage.getItem("Aspire.TerminalPalette"), '"light"');
+});
+
+test("footer palette save failure preserves selection, surfaces a dismissible error and allows retry", () => {
+    const { id } = mount();
+    const setter = mock.method(localStorage, "setItem", () => { throw new Error("Storage disabled"); });
+    terminal.setPaletteFromHost(id, "light");
+    assert.equal(terminal.getToolbarState(id).palette, "dashboard");
+    assert.equal(terminal.getToolbarState(id).error, "palette-failed");
+    terminal.dismissError(id);
+    assert.equal(terminal.getToolbarState(id).error, null);
+    terminal.setPaletteFromHost(id, "light");
+    setter.mock.restore();
+    terminal.setPaletteFromHost(id, "light");
+    assert.equal(terminal.getToolbarState(id).palette, "light");
+    assert.equal(terminal.getToolbarState(id).error, null);
+    assert.equal(attempts.length, 1);
 });
 
 test("theme and contrast changes update palettes and replace the complete overlay without reconnecting", async () => {
@@ -922,6 +964,7 @@ test("init returns an id while mount waits for its first connected frame", async
         title: "", workingDirectory: null, workingDirectoryUri: null,
         progressState: "none", progressPercentage: null,
         isPrimary: false, canTakeControl: true, sizeMode: "font", sizeKey: "100x30",
+        palette: "dashboard",
         fontPx: 13, fontControlsEnabled: true, sizeSelectEnabled: true,
         fitEnabled: true,
         canDecreaseFontSize: true, canIncreaseFontSize: true,

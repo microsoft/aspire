@@ -137,6 +137,31 @@
         <target state="new">The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalPalette">
+        <source>Terminal palette</source>
+        <target state="new">Terminal palette</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalPaletteDark">
+        <source>Dark</source>
+        <target state="new">Dark</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalPaletteFollow">
+        <source>Follow Dashboard</source>
+        <target state="new">Follow Dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalPaletteLight">
+        <source>Light</source>
+        <target state="new">Light</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalPaletteSaveFailed">
+        <source>Unable to save the terminal palette. Check that browser storage is available and try again.</source>
+        <target state="new">Unable to save the terminal palette. Check that browser storage is available and try again.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalProgress">
         <source>Terminal progress</source>
         <target state="new">Terminal progress</target>

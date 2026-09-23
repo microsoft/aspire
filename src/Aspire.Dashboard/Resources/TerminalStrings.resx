@@ -120,6 +120,21 @@
   <data name="TerminalProgress" xml:space="preserve">
     <value>Terminal progress</value>
   </data>
+  <data name="TerminalPalette" xml:space="preserve">
+    <value>Terminal palette</value>
+  </data>
+  <data name="TerminalPaletteFollow" xml:space="preserve">
+    <value>Follow Dashboard</value>
+  </data>
+  <data name="TerminalPaletteLight" xml:space="preserve">
+    <value>Light</value>
+  </data>
+  <data name="TerminalPaletteDark" xml:space="preserve">
+    <value>Dark</value>
+  </data>
+  <data name="TerminalPaletteSaveFailed" xml:space="preserve">
+    <value>Unable to save the terminal palette. Check that browser storage is available and try again.</value>
+  </data>
   <data name="TerminalCopyWorkingDirectory" xml:space="preserve">
     <value>Copy working directory: {0}</value>
     <comment>{0} is the working directory path.</comment>

@@ -124,7 +124,7 @@ export function setTerminalPalette(value) {
     if (value !== "dashboard" && value !== "dark" && value !== "light") {
         throw new TypeError("Invalid terminal palette preference.");
     }
-    // Persist before applying so a failed write can be reported by Settings without a false success.
+    // Persist before applying so a failed write can be reported without a false success.
     localStorage.setItem(TERMINAL_PALETTE_STORAGE_KEY, JSON.stringify(value));
     for (const state of terminals.values()) {
         updateAppearance(state);
@@ -137,6 +137,7 @@ function updateAppearance(state) {
     }
     // "dashboard" follows the resolved page theme, not the OS preference or a local control theme.
     const preference = getTerminalPalette();
+    state.palette = preference;
     state.colorMode = preference === "dashboard"
         ? (document.documentElement.dataset.theme === "light" ? "light" : "dark")
         : preference;
@@ -146,6 +147,29 @@ function updateAppearance(state) {
     state.scrollbar = scrollbarConfiguration(state);
     // setScrollbar replaces, rather than merges, the configuration.
     state.client?.setScrollbar(state.scrollbar);
+    notifyToolbar(state);
+}
+
+export function setPaletteFromHost(id, value) {
+    const state = terminals.get(id);
+    if (!state || state.disposed) {
+        return false;
+    }
+    let saved = false;
+    try {
+        // Palette is a local presentation preference, even for read-only or disconnected terminals.
+        setTerminalPalette(value);
+        saved = true;
+        if (state.error === "palette-failed") {
+            state.error = null;
+        }
+    } catch (error) {
+        console.warn("Dashboard terminal palette save failed.", error);
+        state.error = "palette-failed";
+    }
+    // Restore the authoritative selection after a failed save, even if the rest of the state is unchanged.
+    refreshToolbarState(id);
+    return saved;
 }
 
 function isCurrent(state, generation) {
@@ -490,7 +514,7 @@ function focusControls(state, reverse) {
         previous?.focus();
         return !!previous;
     }
-    const controls = Array.from(state.footer.querySelectorAll("fluent-button, fluent-select"))
+    const controls = Array.from(state.footer.querySelectorAll("fluent-button, fluent-select, fluent-dropdown button[role='combobox']"))
         .filter(element => !element.disabled && element.tabIndex >= 0);
     controls[0]?.focus();
     if (controls.length === 0) {
@@ -748,6 +772,19 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
     updateAppearance(state);
     state.themeObserver = new MutationObserver(() => updateAppearance(state));
     state.themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    // FluentSelect places AriaLabel on the dropdown host, not its generated combobox button.
+    // Forward it until Fluent propagates this attribute; observe child creation because upgrade is async.
+    // https://github.com/microsoft/fluentui-blazor/blob/dev/src/Core/Components/List/FluentSelect.razor
+    const labelPaletteControl = () => {
+        const dropdown = footer.querySelector(".terminal-palette-select fluent-dropdown");
+        const label = dropdown?.getAttribute("aria-label");
+        if (label) {
+            dropdown.querySelector("button[role='combobox']")?.setAttribute("aria-label", label);
+        }
+    };
+    state.footerObserver = new MutationObserver(labelPaletteControl);
+    state.footerObserver.observe(footer, { childList: true, subtree: true });
+    labelPaletteControl();
     // Other windows (including detached terminals) receive storage events; the writer updates its views above.
     window.addEventListener("storage", event => {
         if (event.storageArea === localStorage && (event.key === TERMINAL_PALETTE_STORAGE_KEY || event.key === null)) {
@@ -825,6 +862,7 @@ export function disposeTerminal(id) {
     }
     state.observer.disconnect();
     state.themeObserver.disconnect();
+    state.footerObserver.disconnect();
     state.listeners.abort();
     releaseClient(state);
     state.dotNetRef = null;
@@ -870,10 +908,10 @@ export function setAutoFit(id, autoFit) {
 
 export function dismissError(id) {
     const state = terminals.get(id);
-    if (!state || (state.error !== "input-failed" && state.error !== "sizing-failed")) {
+    if (!state || !["input-failed", "sizing-failed", "palette-failed"].includes(state.error)) {
         return;
     }
-    // Clipboard/input and sizing failures are local actions, not transport failures.
+    // Clipboard/input, sizing and palette failures are local actions, not transport failures.
     state.error = null;
     requestFocus(state);
     applyPendingFocus(state);
@@ -947,6 +985,7 @@ export function getToolbarState(id) {
         progressState: state.progress.state,
         progressPercentage: state.progress.percentage,
         sizeMode: state.sizing.mode === "auto" ? "font" : "fixed",
+        palette: state.palette,
         sizeKey: state.sizing.mode === "auto"
             ? state.geometry ? `${state.geometry.columns}x${state.geometry.rows}` : ""
             : `${state.sizing.columns}x${state.sizing.rows}`,
