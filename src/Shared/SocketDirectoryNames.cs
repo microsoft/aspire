@@ -4,7 +4,7 @@
 namespace Aspire.Shared;
 
 /// <summary>
-/// Directory names shared by socket path construction and validation.
+/// Directory names shared by Aspire-owned socket path construction.
 /// </summary>
 internal static class SocketDirectoryNames
 {

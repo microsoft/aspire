@@ -8,6 +8,7 @@ using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -16,7 +17,7 @@ namespace Aspire.Hosting.Tests;
 public class WithTerminalTests : IAsyncLifetime
 {
     private readonly string _terminalRoot = Directory.CreateTempSubdirectory().FullName;
-    private string _terminalDirectory => Path.Combine(_terminalRoot, ".aspire", "trmnl");
+    private string _terminalDirectory => Path.Combine(_terminalRoot, "terminals");
 
     [Fact]
     public void TerminalImplementationTypesAreInternal()
@@ -432,14 +433,6 @@ public class WithTerminalTests : IAsyncLifetime
     [Fact]
     public async Task WithTerminalWritesMetadataSidecarWithExpectedShape()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(_terminalDirectory,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
-                UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
-                UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
-        }
-
         // The sidecar lets external tools (CLI `aspire terminal ps`, dashboard) discover
         // live terminals by listing ~/.aspire/trmnl/*.metadata.json. The on-disk schema
         // must match TerminalHostMetadata exactly — older readers refuse unknown schemas.
@@ -1394,9 +1387,47 @@ public class WithTerminalTests : IAsyncLifetime
         Assert.True(resource.Resource.HasAnnotationOfType<ForceProcessExecutionAnnotation>());
     }
 
+    [Fact]
+    public async Task WithTerminalCreatesMissingOverrideDirectoryAtConfiguredPath()
+    {
+        using var builder = CreateBuilder();
+        var directory = Path.Combine(_terminalRoot, "custom");
+        builder.Configuration[TerminalHostPaths.DirectoryOverrideConfigName] = directory;
+        var resource = builder.AddExecutable("myapp", "myapp", ".").WithTerminal();
+        await using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+        var host = Assert.Single(resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts);
+        Assert.Equal(directory, Path.GetDirectoryName(host.Layout.MetadataPath));
+        Assert.True(File.Exists(host.Layout.MetadataPath));
+    }
+
+    [Fact]
+    public async Task WithTerminalRejectsPermissiveOverrideBeforeWritingMetadata()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.OtherRead;
+        File.SetUnixFileMode(_terminalDirectory, mode);
+        using var builder = CreateBuilder();
+        builder.AddExecutable("myapp", "myapp", ".").WithTerminal();
+        await using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await Assert.ThrowsAsync<IOException>(async () => await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model)));
+
+        Assert.Equal(mode, File.GetUnixFileMode(_terminalDirectory));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(_terminalDirectory));
+    }
+
     public ValueTask InitializeAsync()
     {
-        Directory.CreateDirectory(_terminalDirectory);
+        SocketPermissionHelper.CreateDirectory(_terminalDirectory, repairExisting: false);
         return ValueTask.CompletedTask;
     }
 

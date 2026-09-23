@@ -99,8 +99,10 @@ public sealed class JsonRpcAuthenticationTests
         }
     }
 
-    [Fact]
-    public async Task RejectedSocketDirectory_DoesNotDeleteExistingFileOnDispose()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RejectedSocketDirectory_DoesNotDeleteExistingFileOnDispose(bool symbolicLink)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -111,6 +113,9 @@ public sealed class JsonRpcAuthenticationTests
         try
         {
             var target = Directory.CreateDirectory(Path.Combine(root.FullName, "target"));
+            File.SetUnixFileMode(target.FullName,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.OtherRead);
+            var originalMode = File.GetUnixFileMode(target.FullName);
             var existingFile = Path.Combine(target.FullName, "rpc.sock");
             await File.WriteAllTextAsync(existingFile, "not our socket");
             Directory.CreateDirectory(Path.Combine(root.FullName, ".aspire", "cli"));
@@ -119,7 +124,7 @@ public sealed class JsonRpcAuthenticationTests
 
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["REMOTE_APP_HOST_SOCKET_PATH"] = Path.Combine(link, "rpc.sock")
+                ["REMOTE_APP_HOST_SOCKET_PATH"] = symbolicLink ? Path.Combine(link, "rpc.sock") : existingFile
             }).Build();
             using var services = new ServiceCollection().BuildServiceProvider();
             using var server = new JsonRpcServer(
@@ -133,6 +138,7 @@ public sealed class JsonRpcAuthenticationTests
             server.Dispose();
 
             Assert.Equal("not our socket", await File.ReadAllTextAsync(existingFile));
+            Assert.Equal(originalMode, File.GetUnixFileMode(target.FullName));
         }
         finally
         {
@@ -164,20 +170,18 @@ public sealed class JsonRpcAuthenticationTests
 
             if (socketDirectory is not null && existingDirectory)
             {
-                var directory = Path.Combine(socketDirectory, ".aspire", "cli", "bch");
+                var directory = Path.Combine(socketDirectory, "rpc");
                 Directory.CreateDirectory(directory);
                 if (!OperatingSystem.IsWindows())
                 {
                     File.SetUnixFileMode(directory,
-                        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
-                        UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
-                        UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
+                        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
                 }
             }
 
             var socketPath = OperatingSystem.IsWindows()
                 ? $"aspire-remotehost-test-{Guid.NewGuid():N}"
-                : Path.Combine(socketDirectory!, ".aspire", "cli", "bch", "rpc.sock");
+                : Path.Combine(socketDirectory!, "rpc", "rpc.sock");
 
             var builder = Host.CreateApplicationBuilder();
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>

@@ -512,6 +512,8 @@ internal sealed class DcpHost
 
     internal static Socket CreateLoggingSocket(string socketPath)
     {
+        // This directory was allocated for the DCP session, not supplied as a socket override.
+        SocketPermissionHelper.CreateDirectory(Path.GetDirectoryName(socketPath)!, repairExisting: true);
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         try
         {

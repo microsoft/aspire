@@ -17,18 +17,20 @@ internal static class SocketPermissionHelper
     // validation, Windows owner-only ACLs, and endpoint permissions here. DirectoryHelper
     // does not apply Windows ACLs or socket-file permissions.
 
+    private const UnixFileMode OwnerOnlyMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+
     /// <summary>
-    /// Creates or repairs a dedicated socket directory before any sockets are bound in it.
+    /// Creates a dedicated socket directory, repairing existing permissions only for Aspire-owned directories.
     /// </summary>
-    internal static DirectoryInfo CreateDirectory(string path)
-        => CreateDirectory(path, Environment.CurrentDirectory,
+    internal static DirectoryInfo CreateDirectory(string path, bool repairExisting)
+        => CreateDirectory(path, repairExisting, Environment.CurrentDirectory,
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Path.GetTempPath());
 
     /// <summary>
     /// Creates or repairs a socket directory using explicitly supplied environment paths.
     /// </summary>
     internal static DirectoryInfo CreateDirectory(
-        string path, string currentDirectory, string userProfileDirectory, string tempDirectory)
+        string path, bool repairExisting, string currentDirectory, string userProfileDirectory, string tempDirectory)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
         ArgumentException.ThrowIfNullOrEmpty(currentDirectory);
@@ -37,13 +39,12 @@ internal static class SocketPermissionHelper
         var directory = new DirectoryInfo(Path.GetFullPath(path, currentDirectory));
         var tempRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(tempDirectory, currentDirectory));
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        if (!IsSocketDirectory(directory, tempRoot, comparison) ||
-            directory.Parent is null ||
+        if (directory.Parent is null ||
             string.Equals(directory.FullName, Path.TrimEndingDirectorySeparator(currentDirectory), comparison) ||
             string.Equals(directory.FullName, Path.TrimEndingDirectorySeparator(userProfileDirectory), comparison) ||
             string.Equals(Path.TrimEndingDirectorySeparator(directory.FullName), tempRoot, comparison))
         {
-            throw new IOException($"The socket directory '{path}' must use an Aspire socket directory layout ({SocketDirectoryNames.Aspire}/{SocketDirectoryNames.Cli}/{SocketDirectoryNames.Backchannels}, {SocketDirectoryNames.Aspire}/{SocketDirectoryNames.Terminals}, or {SocketDirectoryNames.Aspire}/{SocketDirectoryNames.Pty}).");
+            throw new IOException($"The socket directory '{path}' must be a dedicated directory, not the working directory, user profile, filesystem root, or temporary root.");
         }
 
         // Validate the entire configurable suffix, not just the leaf: .aspire or cli
@@ -64,7 +65,7 @@ internal static class SocketPermissionHelper
 
         if (OperatingSystem.IsWindows())
         {
-            return CreateWindowsDirectory(directory);
+            return CreateWindowsDirectory(directory, repairExisting);
         }
 
         // A configured endpoint must not cause chmod on a shared sticky directory such as /var/tmp.
@@ -73,34 +74,20 @@ internal static class SocketPermissionHelper
             throw new IOException($"The socket directory '{path}' must not be a shared sticky directory.");
         }
 
-        return DirectoryHelper.CreateWithOwnerOnlyPermissions(directory.FullName);
-    }
-
-    private static bool IsSocketDirectory(DirectoryInfo directory, string tempRoot, StringComparison comparison)
-    {
-        var parent = directory.Parent;
-        if (parent is null)
+        if (repairExisting)
         {
-            return false;
+            return DirectoryHelper.CreateWithOwnerOnlyPermissions(directory.FullName);
         }
 
-        if (string.Equals(parent.Name, SocketDirectoryNames.Aspire, comparison))
+        // CreateDirectory applies the mode only to a new directory. Do not chmod an
+        // existing override, even if another caller created it concurrently.
+        Directory.CreateDirectory(directory.FullName, OwnerOnlyMode);
+        if (File.GetUnixFileMode(directory.FullName) != OwnerOnlyMode)
         {
-            return string.Equals(directory.Name, SocketDirectoryNames.Terminals, comparison) ||
-                string.Equals(directory.Name, SocketDirectoryNames.Pty, comparison);
+            throw new IOException($"The configured socket directory '{path}' must have mode 0700. Set its permissions to 0700 or choose a new dedicated directory.");
         }
 
-        if (string.Equals(directory.Name, SocketDirectoryNames.Backchannels, comparison) &&
-            string.Equals(parent.Name, SocketDirectoryNames.Cli, comparison) &&
-            string.Equals(parent.Parent?.Name, SocketDirectoryNames.Aspire, comparison))
-        {
-            return true;
-        }
-
-        // DCP session directories are allocated by ITempFileSystemService, not a socket override.
-        return directory.Name.StartsWith(SocketDirectoryNames.DcpPrefix, comparison) &&
-            directory.Name.Length > SocketDirectoryNames.DcpPrefix.Length &&
-            string.Equals(parent.FullName, tempRoot, comparison);
+        return directory;
     }
 
     /// <summary>
@@ -117,7 +104,9 @@ internal static class SocketPermissionHelper
             throw new ArgumentException("The socket path must include a dedicated directory.", nameof(socketPath));
         }
 
-        CreateDirectory(directory);
+        // The allocator repairs Aspire-owned defaults. A listener must not infer ownership
+        // from the path or rewrite an existing configured directory's permissions.
+        CreateDirectory(directory, repairExisting: false);
         socket.Bind(new UnixDomainSocketEndPoint(socketPath));
 
         if (!OperatingSystem.IsWindows())
@@ -130,7 +119,7 @@ internal static class SocketPermissionHelper
     }
 
     [SupportedOSPlatform("windows")]
-    private static DirectoryInfo CreateWindowsDirectory(DirectoryInfo directory)
+    private static DirectoryInfo CreateWindowsDirectory(DirectoryInfo directory, bool repairExisting)
     {
         using var identity = WindowsIdentity.GetCurrent();
         var user = identity.User ?? throw new UnauthorizedAccessException("The current Windows user has no security identifier.");
@@ -144,10 +133,32 @@ internal static class SocketPermissionHelper
             PropagationFlags.None,
             AccessControlType.Allow));
 
-        // Supply the DACL at creation, then also replace permissions on directories from older runs.
+        // Supply the DACL at creation; existing overrides must be validated without rewriting it.
         // Inheritable ACEs protect Windows AF_UNIX socket files without calling Unix-only APIs.
         directory.Create(security);
-        directory.SetAccessControl(security);
+        if (repairExisting)
+        {
+            directory.SetAccessControl(security);
+        }
+        else
+        {
+            var existingSecurity = directory.GetAccessControl();
+            var rules = existingSecurity.GetAccessRules(true, true, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>().ToArray();
+            var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
+            // Hex1b can add SYSTEM to a PTY directory after startup. This does not grant
+            // access to other ordinary users and must not prevent subsequent terminals.
+            if (!existingSecurity.AreAccessRulesProtected ||
+                !user.Equals(existingSecurity.GetOwner(typeof(SecurityIdentifier))) ||
+                rules.Any(rule => rule.AccessControlType != AccessControlType.Allow ||
+                    (!user.Equals(rule.IdentityReference) && !system.Equals(rule.IdentityReference))) ||
+                !rules.Any(rule => user.Equals(rule.IdentityReference) &&
+                    rule.FileSystemRights == FileSystemRights.FullControl &&
+                    rule.InheritanceFlags == (InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit) &&
+                    rule.PropagationFlags == PropagationFlags.None))
+            {
+                throw new IOException($"The configured socket directory '{directory.FullName}' must have a protected owner-only ACL with inheritable full control for the current user (SYSTEM is also allowed). Set those permissions or choose a new dedicated directory.");
+            }
+        }
         return directory;
     }
 }

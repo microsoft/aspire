@@ -44,7 +44,7 @@ internal sealed class BackchannelService(
                 return;
             }
 
-            SocketPermissionHelper.CreateDirectory(Path.GetDirectoryName(unixSocketPath)!);
+            SocketPermissionHelper.CreateDirectory(Path.GetDirectoryName(unixSocketPath)!, repairExisting: false);
             _socketPath = unixSocketPath;
 
             using var activity = profilingTelemetry.StartBackchannelStartup(unixSocketPath);

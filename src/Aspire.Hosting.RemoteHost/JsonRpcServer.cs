@@ -21,6 +21,7 @@ namespace Aspire.Hosting.RemoteHost;
 internal sealed class JsonRpcServer : BackgroundService
 {
     private readonly string _socketPath;
+    private readonly bool _useDefaultSocketPath;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<JsonRpcServer> _logger;
     private readonly RemoteHostProfilingTelemetry _profilingTelemetry;
@@ -39,6 +40,7 @@ internal sealed class JsonRpcServer : BackgroundService
         _profilingTelemetry = profilingTelemetry;
 
         var socketPath = configuration["REMOTE_APP_HOST_SOCKET_PATH"];
+        _useDefaultSocketPath = string.IsNullOrEmpty(socketPath);
         if (string.IsNullOrEmpty(socketPath) && OperatingSystem.IsWindows())
         {
             socketPath = Path.Combine(Path.GetTempPath(), "aspire", "remote-app-host.sock");
@@ -144,7 +146,7 @@ internal sealed class JsonRpcServer : BackgroundService
     {
         _logger.LogInformation("Starting JsonRpc server on Unix domain socket: {SocketPath}", _socketPath);
 
-        SocketPermissionHelper.CreateDirectory(Path.GetDirectoryName(_socketPath)!);
+        SocketPermissionHelper.CreateDirectory(Path.GetDirectoryName(_socketPath)!, repairExisting: _useDefaultSocketPath);
 
         // Delete existing socket file if it exists
         if (File.Exists(_socketPath))

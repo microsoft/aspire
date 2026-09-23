@@ -6,6 +6,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
+using Aspire.Shared;
 using Aspire.Shared.TerminalHost;
 using Hex1b;
 using Hex1b.Automation;
@@ -39,12 +40,10 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
         int? rows = null)
     {
         var workspace = CreateSocketWorkspace();
-        var dcpDir = Path.Combine(workspace.Path, ".aspire", "trmnl");
+        var dcpDir = Path.Combine(workspace.Path, "terminals");
         var hostDir = dcpDir;
         var ctrlDir = dcpDir;
-        Directory.CreateDirectory(dcpDir);
-        Directory.CreateDirectory(hostDir);
-        Directory.CreateDirectory(ctrlDir);
+        SocketPermissionHelper.CreateDirectory(dcpDir, repairExisting: false);
 
         var producer = Path.Combine(dcpDir, "p.sock");
         var consumer = Path.Combine(hostDir, "r.sock");
@@ -1161,7 +1160,6 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     {
         var (args, workspace, control) = BuildArgs();
         using var disp = workspace;
-        MakeSocketDirectoryPermissive(control);
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         await using var listener = new TerminalHostControlListener(
@@ -1184,7 +1182,6 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
         for (var cycle = 0; cycle < 2; cycle++)
         {
             File.Delete(args.ProducerUdsPath);
-            MakeSocketDirectoryPermissive(args.ProducerUdsPath);
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var acceptTask = TerminalReplica.AcceptProducerAsync(args.ProducerUdsPath, cts.Token);
 
@@ -1221,7 +1218,6 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     {
         var (args, workspace, _) = BuildArgs();
         using var disp = workspace;
-        MakeSocketDirectoryPermissive(args.ConsumerUdsPath);
         await using var presentation = new Hmp1PresentationAdapter();
         var connected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         presentation.OnClientConnected = (_, _) =>
@@ -1285,6 +1281,52 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
             }
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => acceptTask);
         }
+    }
+
+    [Theory]
+    [InlineData("control")]
+    [InlineData("producer")]
+    [InlineData("consumer")]
+    public async Task ListenersRejectPermissiveDirectoryWithoutChangingPermissionsOrDeletingFiles(string listenerKind)
+    {
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
+        MakeSocketDirectoryPermissive(control);
+        var directory = Path.GetDirectoryName(control)!;
+        var originalPermissions = OperatingSystem.IsWindows()
+            ? new DirectoryInfo(directory).GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.All)
+            : File.GetUnixFileMode(directory).ToString();
+        var path = listenerKind switch
+        {
+            "control" => control,
+            "producer" => args.ProducerUdsPath,
+            _ => args.ConsumerUdsPath
+        };
+        await File.WriteAllTextAsync(path, "not our socket");
+
+        if (listenerKind == "control")
+        {
+            await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
+            await using var listener = new TerminalHostControlListener(
+                control, new TerminalHostControlRpcTarget(app), NullLogger.Instance);
+            await Assert.ThrowsAsync<IOException>(listener.StartAsync);
+        }
+        else if (listenerKind == "producer")
+        {
+            await Assert.ThrowsAsync<IOException>(() => TerminalReplica.AcceptProducerAsync(path, CancellationToken.None));
+        }
+        else
+        {
+            await using var presentation = new Hmp1PresentationAdapter();
+            Assert.Throws<IOException>(() => new Hmp1UdsServerListenerFilter(
+                path, presentation, NullLogger<Hmp1UdsServerListenerFilter>.Instance, _ => { }));
+        }
+
+        Assert.Equal("not our socket", await File.ReadAllTextAsync(path));
+        var actualPermissions = OperatingSystem.IsWindows()
+            ? new DirectoryInfo(directory).GetAccessControl().GetSecurityDescriptorSddlForm(AccessControlSections.All)
+            : File.GetUnixFileMode(directory).ToString();
+        Assert.Equal(originalPermissions, actualPermissions);
     }
 
     private static void MakeSocketDirectoryPermissive(string socketPath)
