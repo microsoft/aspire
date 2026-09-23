@@ -41,6 +41,7 @@ export function redact(text: string): string {
     // Match the existing runner's token redaction, including raw JSON and URLs
     // emitted before its finally block: /login?t=abc..., "token":"abc...".
     return text
+        .replace(/^::add-mask::.*$/gm, '::add-mask::<redacted>')
         .replace(/\/login\?t=[^"'\s<>\\)]+/gi, '/login?t=<redacted>')
         .replace(/([?&]t=)[^"'\s<>\\)&]+/gi, '$1<redacted>')
         .replace(/(Setting up RPC server with token: )[^\r\n]+/gi, '$1<redacted>')
@@ -240,6 +241,10 @@ export async function runDiagnostics(options: DiagnosticOptions): Promise<Diagno
         // action.yml. This reuses its shipped SDK; no npm feed change or bespoke
         // artifact protocol is needed. Immutable names preserve earlier evidence.
         const artifactName = `tree-actions-live-r${options.runnerIndex}-a${options.runAttempt}-c${String(sequence).padStart(3, '0')}`;
+        const uploadOutputs = path.join(options.outputRoot, `upload-${sequence}.txt`);
+        // The Actions runner normally creates this command file before launching
+        // an action. A directly invoked entry point still requires it to exist.
+        fs.writeFileSync(uploadOutputs, '', { flag: 'wx' });
         const upload = spawn(process.execPath, [options.uploadActionPath], {
             env: {
                 ...process.env,
@@ -251,7 +256,7 @@ export async function runDiagnostics(options: DiagnosticOptions): Promise<Diagno
                 INPUT_OVERWRITE: 'false',
                 'INPUT_INCLUDE-HIDDEN-FILES': 'true',
                 INPUT_ARCHIVE: 'true',
-                GITHUB_OUTPUT: path.join(options.outputRoot, `upload-${sequence}.txt`),
+                GITHUB_OUTPUT: uploadOutputs,
             },
             stdio: ['ignore', 'pipe', 'pipe'],
         });

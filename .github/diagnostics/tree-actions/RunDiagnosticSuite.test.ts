@@ -24,11 +24,13 @@ test('observer readiness requires a real fresh sample and the target DCP binary'
 test('live diagnostic redaction removes tokens while preserving process evidence', () => {
     const input = 'PID=123 root=456 /login?t=abcdefghijklmnop\n'
         + '{"token":"abcdefghijklmnop"}\n'
+        + '::add-mask::artifact-upload-signature\n'
         + 'Setting up RPC server with token: secret-rpc-value\n'
         + 'Authorization: Bearer secret-value\n'
         + 'https://example.invalid/blob?sig=secret-signature&other=kept';
     assert.equal(redact(input), 'PID=123 root=456 /login?t=<redacted>\n'
         + '{"token":"<redacted>"}\n'
+        + '::add-mask::<redacted>\n'
         + 'Setting up RPC server with token: <redacted>\n'
         + 'Authorization: Bearer <redacted>\n'
         + 'https://example.invalid/blob?sig=<redacted>&other=kept');
@@ -103,7 +105,9 @@ test('controller persists remote checkpoints before workload and after exit', { 
         fs.writeFileSync(uploadActionPath, `
 const fs = require('node:fs');
 const path = require('node:path');
+if (!fs.existsSync(process.env.GITHUB_OUTPUT)) { throw new Error('Missing action output command file'); }
 fs.cpSync(process.env.INPUT_PATH, path.join(process.env.DIAGNOSTIC_TEST_REMOTE, process.env.INPUT_NAME), { recursive: true });
+fs.appendFileSync(process.env.GITHUB_OUTPUT, 'artifact-id=fixture\\n');
 `);
         fs.writeFileSync(path.join(toolsRoot, 'Observe-TreeActionsProcesses.ps1'), `
 param($OutputDirectory, $DcpDirectory, $StopFile, $MaximumSeconds)
