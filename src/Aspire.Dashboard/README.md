@@ -188,7 +188,7 @@ Telemetry limits have different scopes depending on the telemetry type:
 
 | Option | Description |
 |--------|-------------|
-| `Dashboard:ApplicationName`<br/>Default: `Aspire` | The application name displayed in the UI. The application name also scopes localhost authentication cookies and persisted dashboard data so dashboards for different applications don't share authentication state or stored data. The display name applies only when no resource service URL is specified. When a resource service exists, the service specifies the display name. |
+| `Dashboard:ApplicationName`<br/>Default: `Aspire` | The configured application name scopes authentication and antiforgery cookie names and dashboard data persisted on disk. It also supplies the UI display name when no resource service URL is specified; otherwise, the resource service supplies the display name. Collapsed-resource state in browser storage is scoped by that display name. Other browser preferences, such as time format, are not application-scoped and can be shared when applications use the same browser origin. Application-name scoping is not a security boundary. |
 | `Dashboard:UI:DisableResourceGraph`<br/>Default: `false` | Disables the resource graph UI. |
 | `Dashboard:UI:DisableImport`<br/>Default: `false` | Disables the telemetry import UI. |
 | `Dashboard:UI:DisableAgentHelp`<br/>Default: `false` | Disables the **AI Agents** button in the dashboard header. When `false`, the button opens a dialog with instructions for using AI coding agents with the dashboard. |
