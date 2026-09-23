@@ -1,0 +1,9 @@
+{
+  "author": "afscrome",
+  "comment": "Rolled out the \"Manage\" link + hide-container pattern to remaining management UI integrations",
+  "mergedAt": "2026-09-23T05:23:10Z",
+  "number": 20070,
+  "runDate": "2026-09-23T06:08:29Z",
+  "status": "included",
+  "title": "Roll out \"Manage\" link pattern to remaining management UI integrations"
+}

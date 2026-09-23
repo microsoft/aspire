@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire Dashboard executable now displays the Aspire icon in Windows Task Manager, File Explorer, and other shell surfaces, matching the icon already used by the CLI and managed host executables.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🖼️",
+  "firstMergedAt": "2026-09-23T00:25:40Z",
+  "lastMergedAt": "2026-09-23T00:25:40Z",
+  "name": "Aspire Dashboard application icon",
+  "owner": "JamesNK",
+  "prs": [
+    20306
+  ]
+}

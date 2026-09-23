@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Matched to existing changelog entry for #19565 (Native AOT dashboard with Fluent UI v5)",
+  "mergedAt": "2026-09-23T04:35:42Z",
+  "number": 1714,
+  "runDate": "2026-09-23T06:08:29Z",
+  "status": "included",
+  "title": "[docs] Document PKCS#12/PFX requirement for resource service client certificates"
+}

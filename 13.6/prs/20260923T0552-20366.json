@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Release-engineering merge of release/14.0 back into main after the 13.6 branch snap; no user-facing product change",
+  "mergedAt": "2026-09-23T05:52:02Z",
+  "number": 20366,
+  "runDate": "2026-09-23T06:08:29Z",
+  "status": "excluded",
+  "title": "Merge release/14.0 back into main after the 13.6 branch snap"
+}

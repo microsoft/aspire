@@ -6,7 +6,7 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The Aspire Dashboard can now publish and run as a standalone Native AOT executable, using an updated Fluent UI v5 across grids, dialogs, filters, charts, and log/telemetry views. `aspire dashboard run` and AppHost startup select the AOT dashboard automatically, with no new command-line options required.",
-  "docsPrs": [],
+  "docsPrs": [1714],
   "docsRequired": true,
   "emoji": "🚀",
   "firstMergedAt": "2026-09-22T19:35:12Z",

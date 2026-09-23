@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@afscrome"
+  ],
+  "description": "phpMyAdmin, pgAdmin, pgweb, Kafka UI, Mongo Express, and Attu now hide their management tool containers and add a \"Manage\" link back onto the resource(s) they manage, matching the pattern already used by Redis. Qdrant, RabbitMQ, the Durable Task Scheduler emulator, and Cosmos DB's built-in dashboard links are also renamed to \"Manage\" for consistency, and \"Manage\" links now sort above a resource's other URLs.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-09-23T05:23:10Z",
+  "lastMergedAt": "2026-09-23T05:23:10Z",
+  "name": "\"Manage\" link pattern extended to remaining management UI integrations",
+  "owner": "JamesNK",
+  "prs": [
+    20070
+  ]
+}

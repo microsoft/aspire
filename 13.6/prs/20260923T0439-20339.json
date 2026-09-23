@@ -1,0 +1,9 @@
+{
+  "author": "danroth27",
+  "comment": "Playground-only OpenTelemetry version bump for Blazor sample apps; no product change",
+  "mergedAt": "2026-09-23T04:39:23Z",
+  "number": 20339,
+  "runDate": "2026-09-23T06:08:29Z",
+  "status": "excluded",
+  "title": "Update Blazor playgrounds to OpenTelemetry 1.19"
+}

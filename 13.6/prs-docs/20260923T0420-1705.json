@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Matched to existing changelog entry for #20279 (fixed duplicate resource-stopped notifications)",
+  "mergedAt": "2026-09-23T04:20:16Z",
+  "number": 1705,
+  "runDate": "2026-09-23T06:08:29Z",
+  "status": "included",
+  "title": "[docs] Clarify ResourceStoppedEvent fires once per stop, not per restart"
+}

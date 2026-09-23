@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Added Aspire icon to the Dashboard executable, visible in Windows shell surfaces",
+  "mergedAt": "2026-09-23T00:25:40Z",
+  "number": 20306,
+  "runDate": "2026-09-23T06:08:29Z",
+  "status": "included",
+  "title": "Add application icon to Aspire Dashboard"
+}
