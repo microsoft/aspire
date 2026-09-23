@@ -288,6 +288,11 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     [Fact]
     public async Task CreateProjectFiles_ExactAspirePackageRestoresInsteadOfUsingCheckoutProject()
     {
+        var integrationDirectory = _workspace.WorkspaceRoot.CreateSubdirectory(
+            Path.Combine("src", "Aspire.Hosting.PostgreSQL"));
+        var integrationProjectPath = Path.Combine(integrationDirectory.FullName, "Aspire.Hosting.PostgreSQL.csproj");
+        await File.WriteAllTextAsync(integrationProjectPath, "<Project />");
+
         var project = CreateProject();
         var integrations = new[]
         {
@@ -307,6 +312,9 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         Assert.Equal("[13.1.0]", packageReference.Attribute("VersionOverride")?.Value);
         Assert.Null(packageReference.Attribute("Version"));
+        Assert.Contains(
+            document.Descendants("ProjectReference"),
+            element => element.Attribute("Include")?.Value == integrationProjectPath);
         Assert.DoesNotContain(
             document.Descendants("PackageReference"),
             element => element.Attribute("Include")?.Value == "Aspire.Hosting.PostgreSQL");

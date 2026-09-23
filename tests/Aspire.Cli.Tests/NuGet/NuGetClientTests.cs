@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.IO.Compression;
+using System.Xml.Linq;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Logging.Abstractions;
 using NuGet.Configuration;
@@ -1029,7 +1031,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
                 nugetConfigPath,
                 workspace.WorkspaceRoot.FullName,
                 TestContext.Current.CancellationToken);
-        var package = Assert.Single(ReadRestoredPackages(restoreDirectory.FullName, nugetConfigPath, workspace.WorkspaceRoot.FullName));
+            var package = Assert.Single(ReadRestoredPackages(restoreDirectory.FullName, nugetConfigPath, workspace.WorkspaceRoot.FullName));
 
             Assert.Equal(incompleteInstallPath, package.InstallPath, ignoreCase: true);
             Assert.True(File.Exists(Path.Combine(package.InstallPath, ".nupkg.metadata")));
@@ -1039,6 +1041,115 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         {
             Directory.Delete(Path.Combine(globalPackagesFolder, packageId.ToLowerInvariant()), recursive: true);
         }
+    }
+
+    [Fact]
+    public void GetSettings_ReturnsEffectiveSourcePolicy()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectDirectory = workspace.CreateDirectory("AppHost");
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        var source = $"https://packages.example.com/v3/index.json?token={Guid.NewGuid():N}";
+        File.WriteAllText(
+            configPath,
+            $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="private" value="{{source}}" />
+              </packageSources>
+              <disabledPackageSources>
+                <add key="private" value="true" />
+              </disabledPackageSources>
+              <packageSourceMapping>
+                <packageSource key="private">
+                  <package pattern="Aspire.*" />
+                </packageSource>
+              </packageSourceMapping>
+              <packageSourceCredentials>
+                <private>
+                  <add key="Username" value="user" />
+                  <add key="ClearTextPassword" value="secret" />
+                </private>
+              </packageSourceCredentials>
+            </configuration>
+            """);
+        var client = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<NuGetClient>.Instance);
+
+        var settings = client.GetSettings(
+            projectDirectory.FullName,
+            Enumerable.Repeat((byte)0x5A, NuGetSourceIdentity.KeySizeInBytes).ToArray());
+
+        Assert.Contains(configPath, settings.ConfigPaths);
+        var sourceInfo = Assert.Single(settings.Sources, source => source.Name == "private");
+        Assert.False(sourceInfo.IsEnabled);
+        Assert.True(sourceInfo.HasCredentials);
+        Assert.Contains(source, settings.SensitiveSourceValues);
+        Assert.True(settings.PackageSourceMappingEnabled);
+        var mapping = Assert.Single(settings.PackageSourceMappings);
+        Assert.Equal("private", mapping.SourceKey);
+        Assert.Equal(["Aspire.*"], mapping.Patterns);
+        Assert.Contains("private", settings.DisabledPackageSourceKeys);
+        Assert.Contains("private", settings.ReservedPackageSourceKeys);
+        Assert.NotEmpty(settings.CacheIdentity);
+    }
+
+    [Fact]
+    public void GetSettings_TrustedSignerChangeInvalidatesCacheIdentity()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        var client = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<NuGetClient>.Instance);
+        var sourceIdentityKey = Enumerable.Repeat((byte)0x5A, NuGetSourceIdentity.KeySizeInBytes).ToArray();
+
+        WriteTrustedSignerConfig(configPath, new string('A', 64));
+        var firstSettings = client.GetSettings(workspace.WorkspaceRoot.FullName, sourceIdentityKey);
+
+        WriteTrustedSignerConfig(configPath, new string('B', 64));
+        var secondSettings = client.GetSettings(workspace.WorkspaceRoot.FullName, sourceIdentityKey);
+
+        Assert.NotEqual(firstSettings.CacheIdentity, secondSettings.CacheIdentity);
+    }
+
+    [Fact]
+    public void WriteConfigOverlay_WritesPolicySections()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "policy", "NuGet.Config");
+        var client = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<NuGetClient>.Instance);
+
+        client.WriteConfigOverlay(
+            new NuGetConfigOverlayRequest(
+                [new("private", "https://packages.example.com/v3/index.json")],
+                [new("private", ["Aspire.*"])],
+                ClearDisabledPackageSources: true,
+                DisabledPackageSourceKeys: ["other"],
+                GlobalPackagesFolder: "/tmp/aspire-packages"),
+            outputPath);
+
+        var document = XDocument.Load(outputPath);
+        Assert.Equal(
+            "https://packages.example.com/v3/index.json",
+            document.Descendants("packageSources").Elements("add").Single().Attribute("value")?.Value);
+        Assert.Equal(
+            ["Aspire.*"],
+            document.Descendants("packageSourceMapping").Elements("packageSource").Elements("package")
+                .Select(static package => package.Attribute("pattern")!.Value));
+        var disabledSources = Assert.Single(document.Descendants("disabledPackageSources"));
+        Assert.NotNull(disabledSources.Element("clear"));
+        Assert.Equal("other", disabledSources.Elements("add").Single().Attribute("key")?.Value);
+        Assert.Equal(
+            "/tmp/aspire-packages",
+            document.Descendants("config").Elements("add").Single().Attribute("value")?.Value);
     }
 
     /// <summary>
@@ -1084,6 +1195,21 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             """);
 
         return nugetConfigPath;
+    }
+
+    private static void WriteTrustedSignerConfig(string configPath, string fingerprint)
+    {
+        File.WriteAllText(
+            configPath,
+            $$"""
+            <configuration>
+              <trustedSigners>
+                <author name="test-author">
+                  <certificate fingerprint="{{fingerprint}}" hashAlgorithm="SHA256" allowUntrustedRoot="false" />
+                </author>
+              </trustedSigners>
+            </configuration>
+            """);
     }
 
     /// <summary>
@@ -1212,4 +1338,29 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             }
         }
     }
+}
+
+file static class NuGetClientTestExtensions
+{
+    public static Task RestoreAsync(
+        this NuGetClient client,
+        IReadOnlyList<(string Id, string Version)> packages,
+        string framework,
+        string? runtimeIdentifier,
+        string outputPath,
+        IReadOnlyList<string> sources,
+        string? nugetConfigPath,
+        string workingDirectory,
+        CancellationToken cancellationToken)
+        => client.RestoreAsync(
+            packages,
+            framework,
+            runtimeIdentifier,
+            outputPath,
+            sources,
+            nugetConfigPath is null ? [] : [nugetConfigPath],
+            workingDirectory,
+            globalPackagesFolderOverride: null,
+            sensitiveSources: [],
+            cancellationToken);
 }

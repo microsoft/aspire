@@ -541,6 +541,7 @@ public class Program
         builder.Services.AddSingleton<ILayoutDiscovery, LayoutDiscovery>();
         builder.Services.AddSingleton<INuGetClient, NuGetClient>();
         builder.Services.AddSingleton<BundleNuGetService>();
+        builder.Services.AddTransient<INuGetSettingsProvider, NuGetSettingsProvider>();
 
         // Git repository operations.
         builder.Services.AddSingleton<IGitRepository, GitRepository>();

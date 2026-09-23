@@ -18,25 +18,29 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         File.WriteAllText(nugetConfigPath, "<configuration />");
 
         string? capturedOutputPath = null;
-        string? capturedConfigPath = null;
+        IReadOnlyList<string>? capturedConfigPaths = null;
         IReadOnlyList<string>? capturedSources = null;
+        string? capturedGlobalPackagesFolder = null;
         var nuGetClient = new FakeNuGetClient
         {
-            RestoreCallback = (_, _, _, outputPath, sources, configPath, _, _) =>
+            RestoreCallback = (_, _, _, outputPath, sources, configPaths, _, globalPackagesFolder, _, _) =>
             {
                 capturedOutputPath = outputPath;
-                capturedConfigPath = configPath;
+                capturedConfigPaths = configPaths;
                 capturedSources = sources;
+                capturedGlobalPackagesFolder = globalPackagesFolder;
                 return Task.CompletedTask;
             }
         };
         var service = CreateService(nuGetClient);
+        var globalPackagesFolder = Path.Combine(workspace.WorkspaceRoot.FullName, "packages");
 
         var manifestPath = await service.RestorePackagesAsync(
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             workingDirectory: appHostDirectory.FullName,
             sources: ["https://example.com/v3/index.json"],
-            nugetConfigPath: nugetConfigPath);
+            nugetConfigPaths: [nugetConfigPath],
+            globalPackagesFolderOverride: globalPackagesFolder);
 
         var restoreRoot = Path.Combine(
             workspace.WorkspaceRoot.FullName,
@@ -45,8 +49,9 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             "package-restore");
         Assert.StartsWith(restoreRoot, manifestPath, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(Path.Combine(Path.GetDirectoryName(manifestPath)!, "obj"), capturedOutputPath);
-        Assert.Equal(nugetConfigPath, capturedConfigPath);
+        Assert.Equal([nugetConfigPath], capturedConfigPaths);
         Assert.Equal(["https://example.com/v3/index.json"], capturedSources);
+        Assert.Equal(globalPackagesFolder, capturedGlobalPackagesFolder);
         Assert.Equal(1, nuGetClient.RestoreCallCount);
         Assert.Equal(1, nuGetClient.WriteManifestCallCount);
     }
@@ -66,6 +71,38 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             [("Aspire.Hosting.JavaScript", "9.4.0")],
             sources: ["https://example.com/feed-b/index.json"],
             workingDirectory: appHostDirectory.FullName);
+
+        Assert.NotEqual(resultA, resultB);
+    }
+
+    [Theory]
+    [InlineData("ambient-a", "overlay", "/packages", "ambient-b", "overlay", "/packages")]
+    [InlineData("ambient", "overlay-a", "/packages", "ambient", "overlay-b", "/packages")]
+    [InlineData("ambient", "overlay", "/packages-a", "ambient", "overlay", "/packages-b")]
+    public async Task RestorePackagesAsync_UsesDistinctCachePathsForRestorePolicy(
+        string settingsIdentityA,
+        string overlayIdentityA,
+        string packagesPathA,
+        string settingsIdentityB,
+        string overlayIdentityB,
+        string packagesPathB)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var service = CreateService(new FakeNuGetClient());
+
+        var resultA = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: appHostDirectory.FullName,
+            nugetSettingsCacheIdentity: settingsIdentityA,
+            nugetConfigOverlayCacheIdentity: overlayIdentityA,
+            globalPackagesFolderOverride: packagesPathA);
+        var resultB = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: appHostDirectory.FullName,
+            nugetSettingsCacheIdentity: settingsIdentityB,
+            nugetConfigOverlayCacheIdentity: overlayIdentityB,
+            globalPackagesFolderOverride: packagesPathB);
 
         Assert.NotEqual(resultA, resultB);
     }
@@ -93,6 +130,28 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ComputePackageHash_DistinguishesSourcesContainingDelimiter()
+    {
+        var packageList = new List<(string Id, string Version)>
+        {
+            ("Aspire.Hosting.JavaScript", "9.4.0")
+        };
+
+        var resultA = BundleNuGetService.ComputePackageHash(
+            packageList,
+            "net10.0",
+            runtimeIdentifier: null,
+            sources: ["/feeds/a|/feeds/b"]);
+        var resultB = BundleNuGetService.ComputePackageHash(
+            packageList,
+            "net10.0",
+            runtimeIdentifier: null,
+            sources: ["/feeds/a", "/feeds/b"]);
+
+        Assert.NotEqual(resultA, resultB);
+    }
+
+    [Fact]
     public void ComputePackageHash_ChangesWhenRestoreToolChanges()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -107,15 +166,12 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         File.WriteAllText(toolPath, "updated implementation with a different size");
         var updatedHash = BundleNuGetService.ComputePackageHash(packageList, "net10.0", runtimeIdentifier: null, toolPath);
 
-        // An updated CLI must not reuse manifests produced by the previous implementation.
         Assert.NotEqual(originalHash, updatedHash);
     }
 
     [Fact]
     public void GetRestoreToolPath_UsesCliAssemblyForManagedLaunch()
     {
-        // Tests run the CLI assembly under a managed host, like `dotnet aspire.dll`, where Environment.ProcessPath is
-        // the host rather than the code performing the restore.
         var toolPath = BundleNuGetService.GetRestoreToolPath();
 
         Assert.Equal(
@@ -125,28 +181,30 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RestorePackagesAsync_RestoreFailureReportsHelperOutput()
+    public async Task RestorePackagesAsync_RestoreFailureRedactsSensitiveSources()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = workspace.CreateDirectory("apphost");
-        var output = "ERROR: NU1101: Unable to find package Missing.Package." + Environment.NewLine +
-            "Error: Restore failed: NU1101: Unable to find package Missing.Package." + Environment.NewLine;
+        const string sensitiveSource = "https://user:secret@example.com/v3/index.json";
+        var output = $"ERROR: Unable to load {sensitiveSource}{Environment.NewLine}";
         var nuGetClient = new FakeNuGetClient
         {
-            RestoreCallback = (_, _, _, _, _, _, _, _) => throw new NuGetOperationException(output)
+            RestoreCallback = (_, _, _, _, _, _, _, _, _, _) => throw new NuGetOperationException(output)
         };
         var service = CreateService(nuGetClient);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.RestorePackagesAsync(
             [("Missing.Package", "1.0.0")],
-            workingDirectory: appHostDirectory.FullName));
+            workingDirectory: appHostDirectory.FullName,
+            additionalSensitiveSources: [sensitiveSource]));
 
-        Assert.Equal($"Package restore failed: {output}", exception.Message);
+        Assert.DoesNotContain("secret", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("example.com/v3/index.json", exception.Message, StringComparison.Ordinal);
         Assert.Equal(0, nuGetClient.WriteManifestCallCount);
     }
 
     [Fact]
-    public async Task RestorePackagesAsync_ManifestFailureReportsHelperOutput()
+    public async Task RestorePackagesAsync_ManifestFailureReportsNuGetOutput()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = workspace.CreateDirectory("apphost");
@@ -234,7 +292,6 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(firstManifest, secondManifest);
         Assert.Equal(1, nuGetClient.RestoreCallCount);
 
-        // A different package set must not collide with the shared entry even though the workspace is shared.
         var divergedManifest = await service.RestorePackagesAsync(
             [("Aspire.Hosting.Python", "9.4.0")],
             workingDirectory: secondAppHost.FullName);
@@ -254,9 +311,6 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             ("Aspire.Hosting.JavaScript", "9.4.0")
         };
         var restoreDirectory = GetRestoreDirectory(workspace, packageList);
-
-        // Older CLIs copied package assets into a libs directory next to the manifest, and an AppHost that is
-        // still running can hold those files open. Restore must neither clean up nor rebuild that directory.
         var legacyLibsDirectory = Directory.CreateDirectory(Path.Combine(restoreDirectory, "libs"));
         var lockedFilePath = Path.Combine(legacyLibsDirectory.FullName, "Microsoft.Extensions.DependencyInjection.xml");
         File.WriteAllText(lockedFilePath, "legacy");
@@ -283,7 +337,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         var allowFirstRestoreToComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var nuGetClient = new FakeNuGetClient
         {
-            RestoreCallback = async (_, _, _, _, _, _, _, cancellationToken) =>
+            RestoreCallback = async (_, _, _, _, _, _, _, _, _, cancellationToken) =>
             {
                 firstRestoreStarted.TrySetResult();
                 await allowFirstRestoreToComplete.Task.WaitAsync(cancellationToken);
@@ -315,17 +369,13 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     private const string ManifestFileName = "integration-package-probe-manifest.json";
 
     private static BundleNuGetService CreateService(INuGetClient nuGetClient)
-    {
-        return new BundleNuGetService(
+        => new(
             NullLogger<BundleNuGetService>.Instance,
             nuGetClient);
-    }
 
-    /// <summary>
-    /// Returns the cache directory <see cref="BundleNuGetService.RestorePackagesAsync"/> uses for the packages
-    /// with the default framework, no runtime identifier, and no explicit sources.
-    /// </summary>
-    private static string GetRestoreDirectory(TemporaryWorkspace workspace, List<(string Id, string Version)> packages)
+    private static string GetRestoreDirectory(
+        TemporaryWorkspace workspace,
+        List<(string Id, string Version)> packages)
     {
         var packageHash = BundleNuGetService.ComputePackageHash(
             packages,
