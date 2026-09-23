@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net.Sockets;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -155,7 +156,13 @@ public class Hex1bPtySocketTests
             var root = Directory.CreateTempSubdirectory();
             try
             {
+                // Windows adds a 12-character temporary directory name. Under the runner's
+                // AppData\Local\Temp this leaves too little room for Hex1b's 47-character
+                // "hex1bpty-{32 hex digits}.socket" name. Move the allocated directory to the
+                // shorter profile path; MoveTo fails rather than reusing an existing directory.
+                root.MoveTo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), root.Name));
                 var directory = Path.Combine(root.FullName, ".aspire", "pty");
+                _ = new UnixDomainSocketEndPoint(Path.Combine(directory, $"hex1bpty-{new string('0', 32)}.socket"));
                 Environment.SetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable, directory);
                 await using (var service = TestTerminalService.Create())
                 {
