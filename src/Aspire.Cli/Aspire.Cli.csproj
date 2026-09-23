@@ -22,7 +22,7 @@
          not a library referenced by strong-named assemblies, so this is safe. -->
     <SignAssembly>false</SignAssembly>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
-    <!-- Ignore the single warn files marked below to suppress their known warnings. -->
+    <!-- Ignore the single warn files marked below to suppress their known warnings. Tracked for removal by https://github.com/microsoft/aspire/issues/20342 -->
     <NoWarn>$(NoWarn);IL2104;IL3053</NoWarn>
     <OptimizationPreference>Size</OptimizationPreference>
     <DefineConstants>$(DefineConstants);CLI</DefineConstants>
@@ -104,7 +104,7 @@
                                     Value="true"
                                     Trim="true" />
 
-    <!-- These can be removed once NuGet completely removes its dependencies on Newtonsoft.Json - https://github.com/NuGet/NuGet.Client/pull/7601 -->
+    <!-- These can be removed once NuGet completely removes its dependencies on Newtonsoft.Json - https://github.com/NuGet/NuGet.Client/pull/7601. Tracked by https://github.com/microsoft/aspire/issues/20342 -->
     <RuntimeHostConfigurationOption Include="Newtonsoft.Json.Linq.JToken.SerializationIsSupported"
                                     Value="false" 
                                     Trim="true" />
@@ -119,7 +119,7 @@
     <Target Name="ConfigureTrimming"
           BeforeTargets="PrepareForILLink">
     <!-- Single warn the following assemblies (produces IL2104 and IL3053), which have known warnings, so the warnings can be suppressed. -->
-    <!-- These can be removed once NuGet completely removes its dependencies on Newtonsoft.Json - https://github.com/NuGet/NuGet.Client/pull/7601 -->
+    <!-- These can be removed once NuGet completely removes its dependencies on Newtonsoft.Json - https://github.com/NuGet/NuGet.Client/pull/7601. Tracked by https://github.com/microsoft/aspire/issues/20342 -->
     <ItemGroup>
       <ManagedAssemblyToLink Condition="'%(Filename)' == 'Microsoft.CSharp'">
         <TrimmerSingleWarn>true</TrimmerSingleWarn>

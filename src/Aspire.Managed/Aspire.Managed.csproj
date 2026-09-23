@@ -31,11 +31,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Provided by the .NET SDK and points to the SDK's RuntimeIdentifierGraph.json file. -->
-    <EmbeddedResource Include="$(BundledRuntimeIdentifierGraphFile)" LogicalName="Aspire.Managed.RuntimeIdentifierGraph.json" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Shared\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Shared\BundleVersionLease.cs" />
     <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Shared\HeldFileLease.cs" />

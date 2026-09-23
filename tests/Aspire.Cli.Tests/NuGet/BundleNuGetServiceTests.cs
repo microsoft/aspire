@@ -93,6 +93,38 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ComputePackageHash_ChangesWhenRestoreToolChanges()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var toolPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.dll");
+        File.WriteAllText(toolPath, "original implementation");
+        var packageList = new List<(string Id, string Version)>
+        {
+            ("Aspire.Hosting.JavaScript", "9.4.0")
+        };
+
+        var originalHash = BundleNuGetService.ComputePackageHash(packageList, "net10.0", runtimeIdentifier: null, toolPath);
+        File.WriteAllText(toolPath, "updated implementation with a different size");
+        var updatedHash = BundleNuGetService.ComputePackageHash(packageList, "net10.0", runtimeIdentifier: null, toolPath);
+
+        // An updated CLI must not reuse manifests produced by the previous implementation.
+        Assert.NotEqual(originalHash, updatedHash);
+    }
+
+    [Fact]
+    public void GetRestoreToolPath_UsesCliAssemblyForManagedLaunch()
+    {
+        // Tests run the CLI assembly under a managed host, like `dotnet aspire.dll`, where Environment.ProcessPath is
+        // the host rather than the code performing the restore.
+        var toolPath = BundleNuGetService.GetRestoreToolPath();
+
+        Assert.Equal(
+            Path.Combine(AppContext.BaseDirectory, $"{typeof(BundleNuGetService).Assembly.GetName().Name}.dll"),
+            toolPath);
+        Assert.NotEqual(Environment.ProcessPath, toolPath);
+    }
+
+    [Fact]
     public async Task RestorePackagesAsync_RestoreFailureReportsHelperOutput()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -145,7 +177,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             packageList,
             "net10.0",
             runtimeIdentifier: null,
-            Environment.ProcessPath);
+            BundleNuGetService.GetRestoreToolPath());
         var manifestPath = Path.Combine(
             workspace.WorkspaceRoot.FullName,
             ".aspire",

@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NuGet.Configuration;
 using NuGet.ProjectModel;
 using NuGet.Packaging;
+using NuGet.Protocol;
 
 namespace Aspire.Cli.Tests.NuGet;
 
@@ -207,6 +208,163 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var lines = exception.Output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
         Assert.Contains(lines, line => line.StartsWith("ERROR: ", StringComparison.Ordinal) && line.Contains(packageId, StringComparison.OrdinalIgnoreCase));
         Assert.Contains(lines, line => line.StartsWith("Error: Restore failed: ", StringComparison.Ordinal));
+    }
+
+    // The tests below observe process-wide state -- the real environment and NuGet's static credential service -- so
+    // each runs in its own process, where no other test's operation can overlap it.
+
+    [Fact]
+    public void RestoreAsync_RestoresSignatureVerificationVariableAfterSuccess()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feedDirectory = workspace.CreateDirectory("feed");
+        var packageId = $"Aspire.Test.Package.{Guid.NewGuid():N}";
+        CreatePackage(feedDirectory.FullName, packageId);
+        var nugetConfigPath = CreateLocalFeedConfig(workspace, feedDirectory, workspace.CreateDirectory("packages"));
+
+        RemoteExecutor.Invoke(
+            static async (packageId, configPath, restorePath, workingDirectory) =>
+            {
+                Environment.SetEnvironmentVariable(NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification, null);
+                var client = new NuGetClient(new TestFeatures(), TestEnvironment.CreateLinux(), NullLogger<NuGetClient>.Instance);
+
+                await client.RestoreAsync(
+                    [(packageId, "[1.0.0]")],
+                    "net10.0",
+                    runtimeIdentifier: null,
+                    restorePath,
+                    [],
+                    configPath,
+                    workingDirectory,
+                    CancellationToken.None);
+
+                Assert.Null(Environment.GetEnvironmentVariable(NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification));
+            },
+            packageId,
+            nugetConfigPath,
+            workspace.CreateDirectory("restore").FullName,
+            workspace.WorkspaceRoot.FullName).Dispose();
+    }
+
+    [Fact]
+    public void RestoreAsync_RestoresSignatureVerificationVariableAfterFailure()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var nugetConfigPath = CreateLocalFeedConfig(workspace, workspace.CreateDirectory("feed"), workspace.CreateDirectory("packages"));
+
+        RemoteExecutor.Invoke(
+            static async (configPath, restorePath, workingDirectory) =>
+            {
+                Environment.SetEnvironmentVariable(NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification, null);
+                var client = new NuGetClient(new TestFeatures(), TestEnvironment.CreateLinux(), NullLogger<NuGetClient>.Instance);
+
+                await Assert.ThrowsAsync<NuGetOperationException>(() => client.RestoreAsync(
+                    [($"Aspire.Test.Missing.{Guid.NewGuid():N}", "[1.0.0]")],
+                    "net10.0",
+                    runtimeIdentifier: null,
+                    restorePath,
+                    [],
+                    configPath,
+                    workingDirectory,
+                    CancellationToken.None));
+
+                Assert.Null(Environment.GetEnvironmentVariable(NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification));
+            },
+            nugetConfigPath,
+            workspace.CreateDirectory("restore").FullName,
+            workspace.WorkspaceRoot.FullName).Dispose();
+    }
+
+    [Fact]
+    public void RestoreAsync_RestoresSignatureVerificationVariableAfterCancellation()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feedDirectory = workspace.CreateDirectory("feed");
+        var packageId = $"Aspire.Test.Package.{Guid.NewGuid():N}";
+        CreatePackage(feedDirectory.FullName, packageId);
+        var nugetConfigPath = CreateLocalFeedConfig(workspace, feedDirectory, workspace.CreateDirectory("packages"));
+
+        RemoteExecutor.Invoke(
+            static async (packageId, configPath, restorePath, workingDirectory) =>
+            {
+                Environment.SetEnvironmentVariable(NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification, null);
+                var client = new NuGetClient(new TestFeatures(), TestEnvironment.CreateLinux(), NullLogger<NuGetClient>.Instance);
+                using var cancellationSource = new CancellationTokenSource();
+                cancellationSource.Cancel();
+
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.RestoreAsync(
+                    [(packageId, "[1.0.0]")],
+                    "net10.0",
+                    runtimeIdentifier: null,
+                    restorePath,
+                    [],
+                    configPath,
+                    workingDirectory,
+                    cancellationSource.Token));
+
+                Assert.Null(Environment.GetEnvironmentVariable(NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification));
+            },
+            packageId,
+            nugetConfigPath,
+            workspace.CreateDirectory("restore").FullName,
+            workspace.WorkspaceRoot.FullName).Dispose();
+    }
+
+    [Fact]
+    public void BeginOperation_ResetsNuGetStateWhenLastOverlappingOperationEnds()
+    {
+        RemoteExecutor.Invoke(static () =>
+        {
+            var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance);
+
+            var first = client.BeginOperation();
+            var second = client.BeginOperation();
+            Assert.NotNull(HttpHandlerResourceV3.CredentialService);
+
+            // Ending one of two overlapping operations, even twice, must not reset state the other is still using.
+            first.Dispose();
+            first.Dispose();
+            Assert.NotNull(HttpHandlerResourceV3.CredentialService);
+
+            second.Dispose();
+            Assert.Null(HttpHandlerResourceV3.CredentialService);
+
+            // The next operation sets the credential service up again after the reset.
+            using (client.BeginOperation())
+            {
+                Assert.NotNull(HttpHandlerResourceV3.CredentialService);
+            }
+
+            Assert.Null(HttpHandlerResourceV3.CredentialService);
+        }).Dispose();
+    }
+
+    [Fact]
+    public void SearchAsync_ResetsNuGetStateWhenComplete()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feedDirectory = workspace.CreateDirectory("feed");
+        CreatePackage(feedDirectory.FullName, "Aspire.Test.Package");
+
+        RemoteExecutor.Invoke(
+            static async (feedPath, workingDirectory) =>
+            {
+                var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance);
+
+                var results = await client.SearchAsync(
+                    "Aspire.Test.Package",
+                    prerelease: false,
+                    take: 1000,
+                    [feedPath],
+                    nugetConfigPath: null,
+                    workingDirectory,
+                    CancellationToken.None);
+
+                Assert.Single(results);
+                Assert.Null(HttpHandlerResourceV3.CredentialService);
+            },
+            feedDirectory.FullName,
+            workspace.WorkspaceRoot.FullName).Dispose();
     }
 
     [Fact]
@@ -740,6 +898,30 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
               <config>
                 <add key="globalPackagesFolder" value="{packagesDirectory.FullName}" />
               </config>
+            </configuration>
+            """);
+
+        return nugetConfigPath;
+    }
+
+    /// <summary>
+    /// Writes a nuget.config with a single local feed and a workspace-scoped global packages folder, so restores
+    /// neither read the machine's configured feeds nor add packages to its real global packages folder.
+    /// </summary>
+    private static string CreateLocalFeedConfig(TemporaryWorkspace workspace, DirectoryInfo feedDirectory, DirectoryInfo packagesDirectory)
+    {
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        File.WriteAllText(
+            nugetConfigPath,
+            $"""
+            <configuration>
+              <config>
+                <add key="globalPackagesFolder" value="{packagesDirectory.FullName}" />
+              </config>
+              <packageSources>
+                <clear />
+                <add key="local" value="{feedDirectory.FullName}" />
+              </packageSources>
             </configuration>
             """);
 

@@ -90,8 +90,8 @@ internal sealed class NuGetClient(
 {
     private const string NuGetOrgUrl = "https://api.nuget.org/v3/index.json";
     private const string RuntimeIdentifierGraphResourceName = "Aspire.Cli.RuntimeIdentifierGraph.json";
-    private static readonly Lock s_credentialServiceLock = new();
-    private static bool s_credentialServiceInitialized;
+    private static readonly Lock s_operationLock = new();
+    private static int s_activeOperationCount;
 
     // Output the helper never produced -- credential provider and trust store diagnostics -- only goes to the debug
     // log. Keeping it out of each operation's captured output keeps failure messages identical to the helper's.
@@ -107,7 +107,7 @@ internal sealed class NuGetClient(
         string workingDirectory,
         CancellationToken cancellationToken)
     {
-        InitializeCredentialService();
+        using var operation = BeginOperation();
         var output = new NuGetOperationOutput(logger);
 
         // The helper received DOTNET_NUGET_SIGNATURE_VERIFICATION only in its own environment. NuGet reads it from the
@@ -279,6 +279,7 @@ internal sealed class NuGetClient(
         string? runtimeIdentifier,
         CancellationToken cancellationToken)
     {
+        using var operation = BeginOperation();
         var output = new NuGetOperationOutput(logger);
         try
         {
@@ -349,7 +350,7 @@ internal sealed class NuGetClient(
         string workingDirectory,
         CancellationToken cancellationToken)
     {
-        InitializeCredentialService();
+        using var operation = BeginOperation();
         var output = new NuGetOperationOutput(logger);
         try
         {
@@ -409,26 +410,62 @@ internal sealed class NuGetClient(
         }
     }
 
-    private void InitializeCredentialService()
+    /// <summary>
+    /// Starts a NuGet operation and returns the scope that ends it.
+    /// </summary>
+    /// <remarks>
+    /// NuGet keeps process-wide state between operations: the credential service with its cached credentials,
+    /// credential provider plugin processes, the HTTP throttle, and other caches. The helper discarded all of it by
+    /// exiting after every operation. The CLI can live much longer -- for example for an entire <c>aspire run</c> --
+    /// so when the last overlapping operation ends, NuGet's own end-of-build reset is raised to discard that state the
+    /// same way. Operations are counted so one ending cannot reset state another is still using.
+    /// </remarks>
+    internal IDisposable BeginOperation()
     {
-        // Credential providers are a deliberate addition over the aspire-managed helper, which never set up NuGet's
-        // credential service and so could only authenticate with credentials stored in nuget.config.
-        if (s_credentialServiceInitialized)
+        lock (s_operationLock)
         {
-            DefaultCredentialServiceUtility.UpdateCredentialServiceDelegatingLogger(_diagnosticLogger);
-            return;
+            s_activeOperationCount++;
+
+            // Credential providers are a deliberate addition over the aspire-managed helper, which never set up NuGet's
+            // credential service and so could only authenticate with credentials stored in nuget.config. The service
+            // is set up per operation because the reset at the end of the previous one discards it; this is a no-op
+            // while an overlapping operation still has it set up.
+            DefaultCredentialServiceUtility.SetupDefaultCredentialService(_diagnosticLogger, nonInteractive: true);
         }
 
-        lock (s_credentialServiceLock)
+        return new OperationScope(_diagnosticLogger);
+    }
+
+    private sealed class OperationScope(INuGetLogger diagnosticLogger) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
         {
-            if (!s_credentialServiceInitialized)
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
             {
-                DefaultCredentialServiceUtility.SetupDefaultCredentialService(_diagnosticLogger, nonInteractive: true);
-                s_credentialServiceInitialized = true;
+                return;
             }
-            else
+
+            lock (s_operationLock)
             {
-                DefaultCredentialServiceUtility.UpdateCredentialServiceDelegatingLogger(_diagnosticLogger);
+                if (--s_activeOperationCount != 0)
+                {
+                    return;
+                }
+
+                // Raised under the lock so an operation starting concurrently cannot set up state that this reset
+                // then discards.
+                try
+                {
+                    global::NuGet.Common.StaticState.RaiseBuildEnded();
+                }
+                catch (Exception ex)
+                {
+                    // Reset handlers tear down plugin processes. A failure there must not turn a completed operation
+                    // into a failed one.
+                    diagnosticLogger.LogDebug($"Failed to reset NuGet process state: {ex}");
+                }
             }
         }
     }

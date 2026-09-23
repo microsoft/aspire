@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.IO.Hashing;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Utils;
@@ -73,13 +74,13 @@ internal sealed class BundleNuGetService : INuGetService
 
         var sourceList = sources?.ToArray();
 
-        // The restore is now performed by this process, so it is the tool whose changes must invalidate cached
-        // manifests, just as the aspire-managed binary's size and timestamp did before.
+        // The restore is now performed by this process, so the CLI's implementation is what must invalidate cached
+        // manifests when it changes, just as the aspire-managed binary's size and timestamp did before.
         var packageHash = ComputePackageHash(
             packageList,
             targetFramework,
             runtimeIdentifier,
-            Environment.ProcessPath,
+            GetRestoreToolPath(),
             sourceList);
         var restoreCacheDirectory = GetPackageRestoreCacheDirectory(workingDirectory);
         var restoreDirectory = Path.Combine(restoreCacheDirectory, packageHash);
@@ -155,6 +156,27 @@ internal sealed class BundleNuGetService : INuGetService
             logger.LogDebug(ex, "Cached package manifest {ManifestPath} is invalid and will be regenerated.", manifestPath);
             return false;
         }
+    }
+
+    /// <summary>
+    /// Gets the file containing the NuGet implementation that performs restores, for the restore cache key.
+    /// </summary>
+    /// <remarks>
+    /// Native AOT compiles the implementation into the executable. A managed launch such as <c>dotnet aspire.dll</c>
+    /// runs it from the CLI assembly instead, and <see cref="Environment.ProcessPath"/> is then the <c>dotnet</c> host,
+    /// which does not change when the CLI is updated.
+    /// </remarks>
+    internal static string? GetRestoreToolPath()
+    {
+        if (!RuntimeFeature.IsDynamicCodeSupported)
+        {
+            return Environment.ProcessPath;
+        }
+
+        // Assembly.Location is unavailable to single-file and Native AOT builds, so derive the path from the base
+        // directory the managed host loaded the CLI from.
+        var assemblyPath = Path.Combine(AppContext.BaseDirectory, $"{typeof(BundleNuGetService).Assembly.GetName().Name}.dll");
+        return File.Exists(assemblyPath) ? assemblyPath : Environment.ProcessPath;
     }
 
     internal static string ComputePackageHash(
