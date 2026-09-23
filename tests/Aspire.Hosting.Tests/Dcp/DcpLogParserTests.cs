@@ -280,6 +280,18 @@ public sealed class DcpLogParserTests
     }
 
     [Fact]
+    public void FormatSystemLog_NoJson_AdditionalFieldsAreIncluded()
+    {
+        var message = "service /apigateway is now in state Ready";
+
+        var formatted = DcpLogParser.FormatSystemLog(
+            message,
+            [new("WorkingDirectory", "/app")]);
+
+        Assert.Equal("[sys] service /apigateway is now in state Ready: WorkingDirectory = /app", formatted);
+    }
+
+    [Fact]
     public void FormatSystemLog_StartingProcessWithCmdAndArgs_FormatsCorrectly()
     {
         // Arrange
@@ -385,6 +397,18 @@ public sealed class DcpLogParserTests
 
         // Assert
         Assert.Equal("[sys] Starting process...\t{invalid json", formatted);
+    }
+
+    [Fact]
+    public void FormatSystemLog_InvalidJson_AdditionalFieldsAreIncluded()
+    {
+        var message = "Starting process...\t{invalid json";
+
+        var formatted = DcpLogParser.FormatSystemLog(
+            message,
+            [new("WorkingDirectory", "/app")]);
+
+        Assert.Equal("[sys] Starting process...\t{invalid json: WorkingDirectory = /app", formatted);
     }
 
     [Fact]

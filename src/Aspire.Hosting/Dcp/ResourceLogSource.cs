@@ -52,9 +52,10 @@ internal sealed class ResourceLogSource<TResource>(
             SingleWriter = false
         });
 
-        // DCP emits Cwd only at debug verbosity. Supply the rendered executable working directory
-        // as caller-provided context for default-level system logs.
+        // DCP emits Cwd only at debug verbosity for process execution. IDE run-session requests do not
+        // carry Spec.WorkingDirectory, so only supply the rendered value for the default/Process runner.
         IReadOnlyList<KeyValuePair<string, string?>>? systemLogFields = resource is Executable executable
+            && executable.Spec.ExecutionType is null or "" or ExecutionType.Process
             && !string.IsNullOrEmpty(executable.Spec.WorkingDirectory)
             ? [new("WorkingDirectory", executable.Spec.WorkingDirectory)]
             : null;
