@@ -20,7 +20,7 @@ jobs:
         with:
           script: |
             const branchToMilestone = {
-              'main': '13.6',
+              'main': '14.0',
               'release/13.5': '13.5.x',
             };
 
