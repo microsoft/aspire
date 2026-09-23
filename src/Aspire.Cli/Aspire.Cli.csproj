@@ -22,6 +22,8 @@
          not a library referenced by strong-named assemblies, so this is safe. -->
     <SignAssembly>false</SignAssembly>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <!-- Ignore the single warn files marked below to suppress their known warnings. Tracked for removal by https://github.com/microsoft/aspire/issues/20342 -->
+    <NoWarn>$(NoWarn);IL2104;IL3053</NoWarn>
     <OptimizationPreference>Size</OptimizationPreference>
     <DefineConstants>$(DefineConstants);CLI</DefineConstants>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
@@ -95,6 +97,50 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Use the SDK's canonical RID compatibility graph when selecting package runtime assets. -->
+    <EmbeddedResource Include="$(BundledRuntimeIdentifierGraphFile)" LogicalName="Aspire.Cli.RuntimeIdentifierGraph.json" />
+
+    <RuntimeHostConfigurationOption Include="NuGet.UseSystemTextJsonDeserialization"
+                                    Value="true"
+                                    Trim="true" />
+
+    <!-- These can be removed once NuGet completely removes its dependencies on Newtonsoft.Json - https://github.com/NuGet/NuGet.Client/pull/7601. Tracked by https://github.com/microsoft/aspire/issues/20342 -->
+    <RuntimeHostConfigurationOption Include="Newtonsoft.Json.Linq.JToken.SerializationIsSupported"
+                                    Value="false" 
+                                    Trim="true" />
+    <RuntimeHostConfigurationOption Include="Newtonsoft.Json.Linq.JToken.ComponentModelIsSupported"
+                                    Value="false"
+                                    Trim="true" />
+    <RuntimeHostConfigurationOption Include="Newtonsoft.Json.Linq.JToken.DynamicIsSupported"
+                                    Value="false"
+                                    Trim="true" />
+  </ItemGroup>
+
+    <Target Name="ConfigureTrimming"
+          BeforeTargets="PrepareForILLink">
+    <!-- Single warn the following assemblies (produces IL2104 and IL3053), which have known warnings, so the warnings can be suppressed. -->
+    <!-- These can be removed once NuGet completely removes its dependencies on Newtonsoft.Json - https://github.com/NuGet/NuGet.Client/pull/7601. Tracked by https://github.com/microsoft/aspire/issues/20342 -->
+    <ItemGroup>
+      <ManagedAssemblyToLink Condition="'%(Filename)' == 'Microsoft.CSharp'">
+        <TrimmerSingleWarn>true</TrimmerSingleWarn>
+      </ManagedAssemblyToLink>
+      <ManagedAssemblyToLink Condition="'%(Filename)' == 'System.Linq.Expressions'">
+        <TrimmerSingleWarn>true</TrimmerSingleWarn>
+      </ManagedAssemblyToLink>
+    </ItemGroup>
+  </Target>
+
+  <!-- NuGet's Linux signature verification probes trustedroots under the SDK root.
+       The NativeAOT CLI extracts these embedded SDK roots only while initializing NuGet's trust store. -->
+  <PropertyGroup>
+    <_SdkTrustedRootsDir>$([System.IO.Path]::Combine($([System.IO.Path]::GetDirectoryName($(BundledRuntimeIdentifierGraphFile))), 'trustedroots'))</_SdkTrustedRootsDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="$(_SdkTrustedRootsDir)\*.pem" />
+    <EmbeddedResource Update="$(_SdkTrustedRootsDir)\*.pem" LogicalName="%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" />
     <PackageReference Include="Hex1b" />
     <PackageReference Include="Markdig" />
@@ -110,9 +156,19 @@
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="Semver" />
     <PackageReference Include="Sigstore" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
+    <!-- System.Security.Cryptography.Pkcs ships a real lib/net10.0 assembly that binds to
+         Microsoft.Bcl.Cryptography, but its net10.0 dependency group is empty. Reference
+         the matching implementation explicitly so Native AOT can resolve signature verification. -->
+    <PackageReference Include="Microsoft.Bcl.Cryptography" />
     <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="Tuf" />
     <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="NuGet.Commands" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.ProjectModel" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.Credentials" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.Protocol" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.Resolver" VersionOverride="$(NuGetPackageVersionForCli)" />
   </ItemGroup>
 
   <ItemGroup>
