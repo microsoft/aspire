@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #20195 (opt-in aspire stop --volumes cleanup)",
+  "mergedAt": "2026-09-23T17:50:54Z",
+  "number": 1729,
+  "runDate": "2026-09-23T18:06:02Z",
+  "status": "included",
+  "title": "[docs] Document aspire stop --volumes opt-in cleanup"
+}

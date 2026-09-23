@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Bundled NuGet operations (search, restore, and package inspection) now run in-process in the native `aspire.exe` instead of launching a separate `aspire-managed` helper process. This also enables installed NuGet credential provider plugins (for example, for Azure Artifacts) to authenticate feeds that previously returned 401 errors.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-09-23T17:16:16Z",
+  "lastMergedAt": "2026-09-23T17:16:16Z",
+  "name": "In-process NuGet operations in the CLI",
+  "owner": "eerhardt",
+  "prs": [
+    19847
+  ]
+}

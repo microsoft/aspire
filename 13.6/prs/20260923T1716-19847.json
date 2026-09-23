@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "In-process NuGet operations in CLI, replacing aspire-managed helper; user-facing behavior change for credential providers",
+  "mergedAt": "2026-09-23T17:16:16Z",
+  "number": 19847,
+  "runDate": "2026-09-23T18:05:33Z",
+  "status": "included",
+  "title": "Move bundled NuGet operations into Aspire CLI"
+}

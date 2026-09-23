@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs-site internal refactor of API Reference component; not tied to a product changelog entry",
+  "mergedAt": "2026-09-23T15:08:36Z",
+  "number": 1724,
+  "runDate": "2026-09-23T18:06:02Z",
+  "status": "excluded",
+  "title": "Refactor API Reference into a language provider registry"
+}

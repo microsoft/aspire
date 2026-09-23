@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "User-facing dashboard popup positioning and persistence fix",
+  "mergedAt": "2026-09-23T14:17:49Z",
+  "number": 20362,
+  "runDate": "2026-09-23T18:05:33Z",
+  "status": "included",
+  "title": "Fix Dashboard popup positioning and persistence"
+}

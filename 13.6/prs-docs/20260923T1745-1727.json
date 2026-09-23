@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #20148, which was excluded as a routine dependency version bump with no product behavior change",
+  "mergedAt": "2026-09-23T17:45:07Z",
+  "number": 1727,
+  "runDate": "2026-09-23T18:06:02Z",
+  "status": "excluded",
+  "title": "[docs] Update Radius recommended version to v0.60.2"
+}
