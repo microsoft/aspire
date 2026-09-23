@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-import { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE, InputRoute, createDefaultScrollbarRenderer, renderDefaultScrollbarTooltip, defaultDarkPalette, defaultLightPalette } from "../../js/hex1b-web-terminal/dist/index.min.js";
+import { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE, InputRoute, createDefaultScrollbarRenderer, renderDefaultScrollbarTooltip, defaultDarkPalette, defaultLightPalette, linkAction } from "../../js/hex1b-web-terminal/dist/index.min.js";
 
 const terminals = new Map();
 const rememberedFontSizes = new Map();
@@ -282,8 +282,8 @@ function configureTerminalChrome(client) {
         .surface {
             background: var(--terminal-background);
             box-shadow:
-                0 0 0 ${TERMINAL_PADDING - 1}px var(--terminal-background),
-                0 0 0 ${TERMINAL_PADDING}px color-mix(in srgb, var(--terminal-foreground) 25%, var(--terminal-background));
+                0 0 0 ${TERMINAL_PADDING - 0.5}px var(--terminal-background),
+                0 0 0 ${TERMINAL_PADDING}px color-mix(in srgb, var(--terminal-foreground) 10%, var(--terminal-background));
         }
         @media (forced-colors: active) {
             .viewport {
@@ -601,6 +601,24 @@ async function mountClient(state, generation, controller) {
             darkModePalette: darkPalette,
             scrollbar: state.scrollbar,
             padding: TERMINAL_PADDING,
+            links: {
+                detection: {
+                    activation: "modifierClick",
+                    rules: [{
+                        id: "web",
+                        builtin: "url",
+                        action: linkAction((_context, activation) => {
+                            // Detected destinations are untrusted workload output, not Dashboard URLs.
+                            // Keep OSC 8 on Hex1b's default allowlist and authorize detected web URLs here.
+                            const url = new URL(activation.target);
+                            if (url.protocol !== "https:" && url.protocol !== "http:") {
+                                throw new Error("Terminal web links must use HTTP or HTTPS.");
+                            }
+                            window.open(url.href, "_blank", "noopener,noreferrer");
+                        }),
+                    }],
+                },
+            },
             onTitleChange(title) {
                 if (current()) {
                     state.title = title;

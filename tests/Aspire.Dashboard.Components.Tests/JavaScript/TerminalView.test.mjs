@@ -1002,6 +1002,41 @@ test("init returns an id while mount waits for its first connected frame", async
     assert.equal(attempts[0].options.readOnly, false);
 });
 
+test("web link detection requires modifier clicks and preserves default OSC 8 handling", () => {
+    mount();
+    const links = attempts[0].options.links;
+    assert.equal(links.osc8, undefined);
+    assert.equal(links.detection.activation, "modifierClick");
+    assert.equal(links.detection.rules.length, 1);
+    assert.equal(links.detection.rules[0].builtin, "url");
+});
+
+for (const target of ["https://aspire.dev/docs?view=terminal#links", "http://localhost:5000/"]) {
+    test(`detected web link opens safely: ${target}`, () => {
+        mount();
+        const opened = [];
+        window.open = (...args) => opened.push(args);
+        attempts[0].options.links.detection.rules[0].action({}, {
+            source: "detected", ruleId: "web", kind: "uri", text: target, target,
+            ranges: [{ row: 0, startColumn: 0, endColumn: target.length }], revision: 1,
+        });
+        assert.deepEqual(opened, [[target, "_blank", "noopener,noreferrer"]]);
+    });
+}
+
+for (const target of ["javascript:alert(1)", "data:text/html,test", "file:///tmp/test", "/relative", "custom://host", "mailto:test@example.com"]) {
+    test(`detected web link rejects non-web destination: ${target}`, () => {
+        mount();
+        const opened = [];
+        window.open = (...args) => opened.push(args);
+        assert.throws(() => attempts[0].options.links.detection.rules[0].action({}, {
+            source: "detected", ruleId: "web", kind: "uri", text: target, target,
+            ranges: [{ row: 0, startColumn: 0, endColumn: target.length }], revision: 1,
+        }));
+        assert.deepEqual(opened, []);
+    });
+}
+
 test("opening a terminal focuses input after the first frame without taking primary", async () => {
     document.activeElement = { tagName: "BUTTON" };
     mount();

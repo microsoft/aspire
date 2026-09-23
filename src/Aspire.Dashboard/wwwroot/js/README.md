@@ -120,9 +120,15 @@ Unused space around the terminal grid has a subtle diagonal hatch: 1px lines eve
 8px, using the active palette foreground at 10% opacity over a base that mixes
 92% palette background with 8% black.
 The grid and its padding remain solid, including transparent default cells.
-A 1px pinstripe at the padding's outer edge blends 25% foreground with the
+A 0.5px pinstripe at the padding's outer edge blends 10% foreground with the
 background to distinguish the terminal boundary without changing its dimensions.
 Forced-colors mode suppresses the decorative pattern and uses a system-color edge.
+
+Plain-text HTTP/HTTPS URLs use Hex1b's per-view link detection and open in a new
+tab on Ctrl/Cmd-click with `noopener,noreferrer`. Explicit OSC 8 links retain
+Hex1b's default HTTP/HTTPS/mailto allowlist. Plain clicks and drags retain terminal
+input and selection behavior; links also work in read-only views. Remote file
+paths and custom URI schemes are not enabled.
 
 The **Terminal palette** dropdown to the right of the footer's dimensions selector
 selects **Dark** or **Light** independently of the site. **Dark** is the default,
