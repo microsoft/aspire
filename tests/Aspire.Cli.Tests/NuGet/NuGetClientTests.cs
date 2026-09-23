@@ -374,6 +374,56 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void DiagnosticNuGetLogger_RedactsUnionOfActiveSensitiveSources()
+    {
+        const string firstSource = "https://first.example/v3/index.json?sig=first-secret";
+        const string secondSource = "https://second.example/v3/index.json?sig=second-secret";
+        var logger = new FakeLogger<NuGetClient>();
+        var diagnosticLogger = new NuGetClient.DiagnosticNuGetLogger(logger);
+
+        using var first = diagnosticLogger.RegisterSensitiveSources([firstSource]);
+        using var second = diagnosticLogger.RegisterSensitiveSources([secondSource]);
+
+        diagnosticLogger.LogDebug($"Credential provider checked {firstSource} and {secondSource}.");
+
+        var record = Assert.Single(logger.Collector.GetSnapshot());
+        Assert.Equal(
+            "Credential provider checked https://first.example/v3/index.json and https://second.example/v3/index.json.",
+            record.Message);
+    }
+
+    [Fact]
+    public void DiagnosticNuGetLogger_ReferenceCountsOverlappingSensitiveSources()
+    {
+        const string sharedSource = "https://feed.example/v3/index.json?sig=shared-secret";
+        const string nextSource = "https://next.example/v3/index.json?sig=next-secret";
+        var logger = new FakeLogger<NuGetClient>();
+        var diagnosticLogger = new NuGetClient.DiagnosticNuGetLogger(logger);
+
+        var first = diagnosticLogger.RegisterSensitiveSources([sharedSource]);
+        var second = diagnosticLogger.RegisterSensitiveSources([sharedSource]);
+
+        first.Dispose();
+        first.Dispose();
+        diagnosticLogger.LogDebug($"Credential provider checked {sharedSource}.");
+
+        second.Dispose();
+        using (diagnosticLogger.RegisterSensitiveSources([nextSource]))
+        {
+            diagnosticLogger.LogDebug($"Credential provider checked {sharedSource} and {nextSource}.");
+        }
+
+        Assert.Collection(
+            logger.Collector.GetSnapshot(),
+            record => Assert.Equal(
+                "Credential provider checked https://feed.example/v3/index.json.",
+                record.Message),
+            record => Assert.Equal(
+                $"Credential provider checked {sharedSource} and https://next.example/v3/index.json.",
+                record.Message));
+    }
+
+    [Fact]
     public void SearchAsync_ResetsNuGetStateWhenComplete()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

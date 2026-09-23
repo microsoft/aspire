@@ -246,7 +246,7 @@ The Aspire overlay does not copy credentials from NuGet credential sections or p
 
 Credential-bearing URLs supplied through `--source` are rejected before source-scoped discovery or restore, including package-version lookup. Credential-bearing sources inherited from ambient NuGet configuration remain available through NuGet's native hierarchy, as do credential-bearing configured channel sources.
 
-Package-only restores suppress direct process logging when participating sources contain credential material and sanitize captured diagnostics through exact-value replacement. Complete HTTP or HTTPS values have user information, query strings, and fragments removed. Malformed HTTP-shaped values fail closed when their exact configured spelling appears in captured output.
+Package-only restores suppress direct process logging when participating sources contain credential material and sanitize captured diagnostics through exact-value replacement. Complete HTTP or HTTPS values have user information, query strings, and fragments removed. Malformed HTTP-shaped values fail closed when their exact configured spelling appears in captured output. Credential-provider and trust-store diagnostics are redacted against the reference-counted union of sensitive sources owned by active NuGet operations because overlapping operations share NuGet's process-wide credential service.
 
 NuGet-generated restore artifacts are not scrubbed or separately isolated by Aspire. Files such as `project.assets.json`, dependency graph specifications, and `.nupkg.metadata` can retain configured source URLs, including inline URL credentials. Authentication should therefore use NuGet credential mechanisms rather than embedding credentials in source URLs.
 

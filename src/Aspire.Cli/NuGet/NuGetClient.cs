@@ -117,7 +117,7 @@ internal sealed class NuGetClient(
         IReadOnlyList<string> sensitiveSources,
         CancellationToken cancellationToken)
     {
-        using var operation = BeginOperation();
+        using var operation = BeginOperation(sensitiveSources);
         var output = new NuGetOperationOutput(logger, sensitiveSources);
 
         // The helper received DOTNET_NUGET_SIGNATURE_VERIFICATION only in its own environment. NuGet reads it from the
@@ -437,23 +437,36 @@ internal sealed class NuGetClient(
     /// so when the last overlapping operation ends, NuGet's own end-of-build reset is raised to discard that state the
     /// same way. Operations are counted so one ending cannot reset state another is still using.
     /// </remarks>
-    internal IDisposable BeginOperation()
+    internal IDisposable BeginOperation(IReadOnlyList<string>? sensitiveSources = null)
     {
         lock (s_operationLock)
         {
-            s_activeOperationCount++;
+            var diagnosticScope = _diagnosticLogger.RegisterSensitiveSources(sensitiveSources ?? []);
 
-            // Credential providers are a deliberate addition over the aspire-managed helper, which never set up NuGet's
-            // credential service and so could only authenticate with credentials stored in nuget.config. The service
-            // is set up per operation because the reset at the end of the previous one discards it; this is a no-op
-            // while an overlapping operation still has it set up.
-            DefaultCredentialServiceUtility.SetupDefaultCredentialService(_diagnosticLogger, nonInteractive: true);
+            try
+            {
+                s_activeOperationCount++;
+
+                // Credential providers are a deliberate addition over the aspire-managed helper, which never set up NuGet's
+                // credential service and so could only authenticate with credentials stored in nuget.config. The service
+                // is set up per operation because the reset at the end of the previous one discards it; this is a no-op
+                // while an overlapping operation still has it set up.
+                DefaultCredentialServiceUtility.SetupDefaultCredentialService(_diagnosticLogger, nonInteractive: true);
+            }
+            catch
+            {
+                s_activeOperationCount--;
+                diagnosticScope.Dispose();
+                throw;
+            }
+
+            return new OperationScope(_diagnosticLogger, diagnosticScope);
         }
-
-        return new OperationScope(_diagnosticLogger);
     }
 
-    private sealed class OperationScope(INuGetLogger diagnosticLogger) : IDisposable
+    private sealed class OperationScope(
+        INuGetLogger diagnosticLogger,
+        IDisposable diagnosticScope) : IDisposable
     {
         private int _disposed;
 
@@ -466,22 +479,29 @@ internal sealed class NuGetClient(
 
             lock (s_operationLock)
             {
-                if (--s_activeOperationCount != 0)
-                {
-                    return;
-                }
-
-                // Raised under the lock so an operation starting concurrently cannot set up state that this reset
-                // then discards.
                 try
                 {
-                    global::NuGet.Common.StaticState.RaiseBuildEnded();
+                    if (--s_activeOperationCount != 0)
+                    {
+                        return;
+                    }
+
+                    // Raised under the lock so an operation starting concurrently cannot set up state that this reset
+                    // then discards.
+                    try
+                    {
+                        global::NuGet.Common.StaticState.RaiseBuildEnded();
+                    }
+                    catch (Exception ex)
+                    {
+                        // Reset handlers tear down plugin processes. A failure there must not turn a completed operation
+                        // into a failed one.
+                        diagnosticLogger.LogDebug($"Failed to reset NuGet process state: {ex}");
+                    }
                 }
-                catch (Exception ex)
+                finally
                 {
-                    // Reset handlers tear down plugin processes. A failure there must not turn a completed operation
-                    // into a failed one.
-                    diagnosticLogger.LogDebug($"Failed to reset NuGet process state: {ex}");
+                    diagnosticScope.Dispose();
                 }
             }
         }
@@ -941,9 +961,45 @@ internal sealed class NuGetClient(
     /// <summary>
     /// Sends NuGet output that has no helper equivalent to the debug log only.
     /// </summary>
-    private sealed class DiagnosticNuGetLogger(ILogger logger) : INuGetLogger
+    internal sealed class DiagnosticNuGetLogger(ILogger logger) : INuGetLogger
     {
-        public void Log(NuGetLogLevel level, string data) => logger.LogDebug("{Message}", data);
+        private readonly Lock _lock = new();
+        private readonly Dictionary<string, int> _sourceRegistrations = new(StringComparer.Ordinal);
+        private string[] _sensitiveSources = [];
+
+        internal IDisposable RegisterSensitiveSources(IReadOnlyList<string> sensitiveSources)
+        {
+            var registeredSources = sensitiveSources
+                .Where(static source => !string.IsNullOrEmpty(source))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
+            lock (_lock)
+            {
+                foreach (var source in registeredSources)
+                {
+                    _sourceRegistrations[source] = _sourceRegistrations.GetValueOrDefault(source) + 1;
+                }
+
+                _sensitiveSources = [.. _sourceRegistrations.Keys];
+            }
+
+            return new SensitiveSourceScope(this, registeredSources);
+        }
+
+        public void Log(NuGetLogLevel level, string data)
+        {
+            string[] sensitiveSources;
+            lock (_lock)
+            {
+                sensitiveSources = _sensitiveSources;
+            }
+
+            logger.LogDebug(
+                "{Message}",
+                PackageSourceRedactor.RedactOccurrences(data, sensitiveSources));
+        }
+
         public void Log(NuGetLogMessage message) => Log(message.Level, message.Message);
 
         public Task LogAsync(NuGetLogLevel level, string data)
@@ -965,6 +1021,42 @@ internal sealed class NuGetClient(
         public void LogMinimal(string data) => Log(NuGetLogLevel.Minimal, data);
         public void LogVerbose(string data) => Log(NuGetLogLevel.Verbose, data);
         public void LogWarning(string data) => Log(NuGetLogLevel.Warning, data);
+
+        private void UnregisterSensitiveSources(IReadOnlyList<string> sensitiveSources)
+        {
+            lock (_lock)
+            {
+                foreach (var source in sensitiveSources)
+                {
+                    var registrationCount = _sourceRegistrations[source];
+                    if (registrationCount == 1)
+                    {
+                        _sourceRegistrations.Remove(source);
+                    }
+                    else
+                    {
+                        _sourceRegistrations[source] = registrationCount - 1;
+                    }
+                }
+
+                _sensitiveSources = [.. _sourceRegistrations.Keys];
+            }
+        }
+
+        private sealed class SensitiveSourceScope(
+            DiagnosticNuGetLogger logger,
+            IReadOnlyList<string> sensitiveSources) : IDisposable
+        {
+            private int _disposed;
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) == 0)
+                {
+                    logger.UnregisterSensitiveSources(sensitiveSources);
+                }
+            }
+        }
     }
 
     private static class NativeAotNuGetTrustStore
