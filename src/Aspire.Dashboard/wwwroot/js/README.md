@@ -116,6 +116,11 @@ active palette background. Mounting passes both palettes and `colorMode`;
 palette changes call `setColorMode` on the existing client, including changes that
 occur while mounting or while a dock pane is hidden.
 
+Unused space around the terminal grid has a subtle diagonal hatch: 1px lines every
+8px, using the active palette foreground at 10% opacity over its background.
+The grid and its padding remain solid, including transparent default cells.
+Forced-colors mode suppresses the decorative pattern.
+
 The **Terminal palette** dropdown to the right of the footer's dimensions selector
 selects **Dark** or **Light** independently of the site. **Dark** is the default,
 including for the former **Follow Dashboard** preference. Site theme changes do

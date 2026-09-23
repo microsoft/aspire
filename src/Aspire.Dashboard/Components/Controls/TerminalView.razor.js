@@ -7,6 +7,7 @@ const terminals = new Map();
 const rememberedFontSizes = new Map();
 let nextId = 1;
 const DEFAULT_FONT_SIZE = 13;
+const TERMINAL_PADDING = 3;
 const TERMINAL_PALETTE_STORAGE_KEY = "Aspire.TerminalPalette";
 // Retain Hex1b's neutral slots and selection colors. Chromatic slots increase OKLCH chroma
 // by up to 25% (dark) / 10% (light), reducing chroma at the sRGB boundary rather than clipping.
@@ -144,6 +145,7 @@ function updateAppearance(state) {
     state.colorMode = preference;
     const palette = state.colorMode === "light" ? lightPalette : darkPalette;
     state.viewElement.style.setProperty("--terminal-background", palette.background);
+    state.viewElement.style.setProperty("--terminal-foreground", palette.foreground);
     state.client?.setColorMode(state.colorMode);
     state.scrollbar = scrollbarConfiguration(state);
     // setScrollbar replaces, rather than merges, the configuration.
@@ -257,7 +259,7 @@ function releaseClient(state) {
 
 function configureTerminalChrome(client) {
     // This pinned Hex1b release has no options/parts for its history chrome or
-    // pointer focus outline. Keep keyboard focus, errors and selection feedback;
+    // pointer focus outline, or unused-space styling. Keep keyboard focus, errors and selection feedback;
     // remove these overrides when upstream exposes controls for them.
     const shadow = client.element.shadowRoot;
     const status = shadow?.querySelector(".inspection-message");
@@ -265,10 +267,23 @@ function configureTerminalChrome(client) {
         throw new Error("Hex1b history chrome could not be configured.");
     }
     const style = document.createElement("style");
+    // Keep transparent default cells and the terminal padding solid; only the unused viewport is hatched.
     style.textContent = `
         .return-live { display: none !important; }
         .inspection-message[data-aspire-history-position] { display: none !important; }
         :host([data-aspire-pointer-input="true"]) .scrollbar-accessibility:focus-visible { outline: none; }
+        .viewport {
+            background-image: repeating-linear-gradient(135deg,
+                color-mix(in srgb, var(--terminal-foreground) 10%, transparent) 0 1px,
+                transparent 1px 8px);
+        }
+        .surface {
+            background: var(--terminal-background);
+            box-shadow: 0 0 0 ${TERMINAL_PADDING}px var(--terminal-background);
+        }
+        @media (forced-colors: active) {
+            .viewport { background-image: none; }
+        }
     `;
     shadow.append(style);
     const update = () => {
@@ -574,7 +589,7 @@ async function mountClient(state, generation, controller) {
             lightModePalette: lightPalette,
             darkModePalette: darkPalette,
             scrollbar: state.scrollbar,
-            padding: 3,
+            padding: TERMINAL_PADDING,
             onTitleChange(title) {
                 if (current()) {
                     state.title = title;
