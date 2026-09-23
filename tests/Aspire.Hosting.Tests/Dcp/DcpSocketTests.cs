@@ -12,10 +12,10 @@ public sealed class DcpSocketTests
     [Fact]
     public async Task LoggingSocket_RestrictsPermissionsBeforeListening()
     {
-        var root = Directory.CreateTempSubdirectory();
+        var root = Directory.CreateTempSubdirectory("aspire-dcp");
         try
         {
-            var directory = Path.Combine(root.FullName, "dcp");
+            var directory = root.FullName;
             Directory.CreateDirectory(directory);
             if (!OperatingSystem.IsWindows())
             {

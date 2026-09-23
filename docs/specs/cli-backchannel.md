@@ -13,10 +13,16 @@ are created with restrictive permissions rather than relying on the process umas
 On Windows, socket directories use a protected DACL granting the current user full control,
 with inheritance for child directories and socket files. Unix mode APIs are not called.
 The remote AppHost uses a named pipe on Windows instead, with a current-user-only pipe ACL.
+Without an explicit socket path, the Unix remote AppHost uses
+`~/.aspire/cli/bch/remote-app-host.sock`.
 
 Permission errors prevent listener startup; there is no fallback to a permissive endpoint.
-Socket paths must use dedicated directories, not shared locations such as the system temp
-directory itself. These permissions isolate OS users, not processes running as the same user,
+Configured socket directories must use the `.aspire/cli/bch`, `.aspire/trmnl`, or
+`.aspire/pty` layout (which can be rooted in a relocated profile). DCP also uses its
+allocated `aspire-dcp*` session directory directly under the system temporary directory.
+Other layouts, including the working directory, profile root, and shared temporary root,
+are rejected before permissions are changed. Symbolic links in the configurable path
+are rejected as well. These permissions isolate OS users, not processes running as the same user,
 and do not protect against privileged administrators.
 
 Process-backed AppHost terminals (both docked and interaction prompts) also configure

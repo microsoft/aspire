@@ -27,7 +27,7 @@ public class Hex1bPtySocketTests
             var root = Directory.CreateTempSubdirectory();
             try
             {
-                var directory = Path.Combine(root.FullName, "pty");
+                var directory = Path.Combine(root.FullName, ".aspire", "pty");
                 var value = bool.Parse(hasOverrideValue) ? directory : null;
                 Environment.SetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable, value);
 
@@ -58,7 +58,7 @@ public class Hex1bPtySocketTests
             var root = Directory.CreateTempSubdirectory();
             try
             {
-                var directory = Path.Combine(root.FullName, "pty");
+                var directory = Path.Combine(root.FullName, ".aspire", "pty");
                 if (bool.Parse(existingDirectoryValue))
                 {
                     var info = Directory.CreateDirectory(directory);
@@ -120,7 +120,8 @@ public class Hex1bPtySocketTests
             var root = Directory.CreateTempSubdirectory();
             try
             {
-                var directory = Path.Combine(root.FullName, "file");
+                Directory.CreateDirectory(Path.Combine(root.FullName, ".aspire"));
+                var directory = Path.Combine(root.FullName, ".aspire", "pty");
                 File.WriteAllText(directory, "not a directory");
                 var value = bool.Parse(sharedRootValue) ? Path.GetTempPath() : directory;
                 Environment.SetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable, value);
@@ -154,7 +155,7 @@ public class Hex1bPtySocketTests
             var root = Directory.CreateTempSubdirectory();
             try
             {
-                var directory = Path.Combine(root.FullName, "pty");
+                var directory = Path.Combine(root.FullName, ".aspire", "pty");
                 Environment.SetEnvironmentVariable(Hex1bPtySocketHelper.SocketDirectoryEnvironmentVariable, directory);
                 await using (var service = TestTerminalService.Create())
                 {

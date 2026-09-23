@@ -113,7 +113,8 @@ public sealed class JsonRpcAuthenticationTests
             var target = Directory.CreateDirectory(Path.Combine(root.FullName, "target"));
             var existingFile = Path.Combine(target.FullName, "rpc.sock");
             await File.WriteAllTextAsync(existingFile, "not our socket");
-            var link = Path.Combine(root.FullName, "link");
+            Directory.CreateDirectory(Path.Combine(root.FullName, ".aspire", "cli"));
+            var link = Path.Combine(root.FullName, ".aspire", "cli", "bch");
             Directory.CreateSymbolicLink(link, target.FullName);
 
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -163,7 +164,7 @@ public sealed class JsonRpcAuthenticationTests
 
             if (socketDirectory is not null && existingDirectory)
             {
-                var directory = Path.Combine(socketDirectory, "s");
+                var directory = Path.Combine(socketDirectory, ".aspire", "cli", "bch");
                 Directory.CreateDirectory(directory);
                 if (!OperatingSystem.IsWindows())
                 {
@@ -176,7 +177,7 @@ public sealed class JsonRpcAuthenticationTests
 
             var socketPath = OperatingSystem.IsWindows()
                 ? $"aspire-remotehost-test-{Guid.NewGuid():N}"
-                : Path.Combine(socketDirectory!, "s", "rpc.sock");
+                : Path.Combine(socketDirectory!, ".aspire", "cli", "bch", "rpc.sock");
 
             var builder = Host.CreateApplicationBuilder();
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
