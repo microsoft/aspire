@@ -33,7 +33,7 @@ internal static class Hex1bPtySocketHelper
                     throw new InvalidOperationException("Cannot configure the PTY socket directory without a user profile directory.");
                 }
 
-                directory = Path.Combine(home, ".aspire", "pty");
+                directory = Path.Combine(home, SocketDirectoryNames.Aspire, SocketDirectoryNames.Pty);
             }
 
             directory = SocketPermissionHelper.CreateDirectory(directory).FullName;
