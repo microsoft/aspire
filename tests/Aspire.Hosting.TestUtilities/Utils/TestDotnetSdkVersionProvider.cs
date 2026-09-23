@@ -43,6 +43,16 @@ internal sealed class TestDotnetSdkVersionProvider(string? version) : IDotnetSdk
         return Task.FromResult(DotnetSdkUtils.SupportsMultiThreadedBuild(_version));
     }
 
+    public Task<bool> SupportsFileBasedMultiThreadedBuildAsync(
+        string? workingDirectory,
+        IReadOnlyDictionary<string, string> environmentVariables,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        RecordCall(workingDirectory, environmentVariables);
+        return Task.FromResult(DotnetSdkUtils.SupportsFileBasedMultiThreadedBuild(_version));
+    }
+
     private void RecordCall(
         string? workingDirectory,
         IReadOnlyDictionary<string, string> environmentVariables)

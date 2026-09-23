@@ -21,6 +21,11 @@ internal interface IDotnetSdkVersionProvider
         string? workingDirectory,
         IReadOnlyDictionary<string, string> environmentVariables,
         CancellationToken cancellationToken);
+
+    Task<bool> SupportsFileBasedMultiThreadedBuildAsync(
+        string? workingDirectory,
+        IReadOnlyDictionary<string, string> environmentVariables,
+        CancellationToken cancellationToken);
 }
 
 internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
@@ -111,6 +116,18 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
             environmentVariables,
             cancellationToken).ConfigureAwait(false);
         return DotnetSdkUtils.SupportsMultiThreadedBuild(version);
+    }
+
+    public async Task<bool> SupportsFileBasedMultiThreadedBuildAsync(
+        string? workingDirectory,
+        IReadOnlyDictionary<string, string> environmentVariables,
+        CancellationToken cancellationToken)
+    {
+        var version = await TryGetVersionAsync(
+            workingDirectory,
+            environmentVariables,
+            cancellationToken).ConfigureAwait(false);
+        return DotnetSdkUtils.SupportsFileBasedMultiThreadedBuild(version);
     }
 
     private Lazy<Task<SemVersion?>> CreateVersionTask(
