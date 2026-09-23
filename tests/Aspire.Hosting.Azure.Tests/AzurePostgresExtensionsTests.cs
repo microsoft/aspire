@@ -313,7 +313,70 @@ public class AzurePostgresExtensionsTests
         Assert.Single(dbAnnotations);
         Assert.Contains(db!.Resource.Annotations, annotation => annotation is HealthCheckAnnotation);
         ProjectionTestHelpers.AssertProjection(postgres, Assert.IsType<AzurePostgresFlexibleServerContainerResource>(projection));
-        Assert.Same(db.Resource, dbResourceInModel);
+        Assert.IsAssignableFrom<PostgresDatabaseResource>(dbResourceInModel);
+        Assert.NotSame(db.Resource, dbResourceInModel);
+        Assert.Same(db.Resource, dbResourceInModel.GetOwnerOrSelf());
+        Assert.Same(
+            db.Resource,
+            Assert.Single(builder.Resources.GetResourceOwners(), resource => resource.Name == db.Resource.Name));
+        Assert.Same(
+            dbResourceInModel,
+            Assert.Single(builder.Resources.GetEffectiveResources(), resource => resource.Name == db.Resource.Name));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsContainerExposesAzureDatabaseProjectionToPgWeb(bool addDatabaseBefore)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var postgres = builder.AddAzurePostgresFlexibleServer("postgres-data");
+        IResourceBuilder<AzurePostgresFlexibleServerDatabaseResource>? database = null;
+
+        if (addDatabaseBefore)
+        {
+            database = postgres.AddDatabase("db1", "database1");
+        }
+
+        postgres.RunAsContainer(container => container.WithPgWeb());
+
+        if (!addDatabaseBefore)
+        {
+            database = postgres.AddDatabase("db1", "database1");
+        }
+
+        using var app = builder.Build();
+        var effectiveDatabase = Assert.Single(builder.Resources.OfType<PostgresDatabaseResource>());
+        Assert.Same(database!.Resource, effectiveDatabase.GetOwnerOrSelf());
+
+        var pgweb = Assert.Single(builder.Resources.OfType<PgWebContainerResource>());
+        var createBookmarks = Assert.Single(pgweb.Annotations.OfType<ContainerFileSystemCallbackAnnotation>());
+        var entries = await createBookmarks.Callback(
+            new ContainerFileSystemCallbackContext { Model = pgweb, Services = app.Services },
+            TestContext.Current.CancellationToken);
+
+        var pgWebDirectory = Assert.IsType<ContainerDirectory>(Assert.Single(entries));
+        var bookmarksDirectory = Assert.IsType<ContainerDirectory>(Assert.Single(pgWebDirectory.Entries));
+        var bookmark = Assert.IsType<ContainerFile>(Assert.Single(bookmarksDirectory.Entries));
+
+        Assert.Equal("db1.toml", bookmark.Name);
+        Assert.Contains("host = \"postgres-data\"", bookmark.Contents);
+        Assert.Contains("database = \"database1\"", bookmark.Contents);
+    }
+
+    [Fact]
+    public void RunAsContainerInPublishModeKeepsAzureDatabaseAsEffectiveResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var postgres = builder.AddAzurePostgresFlexibleServer("postgres-data")
+            .RunAsContainer();
+        var database = postgres.AddDatabase("db1");
+
+        Assert.Same(database.Resource, Assert.Single(builder.Resources, resource => resource.Name == "db1"));
+        Assert.Same(
+            database.Resource,
+            Assert.Single(builder.Resources.GetResourceOwners(), resource => resource.Name == "db1"));
+        Assert.Empty(builder.Resources.OfType<PostgresDatabaseResource>());
     }
 
     [Fact]

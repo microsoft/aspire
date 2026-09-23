@@ -4,11 +4,11 @@
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Stores the container configuration view applied to a resource for the current operation.
+/// Stores the effective configuration view applied to a resource for the current operation.
 /// </summary>
-internal sealed class ContainerResourceProjectionAnnotation : IResourceAnnotation
+internal sealed class ResourceProjectionAnnotation : IResourceAnnotation
 {
-    internal ContainerResourceProjectionAnnotation(IResource owner)
+    internal ResourceProjectionAnnotation(IResource owner)
     {
         Owner = owner;
     }
@@ -27,13 +27,14 @@ internal sealed class ContainerResourceProjectionAnnotation : IResourceAnnotatio
     /// <summary>
     /// Gets the selected projection, or <see langword="null"/> when no projection has been selected.
     /// </summary>
-    internal ContainerResource? Projection { get; private set; }
+    internal IResource? Projection { get; private set; }
 
     private Type? CustomProjectionType { get; set; }
 
-    internal ContainerResource GetOrCreateDefaultProjection(
-        Func<ContainerResource> createProjection,
-        Action<ContainerResource> validateProjection)
+    internal TProjection GetOrCreateDefaultProjection<TProjection>(
+        Func<TProjection> createProjection,
+        Action<TProjection> validateProjection)
+        where TProjection : class, IResource
     {
         if (Projection is null)
         {
@@ -42,34 +43,35 @@ internal sealed class ContainerResourceProjectionAnnotation : IResourceAnnotatio
             Projection = projection;
         }
 
-        return Projection;
+        return (TProjection)Projection;
     }
 
-    internal TContainer GetOrCreateCustomProjection<TContainer>(
-        Func<TContainer> createProjection,
-        Action<TContainer> validateProjection)
-        where TContainer : ContainerResource
+    internal TProjection GetOrCreateCustomProjection<TProjection>(
+        Func<TProjection> createProjection,
+        Action<TProjection> validateProjection,
+        string projectionKind)
+        where TProjection : class, IResource
     {
         if (Projection is null)
         {
             var projection = createProjection();
             validateProjection(projection);
             Projection = projection;
-            CustomProjectionType = typeof(TContainer);
+            CustomProjectionType = typeof(TProjection);
             return projection;
         }
 
-        if (CustomProjectionType != typeof(TContainer))
+        if (CustomProjectionType != typeof(TProjection))
         {
             var selectedProjection = CustomProjectionType is null
-                ? "the default container projection"
-                : $"a custom container projection of type '{CustomProjectionType.Name}'";
+                ? $"the default {projectionKind} projection"
+                : $"a custom {projectionKind} projection of type '{CustomProjectionType.Name}'";
 
             throw new InvalidOperationException(
                 $"The resource '{Owner.Name}' already uses {selectedProjection} and cannot also use " +
-                $"a custom container projection of type '{typeof(TContainer).Name}'. The first projection selected for an operation cannot be replaced.");
+                $"a custom {projectionKind} projection of type '{typeof(TProjection).Name}'. The first projection selected for an operation cannot be replaced.");
         }
 
-        return (TContainer)Projection;
+        return (TProjection)Projection;
     }
 }

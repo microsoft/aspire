@@ -663,11 +663,11 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
     private static ContainerResource GetContainerProjection(IResource owner)
     {
         Assert.Same(owner, owner.GetOwnerOrSelf());
-        var projection = Assert.Single(owner.Annotations.OfType<ContainerResourceProjectionAnnotation>());
+        var projection = Assert.Single(owner.Annotations.OfType<ResourceProjectionAnnotation>());
         Assert.NotNull(projection.Projection);
         Assert.Same(owner, projection.Projection.GetOwnerOrSelf());
         Assert.True(owner.IsContainer());
-        return projection.Projection;
+        return Assert.IsAssignableFrom<ContainerResource>(projection.Projection);
     }
 
     private sealed class TestProject : IProjectMetadata

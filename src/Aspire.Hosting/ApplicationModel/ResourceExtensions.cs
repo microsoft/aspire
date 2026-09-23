@@ -20,7 +20,18 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 public static class ResourceExtensions
 {
-    internal static IEnumerable<IResource> GetResourceOwners(this IResourceCollection resources)
+    /// <summary>
+    /// Gets the canonical logical resources stored in the collection.
+    /// </summary>
+    /// <param name="resources">The resource collection.</param>
+    /// <returns>The canonical resource owners represented by the collection.</returns>
+    /// <remarks>
+    /// Resource collection enumeration exposes selected effective views. Use this method for model membership,
+    /// identity-sensitive traversal, and relationships that must remain associated with the logical owner.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="resources"/> is <see langword="null"/>.</exception>
+    [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
+    public static IEnumerable<IResource> GetResourceOwners(this IResourceCollection resources)
     {
         ArgumentNullException.ThrowIfNull(resources);
 
@@ -32,11 +43,31 @@ public static class ResourceExtensions
         return resources.Select(static resource => resource.GetOwnerOrSelf());
     }
 
+    /// <summary>
+    /// Gets the effective resource views represented by the collection.
+    /// </summary>
+    /// <param name="resources">The resource collection.</param>
+    /// <returns>The selected projection for each resource owner, or the owner when no projection is selected.</returns>
+    /// <remarks>
+    /// The returned sequence preserves one entry per logical model member. Use it for runtime-shape and
+    /// capability discovery when a selected projection should take precedence over the owner.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="resources"/> is <see langword="null"/>.</exception>
+    [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
+    public static IEnumerable<IResource> GetEffectiveResources(this IResourceCollection resources)
+    {
+        ArgumentNullException.ThrowIfNull(resources);
+
+        return resources.GetResourceOwners().Select(static resource => resource.GetEffectiveResource());
+    }
+
     internal static IResource GetEffectiveResource(this IResource resource)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        return resource.AsContainer() ?? resource;
+        return resource.TryGetProjectionRegistration(out var registration)
+            ? registration.Projection!
+            : resource;
     }
 
     /// <summary>
@@ -186,7 +217,7 @@ public static class ResourceExtensions
         // A projection shares its owner's annotation collection, so the registration annotation is reachable from
         // the projection as well as the owner. Matching on reference equality distinguishes the two sides of the
         // pair without requiring integration-authored projection types to implement a marker interface.
-        foreach (var annotation in resource.Annotations.OfType<ContainerResourceProjectionAnnotation>())
+        foreach (var annotation in resource.Annotations.OfType<ResourceProjectionAnnotation>())
         {
             if (ReferenceEquals(annotation.Projection, resource))
             {
@@ -195,6 +226,24 @@ public static class ResourceExtensions
         }
 
         return resource;
+    }
+
+    internal static bool TryGetProjectionRegistration(
+        this IResource resource,
+        [NotNullWhen(true)] out ResourceProjectionAnnotation? registration)
+    {
+        foreach (var candidate in resource.Annotations.OfType<ResourceProjectionAnnotation>())
+        {
+            if (candidate.Projection is not null &&
+                (ReferenceEquals(candidate.Owner, resource) || ReferenceEquals(candidate.Projection, resource)))
+            {
+                registration = candidate;
+                return true;
+            }
+        }
+
+        registration = null;
+        return false;
     }
 
     /// <summary>

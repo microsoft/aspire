@@ -20,7 +20,7 @@ public static class ContainerResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        foreach (var resource in model.Resources)
+        foreach (var resource in model.Resources.GetEffectiveResources())
         {
             if (resource.IsContainer())
             {
@@ -43,10 +43,9 @@ public static class ContainerResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        if (resource.Annotations.OfType<ContainerResourceProjectionAnnotation>().SingleOrDefault() is { } registration &&
-            (ReferenceEquals(resource, registration.Owner) || ReferenceEquals(resource, registration.Projection)))
+        if (resource.TryGetProjectionRegistration(out var registration))
         {
-            return true;
+            return registration.Projection is ContainerResource;
         }
 
         return resource.Annotations.OfType<ContainerImageAnnotation>().Any();
@@ -68,15 +67,6 @@ public static class ContainerResourceExtensions
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        if (resource is ContainerResource container)
-        {
-            return container;
-        }
-
-        var registration = resource.Annotations
-            .OfType<ContainerResourceProjectionAnnotation>()
-            .SingleOrDefault();
-
-        return registration?.Projection;
+        return resource.GetEffectiveResource() as ContainerResource;
     }
 }

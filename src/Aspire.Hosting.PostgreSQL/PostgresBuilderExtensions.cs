@@ -95,7 +95,10 @@ public static class PostgresBuilderExtensions
                 throw new InvalidOperationException($"Could not open connection to '{postgresServer.Name}'");
             }
 
-            foreach (var postgresDatabase in postgresServer.DatabaseResources)
+            var model = @event.Services.GetRequiredService<DistributedApplicationModel>();
+            foreach (var postgresDatabase in model.Resources
+                .OfType<PostgresDatabaseResource>()
+                .Where(database => ReferenceEquals(database.Parent, postgresServer)))
             {
                 await CreateDatabaseAsync(npgsqlConnection, postgresDatabase, @event.Services, ct).ConfigureAwait(false);
             }

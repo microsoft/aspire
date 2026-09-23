@@ -98,7 +98,8 @@ public static class ResourceProjectionBuilderExtensions
 
         var projection = registration.GetOrCreateCustomProjection(
             createProjection,
-            candidate => ValidateProjection(registration.Owner, candidate));
+            candidate => ValidateProjection(registration.Owner, candidate, "container"),
+            "container");
         if (addRegistration)
         {
             registration.Owner.Annotations.Add(registration);
@@ -109,7 +110,7 @@ public static class ResourceProjectionBuilderExtensions
         return builder;
     }
 
-    private static ContainerResourceProjectionAnnotation? TryGetProjectionRegistration<T>(
+    private static ResourceProjectionAnnotation? TryGetProjectionRegistration<T>(
         IResourceBuilder<T> builder,
         DistributedApplicationOperation operation,
         out bool addRegistration)
@@ -117,14 +118,14 @@ public static class ResourceProjectionBuilderExtensions
     {
         addRegistration = false;
 
-        // C# cannot express "T is not a ContainerResource", so the constraint is enforced here. Projecting a
-        // container onto a container is always an authoring mistake: the projection shares the owner's annotation
-        // collection, so its image and endpoints would collide with the ones the owner already has. This is checked
-        // before the operation gate so the mistake surfaces in both run and publish rather than only in one of them.
+        // C# cannot express "T is not a ContainerResource", so the constraint is enforced here. A container already
+        // carries an effective runtime shape directly; sharing its image, endpoint, and lifecycle annotations with
+        // another selected view would make both shapes active at once. This is checked before the operation gate so
+        // the mistake surfaces in both run and publish rather than only in one of them.
         if (builder.Resource is ContainerResource)
         {
             throw new InvalidOperationException(
-                $"The resource '{builder.Resource.Name}' is already a container and cannot be projected as one. " +
+                $"The resource '{builder.Resource.Name}' is already a container and cannot be projected to another resource shape. " +
                 $"Configure it directly instead.");
         }
 
@@ -133,32 +134,94 @@ public static class ResourceProjectionBuilderExtensions
             return null;
         }
 
-        if (builder.Resource.Annotations.OfType<ContainerResourceProjectionAnnotation>().SingleOrDefault() is { } existing)
+        if (builder.Resource.Annotations.OfType<ResourceProjectionAnnotation>().SingleOrDefault() is { } existing)
         {
             return existing;
         }
 
         addRegistration = true;
-        return new ContainerResourceProjectionAnnotation(builder.Resource);
+        return new ResourceProjectionAnnotation(builder.Resource);
     }
 
-    private static void ValidateProjection(IResource owner, ContainerResource projection)
+    private static void ValidateProjection(IResource owner, IResource projection, string projectionKind)
     {
         // A projection stands in for its owner, so it must share the owner's identity and annotation storage.
         // Validating both here turns an easy authoring mistake into an actionable error instead of a projection
         // that silently drops configuration or competes with the owner for a name.
+        if (ReferenceEquals(projection, owner))
+        {
+            throw new InvalidOperationException(
+                $"The {projectionKind} projection for '{owner.Name}' must be a distinct resource instance.");
+        }
+
         if (!string.Equals(projection.Name, owner.Name, StringComparisons.ResourceName))
         {
             throw new InvalidOperationException(
-                $"The container projection '{projection.Name}' must use the same name as its owner '{owner.Name}'.");
+                $"The {projectionKind} projection '{projection.Name}' must use the same name as its owner '{owner.Name}'.");
         }
 
         if (!ReferenceEquals(projection.Annotations, owner.Annotations))
         {
             throw new InvalidOperationException(
-                $"The container projection for '{owner.Name}' must share its owner's annotation collection. " +
+                $"The {projectionKind} projection for '{owner.Name}' must share its owner's annotation collection. " +
                 $"Override '{nameof(IResource.Annotations)}' on '{projection.GetType().Name}' to return the owner's annotations.");
         }
+    }
+
+    /// <summary>
+    /// Projects the resource onto another effective resource shape for the specified operation.
+    /// </summary>
+    /// <typeparam name="T">The owning resource type.</typeparam>
+    /// <typeparam name="TProjection">The effective resource type the owner is projected as.</typeparam>
+    /// <param name="builder">Builder for the resource being projected.</param>
+    /// <param name="operation">The operation the projection applies to.</param>
+    /// <param name="createProjection">
+    /// Creates the effective resource view. The projection must use the owner's name and return the owner's
+    /// <see cref="IResource.Annotations"/> collection.
+    /// </param>
+    /// <param name="configure">Configuration applied to the effective resource view.</param>
+    /// <returns>The <paramref name="builder"/>, so the owner keeps its original type.</returns>
+    /// <remarks>
+    /// The projection is not added as another logical model member. The resource collection retains the owner
+    /// as canonical identity while exposing the projection for effective resource discovery in the selected operation.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when any required argument is <see langword="null"/>.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when <paramref name="builder"/> is already a <see cref="ContainerResource"/>, when the projection is
+    /// the owner, does not use the owner's name, does not share the owner's annotations, or conflicts with a
+    /// projection type already selected for the active operation.
+    /// </exception>
+    [Experimental("ASPIREPROJECTIONS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Integration authoring primitive — integrations export their own operation-specific overloads.")]
+    public static IResourceBuilder<T> WithResourceProjection<T, TProjection>(
+        this IResourceBuilder<T> builder,
+        DistributedApplicationOperation operation,
+        Func<TProjection> createProjection,
+        Action<IResourceBuilder<TProjection>> configure)
+        where T : IResource
+        where TProjection : class, IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(createProjection);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        if (TryGetProjectionRegistration(builder, operation, out var addRegistration) is not { } registration)
+        {
+            return builder;
+        }
+
+        var projection = registration.GetOrCreateCustomProjection(
+            createProjection,
+            candidate => ValidateProjection(registration.Owner, candidate, "resource"),
+            "resource");
+        if (addRegistration)
+        {
+            registration.Owner.Annotations.Add(registration);
+        }
+
+        configure(builder.ApplicationBuilder.CreateResourceBuilder(projection));
+
+        return builder;
     }
 
     /// <summary>
@@ -182,8 +245,8 @@ public static class ResourceProjectionBuilderExtensions
         }
 
         var projection = registration.GetOrCreateDefaultProjection(
-            () => new ContainerResourceProjection<IResource>(registration.Owner),
-            candidate => ValidateProjection(registration.Owner, candidate));
+            () => (ContainerResource)new ContainerResourceProjection<IResource>(registration.Owner),
+            candidate => ValidateProjection(registration.Owner, candidate, "container"));
         if (addRegistration)
         {
             registration.Owner.Annotations.Add(registration);

@@ -239,7 +239,7 @@ public static class AzurePostgresExtensions
                     azureResource.SetInnerResource(container.Resource);
                     container.ConfigurePostgres();
 
-                    foreach (var database in builder.ApplicationBuilder.Resources
+                    foreach (var database in builder.ApplicationBuilder.Resources.GetResourceOwners()
                         .OfType<AzurePostgresFlexibleServerDatabaseResource>()
                         .Where(database => ReferenceEquals(database.Parent, azureResource)))
                     {
@@ -265,9 +265,14 @@ public static class AzurePostgresExtensions
         IResourceBuilder<PostgresServerResource> container,
         IResourceBuilder<AzurePostgresFlexibleServerDatabaseResource> database)
     {
-        var innerDatabase = new AzurePostgresFlexibleServerDatabaseContainerResource(database.Resource, container.Resource);
-        container.Resource.AddDatabase(innerDatabase);
-        database.Resource.SetInnerResource(innerDatabase);
+        database.WithResourceProjection(
+            DistributedApplicationOperation.Run,
+            () => new AzurePostgresFlexibleServerDatabaseContainerResource(database.Resource, container.Resource),
+            projection =>
+            {
+                container.Resource.AddDatabase(projection.Resource);
+                database.Resource.SetInnerResource(projection.Resource);
+            });
 
         string? connectionString = null;
         var healthCheckKey = $"{database.Resource.Name}_check";
