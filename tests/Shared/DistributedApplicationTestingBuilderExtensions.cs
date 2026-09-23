@@ -74,7 +74,7 @@ public static class DistributedApplicationTestingBuilderExtensions
             configuration["DcpPublisher:DiagnosticsLogLevel"] = "debug";
             configuration["DcpPublisher:PreserveExecutableLogs"] = "true";
 
-            // Register as hosted service to forward DCP logs to test output when app stops
+            // Register as a hosted lifecycle service so DCP logs are forwarded after all hosted services stop.
             services.AddSingleton<IHostedService>(sp => new DcpLogForwarder(testOutputHelper, uniqueFolder));
         }
 
@@ -94,13 +94,12 @@ public static class DistributedApplicationTestingBuilderExtensions
 }
 
 /// <summary>
-/// Forwards DCP log files to xUnit test output when stopped.
-/// Implements IHostedService so it gets automatically resolved and stopped when the app shuts down.
+/// Forwards DCP log files to xUnit test output after all hosted services have stopped.
 /// </summary>
 /// <remarks>
 /// DCP is not started in publish mode, so no logs will be available.
 /// </remarks>
-internal sealed class DcpLogForwarder : IHostedService
+internal sealed class DcpLogForwarder : IHostedLifecycleService
 {
     private readonly ITestOutputHelper _testOutputHelper;
     private readonly string _logFolder;
@@ -113,8 +112,16 @@ internal sealed class DcpLogForwarder : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public async Task StopAsync(CancellationToken cancellationToken)
+    public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StartingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public async Task StoppedAsync(CancellationToken cancellationToken)
     {
+        // DCP owns these files until the orchestrator stops. StoppedAsync runs after every hosted
+        // service's StopAsync, which avoids Windows sharing violations while preserving the logs.
         if (!Directory.Exists(_logFolder))
         {
             _testOutputHelper.WriteLine($"DCP log folder not found: {_logFolder}");
@@ -135,4 +142,6 @@ internal sealed class DcpLogForwarder : IHostedService
             }
         }
     }
+
+    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

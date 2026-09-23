@@ -362,7 +362,8 @@ public class DistributedApplicationTests
         Assert.Equal(1, normalEventCount);
         Assert.Equal(0, explicitStartEventCount);
 
-        await app.StopAsync(token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        using var shutdownCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout);
+        await app.StopAsync(shutdownCts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
     }
 
     [Fact]
@@ -409,7 +410,8 @@ public class DistributedApplicationTests
         // Verify that BeforeResourceStartedEvent WAS fired when manually started
         Assert.Equal(1, eventCount);
 
-        await app.StopAsync(token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        using var shutdownCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout);
+        await app.StopAsync(shutdownCts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
     }
 
     [Fact]

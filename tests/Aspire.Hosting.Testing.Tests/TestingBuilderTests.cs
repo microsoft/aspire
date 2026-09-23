@@ -25,6 +25,38 @@ public class TestingBuilderTests(ITestOutputHelper output)
     private static readonly TimeSpan s_appAliveCheckTimeout = TimeSpan.FromMinutes(1);
 
     [Fact]
+    public async Task DcpLogForwarderReadsLogsAfterHostedServicesStop()
+    {
+        var logDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            var logPath = Path.Combine(logDirectory.FullName, "dcp.log");
+            await File.WriteAllTextAsync(logPath, "DCP log content");
+
+            var forwarder = new DcpLogForwarder(output, logDirectory.FullName);
+
+            await using (File.Open(logPath, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                await forwarder.StopAsync(CancellationToken.None);
+            }
+
+            Assert.Empty(output.Output);
+
+            await forwarder.StoppedAsync(CancellationToken.None);
+
+            Assert.Collection(
+                output.Output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries),
+                line => Assert.Equal("=== DCP Log: dcp.log ===", line),
+                line => Assert.Equal("DCP log content", line));
+        }
+        finally
+        {
+            logDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     [ActiveIssue("https://github.com/dotnet/dnceng/issues/6232", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningOnAzdoBuildMachine))]
     public void TestingBuilderHasAllPropertiesFromRealBuilder()
     {
