@@ -59,6 +59,32 @@ public sealed class CiWorkflowTests
     }
 
     [Fact]
+    public void CliTestsUsePipelineNuGetServiceIndexOverride()
+    {
+        var workflow = ReadWorkflow("run-tests.yml");
+        var configureStep = GetStep(GetJob(workflow, "test"), "Configure CLI test NuGet service index");
+        Assert.Contains("$env:TEST_ASSEMBLY_NAME -eq 'Aspire.Cli.Tests'", configureStep);
+        Assert.Contains("$env:GITHUB_ENV", configureStep);
+        var serviceIndexMatch = System.Text.RegularExpressions.Regex.Match(
+            configureStep,
+            "ASPIRE_CLI_NUGET_SERVICE_INDEX=(?<source>https://[^\"\\r\\n]+)");
+        Assert.True(serviceIndexMatch.Success, "The GitHub test runner must provide an HTTPS NuGet service index.");
+        var serviceIndex = serviceIndexMatch.Groups["source"].Value;
+
+        var pipeline = File.ReadAllText(Path.Combine(
+            RepoRoot.Path,
+            "eng",
+            "pipelines",
+            "templates",
+            "BuildAndTest.yml"));
+        var nonHelixTestStep = System.Text.RegularExpressions.Regex.Match(
+            pipeline,
+            "(?ms)^    - script: .*?^      displayName: Run non-helix tests$");
+        Assert.True(nonHelixTestStep.Success, "Could not find the non-Helix test step in BuildAndTest.yml.");
+        Assert.Contains($"ASPIRE_CLI_NUGET_SERVICE_INDEX: {serviceIndex}", nonHelixTestStep.Value);
+    }
+
+    [Fact]
     public void CiFailureTrackerCheckoutDoesNotPinMain()
     {
         var workflow = ReadWorkflow("ci.yml");

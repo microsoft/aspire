@@ -27,7 +27,6 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 {
-    private const string InternalNuGetServiceIndexSource = "https://packagefeedproxy.microsoft.io/nuget/v3/index.json";
     private const string NuGetOrgSource = "https://api.nuget.org/v3/index.json";
     private static readonly byte[] s_sourceIdentityKey = new byte[NuGetSourceIdentity.KeySizeInBytes];
 
@@ -364,14 +363,18 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
               </packageSources>
             </configuration>
             """);
+        var configuredNuGetServiceIndex = Environment.GetEnvironmentVariable(AspireCliIdentityEnvVars.NuGetServiceIndex);
+        var nugetServiceIndexSource = string.IsNullOrWhiteSpace(configuredNuGetServiceIndex)
+            ? PackageSources.NuGetOrg
+            : configuredNuGetServiceIndex;
         var executionContext = workspace.CreateExecutionContext(
-            nugetServiceIndexOverride: InternalNuGetServiceIndexSource);
+            nugetServiceIndexOverride: nugetServiceIndexSource);
         var (server, _) = CreatePackageReferenceServer(
             workspace,
             MockPackagingServiceFactory.Create(),
             executionContext);
         var restorePlan = await server.ResolveIntegrationRestorePlanAsync(
-            "13.4.0",
+            VersionHelper.GetDefaultTemplateVersion(),
             requestedChannel: null,
             packageSourceOverride: feedDirectory.FullName,
             packageSourceOverridePattern: "Direct.Integration",
@@ -412,7 +415,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             .Select(static source => source.Attribute("value")!.Value)
             .ToArray();
         Assert.Contains(feedDirectory.FullName, configuredSources);
-        Assert.Contains(InternalNuGetServiceIndexSource, configuredSources);
+        Assert.Contains(nugetServiceIndexSource, configuredSources);
 
         var startInfo = new ProcessStartInfo("dotnet")
         {
