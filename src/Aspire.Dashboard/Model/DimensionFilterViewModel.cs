@@ -3,6 +3,8 @@
 
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.IO.Hashing;
+using System.Text;
 using Aspire.Dashboard.Extensions;
 
 namespace Aspire.Dashboard.Model;
@@ -10,13 +12,13 @@ namespace Aspire.Dashboard.Model;
 [DebuggerDisplay("{DebuggerToString(),nq}")]
 public class DimensionFilterViewModel
 {
+    private string? _nameHash;
     private string? _sanitizedHtmlId;
     private ImmutableHashSet<DimensionValueViewModel> _selectedValues = [];
 
     public required string Name { get; init; }
     public List<DimensionValueViewModel> Values { get; } = [];
     public IReadOnlySet<DimensionValueViewModel> SelectedValues => Volatile.Read(ref _selectedValues);
-    public bool PopupVisible { get; set; }
 
     /// <summary>
     /// Invoked when the filter state is modified externally (e.g., from the popover)
@@ -59,6 +61,9 @@ public class DimensionFilterViewModel
     }
 
     public string SanitizedHtmlId => _sanitizedHtmlId ??= StringExtensions.SanitizeHtmlId(Name);
+
+    // Hash the original name so distinct names that sanitize identically still have distinct anchors.
+    public string NameHash => _nameHash ??= Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(Name)));
 
     public void SetSelectedValues(IEnumerable<DimensionValueViewModel> dimensionValues)
     {

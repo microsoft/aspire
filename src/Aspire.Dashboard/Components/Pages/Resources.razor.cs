@@ -476,25 +476,28 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         _resourcesMenuItems.Clear();
 
-        if (HasCollapsedResources())
+        if (HasAnyChildResources())
         {
-            _resourcesMenuItems.Add(new MenuButtonItem
+            if (HasCollapsedResources())
             {
-                IsDisabled = false,
-                OnClick = _onToggleCollapseAllCallback.InvokeAsync,
-                Text = Loc[nameof(Dashboard.Resources.Resources.ResourceExpandAllChildren)],
-                Icon = new Icons.Regular.Size16.Eye()
-            });
-        }
-        else
-        {
-            _resourcesMenuItems.Add(new MenuButtonItem
+                _resourcesMenuItems.Add(new MenuButtonItem
+                {
+                    IsDisabled = false,
+                    OnClick = _onToggleCollapseAllCallback.InvokeAsync,
+                    Text = Loc[nameof(Dashboard.Resources.Resources.ResourceExpandAllChildren)],
+                    Icon = new Icons.Regular.Size16.Eye()
+                });
+            }
+            else
             {
-                IsDisabled = false,
-                OnClick = _onToggleCollapseAllCallback.InvokeAsync,
-                Text = Loc[nameof(Dashboard.Resources.Resources.ResourceCollapseAllChildren)],
-                Icon = new Icons.Regular.Size16.EyeOff()
-            });
+                _resourcesMenuItems.Add(new MenuButtonItem
+                {
+                    IsDisabled = false,
+                    OnClick = _onToggleCollapseAllCallback.InvokeAsync,
+                    Text = Loc[nameof(Dashboard.Resources.Resources.ResourceCollapseAllChildren)],
+                    Icon = new Icons.Regular.Size16.EyeOff()
+                });
+            }
         }
 
         if (_showResourceTypeColumn)
@@ -829,13 +832,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private bool HasAnyChildResources()
     {
         return _resourceByName.Values.Any(r => !string.IsNullOrEmpty(r.GetResourcePropertyValue(KnownProperties.Resource.ParentName)));
-    }
-
-    private bool HasViewOptionsMenu()
-    {
-        // Show the menu if there are any child resources (for collapse/expand)
-        // OR if there are any hidden resources (for show/hide hidden resources)
-        return HasAnyChildResources() || _resourceByName.Values.Any(r => r.IsResourceHidden(showHiddenResources: false));
     }
 
     private Task OnTabChangeAsync(FluentTab? newTab)

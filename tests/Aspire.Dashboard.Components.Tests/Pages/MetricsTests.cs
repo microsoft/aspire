@@ -122,8 +122,6 @@ public partial class MetricsTests : DashboardTestContext
             Assert.Single(cut.FindComponents<PlotlyChart>());
             Assert.Empty(cut.FindComponents<MetricTable>());
         });
-        var dimensionFilters = cut.Instance.DimensionFilters;
-
         var activities = new ConcurrentQueue<Activity>();
         using var listener = ActivityListenerHelper.Create(telemetryRepository.SqlActivitySource, onActivityStopped: activities.Enqueue);
 
@@ -143,6 +141,12 @@ public partial class MetricsTests : DashboardTestContext
         Assert.Single(cut.FindComponents<PlotlyChart>());
         Assert.Empty(cut.FindComponents<MetricTable>());
         Assert.Empty(activities);
+
+        var chartFilters = cut.FindComponent<ChartFilters>().Instance;
+        var filterPopover = cut.FindComponent<ChartFilterPopover>().Instance;
+        var filterButtonId = cut.Find(".chart-filter-button").Id;
+        cut.Find(".chart-filter-button").Click();
+        Assert.Equal("true", cut.Find("fluent-popover-b.chart-filter-popover").GetAttribute("opened"));
 
         await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
@@ -176,7 +180,10 @@ public partial class MetricsTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             var updatedFilter = Assert.Single(cut.Instance.DimensionFilters);
-            Assert.NotSame(dimensionFilters, cut.Instance.DimensionFilters);
+            Assert.Same(chartFilters, cut.FindComponent<ChartFilters>().Instance);
+            Assert.Same(filterPopover, cut.FindComponent<ChartFilterPopover>().Instance);
+            Assert.Equal(filterButtonId, cut.Find(".chart-filter-button").Id);
+            Assert.Equal("true", cut.Find("fluent-popover-b.chart-filter-popover").GetAttribute("opened"));
             Assert.Collection(
                 updatedFilter.SelectedValues.Select(value => value.Value).Order(),
                 value => Assert.Equal("GET", value),

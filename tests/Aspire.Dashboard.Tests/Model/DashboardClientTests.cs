@@ -24,6 +24,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
@@ -61,17 +62,8 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         var dashboardClient = new TestDashboardClient(attachTerminal: (_, _) => Task.FromResult<Stream>(stream));
         var sessions = new TerminalViewSessionRegistry();
         using var session = sessions.Create("/api/apphost-terminal?terminalId=terminal", readOnly: false);
-        using var server = new TestServer(new WebHostBuilder().Configure(app =>
-        {
-            app.UseWebSockets();
-            app.Run(context =>
-            {
-                context.Request.Scheme = "https";
-                context.Request.Host = new HostString("dashboard.example.com");
-                return TerminalWebSocketProxy.HandleAppHostTerminalAsync(context, dashboardClient, sessions, NullLogger.Instance, "test");
-            });
-        }));
-        var client = server.CreateWebSocketClient();
+        using var host = await BuildTerminalTestHostAsync(dashboardClient, sessions);
+        var client = host.GetTestServer().CreateWebSocketClient();
         client.ConfigureRequest = request => request.Headers.Origin = "https://dashboard.example.com";
         using var socket = await client.ConnectAsync(
             new Uri($"wss://dashboard.example.com/api/apphost-terminal?terminalId=terminal&viewId={session.Id}"), CancellationToken.None).DefaultTimeout();
@@ -189,17 +181,8 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         var dashboardClient = new TestDashboardClient(attachTerminal: (_, _) => Task.FromResult<Stream>(stream));
         var sessions = new TerminalViewSessionRegistry();
         using var session = sessions.Create("/api/apphost-terminal?terminalId=terminal", readOnly: false);
-        using var server = new TestServer(new WebHostBuilder().Configure(app =>
-        {
-            app.UseWebSockets();
-            app.Run(context =>
-            {
-                context.Request.Scheme = "https";
-                context.Request.Host = new HostString("dashboard.example.com");
-                return TerminalWebSocketProxy.HandleAppHostTerminalAsync(context, dashboardClient, sessions, NullLogger.Instance, "test");
-            });
-        }));
-        var client = server.CreateWebSocketClient();
+        using var host = await BuildTerminalTestHostAsync(dashboardClient, sessions);
+        var client = host.GetTestServer().CreateWebSocketClient();
         client.ConfigureRequest = request => request.Headers.Origin = "https://dashboard.example.com";
         var uri = new Uri($"wss://dashboard.example.com/api/apphost-terminal?terminalId=terminal&viewId={session.Id}");
 
@@ -227,6 +210,24 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         await disposed.Task.DefaultTimeout();
         // The proxy classifies the RPC status; the stream never received an Ended frame.
         Assert.False(stream.TerminalEnded);
+    }
+
+    private static Task<IHost> BuildTerminalTestHostAsync(IDashboardClient dashboardClient, TerminalViewSessionRegistry sessions)
+    {
+        return new HostBuilder()
+            .ConfigureWebHost(webBuilder => webBuilder
+                .UseTestServer()
+                .Configure(app =>
+                {
+                    app.UseWebSockets();
+                    app.Run(context =>
+                    {
+                        context.Request.Scheme = "https";
+                        context.Request.Host = new HostString("dashboard.example.com");
+                        return TerminalWebSocketProxy.HandleAppHostTerminalAsync(context, dashboardClient, sessions, NullLogger.Instance, "test");
+                    });
+                }))
+            .StartAsync();
     }
 
     private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder =>
