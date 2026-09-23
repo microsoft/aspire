@@ -1028,6 +1028,37 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.Equal("project", annotation.LaunchConfigurationType);
     }
 
+    [Theory]
+    [InlineData("9.0.100", true)]
+    [InlineData("10.0.100-preview.1", false)]
+    [InlineData(null, false)]
+    public async Task AddCSharpAppValidatesSelectedSdkVersion(string? version, bool expectFailure)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.Services.AddSingleton<IDotnetSdkVersionProvider>(
+            new TestDotnetSdkVersionProvider(version));
+        var appResource = builder.AddCSharpApp(
+            "app",
+            Path.Combine(builder.AppHostDirectory, "app.cs"),
+            options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+
+        var publishTask = builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(appResource.Resource, app.Services),
+            TestContext.Current.CancellationToken);
+
+        if (expectFailure)
+        {
+            var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+                () => publishTask);
+            Assert.Contains("only supported on .NET 10 or later", exception.Message);
+        }
+        else
+        {
+            await publishTask;
+        }
+    }
+
     [Fact]
     public void AddProjectCreatesRebuilderWithNameValidationPolicyAnnotation()
     {
