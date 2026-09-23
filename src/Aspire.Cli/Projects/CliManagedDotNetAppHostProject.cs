@@ -377,7 +377,16 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
     {
         // CLI-managed single-file AppHosts always need DCP/Dashboard from the bundle (they
         // don't ship per-RID NuGet metadata for those), so inject unconditionally here.
-        var layoutLease = await ConfigureCliBundleEnvironmentAsync(env, injectDcpAndDashboard: true, cancellationToken);
+        var appHostDirectory = appHostFile.Directory
+            ?? throw new InvalidOperationException($"AppHost file '{appHostFile.FullName}' has no parent directory.");
+        var configDirectory = ConfigurationHelper.GetConfigRootDirectory(appHostDirectory);
+        var config = AspireConfigFile.Load(configDirectory.FullName);
+        var aspireHostingVersion = config?.GetEffectiveSdkVersion(IdentitySdkVersion) ?? IdentitySdkVersion;
+        var layoutLease = await ConfigureCliBundleEnvironmentAsync(
+            env,
+            injectDcpAndDashboard: true,
+            aspireHostingVersion,
+            cancellationToken);
 
         // Attach the integration closure cache (probe manifest + libs path) materialized by
         // `aspire restore`. Mirrors PrebuiltAppHostServer.CreateStartInfo so the runtime AppHost

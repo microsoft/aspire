@@ -441,6 +441,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var appHostFile = CreateCliManagedSingleFileAppHost();
         WriteAspireConfigJson(_workspace.WorkspaceRoot.FullName, """
             {
+              "sdk": {
+                "version": "13.6.0"
+              },
               "features": {
                 "experimentalCliManagedAppHost": true
               },
@@ -451,7 +454,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             """);
 
         var runner = new TestDotNetCliRunner();
-        var project = CreateCliManagedDotNetAppHostProject(runner);
+        CreateCliBundle(out var layout);
+        var project = CreateCliManagedDotNetAppHostProject(runner, layout);
 
         runner.BuildAsyncCallback = (projectFile, _, _, _) =>
         {
@@ -467,7 +471,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         {
             Assert.NotNull(env);
             Assert.Contains(BundleDiscovery.DcpPathEnvVar, env.Keys);
-            Assert.Contains(BundleDiscovery.DashboardPathEnvVar, env.Keys);
+            Assert.Equal(layout.GetDashboardPath(), env[BundleDiscovery.DashboardPathEnvVar]);
             return Task.FromResult(0);
         };
 
@@ -2837,7 +2841,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             {
                 Assert.Equal(appHostFile.FullName, projectFile.FullName);
                 Assert.Contains("AspireUseCliBundle", properties);
-                                return (0, JsonDocument.Parse($$"""
+                return (0, JsonDocument.Parse($$"""
                     {
                       "Properties": {
                         "MSBuildVersion": "17.0.0",

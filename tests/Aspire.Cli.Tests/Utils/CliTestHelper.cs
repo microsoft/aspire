@@ -2,27 +2,32 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
-using System.Text.Json;
-using System.Xml.Linq;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Caching;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Commands.Sdk;
+using Aspire.Cli.Configuration;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Documentation.ApiDocs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
-using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Migrations;
+using Aspire.Cli.Npm;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Processes;
+using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Secrets;
@@ -30,6 +35,9 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Utils;
+using Aspire.Cli.Utils.EnvironmentChecker;
+using Aspire.Shared;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,16 +46,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Migrations;
-using Aspire.Cli.Utils;
-using Aspire.Cli.Utils.EnvironmentChecker;
-using Aspire.Cli.Packaging;
-using Aspire.Cli.Caching;
-using Aspire.Cli.Diagnostics;
-using Aspire.Shared;
-using Aspire.Cli.Npm;
-using Aspire.Cli.Profiling;
 
 namespace Aspire.Cli.Tests.Utils;
 
@@ -92,7 +90,8 @@ internal static class CliTestHelper
         var configurationValues = new Dictionary<string, string?>();
 
         // Populate feature flag configuration in in-memory collection.
-        options.ConfigurationCallback += config => {
+        options.ConfigurationCallback += config =>
+        {
             foreach (var featureFlag in options.EnabledFeatures)
             {
                 config[$"{KnownFeatures.FeaturePrefix}:{featureFlag}"] = "true";
@@ -380,18 +379,14 @@ internal static class CliTestHelper
         {
             Layout = layout
         };
-        options.DotNetCliExecutionFactoryFactory = _ => new TestProcessExecutionFactory
+        var settingsClient = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<NuGetClient>.Instance);
+        options.NuGetClientFactory = _ => new FakeNuGetClient
         {
-            AssertionCallback = (arguments, _, _, _) =>
-            {
-                if (arguments.Length >= 2 && arguments[0] == "nuget" && arguments[1] == "write-config")
-                {
-                    WriteNuGetConfigOverlay(arguments);
-                }
-            },
-            AttemptCallback = (_, _) => (
-                0,
-                JsonSerializer.Serialize(new NuGetSettingsInfo(
+            GetSettingsCallback = (_, sourceIdentityKey) =>
+                new NuGetSettingsInfo(
                     ConfigPaths: [],
                     CacheIdentity: "test-cache",
                     Sources: [],
@@ -400,55 +395,9 @@ internal static class CliTestHelper
                     PackageSourceMappings: [],
                     DisabledPackageSourceKeys: [],
                     ReservedPackageSourceKeys: [],
-                    SourceIdentityKey: new byte[NuGetSourceIdentity.KeySizeInBytes])))
+                    SourceIdentityKey: sourceIdentityKey),
+            WriteConfigOverlayCallback = settingsClient.WriteConfigOverlay
         };
-    }
-
-    private static void WriteNuGetConfigOverlay(string[] arguments)
-    {
-        static string GetArgumentValue(string[] values, string name)
-        {
-            var index = Array.IndexOf(values, name);
-            return index >= 0 && index + 1 < values.Length
-                ? values[index + 1]
-                : throw new InvalidDataException($"Missing '{name}'.");
-        }
-
-        var request = JsonSerializer.Deserialize<NuGetConfigOverlayRequest>(
-            File.ReadAllText(GetArgumentValue(arguments, "--request")))
-            ?? throw new InvalidDataException("The NuGet configuration request was empty.");
-        var configuration = new XElement("configuration");
-        if (request.Sources.Length > 0)
-        {
-            configuration.Add(new XElement(
-                "packageSources",
-                request.Sources.Select(source => new XElement(
-                    "add",
-                    new XAttribute("key", source.Key),
-                    new XAttribute("value", source.Source)))));
-        }
-        if (request.PackageSourceMappings.Length > 0)
-        {
-            configuration.Add(new XElement(
-                "packageSourceMapping",
-                request.PackageSourceMappings.Select(mapping => new XElement(
-                    "packageSource",
-                    new XAttribute("key", mapping.SourceKey),
-                    mapping.Patterns.Select(pattern => new XElement(
-                        "package",
-                        new XAttribute("pattern", pattern)))))));
-        }
-        if (request.GlobalPackagesFolder is not null)
-        {
-            configuration.Add(new XElement(
-                "config",
-                new XElement(
-                    "add",
-                    new XAttribute("key", "globalPackagesFolder"),
-                    new XAttribute("value", request.GlobalPackagesFolder))));
-        }
-
-        new XDocument(configuration).Save(GetArgumentValue(arguments, "--output"));
     }
 }
 

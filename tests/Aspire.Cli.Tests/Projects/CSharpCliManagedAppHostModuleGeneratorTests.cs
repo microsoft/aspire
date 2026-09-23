@@ -2,10 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
-using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
@@ -656,35 +654,18 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
         string? nugetServiceIndexOverride = null,
         NuGetSettingsInfo? nugetSettings = null)
     {
-        var layoutRoot = workspace.WorkspaceRoot.CreateSubdirectory(
-            $".bundle-{Guid.NewGuid():N}");
-        var layout = new LayoutConfiguration
-        {
-            LayoutPath = layoutRoot.FullName
-        };
-        var managedPath = layout.GetManagedPath()!;
-        Directory.CreateDirectory(Path.GetDirectoryName(managedPath)!);
-        File.WriteAllText(managedPath, "test");
-
-        var processExecutionFactory = new TestProcessExecutionFactory
-        {
-            AssertionCallback = (args, _, _, _) =>
-            {
-                if (args.Length >= 2 && args[0] == "nuget" && args[1] == "write-config")
-                {
-                    WriteNuGetConfigOverlay(args);
-                }
-            },
-            AttemptCallback = (_, _) => (
-                0,
-                JsonSerializer.Serialize(nugetSettings ?? CreateNuGetSettings()))
-        };
-        var bundleNuGetService = new BundleNuGetService(
-            new FixedLayoutDiscovery(layout),
-            new LayoutProcessRunner(processExecutionFactory),
+        var settingsClient = new NuGetClient(
             new TestFeatures(),
             new TestEnvironment(),
-            NullLogger<BundleNuGetService>.Instance)
+            NullLogger<NuGetClient>.Instance);
+        var nuGetClient = new FakeNuGetClient
+        {
+            GetSettingsCallback = (_, _) => nugetSettings ?? CreateNuGetSettings(),
+            WriteConfigOverlayCallback = settingsClient.WriteConfigOverlay
+        };
+        var bundleNuGetService = new BundleNuGetService(
+            NullLogger<BundleNuGetService>.Instance,
+            nuGetClient)
         {
             SourceIdentityKeyFactory = static () => new byte[NuGetSourceIdentity.KeySizeInBytes]
         };
@@ -719,62 +700,6 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
             DisabledPackageSourceKeys: [],
             ReservedPackageSourceKeys: [],
             SourceIdentityKey: new byte[NuGetSourceIdentity.KeySizeInBytes]);
-    }
-
-    private static void WriteNuGetConfigOverlay(string[] args)
-    {
-        static string GetArgumentValue(string[] values, string name)
-        {
-            var index = Array.IndexOf(values, name);
-            return index >= 0 && index + 1 < values.Length
-                ? values[index + 1]
-                : throw new InvalidDataException($"Missing '{name}'.");
-        }
-
-        var request = JsonSerializer.Deserialize<NuGetConfigOverlayRequest>(
-            File.ReadAllText(GetArgumentValue(args, "--request")))
-            ?? throw new InvalidDataException("The NuGet configuration request was empty.");
-        var configuration = new XElement("configuration");
-        if (request.Sources.Length > 0)
-        {
-            configuration.Add(new XElement(
-                "packageSources",
-                request.Sources.Select(source => new XElement(
-                    "add",
-                    new XAttribute("key", source.Key),
-                    new XAttribute("value", source.Source)))));
-        }
-        if (request.PackageSourceMappings.Length > 0)
-        {
-            configuration.Add(new XElement(
-                "packageSourceMapping",
-                request.PackageSourceMappings.Select(mapping => new XElement(
-                    "packageSource",
-                    new XAttribute("key", mapping.SourceKey),
-                    mapping.Patterns.Select(pattern => new XElement(
-                        "package",
-                        new XAttribute("pattern", pattern)))))));
-        }
-        if (request.GlobalPackagesFolder is not null)
-        {
-            configuration.Add(new XElement(
-                "config",
-                new XElement(
-                    "add",
-                    new XAttribute("key", "globalPackagesFolder"),
-                    new XAttribute("value", request.GlobalPackagesFolder))));
-        }
-
-        new XDocument(configuration).Save(GetArgumentValue(args, "--output"));
-    }
-
-    private sealed class FixedLayoutDiscovery(LayoutConfiguration layout) : ILayoutDiscovery
-    {
-        public LayoutConfiguration? DiscoverLayout(string? projectDirectory = null) => layout;
-
-        public string? GetComponentPath(LayoutComponent component, string? projectDirectory = null) => layout.GetComponentPath(component);
-
-        public bool IsBundleModeAvailable(string? projectDirectory = null) => true;
     }
 
     private static string[] GetPackageSources(XDocument doc)

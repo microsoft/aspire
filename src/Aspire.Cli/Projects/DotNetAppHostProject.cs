@@ -1598,7 +1598,7 @@ internal partial class DotNetAppHostProject : IAppHostProject
                     SignalBuildCompletion();
                     return Task.CompletedTask;
                 }
-                : null,
+            : null,
         };
         ConfigureAppHostInvocationOptions(effectiveAppHostFile, runOptions);
 
@@ -1741,9 +1741,14 @@ internal partial class DotNetAppHostProject : IAppHostProject
         CancellationToken cancellationToken)
     {
         var canQueryCliBundleProperty = !isSingleFileAppHost || !context.NoBuild;
-        var injectDcpAndDashboard = canQueryCliBundleProperty
-            && await IsUsingCliBundleAsync(appHostFile, cancellationToken);
-        return await ConfigureCliBundleEnvironmentAsync(env, injectDcpAndDashboard, cancellationToken);
+        var appHostInfo = canQueryCliBundleProperty
+            ? await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken)
+            : null;
+        return await ConfigureCliBundleEnvironmentAsync(
+            env,
+            appHostInfo?.IsUsingCliBundle == true,
+            appHostInfo?.AspireHostingVersion,
+            cancellationToken);
     }
 
     protected virtual async Task<BundleLayoutLease?> ConfigureCliBundleEnvironmentForPublishAsync(
@@ -1753,12 +1758,6 @@ internal partial class DotNetAppHostProject : IAppHostProject
     {
         await Task.CompletedTask;
         return null;
-    }
-
-    private async Task<bool> IsUsingCliBundleAsync(FileInfo appHostFile, CancellationToken cancellationToken)
-    {
-        var appHostInfo = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken);
-        return appHostInfo.IsUsingCliBundle;
     }
 
     private async Task<(int? ExitCode, bool BuiltByCli, bool DeferBuildCompletion)> PrepareAppHostAsync(
@@ -2738,10 +2737,11 @@ internal partial class DotNetAppHostProject : IAppHostProject
     protected async Task<BundleLayoutLease?> ConfigureCliBundleEnvironmentAsync(
         Dictionary<string, string> env,
         bool injectDcpAndDashboard,
+        string? aspireHostingVersion,
         CancellationToken cancellationToken)
     {
         var layoutLease = await AcquireCliBundleLayoutAsync(cancellationToken);
-        ConfigureCliBundleEnvironment(env, layoutLease, injectDcpAndDashboard);
+        ConfigureCliBundleEnvironment(env, layoutLease, injectDcpAndDashboard, aspireHostingVersion);
         return layoutLease;
     }
 
