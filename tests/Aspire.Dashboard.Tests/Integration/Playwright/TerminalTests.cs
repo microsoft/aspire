@@ -41,6 +41,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await MountObserverAsync(page, requestPrimary: true);
             await connection.WaitForPeerHandshakesAsync(CancellationToken.None).DefaultTimeout();
             var primaryId = connection.Presentation.PrimaryPeerId;
+            var connectionCount = connection.ConnectionCount;
             Assert.NotNull(primaryId);
 
             var terminal = page.GetByTestId("module-terminal");
@@ -56,7 +57,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await ExpectObserverTextAsync(page, "Output while read-only");
             await Assertions.Expect(terminal.Locator("canvas")).ToBeVisibleAsync();
             await page.EvaluateAsync("() => window.moduleTerminal.focus()");
-            await page.Keyboard.TypeAsync("blocked-keyboard");
+            await page.Keyboard.TypeAsync("q");
             await PasteAsync(input, "blocked-paste");
             Assert.Equal(["Terminal view does not accept input", "Terminal view does not accept input"],
                 await page.EvaluateAsync<string[]>("""
@@ -108,7 +109,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await SetReadOnlyAsync(page, terminalId, session, true);
             await ExpectReadOnlyAsync(page, true);
             await page.EvaluateAsync("() => window.moduleTerminal.focus()");
-            await page.Keyboard.TypeAsync("blocked-again");
+            await page.Keyboard.TypeAsync("z");
             await PasteAsync(input, "blocked-paste-again");
             await page.EvaluateAsync("() => window.terminalObserver.paste('still-active')");
             Assert.Equal("still-active", await connection.ReadInputTextAsync("still-active".Length, CancellationToken.None).DefaultTimeout());
@@ -119,7 +120,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await ExpectObserverTextAsync(page, "Output after policy changes");
             await WaitForConnectedAsync(page, terminalId);
             Assert.True(await terminalElement.EvaluateAsync<bool>("element => element.isConnected"));
-            Assert.Equal(2, connection.ConnectionCount);
+            Assert.Equal(connectionCount, connection.ConnectionCount);
         });
     }
 
@@ -132,7 +133,8 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await using var connection = await OpenTerminalAsync(page);
             var input = page.GetByRole(AriaRole.Textbox, new() { Name = "Interactive terminal input", Exact = true });
             var decreaseFontButton = page.GetByRole(AriaRole.Button, new() { Name = "Decrease font size", Exact = true });
-            var precedingControl = page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true });
+            var precedingControl = page.GetByLabel("Page toolbar", new() { Exact = true })
+                .GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true });
             var focusHint = page.Locator(".terminal-focus-hint");
 
             await Assertions.Expect(decreaseFontButton).ToBeEnabledAsync();
@@ -199,10 +201,11 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await using var connection = await OpenTerminalAsync(page);
             await MountObserverAsync(page, requestPrimary: true);
             var primaryId = connection.Presentation.PrimaryPeerId;
-            var dimensions = page.GetByRole(AriaRole.Combobox, new() { Name = "Terminal dimensions", Exact = true });
+            var dropdown = page.Locator("fluent-field.terminal-size-select fluent-dropdown");
+            var dimensions = TerminalDimensions(page);
             await dimensions.ClickAsync();
-            await page.GetByRole(AriaRole.Option, new() { Name = "80×24", Exact = true }).ClickAsync();
-            await Assertions.Expect(dimensions).ToHaveJSPropertyAsync("value", "80x24");
+            await dropdown.Locator("fluent-option[text='80×24']").ClickAsync();
+            await Assertions.Expect(dimensions).ToHaveTextAsync("80×24");
             Assert.NotNull(connection.Presentation.PrimaryPeerId);
             Assert.NotEqual(primaryId, connection.Presentation.PrimaryPeerId);
             await page.WaitForFunctionAsync("() => window.terminalObserver.geometry.columns === 80 && window.terminalObserver.geometry.rows === 24").DefaultTimeout();
@@ -226,7 +229,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
                 await button.ClickAsync();
                 await Assertions.Expect(page.Locator(".terminal-font-size")).ToHaveTextAsync($"{fontSize}px");
             }
-            await Assertions.Expect(button).ToBeDisabledAsync();
+            await Assertions.Expect(button).ToHaveAttributeAsync("disabled", string.Empty);
             Assert.NotNull(connection.Presentation.PrimaryPeerId);
             Assert.NotEqual(primaryId, connection.Presentation.PrimaryPeerId);
         });
@@ -283,8 +286,11 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     }
 
     private static Task ExpectProducerDimensionsAsync(IPage page) =>
-        Assertions.Expect(page.GetByRole(AriaRole.Combobox, new() { Name = "Terminal dimensions", Exact = true }))
-            .ToHaveJSPropertyAsync("value", $"{TestTerminalConnection.Columns}x{TestTerminalConnection.Rows}");
+        Assertions.Expect(TerminalDimensions(page))
+            .ToHaveTextAsync($"{TestTerminalConnection.Columns}×{TestTerminalConnection.Rows}");
+
+    private static ILocator TerminalDimensions(IPage page) =>
+        page.Locator("fluent-field.terminal-size-select [role='combobox']");
 
     private static Task SetReadOnlyAsync(IPage page, int terminalId, TerminalViewSession session, bool readOnly)
     {
