@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Fixes a startup crash caused by stale pending DCP events overwriting valid allocated endpoint addresses",
+  "mergedAt": "2026-09-22T23:25:57Z",
+  "number": 20326,
+  "runDate": "2026-09-23T00:14:46Z",
+  "status": "included",
+  "title": "Prevent pending DCP events from regressing allocated addresses"
+}

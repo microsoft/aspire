@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Fixes aspire stop hang caused by an untracked auxiliary backchannel connection during AppHost shutdown",
+  "mergedAt": "2026-09-22T21:27:14Z",
+  "number": 20319,
+  "runDate": "2026-09-23T00:14:46Z",
+  "status": "included",
+  "title": "Fix auxiliary backchannel shutdown handling"
+}

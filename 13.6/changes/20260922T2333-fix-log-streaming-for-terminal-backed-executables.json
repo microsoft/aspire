@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a DCP `400 BadRequest` when reading logs for terminal-backed executables (`WithTerminal()`). Aspire no longer requests unavailable separate stdout/stderr streams for these executables; startup and system logs remain visible via `aspire logs`, the dashboard, and other log subscribers.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📜",
+  "firstMergedAt": "2026-09-22T23:33:33Z",
+  "lastMergedAt": "2026-09-22T23:33:33Z",
+  "name": "Fix log streaming for terminal-backed executables",
+  "owner": "karolz-ms",
+  "prs": [
+    20317
+  ]
+}

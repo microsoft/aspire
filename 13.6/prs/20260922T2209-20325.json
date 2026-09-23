@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Follow-up fix to the build-only dashboard reference introduced in #20307 to satisfy MSBuild target-framework checks; internal test infrastructure change with no user-facing effect",
+  "mergedAt": "2026-09-22T22:09:05Z",
+  "number": 20325,
+  "runDate": "2026-09-23T00:14:46Z",
+  "status": "excluded",
+  "title": "Fix dashboard build-only reference in hosting tests"
+}

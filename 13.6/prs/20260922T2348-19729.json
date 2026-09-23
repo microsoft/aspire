@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Introduces portable connection-string environment variable aliases for strict deployment targets that reject characters like hyphens",
+  "mergedAt": "2026-09-22T23:48:35Z",
+  "number": 19729,
+  "runDate": "2026-09-23T00:14:46Z",
+  "status": "included",
+  "title": "Normalize connection string environment variable aliases"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Unified restore improves Project V2 coordinated build performance",
+  "mergedAt": "2026-09-22T17:37:52Z",
+  "number": 20294,
+  "runDate": "2026-09-23T00:14:46Z",
+  "status": "included",
+  "title": "Improve Project V2 builds with unified restore"
+}

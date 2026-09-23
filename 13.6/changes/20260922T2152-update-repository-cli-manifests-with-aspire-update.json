@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "`aspire update` now updates repository-local Aspire CLI tool manifest pins (`.config/dotnet-tools.json`, `dotnet-tools.json`, and `package.json`) alongside AppHost integration updates, instead of treating CLI version pinning as a `--self`-only operation. Restoring/installing the updated CLI and refreshing lockfiles remains the package manager's responsibility; `aspire update --self` is unchanged.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "📌",
+  "firstMergedAt": "2026-09-22T21:52:47Z",
+  "lastMergedAt": "2026-09-22T21:52:47Z",
+  "name": "aspire update now updates repository CLI manifest pins",
+  "owner": "eerhardt",
+  "prs": [
+    20295
+  ]
+}

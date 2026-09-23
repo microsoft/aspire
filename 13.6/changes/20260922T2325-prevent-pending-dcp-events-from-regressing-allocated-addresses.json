@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a startup crash (\"Service should have valid address at this point\") caused by a stale, pending DCP service observation overwriting an already-allocated endpoint port with 0 right before workload endpoints were created. Pending address data can no longer regress a usable allocation.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🛡️",
+  "firstMergedAt": "2026-09-22T23:25:57Z",
+  "lastMergedAt": "2026-09-22T23:25:57Z",
+  "name": "Fix startup crash from stale pending DCP address observations",
+  "owner": "danegsta",
+  "prs": [
+    20326
+  ]
+}

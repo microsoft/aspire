@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Adds a build-only test project reference so the dashboard executable is present for hosting tests; internal test infrastructure change with no user-facing effect",
+  "mergedAt": "2026-09-22T20:28:14Z",
+  "number": 20307,
+  "runDate": "2026-09-23T00:14:46Z",
+  "status": "excluded",
+  "title": "Build dashboard for Aspire.Hosting tests"
+}

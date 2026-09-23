@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Fixes to the internal PR-documentation automation workflow; repository/automation maintenance with no user-facing product effect",
+  "mergedAt": "2026-09-22T19:29:28Z",
+  "number": 20293,
+  "runDate": "2026-09-23T00:14:46Z",
+  "status": "excluded",
+  "title": "Fix PR documentation workflow inputs and completion"
+}

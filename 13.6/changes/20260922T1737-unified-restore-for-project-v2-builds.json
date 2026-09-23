@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Project V2's coordinated builds now restore compatible project groups together in a single NuGet graph instead of restoring each root project separately, reducing redundant restore work and improving startup performance. Projects that need per-project restore hooks can opt back in with `Aspire:Dotnet:RestoreProjectsIndividually`.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "⚡",
+  "firstMergedAt": "2026-09-22T17:37:52Z",
+  "lastMergedAt": "2026-09-22T17:37:52Z",
+  "name": "Unified restore for Project V2 builds",
+  "owner": "karolz-ms",
+  "prs": [
+    20294
+  ]
+}

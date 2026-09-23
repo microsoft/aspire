@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "aspire update now updates repository-local Aspire CLI tool manifest pins",
+  "mergedAt": "2026-09-22T21:52:47Z",
+  "number": 20295,
+  "runDate": "2026-09-23T00:14:46Z",
+  "status": "included",
+  "title": "Update repository CLI manifests with aspire update"
+}

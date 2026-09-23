@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "CI failure-attribution workflow improvement; repository maintenance with no user-facing product effect",
+  "mergedAt": "2026-09-22T18:59:53Z",
+  "number": 19455,
+  "runDate": "2026-09-23T00:14:46Z",
+  "status": "excluded",
+  "title": "Fix main CI failure attribution and classification"
+}

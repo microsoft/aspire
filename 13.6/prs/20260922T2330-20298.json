@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Extends the Firefox/Chromium NSS certificate trust support to use the standard Aspire configuration system (certificates.nssDbPaths) instead of a dedicated environment variable",
+  "mergedAt": "2026-09-22T23:30:56Z",
+  "number": 20298,
+  "runDate": "2026-09-23T00:14:46Z",
+  "status": "included",
+  "title": "Configure NSS trust paths through Aspire config"
+}

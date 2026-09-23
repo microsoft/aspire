@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Fixes launching file-based C# resources when Visual Studio cannot host them as loaded projects",
+  "mergedAt": "2026-09-22T19:12:48Z",
+  "number": 20243,
+  "runDate": "2026-09-23T00:14:46Z",
+  "status": "included",
+  "title": "Run file-based C# resources outside legacy IDE sessions"
+}

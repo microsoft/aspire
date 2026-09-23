@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Repository code-review automation change (Copilot review guidance for pinned Action SHAs); no user-facing product effect",
+  "mergedAt": "2026-09-22T18:51:54Z",
+  "number": 20282,
+  "runDate": "2026-09-23T00:14:46Z",
+  "status": "excluded",
+  "title": "Teach Copilot review to catch pinned GitHub Action SHA allow-list changes"
+}

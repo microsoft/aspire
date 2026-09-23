@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`aspire stop` could hang while scanning AppHosts when an auxiliary backchannel connection was accepted just as the AppHost began shutting down. Accepted connections are now tracked and drained during shutdown so clients observe disconnection promptly instead of the AppHost hanging.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔌",
+  "firstMergedAt": "2026-09-22T21:27:14Z",
+  "lastMergedAt": "2026-09-22T21:27:14Z",
+  "name": "Fix aspire stop hang from auxiliary backchannel shutdown race",
+  "owner": "danegsta",
+  "prs": [
+    20319
+  ]
+}

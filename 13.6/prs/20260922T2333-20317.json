@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Fixes a DCP 400 BadRequest when requesting log streams for terminal-backed executables",
+  "mergedAt": "2026-09-22T23:33:33Z",
+  "number": 20317,
+  "runDate": "2026-09-23T00:14:46Z",
+  "status": "included",
+  "title": "Fix log streaming for terminal-backed executables"
+}

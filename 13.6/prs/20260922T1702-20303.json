@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Trivial comment clarification in Directory.Packages.props with no user-facing effect",
+  "mergedAt": "2026-09-22T17:02:53Z",
+  "number": 20303,
+  "runDate": "2026-09-23T00:14:46Z",
+  "status": "excluded",
+  "title": "Clarify beta version deployment strategy in comments"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Connection-string environment variables now separate the logical .NET configuration name from the physical environment-variable name. `WithReference` emits both the legacy alias (e.g. `ConnectionStrings__my-db`) and a portable alias without `-` (e.g. `ConnectionStrings__my_db`) when supported, while strict deployment targets such as Azure App Service and Kubernetes emit only the portable alias. Updated Aspire client integrations resolve the logical name first, then fall back to the portable key; consumers using older integrations or direct `IConfiguration` lookup on strict targets can migrate explicitly with `WithReference(database, connectionName: \"my_db\")`.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-09-22T23:48:35Z",
+  "lastMergedAt": "2026-09-22T23:48:35Z",
+  "name": "Portable connection-string environment variable aliases",
+  "owner": "sebastienros",
+  "prs": [
+    19729
+  ]
+}
