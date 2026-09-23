@@ -401,6 +401,11 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 resourceType: KnownResourceTypes.Container,
                 state: KnownResourceState.Running),
             ModelTestHelpers.CreateResource(
+                resourceName: "hidden-resource",
+                resourceType: KnownResourceTypes.Container,
+                state: KnownResourceState.Running,
+                hidden: true),
+            ModelTestHelpers.CreateResource(
                 resourceName: "TestResource",
                 resourceType: KnownResourceTypes.Project,
                 state: KnownResourceState.Running,

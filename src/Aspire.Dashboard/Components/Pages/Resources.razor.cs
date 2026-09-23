@@ -826,6 +826,18 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         return ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: false, includeNonEndpointUrls: true);
     }
 
+    private bool HasAnyChildResources()
+    {
+        return _resourceByName.Values.Any(r => !string.IsNullOrEmpty(r.GetResourcePropertyValue(KnownProperties.Resource.ParentName)));
+    }
+
+    private bool HasViewOptionsMenu()
+    {
+        // Show the menu if there are any child resources (for collapse/expand)
+        // OR if there are any hidden resources (for show/hide hidden resources)
+        return HasAnyChildResources() || _resourceByName.Values.Any(r => r.IsResourceHidden(showHiddenResources: false));
+    }
+
     private Task OnTabChangeAsync(FluentTab? newTab)
     {
         if (_isDisposing)
