@@ -1414,15 +1414,23 @@ public class AspireSkillsInstallerTests
             Assert.Equal(["evals"], migrationSkill.InstallExcludedRelativePaths);
 
             var migrationFiles = await result.Bundle.GetSkillFilesAsync(migrationSkill, CancellationToken.None);
-            Assert.Equal(
-                [
-                    "SKILL.md",
-                    Path.Combine("references", "compatibility-and-validation.md"),
-                    Path.Combine("references", "migration-patterns.md")
-                ],
-                migrationFiles
-                    .Select(file => file.RelativePath)
-                    .Order(StringComparer.Ordinal));
+            Assert.Collection(
+                migrationFiles.OrderBy(file => file.RelativePath, StringComparer.Ordinal),
+                skillFile =>
+                {
+                    Assert.Equal("SKILL.md", skillFile.RelativePath);
+                    Assert.Contains("# Aspire Project v2 migration", skillFile.Content, StringComparison.Ordinal);
+                },
+                compatibilityReference =>
+                {
+                    Assert.Equal(Path.Combine("references", "compatibility-and-validation.md"), compatibilityReference.RelativePath);
+                    Assert.Contains("# Project v2 compatibility and validation", compatibilityReference.Content, StringComparison.Ordinal);
+                },
+                migrationPatternsReference =>
+                {
+                    Assert.Equal(Path.Combine("references", "migration-patterns.md"), migrationPatternsReference.RelativePath);
+                    Assert.Contains("# Project v2 migration patterns", migrationPatternsReference.Content, StringComparison.Ordinal);
+                });
         }
         finally
         {
