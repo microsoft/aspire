@@ -2337,14 +2337,19 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(endpoint);
         ArgumentNullException.ThrowIfNull(callback);
 
+        var resourceComparer = new ResourceNameComparer();
+
         return builder.WithUrls(context =>
         {
             if (endpoint.Exists)
             {
-                var url = context.Urls.FirstOrDefault(u => ReferenceEquals(u.Endpoint?.Resource, endpoint.Resource) && u.Endpoint?.EndpointName == endpoint.EndpointName);
+                var url = context.Urls.FirstOrDefault(u =>
+                    u.Endpoint is { } urlEndpoint &&
+                    resourceComparer.Equals(urlEndpoint.Resource, endpoint.Resource) &&
+                    string.Equals(urlEndpoint.EndpointName, endpoint.EndpointName, StringComparisons.EndpointAnnotationName));
                 if (url is null)
                 {
-                    if (ReferenceEquals(builder.Resource, endpoint.Resource))
+                    if (resourceComparer.Equals(builder.Resource, endpoint.Resource))
                     {
                         context.Logger.LogWarning("Could not execute callback to customize endpoint URL as no URL for endpoint '{EndpointName}' could be found on resource '{ResourceName}'.", endpoint.EndpointName, builder.Resource.Name);
                         return;
