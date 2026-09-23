@@ -20,9 +20,10 @@ public partial class TerminalHostSignalTests
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "This test sends a Unix SIGTERM directly.");
 
-        var socketDirectory = Directory.CreateTempSubdirectory("ath-");
+        var root = Directory.CreateTempSubdirectory();
         try
         {
+            var socketDirectory = Directory.CreateDirectory(Path.Combine(root.FullName, ".aspire", "trmnl"));
             var producerPath = Path.Combine(socketDirectory.FullName, "p.sock");
             var consumerPath = Path.Combine(socketDirectory.FullName, "h.sock");
             var controlPath = Path.Combine(socketDirectory.FullName, "c.sock");
@@ -51,7 +52,7 @@ public partial class TerminalHostSignalTests
                 {
                     Assert.Fail(
                         $"aspire-managed exited before binding its sockets with code {process.ExitCode}.{Environment.NewLine}" +
-                        await standardErrorTask);
+                        $"stdout: {await standardOutputTask}{Environment.NewLine}stderr: {await standardErrorTask}");
                 }
 
                 await readyTask;
@@ -78,7 +79,7 @@ public partial class TerminalHostSignalTests
         }
         finally
         {
-            Directory.Delete(socketDirectory.FullName, recursive: true);
+            root.Delete(recursive: true);
         }
     }
 
@@ -93,9 +94,10 @@ public partial class TerminalHostSignalTests
 
     private static async Task AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(string? hostAssemblyPath)
     {
-        var socketDirectory = Directory.CreateTempSubdirectory("ath-");
+        var root = Directory.CreateTempSubdirectory();
         try
         {
+            var socketDirectory = Directory.CreateDirectory(Path.Combine(root.FullName, ".aspire", "trmnl"));
             var parentProducerPath = Path.Combine(socketDirectory.FullName, "pp.sock");
             var parentConsumerPath = Path.Combine(socketDirectory.FullName, "ph.sock");
             var parentControlPath = Path.Combine(socketDirectory.FullName, "pc.sock");
@@ -118,7 +120,7 @@ public partial class TerminalHostSignalTests
                 {
                     Assert.Fail(
                         $"The parent terminal host exited before binding its sockets with code {parentProcess.ExitCode}.{Environment.NewLine}" +
-                        await parentStandardErrorTask);
+                        $"stdout: {await parentStandardOutputTask}{Environment.NewLine}stderr: {await parentStandardErrorTask}");
                 }
 
                 await parentReadyTask;
@@ -148,7 +150,7 @@ public partial class TerminalHostSignalTests
                     {
                         Assert.Fail(
                             $"The terminal host exited before binding its sockets with code {process.ExitCode}.{Environment.NewLine}" +
-                            await standardErrorTask);
+                            $"stdout: {await standardOutputTask}{Environment.NewLine}stderr: {await standardErrorTask}");
                     }
 
                     await readyTask;
@@ -188,7 +190,7 @@ public partial class TerminalHostSignalTests
         }
         finally
         {
-            Directory.Delete(socketDirectory.FullName, recursive: true);
+            root.Delete(recursive: true);
         }
     }
 
