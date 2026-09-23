@@ -246,9 +246,11 @@ The Aspire overlay does not copy credentials from NuGet credential sections or p
 
 Credential-bearing URLs supplied through `--source` are rejected before source-scoped discovery or restore, including package-version lookup. Credential-bearing sources inherited from ambient NuGet configuration remain available through NuGet's native hierarchy, as do credential-bearing configured channel sources.
 
-Both restore paths suppress direct process logging when participating sources contain credential material and sanitize captured diagnostics through exact-value replacement. Complete HTTP or HTTPS values have user information, query strings, and fragments removed. Malformed HTTP-shaped values fail closed when their exact configured spelling appears in captured output.
+Package-only restores suppress direct process logging when participating sources contain credential material and sanitize captured diagnostics through exact-value replacement. Complete HTTP or HTTPS values have user information, query strings, and fragments removed. Malformed HTTP-shaped values fail closed when their exact configured spelling appears in captured output.
 
 NuGet-generated restore artifacts are not scrubbed or separately isolated by Aspire. Files such as `project.assets.json`, dependency graph specifications, and `.nupkg.metadata` can retain configured source URLs, including inline URL credentials. Authentication should therefore use NuGet credential mechanisms rather than embedding credentials in source URLs.
+
+Generated SDK builds suppress raw process logging. If a build fails, the CLI reads the generated dependency graph specification, collects credential-bearing package sources from every evaluated project, and exact-redacts those sources before returning or logging the captured diagnostics. If that graph is unavailable or malformed, the CLI omits the raw diagnostics and returns only the safe build-failure summary.
 
 ## Cache identity
 

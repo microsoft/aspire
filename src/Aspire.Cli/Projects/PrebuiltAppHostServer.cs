@@ -6,6 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -406,8 +407,6 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         string? globalPackagesFolder,
         string integrationHostingVersion,
         string? integrationPackageSources,
-        bool suppressLogging,
-        IReadOnlyList<string> sensitiveSources,
         CancellationToken cancellationToken)
     {
         var buildOutput = new OutputCollector();
@@ -431,21 +430,125 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             noRestore,
             new ProcessInvocationOptions
             {
-                StandardOutputCallback = line =>
-                    buildOutput.AppendOutput(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
-                StandardErrorCallback = line =>
-                    buildOutput.AppendError(PackageSourceRedactor.RedactOccurrences(line, sensitiveSources)),
+                StandardOutputCallback = buildOutput.AppendOutput,
+                StandardErrorCallback = buildOutput.AppendError,
                 EnvironmentVariableFilter = name =>
                     string.Equals(name, IntegrationHostingVersionPropertyName, StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(name, IntegrationPackageSourcesPropertyName, StringComparison.OrdinalIgnoreCase) ||
                     (globalPackagesFolder is not null &&
                         string.Equals(name, CliPathHelper.NuGetPackagesEnvironmentVariable, StringComparison.OrdinalIgnoreCase)),
                 EnvironmentVariables = environmentVariables,
-                SuppressLogging = suppressLogging
+                // Referenced projects can discover credential-bearing sources that are not known until
+                // NuGet evaluates the complete restore graph. Buffer the process output without logging
+                // it so failures can be redacted against that evaluated graph before diagnostics escape.
+                SuppressLogging = true
             },
             cancellationToken).ConfigureAwait(false);
 
         return (exitCode, buildOutput);
+    }
+
+    private async Task<OutputCollector> RedactIntegrationBuildFailureOutputAsync(
+        string projectFilePath,
+        string intermediateOutputPath,
+        OutputCollector rawOutput,
+        IReadOnlyList<string> knownSensitiveSources,
+        string failureMessage,
+        CancellationToken cancellationToken)
+    {
+        var dependencyGraphSpecPath = Path.Combine(
+            intermediateOutputPath,
+            $"{Path.GetFileName(projectFilePath)}.nuget.dgspec.json");
+        var evaluatedSources = await TryReadDependencyGraphSourcesAsync(
+            dependencyGraphSpecPath,
+            cancellationToken).ConfigureAwait(false);
+
+        if (evaluatedSources is null)
+        {
+            var safeOutput = new OutputCollector();
+            safeOutput.AppendError(failureMessage);
+            return safeOutput;
+        }
+
+        var sensitiveSources = knownSensitiveSources
+            .Concat(evaluatedSources.Where(PackageSourceOverrideMappings.HasCredentialMaterial))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var redactedOutput = new OutputCollector();
+
+        foreach (var (stream, line) in rawOutput.GetLines())
+        {
+            var redactedLine = PackageSourceRedactor.RedactOccurrences(line, sensitiveSources);
+            if (stream == OutputLineStream.StdOut)
+            {
+                redactedOutput.AppendOutput(redactedLine);
+                _logger.LogTrace("Build output: {Output}", redactedLine);
+            }
+            else
+            {
+                redactedOutput.AppendError(redactedLine);
+                _logger.LogTrace("Build error: {Error}", redactedLine);
+            }
+        }
+
+        return redactedOutput;
+    }
+
+    private async Task<IReadOnlyList<string>?> TryReadDependencyGraphSourcesAsync(
+        string dependencyGraphSpecPath,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var stream = File.OpenRead(dependencyGraphSpecPath);
+            using var document = await JsonDocument.ParseAsync(
+                stream,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            // NuGet writes one entry per evaluated project using this shape:
+            //   { "projects": { "<project path>": { "restore": { "sources": { "<source>": {} } } } } }
+            // Source URLs are JSON property names, and transitive project references can contribute
+            // entries that were not discoverable from the generated root project's settings.
+            if (!document.RootElement.TryGetProperty("projects", out var projects) ||
+                projects.ValueKind != JsonValueKind.Object)
+            {
+                _logger.LogDebug(
+                    "Integration restore dependency graph {DependencyGraphSpecPath} did not contain project metadata. Detailed build output will be omitted.",
+                    dependencyGraphSpecPath);
+                return null;
+            }
+
+            var sources = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var project in projects.EnumerateObject())
+            {
+                if (!project.Value.TryGetProperty("restore", out var restore) ||
+                    restore.ValueKind != JsonValueKind.Object ||
+                    !restore.TryGetProperty("sources", out var projectSources) ||
+                    projectSources.ValueKind != JsonValueKind.Object)
+                {
+                    _logger.LogDebug(
+                        "Integration restore dependency graph {DependencyGraphSpecPath} did not contain source metadata for project {ProjectPath}. Detailed build output will be omitted.",
+                        dependencyGraphSpecPath,
+                        project.Name);
+                    return null;
+                }
+
+                foreach (var source in projectSources.EnumerateObject())
+                {
+                    sources.Add(source.Name);
+                }
+            }
+
+            return sources.ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            _logger.LogDebug(
+                ex,
+                "Integration restore dependency graph {DependencyGraphSpecPath} could not be read. Detailed build output will be omitted.",
+                dependencyGraphSpecPath);
+            return null;
+        }
     }
 
     /// <summary>
@@ -526,15 +629,21 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             restoreConfiguration.GlobalPackagesFolder,
             integrationHostingVersion: sdkVersion,
             integrationPackageSources,
-            suppressLogging: restoreConfiguration.SensitiveSources.Length > 0,
-            restoreConfiguration.SensitiveSources,
             cancellationToken).ConfigureAwait(false);
 
         if (exitCode != 0)
         {
+            var failureMessage = GetIntegrationBuildFailureMessage(buildOutput);
+            buildOutput = await RedactIntegrationBuildFailureOutputAsync(
+                projectFilePath,
+                intermediateOutputPath,
+                buildOutput,
+                restoreConfiguration.SensitiveSources,
+                failureMessage,
+                cancellationToken).ConfigureAwait(false);
             var outputLines = string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line));
             _logger.LogError("Integration project build failed. Output:\n{BuildOutput}", outputLines);
-            throw new AppHostServerPrepareFailedException(GetIntegrationBuildFailureMessage(buildOutput), buildOutput);
+            throw new AppHostServerPrepareFailedException(failureMessage, buildOutput);
         }
 
         var projectRefAssemblyNames = await IntegrationClosureBuilder.ReadProjectRefAssemblyNamesAsync(

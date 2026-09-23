@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -2609,7 +2610,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.Equal([false, false], noRestoreValues);
             Assert.All(processOptions, options =>
             {
-                Assert.False(options.SuppressLogging);
+                Assert.True(options.SuppressLogging);
                 Assert.NotNull(options.EnvironmentVariableFilter);
                 Assert.True(options.EnvironmentVariableFilter(CliPathHelper.NuGetPackagesEnvironmentVariable));
                 Assert.True(options.EnvironmentVariableFilter(PrebuiltAppHostServer.IntegrationHostingVersionPropertyName));
@@ -2772,9 +2773,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         ProcessInvocationOptions? buildOptions = null;
         var dotNetCliRunner = new TestDotNetCliRunner
         {
-            BuildAsyncCallback = (_, _, options, _) =>
+            BuildAsyncCallback = (projectFilePath, _, options, _) =>
             {
                 buildOptions = options;
+                WriteDependencyGraphSpec(projectFilePath, (projectFilePath.FullName, credentialBearingSource));
                 options.StandardErrorCallback?.Invoke(
                     $"NU1301: Unable to load the service index for source {credentialBearingSource}.");
                 return 1;
@@ -3149,11 +3151,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelSource = "https://feed.blob.core.windows.net/packages/index.json?sig=secret-sig";
         var buildCalled = false;
+        ProcessInvocationOptions? buildOptions = null;
         var dotNetCliRunner = new TestDotNetCliRunner
         {
-            BuildAsyncCallback = (_, _, options, _) =>
+            BuildAsyncCallback = (projectFilePath, _, options, _) =>
             {
                 buildCalled = true;
+                buildOptions = options;
+                WriteDependencyGraphSpec(projectFilePath, (projectFilePath.FullName, channelSource));
                 options.StandardErrorCallback?.Invoke(
                     $"NU1301: Unable to load the service index for source {channelSource}.");
                 return 1;
@@ -3188,10 +3193,150 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
             Assert.False(result.Success);
             Assert.True(buildCalled);
+            Assert.NotNull(buildOptions);
+            Assert.True(buildOptions.SuppressLogging);
             Assert.NotNull(result.Output);
             var output = string.Join(Environment.NewLine, result.Output.GetLines().Select(static line => line.Line));
             Assert.Contains("https://feed.blob.core.windows.net/packages/index.json", output);
             Assert.DoesNotContain("secret-sig", output);
+        }
+        finally
+        {
+            server.Dispose();
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithCredentialBearingReferencedProjectSource_RedactsProjectRestoreFailure()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string referencedProjectSource = "https://packages.example.com/v3/index.json?token=child-secret";
+        ProcessInvocationOptions? buildOptions = null;
+        var dotNetCliRunner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (projectFilePath, _, options, _) =>
+            {
+                buildOptions = options;
+                WriteDependencyGraphSpec(
+                    projectFilePath,
+                    (projectFilePath.FullName, PackageSources.NuGetOrg),
+                    ("/path/to/MyIntegration.csproj", referencedProjectSource));
+                options.StandardErrorCallback?.Invoke(
+                    $"NU1301: Unable to load the service index for source {referencedProjectSource}.");
+                return 1;
+            }
+        };
+        var server = CreatePrebuiltAppHostServer(workspace, dotNetCliRunner: dotNetCliRunner);
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0"),
+                    IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
+                ]);
+
+            Assert.False(result.Success);
+            Assert.NotNull(buildOptions);
+            Assert.True(buildOptions.SuppressLogging);
+            Assert.NotNull(result.Output);
+            var output = string.Join(Environment.NewLine, result.Output.GetLines().Select(static line => line.Line));
+            Assert.Contains("https://packages.example.com/v3/index.json", output);
+            Assert.DoesNotContain("child-secret", output);
+        }
+        finally
+        {
+            server.Dispose();
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("{")]
+    public async Task PrepareAsync_WhenDependencyGraphSpecIsUnavailable_OmitsRawProjectRestoreFailure(
+        string? dependencyGraphSpecContent)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string unverifiedSource = "https://packages.example.com/v3/index.json?token=unverified-secret";
+        var dotNetCliRunner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (projectFilePath, _, options, _) =>
+            {
+                if (dependencyGraphSpecContent is not null)
+                {
+                    WriteDependencyGraphSpec(projectFilePath, dependencyGraphSpecContent);
+                }
+                options.StandardErrorCallback?.Invoke(
+                    $"NU1301: Unable to load the service index for source {unverifiedSource}.");
+                return 1;
+            }
+        };
+        var server = CreatePrebuiltAppHostServer(workspace, dotNetCliRunner: dotNetCliRunner);
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0"),
+                    IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
+                ]);
+
+            Assert.False(result.Success);
+            Assert.NotNull(result.Output);
+            Assert.Equal(
+                [(OutputLineStream.StdErr, ErrorStrings.IntegrationBuildFailed)],
+                result.Output.GetLines());
+        }
+        finally
+        {
+            server.Dispose();
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WhenDependencyGraphSpecIsUnavailable_PreservesPackageDowngradeSummary()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dotNetCliRunner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, options, _) =>
+            {
+                options.StandardErrorCallback?.Invoke(
+                    "error NU1605: Warning As Error: Detected package downgrade: Aspire.Hosting");
+                return 1;
+            }
+        };
+        var server = CreatePrebuiltAppHostServer(workspace, dotNetCliRunner: dotNetCliRunner);
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0"),
+                    IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
+                ]);
+
+            Assert.False(result.Success);
+            Assert.NotNull(result.Output);
+            Assert.Equal(
+                [
+                    (
+                        OutputLineStream.StdErr,
+                        string.Format(
+                            CultureInfo.CurrentCulture,
+                            ErrorStrings.IntegrationBuildPackageDowngradeFailed,
+                            VersionHelper.GetDefaultTemplateVersion()))
+                ],
+                result.Output.GetLines());
         }
         finally
         {
@@ -4171,6 +4316,44 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         var document = XDocument.Load(Path.Combine(restoreDirectory.FullName, "Directory.Build.props"));
         return document.Descendants("BaseIntermediateOutputPath").Single().Value;
+    }
+
+    private static void WriteDependencyGraphSpec(
+        FileInfo generatedProjectFile,
+        params (string ProjectPath, string Source)[] projectSources)
+    {
+        var projects = projectSources.ToDictionary(
+            static entry => entry.ProjectPath,
+            static entry => new
+            {
+                restore = new
+                {
+                    sources = new Dictionary<string, object>
+                    {
+                        [entry.Source] = new { }
+                    }
+                }
+            },
+            StringComparer.Ordinal);
+        var intermediateOutputPath = GetIntermediateOutputPath(generatedProjectFile.Directory!);
+        WriteDependencyGraphSpec(generatedProjectFile, JsonSerializer.Serialize(new { projects }), intermediateOutputPath);
+    }
+
+    private static void WriteDependencyGraphSpec(FileInfo generatedProjectFile, string content)
+    {
+        var intermediateOutputPath = GetIntermediateOutputPath(generatedProjectFile.Directory!);
+        WriteDependencyGraphSpec(generatedProjectFile, content, intermediateOutputPath);
+    }
+
+    private static void WriteDependencyGraphSpec(
+        FileInfo generatedProjectFile,
+        string content,
+        string intermediateOutputPath)
+    {
+        Directory.CreateDirectory(intermediateOutputPath);
+        File.WriteAllText(
+            Path.Combine(intermediateOutputPath, $"{generatedProjectFile.Name}.nuget.dgspec.json"),
+            content);
     }
 
     private static void WriteProjectAssetsFile(
