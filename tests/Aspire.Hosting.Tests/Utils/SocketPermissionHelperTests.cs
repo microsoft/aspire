@@ -178,6 +178,160 @@ public sealed class SocketPermissionHelperTests
     }
 
     [Fact]
+    public void CreateDirectory_AllowsLinkedHomeAncestor()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            var target = Directory.CreateDirectory(Path.Combine(root.FullName, "target"));
+            Directory.CreateDirectory(Path.Combine(target.FullName, "home"));
+            var link = Path.Combine(root.FullName, "homes");
+            Directory.CreateSymbolicLink(link, target.FullName);
+            var profile = Path.Combine(link, "home");
+            var path = Path.Combine(profile, ".aspire", "cli", "bch");
+
+            var directory = SocketPermissionHelper.CreateDirectory(
+                path, repairExisting: true, root.FullName, profile, root.FullName);
+
+            Assert.Equal(path, directory.FullName);
+            AssertDirectoryPermissions(Path.Combine(target.FullName, "home", ".aspire", "cli", "bch"));
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void CreateDirectory_AllowsLinkedTrustedBase(bool temporaryBase, bool repairExisting)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            var target = Directory.CreateDirectory(Path.Combine(root.FullName, "target"));
+            var baseMode = File.GetUnixFileMode(target.FullName);
+            var link = Path.Combine(root.FullName, "base");
+            Directory.CreateSymbolicLink(link, target.FullName);
+            var path = Path.Combine(link, ".aspire", "trmnl");
+            var targetDirectory = Path.Combine(target.FullName, ".aspire", "trmnl");
+            if (repairExisting)
+            {
+                MakePermissiveDirectory(targetDirectory);
+            }
+
+            var directory = SocketPermissionHelper.CreateDirectory(
+                path, repairExisting, root.FullName,
+                temporaryBase ? root.FullName : link,
+                temporaryBase ? link : root.FullName);
+
+            Assert.Equal(path, directory.FullName);
+            AssertDirectoryPermissions(targetDirectory);
+            Assert.Equal(baseMode, File.GetUnixFileMode(target.FullName));
+
+            SocketPermissionHelper.CreateDirectory(
+                path, repairExisting: false, root.FullName,
+                temporaryBase ? root.FullName : link,
+                temporaryBase ? link : root.FullName);
+            AssertDirectoryPermissions(targetDirectory);
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(".aspire", false)]
+    [InlineData(".aspire", true)]
+    [InlineData(".aspire/cli", false)]
+    [InlineData(".aspire/cli", true)]
+    [InlineData(".aspire/cli/bch", false)]
+    [InlineData(".aspire/cli/bch", true)]
+    public void CreateDirectory_RejectsLinksBelowLinkedHome(string linkedSuffix, bool repairExisting)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            var home = Directory.CreateDirectory(Path.Combine(root.FullName, "home"));
+            var profile = Path.Combine(root.FullName, "profile");
+            Directory.CreateSymbolicLink(profile, home.FullName);
+            var target = Path.Combine(root.FullName, "target");
+            MakePermissiveDirectory(target);
+            var originalMode = File.GetUnixFileMode(target);
+            var link = Path.Combine(profile, linkedSuffix);
+            Directory.CreateDirectory(Path.GetDirectoryName(link)!);
+            Directory.CreateSymbolicLink(link, target);
+
+            Assert.Throws<IOException>(() => SocketPermissionHelper.CreateDirectory(
+                Path.Combine(profile, ".aspire", "cli", "bch"), repairExisting,
+                root.FullName, profile, root.FullName));
+
+            Assert.Equal(originalMode, File.GetUnixFileMode(target));
+            Assert.Empty(Directory.EnumerateFileSystemEntries(target));
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CreateDirectory_RejectsInvalidLinkedHome(bool fileTarget)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            var target = Path.Combine(root.FullName, "target");
+            if (fileTarget)
+            {
+                File.WriteAllText(target, "not a directory");
+            }
+            var profile = Path.Combine(root.FullName, "profile");
+            Directory.CreateSymbolicLink(profile, target);
+
+            Assert.ThrowsAny<IOException>(() => SocketPermissionHelper.CreateDirectory(
+                Path.Combine(profile, ".aspire", "trmnl"), repairExisting: true,
+                root.FullName, profile, root.FullName));
+
+            Assert.False(Directory.Exists(target));
+            if (fileTarget)
+            {
+                Assert.Equal("not a directory", File.ReadAllText(target));
+            }
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void CreateDirectory_RejectsSymbolicLinkWithoutChangingTarget()
     {
         if (OperatingSystem.IsWindows())
