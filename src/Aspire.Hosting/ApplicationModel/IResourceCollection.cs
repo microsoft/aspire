@@ -8,6 +8,13 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Represents a collection of resources.
 /// </summary>
+/// <remarks>
+/// When a logical resource has a selected projection for the current operation, collection reads expose that
+/// projection as the effective resource while mutations and identity operations continue to address the canonical
+/// owner. Use <see cref="ResourceExtensions.GetResourceOwners(IResourceCollection)"/> for identity-sensitive model
+/// traversal and <see cref="ResourceExtensions.GetEffectiveResources(IResourceCollection)"/> when consuming the
+/// selected runtime or publishing shape explicitly.
+/// </remarks>
 public interface IResourceCollection : IList<IResource>
 {
     /// <summary>
@@ -34,4 +41,3 @@ public interface IResourceCollection : IList<IResource>
         return false;
     }
 }
-

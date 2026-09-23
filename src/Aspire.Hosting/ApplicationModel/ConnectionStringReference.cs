@@ -13,8 +13,12 @@ public enum ConnectionStringReferenceResolution
     PreferEffectiveResource,
 
     /// <summary>
-    /// Prefer the canonical owner and fall back to the effective resource projection.
+    /// Prefer the canonical owner object and fall back to the effective resource projection.
     /// </summary>
+    /// <remarks>
+    /// This selection does not suppress behavior that the owner's connection-string implementation intentionally
+    /// forwards to its projection for compatibility.
+    /// </remarks>
     PreferOwner
 }
 
@@ -69,7 +73,8 @@ public class ConnectionStringReference : IExpressionValue, IManifestExpressionPr
     /// </summary>
     /// <remarks>
     /// Provider selection is performed on each access so projections registered after this reference is created
-    /// are still honored.
+    /// are still honored. Owner preference selects the canonical owner object first, but does not suppress behavior
+    /// that the owner's implementation intentionally forwards to its projection for compatibility.
     /// </remarks>
     public IResourceWithConnectionString Provider =>
         Resource.GetEffectiveCapability<IResourceWithConnectionString>(

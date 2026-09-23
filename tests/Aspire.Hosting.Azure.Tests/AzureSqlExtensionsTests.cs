@@ -220,6 +220,10 @@ public class AzureSqlExtensionsTests
         var sqlResourceInModel = builder.Resources.Single(r => r.Name == "sql");
         var dbResourceInModel = builder.Resources.Single(r => r.Name == "db1");
 
+        Assert.Same(projection, sqlResourceInModel);
+        Assert.Same(projection, Assert.Single(builder.Resources.OfType<SqlServerServerResource>()));
+        Assert.Empty(builder.Resources.OfType<AzureSqlServerResource>());
+        Assert.True(builder.Resources.Contains(sql.Resource));
         Assert.True(sqlResourceInModel.TryGetAnnotationsOfType<Dummy1Annotation>(out var sqlAnnotations1));
         Assert.Single(sqlAnnotations1);
 
@@ -230,8 +234,31 @@ public class AzureSqlExtensionsTests
         Assert.Single(dbAnnotations);
         Assert.Contains(db!.Resource.Annotations, annotation => annotation is HealthCheckAnnotation);
         ProjectionTestHelpers.AssertProjection(sql, Assert.IsType<AzureSqlServerContainerResource>(projection));
-        Assert.Same(db.Resource, dbResourceInModel);
-    }   
+        Assert.IsAssignableFrom<SqlServerDatabaseResource>(dbResourceInModel);
+        Assert.NotSame(db.Resource, dbResourceInModel);
+        Assert.Same(db.Resource, dbResourceInModel.GetOwnerOrSelf());
+        Assert.Same(
+            db.Resource,
+            Assert.Single(builder.Resources.GetResourceOwners(), resource => resource.Name == db.Resource.Name));
+        Assert.Same(
+            dbResourceInModel,
+            Assert.Single(builder.Resources.GetEffectiveResources(), resource => resource.Name == db.Resource.Name));
+    }
+
+    [Fact]
+    public void RunAsContainerInPublishModeKeepsAzureDatabaseAsEffectiveResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var sql = builder.AddAzureSqlServer("sql")
+            .RunAsContainer();
+        var database = sql.AddDatabase("db1");
+
+        Assert.Same(database.Resource, Assert.Single(builder.Resources, resource => resource.Name == "db1"));
+        Assert.Same(
+            database.Resource,
+            Assert.Single(builder.Resources.GetResourceOwners(), resource => resource.Name == "db1"));
+        Assert.Empty(builder.Resources.OfType<SqlServerDatabaseResource>());
+    }
 
     [Fact]
     public async Task RunAsContainerReappliesContainerDefaults()

@@ -199,7 +199,9 @@ public static class AzureSqlExtensions
                     azureResource.SetInnerResource(container.Resource);
                     container.ConfigureSqlServer();
 
-                    foreach (var database in azureResource.AzureSqlDatabases.Values)
+                    foreach (var database in builder.ApplicationBuilder.Resources.GetResourceOwners()
+                        .OfType<AzureSqlDatabaseResource>()
+                        .Where(database => ReferenceEquals(database.Parent, azureResource)))
                     {
                         AttachContainerDatabase(
                             container,
@@ -223,9 +225,14 @@ public static class AzureSqlExtensions
         IResourceBuilder<SqlServerServerResource> container,
         IResourceBuilder<AzureSqlDatabaseResource> database)
     {
-        var innerDatabase = new AzureSqlDatabaseContainerResource(database.Resource, container.Resource);
-        container.Resource.AddDatabase(innerDatabase);
-        database.Resource.SetInnerResource(innerDatabase);
+        database.WithResourceProjection(
+            DistributedApplicationOperation.Run,
+            () => new AzureSqlDatabaseContainerResource(database.Resource, container.Resource),
+            projection =>
+            {
+                container.Resource.AddDatabase(projection.Resource);
+                database.Resource.SetInnerResource(projection.Resource);
+            });
 
         string? connectionString = null;
         var healthCheckKey = $"{database.Resource.Name}_check";

@@ -37,9 +37,17 @@ public partial class AppHostAnalyzer
             return;
         }
 
+        // Projection methods opt in explicitly. Matching every method on the containing type would cause a future
+        // authoring API with different container-owner semantics to start reporting this diagnostic accidentally.
+        if (targetMethod.Name is not (
+            "RunAsContainerImage" or
+            "WithContainerProjection" or
+            "WithResourceProjection"))
+        {
+            return;
+        }
+
         // Every projection method names the owner first, so the owner type is always the first type argument.
-        // This matches on the containing type rather than a list of method names so methods added later are
-        // covered without touching the analyzer.
         if (targetMethod.TypeArguments.Length == 0 ||
             !InheritsFromOrEquals(targetMethod.TypeArguments[0], containerResource))
         {

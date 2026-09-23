@@ -86,7 +86,10 @@ public static partial class SqlServerBuilderExtensions
                     throw new InvalidOperationException($"Could not open connection to '{sqlServer.Name}'");
                 }
 
-                foreach (var sqlDatabase in sqlServer.DatabaseResources)
+                var model = @event.Services.GetRequiredService<DistributedApplicationModel>();
+                foreach (var sqlDatabase in model.Resources
+                    .OfType<SqlServerDatabaseResource>()
+                    .Where(database => ReferenceEquals(database.Parent, sqlServer)))
                 {
                     await CreateDatabaseAsync(sqlConnection, sqlDatabase, @event.Services, ct).ConfigureAwait(false);
                 }

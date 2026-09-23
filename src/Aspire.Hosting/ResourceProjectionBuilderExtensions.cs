@@ -20,6 +20,12 @@ namespace Aspire.Hosting;
 /// comparisons. Casting the projection to <see cref="IResource"/> does not resolve its owner.
 /// Typed resource-event callbacks registered through the projection also retain that typed view.
 /// </para>
+/// <para>
+/// The owner and projection share one live annotation collection. Configuration written through either view is
+/// therefore visible through the other; a projection is an active configuration view rather than an isolated
+/// snapshot. Projecting a parent does not automatically project its children. Integrations whose local shape uses
+/// different child resource types must register those child projections explicitly.
+/// </para>
 /// </remarks>
 public static class ResourceProjectionBuilderExtensions
 {
@@ -182,8 +188,17 @@ public static class ResourceProjectionBuilderExtensions
     /// <param name="configure">Configuration applied to the effective resource view.</param>
     /// <returns>The <paramref name="builder"/>, so the owner keeps its original type.</returns>
     /// <remarks>
+    /// <para>
     /// The projection is not added as another logical model member. The resource collection retains the owner
     /// as canonical identity while exposing the projection for effective resource discovery in the selected operation.
+    /// The owner and projection share live annotations, so configuration applied through either view affects both.
+    /// </para>
+    /// <para>
+    /// This method provides projection selection, identity, collection, and capability-resolution behavior. It does
+    /// not make every resource type realizable by every runtime or publisher. The integration must select a projection
+    /// type supported by the consumers involved in that operation and must register projections for child resources
+    /// whose effective types also change.
+    /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when any required argument is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">

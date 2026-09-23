@@ -127,7 +127,6 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
     }
 
     private readonly Dictionary<string, string> _databases = new(StringComparers.ResourceName);
-    private readonly List<SqlServerDatabaseResource> _databaseResources = [];
 
     /// <summary>
     /// A dictionary where the key is the resource name and the value is the database name.
@@ -144,10 +143,7 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
     internal void AddDatabase(SqlServerDatabaseResource database)
     {
         _databases.TryAdd(database.Name, database.DatabaseName);
-        _databaseResources.Add(database);
     }
-
-    internal IReadOnlyList<SqlServerDatabaseResource> DatabaseResources => _databaseResources;
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {

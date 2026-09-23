@@ -95,4 +95,51 @@ public class ContainerResourceProjectionAnalyzerTests
 
         await test.RunAsync();
     }
+
+    [Fact]
+    public async Task FutureProjectionMethodDoesNotImplicitlyReportDiagnostic()
+    {
+        var test = AnalyzerTest.Create<AppHostAnalyzer>("""
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var container = new ResourceBuilder<ContainerResource>();
+            container.FutureProjection();
+
+            namespace Aspire.Hosting.ApplicationModel
+            {
+                public interface IResource
+                {
+                }
+
+                public class ContainerResource : IResource
+                {
+                }
+
+                public interface IResourceBuilder<T>
+                    where T : IResource
+                {
+                }
+
+                public sealed class ResourceBuilder<T> : IResourceBuilder<T>
+                    where T : IResource
+                {
+                }
+            }
+
+            namespace Aspire.Hosting
+            {
+                public static class ResourceProjectionBuilderExtensions
+                {
+                    public static IResourceBuilder<T> FutureProjection<T>(this IResourceBuilder<T> builder)
+                        where T : IResource
+                        => builder;
+                }
+            }
+            """,
+            [],
+            includeAspireHostingReference: false);
+
+        await test.RunAsync();
+    }
 }

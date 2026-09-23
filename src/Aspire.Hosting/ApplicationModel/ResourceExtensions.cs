@@ -84,9 +84,17 @@ public static class ResourceExtensions
     /// or <see langword="null"/> when neither view implements it.
     /// </returns>
     /// <remarks>
+    /// <para>
     /// Resource projections can provide behavior that differs from their canonical owner. Use this method when
-    /// consuming a capability so that a selected projection can supply the effective behavior. Use
-    /// <paramref name="preferOwner"/> only when the owner's implementation should take precedence.
+    /// consuming a capability so that a selected projection can supply the effective behavior. Capability selection
+    /// occurs immediately; a projection registered after this method returns does not change the returned object.
+    /// Use <see cref="GetValueProvider{TCapability}(IResource, bool)"/> when selection must occur when a value is
+    /// evaluated instead.
+    /// </para>
+    /// <para>
+    /// <paramref name="preferOwner"/> selects the canonical owner object first. It does not suppress behavior that
+    /// the owner's implementation intentionally forwards to its projection for compatibility.
+    /// </para>
     /// </remarks>
     /// <example>
     /// Resolve a connection-string provider while allowing a selected projection to override the owner:
@@ -121,8 +129,14 @@ public static class ResourceExtensions
     /// </param>
     /// <returns>A value provider that selects the capability provider when the value is evaluated.</returns>
     /// <remarks>
+    /// <para>
     /// The returned provider performs selection lazily so projections registered after this method is called are honored.
     /// The non-preferred resource view remains a fallback.
+    /// </para>
+    /// <para>
+    /// <paramref name="preferOwner"/> selects the canonical owner object first. It does not suppress behavior that
+    /// the owner's implementation intentionally forwards to its projection for compatibility.
+    /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="resource"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
@@ -147,8 +161,19 @@ public static class ResourceExtensions
     /// </param>
     /// <returns>The resolved connection-string expression.</returns>
     /// <remarks>
+    /// <para>
     /// The non-preferred resource view remains a fallback. Directly accessing
     /// <see cref="IResourceWithConnectionString.ConnectionStringExpression"/> can bypass a selected projection.
+    /// </para>
+    /// <para>
+    /// Selection occurs immediately and the returned expression is not replaced if a projection is registered later.
+    /// Use <see cref="GetValueProvider{TCapability}(IResource, bool)"/> or
+    /// <see cref="ConnectionStringReference"/> when provider selection must occur during value evaluation.
+    /// </para>
+    /// <para>
+    /// <paramref name="preferOwner"/> selects the canonical owner object first. It does not suppress behavior that
+    /// the owner's implementation intentionally forwards to its projection for compatibility.
+    /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="resource"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
