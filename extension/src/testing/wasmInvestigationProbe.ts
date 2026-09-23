@@ -19,15 +19,33 @@ export function installWasmInvestigationProbe(logDirectory: string): vscode.Disp
         }, (key, value) => /env|token|password|secret|authorization/i.test(key) ? '<redacted>' : value)}\n`);
     };
     const lifecycleCommands = new Set(['initialize', 'launch', 'attach', 'configurationDone', 'disconnect', 'terminate']);
-    const lifecycleEvents = new Set(['initialized', 'process', 'exited', 'terminated', 'thread']);
+    const lifecycleEvents = new Set(['initialized', 'process', 'exited', 'terminated', 'thread', 'stopped', 'continued']);
     record('probe-installed', undefined, { platform: process.platform, architecture: process.arch, vscode: vscode.version });
 
     return vscode.Disposable.from(
         vscode.debug.registerDebugConfigurationProvider('*', {
             resolveDebugConfigurationWithSubstitutedVariables(_folder, configuration) {
                 if (configuration.type === 'monovsdbg_wasm') {
-                    configuration.logging = { ...configuration.logging, engineLogging: true };
-                    record('native-logging-enabled', undefined, { type: configuration.type });
+                    // The pinned adapter deprecates engineLogging in favor of diagnosticsLog.
+                    // Keep full DAP payload logging off: the field-selected tracker below already
+                    // captures teardown requests without printing launch environments.
+                    configuration.logging = {
+                        ...configuration.logging,
+                        engineLogging: false,
+                        diagnosticsLog: {
+                            ...configuration.logging?.diagnosticsLog,
+                            protocolMessages: false,
+                            dispatcherMessages: 'normal',
+                            debugEngineAPITracing: 'all',
+                            debugRuntimeEventTracing: true,
+                            expressionEvaluationTracing: false,
+                            startDebuggingTracing: true,
+                        },
+                    };
+                    record('native-logging-enabled', undefined, {
+                        type: configuration.type,
+                        diagnosticsLog: configuration.logging.diagnosticsLog,
+                    });
                 }
                 return configuration;
             },
@@ -52,6 +70,7 @@ export function installWasmInvestigationProbe(logDirectory: string): vscode.Disp
                                     : {
                                         program: message.arguments?.program,
                                         monoDebuggerOptions: message.arguments?.monoDebuggerOptions,
+                                        diagnosticsLog: message.arguments?.logging?.diagnosticsLog,
                                     },
                             });
                         }
