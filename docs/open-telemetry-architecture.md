@@ -55,6 +55,12 @@ Aspire deployment environments should configure OTEL environment variables that 
 
 Aspire telemetry works best in environments that support OTLP. OTLP exporting is disabled if `OTEL_EXPORTER_OTLP_ENDPOINT` isn't configured.
 
+### OpenTelemetry upgrade limits
+
+OpenTelemetry 1.18 reduces the default maximum serialized OTLP request from 128 MiB to 64 MiB. A batch exceeding that limit is dropped. Applications that need the previous capacity can configure `OtlpExporterOptions.MaxRequestSizeBytes` to `128 * 1024 * 1024`. The default maximum OTLP response is now 4 MiB; oversized responses are treated as non-retryable failures.
+
+Newly generated ServiceDefaults projects use the updated package versions. Existing generated projects retain their package references until explicitly updated.
+
 ## Non-.NET apps
 
 OTEL isn't limited to .NET projects. Apps and containers that include OTEL can be passed environment variables to configure exporting telemetry. For example, the dapr sidecar (written in golang) includes OTEL and standard OTEL environment variables can be used to enable telemetry.
