@@ -1,9 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO.Hashing;
+using System.Text;
 using Aspire.Hosting.Dcp.Process;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -15,13 +17,18 @@ internal interface IDotnetSdkVersionProvider
 {
     Task<SemVersion?> TryGetVersionAsync(string? workingDirectory, CancellationToken cancellationToken);
 
-    Task<bool> SupportsMultiThreadedBuildAsync(string? workingDirectory, CancellationToken cancellationToken);
+    Task<bool> SupportsMultiThreadedBuildAsync(
+        string? workingDirectory,
+        IReadOnlyDictionary<string, string> environmentVariables,
+        CancellationToken cancellationToken);
 }
 
 internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
 {
     private const string DefaultSdkContext = "<default>";
     private static readonly TimeSpan s_probeTimeout = TimeSpan.FromSeconds(5);
+    private static readonly IReadOnlyDictionary<string, string> s_emptyEnvironment =
+        new Dictionary<string, string>();
     private static readonly Dictionary<string, string> s_dotnetCliEnvironment = new()
     {
         ["DOTNET_NOLOGO"] = "true",
@@ -59,12 +66,27 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
         string? workingDirectory,
         CancellationToken cancellationToken)
     {
+        return await TryGetVersionAsync(
+            workingDirectory,
+            s_emptyEnvironment,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<SemVersion?> TryGetVersionAsync(
+        string? workingDirectory,
+        IReadOnlyDictionary<string, string> environmentVariables,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(environmentVariables);
+
         string normalizedWorkingDirectory;
         string sdkContext;
+        Dictionary<string, string> probeEnvironment;
         try
         {
             normalizedWorkingDirectory = Path.GetFullPath(workingDirectory ?? Environment.CurrentDirectory);
-            sdkContext = GetSdkContext(normalizedWorkingDirectory);
+            probeEnvironment = CreateProbeEnvironment(environmentVariables);
+            sdkContext = GetSdkContext(normalizedWorkingDirectory, probeEnvironment);
         }
         catch (Exception ex)
         {
@@ -74,26 +96,35 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
 
         var versionTask = _versionsBySdkContext.GetOrAdd(
             sdkContext,
-            _ => CreateVersionTask(sdkContext, normalizedWorkingDirectory));
+            _ => CreateVersionTask(sdkContext, normalizedWorkingDirectory, probeEnvironment));
 
         return await versionTask.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<bool> SupportsMultiThreadedBuildAsync(
         string? workingDirectory,
+        IReadOnlyDictionary<string, string> environmentVariables,
         CancellationToken cancellationToken)
     {
-        var version = await TryGetVersionAsync(workingDirectory, cancellationToken).ConfigureAwait(false);
+        var version = await TryGetVersionAsync(
+            workingDirectory,
+            environmentVariables,
+            cancellationToken).ConfigureAwait(false);
         return DotnetSdkUtils.SupportsMultiThreadedBuild(version);
     }
 
-    private Lazy<Task<SemVersion?>> CreateVersionTask(string sdkContext, string workingDirectory)
+    private Lazy<Task<SemVersion?>> CreateVersionTask(
+        string sdkContext,
+        string workingDirectory,
+        IReadOnlyDictionary<string, string> probeEnvironment)
     {
         Lazy<Task<SemVersion?>>? versionTask = null;
         versionTask = new Lazy<Task<SemVersion?>>(
             async () =>
             {
-                var version = await ProbeVersionAsync(workingDirectory).ConfigureAwait(false);
+                var version = await ProbeVersionAsync(
+                    workingDirectory,
+                    probeEnvironment).ConfigureAwait(false);
                 if (version is null)
                 {
                     // A later build may run after the SDK installation or global.json issue has been corrected.
@@ -106,20 +137,80 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
         return versionTask;
     }
 
-    private static string GetSdkContext(string workingDirectory)
+    private static string GetSdkContext(
+        string workingDirectory,
+        IReadOnlyDictionary<string, string> environmentVariables)
     {
-        if (DotnetSdkUtils.FindNearestGlobalJson(workingDirectory) is not { } globalJsonPath)
+        var globalJsonContext = DefaultSdkContext;
+        if (DotnetSdkUtils.FindNearestGlobalJson(workingDirectory) is { } globalJsonPath)
         {
-            return DefaultSdkContext;
+            // SDK selection depends on global.json contents, so include a cheap content fingerprint. This preserves
+            // probe reuse while allowing rebuilds to observe SDK changes without restarting the AppHost.
+            var hash = XxHash3.HashToUInt64(File.ReadAllBytes(globalJsonPath));
+            globalJsonContext =
+                $"{globalJsonPath}\0{hash.ToString("X16", CultureInfo.InvariantCulture)}";
         }
 
-        // SDK selection depends on global.json contents, so include a cheap content fingerprint. This preserves
-        // probe reuse while allowing rebuilds to observe SDK changes without restarting the AppHost.
-        var hash = XxHash3.HashToUInt64(File.ReadAllBytes(globalJsonPath));
-        return $"{globalJsonPath}\0{hash.ToString("X16", CultureInfo.InvariantCulture)}";
+        return $"{globalJsonContext}\0{GetEnvironmentFingerprint(environmentVariables)}";
     }
 
-    private async Task<SemVersion?> ProbeVersionAsync(string workingDirectory)
+    private static Dictionary<string, string> CreateProbeEnvironment(
+        IReadOnlyDictionary<string, string> environmentVariables)
+    {
+        var comparer = OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+        var probeEnvironment = new Dictionary<string, string>(
+            environmentVariables.Count + s_dotnetCliEnvironment.Count,
+            comparer);
+
+        foreach (var (name, value) in environmentVariables)
+        {
+            probeEnvironment[name] = value;
+        }
+
+        foreach (var (name, value) in s_dotnetCliEnvironment)
+        {
+            probeEnvironment.TryAdd(name, value);
+        }
+
+        return probeEnvironment;
+    }
+
+    private static string GetEnvironmentFingerprint(
+        IReadOnlyDictionary<string, string> environmentVariables)
+    {
+        var comparer = OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+        var hash = new XxHash3();
+
+        // Build environments can alter executable and SDK selection in ways that evolve with the .NET host.
+        // Hash the complete override set instead of maintaining a brittle allowlist. The fingerprint is used
+        // only as an in-memory cache key and is never logged.
+        foreach (var (name, value) in environmentVariables
+            .OrderBy(static variable => variable.Key, comparer)
+            .ThenBy(static variable => variable.Key, StringComparer.Ordinal))
+        {
+            AppendHashValue(hash, name);
+            AppendHashValue(hash, value);
+        }
+
+        return Convert.ToHexString(hash.GetCurrentHash());
+
+        static void AppendHashValue(XxHash3 hash, string value)
+        {
+            var bytes = Encoding.UTF8.GetBytes(value);
+            Span<byte> lengthBytes = stackalloc byte[sizeof(int)];
+            BinaryPrimitives.WriteInt32LittleEndian(lengthBytes, bytes.Length);
+            hash.Append(lengthBytes);
+            hash.Append(bytes);
+        }
+    }
+
+    private async Task<SemVersion?> ProbeVersionAsync(
+        string workingDirectory,
+        IReadOnlyDictionary<string, string> probeEnvironment)
     {
         try
         {
@@ -127,7 +218,7 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
             {
                 WorkingDirectory = workingDirectory,
                 ArgumentList = ["--version"],
-                EnvironmentVariables = s_dotnetCliEnvironment,
+                EnvironmentVariables = new Dictionary<string, string>(probeEnvironment),
                 ResolveExecutablePath = true,
                 RetainedOutputLineCount = 16,
                 ThrowOnNonZeroReturnCode = false,
