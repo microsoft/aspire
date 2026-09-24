@@ -98,16 +98,24 @@ export function getParentResourceName(resource: ResourceJson): string | null {
 }
 
 export function getResourceSourcePath(resource: ResourceJson, appHostPath?: string): string | undefined {
-    const source = resource.source?.trim();
-    if (!source) {
-        return undefined;
-    }
+    const sourceValues = [
+        resource.properties?.['project.path'],
+        resource.properties?.['executable.path'],
+        resource.properties?.['resource.source'],
+        resource.source,
+    ];
+    const candidates = sourceValues.flatMap(source => {
+        const trimmedSource = source?.trim();
+        if (!trimmedSource) {
+            return [];
+        }
 
-    const candidates = path.isAbsolute(source)
-        ? [source]
-        : appHostPath
-            ? [path.resolve(path.dirname(appHostPath), source)]
-            : [];
+        return path.isAbsolute(trimmedSource)
+            ? [trimmedSource]
+            : appHostPath
+                ? [path.resolve(path.dirname(appHostPath), trimmedSource)]
+                : [];
+    });
 
     return candidates.find(candidate => fs.existsSync(candidate));
 }

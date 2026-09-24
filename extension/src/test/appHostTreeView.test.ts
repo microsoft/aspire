@@ -1782,6 +1782,14 @@ suite('getResourceContextValue', () => {
         assert.strictEqual(result, 'resource:canOpenSource');
     });
 
+    test('resource source falls back to the path-bearing project property', () => {
+        const result = getResourceContextValue(makeResource({
+            source: path.basename(__filename),
+            properties: { 'project.path': __filename },
+        }));
+        assert.strictEqual(result, 'resource:canOpenSource');
+    });
+
     test('resource with an unavailable source path does not include source context', () => {
         const result = getResourceContextValue(makeResource({ source: path.join(os.tmpdir(), 'missing-resource-source') }));
         assert.strictEqual(result, 'resource');
