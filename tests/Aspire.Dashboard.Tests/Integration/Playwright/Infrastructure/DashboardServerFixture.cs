@@ -16,6 +16,10 @@ namespace Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 
 public class DashboardServerFixture : IAsyncLifetime
 {
+    // Keep tests sharing this fixture sequential through browser-context disposal so a previous
+    // Blazor circuit cannot continue using fixture services after the next test starts.
+    internal SemaphoreSlim TestGate { get; } = new(1, 1);
+
     public Dictionary<string, string?> Configuration { get; }
 
     public DashboardWebApplication DashboardApp { get; private set; } = null!;
@@ -132,7 +136,7 @@ public class DashboardServerFixture : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        await DashboardApp.DisposeAsync();
         await PlaywrightFixture.DisposeAsync();
+        await DashboardApp.DisposeAsync();
     }
 }

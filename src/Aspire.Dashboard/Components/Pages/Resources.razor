@@ -310,21 +310,19 @@
 
             <FluentButton id="resourceFilterButton"
                           Class="toolbar-button"
+                          Style="anchor-name: --resource-filter-button"
                           Appearance="@(NoFiltersSet ? ButtonAppearance.Default : ButtonAppearance.Primary)"
                           IconEnd="@(new Icons.Regular.Size20.Filter())"
                           @onclick="() => _isFilterPopupVisible = !_isFilterPopupVisible"
                           Title="@(NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)])"
                           aria-label="@(NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)])" />
 
-            @if (HasViewOptionsMenu())
-            {
-                <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
-                                  ButtonClass="toolbar-button"
-                                  Icon="@(new Icons.Regular.Size20.Options())"
-                                  ItemsProvider="@(() => _resourcesMenuItems)"
-                                  RestoreFocusOnItemClick="true"
-                                  Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)]" />
-            }
+            <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
+                              ButtonClass="toolbar-button"
+                              Icon="@(new Icons.Regular.Size20.Options())"
+                              ItemsProvider="@(() => _resourcesMenuItems)"
+                              RestoreFocusOnItemClick="true"
+                              Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)]" />
         </div>;
     }
 }

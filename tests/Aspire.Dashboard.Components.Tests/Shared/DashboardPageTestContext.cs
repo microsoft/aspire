@@ -8,7 +8,7 @@ using Microsoft.JSInterop;
 using System.Reflection;
 
 namespace Aspire.Dashboard.Components.Tests.Shared;
-public abstract class DashboardTestContext : TestContext
+public abstract class DashboardTestContext : BunitContext
 {
     private const string VirtualizeJsFunctionsPrefix = "Blazor._internal.Virtualize.";
 
