@@ -1124,20 +1124,6 @@ public static class AzureContainerAppExtensions
         bool useUniqueResourceNaming,
         ContainerAppsPipelineStepMarker marker) : DynamicResourceNamePropertyResolver
     {
-        // Azure Container Apps managed environment names allow lowercase letters, digits, and hyphens and are
-        // 2-60 characters long. These are the managed-environment limits, not the 2-32 character container-app
-        // limits:
-        // https://azure.github.io/PSRule.Rules.Azure/en/rules/Azure.ContainerApp.EnvNaming/
-        //
-        // Azure.Provisioning.AppContainers 1.2.0 inherited the conservative default of
-        // (1, 24, LowercaseLetters). That default silently drops the digits Aspire relies on to keep sibling
-        // environment names distinct, so "cae1"/"cae2" both sanitize to "cae" and collide in a shared resource
-        // group (https://github.com/microsoft/aspire/issues/18722).
-        private static readonly ResourceNameRequirements s_requirements = new(
-            minLength: 2,
-            maxLength: 60,
-            validCharacters: ResourceNameCharacters.LowercaseLetters | ResourceNameCharacters.Numbers | ResourceNameCharacters.Hyphen);
-
         // Preserve existing deployment names even when the SDK changes its default naming requirements.
         private static readonly ResourceNameRequirements s_legacyRequirements = new(
             minLength: 1,
@@ -1157,14 +1143,14 @@ public static class AzureContainerAppExtensions
                 return null;
             }
 
-            // Delegate to the standard dynamic naming algorithm. The opt-in substitutes the requirements that
-            // Azure.Provisioning failed to declare; otherwise the legacy requirements preserve the output
+            // Delegate to the standard dynamic naming algorithm. The opt-in uses the SDK's corrected
+            // requirements; otherwise the legacy requirements preserve the output
             // byte-for-byte. Recording the returned expression here means caller-configured resolvers still take
             // precedence and only names produced by this fallback participate in collision validation.
             var resolvedName = base.ResolveName(
                 options,
                 resource,
-                useUniqueResourceNaming ? s_requirements : s_legacyRequirements);
+                useUniqueResourceNaming ? requirements : s_legacyRequirements);
 
             if (resolvedName is not null)
             {
