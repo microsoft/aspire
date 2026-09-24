@@ -1,0 +1,65 @@
+{
+  "run_id": 35989254580,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/35989254580",
+  "run_scope": "main",
+  "analyzed_at": "2026-09-24T11:48:03Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20330,
+    "title": "Set local socket directory and endpoint permissions consistently",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-backchannel-socket-permissions",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20330",
+    "merged_at": "2026-09-24T10:47:20Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "d1d373193cfacd4638a68944ea49ff37cecdf798",
+    "failed_sha": "c1c5a54a50312545eae117818881105d42f8b443",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "c1c5a54a50312545eae117818881105d42f8b443",
+        "message": "Set local socket directory and endpoint permissions consistently (#20330) ## Description Use a shared helper to set directory permissions before binding backchannel, DCP, and terminal sockets, and endpoint permissions before listening. Configure the Hex1b PTY socket directory through its existing environment variable. Adds platform-specific coverage and documentation. Windows runtime validation and replacing the Hex1b environment-variable workaround remain follow-ups. Fixes # (issue) ## Checklis",
+        "html_url": "https://github.com/microsoft/aspire/commit/c1c5a54a50312545eae117818881105d42f8b443",
+        "pull_request": {
+          "number": 20330,
+          "title": "Set local socket directory and endpoint permissions consistently",
+          "url": "https://github.com/microsoft/aspire/pull/20330",
+          "merged_at": "2026-09-24T10:47:20Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 107605129781,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/35989254580/job/107605129781",
+      "classification": "flaky-test",
+      "reason": "The 'Run extension E2E tests' step failed on a single structured test failure: 'Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone' timed out after 295065ms waiting for the pwa-msedge child debug session, preceded by repeated 'Browser connection failed, will retry: Unable to attach to browser' messages. This matches a known recurring flaky test with the same test name, job, and error pattern, unrelated to the merged socket-permissions PR.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "error": "Failed to apply E2E control revision 1790248273683: Error: Timed out after 295065ms waiting for pwa-msedge child session for Blazor WASM root '09fa4c47-eebe-4ee0-9b9d-dd41381b80ed'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"40f0ebb9-aace-4f87-a62c-2cef848c315b\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-VnZklj\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":60983,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-VnZklj\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-VnZklj\\\\workspace\\\\StandaloneClient\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmi",
+      "stack_trace": "Error: Failed to apply E2E control revision 1790248273683: Error: Timed out after 295065ms waiting for pwa-msedge child session for Blazor WASM root '09fa4c47-eebe-4ee0-9b9d-dd41381b80ed'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"40f0ebb9-aace-4f87-a62c-2cef848c315b\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-VnZklj\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":60983,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-VnZklj\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-VnZklj\\\\workspace\\\\StandaloneClient\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-VnZklj\\\\workspace\\\\HostedGlobal\\\\HostedGlobal.Client\\\\bin\\\\Debug\\\\net11.0\\\\\"},\"stopAtEntry\":false,\"justMyCode\":true,\"requireExactSource\":true,\"enableStepFiltering\":true,\"logging\":{\"exceptions\":true,\"moduleLoad\":true,\"programOutput\":true,\"browserStdOut\":true,\"elapsedTiming\":false,\"threadExit\":false,\"processExit\":true,\"engineLogging\":false,\"diagnosticsLog\":{\"protocolMessages\":false,\"dispatcherMessages\":\"none\",\"debugEngineAPITracing\":\"none\",\"debugRuntimeEventTracing\":false,\"expressionEvaluationTracing\":false,\"startDebuggingTracing\":false},\"consoleUsageMessage\":true},\"suppressJITOptimizations\":false,\"symbolOptions\":{\"searchPaths\":[],\"searchMicrosoftSymbolServer\":false,\"searchNuGetOrgSymbolServer\":false,\"cachePath\":\"\",\"moduleFilter\":{\"mode\":\"loadAllButExcluded\",\"excludedModules\":[],\"includedModules\":[],\"includeSymbolsNextToModules\":true,\"includeSymbolsOnDemand\":true}},\"expressionEvaluationOptions\":{\"allowImplicitFuncEval\":true,\"allowToString\":true,\"allowF",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches an existing tracked flaky test (issue #20423) with the same test name, job, and error pattern: repeated 'Browser connection failed, will retry: Unable to attach to browser' messages leading to a pwa-msedge child session attach timeout, an environmental/timing issue in the Windows Blazor WASM browser debugger E2E, unrelated to the merged socket-permissions PR."
+    }
+  ],
+  "causes": [
+    "vscode-extension-e2e-blazordebugger-standalone-timeout-windows"
+  ]
+}
