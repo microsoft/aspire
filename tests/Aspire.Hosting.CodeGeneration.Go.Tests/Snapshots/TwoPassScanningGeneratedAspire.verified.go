@@ -19022,7 +19022,6 @@ type ParameterResource interface {
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) ParameterResource
 	OnResourceReady(callback func(arg ResourceReadyEvent)) ParameterResource
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ParameterResource
-	RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) ParameterResource
 	SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ParameterResource
 	TestWaitFor(dependency Resource) ParameterResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) ParameterResource
@@ -19234,33 +19233,6 @@ func (s *parameterResource) OnResourceStopped(callback func(arg ResourceStoppedE
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/onResourceStopped", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// RunAsContainerImage runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-func (s *parameterResource) RunAsContainerImage(image string, options ...*RunAsContainerImageOptions) ParameterResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["image"] = serializeValue(image)
-	if len(options) > 0 {
-		merged := &RunAsContainerImageOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-		if merged.Configure != nil {
-			cb := merged.Configure
-			shim := func(args ...any) any {
-				cb(callbackArg[ContainerResource](args, 0))
-				return nil
-			}
-			reqArgs["configure"] = s.client.registerCallback(shim)
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/runAsContainerImage", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

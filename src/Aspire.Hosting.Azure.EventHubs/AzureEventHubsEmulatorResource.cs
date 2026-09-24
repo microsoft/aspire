@@ -38,7 +38,7 @@ public class AzureEventHubsEmulatorResource(AzureEventHubsResource innerResource
         yield return new("Host", ReferenceExpression.Create($"{owner.EmulatorEndpoint.Property(EndpointProperty.Host)}"));
         yield return new("Port", ReferenceExpression.Create($"{owner.EmulatorEndpoint.Property(EndpointProperty.Port)}"));
         yield return new("Uri", ReferenceExpression.Create($"sb://{owner.EmulatorEndpoint.Property(EndpointProperty.HostAndPort)}"));
-        yield return new("ConnectionString", ReferenceExpression.Create($"Endpoint={owner.EmulatorEndpoint.Property(EndpointProperty.HostAndPort)};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"));
+        yield return new("ConnectionString", CreateConnectionString(owner));
     }
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>

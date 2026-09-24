@@ -695,6 +695,23 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
+    public void ScanHostingAssembly_RunAsContainerImageExcludesInvalidProjectionOwners()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(IResource).Assembly);
+
+        var capability = Assert.Single(
+            result.Capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting/runAsContainerImage");
+        var targetTypes = capability.ExpandedTargetTypes
+            .Select(target => target.ClrType)
+            .ToHashSet();
+
+        Assert.Contains(typeof(ExecutableResource), targetTypes);
+        Assert.DoesNotContain(typeof(ContainerResource), targetTypes);
+        Assert.DoesNotContain(typeof(ParameterResource), targetTypes);
+    }
+
+    [Fact]
     public void ExcludedTargetTypeCompatibility_UsesCurrentContract()
     {
         Type[] excludedTargetTypes = [typeof(ExcludedEnvironmentResource)];

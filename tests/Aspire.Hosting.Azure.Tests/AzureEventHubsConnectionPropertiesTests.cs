@@ -64,7 +64,7 @@ public class AzureEventHubsConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("ConnectionString", property.Key);
-                Assert.Equal("Endpoint={eventhubs.bindings.emulator.host}:{eventhubs.bindings.emulator.port};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true", property.Value.ValueExpression);
+                Assert.Equal("Endpoint=sb://{eventhubs.bindings.emulator.host}:{eventhubs.bindings.emulator.port};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true", property.Value.ValueExpression);
             });
         Assert.Equal(provider.ConnectionStringExpression.ValueExpression, eventHubs.Resource.ConnectionStringExpression.ValueExpression);
     }

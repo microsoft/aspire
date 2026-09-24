@@ -33809,19 +33809,6 @@ export interface ParameterResource {
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise;
-    /**
-     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the run-mode container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
-     * when capturing its logical identity rather than its container-specific configuration.
-     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ParameterResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ParameterResourcePromise;
     /**
@@ -34172,19 +34159,6 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The resource builder.
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise;
-    /**
-     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the run-mode container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
-     * when capturing its logical identity rather than its container-specific configuration.
-     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ParameterResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ParameterResourcePromise;
     /**
@@ -35046,39 +35020,6 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _runAsContainerImageInternal(image: string, configure?: (obj: ContainerResource) => Promise<void>): Promise<ParameterResource> {
-        const configureId = configure ? registerCallback(async (objData: unknown) => {
-            const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
-            const obj = new ContainerResourceImpl(objHandle, this._client);
-            await configure(obj);
-        }) : undefined;
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
-        if (configure !== undefined) rpcArgs.configure = configureId;
-        const result = await this._client.invokeCapability<ParameterResourceHandle>(
-            'Aspire.Hosting/runAsContainerImage',
-            rpcArgs
-        );
-        return new ParameterResourceImpl(result, this._client);
-    }
-
-    /**
-     * Runs the resource as a container built from a prebuilt image, leaving how it is published unchanged.
-     *
-     * The image is required so a projection can never exist without a valid container source. Configuration
-     * written inside `configure` applies only to the run-mode container; configuration written
-     * on `builder` applies to the resource itself and is seen by every projection of it.
-     * The callback's resource is a distinct container view. Use `GetOwnerOrSelf`
-     * when capturing its logical identity rather than its container-specific configuration.
-     * @param image The container image reference, for example `contoso/worker:dev` or `mcr.microsoft.com/dotnet/aspnet:10.0`. The registry, image, and tag or digest are recorded separately.
-     * @param options Additional options.
-     * @returns The resource builder.
-     */
-    runAsContainerImage(image: string, options?: RunAsContainerImageOptions): ParameterResourcePromise {
-        const configure = options?.configure;
-        return new ParameterResourcePromiseImpl(this._runAsContainerImageInternal(image, configure), this._client);
-    }
-
-    /** @internal */
     private async _withTerminalInternal(): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
@@ -35711,7 +35652,6 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["excludeFromMcp"]: () => ParameterResourcePromiseImpl,
     ["withHidden"]: () => ParameterResourcePromiseImpl,
     ["withHiddenOnCompletion"]: () => ParameterResourcePromiseImpl,
-    ["runAsContainerImage"]: () => ParameterResourcePromiseImpl,
     ["withTerminal"]: () => ParameterResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ParameterResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ParameterResourcePromiseImpl,
