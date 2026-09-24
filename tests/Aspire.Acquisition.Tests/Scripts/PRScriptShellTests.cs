@@ -55,9 +55,23 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         Assert.Contains("--skip-extension", result.Output);
         Assert.Contains("--use-insiders", result.Output);
         Assert.Contains("--skip-path", result.Output);
+        Assert.Contains("--skip-completions", result.Output);
         Assert.Contains("--keep-archive", result.Output);
         Assert.Contains("--verbose", result.Output);
         Assert.Contains("--dry-run", result.Output);
+    }
+
+    [Fact]
+    public async Task SkipCompletions_DryRun_DoesNotGenerateOrRegister()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("1234", "--dry-run", "--skip-path", "--skip-extension", "--skip-completions");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Skipping shell completions due to --skip-completions", result.Output);
+        Assert.Empty(Directory.GetFileSystemEntries(env.MockHome));
     }
 
     [Fact]

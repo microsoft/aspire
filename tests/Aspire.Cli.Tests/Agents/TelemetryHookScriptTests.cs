@@ -24,20 +24,24 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
     private const string CaptureFileEnvName = "ASPIRE_HOOK_TEST_CAPTURE_FILE";
     private const string ContinueResponse = """{"continue":true}""";
 
-    [Fact]
+    [Theory]
+    [InlineData("aspire")]
+    [InlineData("aspire-project-v2-migration")]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
-    public async Task Bash_SkillInvocation_Copilot_ForwardsSkillName()
+    public async Task Bash_SkillInvocation_Copilot_ForwardsSkillName(string skillName)
     {
+        var payload = """{"toolName":"skill","sessionId":"11111111-2222-3333-4444-555555555555","toolArgs":{"skill":"__SKILL_NAME__"}}"""
+            .Replace("__SKILL_NAME__", skillName, StringComparison.Ordinal);
         var run = await RunBashHookAsync(
-            """{"toolName":"skill","sessionId":"11111111-2222-3333-4444-555555555555","toolArgs":{"skill":"aspire"}}""",
+            payload,
             new() { ["COPILOT_CLI"] = "1" });
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "skill_invocation");
         AssertArg(args, "--client-name", "copilot-cli");
-        AssertArg(args, "--skill-name", "aspire");
+        AssertArg(args, "--skill-name", skillName);
         AssertArg(args, "--session-id", "11111111-2222-3333-4444-555555555555");
     }
 
@@ -57,8 +61,7 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "skill_invocation");
-        // v0.0.2 ignores AI_AGENT; App attribution must be added upstream, not in these copied scripts.
-        // https://github.com/microsoft/aspire-skills/issues/71
+        // Keep this limitation explicit until https://github.com/microsoft/aspire-skills/issues/71 ships.
         AssertArg(args, "--client-name", "copilot-cli");
         AssertArg(args, "--skill-name", "aspire");
     }
@@ -95,19 +98,23 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--tool-name", "mcp__aspire__list_resources");
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("aspire-deployment/references/azure.md")]
+    [InlineData("aspire-project-v2-migration/references/compatibility-and-validation.md")]
+    [InlineData("aspire-project-v2-migration/references/migration-patterns.md")]
     [RequiresTools(["bash"])]
     [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
-    public async Task Bash_ReferenceFileRead_ForwardsRelativePath()
+    public async Task Bash_ReferenceFileRead_ForwardsRelativePath(string referencePath)
     {
-        var run = await RunBashHookAsync(
-            """{"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":".agents/skills/aspire-deployment/references/azure.md"}}""");
+        var payload = """{"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":".agents/skills/__REFERENCE_PATH__"}}"""
+            .Replace("__REFERENCE_PATH__", referencePath, StringComparison.Ordinal);
+        var run = await RunBashHookAsync(payload);
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "reference_file_read");
         // Only the repo-relative path after skills/<skill>/ is forwarded — never the absolute path.
-        AssertArg(args, "--file-reference", "aspire-deployment/references/azure.md");
+        AssertArg(args, "--file-reference", referencePath);
     }
 
     [Theory]
@@ -272,19 +279,23 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--file-reference", "aspire-deployment/references/azure.md");
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("aspire")]
+    [InlineData("aspire-project-v2-migration")]
     [RequiresTools(["pwsh"])]
-    public async Task Pwsh_SkillInvocation_Copilot_ForwardsSkillName()
+    public async Task Pwsh_SkillInvocation_Copilot_ForwardsSkillName(string skillName)
     {
+        var payload = """{"toolName":"skill","sessionId":"11111111-2222-3333-4444-555555555555","toolArgs":{"skill":"__SKILL_NAME__"}}"""
+            .Replace("__SKILL_NAME__", skillName, StringComparison.Ordinal);
         var run = await RunPwshHookAsync(
-            """{"toolName":"skill","sessionId":"11111111-2222-3333-4444-555555555555","toolArgs":{"skill":"aspire"}}""",
+            payload,
             new() { ["COPILOT_CLI"] = "1" });
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "skill_invocation");
         AssertArg(args, "--client-name", "copilot-cli");
-        AssertArg(args, "--skill-name", "aspire");
+        AssertArg(args, "--skill-name", skillName);
         AssertArg(args, "--session-id", "11111111-2222-3333-4444-555555555555");
     }
 
@@ -371,18 +382,22 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertNotInvoked(run);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("aspire-deployment/references/azure.md")]
+    [InlineData("aspire-project-v2-migration/references/compatibility-and-validation.md")]
+    [InlineData("aspire-project-v2-migration/references/migration-patterns.md")]
     [RequiresTools(["pwsh"])]
-    public async Task Pwsh_ReferenceFileRead_ForwardsRelativePath()
+    public async Task Pwsh_ReferenceFileRead_ForwardsRelativePath(string referencePath)
     {
-        var run = await RunPwshHookAsync(
-            """{"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":".agents/skills/aspire-deployment/references/azure.md"}}""");
+        var payload = """{"hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":".agents/skills/__REFERENCE_PATH__"}}"""
+            .Replace("__REFERENCE_PATH__", referencePath, StringComparison.Ordinal);
+        var run = await RunPwshHookAsync(payload);
 
         AssertContinue(run);
         var args = AssertInvoked(run);
         AssertArg(args, "--event-type", "reference_file_read");
         // Only the repo-relative path after skills/<skill>/ is forwarded — never the absolute path.
-        AssertArg(args, "--file-reference", "aspire-deployment/references/azure.md");
+        AssertArg(args, "--file-reference", referencePath);
     }
 
     [Theory]

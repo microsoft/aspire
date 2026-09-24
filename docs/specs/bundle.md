@@ -27,13 +27,13 @@ The Aspire Bundle distributes the CLI with its runtime components:
 
 | Component | Deployment | Purpose |
 |-----------|------------|---------|
-| `aspire[.exe]` | Native AOT | CLI, including native development-certificate management |
-| `managed/aspire-managed[.exe]` | Self-contained single-file executable | AppHost Server, NuGet operations, terminal hosting, and a Dashboard compatibility forwarder |
+| `aspire[.exe]` | Native AOT | CLI, including native development-certificate management and in-process NuGet operations |
+| `managed/aspire-managed[.exe]` | Self-contained single-file executable | AppHost Server, terminal hosting, and a Dashboard compatibility forwarder |
 | `dashboard/Aspire.Dashboard[.exe]` | Native AOT | Dashboard web application |
 | `dashboard/wwwroot/` and native dependencies | Publish assets | Dashboard scripts, styles, fonts, images, and SQLite native library |
 | `dcp/` | Platform-specific native binaries | Developer Control Plane |
 
-The bundle removes the need to acquire DCP and Dashboard separately when using the bundled components. Its pre-built AppHost Server and NuGet helper do not require a globally installed .NET SDK.
+The bundle removes the need to acquire DCP and Dashboard separately when using the bundled components. Its pre-built AppHost Server and in-process NuGet client do not require a globally installed .NET SDK.
 
 This does **not** mean every application can run without other prerequisites. .NET application development still requires the appropriate SDK, guest languages require their own toolchains, and container resources require a container runtime. Integration packages and application dependencies must be available locally or restored from their configured sources. Offline operation requires those dependencies to have been acquired already.
 
@@ -44,9 +44,10 @@ The managed helper contains its own runtime. The CLI and Dashboard are Native AO
 ```text
 aspire (Native AOT CLI)
   |
+  +-- in-process NuGet.Client: package search, restore, and probe manifests
+  |
   +-- managed/aspire-managed
   |     +-- server: AppHost Server and integration loading
-  |     +-- nuget: package search, restore, and probe manifests
   |     +-- terminalhost: terminal hosting
   |     +-- dashboard: compatibility forwarder to native Dashboard
   |
@@ -231,7 +232,7 @@ The native-version gate and executable-selection behavior are defined in [Layout
 
 ## NuGet and AppHost Server
 
-`aspire-managed nuget` provides package search, restore, and package probe-manifest generation without requiring a globally installed SDK. Its command definitions live in [Aspire.Managed/NuGet](../../src/Aspire.Managed/NuGet); use the subcommands' `--help` output for their current arguments.
+The CLI calls NuGet.Client APIs in-process for package search, restore, asset selection, and package probe-manifest generation, without requiring a globally installed SDK or an `aspire-managed` subprocess. The implementation lives in [Aspire.Cli/NuGet](../../src/Aspire.Cli/NuGet).
 
 The pre-built AppHost Server loads the integrations required by the project. Package restore artifacts and probe manifests are cached beneath `<workspace>/.aspire/integrations/`:
 
@@ -345,7 +346,7 @@ For the complete tool contract, see [CreateLayout](../../tools/CreateLayout/READ
 - Extraction validates archive paths and links to prevent traversal outside the extraction root. Validate the staged layout before switching the active link.
 - Version-rooted paths and leases protect running consumers from cleanup and mixed-version component selection during updates.
 - Native Dashboard startup does not require a globally selected .NET runtime. The managed helper carries its runtime; SDK-based development remains a separate workflow.
-- Package source configuration, authentication, and package trust remain the responsibility of the NuGet acquisition path. Bundling the NuGet helper does not remove those requirements.
+- Package source configuration, authentication, and package trust remain the responsibility of the NuGet acquisition path. Running NuGet in-process does not remove those requirements.
 
 ## Validation
 

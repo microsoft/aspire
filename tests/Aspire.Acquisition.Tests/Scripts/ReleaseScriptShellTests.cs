@@ -28,6 +28,20 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
         Assert.Contains("Usage", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Aspire CLI", result.Output);
+        Assert.Contains("--skip-completions", result.Output);
+    }
+
+    [Fact]
+    public async Task SkipCompletions_DryRun_DoesNotGenerateOrRegister()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+
+        var result = await cmd.ExecuteAsync("--dry-run", "--skip-path", "--skip-completions");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Skipping shell completions due to --skip-completions", result.Output);
+        Assert.Empty(Directory.GetFileSystemEntries(env.MockHome));
     }
 
     [Fact]

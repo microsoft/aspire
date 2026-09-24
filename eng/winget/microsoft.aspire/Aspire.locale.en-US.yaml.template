@@ -29,5 +29,11 @@ Tags:
 - microservices
 - containers
 ReleaseNotesUrl: ${RELEASE_NOTES_URL}
+InstallationNotes: >
+  Shell completion is available but is not registered by WinGet.
+  In PowerShell 7+, enable it for this session with:
+  aspire completions script pwsh | Out-String | Invoke-Expression
+  For persistent setup and other shells, see
+  https://github.com/microsoft/aspire/blob/main/src/Aspire.Cli/README.md#shell-completion
 ManifestType: defaultLocale
 ManifestVersion: 1.10.0

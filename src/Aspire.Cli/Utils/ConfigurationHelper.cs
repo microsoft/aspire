@@ -24,6 +24,9 @@ internal static class ConfigurationHelper
     };
 
     internal static void RegisterSettingsFiles(IConfigurationBuilder configuration, DirectoryInfo workingDirectory, FileInfo globalSettingsFile)
+        => RegisterSettingsFiles(configuration, workingDirectory, globalSettingsFile, persistNormalization: true);
+
+    internal static void RegisterSettingsFiles(IConfigurationBuilder configuration, DirectoryInfo workingDirectory, FileInfo globalSettingsFile, bool persistNormalization)
     {
         var currentDirectory = workingDirectory;
 
@@ -73,13 +76,13 @@ internal static class ConfigurationHelper
         // Add global settings first (if it exists) - lower precedence
         if (File.Exists(globalSettingsFile.FullName))
         {
-            AddSettingsFile(configuration, globalSettingsFile.FullName);
+            AddSettingsFile(configuration, globalSettingsFile.FullName, persistNormalization);
         }
 
         // Then add local settings (if found) - this will override global settings
         if (localSettingsFile is not null)
         {
-            AddSettingsFile(configuration, localSettingsFile.FullName);
+            AddSettingsFile(configuration, localSettingsFile.FullName, persistNormalization);
         }
     }
 
@@ -250,12 +253,15 @@ internal static class ConfigurationHelper
         }
     }
 
-    private static void AddSettingsFile(IConfigurationBuilder configuration, string filePath)
+    private static void AddSettingsFile(IConfigurationBuilder configuration, string filePath, bool persistNormalization)
     {
         // Proactively normalize the settings file to prevent duplicate key errors.
         // This handles files corrupted by mixing colon and dot notation
         // (e.g., both "features:key" flat entry and "features" nested object).
-        TryNormalizeSettingsFile(filePath);
+        if (persistNormalization)
+        {
+            TryNormalizeSettingsFile(filePath);
+        }
 
         // Pre-process the file to handle comments and trailing commas.
         // Microsoft.Extensions.Configuration.Json doesn't support JSON comments,
@@ -264,6 +270,13 @@ internal static class ConfigurationHelper
         {
             var content = File.ReadAllText(filePath);
             var node = JsonNode.Parse(content, documentOptions: ParseOptions);
+            if (!persistNormalization && node is JsonObject settings)
+            {
+                // Completion must resolve the same flat/nested key collisions without
+                // rewriting user files merely because the shell requested suggestions.
+                NormalizeSettings(settings);
+            }
+
             if (node is not null)
             {
                 var cleanJson = node.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
@@ -298,78 +311,9 @@ internal static class ConfigurationHelper
 
             var settings = JsonNode.Parse(content, documentOptions: ParseOptions)?.AsObject();
 
-            if (settings is null)
+            if (settings is null || !NormalizeSettings(settings))
             {
                 return false;
-            }
-
-            // Find all colon-separated keys at root level
-            var colonKeys = new List<(string key, JsonNode? value)>();
-
-            foreach (var kvp in settings)
-            {
-                if (kvp.Key.Contains(':'))
-                {
-                    // DeepClone preserves the original JSON type (boolean, number, etc.)
-                    // instead of converting to string via ToString().
-                    colonKeys.Add((kvp.Key, kvp.Value?.DeepClone()));
-                }
-            }
-
-            if (colonKeys.Count == 0)
-            {
-                return false;
-            }
-
-            // Remove colon keys and re-add them as nested structure
-            foreach (var (key, value) in colonKeys)
-            {
-                settings.Remove(key);
-
-                // Convert "a:b:c" to nested {"a": {"b": {"c": value}}}
-                var parts = key.Split(':');
-                var currentObject = settings;
-                var pathConflict = false;
-
-                // Walk all but the last segment, creating objects as needed.
-                for (int i = 0; i < parts.Length - 1; i++)
-                {
-                    var part = parts[i];
-
-                    if (!currentObject.ContainsKey(part) || currentObject[part] is null)
-                    {
-                        currentObject[part] = new JsonObject();
-                    }
-                    else if (currentObject[part] is JsonObject)
-                    {
-                        currentObject = currentObject[part]!.AsObject();
-                        continue;
-                    }
-                    else
-                    {
-                        // Existing non-object value conflicts with the desired nested structure.
-                        // Prefer the existing nested value and drop the flat key.
-                        pathConflict = true;
-                        break;
-                    }
-
-                    currentObject = currentObject[part]!.AsObject();
-                }
-
-                if (pathConflict)
-                {
-                    continue;
-                }
-
-                var finalKey = parts[parts.Length - 1];
-
-                // If the final key already exists, keep its value and drop the flat key.
-                if (currentObject.ContainsKey(finalKey) && currentObject[finalKey] is not null)
-                {
-                    continue;
-                }
-
-                currentObject[finalKey] = value;
             }
 
             WriteSettingsFile(filePath, settings);
@@ -380,5 +324,79 @@ internal static class ConfigurationHelper
         {
             return false;
         }
+    }
+
+    private static bool NormalizeSettings(JsonObject settings)
+    {
+        // Find all colon-separated keys at root level
+        var colonKeys = new List<(string key, JsonNode? value)>();
+
+        foreach (var kvp in settings)
+        {
+            if (kvp.Key.Contains(':'))
+            {
+                // DeepClone preserves the original JSON type (boolean, number, etc.)
+                // instead of converting to string via ToString().
+                colonKeys.Add((kvp.Key, kvp.Value?.DeepClone()));
+            }
+        }
+
+        if (colonKeys.Count == 0)
+        {
+            return false;
+        }
+
+        // Remove colon keys and re-add them as nested structure
+        foreach (var (key, value) in colonKeys)
+        {
+            settings.Remove(key);
+
+            // Convert "a:b:c" to nested {"a": {"b": {"c": value}}}
+            var parts = key.Split(':');
+            var currentObject = settings;
+            var pathConflict = false;
+
+            // Walk all but the last segment, creating objects as needed.
+            for (int i = 0; i < parts.Length - 1; i++)
+            {
+                var part = parts[i];
+
+                if (!currentObject.ContainsKey(part) || currentObject[part] is null)
+                {
+                    currentObject[part] = new JsonObject();
+                }
+                else if (currentObject[part] is JsonObject)
+                {
+                    currentObject = currentObject[part]!.AsObject();
+                    continue;
+                }
+                else
+                {
+                    // Existing non-object value conflicts with the desired nested structure.
+                    // Prefer the existing nested value and drop the flat key.
+                    pathConflict = true;
+                    break;
+                }
+
+                currentObject = currentObject[part]!.AsObject();
+            }
+
+            if (pathConflict)
+            {
+                continue;
+            }
+
+            var finalKey = parts[parts.Length - 1];
+
+            // If the final key already exists, keep its value and drop the flat key.
+            if (currentObject.ContainsKey(finalKey) && currentObject[finalKey] is not null)
+            {
+                continue;
+            }
+
+            currentObject[finalKey] = value;
+        }
+
+        return true;
     }
 }

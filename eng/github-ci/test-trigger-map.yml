@@ -331,7 +331,11 @@ path_rules:
   - paths:
       - eng/scripts/pack-cli-npm-package.ps1
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
-    reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse this script
+    reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse the pack script
+  - paths:
+      - eng/scripts/pack-cli-npm-package.pointer.README.md
+    targets: [test:Infrastructure.Tests]
+    reason: Infrastructure.Tests/Pipelines/NpmCliPackageTests renders this template and verifies the packaged README
   - paths:
       - src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend/package-lock.json
     targets: [test:Aspire.Cli.Tests]

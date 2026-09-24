@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREMCP001
+#pragma warning disable ASPIRETERMINAL001
 
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Diagnostics.CodeAnalysis;
@@ -122,6 +124,49 @@ public static class PostgresBuilderExtensions
                           context.EnvironmentVariables[PasswordEnvVarName] = postgresServer.PasswordParameter;
                       })
                       .WithHealthCheck(healthCheckKey);
+    }
+
+    /// <summary>
+    /// Adds a REPL command that opens an authenticated PostgreSQL shell in the dashboard terminal dock.
+    /// </summary>
+    /// <param name="builder">The PostgreSQL server resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// This command is opt-in and available only in run mode. Dashboard users who can execute resource commands
+    /// can run commands with the resource's configured credentials. Enable it only for trusted dashboard users,
+    /// especially when sharing the dashboard through a tunnel or remote development environment.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddPostgres("postgres").WithRepl();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<PostgresServerResource> WithRepl(this IResourceBuilder<PostgresServerResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
+    }
+
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(PostgresServerResource resource, CancellationToken cancellationToken)
+    {
+        var port = resource.PrimaryEndpoint.TargetPort ?? throw new DistributedApplicationException("The PostgreSQL REPL port is not available.");
+        var username = await resource.UserNameReference.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        var password = await resource.PasswordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+        {
+            throw new DistributedApplicationException("The PostgreSQL REPL credentials are not available.");
+        }
+
+        return new TerminalLaunchOptions
+        {
+            Title = $"psql ({resource.Name})",
+            Executable = "psql",
+            Arguments = ["--username", username, "--dbname", "postgres", "--no-password", "--port", port.ToString(CultureInfo.InvariantCulture)],
+            EnvironmentVariables = { ["PGPASSWORD"] = password }
+        };
     }
 
     /// <summary>

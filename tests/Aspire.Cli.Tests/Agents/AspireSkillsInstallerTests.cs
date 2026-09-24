@@ -1384,8 +1384,11 @@ public class AspireSkillsInstallerTests
 
         try
         {
+            const string migrationSkillName = "aspire-project-v2-migration";
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
+            var embeddedBundleProvider = new EmbeddedAspireSkillsBundleProvider(
+                new AspireSkillsBundleProvider(executionContext),
+                NullLogger<EmbeddedAspireSkillsBundleProvider>.Instance);
             var attestationVerifier = new TestGitHubArtifactAttestationVerifier();
             // Throw on any HTTP call so we can prove the GitHub path was never invoked.
             var handler = new MockHttpMessageHandler(_ => throw new InvalidOperationException("HTTP must not be called when remote fetch is disabled."));
@@ -1401,8 +1404,33 @@ public class AspireSkillsInstallerTests
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
-            Assert.True(embeddedBundleProvider.CreateBundleCalled);
+            Assert.Equal(AspireSkillsInstaller.Version, result.Bundle.Version);
             Assert.False(attestationVerifier.VerifyCalled);
+            var migrationSkill = Assert.Single(
+                result.Bundle.GetSkillDefinitions(),
+                skill => skill.HasName(migrationSkillName));
+            Assert.True(migrationSkill.IsDefault);
+            Assert.Empty(migrationSkill.ApplicableLanguages);
+            Assert.Equal(["evals"], migrationSkill.InstallExcludedRelativePaths);
+
+            var migrationFiles = await result.Bundle.GetSkillFilesAsync(migrationSkill, CancellationToken.None);
+            Assert.Collection(
+                migrationFiles.OrderBy(file => file.RelativePath, StringComparer.Ordinal),
+                skillFile =>
+                {
+                    Assert.Equal("SKILL.md", skillFile.RelativePath);
+                    Assert.Contains("# Aspire Project v2 migration", skillFile.Content, StringComparison.Ordinal);
+                },
+                compatibilityReference =>
+                {
+                    Assert.Equal(Path.Combine("references", "compatibility-and-validation.md"), compatibilityReference.RelativePath);
+                    Assert.Contains("# Project v2 compatibility and validation", compatibilityReference.Content, StringComparison.Ordinal);
+                },
+                migrationPatternsReference =>
+                {
+                    Assert.Equal(Path.Combine("references", "migration-patterns.md"), migrationPatternsReference.RelativePath);
+                    Assert.Contains("# Project v2 migration patterns", migrationPatternsReference.Content, StringComparison.Ordinal);
+                });
         }
         finally
         {
