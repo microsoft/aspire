@@ -419,7 +419,9 @@ extends:
           jobs:
           - job: TemplateTests
             displayName: Template Tests
-            timeoutInMinutes: 30
+            # Unlike class-sharded PR CI, this job runs all basic-build cases in one
+            # session. Leave setup and publishing time beyond its 45-minute test budget.
+            timeoutInMinutes: 60
             pool:
               name: NetCore1ESPool-Internal
               image: windows.vs2026preview.scout.amd64
@@ -476,6 +478,7 @@ extends:
                         $(_OfficialBuildIdArgs)
                         $(_InternalBuildArgs)
                         /p:SkipTests=false
+                        /p:TestSessionTimeout=45m
                         -projects $(Build.SourcesDirectory)\tests\Aspire.Templates.Tests\Aspire.Templates.Tests.csproj
                 env:
                   RunOnlyBasicBuildTemplateTests: true
