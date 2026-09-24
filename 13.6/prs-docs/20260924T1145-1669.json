@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents #20133 fix for preserving explicit Kestrel certificate configuration",
+  "mergedAt": "2026-09-24T11:45:21Z",
+  "number": 1669,
+  "runDate": "2026-09-24T12:05:18Z",
+  "status": "included",
+  "title": "[docs] Document explicit Kestrel certificate configuration preservation"
+}

@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "`WithProjectDefaults` no longer overwrites an explicit Kestrel certificate configuration (`Kestrel__Certificates__Default__Path`, `KeyPath`, or `Subject`) set via `WithHttpsCertificateConfiguration`. Previously the built-in PFX default replaced the certificate path while leaving a stale key path, producing a mixed PFX/PEM configuration that Kestrel rejected with \"The provided key file is missing or invalid.\"",
-  "docsPrs": [],
+  "docsPrs": [
+    1669
+  ],
   "docsRequired": true,
   "emoji": "🔐",
   "firstMergedAt": "2026-09-15T17:47:00Z",
