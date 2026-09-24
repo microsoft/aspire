@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Text.Json;
 using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.Diagnostics;
+using Aspire.Tests.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -15,7 +16,7 @@ using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
 
-public sealed class JsonRpcAuthenticationTests
+public sealed class JsonRpcAuthenticationTests(ITestOutputHelper outputHelper)
 {
     public static TheoryData<string, object?[]> ProtectedMethods => new()
     {
@@ -31,7 +32,8 @@ public sealed class JsonRpcAuthenticationTests
     [Fact]
     public async Task Ping_DoesNotRequireAuthentication()
     {
-        await using var server = await RemoteHostTestServer.StartAsync(existingDirectory: true);
+        using var workspace = CreateSocketWorkspace();
+        await using var server = await RemoteHostTestServer.StartAsync(workspace, existingDirectory: true);
         await using var client = await server.ConnectAsync();
 
         var result = await client.InvokeAsync<string>("ping");
@@ -43,7 +45,8 @@ public sealed class JsonRpcAuthenticationTests
     [MemberData(nameof(ProtectedMethods))]
     public async Task ProtectedMethods_RequireAuthentication(string methodName, object?[] arguments)
     {
-        await using var server = await RemoteHostTestServer.StartAsync(existingDirectory: true);
+        using var workspace = CreateSocketWorkspace();
+        await using var server = await RemoteHostTestServer.StartAsync(workspace, existingDirectory: true);
         await using var client = await server.ConnectAsync();
 
         var ex = await Assert.ThrowsAsync<RemoteInvocationException>(
@@ -55,7 +58,8 @@ public sealed class JsonRpcAuthenticationTests
     [Fact]
     public async Task FailedAuthentication_ClosesConnection_AndPreventsFurtherCalls()
     {
-        await using var server = await RemoteHostTestServer.StartAsync(existingDirectory: true);
+        using var workspace = CreateSocketWorkspace();
+        await using var server = await RemoteHostTestServer.StartAsync(workspace, existingDirectory: true);
         await using var client = await server.ConnectAsync();
 
         Assert.Equal("pong", await client.InvokeAsync<string>("ping"));
@@ -86,7 +90,8 @@ public sealed class JsonRpcAuthenticationTests
     [InlineData(true)]
     public async Task SocketPermissions_AreRestrictedBeforeServingClients(bool existingDirectory)
     {
-        await using var server = await RemoteHostTestServer.StartAsync(existingDirectory);
+        using var workspace = CreateSocketWorkspace();
+        await using var server = await RemoteHostTestServer.StartAsync(workspace, existingDirectory);
         await using var client = await server.ConnectAsync();
 
         Assert.Equal("pong", await client.InvokeAsync<string>("ping"));
@@ -109,41 +114,41 @@ public sealed class JsonRpcAuthenticationTests
             return;
         }
 
-        var root = Directory.CreateTempSubdirectory();
-        try
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var target = workspace.CreateDirectory("target");
+        File.SetUnixFileMode(target.FullName,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.OtherRead);
+        var originalMode = File.GetUnixFileMode(target.FullName);
+        var existingFile = Path.Combine(target.FullName, "rpc.sock");
+        await File.WriteAllTextAsync(existingFile, "not our socket");
+        workspace.CreateDirectory(Path.Combine(".aspire", "cli"));
+        var link = Path.Combine(workspace.Path, ".aspire", "cli", "bch");
+        Directory.CreateSymbolicLink(link, target.FullName);
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            var target = Directory.CreateDirectory(Path.Combine(root.FullName, "target"));
-            File.SetUnixFileMode(target.FullName,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.OtherRead);
-            var originalMode = File.GetUnixFileMode(target.FullName);
-            var existingFile = Path.Combine(target.FullName, "rpc.sock");
-            await File.WriteAllTextAsync(existingFile, "not our socket");
-            Directory.CreateDirectory(Path.Combine(root.FullName, ".aspire", "cli"));
-            var link = Path.Combine(root.FullName, ".aspire", "cli", "bch");
-            Directory.CreateSymbolicLink(link, target.FullName);
+            ["REMOTE_APP_HOST_SOCKET_PATH"] = symbolicLink ? Path.Combine(link, "rpc.sock") : existingFile
+        }).Build();
+        using var services = new ServiceCollection().BuildServiceProvider();
+        using var server = new JsonRpcServer(
+            configuration,
+            services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<JsonRpcServer>.Instance,
+            new RemoteHostProfilingTelemetry(configuration));
 
-            var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["REMOTE_APP_HOST_SOCKET_PATH"] = symbolicLink ? Path.Combine(link, "rpc.sock") : existingFile
-            }).Build();
-            using var services = new ServiceCollection().BuildServiceProvider();
-            using var server = new JsonRpcServer(
-                configuration,
-                services.GetRequiredService<IServiceScopeFactory>(),
-                NullLogger<JsonRpcServer>.Instance,
-                new RemoteHostProfilingTelemetry(configuration));
+        await server.StartAsync(CancellationToken.None);
+        await Assert.ThrowsAsync<IOException>(() => server.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(10)));
+        server.Dispose();
 
-            await server.StartAsync(CancellationToken.None);
-            await Assert.ThrowsAsync<IOException>(() => server.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(10)));
-            server.Dispose();
+        Assert.Equal("not our socket", await File.ReadAllTextAsync(existingFile));
+        Assert.Equal(originalMode, File.GetUnixFileMode(target.FullName));
+    }
 
-            Assert.Equal("not our socket", await File.ReadAllTextAsync(existingFile));
-            Assert.Equal(originalMode, File.GetUnixFileMode(target.FullName));
-        }
-        finally
-        {
-            root.Delete(recursive: true);
-        }
+    private TemporaryWorkspace CreateSocketWorkspace()
+    {
+        // The default workspace path includes the assembly name and can exceed Unix socket
+        // path limits. Use a short root while retaining TemporaryWorkspace's cleanup retries.
+        return new TemporaryWorkspace(outputHelper, Directory.CreateTempSubdirectory());
     }
 
     private sealed class RemoteHostTestServer : IAsyncDisposable
@@ -151,37 +156,28 @@ public sealed class JsonRpcAuthenticationTests
         private const string RemoteAppHostToken = "ASPIRE_REMOTE_APPHOST_TOKEN";
         private readonly IHost _host;
         private readonly string _socketPath;
-        private readonly string? _socketDirectory;
 
         public string SocketPath => _socketPath;
 
-        private RemoteHostTestServer(IHost host, string socketPath, string? socketDirectory)
+        private RemoteHostTestServer(IHost host, string socketPath)
         {
             _host = host;
             _socketPath = socketPath;
-            _socketDirectory = socketDirectory;
         }
 
-        public static async Task<RemoteHostTestServer> StartAsync(bool existingDirectory)
+        public static async Task<RemoteHostTestServer> StartAsync(TemporaryWorkspace workspace, bool existingDirectory)
         {
-            var socketDirectory = OperatingSystem.IsWindows()
-                ? null
-                : Directory.CreateTempSubdirectory().FullName;
-
-            if (socketDirectory is not null && existingDirectory)
+            if (!OperatingSystem.IsWindows() && existingDirectory)
             {
-                var directory = Path.Combine(socketDirectory, "rpc");
+                var directory = Path.Combine(workspace.Path, "rpc");
                 Directory.CreateDirectory(directory);
-                if (!OperatingSystem.IsWindows())
-                {
-                    File.SetUnixFileMode(directory,
-                        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-                }
+                File.SetUnixFileMode(directory,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             }
 
             var socketPath = OperatingSystem.IsWindows()
                 ? $"aspire-remotehost-test-{Guid.NewGuid():N}"
-                : Path.Combine(socketDirectory!, "rpc", "rpc.sock");
+                : Path.Combine(workspace.Path, "rpc", "rpc.sock");
 
             var builder = Host.CreateApplicationBuilder();
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -195,7 +191,7 @@ public sealed class JsonRpcAuthenticationTests
             var host = builder.Build();
             await host.StartAsync();
 
-            return new RemoteHostTestServer(host, socketPath, socketDirectory);
+            return new RemoteHostTestServer(host, socketPath);
         }
 
         public async Task<JsonRpcClientHandle> ConnectAsync()
@@ -219,16 +215,6 @@ public sealed class JsonRpcAuthenticationTests
         {
             await _host.StopAsync();
             _host.Dispose();
-
-            if (!OperatingSystem.IsWindows() && File.Exists(_socketPath))
-            {
-                File.Delete(_socketPath);
-            }
-
-            if (!string.IsNullOrEmpty(_socketDirectory) && Directory.Exists(_socketDirectory))
-            {
-                Directory.Delete(_socketDirectory, recursive: true);
-            }
         }
 
         private static void ConfigureServices(IServiceCollection services)
