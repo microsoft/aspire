@@ -27,8 +27,11 @@ export interface UsefulnessSurveyEnvironment {
     warn(): void;
 }
 
+// These handlers return after terminal dispatch, not after the interactive operation ends.
+const terminalWorkflowCommands = new Set(['new', 'init', 'add', 'update', 'updateSelf']);
+
 const activityCommands = new Set([
-    'new', 'init', 'add', 'deploy', 'publish', 'do', 'update',
+    'deploy', 'publish', 'do',
     'runAppHost', 'debugAppHost', 'runAppHostCommand', 'debugAppHostCommand',
     'runAppHostFromExplorer', 'debugAppHostFromExplorer',
     'runAppHostFromEditorCommand', 'debugAppHostFromEditorCommand',
@@ -36,6 +39,8 @@ const activityCommands = new Set([
     'startResource', 'stopResource', 'restartResource', 'executeResourceCommand',
     'executeResourceCommandItem', 'deployAppHost', 'publishAppHost',
     'runPipelineStepAppHost', 'debugPipelineStepAppHost',
+    'stopAppHost', 'codeLensDebugPipelineStep', 'codeLensResourceAction',
+    'codeLensViewLogs', 'codeLensOpenDashboard', 'codeLensViewAppHostLogs',
 ]);
 
 export class UsefulnessSurveyService implements vscode.Disposable {
@@ -53,8 +58,15 @@ export class UsefulnessSurveyService implements vscode.Disposable {
     ) { }
 
     recordCommand(command: string): void {
-        if (!command.startsWith('aspire-vscode.') ||
-            !activityCommands.has(command.slice('aspire-vscode.'.length)) ||
+        if (!command.startsWith('aspire-vscode.')) {
+            return;
+        }
+        const commandName = command.slice('aspire-vscode.'.length);
+        if (terminalWorkflowCommands.has(commandName)) {
+            this._cancelTimer();
+            return;
+        }
+        if (!activityCommands.has(commandName) ||
             !this._canCollect() || this._open) {
             return;
         }

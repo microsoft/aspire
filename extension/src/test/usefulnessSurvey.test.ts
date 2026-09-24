@@ -28,6 +28,33 @@ suite('Usefulness survey', () => {
         assert.deepStrictEqual(h.persistence.writes, []);
     });
 
+    for (const command of ['new', 'init', 'add', 'update', 'updateSelf']) {
+        test(`${command} terminal dispatch does not qualify and cancels a pending invitation`, async () => {
+            h.service.recordCommand(`aspire-vscode.${command}`);
+            await h.show();
+            assert.strictEqual(h.shown, 0);
+            h.service.recordCommand('aspire-vscode.runAppHost');
+            await h.clock.tickAsync(119_999);
+            h.service.recordCommand(`aspire-vscode.${command}`);
+            await h.show();
+            assert.strictEqual(h.shown, 0);
+            assert.deepStrictEqual(h.persistence.writes, []);
+        });
+    }
+
+    for (const command of [
+        'stopAppHost', 'codeLensDebugPipelineStep', 'codeLensResourceAction',
+        'codeLensViewLogs', 'codeLensOpenDashboard', 'codeLensViewAppHostLogs',
+    ]) {
+        test(`${command} qualifies after the same quiet delay as tree actions`, async () => {
+            h.service.recordCommand(`aspire-vscode.${command}`);
+            await h.clock.tickAsync(119_999);
+            assert.strictEqual(h.shown, 0);
+            await h.clock.tickAsync(1);
+            assert.strictEqual(h.shown, 1);
+        });
+    }
+
     for (const outcome of ['yes', 'no', 'dismissed', 'never_again'] as const) {
         test(`${outcome} retires the prompt across reload and campaign changes`, async () => {
             h.response = outcome;
