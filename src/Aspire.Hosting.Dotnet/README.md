@@ -229,6 +229,14 @@ Call `PublishAsDockerFile(...)` or `publishAsDockerFile(...)` to use an explicit
 container publishing. Call `ExcludeFromManifest()` or `excludeFromManifest()` when the resource is intentionally
 available only during local orchestration.
 
+## Migrating from legacy project resources
+
+For C# and TypeScript AppHosts targeting Aspire 13.6 or newer, the
+[`aspire-project-v2-migration` agent skill](https://github.com/microsoft/aspire-skills/tree/main/skills/aspire-project-v2-migration)
+assesses existing project resources and proposes a migration for approval before editing.
+It preserves supported resource configuration and identifies unsupported patterns, including
+Azure Functions and custom integrations tied to `ProjectResource`. It does not upgrade the AppHost's Aspire version.
+
 ## Additional documentation
 
 - https://aspire.dev/integrations/gallery/
