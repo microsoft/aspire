@@ -3,7 +3,7 @@
 
 using System.Text.RegularExpressions;
 using Aspire.Cli.Agents.Hooks;
-using Microsoft.DotNet.RemoteExecutor;
+using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Agents;
 
@@ -40,39 +40,39 @@ public class AgentTelemetryHookTests
     }
 
     [Fact]
-    public void HookAlwaysReturnsOneBenignResponseWithoutStartingCliForUnrelatedInput()
+    public async Task HookAlwaysReturnsOneBenignResponseWithoutStartingTelemetryForUnrelatedInput()
     {
-        using var process = RemoteExecutor.Invoke(static async () =>
+        var hook = new AgentTelemetryHook(new TestEnvironment());
+        using var input = new StringReader("""{"toolName":"bash","toolArgs":{"command":"echo hello"}}""");
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var calls = 0;
+        var result = await hook.RunAsync(input, output, error, _ =>
         {
-            Environment.SetEnvironmentVariable("ASPIRE_CLI_TELEMETRY_OPTOUT", "false");
-            Environment.SetEnvironmentVariable(AgentTelemetryHook.PayloadLimitEnvironmentVariable, null);
-            using var input = new StringReader("""{"toolName":"bash","toolArgs":{"command":"echo hello"}}""");
-            using var output = new StringWriter();
-            var calls = 0;
-            var result = await AgentTelemetryHook.RunAsync(input, output, _ =>
-            {
-                calls++;
-                return Task.FromResult(0);
-            });
-            Assert.Equal(0, result);
-            Assert.Equal(0, calls);
-            Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
+            calls++;
+            return Task.FromResult(0);
         });
+        Assert.Equal(0, result);
+        Assert.Equal(0, calls);
+        Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
+        Assert.Equal("", error.ToString());
     }
 
     [Fact]
-    public void HookOptOutDoesNotReadOrInvoke()
+    public async Task HookOptOutDoesNotReadOrInvoke()
     {
-        using var process = RemoteExecutor.Invoke(static async () =>
+        var hook = new AgentTelemetryHook(new TestEnvironment(new Dictionary<string, string?>
         {
-            Environment.SetEnvironmentVariable("ASPIRE_CLI_TELEMETRY_OPTOUT", "TrUe");
-            using var input = new StringReader("""{"toolName":"skill","toolArgs":{"skill":"aspire"}}""");
-            using var output = new StringWriter();
-            var result = await AgentTelemetryHook.RunAsync(input, output, _ => throw new InvalidOperationException());
-            Assert.Equal(0, result);
-            Assert.Equal('{', input.Peek());
-            Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
-        });
+            ["ASPIRE_CLI_TELEMETRY_OPTOUT"] = "TrUe"
+        }));
+        using var input = new StringReader("""{"toolName":"skill","toolArgs":{"skill":"aspire"}}""");
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var result = await hook.RunAsync(input, output, error, _ => throw new InvalidOperationException());
+        Assert.Equal(0, result);
+        Assert.Equal('{', input.Peek());
+        Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
+        Assert.Equal("", error.ToString());
     }
 
     [Fact]
@@ -81,6 +81,48 @@ public class AgentTelemetryHookTests
         var args = AgentTelemetryHook.Classify("""{"toolName":"aspire-list_resources","toolArgs":"not json"}""", "1", AgentTelemetryHook.DefaultMaxPayloadCharacters);
         Assert.NotNull(args);
         Assert.Equal("aspire-list_resources", args[Array.IndexOf(args, "--tool-name") + 1]);
+    }
+
+    [Theory]
+    [InlineData("11111111-2222-3333-4444-555555555555", true)]
+    [InlineData("11111111222233334444555555555555", false)]
+    [InlineData("not-a-session-id", false)]
+    public void SessionIdUsesGuidFormatValidation(string sessionId, bool expected)
+    {
+        var args = AgentTelemetryHook.Classify(
+            $$"""{"toolName":"aspire-list_resources","sessionId":"{{sessionId}}"}""",
+            "1", AgentTelemetryHook.DefaultMaxPayloadCharacters);
+        Assert.NotNull(args);
+        var index = Array.IndexOf(args, "--session-id");
+        Assert.Equal(expected, index >= 0);
+        if (expected)
+        {
+            Assert.Equal(sessionId, args[index + 1]);
+        }
+    }
+
+    [Fact]
+    public async Task HookUsesInjectedClientEnvironmentAndReturnsBenignResponseOnFailure()
+    {
+        var hook = new AgentTelemetryHook(new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["COPILOT_CLI"] = "1"
+        }));
+        using var input = new StringReader("""{"hook_event_name":"PostToolUse","tool_name":"mcp__aspire__list_resources"}""");
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        string[]? recordedArgs = null;
+
+        Assert.Equal(0, await hook.RunAsync(input, output, error, args =>
+        {
+            recordedArgs = args;
+            throw new IOException("Must not expose payload or exception message.");
+        }));
+
+        Assert.NotNull(recordedArgs);
+        Assert.Equal("copilot-cli", recordedArgs[Array.IndexOf(recordedArgs, "--client-name") + 1]);
+        Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
+        Assert.Equal("Agent telemetry hook failed (IOException)." + Environment.NewLine, error.ToString());
     }
 
     [Fact]
@@ -126,45 +168,44 @@ public class AgentTelemetryHookTests
     [Theory]
     [InlineData(0, true)]
     [InlineData(1, false)]
-    public void HookHonorsConfiguredLimitAndDrainsOversizedInput(int extraCharacters, bool expectedInvocation)
+    public async Task HookHonorsConfiguredLimitAndDrainsOversizedInput(int extraCharacters, bool expectedInvocation)
     {
-        using var process = RemoteExecutor.Invoke(static async (extra, expected) =>
+        const string payload = """{"toolName":"skill","toolArgs":{"skill":"aspire"}}""";
+        var hook = new AgentTelemetryHook(new TestEnvironment(new Dictionary<string, string?>
         {
-            const string payload = """{"toolName":"skill","toolArgs":{"skill":"aspire"}}""";
-            Environment.SetEnvironmentVariable("ASPIRE_CLI_TELEMETRY_OPTOUT", "false");
-            Environment.SetEnvironmentVariable(AgentTelemetryHook.PayloadLimitEnvironmentVariable, payload.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            using var input = new StringReader(payload + new string(' ', int.Parse(extra)));
-            using var output = new StringWriter();
-            var invoked = false;
+            [AgentTelemetryHook.PayloadLimitEnvironmentVariable] = payload.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        }));
+        using var input = new StringReader(payload + new string(' ', extraCharacters));
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var invoked = false;
 
-            Assert.Equal(0, await AgentTelemetryHook.RunAsync(input, output, _ =>
-            {
-                invoked = true;
-                return Task.FromResult(0);
-            }));
+        Assert.Equal(0, await hook.RunAsync(input, output, error, _ =>
+        {
+            invoked = true;
+            return Task.FromResult(0);
+        }));
 
-            Assert.Equal(bool.Parse(expected), invoked);
-            Assert.Equal(-1, input.Peek());
-            Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
-        }, extraCharacters.ToString(), expectedInvocation.ToString());
+        Assert.Equal(expectedInvocation, invoked);
+        Assert.Equal(-1, input.Peek());
+        Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
+        Assert.Equal("", error.ToString());
     }
 
     [Fact]
-    public void HookReportsInvalidConfigurationWithoutInvokingCli()
+    public async Task HookReportsInvalidConfigurationWithoutInvokingCli()
     {
-        using var process = RemoteExecutor.Invoke(static async () =>
+        var hook = new AgentTelemetryHook(new TestEnvironment(new Dictionary<string, string?>
         {
-            Environment.SetEnvironmentVariable("ASPIRE_CLI_TELEMETRY_OPTOUT", "false");
-            Environment.SetEnvironmentVariable(AgentTelemetryHook.PayloadLimitEnvironmentVariable, "0");
-            using var input = new StringReader("""{"toolName":"skill","toolArgs":{"skill":"aspire"}}""");
-            using var output = new StringWriter();
-            using var error = new StringWriter();
-            Console.SetError(error);
+            [AgentTelemetryHook.PayloadLimitEnvironmentVariable] = "0"
+        }));
+        using var input = new StringReader("""{"toolName":"skill","toolArgs":{"skill":"aspire"}}""");
+        using var output = new StringWriter();
+        using var error = new StringWriter();
 
-            Assert.Equal(0, await AgentTelemetryHook.RunAsync(input, output, _ => throw new InvalidOperationException()));
-            Assert.Contains(AgentTelemetryHook.PayloadLimitEnvironmentVariable, error.ToString());
-            Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
-        });
+        Assert.Equal(0, await hook.RunAsync(input, output, error, _ => throw new InvalidOperationException()));
+        Assert.Contains(AgentTelemetryHook.PayloadLimitEnvironmentVariable, error.ToString());
+        Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
     }
 
     [Fact]

@@ -1,12 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Formats.Tar;
+using System.IO.Compression;
+using System.Text.Json;
 using System.Text.RegularExpressions;
+using Aspire.Cli.Agents.AspireSkills;
 
 namespace Aspire.Cli.Agents.Hooks;
 
 /// <summary>
-/// Reads the telemetry allowlists from the embedded, release-verified canonical hook.
+/// Reads skills and references from the embedded skill manifest, and MCP tools from the canonical hook.
 /// </summary>
 internal sealed partial class AgentTelemetryCatalog
 {
@@ -25,48 +29,103 @@ internal sealed partial class AgentTelemetryCatalog
         References = references;
     }
 
-    internal static AgentTelemetryCatalog Parse(string script)
+    internal static AgentTelemetryCatalog Parse(SkillBundleManifest manifest, string script)
     {
-        var declarations = Declarations().Matches(script);
-        return new(Read("ASPIRE_SKILLS"), Read("ASPIRE_MCP_TOOLS"), Read("ASPIRE_REFERENCE_FILES"));
-
-        HashSet<string> Read(string name)
+        if (manifest.Skills is not { Length: > 0 })
         {
-            var matches = declarations.Where(match => match.Groups["name"].Value == name).ToArray();
-            if (matches.Length != 1)
-            {
-                throw new InvalidDataException($"The bundled telemetry hook must declare {name} exactly once.");
-            }
-
-            var values = matches[0].Groups["values"].Value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-            if (values.Length == 0 || values.Any(value => !Identifier().IsMatch(value)))
-            {
-                throw new InvalidDataException($"The bundled telemetry hook contains an invalid {name} allowlist.");
-            }
-
-            return new HashSet<string>(values, StringComparer.OrdinalIgnoreCase);
+            throw new InvalidDataException("The bundled skill manifest must contain skills.");
         }
+
+        var skills = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var references = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var skill in manifest.Skills)
+        {
+            if (skill?.Name is not { Length: > 0 } name)
+            {
+                throw new InvalidDataException("The bundled skill manifest contains an unnamed skill.");
+            }
+
+            AspireSkillsBundleProvider.ValidateSkillName(name);
+            if (!skills.Add(name))
+            {
+                throw new InvalidDataException($"The bundled skill manifest contains duplicate skill '{name}'.");
+            }
+
+            if (skill.Files is not { } files)
+            {
+                throw new InvalidDataException($"The bundled skill '{name}' is missing its file inventory.");
+            }
+            foreach (var file in files)
+            {
+                var path = AspireSkillsBundleProvider.NormalizeRelativePath(file?.RelativePath).Replace('\\', '/');
+                // SKILL.md is an invocation, not a reference. Evals, scripts, and other manifest
+                // assets must not become new telemetry dimensions merely because they are shipped.
+                if (path.StartsWith("references/", StringComparison.Ordinal))
+                {
+                    references.Add($"{name}/{path}");
+                }
+            }
+        }
+
+        // The manifest does not yet describe MCP tools. Retain the canonical tool allowlist until
+        // structured tool metadata is available, without parsing shell declarations for skills.
+        var declarations = McpToolsDeclaration().Matches(script);
+        if (declarations.Count != 1)
+        {
+            throw new InvalidDataException("The bundled telemetry hook must declare ASPIRE_MCP_TOOLS exactly once.");
+        }
+        var tools = declarations[0].Groups["values"].Value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (tools.Length == 0 || tools.Any(tool => !ToolIdentifier().IsMatch(tool)))
+        {
+            throw new InvalidDataException("The bundled telemetry hook contains an invalid MCP tool allowlist.");
+        }
+
+        return new(skills, new HashSet<string>(tools, StringComparer.OrdinalIgnoreCase), references);
     }
 
     private static AgentTelemetryCatalog LoadBundled()
     {
-        // Read the compiled resource, never the mutable installed script. Updating the canonical
-        // skills bundle then updates native classification too, without another maintained list.
+        // Read only compiled resources, never user-installed skills or scripts. No extraction,
+        // network lookup, or skill-content reads are needed on the hook path.
+        using var archive = typeof(AgentTelemetryCatalog).Assembly.GetManifestResourceStream("aspire-skills.bundle.tgz")
+            ?? throw new InvalidDataException("The bundled skills archive is missing.");
+        var manifest = ReadManifest(archive);
         using var stream = typeof(AgentTelemetryCatalog).Assembly.GetManifestResourceStream("track-telemetry.sh")
             ?? throw new InvalidDataException("The bundled telemetry hook is missing.");
         using var reader = new StreamReader(stream);
-        return Parse(reader.ReadToEnd());
+        return Parse(manifest, reader.ReadToEnd());
     }
 
-    // Canonical declarations are literal, whitespace-separated names, optionally on multiple lines:
-    // ASPIRE_SKILLS="aspire aspire-init"
-    // ASPIRE_REFERENCE_FILES="
-    // aspire-init/references/templates.md
-    // "
-    // Do not evaluate shell expressions or accept an unrecognized format as an empty allowlist.
-    [GeneratedRegex("""^(?<name>ASPIRE_SKILLS|ASPIRE_MCP_TOOLS|ASPIRE_REFERENCE_FILES)="(?<values>[^"]*)"[ \t]*\r?$""", RegexOptions.Multiline)]
-    private static partial Regex Declarations();
+    internal static SkillBundleManifest ReadManifest(Stream archive)
+    {
+        using var gzip = new GZipStream(archive, CompressionMode.Decompress, leaveOpen: true);
+        using var tar = new TarReader(gzip);
+        SkillBundleManifest? manifest = null;
+        while (tar.GetNextEntry() is { } entry)
+        {
+            // The manifest is at the archive root or one wrapper directory below it:
+            // skill-manifest.json or aspire-skills-v0.0.3/skill-manifest.json.
+            var parts = entry.Name.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (parts is not (["skill-manifest.json"] or [_, "skill-manifest.json"]))
+            {
+                continue;
+            }
+            if (manifest is not null || entry.DataStream is null ||
+                entry.EntryType is not (TarEntryType.RegularFile or TarEntryType.V7RegularFile))
+            {
+                throw new InvalidDataException("The bundled skills archive must contain one regular skill manifest.");
+            }
+            manifest = JsonSerializer.Deserialize(entry.DataStream, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest)
+                ?? throw new InvalidDataException("The bundled skill manifest is empty.");
+        }
 
-    [GeneratedRegex("""\A[a-zA-Z0-9_./-]+\z""")]
-    private static partial Regex Identifier();
+        return manifest ?? throw new InvalidDataException("The bundled skills archive is missing skill-manifest.json.");
+    }
+
+    // ASPIRE_MCP_TOOLS="doctor list_resources ..." is literal, whitespace-separated data.
+    [GeneratedRegex("""^ASPIRE_MCP_TOOLS="(?<values>[^"]*)"[ \t]*\r?$""", RegexOptions.Multiline)]
+    private static partial Regex McpToolsDeclaration();
+
+    [GeneratedRegex("""\A[a-zA-Z0-9_-]+\z""")]
+    private static partial Regex ToolIdentifier();
 }

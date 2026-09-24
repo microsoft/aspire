@@ -8,9 +8,9 @@ using Aspire.Cli.Telemetry;
 namespace Aspire.Cli.Agents.Hooks;
 
 /// <summary>
-/// Handles hook input before CLI startup, avoiding a shell and host initialization for unrelated tools.
+/// Classifies hook input before telemetry providers and enrichment are initialized.
 /// </summary>
-internal static class AgentTelemetryHook
+internal sealed class AgentTelemetryHook(IEnvironment environment)
 {
     internal const string PayloadLimitEnvironmentVariable = "ASPIRE_AGENT_TELEMETRY_MAX_PAYLOAD_CHARACTERS";
     // Bound memory before JSON parsing; TextReader counts UTF-16 characters, not bytes.
@@ -30,11 +30,11 @@ internal static class AgentTelemetryHook
         return (command, args);
     }
 
-    internal static async Task<int> RunAsync(TextReader input, TextWriter output, Func<string[], Task<int>> execute)
+    internal async Task<int> RunAsync(TextReader input, TextWriter output, TextWriter error, Func<string[], Task<int>> execute)
     {
         try
         {
-            var optOut = Environment.GetEnvironmentVariable(AspireCliTelemetry.TelemetryOptOutConfigKey);
+            var optOut = environment.GetEnvironmentVariable(AspireCliTelemetry.TelemetryOptOutConfigKey);
             if (optOut is "1" || string.Equals(optOut, "true", StringComparison.OrdinalIgnoreCase))
             {
                 return 0;
@@ -43,11 +43,11 @@ internal static class AgentTelemetryHook
             int maxPayloadCharacters;
             try
             {
-                maxPayloadCharacters = GetMaxPayloadCharacters(Environment.GetEnvironmentVariable(PayloadLimitEnvironmentVariable));
+                maxPayloadCharacters = GetMaxPayloadCharacters(environment.GetEnvironmentVariable(PayloadLimitEnvironmentVariable));
             }
             catch (ArgumentException ex)
             {
-                await Console.Error.WriteLineAsync(ex.Message).ConfigureAwait(false);
+                await error.WriteLineAsync(ex.Message).ConfigureAwait(false);
                 return 0;
             }
 
@@ -62,7 +62,7 @@ internal static class AgentTelemetryHook
                 return 0;
             }
 
-            var args = Classify(new string(buffer, 0, length), Environment.GetEnvironmentVariable("COPILOT_CLI"), maxPayloadCharacters);
+            var args = Classify(new string(buffer, 0, length), environment.GetEnvironmentVariable("COPILOT_CLI"), maxPayloadCharacters);
             if (args is not null)
             {
                 await execute(args).ConfigureAwait(false);
@@ -72,7 +72,7 @@ internal static class AgentTelemetryHook
         {
             // Hooks must not interrupt the tool loop, including on malformed input or CLI failure.
             // Do not include the payload in diagnostics.
-            await Console.Error.WriteLineAsync($"Agent telemetry hook failed ({ex.GetType().Name}).").ConfigureAwait(false);
+            await error.WriteLineAsync($"Agent telemetry hook failed ({ex.GetType().Name}).").ConfigureAwait(false);
         }
         finally
         {
@@ -188,7 +188,7 @@ internal static class AgentTelemetryHook
                 telemetryEvent.Dimension, telemetryEvent.Value
             };
             var session = Text(data, "sessionId") ?? Text(data, "session_id");
-            if (session?.Length == 36 && Guid.TryParseExact(session, "D", out _))
+            if (Guid.TryParseExact(session, "D", out _))
             {
                 args.AddRange(["--session-id", session]);
             }

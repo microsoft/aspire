@@ -255,7 +255,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         return new AspireSkillsBundle(version, validatedSkills);
     }
 
-    private static void ValidateSkillName(string skillName)
+    internal static void ValidateSkillName(string skillName)
     {
         // Agent hosts use this grammar to discover skills consistently.
         // See https://agentskills.io/specification.

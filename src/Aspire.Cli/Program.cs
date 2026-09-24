@@ -685,6 +685,8 @@ public class Program
         builder.Services.AddTransient<AgentMcpCommand>();
         builder.Services.AddTransient<AgentInitCommand>();
         builder.Services.AddTransient<AgentTelemetryCommand>();
+        builder.Services.AddSingleton<Agents.Hooks.AgentTelemetryHook>();
+        builder.Services.AddSingleton<TextReader>(Console.In);
         builder.Services.AddTransient<TelemetryCommand>();
         builder.Services.AddTransient<TelemetryLogsCommand>();
         builder.Services.AddTransient<TelemetrySpansCommand>();
@@ -1024,11 +1026,6 @@ public class Program
 
     public static async Task<int> Main(string[] args)
     {
-        if (args is ["agent", "telemetry", "--hook"])
-        {
-            return await Agents.Hooks.AgentTelemetryHook.RunAsync(Console.In, Console.Out, Main).ConfigureAwait(false);
-        }
-
         Console.OutputEncoding = Encoding.UTF8;
 
         if (CompletionInvocation.Matches(args))
@@ -1112,15 +1109,15 @@ public class Program
         logger.LogInformation("CLI process ID: {ProcessId}", Environment.ProcessId);
 
         IHost? app = null;
-        TelemetryManager telemetryManager;
+        Lazy<TelemetryManager> telemetryManager;
+        ParseResult parseResult;
         try
         {
             app = await BuildApplicationAsync(args, startupContext);
-            // Create telemetry providers before hosted services start. AspireCliTelemetry starts
-            // background tag calculation as a hosted service and can complete a cache-hit detector
-            // immediately; resolving the manager first guarantees its listener is attached before
-            // the detector-health activity is created.
-            telemetryManager = app.Services.GetRequiredService<TelemetryManager>();
+            parseResult = app.Services.GetRequiredService<RootCommand>().Parse(args);
+            telemetryManager = app.Services.GetRequiredService<Lazy<TelemetryManager>>();
+            InitializeCommandTelemetry(parseResult.CommandResult.Command, telemetryManager,
+                app.Services.GetRequiredService<AspireCliTelemetry>());
             await app.StartAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -1133,7 +1130,7 @@ public class Program
         }
 
         // Ensure dispose of app when Main exits.
-        using var _ = app;
+        using var appLifetime = app;
 
         // Immediately get telemetry so background tag calculation is available to command activities.
         var telemetry = app.Services.GetRequiredService<AspireCliTelemetry>();
@@ -1143,11 +1140,9 @@ public class Program
         // Log feature state at startup for diagnostics
         app.Services.GetRequiredService<IFeatures>().LogFeatureState();
 
-        // The agent telemetry command is invoked fire-and-forget by the agent telemetry hook
-        // scripts on every PostToolUse event. It emits its own dedicated reported span, so the
-        // generic aspire/cli/main span is suppressed below to avoid double-counting CLI usage, and
-        // the first-run telemetry notice is skipped so a background hook cannot silently consume the
-        // notice the user is meant to see on their first interactive command.
+        // The agent telemetry command emits its own dedicated reported span, so the generic
+        // aspire/cli/main span is suppressed below to avoid double-counting CLI usage. The first-run
+        // notice is skipped so a background hook cannot consume the interactive user's notice.
         var isAgentTelemetryInvocation = AgentTelemetryInvocation.Matches(args);
 
         // Display first run experience if this is the first time the CLI is run on this machine
@@ -1156,7 +1151,6 @@ public class Program
             await DisplayFirstTimeUseNoticeIfNeededAsync(app.Services, args, cancellationManager.Token);
         }
 
-        var rootCommand = app.Services.GetRequiredService<RootCommand>();
         var invokeConfig = new InvocationConfiguration()
         {
             // Disable default exception handler so we can log exceptions to telemetry.
@@ -1167,9 +1161,7 @@ public class Program
 
         app.Services.GetRequiredService<CliExecutionContext>();
 
-        // Suppress the generic main span for the agent telemetry command path: that command emits
-        // its own aspire/cli/agent_telemetry span, and creating the main span too would record a
-        // second span (inflating ordinary CLI-usage metrics) for every hook event.
+        // Agent events must not also count as ordinary CLI invocations.
         using var mainActivity = isAgentTelemetryInvocation
             ? null
             : telemetry.StartReportedActivity(TelemetryConstants.Activities.Main, ActivityKind.Internal);
@@ -1192,13 +1184,6 @@ public class Program
                 {
                     profileCaptureSession = await app.Services.GetRequiredService<ProfileCaptureService>().StartAsync(profileCaptureOptions, cancellationManager.Token).ConfigureAwait(false);
                 }
-
-                // Parse before logging. `aspire run --ApiKey sk-live-...` forwards unmatched tokens
-                // to the AppHost even though the user never typed a `--` separator, so the parse
-                // tree is the only reliable way to tell CLI-owned tokens from AppHost input.
-                // Reordering is safe because Parse collects errors into the result instead of
-                // throwing, and nothing between here and the original call site inspects args.
-                var parseResult = rootCommand.Parse(args);
 
                 // Log command invocation details for debugging. Anything forwarded to the AppHost
                 // can contain secrets, so it is redacted.
@@ -1226,16 +1211,7 @@ public class Program
                     }
 
                     // Parse commandline and invoke the handler.
-                    if (args is ["agent", "telemetry", "--drain"] && telemetryManager.HasAzureMonitor)
-                    {
-                        await AgentTelemetryUploader.DrainAsync(TelemetryManager.GetTelemetryStoragePath(),
-                            AgentTelemetryUploader.LockPath, cancellationManager.Token).ConfigureAwait(false);
-                        exitCode = CliExitCodes.Success;
-                    }
-                    else
-                    {
-                        exitCode = await parseResult.InvokeAsync(invokeConfig, cancellationManager.Token).ConfigureAwait(false);
-                    }
+                    exitCode = await parseResult.InvokeAsync(invokeConfig, cancellationManager.Token).ConfigureAwait(false);
 
                     // Set telemetry tags based on how the command completed.
                     profileCommandActivity.SetProcessExitCode(exitCode);
@@ -1281,7 +1257,7 @@ public class Program
             {
                 try
                 {
-                    await telemetryManager.ForceFlushProfilingAsync().ConfigureAwait(false);
+                    await telemetryManager.Value.ForceFlushProfilingAsync().ConfigureAwait(false);
                     var exportExitCode = await profileCaptureSession.ExportAsync(cancellationManager.Token).ConfigureAwait(false);
                     if (exitCode == CliExitCodes.Success && exportExitCode != CliExitCodes.Success)
                     {
@@ -1308,40 +1284,30 @@ public class Program
                 await profileCaptureSession.DisposeAsync().ConfigureAwait(false);
             }
 
-            // The detector-health activity is created asynchronously after default tags resolve. Ensure
-            // it has been handed to the provider before shutdown starts so short CLI invocations do not
-            // lose the activity while the provider is flushing.
+            // Finish asynchronously-created detector activities before shutting down their provider.
             await telemetry.CompleteInternalMicrosoftDiagnosticsAsync().ConfigureAwait(false);
-
-            // Agent telemetry flushes to durable exporter storage, not to the network. Persist after
-            // enrichment so the hook can return without losing its event or waiting for ingestion.
-            if (isAgentTelemetryInvocation)
-            {
-                try
-                {
-                    if (!await telemetryManager.ForceFlushReportedAsync().ConfigureAwait(false))
-                    {
-                        logger.LogWarning("Agent telemetry persistence did not complete before the flush timeout.");
-                    }
-                    if (telemetryManager.HasAzureMonitor && args is not ["agent", "telemetry", "--drain"])
-                    {
-                        await AgentTelemetryUploader.EnsureRunningAsync(app.Services).ConfigureAwait(false);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // A telemetry flush failure must never change the hook's exit code.
-                    logger.LogDebug(ex, "Failed to persist agent telemetry or start its uploader.");
-                }
-            }
 
             // Shutting down telemetry manager to flush any remaining telemetry will take time.
             // Run it concurrently with application shutdown after all asynchronously-created telemetry
             // has been submitted to the providers.
-            var shutdownTelemetryTask = telemetryManager.ShutdownAsync();
+            var shutdownTelemetryTask = telemetryManager.IsValueCreated
+                ? telemetryManager.Value.ShutdownAsync()
+                : Task.CompletedTask;
 
             await app.StopAsync().ConfigureAwait(false);
             await shutdownTelemetryTask;
+        }
+    }
+
+    internal static void InitializeCommandTelemetry(Command command, Lazy<TelemetryManager> manager, AspireCliTelemetry telemetry)
+    {
+        // Like package prefetching, expensive telemetry startup is command-controlled. A hook may
+        // have nothing to report; its handler opts in after classification, through normal dispatch.
+        if (command is not BaseCommand { InitializeTelemetryOnStartup: false })
+        {
+            // Attach listeners before enrichment can emit immediately completed activities.
+            _ = manager.Value;
+            telemetry.Initialize();
         }
     }
 

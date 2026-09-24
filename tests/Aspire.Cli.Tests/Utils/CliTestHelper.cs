@@ -134,6 +134,12 @@ internal static class CliTestHelper
         services.AddSingleton(sp => sp.GetRequiredService<ConsoleEnvironment>().Out);
         services.AddSingleton(options.TimeProvider);
         services.AddSingleton(options.TelemetryFactory);
+        services.AddSingleton(new TelemetryConfiguration { ReportedTelemetryEnabled = false });
+        services.AddSingleton<TelemetryTagsSource>();
+        services.AddSingleton<TelemetryManager>();
+        services.AddSingleton(sp => new Lazy<TelemetryManager>(sp.GetRequiredService<TelemetryManager>));
+        services.AddSingleton<AgentTelemetryHook>();
+        services.AddSingleton<TextReader>(TextReader.Null);
         services.AddSingleton<ProfilingTelemetry>();
         services.AddSingleton(options.ProjectLocatorFactory);
         services.AddSingleton(options.SolutionLocatorFactory);

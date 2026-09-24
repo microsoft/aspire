@@ -6,6 +6,7 @@ using System.Net;
 using System.Text.Json;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Utils;
+using Aspire.TestUtilities;
 using Azure.Core.Pipeline;
 using Azure.Monitor.OpenTelemetry.Exporter;
 using Microsoft.AspNetCore.InternalTesting;
@@ -29,6 +30,7 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [OuterloopTest("Exercises the exporter's real three-minute lease expiry across processes.")]
     public void Uploader_DeliversPersistedEventAfterProducerExits()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -43,8 +43,8 @@ internal static class TelemetryServiceCollectionExtensions
         services.AddSingleton<IInternalMicrosoftDetector, InternalMicrosoftDetector>();
         services.AddSingleton<TelemetryTagsSource>();
         services.AddSingleton<AspireCliTelemetry>();
+        services.AddSingleton(sp => new Lazy<TelemetryManager>(sp.GetRequiredService<TelemetryManager>));
         services.AddSingleton<ProfilingTelemetry>();
-        services.AddHostedService(sp => sp.GetRequiredService<AspireCliTelemetry>());
 
         return services;
     }
