@@ -43,6 +43,13 @@
     transform: translateY(0);
 }
 
+/* The dock is mounted for the first time already visible, so it needs a starting transform to slide in. */
+@starting-style {
+    .terminal-dock.visible {
+        transform: translateY(100%);
+    }
+}
+
 .terminal-dock.collapsed {
     transform: translateY(100%);
     pointer-events: none;
