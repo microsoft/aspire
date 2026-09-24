@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Shared;
 using Hex1b;
 using Hex1b.Tokens;
 using Microsoft.Extensions.Logging;
@@ -206,7 +207,7 @@ internal sealed class Hmp1UdsServerListenerFilter : IHex1bTerminalPresentationFi
         var directory = Path.GetDirectoryName(socketPath);
         if (!string.IsNullOrWhiteSpace(directory))
         {
-            Directory.CreateDirectory(directory);
+            SocketPermissionHelper.CreateDirectory(directory, repairExisting: false);
         }
 
         if (File.Exists(socketPath))
@@ -217,7 +218,7 @@ internal sealed class Hmp1UdsServerListenerFilter : IHex1bTerminalPresentationFi
         var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         try
         {
-            listener.Bind(new UnixDomainSocketEndPoint(socketPath));
+            SocketPermissionHelper.Bind(listener, socketPath);
             listener.Listen(backlog: 16);
             return listener;
         }

@@ -29,7 +29,7 @@ test("accountConfig defaults unconfigured accounts to the public repos", () => {
   assert.equal(normal.configured, false);
 });
 
-test("accountConfig defaults the Proxima enterprise account to the first-party repo", () => {
+test("accountConfig defaults the Proxima enterprise account to the default Proxima repo set", () => {
   const proxima = accountConfig({ accounts: {} }, "acct:msft.ghe.com/ankj");
 
   assert.deepEqual(proxima.repos, DEFAULT_PROXIMA_REPOS);
@@ -47,7 +47,7 @@ test("accountConfig keeps Proxima defaults on its host", () => {
   );
   assert.deepEqual(
     accountConfig({ accounts: {} }, "acct:msft.ghe.com/ankj").repos,
-    ["coreai/aspire-1p"],
+    ["coreai/aspire-1p", "coreai/sisyphus"],
   );
 });
 
@@ -92,7 +92,7 @@ test("activateNewProximaAccounts activates only usable accounts without saved pr
   assert.deepEqual(prefs.accounts, {
     "acct:github.com/octo": { repos: ["microsoft/aspire"], active: true },
     "acct:msft.ghe.com/disabled": { repos: ["coreai/aspire-1p"], active: false },
-    "acct:msft.ghe.com/ankj": { repos: ["coreai/aspire-1p"], active: true },
+    "acct:msft.ghe.com/ankj": { repos: ["coreai/aspire-1p", "coreai/sisyphus"], active: true },
   });
 });
 
@@ -105,7 +105,7 @@ test("activateNewProximaAccounts also handles a fresh preferences file", () => {
   ]);
 
   assert.deepEqual(prefs.accounts, {
-    "acct:msft.ghe.com/ankj": { repos: ["coreai/aspire-1p"], active: true },
+    "acct:msft.ghe.com/ankj": { repos: ["coreai/aspire-1p", "coreai/sisyphus"], active: true },
   });
 });
 

@@ -750,6 +750,49 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CreateSocket_RestrictsDirectoryAndSocketPermissions(bool existingDirectory)
+    {
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            var directory = BackchannelConstants.GetBackchannelsDirectory(root.FullName);
+            if (existingDirectory)
+            {
+                Directory.CreateDirectory(directory);
+                if (!OperatingSystem.IsWindows())
+                {
+                    File.SetUnixFileMode(directory,
+                        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                        UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
+                        UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
+                }
+            }
+
+            using var listener = AppHostSocketManager.CreateSocket(
+                appHostPath: null,
+                root.FullName,
+                Environment.ProcessId,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+
+            if (!OperatingSystem.IsWindows())
+            {
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+                    File.GetUnixFileMode(directory));
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                    File.GetUnixFileMode(listener.SocketPath));
+            }
+
+            Assert.True(File.Exists(listener.SocketPath));
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
     /// <summary>
     /// Gets a home directory whose generated socket paths fit the platform's AF_UNIX byte limit.
     /// </summary>

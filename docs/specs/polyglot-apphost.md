@@ -277,6 +277,11 @@ The CLI passes the connection path via **environment variable**:
 |---------------------|-------------|---------|
 | `REMOTE_APP_HOST_SOCKET_PATH` | Unix socket path (or named pipe name on Windows) | `/tmp/aspire/host.sock` |
 
+The CLI normally allocates a randomized Unix socket path under `~/.aspire/cli/bch`.
+Explicit paths such as the example above are also supported. If the parent directory
+already exists on Unix, it must have mode `0700`; its permissions are not rewritten.
+A missing parent directory is created with mode `0700`.
+
 **Security:** The socket is protected by file system permissions (Unix: `0600`, Windows: current user ACL). Only processes running as the same user can connect.
 
 **Guest startup requirements:**

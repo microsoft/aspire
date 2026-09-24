@@ -6,6 +6,7 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using Aspire.Hosting.Utils;
 using Hex1b;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -100,6 +101,15 @@ public sealed class TerminalService : IAsyncDisposable
     /// The placement in <paramref name="options"/> is not <see cref="TerminalPlacement.Dock"/>,
     /// <see cref="TerminalPlacement.Dialog"/>, or <see cref="TerminalPlacement.None"/>.
     /// </exception>
+    /// <exception cref="IOException">
+    /// On Windows, the PTY socket directory does not use a supported Aspire layout or cannot be created.
+    /// </exception>
+    /// <exception cref="UnauthorizedAccessException">
+    /// On Windows, the PTY socket directory permissions cannot be applied.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// On Windows, no user profile directory is available for the default PTY socket directory.
+    /// </exception>
     public AspireTerminal CreateTerminal(TerminalLaunchOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -128,6 +138,8 @@ public sealed class TerminalService : IAsyncDisposable
         var environment = options.EnvironmentVariables.Count > 0
             ? new Dictionary<string, string>(options.EnvironmentVariables, StringComparer.Ordinal)
             : null;
+
+        Hex1bPtySocketHelper.Configure();
 
         return Hex1bTerminal.CreateBuilder()
             .WithPtyProcess(process =>
