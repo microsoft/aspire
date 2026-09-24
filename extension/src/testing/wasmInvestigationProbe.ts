@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
+import { spawnSync } from 'child_process';
 
 // Investigation-only instrumentation for #20117; not part of the proposed fix.
 export function installWasmInvestigationProbe(logDirectory: string): vscode.Disposable {
@@ -21,8 +22,11 @@ export function installWasmInvestigationProbe(logDirectory: string): vscode.Disp
     const lifecycleCommands = new Set(['initialize', 'launch', 'attach', 'configurationDone', 'disconnect', 'terminate']);
     const lifecycleEvents = new Set(['initialized', 'process', 'exited', 'terminated', 'thread', 'stopped', 'continued']);
     record('probe-installed', undefined, { platform: process.platform, architecture: process.arch, vscode: vscode.version });
+    const bridgeExceptionProbe = installBridgeExceptionProbe(logDirectory);
+    record('bridge-exception-probe-installed', undefined);
 
     return vscode.Disposable.from(
+        bridgeExceptionProbe,
         vscode.debug.registerDebugConfigurationProvider('*', {
             resolveDebugConfigurationWithSubstitutedVariables(_folder, configuration) {
                 if (configuration.type === 'monovsdbg_wasm') {
@@ -97,3 +101,149 @@ export function installWasmInvestigationProbe(logDirectory: string): vscode.Disp
         new vscode.Disposable(() => record('probe-disposed', undefined)),
     );
 }
+
+function installBridgeExceptionProbe(logDirectory: string): vscode.Disposable {
+    const directory = path.join(logDirectory, 'bridge-exception-probe');
+    fs.mkdirSync(directory, { recursive: true });
+    const projectPath = path.join(directory, 'BridgeExceptionProbe.csproj');
+    fs.writeFileSync(projectPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>13</LangVersion>
+  </PropertyGroup>
+</Project>
+`);
+    fs.writeFileSync(path.join(directory, 'StartupHook.cs'), bridgeStartupHookSource);
+    const outputPath = path.join(directory, 'out');
+    const build = spawnSync('dotnet', [
+        'build', projectPath, '--configuration', 'Release', '--output', outputPath,
+        '--verbosity', 'quiet', '--nologo',
+        '-p:ImportDirectoryBuildProps=false', '-p:ImportDirectoryBuildTargets=false',
+        '-p:NuGetAudit=false',
+    ], {
+        cwd: directory,
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 180000,
+        env: { ...process.env, MSBUILDTERMINALLOGGER: 'false' },
+    });
+    fs.writeFileSync(path.join(directory, 'build.log'), `${build.stdout ?? ''}\n${build.stderr ?? ''}`);
+    if (build.error || build.status !== 0) {
+        throw new Error(`Could not build the investigation-only bridge exception probe: ${build.error?.message ?? `exit ${build.status}`}. See ${path.join(directory, 'build.log')}.`);
+    }
+
+    // Observe caught bridge exceptions without replacing its binaries or changing its
+    // log filters, protocol traffic, retries, or timeouts. Compile against an older
+    // runtime because C# can launch the net9 bridge on a different SDK's runtime.
+    // https://github.com/dotnet/runtime/blob/main/docs/design/features/host-startup-hook.md
+    const hookPath = path.join(outputPath, 'BridgeExceptionProbe.dll');
+    const previousHooks = process.env.DOTNET_STARTUP_HOOKS;
+    const previousDirectory = process.env.ASPIRE_WASM_BRIDGE_TRACE_DIRECTORY;
+    const hooks = previousHooks ? `${previousHooks}${path.delimiter}${hookPath}` : hookPath;
+    process.env.DOTNET_STARTUP_HOOKS = hooks;
+    process.env.ASPIRE_WASM_BRIDGE_TRACE_DIRECTORY = logDirectory;
+    return new vscode.Disposable(() => {
+        if (process.env.DOTNET_STARTUP_HOOKS === hooks) {
+            if (previousHooks === undefined) {
+                delete process.env.DOTNET_STARTUP_HOOKS;
+            }
+            else {
+                process.env.DOTNET_STARTUP_HOOKS = previousHooks;
+            }
+        }
+        if (process.env.ASPIRE_WASM_BRIDGE_TRACE_DIRECTORY === logDirectory) {
+            if (previousDirectory === undefined) {
+                delete process.env.ASPIRE_WASM_BRIDGE_TRACE_DIRECTORY;
+            }
+            else {
+                process.env.ASPIRE_WASM_BRIDGE_TRACE_DIRECTORY = previousDirectory;
+            }
+        }
+    });
+}
+
+const bridgeStartupHookSource = `
+using System;
+using System.IO;
+using System.Reflection;
+using System.Text.Json;
+
+internal static class StartupHook
+{
+    [ThreadStatic]
+    private static bool s_writing;
+
+    public static void Initialize()
+    {
+        // Other dotnet children inherit the environment but must not be traced.
+        if (Assembly.GetEntryAssembly()?.GetName().Name != "Microsoft.Diagnostics.BrowserDebugHost")
+        {
+            return;
+        }
+
+        var directory = Environment.GetEnvironmentVariable("ASPIRE_WASM_BRIDGE_TRACE_DIRECTORY")
+            ?? throw new InvalidOperationException("Bridge investigation trace directory is missing.");
+        var file = Path.Combine(directory, $"wasm-bridge-exceptions-{Environment.ProcessId}-{Guid.NewGuid():N}.jsonl");
+        var writer = new StreamWriter(new FileStream(file, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
+        {
+            AutoFlush = true,
+        };
+        var gate = new object();
+        var exceptionCount = 0;
+
+        void Write(string eventName, object? detail = null)
+        {
+            writer.WriteLine(JsonSerializer.Serialize(new
+            {
+                observedAt = DateTimeOffset.UtcNow,
+                processId = Environment.ProcessId,
+                eventName,
+                detail,
+            }));
+        }
+
+        Write("hook-installed", new { runtime = Environment.Version.ToString() });
+        AppDomain.CurrentDomain.FirstChanceException += (_, args) =>
+        {
+            // A logging exception must not recursively re-enter this diagnostic handler.
+            if (s_writing)
+            {
+                return;
+            }
+            s_writing = true;
+            try
+            {
+                lock (gate)
+                {
+                    exceptionCount++;
+                    if (exceptionCount <= 512)
+                    {
+                        Write("first-chance-exception", new
+                        {
+                            type = args.Exception.GetType().FullName,
+                            message = args.Exception.Message,
+                            stack = args.Exception.StackTrace,
+                        });
+                    }
+                    else if (exceptionCount == 513)
+                    {
+                        Write("exception-limit-reached", new { limit = 512 });
+                    }
+                }
+            }
+            finally
+            {
+                s_writing = false;
+            }
+        };
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            lock (gate)
+            {
+                Write("process-exit", new { exceptionCount });
+            }
+        };
+    }
+}
+`;
