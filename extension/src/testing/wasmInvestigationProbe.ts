@@ -165,6 +165,8 @@ function installBridgeExceptionProbe(logDirectory: string): vscode.Disposable {
 
 const bridgeStartupHookSource = `
 using System;
+using System.Collections.Generic;
+using System.Diagnostics.Tracing;
 using System.IO;
 using System.Reflection;
 using System.Text.Json;
@@ -173,6 +175,8 @@ internal static class StartupHook
 {
     [ThreadStatic]
     private static bool s_writing;
+
+    private static EventListener? s_networkListener;
 
     public static void Initialize()
     {
@@ -204,6 +208,27 @@ internal static class StartupHook
         }
 
         Write("hook-installed", new { runtime = Environment.Version.ToString() });
+        var networkEventCount = 0;
+        s_networkListener = new NetworkEventListener(args =>
+        {
+            lock (gate)
+            {
+                networkEventCount++;
+                if (networkEventCount <= 4096)
+                {
+                    var fields = new Dictionary<string, object?>();
+                    for (var index = 0; index < (args.PayloadNames?.Count ?? 0); index++)
+                    {
+                        fields.Add(args.PayloadNames![index], args.Payload![index]);
+                    }
+                    Write("websocket-event", new { name = args.EventName, fields });
+                }
+                else if (networkEventCount == 4097)
+                {
+                    Write("websocket-event-limit-reached", new { limit = 4096 });
+                }
+            }
+        });
         AppDomain.CurrentDomain.FirstChanceException += (_, args) =>
         {
             // A logging exception must not recursively re-enter this diagnostic handler.
@@ -241,9 +266,32 @@ internal static class StartupHook
         {
             lock (gate)
             {
-                Write("process-exit", new { exceptionCount });
+                Write("process-exit", new { exceptionCount, networkEventCount });
             }
         };
+    }
+
+    private sealed class NetworkEventListener(Action<EventWrittenEventArgs> write) : EventListener
+    {
+        protected override void OnEventSourceCreated(EventSource eventSource)
+        {
+            if (eventSource.Name == "Private.InternalDiagnostics.System.Net.WebSockets")
+            {
+                EnableEvents(eventSource, EventLevel.Verbose, (EventKeywords)(-1));
+            }
+        }
+
+        protected override void OnEventWritten(EventWrittenEventArgs eventData)
+        {
+            // Associate events link each WebSocket to its underlying stream, allowing
+            // browser-client reads to be distinguished from IDE-server reads. Omit
+            // payload dumps; this investigation needs connection lifecycle, not data.
+            if (eventData.EventName is not null
+                && !eventData.EventName.Contains("Dump", StringComparison.OrdinalIgnoreCase))
+            {
+                write(eventData);
+            }
+        }
     }
 }
 `;
