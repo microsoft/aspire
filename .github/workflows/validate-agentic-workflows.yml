@@ -48,7 +48,7 @@ jobs:
         id: changed-locks
         run: |
           set -euo pipefail
-          mapfile -t files < <(git diff --no-renames --name-only HEAD^1 HEAD -- '.github/workflows' | grep -E '\.lock\.yml$' || true)
+          mapfile -t files < <(git diff --diff-filter=ACMT --no-renames --name-only HEAD^1 HEAD -- '.github/workflows' | grep -E '\.lock\.yml$' || true)
           {
             echo "files<<EOF_CHANGED_LOCKS"
             if (( ${#files[@]} > 0 )); then
@@ -62,13 +62,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh aw compile --validate --actionlint --shellcheck --no-check-update
+          gh aw compile --purge --validate --actionlint --shellcheck --no-check-update
 
       - name: Verify generated files are up to date
         run: |
-          git --no-pager diff --exit-code -- \
+          set -euo pipefail
+          changes=$(git status --porcelain --untracked-files=all -- \
+            '.github/aw/actions-lock.json' \
             '.github/workflows/*.lock.yml' \
-            '.github/workflows/agentics-maintenance*.yml'
+            '.github/workflows/agentics-maintenance*.yml')
+          if [[ -n "$changes" ]]; then
+            echo "Generated agentic workflow files are not up to date:"
+            printf '%s\n' "$changes"
+            exit 1
+          fi
 
       # `gh aw compile --actionlint/--shellcheck` above only prints advisory diagnostics and always
       # exits 0 (its JSON --validate output never reports them as errors either), so it cannot fail
