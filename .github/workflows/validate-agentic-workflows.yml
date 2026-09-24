@@ -1,0 +1,104 @@
+name: Validate Agentic Workflows
+
+# Agentic workflow Markdown sources and their generated .lock.yml files are excluded from the
+# top-level CI skip gate (eng/github-ci/ci-skip-entirely-patterns.txt), so a PR touching only those
+# files never triggers the main build/test workflow. This dedicated job gives them their own
+# deterministic, path-triggered validation: recompile the Markdown sources with the repository-pinned
+# gh-aw CLI, prove the committed .lock.yml/agentics-maintenance files are not stale, and run the
+# focused Infrastructure.Tests contracts that assert on their shape. See
+# https://github.com/microsoft/aspire/issues/20446.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/**/*.md
+      - .github/workflows/**/*.lock.yml
+      - .github/workflows/agentics-maintenance*.yml
+      - .github/workflows/copilot-setup-steps.yml
+      - .github/aw/actions-lock.json
+      - .github/workflows/validate-agentic-workflows.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Compile, lint, and test agentic workflows
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          # The PR event checks out the synthetic merge commit, whose two parents are the base
+          # branch tip and the PR head. Depth 2 is enough to diff HEAD^1 (base) against HEAD to
+          # find exactly which .lock.yml files this PR changed, without a full-history clone.
+          fetch-depth: 2
+
+      # Keep this pinned to the same gh-aw release as copilot-setup-steps.yml so the recompiled
+      # workflows are byte-for-byte comparable with what a contributor generates locally; see
+      # .github/workflows/README.md.
+      - name: Install gh-aw extension
+        uses: github/gh-aw-actions/setup-cli@5e508589e03a7757a7e05b26e834292f5445bfb6 # v0.88.7
+        with:
+          version: v0.88.7
+
+      # Recorded before compiling so the list reflects exactly what this PR itself changed,
+      # not any incidental regeneration performed by the next step.
+      - name: Determine changed lock files
+        id: changed-locks
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(git diff --no-renames --name-only HEAD^1 HEAD -- '.github/workflows' | grep -E '\.lock\.yml$' || true)
+          {
+            echo "files<<EOF_CHANGED_LOCKS"
+            if (( ${#files[@]} > 0 )); then
+              printf '%s\n' "${files[@]}"
+            fi
+            echo "EOF_CHANGED_LOCKS"
+          } >> "$GITHUB_OUTPUT"
+          echo "Changed lock files: ${files[*]:-<none>}"
+
+      - name: Compile agentic workflows (schema and action-pin validation)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh aw compile --validate --actionlint --shellcheck --no-check-update
+
+      - name: Verify generated files are up to date
+        run: |
+          git --no-pager diff --exit-code -- \
+            '.github/workflows/*.lock.yml' \
+            '.github/workflows/agentics-maintenance*.yml'
+
+      # `gh aw compile --actionlint/--shellcheck` above only prints advisory diagnostics and always
+      # exits 0 (its JSON --validate output never reports them as errors either), so it cannot fail
+      # a PR on its own. `gh aw lint` is the CLI's dedicated, exit-code-precise linter (strict mode
+      # fails with a non-zero exit when actionlint reports any error). Several lock files already
+      # committed on main carry pre-existing actionlint/shellcheck findings unrelated to this
+      # feature; running `gh aw lint` unscoped would make this required check permanently red for
+      # any PR, including ones that don't touch those files. Scoping it to only the lock files this
+      # PR changed enforces the requirement precisely for new/modified content without blocking on
+      # unrelated repository debt.
+      - name: Lint changed lock files (fails on actionlint/shellcheck errors)
+        if: steps.changed-locks.outputs.files != ''
+        env:
+          CHANGED_LOCK_FILES: ${{ steps.changed-locks.outputs.files }}
+        run: |
+          set -euo pipefail
+          mapfile -t files <<< "$CHANGED_LOCK_FILES"
+          gh aw lint --shellcheck "${files[@]}"
+
+      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: ./restore.sh
+
+      - name: Run Infrastructure.Tests agentic workflow contracts
+        run: |
+          dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj \
+            --no-launch-profile -- \
+            --filter-class "*.AgenticWorkflowTests" \
+            --filter-not-trait "quarantined=true" \
+            --filter-not-trait "outerloop=true"
