@@ -1694,6 +1694,235 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task AzureDevComputeClientSurfacesSafeProblemDetailFields()
+    {
+        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent(
+                """
+                {
+                  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+                  "title": "InvalidResourceTier",
+                  "status": 400,
+                  "detail": "Disk size '20480Mi' exceeds tier maximum of '10240Mi'.",
+                  "errorCode": 18,
+                  "traceId": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+                  "requestId": "8c1f3f0e-2a8b-4f5e-9c43-2b7d1f6c1a90"
+                }
+                """,
+                Encoding.UTF8,
+                "application/problem+json")
+        }));
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateSandboxAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            CreateSandboxRequest(new Dictionary<string, string>(StringComparer.Ordinal)),
+            CancellationToken.None));
+
+        Assert.Equal(
+            "ADC request 'PUT subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/sandboxes' failed with HTTP 400 (Bad Request): " +
+            "InvalidResourceTier (errorCode 18). " +
+            "traceId=00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01, requestId=8c1f3f0e-2a8b-4f5e-9c43-2b7d1f6c1a90. " +
+            "Additional service details were redacted.",
+            exception.Message);
+        Assert.False(exception.ResponseMayHaveBeenLost);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientIncludesProblemStatusWhenItDiffersFromHttpStatus()
+    {
+        var handler = new RecordingHandler(_ => Task.FromResult(JsonResponse(
+            """{ "title": "QuotaExceeded", "status": 429, "errorCode": "Sandbox.Quota" }""",
+            HttpStatusCode.Conflict)));
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            "disk-1",
+            CancellationToken.None));
+
+        Assert.Equal(
+            "ADC request 'GET subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/disk-1' failed with HTTP 409 (Conflict): " +
+            "QuotaExceeded (errorCode Sandbox.Quota, status 429).",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientDropsFreeFormTitlesAndValidationErrors()
+    {
+        const string secret = "resolved-secret-environment-value";
+        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = JsonContent.Create(new
+            {
+                type = "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+                title = "One or more validation errors occurred.",
+                status = 400,
+                errors = new Dictionary<string, string[]>
+                {
+                    ["environment.API_KEY"] = [$"The value '{secret}' is invalid."]
+                },
+                traceId = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+            })
+        }));
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateSandboxAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            CreateSandboxRequest(new Dictionary<string, string>(StringComparer.Ordinal) { ["API_KEY"] = secret }),
+            CancellationToken.None));
+
+        Assert.Equal(
+            "ADC request 'PUT subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/sandboxes' failed with HTTP 400 (Bad Request): " +
+            "traceId=00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01. " +
+            "Additional service details were redacted.",
+            exception.Message);
+    }
+
+    [Theory]
+    [InlineData("title")]
+    [InlineData("errorCode")]
+    [InlineData("traceId")]
+    [InlineData("requestId")]
+    public async Task AzureDevComputeClientRedactsIdentifierShapedSecretsEchoedInSafeFields(string fieldName)
+    {
+        const string secret = "ResolvedSecretValue42";
+        var body = new JsonObject
+        {
+            ["title"] = "InvalidEnvironment",
+            ["status"] = 400,
+            [fieldName] = secret
+        };
+        var handler = new RecordingHandler(_ => Task.FromResult(JsonResponse(body.ToJsonString(), HttpStatusCode.BadRequest)));
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateSandboxAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            CreateSandboxRequest(new Dictionary<string, string>(StringComparer.Ordinal) { ["API_KEY"] = secret }),
+            CancellationToken.None));
+
+        Assert.DoesNotContain(secret, exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("details were redacted", exception.Message);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientRedactsIdentifierTitlesThatEmbedRequestSecrets()
+    {
+        const string secret = "hunter2hunter2";
+        var handler = new RecordingHandler(_ => Task.FromResult(JsonResponse(
+            $$"""{ "title": "InvalidValue{{secret}}", "status": 400 }""",
+            HttpStatusCode.BadRequest)));
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateSandboxAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            CreateSandboxRequest(new Dictionary<string, string>(StringComparer.Ordinal) { ["PASSWORD"] = secret }),
+            CancellationToken.None));
+
+        Assert.Equal(
+            "ADC request 'PUT subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/sandboxes' failed with HTTP 400 (Bad Request): " +
+            "The service returned an error response whose details were redacted.",
+            exception.Message);
+    }
+
+    [Theory]
+    [InlineData("""{ "title": "InvalidResourceTier", "errorCode": 18""", "application/json")]
+    [InlineData("""["InvalidResourceTier"]""", "application/json")]
+    [InlineData("\"InvalidResourceTier\"", "application/json")]
+    [InlineData("<html><body>InvalidResourceTier</body></html>", "text/html")]
+    public async Task AzureDevComputeClientRedactsInvalidOrNonObjectErrorBodies(string content, string mediaType)
+    {
+        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent(content, Encoding.UTF8, mediaType)
+        }));
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            "disk-1",
+            CancellationToken.None));
+
+        Assert.Equal(
+            "ADC request 'GET subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/disk-1' failed with HTTP 400 (Bad Request): " +
+            "The service returned an error response whose details were redacted.",
+            exception.Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AzureDevComputeClientRedactsOversizedErrorBodies(bool includeContentLength)
+    {
+        var json = $$"""{ "title": "InvalidResourceTier", "errorCode": 18, "detail": "{{new string('x', AzureDevComputeErrorFormatter.MaxErrorBodyBytes)}}" }""";
+        var handler = new RecordingHandler(_ =>
+        {
+            HttpContent content = includeContentLength
+                ? new StringContent(json, Encoding.UTF8, "application/problem+json")
+                : new StreamContent(new MemoryStream(Encoding.UTF8.GetBytes(json)));
+            if (!includeContentLength)
+            {
+                content.Headers.ContentLength = null;
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = content });
+        });
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            "disk-1",
+            CancellationToken.None));
+
+        Assert.Equal(
+            "ADC request 'GET subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/disk-1' failed with HTTP 400 (Bad Request): " +
+            "The service returned an error response whose details were redacted.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientOmitsDetailsForEmptyErrorBodies()
+    {
+        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent(string.Empty)
+        }));
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetDiskImageAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            "disk-1",
+            CancellationToken.None));
+
+        Assert.Equal(
+            "ADC request 'GET subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/disk-1' failed with HTTP 400 (Bad Request).",
+            exception.Message);
+    }
+
+    private static AzureDevComputeSandboxRequest CreateSandboxRequest(Dictionary<string, string> environment)
+    {
+        return new AzureDevComputeSandboxRequest
+        {
+            Environment = environment,
+            SourcesRef = new AzureDevComputeSandboxSource
+            {
+                DiskImage = new AzureDevComputeSandboxDiskImageSource
+                {
+                    Id = "disk-1",
+                    IsPublic = false
+                }
+            },
+            Resources = new AzureDevComputeSandboxResources
+            {
+                Cpu = "1000m",
+                Memory = "2048Mi",
+                Disk = "20480Mi"
+            }
+        };
+    }
+
+    [Fact]
     public async Task DigestPinnedSandboxImageReferencesAreInspected()
     {
         var runtime = new FakeContainerRuntime

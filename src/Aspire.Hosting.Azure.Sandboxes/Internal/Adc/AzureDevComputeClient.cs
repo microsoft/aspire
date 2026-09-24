@@ -194,7 +194,7 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
             return;
         }
 
-        await EnsureSuccessAsync(response, method, path, cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, method, path, content, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<T> SendAsync<T>(
@@ -211,7 +211,7 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
             return notFoundFactory();
         }
 
-        await EnsureSuccessAsync(response, method, path, cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, method, path, content, cancellationToken).ConfigureAwait(false);
 
         var result = await response.Content.ReadFromJsonAsync<T>(s_jsonSerializerOptions, cancellationToken).ConfigureAwait(false);
         return result ?? throw new InvalidOperationException($"ADC request '{method} {path}' returned an empty response.");
@@ -252,7 +252,7 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
             {
                 try
                 {
-                    await EnsureSuccessAsync(response, method, path, cancellationToken).ConfigureAwait(false);
+                    await EnsureSuccessAsync(response, method, path, content, cancellationToken).ConfigureAwait(false);
                 }
                 catch (InvalidOperationException ex)
                 {
@@ -451,29 +451,21 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
         return _accessToken.Token;
     }
 
-    private static async Task EnsureSuccessAsync(HttpResponseMessage response, HttpMethod method, string path, CancellationToken cancellationToken)
+    private static async Task EnsureSuccessAsync(HttpResponseMessage response, HttpMethod method, string path, object? requestContent, CancellationToken cancellationToken)
     {
         if (response.IsSuccessStatusCode)
         {
             return;
         }
 
-        var message = await GetErrorMessageAsync(response, cancellationToken).ConfigureAwait(false);
+        // The request content is passed through so the formatter can drop any surfaced field that
+        // echoes a value Aspire sent (for example, a resolved secret environment variable).
+        var message = await AzureDevComputeErrorFormatter.GetErrorMessageAsync(response, requestContent, s_jsonSerializerOptions, cancellationToken).ConfigureAwait(false);
         var permissionHint = response.StatusCode == HttpStatusCode.Forbidden
             ? " Verify that the calling principal has the Container Apps SandboxGroup Data Owner role on the sandbox group; newly-created role assignments can take a short time to propagate."
             : string.Empty;
-        throw new InvalidOperationException($"ADC request '{method} {path}' failed with HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). {message}{permissionHint}");
-    }
-
-    private static Task<string> GetErrorMessageAsync(HttpResponseMessage response, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        if (response.Content.Headers.ContentLength == 0)
-        {
-            return Task.FromResult(string.Empty);
-        }
-
-        return Task.FromResult("The service returned an error response whose details were redacted.");
+        var details = string.IsNullOrEmpty(message) ? "." : $": {message}";
+        throw new InvalidOperationException($"ADC request '{method} {path}' failed with HTTP {(int)response.StatusCode} ({response.ReasonPhrase}){details}{permissionHint}");
     }
 
     private static string GetSandboxGroupPath(AzureDevComputeResourceScope scope)
