@@ -52,6 +52,9 @@ internal sealed class JsonRpcServer : BackgroundService
             {
                 throw new InvalidOperationException("Cannot determine the user profile for the remote AppHost socket.");
             }
+            // Reuse the per-user backchannel directory so the standalone fallback has
+            // the same directory permissions as CLI-managed launches. The CLI normally
+            // supplies its own randomized socket path.
             socketPath = Path.Combine(home, SocketDirectoryNames.Aspire, SocketDirectoryNames.Cli, SocketDirectoryNames.Backchannels, "remote-app-host.sock");
         }
         _socketPath = socketPath;
