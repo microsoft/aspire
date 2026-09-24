@@ -3,6 +3,7 @@
 
 using System.Net.Sockets;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Backchannel;
@@ -61,7 +62,7 @@ internal static class AppHostSocketManager
         ArgumentNullException.ThrowIfNull(logger);
 
         var backchannelsDirectory = BackchannelConstants.GetBackchannelsDirectory(homeDirectory);
-        Directory.CreateDirectory(backchannelsDirectory);
+        SocketPermissionHelper.CreateDirectory(backchannelsDirectory, repairExisting: true);
 
         string appHostId;
         if (string.IsNullOrEmpty(appHostPath))
@@ -85,8 +86,7 @@ internal static class AppHostSocketManager
         try
         {
             var appHostSocket = new AppHostSocket(socketPath, logger);
-            var endpoint = new UnixDomainSocketEndPoint(appHostSocket.SocketPath);
-            socket.Bind(endpoint);
+            SocketPermissionHelper.Bind(socket, appHostSocket.SocketPath);
             socket.Listen(ListenBacklog);
             return new AppHostSocketListener(socket, appHostSocket);
         }

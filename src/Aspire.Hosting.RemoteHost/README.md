@@ -98,8 +98,13 @@ Handles serialization between .NET types and JSON:
 
 | Variable | Description |
 |----------|-------------|
-| `REMOTE_APP_HOST_SOCKET_PATH` | Path to the Unix domain socket. Defaults to `{temp}/aspire/remote-app-host.sock` |
+| `REMOTE_APP_HOST_SOCKET_PATH` | Path to the Unix domain socket. Defaults to `~/.aspire/cli/bch/remote-app-host.sock` on Unix/macOS. On Windows, defaults to `{temp}/aspire/remote-app-host.sock` and is used to derive the named pipe name. |
 | `REMOTE_APP_HOST_PID` | Parent process ID for orphan detection. If set, the server shuts down when the parent exits |
+
+On Unix/macOS, a configured socket path can use any dedicated directory name. Missing
+directories are created with mode `0700`; existing configured directories must already
+have mode `0700` and are not modified. The default socket directory's permissions are
+repaired automatically.
 
 ## Security
 
