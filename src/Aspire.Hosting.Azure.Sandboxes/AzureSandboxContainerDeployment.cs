@@ -806,10 +806,14 @@ internal static class AzureSandboxContainerDeployment
     internal static AzureDevComputeSandboxResources CreateSandboxResources(AzureSandboxContainerResource resource)
     {
         var options = GetAzureSandboxContainerOptions(resource.TargetResource);
+
+        // The Azure Dev Compute data plane rejects sandboxes whose disk exceeds cores x 20Gi
+        // (for example, 500m CPU allows at most 10Gi) with an InvalidResourceTier error, so each
+        // tier's disk must stay within that limit.
         return (options?.Tier ?? AzureSandboxTier.Medium) switch
         {
-            AzureSandboxTier.ExtraSmall => new() { Cpu = "250m", Memory = "512Mi", Disk = "20480Mi" },
-            AzureSandboxTier.Small => new() { Cpu = "500m", Memory = "1024Mi", Disk = "20480Mi" },
+            AzureSandboxTier.ExtraSmall => new() { Cpu = "250m", Memory = "512Mi", Disk = "5120Mi" },
+            AzureSandboxTier.Small => new() { Cpu = "500m", Memory = "1024Mi", Disk = "10240Mi" },
             AzureSandboxTier.Medium => new() { Cpu = "1000m", Memory = "2048Mi", Disk = "20480Mi" },
             AzureSandboxTier.Large => new() { Cpu = "2000m", Memory = "4096Mi", Disk = "40960Mi" },
             AzureSandboxTier.ExtraLarge => new() { Cpu = "4000m", Memory = "8192Mi", Disk = "81920Mi" },
