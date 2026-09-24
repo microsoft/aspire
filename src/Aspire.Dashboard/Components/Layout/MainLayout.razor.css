@@ -38,6 +38,10 @@
     height: 24px;
 }
 
+::deep.layout:has(a.logo:hover, a.application-name:hover, .page-header:hover) :is(a.logo, a.application-name) {
+    filter: brightness(var(--aspire-brand-hover-brightness));
+}
+
 ::deep.layout > header .header-button {
     --aspire-button-background: transparent;
     --aspire-button-border-color: currentColor;
