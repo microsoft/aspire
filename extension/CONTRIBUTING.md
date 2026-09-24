@@ -62,7 +62,7 @@ Run `build.ps1` (Windows) or `build.sh` (Mac/Linux) from the repository root to 
 To debug the Aspire CLI together with the extension, set `Aspire Cli Executable Path` to the CLI output path. You can use an absolute path or a workspace token. If you opened the `extension` folder, the local build is:
 
 ```json
-"aspire.aspireCliExecutablePath": "${workspaceFolder}/../artifacts/bin/Aspire.Cli/Debug/net10.0/aspire"
+"aspire.aspireCliExecutablePath": "${workspaceFolder}/../artifacts/bin/Aspire.Cli/Debug/net11.0/aspire"
 ```
 
 `${workspaceFolder}` uses the folder that owns the current operation. In a multi-root workspace, `${workspaceFolder:name}` selects the uniquely named folder. Plain relative paths are not resolved; use a workspace token when the path should move with the checkout.
@@ -77,7 +77,7 @@ You can use the `Aspire: Extension settings` command to open VS Code settings di
 
 When `Aspire Cli Executable Path` resolves to an existing **absolute** path that is not a raw framework-dependent local CLI build output, the extension forwards that value as the `AspireCliPath` MSBuild property/environment variable to terminals, tasks, and debug processes in that workspace folder. The Aspire SDK's `ResolveAspireCliBundle` task uses `AspireCliPath` (defined in [`src/Aspire.Hosting.Tasks/ResolveAspireCliBundle.cs`](/src/Aspire.Hosting.Tasks/ResolveAspireCliBundle.cs)) to locate the matching bundle layout — DCP, dashboard, and terminal-host binaries — and bakes those paths into the built AppHost as `[AssemblyMetadata]` attributes. Without this forwarding, MSBuild probes `PATH` and can stamp the *stable* CLI's bundle into the AppHost while the extension is launching it through the *dev* CLI, producing surprising runtime mismatches such as `<unresolved-aspire-terminalhost>` even though the new CLI is correctly invoked (tracked in [issue #18073](https://github.com/microsoft/aspire/issues/18073)).
 
-A tokenized setting is expanded to an absolute path before validation. A plain relative value (for example the bare `aspire` literal) or an absolute path that no longer exists is intentionally not forwarded because `ResolveAspireCliBundle` stops with a warning for invalid explicit `AspireCliPath` values instead of probing `PATH`. A raw framework-dependent local build output such as `artifacts/bin/Aspire.Cli/Debug/net10.0/aspire` is also not forwarded because it can make `ResolveAspireCliBundle` fall back to unrelated `ASPIRE_HOME` metadata. Symlinks to that raw local build output are filtered the same way. To dogfood bundle metadata end-to-end, point the setting at an installed/bundled CLI layout with a sidecar or adjacent bundle assets. Clear the setting to revert to default PATH/ASPIRE_HOME resolution.
+A tokenized setting is expanded to an absolute path before validation. A plain relative value (for example the bare `aspire` literal) or an absolute path that no longer exists is intentionally not forwarded because `ResolveAspireCliBundle` stops with a warning for invalid explicit `AspireCliPath` values instead of probing `PATH`. A raw framework-dependent local build output such as `artifacts/bin/Aspire.Cli/Debug/net11.0/aspire` is also not forwarded because it can make `ResolveAspireCliBundle` fall back to unrelated `ASPIRE_HOME` metadata. Symlinks to that raw local build output are filtered the same way. To dogfood bundle metadata end-to-end, point the setting at an installed/bundled CLI layout with a sidecar or adjacent bundle assets. Clear the setting to revert to default PATH/ASPIRE_HOME resolution.
 
 ## Running tests
 

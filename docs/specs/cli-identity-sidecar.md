@@ -225,7 +225,7 @@ The matrix:
 Three things to call out:
 
 1. **The csproj `<AspireCliChannel>local</AspireCliChannel>` default can stay** as a no-op — it costs nothing and keeps `dotnet build` producing a binary whose assembly metadata reads sensibly when inspected. What changes is that CI stops *overriding* it for non-dotnet-tool publish paths.
-2. **`dotnet run --project src/Aspire.Cli` continues to find no sidecar**, because the project's `bin/Debug/net10.0/` directory is not an install directory and nothing writes a sidecar there. This is correct: a `dotnet run` invocation is not an installed CLI and should resolve `local`.
+2. **`dotnet run --project src/Aspire.Cli` continues to find no sidecar**, because the project's `bin/Debug/net11.0/` directory is not an install directory and nothing writes a sidecar there. This is correct: a `dotnet run` invocation is not an installed CLI and should resolve `local`.
 3. **The validation patterns become available in the `dotnet run` loop too.** Want to reproduce a customer's stable-channel bug while iterating on `src/Aspire.Cli`?
 
    ```bash
@@ -313,7 +313,7 @@ A user reports an issue against `aspire 13.4.0` (stable, commit `abc123`). Today
 ASPIRE_CLI_CHANNEL=stable \
 ASPIRE_CLI_VERSION=13.4.0 \
 ASPIRE_CLI_COMMIT=abc123 \
-  ./artifacts/bin/Aspire.Cli/Debug/net10.0/aspire init
+  ./artifacts/bin/Aspire.Cli/Debug/net11.0/aspire init
 ```
 
 The dev binary now runs every identity-conditional code path under the reported identity. Reproduction is a single command on the developer's machine, against the in-tree source code, with debugger attached.

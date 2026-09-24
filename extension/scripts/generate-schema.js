@@ -11,7 +11,7 @@ const path = require('path');
 
 // Determine the Aspire CLI path based on the OS
 const isWindows = process.platform === 'win32';
-const cliPath = path.join(__dirname, '..', '..', 'artifacts', 'bin', 'Aspire.Cli', 'Debug', 'net10.0', isWindows ? 'aspire.exe' : 'aspire');
+const cliPath = path.join(__dirname, '..', '..', 'artifacts', 'bin', 'Aspire.Cli', 'Debug', 'net11.0', isWindows ? 'aspire.exe' : 'aspire');
 
 // Output paths for the schemas (relative to extension directory)
 const localSchemaOutputPath = path.join(__dirname, '..', 'schemas', 'aspire-settings.schema.json');

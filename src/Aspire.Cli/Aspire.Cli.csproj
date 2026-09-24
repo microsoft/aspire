@@ -4,7 +4,7 @@
     <OutputType>Exe</OutputType>
     <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <ToolPackageRuntimeIdentifiers>$(RuntimeIdentifiers)</ToolPackageRuntimeIdentifiers>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -116,17 +116,20 @@
                                     Trim="true" />
   </ItemGroup>
 
-    <Target Name="ConfigureTrimming"
-          BeforeTargets="PrepareForILLink">
+  <!-- Starting in .NET 11, both ILLink and ILC (NativeAOT) read per-assembly trim metadata from
+       ResolvedFileToPublish after _PrepareTrimConfiguration runs, instead of from ManagedAssemblyToLink.
+       See the _PrepareTrimConfiguration target in Microsoft.NET.ILLink.targets. -->
+  <Target Name="ConfigureTrimming"
+          AfterTargets="_PrepareTrimConfiguration">
     <!-- Single warn the following assemblies (produces IL2104 and IL3053), which have known warnings, so the warnings can be suppressed. -->
     <!-- These can be removed once NuGet completely removes its dependencies on Newtonsoft.Json - https://github.com/NuGet/NuGet.Client/pull/7601. Tracked by https://github.com/microsoft/aspire/issues/20342 -->
     <ItemGroup>
-      <ManagedAssemblyToLink Condition="'%(Filename)' == 'Microsoft.CSharp'">
+      <ResolvedFileToPublish Condition="'%(Filename)' == 'Microsoft.CSharp'">
         <TrimmerSingleWarn>true</TrimmerSingleWarn>
-      </ManagedAssemblyToLink>
-      <ManagedAssemblyToLink Condition="'%(Filename)' == 'System.Linq.Expressions'">
+      </ResolvedFileToPublish>
+      <ResolvedFileToPublish Condition="'%(Filename)' == 'System.Linq.Expressions'">
         <TrimmerSingleWarn>true</TrimmerSingleWarn>
-      </ManagedAssemblyToLink>
+      </ResolvedFileToPublish>
     </ItemGroup>
   </Target>
 

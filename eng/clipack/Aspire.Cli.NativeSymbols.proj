@@ -42,7 +42,7 @@
 <Project Sdk="Microsoft.Build.NoTargets">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
 
     <IsPackable>true</IsPackable>
     <PackageId>Aspire.Cli.$(RuntimeIdentifier)</PackageId>
