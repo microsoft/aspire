@@ -129,9 +129,10 @@ function getStringLiteralUnion(typeNode: ts.TypeNode): string[] {
 }
 
 suite('extension/telemetry.json', () => {
-    test('event entity names are lowercase to match VS Code telemetry ingestion', () => {
+    test('event entity names are lowercase', () => {
         const inventory = readTelemetryInventory();
-        const mixedCaseEntityNames = Object.keys(inventory.events).filter(name => name !== name.toLowerCase());
+        const mixedCaseEntityNames = Object.keys(inventory.events)
+            .filter(name => name !== name.toLowerCase());
 
         assert.deepStrictEqual(mixedCaseEntityNames, []);
     });

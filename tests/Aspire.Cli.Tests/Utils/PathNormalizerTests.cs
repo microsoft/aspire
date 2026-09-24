@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using Aspire.Hosting.Utils;
 using Aspire.Cli.Tests.TestServices;
 
@@ -202,6 +203,96 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
         var resolved = PathNormalizer.ResolveToFilesystemPath(missingPath);
 
         Assert.EndsWith(Path.Combine("Missing.AppHost", "Missing.AppHost.csproj"), resolved, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Cafe\u0301")]
+    [InlineData("\u1100\u1161")]
+    public void ResolveToFilesystemPath_UsesEnumeratedUnicodeNormalization(string decomposedName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testRoot = workspace.WorkspaceRoot.CreateSubdirectory("unicode-normalization");
+        var composedName = decomposedName.Normalize(NormalizationForm.FormC);
+        var decomposedPath = Path.Combine(testRoot.FullName, decomposedName);
+        Directory.CreateDirectory(decomposedPath);
+
+        var enumeratedPath = Assert.Single(Directory.EnumerateDirectories(testRoot.FullName));
+        var composedPath = Path.Combine(testRoot.FullName, composedName);
+        Assert.SkipUnless(
+            Directory.Exists(composedPath),
+            "The current filesystem does not resolve normalization-equivalent path segments.");
+        Assert.SkipWhen(
+            enumeratedPath.Equals(composedPath, StringComparison.Ordinal),
+            "The current filesystem enumerates the candidate with the same normalization form.");
+
+        // Resolve the enumerated side too because the temporary root can itself be an alias
+        // (for example /var -> /private/var on macOS).
+        Assert.Equal(
+            PathNormalizer.ResolveSymlinks(enumeratedPath),
+            PathNormalizer.ResolveToFilesystemPath(composedPath));
+    }
+
+    [Fact]
+    public void ResolveToFilesystemPath_DoesNotChooseBetweenConflictingCaseAndNormalizationMatches()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testRoot = workspace.WorkspaceRoot.CreateSubdirectory("normalization-collision");
+        var caseMatch = testRoot.CreateSubdirectory("CAF\u00C9");
+        var normalizationMatch = Path.Combine(testRoot.FullName, "Cafe\u0301");
+        Assert.SkipWhen(
+            Directory.Exists(normalizationMatch),
+            "The filesystem aliases both case and normalization, so the two entries cannot coexist.");
+        Directory.CreateDirectory(normalizationMatch);
+
+        var candidate = Path.Combine(testRoot.FullName, "Caf\u00E9");
+        Assert.SkipUnless(
+            Directory.Exists(candidate),
+            "The filesystem does not resolve either alternate spelling.");
+
+        Assert.Equal(
+            PathNormalizer.ResolveSymlinks(candidate),
+            PathNormalizer.ResolveToFilesystemPath(candidate));
+        Assert.False(PathNormalizer.TryResolveToFilesystemPath(candidate, out var unresolvedPath));
+        Assert.Equal(candidate, unresolvedPath);
+        Assert.True(PathNormalizer.TryResolveToFilesystemPath(caseMatch.FullName, out _));
+        Assert.True(PathNormalizer.TryResolveToFilesystemPath(normalizationMatch, out _));
+    }
+
+    [Fact]
+    public void ResolveToFilesystemPath_UsesUppercaseWindowsDriveLetter()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows(), "Drive-letter casing only applies on Windows.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var file = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "app.csproj"));
+        File.WriteAllText(file.FullName, "<Project />");
+        Assert.SkipUnless(
+            file.FullName.Length >= 3 &&
+            file.FullName[1] == ':' &&
+            file.FullName[2] == Path.DirectorySeparatorChar,
+            "The temporary workspace is not on a drive-letter path.");
+
+        var lowercaseDrivePath = $"{char.ToLowerInvariant(file.FullName[0])}{file.FullName[1..]}";
+        var uppercaseDrivePath = $"{char.ToUpperInvariant(file.FullName[0])}{file.FullName[1..]}";
+
+        Assert.NotEqual(lowercaseDrivePath, uppercaseDrivePath);
+        Assert.Equal(uppercaseDrivePath, PathNormalizer.ResolveToFilesystemPath(lowercaseDrivePath));
+    }
+
+    [Fact]
+    public void TryResolveToFilesystemPath_ReturnsFalseForMissingWindowsDriveRoot()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows(), "Drive-letter roots only apply on Windows.");
+
+        var missingDriveLetter = Enumerable.Range('D', 'Z' - 'D' + 1)
+            .Select(value => (char)value)
+            .FirstOrDefault(driveLetter => !Directory.Exists($"{driveLetter}:{Path.DirectorySeparatorChar}"));
+        Assert.SkipWhen(missingDriveLetter == default, "All drive letters are in use.");
+
+        var missingDriveRoot = $"{char.ToLowerInvariant(missingDriveLetter)}:{Path.DirectorySeparatorChar}";
+
+        Assert.False(PathNormalizer.TryResolveToFilesystemPath(missingDriveRoot, out var resolvedPath));
+        Assert.Equal(missingDriveRoot, resolvedPath);
     }
 
 }

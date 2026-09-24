@@ -22,6 +22,15 @@ internal abstract class CliMcpTool
     public abstract string Description { get; }
 
     /// <summary>
+    /// Gets additional information and behavior hints for the tool.
+    /// </summary>
+    public virtual ToolAnnotations Annotations { get; } = new()
+    {
+        ReadOnlyHint = true,
+        DestructiveHint = false
+    };
+
+    /// <summary>
     /// Gets the input schema for the tool as a JsonElement.
     /// </summary>
     /// <returns>The JSON schema describing the tool's input parameters.</returns>

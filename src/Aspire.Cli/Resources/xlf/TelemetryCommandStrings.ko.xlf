@@ -7,6 +7,11 @@
         <target state="new">API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConfiguredDashboardDisplayValue">
+        <source>the configured dashboard</source>
+        <target state="new">the configured dashboard</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DashboardApiNotEnabled">
         <source>Could not fetch telemetry data from the dashboard. The dashboard at '{0}' does not have the telemetry API enabled.</source>
         <target state="new">Could not fetch telemetry data from the dashboard. The dashboard at '{0}' does not have the telemetry API enabled.</target>
@@ -145,6 +150,11 @@
       <trans-unit id="HeaderTimestamp">
         <source>Timestamp</source>
         <target state="translated">타임스탬프</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InvalidDashboardUrlDisplayValue">
+        <source>not an absolute HTTP(S) URL</source>
+        <target state="new">not an absolute HTTP(S) URL</target>
         <note />
       </trans-unit>
       <trans-unit id="LimitMustBePositive">

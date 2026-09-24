@@ -40,6 +40,59 @@ suite('E2E state file bridge', () => {
         sandbox.restore();
     });
 
+    for (const route of [
+        { invocation: 'vscode.lm.invokeTool', direct: false, canceled: false },
+        { invocation: 'registeredToolDirect', direct: true, canceled: false },
+        { invocation: 'registeredToolCanceled', direct: false, canceled: true },
+        { invocation: 'registeredToolCanceled', direct: true, canceled: true },
+    ]) {
+        test(`reports the actual tool invocation route: ${route.invocation}, direct=${route.direct}`, async () => {
+            const repository = createRepository([]);
+            const terminalProvider = {} as AspireTerminalProvider;
+            const launchService = createLaunchService();
+            const provider = new AspireAppHostTreeProvider(repository, terminalProvider, launchService);
+            const result = new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart('{"success":true}')]);
+            const invoke = sandbox.stub().callsFake(async (_options, token: vscode.CancellationToken) => {
+                assert.strictEqual(token.isCancellationRequested, route.canceled);
+                return result;
+            });
+            const publicInvoke = sandbox.stub(vscode.lm, 'invokeTool').resolves(result);
+            try {
+                const response = await executeE2eControlCommand(
+                    {} as vscode.ExtensionContext,
+                    {} as AspireExtensionContext,
+                    repository,
+                    launchService,
+                    provider,
+                    terminalProvider,
+                    { hasSnapshot: false },
+                    {},
+                    new Map([['aspire_test_tool', { registered: true, tool: { invoke } }]]),
+                    {
+                        name: 'invokeLanguageModelTool',
+                        toolName: 'aspire_test_tool',
+                        input: {},
+                        invokeRegisteredToolDirectly: route.direct,
+                        cancelBeforeInvocation: route.canceled,
+                    },
+                    () => { });
+
+                assert.deepStrictEqual(response, {
+                    registered: true,
+                    invocation: route.invocation,
+                    results: ['{"success":true}'],
+                    cancellations: 0,
+                    unexpectedFailures: 0,
+                });
+                assert.strictEqual(publicInvoke.callCount, route.direct || route.canceled ? 0 : 1);
+                assert.strictEqual(invoke.callCount, route.direct || route.canceled ? 1 : 0);
+            }
+            finally {
+                provider.dispose();
+            }
+        });
+    }
+
     test('routes every AppHost action through the exact secondary tree element', async () => {
         const primaryPath = '/repo/primary/AppHost/AppHost.csproj';
         const secondaryPath = '/repo/secondary/AppHost/AppHost.csproj';

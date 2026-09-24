@@ -23,6 +23,14 @@ internal sealed class ExecuteResourceCommandTool(
 
     public override string Description => "Executes a command on a resource. If a resource needs to be restarted and is currently stopped, use the start command instead.";
 
+    // MCP annotations are static for the listed tool, but the selected resource command can stop,
+    // delete, or otherwise destructively mutate a resource. Advertise the conservative behavior.
+    public override ToolAnnotations Annotations { get; } = new()
+    {
+        ReadOnlyHint = false,
+        DestructiveHint = true
+    };
+
     public override JsonElement GetInputSchema()
     {
         // MCP input schema JSON accepts optional nested command arguments:

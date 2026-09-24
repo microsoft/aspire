@@ -84,6 +84,18 @@ public class DashboardUrlsTests
     }
 
     [Fact]
+    public void CombineUrl_ComposesBasePathQueryAndRequestFragment()
+    {
+        var result = DashboardUrls.CombineUrl(
+            "https://localhost:18888/base?api-version=1#base-fragment",
+            "/api/telemetry/logs?limit=100#request-fragment");
+
+        Assert.Equal(
+            "https://localhost:18888/base/api/telemetry/logs?api-version=1&limit=100#request-fragment",
+            result);
+    }
+
+    [Fact]
     public void TelemetryLogsApiUrl_WithSearch_AppendsSearchQueryParameter()
     {
         var url = DashboardUrls.TelemetryLogsApiUrl("http://localhost:18888", search: "connection error");
@@ -123,5 +135,47 @@ public class DashboardUrlsTests
         Assert.Contains("resource=service1", url);
         Assert.Contains("severity=error", url);
         Assert.Contains("search=failed", url);
+    }
+
+    [Theory]
+    [InlineData(
+        "https://user:password@dashboard.dev.localhost:8443/base/login?t=secret&view=resources#fragment",
+        true,
+        "https://user:password@localhost:8443/base?t=secret&view=resources#fragment")]
+    [InlineData(
+        "https://example.com:8443/base?view=resources",
+        false,
+        "https://example.com:8443/base?view=resources")]
+    [InlineData("tcp://cache.example.com:6379", false, null)]
+    [InlineData("file:///repo/private.txt", false, null)]
+    [InlineData("not-a-url", true, null)]
+    public void NormalizeDashboardRequestUrl_PreservesRequestAuthentication(
+        string input,
+        bool stripLoginPath,
+        string? expected)
+    {
+        Assert.Equal(
+            expected,
+            DashboardUrls.NormalizeDashboardRequestUrl(input, stripLoginPath));
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("http://localhost:18888", null)]
+    [InlineData("http://localhost:18888/login", null)]
+    [InlineData("http://localhost:18888/login?t=authtoken123", "authtoken123")]
+    [InlineData("https://localhost:16319/login?t=d8d8255df4c79aebcb5b7325828ccb20", "d8d8255df4c79aebcb5b7325828ccb20")]
+    [InlineData("http://localhost/base/login?t=token123", "token123")]
+    [InlineData("https://example.com:8080/app/deep/login?t=abc", "abc")]
+    [InlineData("http://localhost/base/login?t=token%2Bvalue", "token+value")]
+    [InlineData("http://localhost:18888/login?other=value", null)]
+    [InlineData("http://localhost:18888/login?t=", null)]
+    [InlineData("http://localhost/base/notlogin?t=secret", null)]
+    [InlineData("invalid-url", null)]
+    public void ExtractDashboardLoginToken_ReturnsOnlyLoginToken(
+        string? input,
+        string? expected)
+    {
+        Assert.Equal(expected, DashboardUrls.ExtractDashboardLoginToken(input));
     }
 }

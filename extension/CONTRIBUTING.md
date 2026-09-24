@@ -99,6 +99,18 @@ corepack yarn unit-test --grep "parseConfigInfoOutput"
 corepack yarn unit-test --run out/test/configInfoProvider.test.js --run out/test/extensionApi.test.js
 ```
 
+Editor-assistance regressions live in `editorAssistanceTools.test.ts`; shared ordinal name matching is covered by `strings.test.ts` and `launchProfiles.test.ts`. Model-facing resource sources must reject the same unsafe Unicode categories as metadata, including leading and trailing controls before trimming container images. Keep their separate length limits: 256 Unicode scalar values for sources and 128 UTF-16 code units for metadata. `dotnetDebugger.test.ts` covers both emitted process errors and synchronous Node argument-validation errors.
+
+Multi-root lifecycle tests must round-trip returned `appHostPath` selectors through subsequent operations. MCP registration tests must cover ownership changes between nested workspace folders while preserving labels and definitions for unaffected pins.
+
+Start/stop confirmations expire against monotonic time. Expiry regressions must vary wall time independently, checking just before and exactly at the deadline for both tools.
+
+The launch-failure store retains one sanitized failure per AppHost for 30 minutes using monotonic time, with a global limit of 50 AppHosts. A replacement refreshes expiry and write-order eviction; reads do not. Cover reads and writes, including the production singleton, when testing clock changes. Verify duplicate-capture suppression by counting writes, not retained entries. CLI filesystem normalization coverage must include caseless Unicode names such as Hangul, not only names with upper/lowercase variants.
+
+The store is a fallback for failures that can outlive a debug session or happen before one exists, not a second logging system. It keeps only the six bounded failure fields; detailed errors remain in the existing Output, CLI, and resource logs.
+
+The CLI's shared resource-wait budget is covered by `ResourceWaitServiceTests` and `WaitForResourcesToolTests` under `tests/Aspire.Cli.Tests/`. Clock-jump regressions must vary UTC independently of monotonic elapsed time; advancing both clocks together does not test this failure.
+
 ### End-to-end tests
 
 UI end-to-end tests live under `src/test-e2e`. They run a packaged VSIX in a real VS Code instance through ExTester, using a real Aspire CLI and a generated AppHost workspace.
@@ -168,6 +180,8 @@ Each source and file is attempted independently, and text is redacted before bei
 Linux CI shards also record the Xvfb display with `ffmpeg`. The default workflow mode is `ASPIRE_EXTENSION_E2E_RECORDING_MODE=always`, which keeps and uploads `extension/.test-recordings/<shard>/*.mp4` for both successful and failing Linux shards. Set `ASPIRE_EXTENSION_E2E_RECORDING_MODE=failure` when you only want failed-run videos, or `off` to disable recording. The default capture size is `1280x1024`, matching the hosted Xvfb display; override with `ASPIRE_EXTENSION_E2E_RECORDING_SIZE` if you run under a larger display. Recording is intentionally Linux-only because the Windows E2E jobs do not run under Xvfb and hosted desktop capture is less reliable.
 
 E2E tests should avoid fixed sleeps for readiness. Prefer the observation state written by the extension test bridge, ExTester wait APIs, unique generated workspaces, explicit per-phase timeouts, and cleanup through `aspire stop --apphost`. This is intentionally stricter than a normal smoke test because the suite runs a real VS Code, CLI, AppHost, terminal, and dashboard path. See https://github.com/microsoft/aspire/issues/17727 for the original tracking issue.
+
+Language-model tool tests must assert the bridge's `invocation` field before counting a call as public API coverage. `vscode.lm.invokeTool` identifies the public API; `registeredToolDirect` and `registeredToolCanceled` identify direct adapter calls that bypass it. The lifecycle suite also injects a real compiler error and checks that `aspire_explain_launch_failure` reports it after CLI-initiated shutdown.
 
 ## Localizing user-facing strings
 

@@ -94,7 +94,9 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
             // Fetch all traces from the API. Limiting of returned telemetry to the MCP caller happens later.
             var url = DashboardUrls.TelemetryTracesApiUrl(apiBaseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit, search: search);
 
-            logger.LogDebug("Fetching traces from {Url}", url);
+            logger.LogDebug(
+                "Fetching traces from {Url}",
+                McpToolHelpers.SanitizeDashboardRequestUrl(url));
 
             var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
             TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
@@ -134,10 +136,10 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
         }
         catch (HttpRequestException ex)
         {
-            logger.LogError(ex, "Failed to fetch traces from Dashboard API");
+            logger.LogError("Failed to fetch traces from Dashboard API");
             var errorMessage = dashboardInfoProvider.IsDirectConnection
                 ? await TelemetryCommandHelpers.GetDashboardApiErrorMessageAsync(ex, apiBaseUrl, httpClientFactory, logger, cancellationToken)
-                : $"Failed to fetch traces: {ex.Message}";
+                : "Failed to fetch traces from the Dashboard API.";
             throw new McpProtocolException(errorMessage, McpErrorCode.InternalError);
         }
     }

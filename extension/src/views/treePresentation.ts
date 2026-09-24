@@ -2,11 +2,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
-import { compareResourceCommands, getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
+import { compareResourceCommands, getParameterValueDescription, getResourceSource, getResourceStateDescription } from '../utils/resourceDisplay';
 import {
     tooltipType,
     tooltipState,
     tooltipHealth,
+    tooltipSource,
     tooltipEndpoints,
     resourceDescriptionHealth,
     resourceDescriptionExitCode,
@@ -230,6 +231,10 @@ export function buildResourceDescription(resource: ResourceJson): string {
     if (exitCode != null && exitCode !== 0) {
         parts.push(resourceDescriptionExitCode(exitCode));
     }
+    const source = getResourceSource(resource);
+    if (source) {
+        parts.push(source);
+    }
     return parts.join(' · ');
 }
 
@@ -257,6 +262,12 @@ export function buildResourceTooltip(resource: ResourceJson): vscode.MarkdownStr
                 md.appendMarkdown(`${icon} ${name}: ${report.status ?? 'Unknown'}${report.description ? ` - ${report.description}` : ''}\n\n`);
             }
         }
+    }
+    const source = getResourceSource(resource);
+    if (source) {
+        md.appendMarkdown(`${tooltipSource} `);
+        md.appendText(source);
+        md.appendMarkdown('\n\n');
     }
     const urls = getLinkableResourceUrls(resource);
     if (urls.length > 0) {
