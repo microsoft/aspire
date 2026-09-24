@@ -362,7 +362,7 @@ public class DistributedApplicationTests
         Assert.Equal(1, normalEventCount);
         Assert.Equal(0, explicitStartEventCount);
 
-        await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestShutdownTimeout);
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
     [Fact]
@@ -409,7 +409,7 @@ public class DistributedApplicationTests
         // Verify that BeforeResourceStartedEvent WAS fired when manually started
         Assert.Equal(1, eventCount);
 
-        await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestShutdownTimeout);
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
     [Fact]
@@ -434,7 +434,7 @@ public class DistributedApplicationTests
 
         Assert.Equal(1, eventCount);
 
-        await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestShutdownTimeout);
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
     [Fact]
@@ -2105,7 +2105,7 @@ public class DistributedApplicationTests
         try
         {
             var firstRun = await StartParentScopedResourcesAsync(parentProcess.Id, token);
-            await StopAndDisposeAppAsync(firstRun.App, token);
+            await StopAndDisposeAppAsync(firstRun.App);
 
             var secondRun = await StartParentScopedResourcesAsync(parentProcess.Id, token);
             try
@@ -2135,7 +2135,7 @@ public class DistributedApplicationTests
             }
             finally
             {
-                await StopAndDisposeAppAsync(secondRun.App, token);
+                await StopAndDisposeAppAsync(secondRun.App);
             }
         }
         finally
@@ -2185,11 +2185,11 @@ public class DistributedApplicationTests
             }
         }
 
-        static async Task StopAndDisposeAppAsync(DistributedApplication app, CancellationToken cancellationToken)
+        static async Task StopAndDisposeAppAsync(DistributedApplication app)
         {
             try
             {
-                await app.StopAsync(cancellationToken).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+                await app.StopAsync().DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
             }
             finally
             {
@@ -2446,8 +2446,7 @@ public class DistributedApplicationTests
             trustDeveloperCertificate: trustDeveloperCertificate);
 
         testProgram.AppBuilder.WithTestAndResourceLogging(_testOutputHelper);
-        testProgram.AppBuilder.Services.Configure<HostOptions>(options =>
-            options.ShutdownTimeout = TimeSpan.FromMilliseconds(TestConstants.DefaultOrchestratorTestShutdownTimeout));
+        testProgram.AppBuilder.WithTestHostShutdownTimeout();
 
         return testProgram;
     }

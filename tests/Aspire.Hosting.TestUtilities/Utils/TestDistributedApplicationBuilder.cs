@@ -70,6 +70,7 @@ public static class TestDistributedApplicationBuilder
     private static IDistributedApplicationTestingBuilder CreateCore(string[] args, Action<DistributedApplicationOptions>? configureOptions, ITestOutputHelper? testOutputHelper = null)
     {
         var builder = DistributedApplicationTestingBuilder.Create(args, (applicationOptions, hostBuilderOptions) => configureOptions?.Invoke(applicationOptions));
+        builder.WithTestHostShutdownTimeout();
 
         // TODO: consider centralizing this to DistributedApplicationFactory by default once consumers have a way to opt-out
         // E.g., once https://github.com/dotnet/extensions/pull/5801 is released.

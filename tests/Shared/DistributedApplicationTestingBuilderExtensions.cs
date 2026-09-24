@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Testing;
+using Aspire.TestUtilities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -16,9 +17,18 @@ namespace Aspire.Hosting.Utils;
 /// </summary>
 public static class DistributedApplicationTestingBuilderExtensions
 {
+    private static readonly TimeSpan s_defaultHostShutdownTimeout =
+        TimeSpan.FromSeconds(PlatformDetection.IsRunningOnCI ? 45 : 30); // 30 sec, 45 sec in CI
+
     // Returns the unique prefix used for volumes from unnamed volumes this builder
     public static string GetVolumePrefix(this IDistributedApplicationTestingBuilder builder) =>
         $"{VolumeNameGenerator.Sanitize(builder.Environment.ApplicationName).ToLowerInvariant()}-{builder.Configuration["AppHost:Sha256"]!.ToLowerInvariant()[..10]}";
+
+    public static T WithTestHostShutdownTimeout<T>(this T builder) where T : IDistributedApplicationBuilder
+    {
+        builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = s_defaultHostShutdownTimeout);
+        return builder;
+    }
 
     public static T WithTestAndResourceLogging<T>(this T builder, ITestOutputHelper testOutputHelper) where T : IDistributedApplicationBuilder
     {

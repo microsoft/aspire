@@ -23,7 +23,6 @@ internal static class TestConstants
     public static readonly int ExtraLongTimeoutDuration = 60 * 1000 * 3 * (PlatformDetection.IsRunningOnCI ? 2 : 1); // 180 sec, 360 sec in CI -- useful when a docker image might need pulling
     public static readonly int DefaultOrchestratorTestTimeout = 15 * 1000 * (PlatformDetection.IsRunningOnCI ? 2 : 1); // 15 sec, 30 sec in CI
     public static readonly int DefaultOrchestratorTestLongTimeout = 45 * 1000 * (PlatformDetection.IsRunningOnCI ? 4 : 1); // 45 sec, 180 sec in CI
-    public static readonly int DefaultOrchestratorTestShutdownTimeout = 15 * 1000 * (PlatformDetection.IsRunningOnCI ? 3 : 1); // 15 sec, 45 sec in CI
 
     public static TimeSpan DefaultTimeoutTimeSpan { get; } = TimeSpan.FromMilliseconds(DefaultTimeoutDuration);
     public static TimeSpan LongTimeoutTimeSpan { get; } = TimeSpan.FromMilliseconds(LongTimeoutDuration);
