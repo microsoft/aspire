@@ -223,6 +223,14 @@
       <_PackToolProperties Include="@(_SharedPackToolProperties)" />
       <_PackToolProperties Include="CreateRidSpecificToolPackages=true" />
       <_PackToolProperties Include="PublishAot=true" />
+      <!-- Pack the RID-specific tool as self-contained so the SDK lays it out as tools/any/<rid>/
+           instead of tools/<TargetFramework>/<rid>/. The payload is a prebuilt NativeAOT binary that
+           doesn't need a shared runtime, but a TFM folder (e.g. net11.0) would make `dotnet tool install`
+           fail on older SDKs (e.g. .NET 10) with "Settings file 'DotnetToolSettings.xml' was not found in
+           the package", because they can't select a tools/<tfm> folder newer than themselves.
+           PublishAot=true alone doesn't imply this here: the SDK only infers SelfContained from PublishAot when
+           _IsPacking is set (by `dotnet pack`), and this MSBuild task invocation doesn't set it. -->
+      <_PackToolProperties Include="SelfContained=true" />
       <_PackToolProperties Include="RuntimeIdentifier=$(CliRuntime)" />
       <_PackToolProperties Include="PublishDir=$(_CliToolPublishDir)" />
     </ItemGroup>

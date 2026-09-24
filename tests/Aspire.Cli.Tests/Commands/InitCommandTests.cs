@@ -245,7 +245,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await parseResult.InvokeAsync(new System.CommandLine.InvocationConfiguration { Output = output }).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        await Verify(output.ToString(), extension: "txt");
+        await Verify(output.ToString(), extension: "txt").ScrubRootCommandName();
     }
 
     [Fact]
