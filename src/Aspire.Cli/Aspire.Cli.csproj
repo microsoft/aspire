@@ -116,9 +116,6 @@
                                     Trim="true" />
   </ItemGroup>
 
-  <!-- Starting in .NET 11, both ILLink and ILC (NativeAOT) read per-assembly trim metadata from
-       ResolvedFileToPublish after _PrepareTrimConfiguration runs, instead of from ManagedAssemblyToLink.
-       See the _PrepareTrimConfiguration target in Microsoft.NET.ILLink.targets. -->
   <Target Name="ConfigureTrimming"
           AfterTargets="_PrepareTrimConfiguration">
     <!-- Single warn the following assemblies (produces IL2104 and IL3053), which have known warnings, so the warnings can be suppressed. -->
