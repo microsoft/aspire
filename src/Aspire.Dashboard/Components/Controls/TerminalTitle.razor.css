@@ -30,6 +30,7 @@
 
 .terminal-title-container ::deep .terminal-title-button,
 .terminal-directory-container ::deep .terminal-directory {
+    --colorNeutralForeground2BrandPressed: var(--colorBrandForegroundLinkPressed);
     max-width: 100%;
     min-width: 0;
     padding-inline: 4px;
