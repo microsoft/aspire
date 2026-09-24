@@ -193,6 +193,52 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         Assert.Equal(malformed, await File.ReadAllTextAsync(settingsPath).DefaultTimeout());
     }
 
+    [Theory]
+    [InlineData("notaspire.dll", false)]
+    [InlineData("aspire.dll", true)]
+    [InlineData("ASPIRE.DLL", true)]
+    public async Task ConfigureAsync_MigratesOnlyExactManagedAspireAssembly(string assemblyName, bool shouldReplace)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var claude = Directory.CreateDirectory(Path.Combine(home.FullName, ".claude"));
+        // Include a rooted host path: when the current CLI itself uses dotnet, matching that host
+        // must not bypass validation of the assembly argument.
+        var host = string.Equals(Path.GetFileNameWithoutExtension(Environment.ProcessPath), "dotnet", StringComparison.OrdinalIgnoreCase)
+            ? Environment.ProcessPath!
+            : Path.Combine(workspace.Path, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+        var existingHook = new JsonObject
+        {
+            ["type"] = "command",
+            ["command"] = host,
+            ["args"] = new JsonArray(Path.Combine(workspace.Path, assemblyName), "agent", "telemetry", "--hook")
+        };
+        var settings = new JsonObject
+        {
+            ["hooks"] = new JsonObject
+            {
+                ["PostToolUse"] = new JsonArray(new JsonObject
+                {
+                    ["matcher"] = "*",
+                    ["hooks"] = new JsonArray(existingHook)
+                })
+            }
+        };
+        await File.WriteAllTextAsync(Path.Combine(claude.FullName, "settings.json"), settings.ToJsonString());
+        var configurator = CreateConfigurator(workspace, home);
+
+        await configurator.ConfigureAsync([AgentClientKind.ClaudeCode], CancellationToken.None);
+        await configurator.ConfigureAsync([AgentClientKind.ClaudeCode], CancellationToken.None);
+
+        var groups = await ReadClaudePostToolUseAsync(home);
+        var hooks = groups.SelectMany(group => group!["hooks"]!.AsArray()).ToArray();
+        Assert.Equal(shouldReplace ? 1 : 2, hooks.Length);
+        Assert.Equal(!shouldReplace, hooks.Any(hook => JsonNode.DeepEquals(hook, existingHook)));
+        var (command, args) = AgentTelemetryHook.GetCommand("--hook");
+        Assert.Single(hooks, hook => (string?)hook!["command"] == command
+            && hook["args"]!.AsArray().Select(arg => (string)arg!).SequenceEqual(args));
+    }
+
     [Fact]
     public async Task ConfigureAsync_SkipsClaude_WhenHooksShapeIsUnexpected()
     {

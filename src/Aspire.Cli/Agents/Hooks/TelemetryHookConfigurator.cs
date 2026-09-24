@@ -339,11 +339,12 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
             var executable = hook["command"] is JsonValue executableValue && executableValue.TryGetValue<string>(out var executableText)
                 ? executableText : null;
             var (currentCommand, _) = AgentTelemetryHook.GetCommand("--hook");
-            if (values is [.., "agent", "telemetry", "--hook"]
-                && (executable == currentCommand
-                    || string.Equals(Path.GetFileNameWithoutExtension(executable), "aspire", StringComparison.OrdinalIgnoreCase)
-                    || (string.Equals(Path.GetFileNameWithoutExtension(executable), "dotnet", StringComparison.OrdinalIgnoreCase)
-                        && values[0]?.EndsWith("aspire.dll", StringComparison.OrdinalIgnoreCase) == true)))
+            var executableName = Path.GetFileNameWithoutExtension(executable);
+            var isDotnet = string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase);
+            if ((values is ["agent", "telemetry", "--hook"] && !isDotnet
+                    && (executable == currentCommand || string.Equals(executableName, "aspire", StringComparison.OrdinalIgnoreCase)))
+                || (values is [var assemblyPath, "agent", "telemetry", "--hook"] && isDotnet
+                    && string.Equals(Path.GetFileName(assemblyPath), "aspire.dll", StringComparison.OrdinalIgnoreCase)))
             {
                 return true;
             }
