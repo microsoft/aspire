@@ -603,7 +603,9 @@ internal sealed class TerminalReplica : IAsyncDisposable
         // stream from Hmp1Transports.ListenUnixSocket and disposing its enumerator.
         using var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         SocketPermissionHelper.Bind(listener, path);
-        listener.Listen(backlog: 16);
+        // Preserve the backlog used by Hex1b 0.168.0's Hmp1Transports.ListenUnixSocket.
+        const int ListenBacklog = 16;
+        listener.Listen(backlog: ListenBacklog);
         var socket = await listener.AcceptAsync(ct).ConfigureAwait(false);
         return new NetworkStream(socket, ownsSocket: true);
     }
