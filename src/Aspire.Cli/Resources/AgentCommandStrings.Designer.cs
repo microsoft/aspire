@@ -833,5 +833,50 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InitCommand_ConfigurationComplete", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Warns that plugin content can execute code with the user's permissions.
+        /// </summary>
+        internal static string InitCommand_PluginRiskWarning => ResourceManager.GetString("InitCommand_PluginRiskWarning", resourceCulture);
+
+        /// <summary>
+        ///   Links to the direct skill installation alternative.
+        /// </summary>
+        internal static string InitCommand_DirectSkillsAlternative => ResourceManager.GetString("InitCommand_DirectSkillsAlternative", resourceCulture);
+
+        /// <summary>
+        ///   Lists local skill files that may conflict with native content.
+        /// </summary>
+        internal static string InitCommand_LocalSkillsConflict => ResourceManager.GetString("InitCommand_LocalSkillsConflict", resourceCulture);
+
+        /// <summary>
+        ///   Reports a local skill inspection failure.
+        /// </summary>
+        internal static string LocalSkills_ReadFailed => ResourceManager.GetString("LocalSkills_ReadFailed", resourceCulture);
+
+        /// <summary>
+        ///   Describes the optional plugin registration migration and its risk before confirmation.
+        /// </summary>
+        internal static string LocalSkills_MigrationTitle => ResourceManager.GetString("LocalSkills_MigrationTitle", resourceCulture);
+
+        /// <summary>
+        ///   Describes local skills without claiming their origin or age is known.
+        /// </summary>
+        internal static string LocalSkills_MigrationDetail => ResourceManager.GetString("LocalSkills_MigrationDetail", resourceCulture);
+
+        /// <summary>
+        ///   Provides migration and direct-install guidance, including workspaces without an AppHost.
+        /// </summary>
+        internal static string LocalSkills_MigrationGuidance => ResourceManager.GetString("LocalSkills_MigrationGuidance", resourceCulture);
+
+        /// <summary>
+        ///   Explains why plugin migration did not complete.
+        /// </summary>
+        internal static string LocalSkills_MigrationIncomplete => ResourceManager.GetString("LocalSkills_MigrationIncomplete", resourceCulture);
+
+        /// <summary>
+        ///   Explains the manual review still needed after offline registration.
+        /// </summary>
+        internal static string LocalSkills_MigrationReview => ResourceManager.GetString("LocalSkills_MigrationReview", resourceCulture);
     }
 }

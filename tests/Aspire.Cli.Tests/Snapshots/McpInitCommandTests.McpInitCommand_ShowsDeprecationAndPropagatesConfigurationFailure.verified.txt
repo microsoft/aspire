@@ -2,6 +2,7 @@
   Output: [
     ⚠ Warning: 'aspire mcp' commands are deprecated and will be removed in a future release. Please use 'aspire agent' instead.,
     ,
+    Prefer not to use the plugin? Install the skills directly from https://github.com/microsoft/aspire-skills instead.,
     🤖 Detecting agents...,
     Only the selected scope is configured. Shared locations are written once. User scope also configures usage hooks for detected supported clients, respecting policy and telemetry opt-out.,
     Existing MCP configuration is disabled.,

@@ -64,6 +64,22 @@ public class PendingMigrationsCheckTests
     }
 
     [Fact]
+    public async Task CheckAsync_UsesMigrationSpecificGuidance()
+    {
+        var migration = new TestMigration("optional-migration", 200, new MigrationDescriptor
+        {
+            Title = "Review local skills",
+            Detail = "Direct installation is supported.",
+            Fix = "Choose native registration or keep the direct install."
+        });
+        var check = new PendingMigrationsCheck([migration], NullLogger<PendingMigrationsCheck>.Instance);
+
+        var result = Assert.Single(await check.CheckAsync());
+
+        Assert.Equal("Choose native registration or keep the direct install.", result.Fix);
+    }
+
+    [Fact]
     public async Task CheckAsync_WithFailingMigration_SkipsItAndContinues()
     {
         var failing = new TestMigration("failing", 100, descriptor: null, throwOnDetect: true);

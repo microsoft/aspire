@@ -94,6 +94,16 @@ internal sealed class AgentInitCommand : BaseCommand
         return ExecuteAsync(parseResult, cancellationToken);
     }
 
+    /// <summary>
+    /// Offers native registration through the existing agent/scope flow without replacing local skills.
+    /// </summary>
+    internal Task<AgentInitExecutionResult> MigrateLocalSkillsAsync(
+        DirectoryInfo workspaceRoot, AgentConfigurationScope defaultScope, CancellationToken cancellationToken)
+    {
+        var bindings = CreateBindings(this.Parse(["init", "--mcp", "n", "--playwright", "n", "--dotnet-inspect", "n", "--aspire-skills", "y"]), includeMcp: true);
+        return ExecuteAgentInitAsync(workspaceRoot, bindings with { Scope = bindings.Scope.WithDefault(defaultScope) }, cancellationToken);
+    }
+
     internal async Task<AgentInitExecutionResult> PromptAndChainAsync(
         IInteractionService interactionService,
         int previousResultExitCode,
@@ -295,6 +305,13 @@ internal sealed class AgentInitCommand : BaseCommand
             AgentCommandStrings.InitCommand_ConfigureDotnetInspectPrompt,
             binding: bindings.DotnetInspect,
             cancellationToken: cancellationToken);
+        var (pluginWasProvided, pluginRequested) = bindings.AspireSkills.Resolve();
+        if (!pluginWasProvided || pluginRequested)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Warning, AgentCommandStrings.InitCommand_PluginRiskWarning);
+        }
+        InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture,
+            AgentCommandStrings.InitCommand_DirectSkillsAlternative, AspireSkillsPluginConfiguration.RepositoryUrl));
         var aspireSkills = await InteractionService.PromptConfirmAsync(
             AgentCommandStrings.InitCommand_ConfigureAspireSkillsPrompt,
             binding: bindings.AspireSkills,
@@ -371,16 +388,33 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         var (scopeWasProvided, requestedScope) = bindings.Scope.Resolve();
-        var scope = scopeWasProvided ? requestedScope : AgentConfigurationScope.Project;
+        var defaultScope = bindings.Scope.DefaultValue;
+        var scope = scopeWasProvided ? requestedScope : defaultScope;
         var request = new AgentInitRequest(workspaceRoot, assets, scope, clients.Distinct().ToArray(), detections);
         if (!scopeWasProvided && _hostEnvironment.SupportsInteractiveInput)
         {
-            scope = await InteractionService.PromptForSelectionAsync(
+            scope = await InteractionService.PromptForSelectionAsync<AgentConfigurationScope>(
                 AgentCommandStrings.InitCommand_SelectScopePrompt,
-                [AgentConfigurationScope.Project, AgentConfigurationScope.User],
+                defaultScope is AgentConfigurationScope.Project
+                    ? [AgentConfigurationScope.Project, AgentConfigurationScope.User]
+                    : [AgentConfigurationScope.User, AgentConfigurationScope.Project],
                 value => DescribeScope(value, request),
                 cancellationToken: cancellationToken);
             request = request with { Scope = scope };
+        }
+
+        if (aspireSkills)
+        {
+            var localSkills = await LocalAspireSkills.FindAsync(workspaceRoot, request.Environments, ExecutionContext, _environment, cancellationToken);
+            foreach (var error in localSkills.Errors)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Warning, error);
+            }
+            if (localSkills.Files.Count > 0)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture,
+                    AgentCommandStrings.InitCommand_LocalSkillsConflict, string.Join(Environment.NewLine, localSkills.Files.Select(file => file.Path))));
+            }
         }
 
         using var activity = Telemetry.StartReportedActivity("AgentInit.Configure");

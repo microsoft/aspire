@@ -26,6 +26,11 @@ internal sealed class MigrationDescriptor
     public required string Detail { get; init; }
 
     /// <summary>
+    /// Optional migration-specific guidance, overriding the standard doctor update hint.
+    /// </summary>
+    public string? Fix { get; init; }
+
+    /// <summary>
     /// Optional structured metadata attached to the <c>aspire doctor --format json</c> output for
     /// programmatic consumers.
     /// </summary>

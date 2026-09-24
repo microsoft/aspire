@@ -24,6 +24,86 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
     private readonly TestTelemetryHookConfigurator _hooks = new();
 
     [Theory]
+    [InlineData("", true)]
+    [InlineData("--aspire-skills y", true)]
+    [InlineData("--aspire-skills n", false)]
+    public async Task AgentInitCommand_PluginAdvice_IsShownOnceBeforeItsConfirmation(string option, bool expectRisk)
+    {
+        var events = new List<string>();
+        var interaction = new TestInteractionService
+        {
+            DisplayMessageCallback = (_, message, _) => events.Add(message),
+            DisplaySubtleMessageCallback = events.Add,
+            ConfirmCallback = (prompt, _) =>
+            {
+                events.Add(prompt);
+                return false;
+            }
+        };
+        using var provider = CreateServices(options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        }).BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse($"agent init --agent none {option}").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(expectRisk ? 1 : 0, events.Count(message => message == AgentCommandStrings.InitCommand_PluginRiskWarning));
+        var alternative = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_DirectSkillsAlternative,
+            "https://github.com/microsoft/aspire-skills");
+        Assert.Equal(1, events.Count(message => message == alternative));
+        if (option.Length == 0)
+        {
+            Assert.True(events.IndexOf(AgentCommandStrings.InitCommand_PluginRiskWarning) <
+                events.IndexOf(AgentCommandStrings.InitCommand_ConfigureAspireSkillsPrompt));
+            Assert.True(events.IndexOf(alternative) < events.IndexOf(AgentCommandStrings.InitCommand_ConfigureAspireSkillsPrompt));
+        }
+        Assert.Empty(_hooks.Requests);
+    }
+
+    [Theory]
+    [InlineData("project", true, true)]
+    [InlineData("user", true, true)]
+    [InlineData("project", false, false)]
+    public async Task AgentInitCommand_WarnsAboutLocalSkillsBeforeRegistrationWithoutChangingThem(string scope, bool plugin, bool warns)
+    {
+        var path = Path.Combine(_workspace.WorkspaceRoot.FullName, ".github", "skills", "aspire", "SKILL.md");
+        await AgentConfigurationTestContext.WriteAsync(path, "Customized local instructions.");
+        var timestamp = File.GetLastWriteTimeUtc(path);
+        var messages = new List<string>();
+        var interaction = new TestInteractionService { DisplayMessageCallback = (_, message, _) => messages.Add(message) };
+        _hooks.PlanCallback = _ =>
+        {
+            messages.Add("configure");
+            return [];
+        };
+        using var provider = CreateServices(options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+            options.GitRepositoryFactory = _ => new TestGitRepository
+            {
+                GetRootAsyncCallback = _ => Task.FromResult<DirectoryInfo?>(_workspace.WorkspaceRoot)
+            };
+        }).BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse($"agent init --agent copilot --scope {scope} --mcp y --aspire-skills {(plugin ? "y" : "n")} --non-interactive")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var warning = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict, path);
+        Assert.Equal(warns ? 1 : 0, messages.Count(message => message == warning));
+        if (warns)
+        {
+            Assert.True(messages.IndexOf(warning) < messages.IndexOf("configure"));
+        }
+        Assert.Equal("Customized local instructions.", await File.ReadAllTextAsync(path));
+        Assert.Equal(timestamp, File.GetLastWriteTimeUtc(path));
+    }
+
+    [Theory]
     [InlineData("", "Project")]
     [InlineData("--scope project", "Project")]
     [InlineData("--scope PROJECT", "Project")]
@@ -783,10 +863,15 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
             "Unchanged" => [targetMessage, "Native client owns acquisition.", AgentCommandStrings.InitCommand_ClientAcquisitionNotice],
             _ => ["Native client owns acquisition."]
         };
-        Assert.Equal(expectedMessages, interaction.DisplayedMessages.Select(message => message.Message.Replace(logFilePath, "<log-file>", StringComparison.Ordinal)));
+        Assert.Equal(new[] { AgentCommandStrings.InitCommand_PluginRiskWarning }.Concat(expectedMessages),
+            interaction.DisplayedMessages.Select(message => message.Message.Replace(logFilePath, "<log-file>", StringComparison.Ordinal)));
         Assert.Equal(expectedErrors, interaction.DisplayedErrors);
         Assert.Equal(expectedSuccess, interaction.DisplayedSuccess);
-        Assert.Equal(new[] { AgentCommandStrings.InitCommand_EnvironmentSelectionNotice }.Concat(expectedSubtleMessages), subtleMessages);
+        Assert.Equal(new[]
+        {
+            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_DirectSkillsAlternative, AspireSkillsPluginConfiguration.RepositoryUrl),
+            AgentCommandStrings.InitCommand_EnvironmentSelectionNotice
+        }.Concat(expectedSubtleMessages), subtleMessages);
     }
 
     [Theory]
@@ -823,6 +908,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
         Assert.Equal(KnownEmojis.Warning, interaction.DisplayedMessages[^1].Emoji);
         Assert.Equal(
         [
+            AgentCommandStrings.InitCommand_PluginRiskWarning,
             string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RegisteredTarget,
                 AgentCommandStrings.InitCommand_AspireSkillsAsset, AgentCommandStrings.Environment_Copilot, AgentCommandStrings.InitCommand_ProjectScope, projectPath),
             string.Format(CultureInfo.CurrentCulture, status == "Blocked" ? AgentCommandStrings.InitCommand_BlockedTarget : AgentCommandStrings.InitCommand_FailedTarget,
@@ -830,7 +916,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
             AgentCommandStrings.ConfigurationCompletedWithWarnings
         ],
         interaction.DisplayedMessages.Select(message => message.Message));
-        Assert.Equal([AgentCommandStrings.InitCommand_EnvironmentSelectionNotice, "The hook could not be written.",
+        Assert.Equal([string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_DirectSkillsAlternative, AspireSkillsPluginConfiguration.RepositoryUrl),
+            AgentCommandStrings.InitCommand_EnvironmentSelectionNotice, "The hook could not be written.",
             AgentCommandStrings.InitCommand_ClientAcquisitionNotice], subtleMessages);
     }
 

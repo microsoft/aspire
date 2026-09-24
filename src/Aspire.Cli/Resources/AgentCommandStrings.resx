@@ -320,4 +320,43 @@
   <data name="InitCommand_SkillFileOutsideTarget" xml:space="preserve">
     <value>The skill file resolves outside the selected skill directory: {0}</value>
   </data>
+  <data name="InitCommand_PluginRiskWarning" xml:space="preserve">
+    <value>Install and use Aspire plugins or catalog content at your own risk. Review the source before enabling it: plugin-provided tools and scripts can execute code with your permissions.</value>
+  </data>
+  <data name="InitCommand_DirectSkillsAlternative" xml:space="preserve">
+    <value>Prefer not to use the plugin? Install the skills directly from {0} instead.</value>
+    <comment>{0} is the official Aspire skills repository URL.</comment>
+  </data>
+  <data name="InitCommand_LocalSkillsConflict" xml:space="preserve">
+    <value>Local Aspire skills may duplicate or override plugin/catalog guidance:
+{0}
+These files were left unchanged. Review them after the client acquires the plugin; preserve any customizations you need.</value>
+    <comment>{0} lists the local skill entry-point paths, one per line.</comment>
+  </data>
+  <data name="LocalSkills_ReadFailed" xml:space="preserve">
+    <value>Could not check local Aspire skills at '{0}': {1}</value>
+  </data>
+  <data name="LocalSkills_MigrationTitle" xml:space="preserve">
+    <value>Offer Aspire plugin registration for selected agents and scope; keep these local skills for review:
+{0}
+Plugin content runs with your permissions. Review its source and use it at your own risk.</value>
+    <comment>{0} lists local skill paths and any inspection errors.</comment>
+  </data>
+  <data name="LocalSkills_MigrationDetail" xml:space="preserve">
+    <value>Local Aspire skill files were found:
+{0}
+Their installer, version, and customization status cannot be verified. Direct skill installation remains supported; plugin registration is an optional alternative.</value>
+    <comment>{0} lists local skill paths and any inspection errors.</comment>
+  </data>
+  <data name="LocalSkills_MigrationGuidance" xml:space="preserve">
+    <value>To switch to native plugin/catalog registration in an AppHost project, run 'aspire update --migrate'. Otherwise, run 'aspire agent init --aspire-skills y' and select the agents and scope.
+Local files are preserved for manual review. Prefer direct skills? See {0}.</value>
+    <comment>{0} is the official Aspire skills repository URL.</comment>
+  </data>
+  <data name="LocalSkills_MigrationIncomplete" xml:space="preserve">
+    <value>Plugin migration did not complete for all requested targets, or no agents were selected. Local skill files were preserved. Review the results and use 'aspire agent init --aspire-skills y --agent &lt;agent&gt; --scope &lt;project|user&gt;' to configure an explicit target.</value>
+  </data>
+  <data name="LocalSkills_MigrationReview" xml:space="preserve">
+    <value>Native Aspire registration is configured, but client acquisition and activation are not verified. Local skills and supporting files were preserved. After verifying the plugin in the client, review and remove duplicate local copies manually; keep any customizations you need.</value>
+  </data>
 </root>

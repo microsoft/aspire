@@ -7,6 +7,7 @@ using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Agents;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
@@ -20,6 +21,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -1080,6 +1082,48 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(pendingMigration.ApplyInvoked);
         Assert.Contains(MigrationStrings.MigrationCancelled, subtleMessages);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UpdateCommand_LocalSkillsMigration_RequiresConfirmationAndKeepsLocalFiles(bool confirmed)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var skillDirectory = workspace.CreateDirectory(Path.Combine(".agents", "skills", "aspire"));
+        var skillPath = Path.Combine(skillDirectory.FullName, "SKILL.md");
+        await File.WriteAllTextAsync(skillPath, "User-maintained Aspire instructions.");
+        var targetPath = Path.Combine(workspace.WorkspaceRoot.FullName, "plugin-settings.json");
+        var interaction = new TestInteractionService
+        {
+            ConfirmCallback = (prompt, defaultValue) => prompt == MigrationStrings.ConfirmApplyPrompt ? confirmed : defaultValue
+        };
+        var services = CreateMigrationUpdateServices(workspace, interaction, new TestMigration("unused", 0, null));
+        services.RemoveAll<IMigration>();
+        services.AddSingleton<IMigration, LocalAspireSkillsMigration>();
+        var copilot = new TestAgentEnvironmentScanner("copilot", AgentCommandStrings.Environment_Copilot,
+            new AgentClientDetection(AgentClientKind.CopilotCli, "1.0.0", false));
+        copilot.GetTargetsCallback = request =>
+        {
+            Assert.Equal(new AgentAssetSelection(false, false, false, true), request.Assets);
+            Assert.Equal(AgentConfigurationScope.Project, request.Scope);
+            return [copilot.CreateTarget(targetPath, AgentAssetKind.AspireSkills, AgentConfigurationStatus.Configured, null)];
+        };
+        services.RemoveAll<IAgentEnvironmentScanner>();
+        services.AddSingleton<IAgentEnvironmentScanner>(copilot);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("update --apphost AppHost.csproj --migrate").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(confirmed, File.Exists(targetPath));
+        Assert.Equal("User-maintained Aspire instructions.", await File.ReadAllTextAsync(skillPath));
+        Assert.Single(interaction.BooleanPromptCalls, call => call.PromptText == MigrationStrings.ConfirmApplyPrompt);
+        if (confirmed)
+        {
+            Assert.Contains(interaction.DisplayedMessages, message => message.Message == AgentCommandStrings.LocalSkills_MigrationReview);
+        }
     }
 
     [Fact]

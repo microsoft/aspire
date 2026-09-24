@@ -14,6 +14,7 @@ internal static class AspireSkillsPluginConfiguration
     internal const string MarketplaceName = "aspire-skills";
     internal const string PluginName = "aspire@aspire-skills";
     internal const string Repository = "microsoft/aspire-skills";
+    internal const string RepositoryUrl = "https://github.com/" + Repository;
 
     public static AgentConfigurationEdit Apply(JsonObject root, IReadOnlyList<JsonObject> settings)
     {

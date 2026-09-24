@@ -214,7 +214,7 @@
     <value>Run 'aspire update --migrate' to apply them.</value>
   </data>
   <data name="MigrateOptionDescription" xml:space="preserve">
-    <value>Apply any pending migrations to the project after updating its packages.</value>
+    <value>Apply pending migrations after updating the project's packages.</value>
   </data>
   <data name="MigrationApplyFailedWarning" xml:space="preserve">
     <value>The project packages were updated, but applying migrations failed. Run 'aspire update --migrate' again to retry.</value>

@@ -217,6 +217,11 @@
         <target state="new">Detecting agents...</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_DirectSkillsAlternative">
+        <source>Prefer not to use the plugin? Install the skills directly from {0} instead.</source>
+        <target state="new">Prefer not to use the plugin? Install the skills directly from {0} instead.</target>
+        <note>{0} is the official Aspire skills repository URL.</note>
+      </trans-unit>
       <trans-unit id="InitCommand_DotnetInspectAsset">
         <source>dotnet-inspect skill</source>
         <target state="new">dotnet-inspect skill</target>
@@ -277,6 +282,15 @@
         <target state="new">Invalid scope '{0}'. Use 'project' or 'user'.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_LocalSkillsConflict">
+        <source>Local Aspire skills may duplicate or override plugin/catalog guidance:
+{0}
+These files were left unchanged. Review them after the client acquires the plugin; preserve any customizations you need.</source>
+        <target state="new">Local Aspire skills may duplicate or override plugin/catalog guidance:
+{0}
+These files were left unchanged. Review them after the client acquires the plugin; preserve any customizations you need.</target>
+        <note>{0} lists the local skill entry-point paths, one per line.</note>
+      </trans-unit>
       <trans-unit id="InitCommand_McpAsset">
         <source>Aspire MCP server</source>
         <target state="new">Aspire MCP server</target>
@@ -305,6 +319,11 @@
       <trans-unit id="InitCommand_PlaywrightOptionDescription">
         <source>Install Playwright CLI and its skills for the selected agents (y/n or true/false; default: no)</source>
         <target state="new">Install Playwright CLI and its skills for the selected agents (y/n or true/false; default: no)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_PluginRiskWarning">
+        <source>Install and use Aspire plugins or catalog content at your own risk. Review the source before enabling it: plugin-provided tools and scripts can execute code with your permissions.</source>
+        <target state="new">Install and use Aspire plugins or catalog content at your own risk. Review the source before enabling it: plugin-provided tools and scripts can execute code with your permissions.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
@@ -360,6 +379,46 @@
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
         <source>Path to the workspace root directory</source>
         <target state="new">Path to the workspace root directory</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalSkills_MigrationDetail">
+        <source>Local Aspire skill files were found:
+{0}
+Their installer, version, and customization status cannot be verified. Direct skill installation remains supported; plugin registration is an optional alternative.</source>
+        <target state="new">Local Aspire skill files were found:
+{0}
+Their installer, version, and customization status cannot be verified. Direct skill installation remains supported; plugin registration is an optional alternative.</target>
+        <note>{0} lists local skill paths and any inspection errors.</note>
+      </trans-unit>
+      <trans-unit id="LocalSkills_MigrationGuidance">
+        <source>To switch to native plugin/catalog registration in an AppHost project, run 'aspire update --migrate'. Otherwise, run 'aspire agent init --aspire-skills y' and select the agents and scope.
+Local files are preserved for manual review. Prefer direct skills? See {0}.</source>
+        <target state="new">To switch to native plugin/catalog registration in an AppHost project, run 'aspire update --migrate'. Otherwise, run 'aspire agent init --aspire-skills y' and select the agents and scope.
+Local files are preserved for manual review. Prefer direct skills? See {0}.</target>
+        <note>{0} is the official Aspire skills repository URL.</note>
+      </trans-unit>
+      <trans-unit id="LocalSkills_MigrationIncomplete">
+        <source>Plugin migration did not complete for all requested targets, or no agents were selected. Local skill files were preserved. Review the results and use 'aspire agent init --aspire-skills y --agent &lt;agent&gt; --scope &lt;project|user&gt;' to configure an explicit target.</source>
+        <target state="new">Plugin migration did not complete for all requested targets, or no agents were selected. Local skill files were preserved. Review the results and use 'aspire agent init --aspire-skills y --agent &lt;agent&gt; --scope &lt;project|user&gt;' to configure an explicit target.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalSkills_MigrationReview">
+        <source>Native Aspire registration is configured, but client acquisition and activation are not verified. Local skills and supporting files were preserved. After verifying the plugin in the client, review and remove duplicate local copies manually; keep any customizations you need.</source>
+        <target state="new">Native Aspire registration is configured, but client acquisition and activation are not verified. Local skills and supporting files were preserved. After verifying the plugin in the client, review and remove duplicate local copies manually; keep any customizations you need.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalSkills_MigrationTitle">
+        <source>Offer Aspire plugin registration for selected agents and scope; keep these local skills for review:
+{0}
+Plugin content runs with your permissions. Review its source and use it at your own risk.</source>
+        <target state="new">Offer Aspire plugin registration for selected agents and scope; keep these local skills for review:
+{0}
+Plugin content runs with your permissions. Review its source and use it at your own risk.</target>
+        <note>{0} lists local skill paths and any inspection errors.</note>
+      </trans-unit>
+      <trans-unit id="LocalSkills_ReadFailed">
+        <source>Could not check local Aspire skills at '{0}': {1}</source>
+        <target state="new">Could not check local Aspire skills at '{0}': {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToDownload">

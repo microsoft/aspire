@@ -670,6 +670,7 @@ public class Program
         builder.Services.AddTransient<SdkExportCommand>();
         builder.Services.AddTransient<RestoreCommand>();
         builder.Services.AddSingleton<IMigration, TypeScriptAppHostMigration>();
+        builder.Services.AddSingleton<IMigration, LocalAspireSkillsMigration>();
         builder.Services.AddTransient<SetupCommand>();
 #if DEBUG
         builder.Services.AddTransient<RenderCommand>();
