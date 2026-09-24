@@ -611,6 +611,73 @@ public partial class AtsCapabilityScannerTests
                 && d.Message.Contains("has collisions", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ScanAssembly_BaseTargetMethodShadowsGenericMethodForDerivedTargets(bool scanAssemblies)
+    {
+        var assembly = typeof(AtsCapabilityScannerTests).Assembly;
+        var result = scanAssemblies
+            ? AtsCapabilityScanner.ScanAssemblies([assembly])
+            : AtsCapabilityScanner.ScanAssembly(assembly);
+        var generic = Assert.Single(result.Capabilities, c => c.CapabilityId.EndsWith("/shadowedExporter", StringComparison.Ordinal));
+        var specific = Assert.Single(result.Capabilities, c => c.CapabilityId.EndsWith("/specificShadowedExporter", StringComparison.Ordinal));
+        var expectedTargets = new[]
+        {
+            typeof(ShadowedEnvironmentResource),
+            typeof(DerivedShadowedEnvironmentResource),
+            typeof(GrandchildShadowedEnvironmentResource)
+        }.Select(AtsTypeMapping.DeriveTypeId).Order().ToArray();
+
+        Assert.Equal(expectedTargets, specific.ExpandedTargetTypes.Select(t => t.TypeId).Order());
+        Assert.Empty(generic.ExpandedTargetTypes.Select(t => t.TypeId).Intersect(expectedTargets));
+        Assert.Contains(generic.ExpandedTargetTypes, t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(OtherEnvironmentResource)));
+        Assert.DoesNotContain(result.Diagnostics, d => d.Severity != AtsDiagnosticSeverity.Info &&
+            d.Message.Contains("shadowedExporter", StringComparison.Ordinal));
+
+        var application = DistributedApplication.CreateBuilder();
+        var project = new GrandchildShadowedEnvironmentResource("project");
+        var builder = application.AddResource(project);
+        Assert.Same(builder, result.Methods[specific.CapabilityId].Invoke(null, [builder]));
+        var other = new OtherEnvironmentResource("other");
+        var otherBuilder = application.AddResource(other);
+        var genericMethod = result.Methods[generic.CapabilityId].MakeGenericMethod(typeof(OtherEnvironmentResource));
+        Assert.Same(otherBuilder, genericMethod.Invoke(null, [otherBuilder]));
+    }
+
+    [Fact]
+    public void ScanAssembly_UnrelatedInterfaceTargetsRemainAmbiguous()
+    {
+        var module = CreateInheritanceModule();
+        var exports = module.DefineType("Ambiguous.Exports", TypeAttributes.Public | TypeAttributes.Abstract | TypeAttributes.Sealed);
+        foreach (var (id, target, name) in new[]
+        {
+            ("environment", typeof(IResourceWithEnvironment), "configure"),
+            ("arguments", typeof(IResourceWithArgs), "configure"),
+            ("probe", typeof(AmbiguousEnvironmentResource), "probe")
+        })
+        {
+            var builderType = typeof(IResourceBuilder<>).MakeGenericType(target);
+            var method = exports.DefineMethod(id, MethodAttributes.Public | MethodAttributes.Static, builderType, [builderType]);
+            method.SetCustomAttribute(new CustomAttributeBuilder(
+                typeof(AspireExportAttribute).GetConstructor([typeof(string)])!,
+                [id],
+                [typeof(AspireExportAttribute).GetProperty(nameof(AspireExportAttribute.MethodName))!],
+                [name]));
+            var il = method.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ret);
+        }
+        exports.CreateType();
+
+        var result = AtsCapabilityScanner.ScanAssembly(module.Assembly);
+
+        var warning = Assert.Single(result.Diagnostics, d => d.Severity == AtsDiagnosticSeverity.Warning);
+        Assert.Contains("has collisions", warning.Message);
+        Assert.Contains(AtsTypeMapping.DeriveTypeId(typeof(AmbiguousEnvironmentResource)), warning.Message);
+        Assert.Single(result.Capabilities, c => c.MethodName == "configure");
+    }
+
     #endregion
 
     #region Callback Parameter Type Resolution Tests
@@ -866,7 +933,13 @@ public partial class AtsCapabilityScannerTests
         }
     }
 
-    private sealed class ShadowedEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
+    private class ShadowedEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
+
+    private class DerivedShadowedEnvironmentResource(string name) : ShadowedEnvironmentResource(name);
+
+    private sealed class GrandchildShadowedEnvironmentResource(string name) : DerivedShadowedEnvironmentResource(name);
+
+    private sealed class AmbiguousEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment, IResourceWithArgs;
 
     private sealed class OtherEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
 
@@ -969,6 +1042,18 @@ public partial class AtsCapabilityScannerTests
 
         [AspireExport("otherEnvironmentProbe")]
         public static IResourceBuilder<OtherEnvironmentResource> OtherEnvironmentProbe(IResourceBuilder<OtherEnvironmentResource> builder)
+        {
+            return builder;
+        }
+
+        [AspireExport("derivedEnvironmentProbe")]
+        public static IResourceBuilder<DerivedShadowedEnvironmentResource> DerivedEnvironmentProbe(IResourceBuilder<DerivedShadowedEnvironmentResource> builder)
+        {
+            return builder;
+        }
+
+        [AspireExport("grandchildEnvironmentProbe")]
+        public static IResourceBuilder<GrandchildShadowedEnvironmentResource> GrandchildEnvironmentProbe(IResourceBuilder<GrandchildShadowedEnvironmentResource> builder)
         {
             return builder;
         }
