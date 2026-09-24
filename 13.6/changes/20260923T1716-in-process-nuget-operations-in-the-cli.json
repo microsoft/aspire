@@ -10,10 +10,11 @@
   "docsRequired": true,
   "emoji": "🔐",
   "firstMergedAt": "2026-09-23T17:16:16Z",
-  "lastMergedAt": "2026-09-23T17:16:16Z",
+  "lastMergedAt": "2026-09-23T18:51:35Z",
   "name": "In-process NuGet operations in the CLI",
   "owner": "eerhardt",
   "prs": [
-    19847
+    19847,
+    20391
   ]
 }

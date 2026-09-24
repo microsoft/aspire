@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Documents-only clarification of existing CLI debug log location wording; corresponding source PR #19868 was already excluded as a doc-only change with no product entry",
+  "mergedAt": "2026-09-23T19:19:10Z",
+  "number": 1613,
+  "runDate": "2026-09-24T00:09:04Z",
+  "status": "excluded",
+  "title": "[docs] Document Aspire CLI debug log location in VS Code extension"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site UI bug fix (FileTree icons), unrelated to a product changelog entry",
+  "mergedAt": "2026-09-23T20:19:46Z",
+  "number": 1733,
+  "runDate": "2026-09-24T00:09:04Z",
+  "status": "excluded",
+  "title": "Fix missing FileTree file icons"
+}

@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "Added `--file-based` to `aspire init` so an empty, file-based C# AppHost can be scaffolded in the current directory without .NET solution discovery, avoiding unwanted prompts or solution-based scaffolding caused by incidental `.sln`/`.slnx` files.",
-  "docsPrs": [],
+  "docsPrs": [
+    1648
+  ],
   "docsRequired": true,
-  "emoji": "📄",
+  "emoji": "\ud83d\udcc4",
   "firstMergedAt": "2026-09-11T07:02:27Z",
   "lastMergedAt": "2026-09-11T07:02:27Z",
   "name": "New `--file-based` option for `aspire init`",

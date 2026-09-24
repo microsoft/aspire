@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Documents Visual Studio debugging fix for file-based C# apps (PR #20243)",
+  "mergedAt": "2026-09-23T19:21:37Z",
+  "number": 1721,
+  "runDate": "2026-09-24T00:09:04Z",
+  "status": "included",
+  "title": "[docs] Document Visual Studio debugging behavior for file-based C# apps"
+}

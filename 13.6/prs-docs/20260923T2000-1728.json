@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Documents metrics dimension-filter popover staying open during live updates (PR #20362), part of Dashboard popup positioning fixes",
+  "mergedAt": "2026-09-23T20:00:02Z",
+  "number": 1728,
+  "runDate": "2026-09-24T00:09:04Z",
+  "status": "included",
+  "title": "[docs] Note that metrics dimension-filter popover stays open during live updates"
+}

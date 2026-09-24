@@ -1,14 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Terminal-host telemetry from `WithTerminal()` is now disabled by default, so its hidden helper resources no longer show up in the dashboard's telemetry resource list (including the Traces filter) unless explicitly opted into with `ShowTerminalHost = true`.",
-  "docsPrs": [],
+  "docsPrs": [
+    1651
+  ],
   "docsRequired": false,
-  "emoji": "🔕",
+  "emoji": "\ud83d\udd15",
   "firstMergedAt": "2026-09-11T09:55:34Z",
   "lastMergedAt": "2026-09-11T09:55:34Z",
   "name": "Terminal-host telemetry now opt-in",

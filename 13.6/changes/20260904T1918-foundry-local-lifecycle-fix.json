@@ -1,14 +1,16 @@
 {
   "area": "Integrations",
-  "areaEmoji": "🔌",
+  "areaEmoji": "\ud83d\udd0c",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Fixed Aspire hanging when Foundry Local daemonizes through the newer foundry server CLI, and added support for connecting to a Foundry Local service already running on another host from WSL2 and Linux AppHosts.",
-  "docsPrs": [],
+  "docsPrs": [
+    1621
+  ],
   "docsRequired": false,
-  "emoji": "🤖",
+  "emoji": "\ud83e\udd16",
   "firstMergedAt": "2026-09-04T19:18:09Z",
   "lastMergedAt": "2026-09-04T19:18:09Z",
   "name": "Fix Foundry Local lifecycle and remote endpoints",

@@ -1,14 +1,17 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "The CLI's development-certificate trust support now recognizes Firefox NSS certificate databases under XDG_CONFIG_HOME. The override is now exposed as standard Aspire configuration (`certificates.nssDbPaths`, including user-level `~/.aspire` settings) instead of a dedicated environment variable, and takes precedence over the existing `DOTNET_DEV_CERTS_NSSDB_PATHS` upstream environment variable.",
-  "docsPrs": [],
+  "docsPrs": [
+    1716,
+    1725
+  ],
   "docsRequired": true,
-  "emoji": "🔐",
+  "emoji": "\ud83d\udd10",
   "firstMergedAt": "2026-09-21T08:09:33Z",
   "lastMergedAt": "2026-09-22T23:30:56Z",
   "name": "Firefox NSS certificate support in the CLI",

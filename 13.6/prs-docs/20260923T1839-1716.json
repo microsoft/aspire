@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Documents certificates.nssDbPaths CLI config setting (PR #20298), part of Firefox NSS certificate support",
+  "mergedAt": "2026-09-23T18:39:42Z",
+  "number": 1716,
+  "runDate": "2026-09-24T00:09:04Z",
+  "status": "included",
+  "title": "[docs] Document certificates.nssDbPaths CLI config setting"
+}

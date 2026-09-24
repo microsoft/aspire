@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "aspire run and detached aspire start no longer count time spent restoring and building the AppHost against the startup timeout, fixing misleading timeout failures for cold or large solutions.",
-  "docsPrs": [],
+  "docsPrs": [
+    1619
+  ],
   "docsRequired": false,
-  "emoji": "⏱️",
+  "emoji": "\u23f1\ufe0f",
   "firstMergedAt": "2026-09-04T15:00:36Z",
   "lastMergedAt": "2026-09-04T15:00:36Z",
   "name": "Don't count AppHost builds against CLI startup timeout",

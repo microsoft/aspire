@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Documents log streaming fix for terminal-backed executables (PR #20317)",
+  "mergedAt": "2026-09-23T20:07:18Z",
+  "number": 1717,
+  "runDate": "2026-09-24T00:09:04Z",
+  "status": "included",
+  "title": "[docs] Clarify log streaming for terminal-backed executables"
+}

@@ -1,14 +1,16 @@
 {
   "area": "Integrations",
-  "areaEmoji": "🔌",
+  "areaEmoji": "\ud83d\udd0c",
   "backport": false,
   "breaking": true,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "`RunAsEmulator` for Azure Cosmos DB now defaults to the Linux-based vNext emulator image. A new `RunAsClassicEmulator` API preserves access to the classic emulator, and the former `RunAsPreviewEmulator` is now an obsolete alias that forwards to `RunAsEmulator`.",
-  "docsPrs": [],
+  "docsPrs": [
+    1563
+  ],
   "docsRequired": true,
-  "emoji": "🌐",
+  "emoji": "\ud83c\udf10",
   "firstMergedAt": "2026-08-21T16:50:46Z",
   "lastMergedAt": "2026-08-21T16:50:46Z",
   "name": "Cosmos DB emulator now defaults to vNext",

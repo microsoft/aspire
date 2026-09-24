@@ -1,14 +1,16 @@
 {
   "area": "Dashboard",
-  "areaEmoji": "📊",
+  "areaEmoji": "\ud83d\udcca",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Dashboard terminals now explicitly use the WebGL2 renderer on desktop and Android Firefox to avoid a WebGPU performance issue in that browser, even when WebGPU is otherwise available.",
-  "docsPrs": [],
+  "docsPrs": [
+    1703
+  ],
   "docsRequired": false,
-  "emoji": "🦊",
+  "emoji": "\ud83e\udd8a",
   "firstMergedAt": "2026-09-21T06:42:47Z",
   "lastMergedAt": "2026-09-21T06:42:47Z",
   "name": "Force WebGL2 for Firefox dashboard terminals",

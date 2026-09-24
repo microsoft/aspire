@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Documents CLI startup timeout change (PR #19478)",
+  "mergedAt": "2026-09-23T20:20:48Z",
+  "number": 1619,
+  "runDate": "2026-09-24T00:09:04Z",
+  "status": "included",
+  "title": "[docs] Clarify CLI startup timeout excludes AppHost build time"
+}

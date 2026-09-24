@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Documents single-member MongoDB replica set (PR #19961)",
+  "mergedAt": "2026-09-23T19:22:27Z",
+  "number": 1730,
+  "runDate": "2026-09-24T00:09:04Z",
+  "status": "included",
+  "title": "[docs] Document single-member MongoDB replica set for transactions and change streams"
+}

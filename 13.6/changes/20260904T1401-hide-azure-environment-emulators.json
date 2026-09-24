@@ -1,14 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The azure-environment resource is now hidden in the dashboard when every Azure resource in the model runs through a local emulator, since there is nothing to provision.",
-  "docsPrs": [],
+  "docsPrs": [
+    1618
+  ],
   "docsRequired": false,
-  "emoji": "🙈",
+  "emoji": "\ud83d\ude48",
   "firstMergedAt": "2026-09-04T14:01:39Z",
   "lastMergedAt": "2026-09-04T14:01:39Z",
   "name": "Hide Azure environment when all resources use emulators",

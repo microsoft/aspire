@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Documents azure-environment hidden when all resources use emulators (PR #19843)",
+  "mergedAt": "2026-09-23T20:36:06Z",
+  "number": 1618,
+  "runDate": "2026-09-24T00:09:04Z",
+  "status": "included",
+  "title": "[docs] Document that azure-environment is hidden when all resources use emulators"
+}
