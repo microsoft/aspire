@@ -1111,6 +1111,26 @@ public partial class MainLayoutTests : DashboardTestContext
         });
     }
 
+    [Theory]
+    [InlineData(AspireKeyboardShortcut.GoToResources)]
+    [InlineData(AspireKeyboardShortcut.GoToConsoleLogs)]
+    public async Task ResourceServiceShortcut_WhenResourceServiceIsDisabled_DoesNotNavigate(AspireKeyboardShortcut shortcut)
+    {
+        SetupMainLayoutServices(dashboardClient: new TestDashboardClient(isEnabled: false));
+
+        var cut = Render<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        var initialUri = navigationManager.Uri;
+
+        await cut.InvokeAsync(() => cut.Instance.OnPageKeyDownAsync(shortcut));
+
+        Assert.False(cut.Instance.SubscribedShortcuts.Contains(shortcut));
+        Assert.Equal(initialUri, navigationManager.Uri);
+    }
+
     private void SetupMainLayoutServices(
         TestLocalStorage? localStorage = null,
         Action<DashboardOptions>? configureOptions = null,
