@@ -7,6 +7,7 @@ using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -113,6 +114,8 @@ public class HealthCheckTests(ITestOutputHelper testOutputHelper)
     public async Task VerifyWithHttpHealthCheckBlocksDependentResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.Configure<HostOptions>(options =>
+            options.ShutdownTimeout = TimeSpan.FromMilliseconds(TestConstants.DefaultOrchestratorTestShutdownTimeout));
 
         var healthCheckTcs = new TaskCompletionSource<HealthCheckResult>();
         builder.Services.AddHealthChecks().AddAsyncCheck("blocking_check", () =>
@@ -146,7 +149,7 @@ public class HealthCheckTests(ITestOutputHelper testOutputHelper)
 
         await pendingStart.DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
 
-        await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestShutdownTimeout);
     }
 
     [Fact]

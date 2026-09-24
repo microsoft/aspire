@@ -226,7 +226,7 @@ public class DistributedApplicationTests
 
         await restartResourceTask.DefaultTimeout(TestConstants.LongTimeoutDuration);
         await startTask.DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await app.StopAsync(token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
     [Fact]
@@ -302,7 +302,7 @@ public class DistributedApplicationTests
         await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         Assert.Equal("Hello World!", await serviceAClient.GetStringAsync("/", token));
 
-        await app.StopAsync(token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
     [Fact]
@@ -362,8 +362,7 @@ public class DistributedApplicationTests
         Assert.Equal(1, normalEventCount);
         Assert.Equal(0, explicitStartEventCount);
 
-        using var shutdownCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout);
-        await app.StopAsync(shutdownCts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+        await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestShutdownTimeout);
     }
 
     [Fact]
@@ -410,8 +409,7 @@ public class DistributedApplicationTests
         // Verify that BeforeResourceStartedEvent WAS fired when manually started
         Assert.Equal(1, eventCount);
 
-        using var shutdownCts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout);
-        await app.StopAsync(shutdownCts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+        await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestShutdownTimeout);
     }
 
     [Fact]
@@ -436,7 +434,7 @@ public class DistributedApplicationTests
 
         Assert.Equal(1, eventCount);
 
-        await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestShutdownTimeout);
     }
 
     [Fact]
@@ -599,7 +597,7 @@ public class DistributedApplicationTests
         await rns.WaitForResourceAsync(notStartedResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         await startTask.DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
-        await app.StopAsync(token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
     [Fact]
@@ -688,7 +686,7 @@ public class DistributedApplicationTests
             }
 
             await startTask.DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
-            await app.StopAsync(token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+            await app.StopAsync().DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
         }
     }
 
@@ -1284,7 +1282,7 @@ public class DistributedApplicationTests
         Assert.NotNull(serviceA);
         Assert.Equal("Hello World!", await serviceAClient.GetStringAsync("/", token));
 
-        await app.StopAsync(token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+        await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
     }
 
     [Fact]
@@ -2290,7 +2288,7 @@ public class DistributedApplicationTests
             await EnsureLogLines(logStream, logCts.Token, tail, (long n) => n >= minimumLineNumber++);
         }
 
-        await app.StopAsync(token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+        await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
     }
 
     [Theory]
@@ -2318,7 +2316,7 @@ public class DistributedApplicationTests
         await rns.WaitForResourceAsync(containerResourceName, KnownResourceStates.Exited, token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
 
         await startTask.DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
-        await app.StopAsync(token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+        await app.StopAsync().DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
     }
 
     private static async Task EnsureLogLines(Stream stream, CancellationToken ct, long nlines, Func<long, bool>? validateLineNumber = default)
@@ -2448,6 +2446,8 @@ public class DistributedApplicationTests
             trustDeveloperCertificate: trustDeveloperCertificate);
 
         testProgram.AppBuilder.WithTestAndResourceLogging(_testOutputHelper);
+        testProgram.AppBuilder.Services.Configure<HostOptions>(options =>
+            options.ShutdownTimeout = TimeSpan.FromMilliseconds(TestConstants.DefaultOrchestratorTestShutdownTimeout));
 
         return testProgram;
     }
