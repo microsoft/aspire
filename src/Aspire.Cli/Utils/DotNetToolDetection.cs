@@ -263,8 +263,9 @@ internal static class DotNetToolDetection
 
     private static bool IsSupportedToolTargetFramework(string targetFramework)
     {
-        return string.Equals(targetFramework, "any", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(targetFramework, "net11.0", StringComparison.OrdinalIgnoreCase);
+        // eng/clipack packs the RID-specific tool as self-contained, so the SDK always lays the
+        // NativeAOT binary out under tools/any/<rid>/ (and the pointer package under tools/any/any/).
+        return string.Equals(targetFramework, "any", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsSupportedToolRuntimeIdentifier(string runtimeIdentifier)

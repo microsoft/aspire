@@ -376,7 +376,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_GuestProject_WhenTargetSdkNewerThanCli_PromptsForCliUpdateBeforeProjectUpdateAndSkipsWhenAccepted()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string processPath = "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/net11.0/linux-x64/aspire";
+        const string processPath = "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/any/linux-x64/aspire";
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
         File.WriteAllText(appHostPath, "// test apphost");
 
@@ -550,7 +550,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_WhenProjectUpdatedSuccessfullyAndRunningAsDotnetTool_DisplaysDotnetToolUpdateCommand()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string processPath = "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/net11.0/linux-x64/aspire";
+        const string processPath = "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/any/linux-x64/aspire";
         var interactionService = new TestInteractionService()
         {
             ConfirmCallback = (_, _) => true
@@ -3350,7 +3350,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             "aspire.cli.linux-x64",
             "9.4.0",
             "tools",
-            "net11.0",
+            "any",
             "linux-x64",
             GetAspireExecutableName());
 
