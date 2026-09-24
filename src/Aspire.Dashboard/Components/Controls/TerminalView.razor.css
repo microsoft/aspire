@@ -116,7 +116,7 @@
     background: var(--colorNeutralBackground2);
     border-bottom: 1px solid var(--terminal-titlebar-border-color);
     color: var(--colorNeutralForeground2);
-    font: 12px ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font: var(--fontSizeBase200) var(--fontFamilyBase);
 }
 
 .terminal-titlebar ::deep .terminal-open-window {

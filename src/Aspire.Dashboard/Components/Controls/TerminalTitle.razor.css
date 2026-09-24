@@ -5,6 +5,7 @@
     min-width: 0;
     flex: 1;
     color: var(--colorNeutralForeground1);
+    font-family: var(--fontFamilyBase);
     font-size: var(--fontSizeBase200);
 }
 
@@ -34,10 +35,6 @@
     padding-inline: 4px;
     font-family: inherit;
     font-size: inherit;
-}
-
-.terminal-directory-container ::deep .terminal-directory {
-    font-family: var(--fontFamilyMonospace);
 }
 
 .terminal-title-container ::deep .terminal-title-button:focus-visible,
