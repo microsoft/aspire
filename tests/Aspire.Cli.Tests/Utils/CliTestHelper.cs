@@ -4,23 +4,30 @@
 using System.Text;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Caching;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Commands.Sdk;
+using Aspire.Cli.Configuration;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Documentation.ApiDocs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
-using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Migrations;
+using Aspire.Cli.Npm;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Processes;
+using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Secrets;
@@ -28,6 +35,9 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Utils;
+using Aspire.Cli.Utils.EnvironmentChecker;
+using Aspire.Shared;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,15 +46,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Migrations;
-using Aspire.Cli.Utils;
-using Aspire.Cli.Utils.EnvironmentChecker;
-using Aspire.Cli.Packaging;
-using Aspire.Cli.Caching;
-using Aspire.Cli.Diagnostics;
-using Aspire.Cli.Npm;
-using Aspire.Cli.Profiling;
 
 namespace Aspire.Cli.Tests.Utils;
 
@@ -89,7 +90,8 @@ internal static class CliTestHelper
         var configurationValues = new Dictionary<string, string?>();
 
         // Populate feature flag configuration in in-memory collection.
-        options.ConfigurationCallback += config => {
+        options.ConfigurationCallback += config =>
+        {
             foreach (var featureFlag in options.EnabledFeatures)
             {
                 config[$"{KnownFeatures.FeaturePrefix}:{featureFlag}"] = "true";
@@ -230,6 +232,7 @@ internal static class CliTestHelper
 
         // AppHost project handlers - must match Program.cs registration pattern
         services.AddSingleton<DotNetAppHostProject>();
+        services.AddSingleton<CliManagedDotNetAppHostProject>();
         services.AddSingleton<Func<LanguageInfo, GuestAppHostProject>>(sp =>
         {
             return language => ActivatorUtilities.CreateInstance<GuestAppHostProject>(sp, language);
@@ -348,6 +351,54 @@ internal static class CliTestHelper
         services.AddTransient(options.AppHostBackchannelFactory);
 
         return services;
+    }
+
+    public static void ConfigureCliManagedNuGet(
+        CliServiceCollectionTestOptions options,
+        TemporaryWorkspace workspace,
+        LayoutConfiguration? layout = null)
+    {
+        if (layout is null)
+        {
+            var bundleRoot = workspace.WorkspaceRoot.CreateSubdirectory(Guid.NewGuid().ToString());
+            var managedDirectory = bundleRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+            File.WriteAllText(
+                Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+                "");
+            layout = new LayoutConfiguration
+            {
+                LayoutPath = bundleRoot.FullName,
+                Components = new LayoutComponents
+                {
+                    Managed = BundleDiscovery.ManagedDirectoryName
+                }
+            };
+        }
+
+        options.LayoutDiscoveryFactory = _ => new FixedLayoutDiscovery(layout);
+        options.BundleServiceFactory = _ => new TestBundleService(isBundle: true)
+        {
+            Layout = layout
+        };
+        var settingsClient = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<NuGetClient>.Instance);
+        options.NuGetClientFactory = _ => new FakeNuGetClient
+        {
+            GetSettingsCallback = (_, sourceIdentityKey) =>
+                new NuGetSettingsInfo(
+                    ConfigPaths: [],
+                    CacheIdentity: "test-cache",
+                    Sources: [],
+                    SensitiveSourceValues: [],
+                    PackageSourceMappingEnabled: false,
+                    PackageSourceMappings: [],
+                    DisabledPackageSourceKeys: [],
+                    ReservedPackageSourceKeys: [],
+                    SourceIdentityKey: sourceIdentityKey),
+            WriteConfigOverlayCallback = settingsClient.WriteConfigOverlay
+        };
     }
 }
 
@@ -646,7 +697,7 @@ internal sealed class CliServiceCollectionTestOptions
         var templateNuGetConfigService = serviceProvider.GetRequiredService<TemplateNuGetConfigService>();
         var dotNetFactory = new DotNetTemplateFactory(interactionService, runner, certificateService, prompter, executionContext, sdkInstaller, features, telemetry, hostEnvironment, templateNuGetConfigService, new HostEnvironment());
         var projectFactory = serviceProvider.GetRequiredService<IAppHostProjectFactory>();
-        var cliFactory = new CliTemplateFactory(languageDiscovery, projectFactory, scaffoldingService, prompter, executionContext, interactionService, hostEnvironment, serviceProvider.GetRequiredService<IEnvironment>(), templateNuGetConfigService, cliTemplateLogger);
+        var cliFactory = new CliTemplateFactory(languageDiscovery, projectFactory, scaffoldingService, prompter, executionContext, interactionService, hostEnvironment, serviceProvider.GetRequiredService<IEnvironment>(), templateNuGetConfigService, features, cliTemplateLogger);
         return new TemplateProvider([dotNetFactory, cliFactory]);
     };
 
