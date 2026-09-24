@@ -42,10 +42,12 @@ internal static class SocketPermissionHelper
             ? null
             : Path.TrimEndingDirectorySeparator(Path.GetFullPath(userProfileDirectory, currentDirectory));
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        if (directory.Parent is null ||
-            string.Equals(directory.FullName, Path.TrimEndingDirectorySeparator(currentDirectory), comparison) ||
-            string.Equals(directory.FullName, profileRoot, comparison) ||
-            string.Equals(Path.TrimEndingDirectorySeparator(directory.FullName), tempRoot, comparison))
+        var isFileSystemRoot = directory.Parent is null;
+        var isWorkingDirectory = string.Equals(directory.FullName, Path.TrimEndingDirectorySeparator(currentDirectory), comparison);
+        var isUserProfile = string.Equals(directory.FullName, profileRoot, comparison);
+        var isTemporaryRoot = string.Equals(Path.TrimEndingDirectorySeparator(directory.FullName), tempRoot, comparison);
+
+        if (isFileSystemRoot || isWorkingDirectory || isUserProfile || isTemporaryRoot)
         {
             throw new IOException($"The socket directory '{path}' must be a dedicated directory, not the working directory, user profile, filesystem root, or temporary root.");
         }
