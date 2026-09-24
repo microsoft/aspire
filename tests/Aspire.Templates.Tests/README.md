@@ -64,6 +64,12 @@ lets CI shard all 153 cases without tripling a single job's runtime. The framewo
 tests check generated package names, versions, and executable output where required
 before building, so update these expectations when changing starter test dependencies.
 
+The official Azure Pipelines `Template Tests` job runs all `basic-build` cases in a
+single session rather than sharding by class. It passes `/p:TestSessionTimeout=45m`
+to give the full suite its own budget, with a 60-minute job limit for setup and
+artifact publishing. The class-sharded CI budgets and per-test hang timeout are
+unchanged.
+
 - The sdk+workload is never updated automatically. In other words, once installed the workload packs don't get overwritten even when the source binaries changes in `artifacts`. This may change in future.
 
 There are three categories of NuGet packages used by the workload:
