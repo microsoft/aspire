@@ -33,7 +33,8 @@ internal sealed class ResourceProjectionAnnotation : IResourceAnnotation
 
     internal TProjection GetOrCreateDefaultProjection<TProjection>(
         Func<TProjection> createProjection,
-        Action<TProjection> validateProjection)
+        Action<TProjection> validateProjection,
+        string projectionKind)
         where TProjection : class, IResource
     {
         if (Projection is null)
@@ -43,7 +44,14 @@ internal sealed class ResourceProjectionAnnotation : IResourceAnnotation
             Projection = projection;
         }
 
-        return (TProjection)Projection;
+        if (Projection is not TProjection compatibleProjection)
+        {
+            throw new InvalidOperationException(
+                $"The resource '{Owner.Name}' has a configured projected resource of type '{Projection.GetType().Name}' and cannot also use " +
+                $"the default {projectionKind} projection. The first projection selected for an operation cannot be replaced.");
+        }
+
+        return compatibleProjection;
     }
 
     internal TProjection GetOrCreateCustomProjection<TProjection>(

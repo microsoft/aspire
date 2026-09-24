@@ -292,7 +292,8 @@ public static class ResourceProjectionBuilderExtensions
 
         var projection = registration.GetOrCreateDefaultProjection(
             () => (ContainerResource)new ContainerResourceProjection<IResource>(registration.Owner),
-            candidate => ValidateProjection(registration.Owner, candidate, "container"));
+            candidate => ValidateProjection(registration.Owner, candidate, "container"),
+            "container");
         if (addRegistration)
         {
             registration.Owner.Annotations.Add(registration);

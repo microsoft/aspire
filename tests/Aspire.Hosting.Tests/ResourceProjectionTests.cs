@@ -644,6 +644,33 @@ public class ResourceProjectionTests
     }
 
     [Fact]
+    public void NonContainerProjectionPreventsLaterDefaultContainerProjection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var resource = builder.AddResource(new PlainOwnerResource("worker"));
+        EffectiveTestResource? selectedProjection = null;
+        var defaultCallbackInvoked = false;
+
+        resource.WithResourceProjection(
+            DistributedApplicationOperation.Publish,
+            () => new EffectiveTestResource(resource.Resource),
+            projection => selectedProjection = projection.Resource);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            resource.WithContainerProjection(
+                DistributedApplicationOperation.Publish,
+                _ => defaultCallbackInvoked = true));
+
+        Assert.Contains(
+            $"has a configured projected resource of type '{nameof(EffectiveTestResource)}'",
+            exception.Message);
+        Assert.Contains("cannot also use the default container projection", exception.Message);
+        Assert.False(defaultCallbackInvoked);
+        Assert.Same(selectedProjection, Assert.Single(builder.Resources));
+        Assert.Null(resource.Resource.AsContainer());
+    }
+
+    [Fact]
     public void RepeatedCustomProjectionConfigurationReusesSelectedInstanceWithoutCallingFactory()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
