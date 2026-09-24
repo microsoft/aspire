@@ -1,0 +1,16 @@
+{
+  "id": "vscode-extension-e2e-blazordebugger-standalone-timeout-windows",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension Blazor browser debugger E2E (standalone) times out waiting for pwa-msedge child session on Windows",
+  "test_name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone",
+  "error_pattern": "Error: Timed out after 286929ms waiting for pwa-msedge child session for Blazor WASM root 'fc76eabc-bfe5-442d-ae6f-8be891c6269f'. Last error: <none>. Preceded by repeated 'Browser connection failed, will retry: Unable to attach to browser' messages.",
+  "occurrences": [
+    {
+      "run_id": 35953120271,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35953120271",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "pr_number": 0,
+      "observed_at": "2026-09-24T04:41:34Z"
+    }
+  ]
+}

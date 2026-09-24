@@ -1,0 +1,98 @@
+{
+  "run_id": 35953120271,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/35953120271",
+  "run_scope": "main",
+  "analyzed_at": "2026-09-24T04:41:34Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20231,
+    "title": "Add docked REPL commands for database and cache integrations",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-postgres-and-redis-repl",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20231",
+    "merged_at": "2026-09-24T03:50:24Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "bcdcd4b05edb39210c634101d030404ec18a0a7b",
+    "failed_sha": "e9944f97d78f47dd7658825f5d94c3888d684799",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "6615623c618e88ac84ed17315e89f03a0d2392a6",
+        "message": "Add CLI shell completion generation and installer integration (#20026) ## Description Make the Aspire CLI easier to discover and use through shell tab completion, and configure completion during installation where the installer has a suitable user-shell integration mechanism. Adds `aspire completions script [bash|fish|pwsh|zsh]`. Generated hooks query the live command model for commands, subcommands, options, and completion-enabled values without requiring `dotnet-suggest`. Requests avoid normal",
+        "html_url": "https://github.com/microsoft/aspire/commit/6615623c618e88ac84ed17315e89f03a0d2392a6",
+        "pull_request": {
+          "number": 20026,
+          "title": "Add CLI shell completion generation and installer integration",
+          "url": "https://github.com/microsoft/aspire/pull/20026",
+          "merged_at": "2026-09-24T01:32:11Z"
+        }
+      },
+      {
+        "sha": "e9944f97d78f47dd7658825f5d94c3888d684799",
+        "message": "Add docked REPL commands for database and cache integrations (#20231) ## Description Make it possible to query local databases and caches directly from the Aspire dashboard without installing clients or copying credentials into a separate terminal. Adds an explicitly opt-in **REPL** resource command for PostgreSQL, Redis, Valkey, MongoDB, MySQL, and SQL Server. Each integration exposes a typed `WithRepl()` extension. The command opens the bundled client (`psql`, `redis-cli`, `valkey-cli`, `mongo",
+        "html_url": "https://github.com/microsoft/aspire/commit/e9944f97d78f47dd7658825f5d94c3888d684799",
+        "pull_request": {
+          "number": 20231,
+          "title": "Add docked REPL commands for database and cache integrations",
+          "url": "https://github.com/microsoft/aspire/pull/20231",
+          "merged_at": "2026-09-24T03:50:24Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 107489382344,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/35953120271/job/107489382344",
+      "classification": "flaky-test",
+      "reason": "All setup/build steps succeeded; 'Run extension E2E tests' step failed with three Blazor WASM debugger E2E tests timing out (~287-299s) waiting for a WASM root/child debug session to attach. Neither candidate merge (CLI shell completion, database REPL commands) touches the VS Code extension's Blazor WASM debugger E2E infrastructure.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "error": "Failed to apply E2E control revision 1790223147575: Error: Timed out after 286929ms waiting for pwa-msedge child session for Blazor WASM root 'fc76eabc-bfe5-442d-ae6f-8be891c6269f'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"b24f7d5a-0697-4b6a-9eeb-07087e1c2290\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":53459,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\\\\StandaloneClient\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmi",
+      "stack_trace": "Error: Failed to apply E2E control revision 1790223147575: Error: Timed out after 286929ms waiting for pwa-msedge child session for Blazor WASM root 'fc76eabc-bfe5-442d-ae6f-8be891c6269f'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"b24f7d5a-0697-4b6a-9eeb-07087e1c2290\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":53459,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\\\\StandaloneClient\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\\\\HostedGlobal\\\\HostedGlobal.Client\\\\bin\\\\Debug\\\\net11.0\\\\\"},\"stopAtEntry\":false,\"justMyCode\":true,\"requireExactSource\":true,\"enableStepFiltering\":true,\"logging\":{\"exceptions\":true,\"moduleLoad\":true,\"programOutput\":true,\"browserStdOut\":true,\"elapsedTiming\":false,\"threadExit\":false,\"processExit\":true,\"engineLogging\":false,\"diagnosticsLog\":{\"protocolMessages\":false,\"dispatcherMessages\":\"none\",\"debugEngineAPITracing\":\"none\",\"debugRuntimeEventTracing\":false,\"expressionEvaluationTracing\":false,\"startDebuggingTracing\":false},\"consoleUsageMessage\":true},\"suppressJITOptimizations\":false,\"symbolOptions\":{\"searchPaths\":[],\"searchMicrosoftSymbolServer\":false,\"searchNuGetOrgSymbolServer\":false,\"cachePath\":\"\",\"moduleFilter\":{\"mode\":\"loadAllButExcluded\",\"excludedModules\":[],\"includedModules\":[],\"includeSymbolsNextToModules\":true,\"includeSymbolsOnDemand\":true}},\"expressionEvaluationOptions\":{\"allowImplicitFuncEval\":true,\"allowToString\":true,\"allowF",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Repeated 'Browser connection failed, will retry: Unable to attach to browser' messages then a multi-minute timeout, an environmental/timing failure in the WASM debugger attach flow, not caused by unrelated merged PR changes (CLI completions, DB REPL commands)."
+    },
+    {
+      "name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for hosted-global",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "error": "Failed to apply E2E control revision 1790223147578: Error: Timed out after 299337ms waiting for Blazor WASM root session for resource 'hosted-global'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"9d4fb946-3dbb-45b8-bd53-4fdc8ec37860\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":64392,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\\\\StandaloneClient\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9",
+      "stack_trace": "Error: Failed to apply E2E control revision 1790223147578: Error: Timed out after 299337ms waiting for Blazor WASM root session for resource 'hosted-global'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"9d4fb946-3dbb-45b8-bd53-4fdc8ec37860\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":64392,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\\\\StandaloneClient\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\\\\HostedGlobal\\\\HostedGlobal.Client\\\\bin\\\\Debug\\\\net11.0\\\\\"},\"stopAtEntry\":false,\"justMyCode\":true,\"requireExactSource\":true,\"enableStepFiltering\":true,\"logging\":{\"exceptions\":true,\"moduleLoad\":true,\"programOutput\":true,\"browserStdOut\":true,\"elapsedTiming\":false,\"threadExit\":false,\"processExit\":true,\"engineLogging\":false,\"diagnosticsLog\":{\"protocolMessages\":false,\"dispatcherMessages\":\"none\",\"debugEngineAPITracing\":\"none\",\"debugRuntimeEventTracing\":false,\"expressionEvaluationTracing\":false,\"startDebuggingTracing\":false},\"consoleUsageMessage\":true},\"suppressJITOptimizations\":false,\"symbolOptions\":{\"searchPaths\":[],\"searchMicrosoftSymbolServer\":false,\"searchNuGetOrgSymbolServer\":false,\"cachePath\":\"\",\"moduleFilter\":{\"mode\":\"loadAllButExcluded\",\"excludedModules\":[],\"includedModules\":[],\"includeSymbolsNextToModules\":true,\"includeSymbolsOnDemand\":true}},\"expressionEvaluationOptions\":{\"allowImplicitFuncEval\":true,\"allowToString\":true,\"allowFastEvaluate\":true,\"showRawValue",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same WASM root-session attach timeout pattern as a previously tracked recurring Blazor debugger E2E flake, here manifesting on the Windows shard; unrelated to the merged PR changes."
+    },
+    {
+      "name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for hosted-per-page",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "error": "Failed to apply E2E control revision 1790223147581: Error: Timed out after 299409ms waiting for Blazor WASM root session for resource 'hosted-per-page'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"10471048-6cd3-4356-8752-ca8a0bcd1b98\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":58673,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\\\\StandaloneClient\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-",
+      "stack_trace": "Error: Failed to apply E2E control revision 1790223147581: Error: Timed out after 299409ms waiting for Blazor WASM root session for resource 'hosted-per-page'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"10471048-6cd3-4356-8752-ca8a0bcd1b98\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":58673,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\\\\StandaloneClient\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-W9PaE6\\\\workspace\\\\HostedGlobal\\\\HostedGlobal.Client\\\\bin\\\\Debug\\\\net11.0\\\\\"},\"stopAtEntry\":false,\"justMyCode\":true,\"requireExactSource\":true,\"enableStepFiltering\":true,\"logging\":{\"exceptions\":true,\"moduleLoad\":true,\"programOutput\":true,\"browserStdOut\":true,\"elapsedTiming\":false,\"threadExit\":false,\"processExit\":true,\"engineLogging\":false,\"diagnosticsLog\":{\"protocolMessages\":false,\"dispatcherMessages\":\"none\",\"debugEngineAPITracing\":\"none\",\"debugRuntimeEventTracing\":false,\"expressionEvaluationTracing\":false,\"startDebuggingTracing\":false},\"consoleUsageMessage\":true},\"suppressJITOptimizations\":false,\"symbolOptions\":{\"searchPaths\":[],\"searchMicrosoftSymbolServer\":false,\"searchNuGetOrgSymbolServer\":false,\"cachePath\":\"\",\"moduleFilter\":{\"mode\":\"loadAllButExcluded\",\"excludedModules\":[],\"includedModules\":[],\"includeSymbolsNextToModules\":true,\"includeSymbolsOnDemand\":true}},\"expressionEvaluationOptions\":{\"allowImplicitFuncEval\":true,\"allowToString\":true,\"allowFastEvaluate\":true,\"showRawVal",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same WASM root-session attach timeout pattern as a previously tracked recurring Blazor debugger E2E flake, here manifesting on the Windows shard; unrelated to the merged PR changes."
+    }
+  ],
+  "causes": [
+    "vscode-extension-e2e-blazordebugger-standalone-timeout-windows",
+    "vscode-extension-e2e-blazordebugger-hostedglobal-timeout-windows",
+    "vscode-extension-e2e-blazordebugger-hostedperpage-timeout-windows"
+  ]
+}

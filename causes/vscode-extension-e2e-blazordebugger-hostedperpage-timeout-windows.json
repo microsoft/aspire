@@ -1,0 +1,16 @@
+{
+  "id": "vscode-extension-e2e-blazordebugger-hostedperpage-timeout-windows",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension Blazor browser debugger E2E (hosted-per-page) times out waiting for WASM root session on Windows",
+  "test_name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for hosted-per-page",
+  "error_pattern": "Error: Timed out after 299409ms waiting for Blazor WASM root session for resource 'hosted-per-page'. Last error: <none>.",
+  "occurrences": [
+    {
+      "run_id": 35953120271,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/35953120271",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "pr_number": 0,
+      "observed_at": "2026-09-24T04:41:34Z"
+    }
+  ]
+}
