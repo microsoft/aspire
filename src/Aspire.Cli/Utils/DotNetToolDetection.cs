@@ -264,7 +264,6 @@ internal static class DotNetToolDetection
     private static bool IsSupportedToolTargetFramework(string targetFramework)
     {
         return string.Equals(targetFramework, "any", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(targetFramework, "net10.0", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(targetFramework, "net11.0", StringComparison.OrdinalIgnoreCase);
     }
 
