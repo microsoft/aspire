@@ -141,6 +141,10 @@ dotnet test --project <path> --no-build -- \
 
 MTP MSBuild integration injects `TestingPlatformCommandLineArguments` automatically (includes `--filter-not-trait "category=failing"` and TRX filename). These args are complementary to the explicit `-- <args>`.
 
+Because `dotnet test` still returns its aggregated exit code after the test module
+applies `--ignore-exit-code 8`, the non-NuGet paths in `run-tests.yml` explicitly
+map exit code 8 to success. Other nonzero exit codes remain failures.
+
 ## Backward compatibility
 
 The `run-tests.yml` `mtpBaseArgs` input has a default value that includes diagnostic flags (crashdump, hangdump, exit-code handling) but does not include timeout arguments. Timeout values are baked into `mtpBaseArgs` at build time by MSBuild (via `eng/Testing.targets`) and flow through the test matrix metadata. Callers that bypass the matrix and don't pass `mtpBaseArgs` should include the timeout arguments explicitly if needed.

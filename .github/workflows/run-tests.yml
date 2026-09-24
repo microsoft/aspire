@@ -549,6 +549,13 @@ jobs:
             --results-directory ${{ github.workspace }}/testresults \
             ${{ inputs.extraTestArgs }} || TEST_EXIT_CODE=$?
 
+          # `--ignore-exit-code 8` only remaps the test module's exit code. `dotnet test`
+          # aggregates the run and still returns 8 when every selected test is skipped.
+          if [ "$TEST_EXIT_CODE" -eq 8 ]; then
+            echo "All selected tests were skipped; treating MTP exit code 8 as success."
+            TEST_EXIT_CODE=0
+          fi
+
           # Persist the MTP exit code so the "Verify test results exist" gate can classify the outcome
           # (test failure vs. infrastructure/crash) even though we exit 0 below in quarantine mode.
           echo "$TEST_EXIT_CODE" > "${{ github.workspace }}/test-exit-code.txt"
@@ -612,6 +619,13 @@ jobs:
               --results-directory ${{ github.workspace }}/testresults `
               ${{ inputs.extraTestArgs }}
             $testExitCode = $LASTEXITCODE
+
+            # `--ignore-exit-code 8` only remaps the test module's exit code. `dotnet test`
+            # aggregates the run and still returns 8 when every selected test is skipped.
+            if ($testExitCode -eq 8) {
+              Write-Host "All selected tests were skipped; treating MTP exit code 8 as success."
+              $testExitCode = 0
+            }
           }
           finally {
             # Stop heartbeat monitor
@@ -654,8 +668,9 @@ jobs:
           #   10 = test adapter infrastructure failure (e.g. a fixture could not be created)
           #   11 = the test process exited because a dependent process exited
           #   12 = no supported protocol version
-          # (Exit code 8 "zero tests ran" is already mapped to 0 by --ignore-exit-code 8 in MtpBaseArgs, so a
-          # genuinely empty run is caught below by the .trx/artifact checks rather than by the exit code.)
+          # (Exit code 8 "zero tests ran" is mapped to 0 either by --ignore-exit-code 8 for direct assembly
+          # execution or explicitly by the dotnet test steps above, so a genuinely empty run is caught below
+          # by the .trx/artifact checks rather than by the exit code.)
           $exitCodeFile = "${{ github.workspace }}/test-exit-code.txt"
           if (Test-Path $exitCodeFile) {
             $mtpExitCode = [int]((Get-Content -Path $exitCodeFile -Raw).Trim())
