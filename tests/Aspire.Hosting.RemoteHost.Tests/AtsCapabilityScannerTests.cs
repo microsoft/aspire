@@ -12,7 +12,7 @@ using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
 
-public class AtsCapabilityScannerTests
+public partial class AtsCapabilityScannerTests
 {
     #region MapToAtsTypeId Tests
 
