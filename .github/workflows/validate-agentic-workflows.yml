@@ -48,7 +48,14 @@ jobs:
         id: changed-locks
         run: |
           set -euo pipefail
-          mapfile -t files < <(git diff --diff-filter=ACMT --no-renames --name-only HEAD^1 HEAD -- '.github/workflows' | grep -E '\.lock\.yml$' || true)
+          changed_files_output=$(git diff --diff-filter=ACMT --no-renames --name-only HEAD^1 HEAD -- '.github/workflows')
+          mapfile -t changed_files <<< "$changed_files_output"
+          files=()
+          for file in "${changed_files[@]}"; do
+            if [[ "$file" == *.lock.yml ]]; then
+              files+=("$file")
+            fi
+          done
           {
             echo "files<<EOF_CHANGED_LOCKS"
             if (( ${#files[@]} > 0 )); then
@@ -62,7 +69,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh aw compile --purge --validate --actionlint --shellcheck --no-check-update
+          gh aw compile --purge --force-refresh-action-pins \
+            --validate --actionlint --shellcheck --no-check-update
 
       - name: Verify generated files are up to date
         run: |

@@ -28,7 +28,9 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
         Assert.Contains(ActionsLockPath, paths);
 
         var steps = Steps(root);
-        Assert.Contains("--purge", Scalar(Step(steps, "Compile agentic workflows (schema and action-pin validation)"), "run"), StringComparison.Ordinal);
+        var compileScript = Scalar(Step(steps, "Compile agentic workflows (schema and action-pin validation)"), "run");
+        Assert.Contains("--purge", compileScript, StringComparison.Ordinal);
+        Assert.Contains("--force-refresh-action-pins", compileScript, StringComparison.Ordinal);
         Assert.Equal(
             "${{ steps.changed-locks.outputs.files }}",
             Scalar(Mapping(Step(steps, "Lint changed lock files (fails on actionlint/shellcheck errors)"), "env"), "CHANGED_LOCK_FILES"));
@@ -53,6 +55,21 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
         Assert.Equal(
             ["files<<EOF_CHANGED_LOCKS", "EOF_CHANGED_LOCKS"],
             await File.ReadAllLinesAsync(githubOutput));
+    }
+
+    [Fact]
+    [RequiresTools(["git", "bash"])]
+    public async Task ChangedLockDetectionRejectsMissingBaseCommit()
+    {
+        using var workspace = CreateRepository();
+
+        var result = await RunScriptAsync(
+            workspace,
+            Scalar(Step(Steps(LoadWorkflow()), "Determine changed lock files"), "run"),
+            new Dictionary<string, string> { ["GITHUB_OUTPUT"] = Path.Combine(workspace.Path, "github-output") });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("HEAD^1", result.Output, StringComparison.Ordinal);
     }
 
     [Theory]
