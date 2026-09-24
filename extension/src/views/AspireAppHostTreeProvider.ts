@@ -18,6 +18,9 @@ import {
     appHostPathInvalid,
     appHostSourceNotFound,
     appHostSourceOpenFailed,
+    resourceSourceNotFound,
+    resourceSourceOutsideWorkspace,
+    resourceSourceRevealFailed,
     logFileOpenFailed,
     logFilePathInvalid,
     dashboardUrlNotFound,
@@ -46,6 +49,7 @@ import { isAppHostSourceFile, isProjectFile } from '../utils/paths/comparison';
 import { isCommandCancellation } from '../utils/telemetry';
 import {
     getParentResourceName,
+    getResourceSourcePath,
     getTerminalReplicaIndex,
     getVisibleCommands,
     getVisibleResourceUrls,
@@ -972,9 +976,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
         if (element instanceof ResourcesGroupItem) {
             const topLevel = element.resources.filter(r => !getParentResourceName(r));
+            const appHostPath = this._repository.appHosts.find(a => a.appHostPid === element.appHostPid)?.appHostPath;
             return sortResources(topLevel).map(r => {
                 const hasChildren = element.resources.some(c => getParentResourceName(c) === r.name);
-                return new ResourceItem(r, element.appHostPid, hasChildren, element.resources);
+                return new ResourceItem(r, element.appHostPid, hasChildren, element.resources, appHostPath);
             });
         }
 
@@ -1461,6 +1466,32 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             await vscode.window.showTextDocument(document, { preview: false });
         } catch {
             vscode.window.showWarningMessage(appHostSourceOpenFailed(sourcePath));
+        }
+    }
+
+    async openResourceSource(element?: ResourceItem): Promise<void> {
+        if (!element) {
+            vscode.window.showWarningMessage(resourceSourceNotFound);
+            return;
+        }
+
+        const sourcePath = getResourceSourcePath(element.resource, element.appHostPath);
+        if (!sourcePath) {
+            vscode.window.showWarningMessage(resourceSourceNotFound);
+            return;
+        }
+
+        const sourceUri = vscode.Uri.file(sourcePath);
+        if (!vscode.workspace.getWorkspaceFolder(sourceUri)) {
+            vscode.window.showWarningMessage(resourceSourceOutsideWorkspace(sourcePath));
+            return;
+        }
+
+        try {
+            await vscode.commands.executeCommand('revealInExplorer', sourceUri);
+        } catch (error) {
+            extensionLogOutputChannel.warn(`Unable to reveal resource source '${sourcePath}': ${getErrorMessage(error)}`);
+            vscode.window.showWarningMessage(resourceSourceRevealFailed(sourcePath));
         }
     }
 

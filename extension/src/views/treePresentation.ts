@@ -97,9 +97,27 @@ export function getParentResourceName(resource: ResourceJson): string | null {
     return resource.properties?.['resource.parentName'] ?? null;
 }
 
-export function getResourceContextValue(resource: ResourceJson): string {
+export function getResourceSourcePath(resource: ResourceJson, appHostPath?: string): string | undefined {
+    const source = resource.source?.trim();
+    if (!source) {
+        return undefined;
+    }
+
+    const candidates = path.isAbsolute(source)
+        ? [source]
+        : appHostPath
+            ? [path.resolve(path.dirname(appHostPath), source)]
+            : [];
+
+    return candidates.find(candidate => fs.existsSync(candidate));
+}
+
+export function getResourceContextValue(resource: ResourceJson, appHostPath?: string): string {
     const commands = resource.commands;
     const parts = ['resource'];
+    if (getResourceSourcePath(resource, appHostPath)) {
+        parts.push('canOpenSource');
+    }
     if (hasEnabledCommand(commands, 'start') || hasEnabledCommand(commands, 'resource-start')) {
         parts.push('canStart');
     }
