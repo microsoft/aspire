@@ -392,12 +392,37 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         var blockingViolations = axeResults.Violations
             .Where(v => v.Impact is not null
                 && s_failingImpacts.Contains(v.Impact)
-                && !s_allowedRuleIds.Contains(v.Id))
+                && !s_allowedRuleIds.Contains(v.Id)
+                && !IsAllowedFluentUiViolation(v))
             .ToList();
 
         Assert.True(
             blockingViolations.Count == 0,
             BuildFailureMessage(axeResults, blockingViolations, relativeUrl, theme, viewportLabel, surfaceLabel));
+    }
+
+    private static bool IsAllowedFluentUiViolation(AxeResultItem violation)
+    {
+        // Microsoft.FluentUI.AspNetCore.Components 5.0.0-preview.26260.3 renders its app-bar overflow
+        // trigger as a focusable div with aria-label, which axe correctly flags. Fluent UI fixed the
+        // component to render a button in https://github.com/microsoft/fluentui-blazor/pull/5324.
+        // Keep this exemption scoped to that generated node and remove it after updating Fluent UI.
+        if (violation.Id.Equals("aria-prohibited-attr", StringComparison.OrdinalIgnoreCase)
+            && violation.Nodes.Any()
+            && violation.Nodes.All(node => node.Html.Contains("class=\"fluent-appbar-more-item\"", StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
+        // FluentSelect sets these attributes through a one-shot JS initializer that can race creation
+        // of its generated control. See https://github.com/microsoft/fluentui-blazor/pull/5074.
+        // Keep the exemption scoped to the affected rules and generated controls.
+        return violation.Id is "aria-required-attr" or "button-name"
+            && violation.Nodes.Any()
+            && violation.Nodes.All(node =>
+                node.Html.Contains("aria-haspopup=\"listbox\"", StringComparison.Ordinal)
+                && node.Html.Contains("role=\"combobox\"", StringComparison.Ordinal)
+                && node.Html.Contains("slot=\"control\"", StringComparison.Ordinal));
     }
 
     // Blazor + Fluent web components hydrate asynchronously and independently. Component types on

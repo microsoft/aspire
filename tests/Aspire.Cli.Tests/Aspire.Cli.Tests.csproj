@@ -11,6 +11,7 @@
     <RunOnAzdoHelixWindows>false</RunOnAzdoHelixWindows>
     <RunOnAzdoHelixLinux>false</RunOnAzdoHelixLinux>
     <RunOnGithubActionsMacOS>true</RunOnGithubActionsMacOS>
+    <RequiresJava Condition="'$(RunOuterloopTests)' == 'true'">true</RequiresJava>
   </PropertyGroup>
 
   <ItemGroup>
