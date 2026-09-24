@@ -113,7 +113,9 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
         // default autoConfigureDataProtection to true for .NET projects
         if (Resource is ProjectResource)
         {
-            const string latestPreview = "2025-10-02-preview"; // this property is currently only available in preview
+            // Data protection is still preview-only, including in the 2026-07-01 stable API.
+            // https://learn.microsoft.com/azure/templates/microsoft.app/2026-03-02-preview/containerapps
+            const string latestPreview = "2026-03-02-preview";
             containerApp.ResourceVersion = latestPreview;
 
             var value = new BicepValue<bool>(true);

@@ -1826,11 +1826,11 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     {
         var containerApp = new ContainerApp("app");
 
-        // In order to set autoConfigureDataProtection, we need to use a preview API ContainerApp version.
-        // This test fails on new default versions for ContainerApp so we check if autoConfigureDataProtection exists on the new Azure.Provisioning version.
-        // Also, we need to ensure the new default version isn't newer than the preview version used to set autoConfigureDataProtection because
-        // callers will get new APIs that may not work with the preview version we are using.
-        Assert.True(containerApp.ResourceVersion == "2025-07-01", "When we get a new ResourceVersion for ContainerApps, ensure the version used by ContainerAppContext.CreateContainerApp() still works correctly.");
+        // Recheck the preview workaround when the SDK's default version changes. The 2026-07-01 stable API
+        // still omits autoConfigureDataProtection; 2026-03-02-preview supports the properties Aspire emits.
+        // Stable-only properties (networking and allowScalingRuleOverride) require callers to override
+        // ResourceVersion when customizing a project resource.
+        Assert.True(containerApp.ResourceVersion == "2026-07-01", "When we get a new ResourceVersion for ContainerApps, ensure the version used by ContainerAppContext.CreateContainerApp() still works correctly.");
     }
 
     [Fact]

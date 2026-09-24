@@ -13,7 +13,7 @@ param project_containerimage string
 
 param env_outputs_volumes_project_0 string
 
-resource project 'Microsoft.App/containerApps@2025-10-02-preview' = {
+resource project 'Microsoft.App/containerApps@2026-03-02-preview' = {
   name: 'project'
   location: location
   properties: {
