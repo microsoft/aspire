@@ -2,10 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
+using System.Globalization;
+using System.IO.Hashing;
 using System.Text;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using NuGet.Commands;
 using NuGet.Configuration;
@@ -41,8 +44,10 @@ internal interface INuGetClient
         string? runtimeIdentifier,
         string outputPath,
         IReadOnlyList<string> sources,
-        string? nugetConfigPath,
+        IReadOnlyList<string> nugetConfigPaths,
         string workingDirectory,
+        string? globalPackagesFolderOverride,
+        IReadOnlyList<string> sensitiveSources,
         CancellationToken cancellationToken);
 
     Task WriteManifestAsync(
@@ -60,6 +65,10 @@ internal interface INuGetClient
         string? nugetConfigPath,
         string workingDirectory,
         CancellationToken cancellationToken);
+
+    NuGetSettingsInfo GetSettings(string workingDirectory, byte[] sourceIdentityKey);
+
+    void WriteConfigOverlay(NuGetConfigOverlayRequest request, string outputPath);
 }
 
 internal sealed record NuGetSearchResult(
@@ -72,9 +81,8 @@ internal sealed record NuGetSearchResult(
 /// Reports a failed in-process NuGet operation.
 /// </summary>
 /// <param name="output">The diagnostic text the <c>aspire-managed nuget</c> helper would have written to stderr.</param>
-/// <param name="innerException">The exception that caused the failure, if any.</param>
-internal sealed class NuGetOperationException(string output, Exception? innerException = null)
-    : Exception("NuGet operation failed.", innerException)
+internal sealed class NuGetOperationException(string output)
+    : Exception("NuGet operation failed.")
 {
     /// <summary>
     /// Gets the text the helper would have written to stderr. Callers surface it exactly as they surfaced the
@@ -103,12 +111,14 @@ internal sealed class NuGetClient(
         string? runtimeIdentifier,
         string outputPath,
         IReadOnlyList<string> sources,
-        string? nugetConfigPath,
+        IReadOnlyList<string> nugetConfigPaths,
         string workingDirectory,
+        string? globalPackagesFolderOverride,
+        IReadOnlyList<string> sensitiveSources,
         CancellationToken cancellationToken)
     {
-        using var operation = BeginOperation();
-        var output = new NuGetOperationOutput(logger);
+        using var operation = BeginOperation(sensitiveSources);
+        var output = new NuGetOperationOutput(logger, sensitiveSources);
 
         // The helper received DOTNET_NUGET_SIGNATURE_VERIFICATION only in its own environment. NuGet reads it from the
         // process environment, so it has to be set here, but only for the duration of the restore.
@@ -121,9 +131,11 @@ internal sealed class NuGetClient(
             // the aspire-managed helper did. Reimplementing the graph walk here previously diverged from
             // NuGet on RID-specific dependencies, placeholder assets, and version selection.
             var machineWideSettings = new XPlatMachineWideSetting();
-            var settings = Settings.LoadDefaultSettings(workingDirectory, nugetConfigPath, machineWideSettings);
+            var settings = nugetConfigPaths.Count > 0
+                ? Settings.LoadSettingsGivenConfigPaths(nugetConfigPaths.ToList())
+                : Settings.LoadDefaultSettings(workingDirectory, configFileName: null, machineWideSettings);
 
-            var packageSources = ResolvePackageSources(settings, sources);
+            var packageSources = ResolvePackageSources(settings, sources, addNuGetOrgFallback: false);
             var targetFramework = NuGetFramework.Parse(framework);
             var packageSpec = BuildPackageSpec(
                 packages,
@@ -131,7 +143,8 @@ internal sealed class NuGetClient(
                 runtimeIdentifier,
                 outputPath,
                 packageSources,
-                settings);
+                settings,
+                globalPackagesFolderOverride);
 
             var dgSpec = new DependencyGraphSpec();
             dgSpec.AddProject(packageSpec);
@@ -179,7 +192,10 @@ internal sealed class NuGetClient(
                 output.WriteLine(ex.ToString());
             }
 
-            throw new NuGetOperationException(output.Text, ex);
+            // The original exception can contain credential-bearing source URLs. Diagnostics,
+            // including the full exception when debug logging is enabled, are captured through the
+            // redacting operation output, so do not retain the unsafe object in the outer log chain.
+            throw new NuGetOperationException(output.Text);
         }
     }
 
@@ -189,7 +205,8 @@ internal sealed class NuGetClient(
         string? runtimeIdentifier,
         string outputPath,
         List<PackageSource> sources,
-        ISettings settings)
+        ISettings settings,
+        string? globalPackagesFolderOverride)
     {
         var projectName = "AspireRestore";
         var projectPath = Path.Combine(outputPath, "project.json");
@@ -221,7 +238,7 @@ internal sealed class NuGetClient(
             ProjectPath = projectPath,
             ProjectStyle = ProjectStyle.PackageReference,
             OutputPath = outputPath,
-            PackagesPath = SettingsUtility.GetGlobalPackagesFolder(settings),
+            PackagesPath = globalPackagesFolderOverride ?? SettingsUtility.GetGlobalPackagesFolder(settings),
             OriginalTargetFrameworks = [tfmShort],
             ConfigFilePaths = settings.GetConfigFilePaths().ToList(),
         };
@@ -334,10 +351,10 @@ internal sealed class NuGetClient(
             output.WriteLine($"Error: {ex.Message}");
             if (output.Verbose)
             {
-                output.WriteLine(ex.StackTrace ?? string.Empty);
+                output.WriteLine(ex.ToString());
             }
 
-            throw new NuGetOperationException(output.Text, ex);
+            throw new NuGetOperationException(output.Text);
         }
     }
 
@@ -381,10 +398,10 @@ internal sealed class NuGetClient(
             output.WriteLine($"Error: {ex.Message}");
             if (output.Verbose)
             {
-                output.WriteLine(ex.StackTrace ?? string.Empty);
+                output.WriteLine(ex.ToString());
             }
 
-            throw new NuGetOperationException(output.Text, ex);
+            throw new NuGetOperationException(output.Text);
         }
     }
 
@@ -420,23 +437,36 @@ internal sealed class NuGetClient(
     /// so when the last overlapping operation ends, NuGet's own end-of-build reset is raised to discard that state the
     /// same way. Operations are counted so one ending cannot reset state another is still using.
     /// </remarks>
-    internal IDisposable BeginOperation()
+    internal IDisposable BeginOperation(IReadOnlyList<string>? sensitiveSources = null)
     {
         lock (s_operationLock)
         {
-            s_activeOperationCount++;
+            var diagnosticScope = _diagnosticLogger.RegisterSensitiveSources(sensitiveSources ?? []);
 
-            // Credential providers are a deliberate addition over the aspire-managed helper, which never set up NuGet's
-            // credential service and so could only authenticate with credentials stored in nuget.config. The service
-            // is set up per operation because the reset at the end of the previous one discards it; this is a no-op
-            // while an overlapping operation still has it set up.
-            DefaultCredentialServiceUtility.SetupDefaultCredentialService(_diagnosticLogger, nonInteractive: true);
+            try
+            {
+                s_activeOperationCount++;
+
+                // Credential providers are a deliberate addition over the aspire-managed helper, which never set up NuGet's
+                // credential service and so could only authenticate with credentials stored in nuget.config. The service
+                // is set up per operation because the reset at the end of the previous one discards it; this is a no-op
+                // while an overlapping operation still has it set up.
+                DefaultCredentialServiceUtility.SetupDefaultCredentialService(_diagnosticLogger, nonInteractive: true);
+            }
+            catch
+            {
+                s_activeOperationCount--;
+                diagnosticScope.Dispose();
+                throw;
+            }
+
+            return new OperationScope(_diagnosticLogger, diagnosticScope);
         }
-
-        return new OperationScope(_diagnosticLogger);
     }
 
-    private sealed class OperationScope(INuGetLogger diagnosticLogger) : IDisposable
+    private sealed class OperationScope(
+        INuGetLogger diagnosticLogger,
+        IDisposable diagnosticScope) : IDisposable
     {
         private int _disposed;
 
@@ -449,22 +479,29 @@ internal sealed class NuGetClient(
 
             lock (s_operationLock)
             {
-                if (--s_activeOperationCount != 0)
-                {
-                    return;
-                }
-
-                // Raised under the lock so an operation starting concurrently cannot set up state that this reset
-                // then discards.
                 try
                 {
-                    global::NuGet.Common.StaticState.RaiseBuildEnded();
+                    if (--s_activeOperationCount != 0)
+                    {
+                        return;
+                    }
+
+                    // Raised under the lock so an operation starting concurrently cannot set up state that this reset
+                    // then discards.
+                    try
+                    {
+                        global::NuGet.Common.StaticState.RaiseBuildEnded();
+                    }
+                    catch (Exception ex)
+                    {
+                        // Reset handlers tear down plugin processes. A failure there must not turn a completed operation
+                        // into a failed one.
+                        diagnosticLogger.LogDebug($"Failed to reset NuGet process state: {ex}");
+                    }
                 }
-                catch (Exception ex)
+                finally
                 {
-                    // Reset handlers tear down plugin processes. A failure there must not turn a completed operation
-                    // into a failed one.
-                    diagnosticLogger.LogDebug($"Failed to reset NuGet process state: {ex}");
+                    diagnosticScope.Dispose();
                 }
             }
         }
@@ -546,7 +583,8 @@ internal sealed class NuGetClient(
 
     private static List<PackageSource> ResolvePackageSources(
         ISettings settings,
-        IReadOnlyList<string> cliSources)
+        IReadOnlyList<string> cliSources,
+        bool addNuGetOrgFallback)
     {
         var sources = new PackageSourceProvider(settings)
             .LoadPackageSources()
@@ -561,13 +599,267 @@ internal sealed class NuGetClient(
             }
         }
 
-        if (!sources.Any(source => source.Source.Equals(NuGetOrgUrl, StringComparison.OrdinalIgnoreCase)))
+        if (addNuGetOrgFallback &&
+            !sources.Any(source => source.Source.Equals(NuGetOrgUrl, StringComparison.OrdinalIgnoreCase)))
         {
             sources.Add(new PackageSource(NuGetOrgUrl, "nuget.org"));
         }
 
         return sources;
     }
+
+    public NuGetSettingsInfo GetSettings(string workingDirectory, byte[] sourceIdentityKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
+        ArgumentNullException.ThrowIfNull(sourceIdentityKey);
+
+        var settings = Settings.LoadDefaultSettings(
+            workingDirectory,
+            configFileName: null,
+            new XPlatMachineWideSetting());
+        var packageSourceProvider = new PackageSourceProvider(settings);
+        var packageSources = packageSourceProvider.LoadPackageSources().ToArray();
+        var auditSources = packageSourceProvider.LoadAuditSources().ToArray();
+        var sources = packageSources
+            .Select(source => CreateSourceInfo(source, sourceIdentityKey))
+            .ToArray();
+        var sensitiveSourceValues = packageSources
+            .Concat(auditSources)
+            .Select(static source => source.Source)
+            .Where(NuGetSourceIdentity.HasCredentialMaterial)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var packageSourceMappings = new PackageSourceMappingProvider(settings)
+            .GetPackageSourceMappingItems()
+            .Select(static mapping => new NuGetPackageSourceMapping(
+                mapping.Key,
+                mapping.Patterns.Select(static pattern => pattern.Pattern).ToArray()))
+            .ToArray();
+        var disabledPackageSourceKeys = settings
+            .GetSection(ConfigurationConstants.DisabledPackageSources)?
+            .Items
+            .OfType<AddItem>()
+            .Select(static item => item.Key)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray() ?? [];
+        var credentialSourceKeys = settings
+            .GetSection(ConfigurationConstants.CredentialsSectionName)?
+            .Items
+            .OfType<CredentialsItem>()
+            .Select(static item => item.ElementName) ?? [];
+        var clientCertificateSourceKeys = settings
+            .GetSection(ConfigurationConstants.ClientCertificates)?
+            .Items
+            .OfType<ClientCertItem>()
+            .Select(static item => item.PackageSource) ?? [];
+        var reservedPackageSourceKeys = sources
+            .Select(static source => source.Name)
+            .Concat(packageSourceMappings.Select(static mapping => mapping.SourceKey))
+            .Concat(disabledPackageSourceKeys)
+            .Concat(credentialSourceKeys)
+            .Concat(clientCertificateSourceKeys)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return new NuGetSettingsInfo(
+            settings.GetConfigFilePaths().ToArray(),
+            ComputeSettingsCacheIdentity(settings, packageSources, auditSources, packageSourceMappings),
+            sources,
+            sensitiveSourceValues,
+            packageSourceMappings.Length > 0,
+            packageSourceMappings,
+            disabledPackageSourceKeys,
+            reservedPackageSourceKeys,
+            sourceIdentityKey);
+    }
+
+    public void WriteConfigOverlay(NuGetConfigOverlayRequest request, string outputPath)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+
+        var outputFile = new FileInfo(outputPath);
+        outputFile.Directory?.Create();
+        outputFile.Delete();
+
+        var settings = new Settings(
+            outputFile.DirectoryName!,
+            outputFile.Name,
+            isMachineWide: false);
+
+        // A new Settings file starts with NuGet.org. An Aspire policy overlay contains only
+        // entries selected by the caller so ambient sources continue to come from the hierarchy.
+        var defaultSources = settings
+            .GetSection(ConfigurationConstants.PackageSources)?
+            .Items
+            .OfType<SourceItem>()
+            .ToArray() ?? [];
+        foreach (var defaultSource in defaultSources)
+        {
+            settings.Remove(ConfigurationConstants.PackageSources, defaultSource);
+        }
+
+        foreach (var source in request.Sources)
+        {
+            settings.AddOrUpdate(
+                ConfigurationConstants.PackageSources,
+                new SourceItem(source.Key, source.Source));
+        }
+
+        if (request.ClearDisabledPackageSources)
+        {
+            settings.AddOrUpdate(
+                ConfigurationConstants.DisabledPackageSources,
+                new ClearItem());
+            foreach (var sourceKey in request.DisabledPackageSourceKeys)
+            {
+                settings.AddOrUpdate(
+                    ConfigurationConstants.DisabledPackageSources,
+                    new AddItem(sourceKey, "true"));
+            }
+        }
+
+        if (request.PackageSourceMappings.Length > 0)
+        {
+            settings.AddOrUpdate(
+                ConfigurationConstants.PackageSourceMapping,
+                new ClearItem());
+            var mappings = request.PackageSourceMappings
+                .Select(static mapping => new PackageSourceMappingSourceItem(
+                    mapping.SourceKey,
+                    mapping.Patterns.Select(static pattern => new PackagePatternItem(pattern))))
+                .ToArray();
+            new PackageSourceMappingProvider(settings, shouldSkipSave: true)
+                .SavePackageSourceMappings(mappings);
+        }
+
+        if (!string.IsNullOrEmpty(request.GlobalPackagesFolder))
+        {
+            settings.AddOrUpdate(
+                ConfigurationConstants.Config,
+                new AddItem(
+                    ConfigurationConstants.GlobalPackagesFolder,
+                    request.GlobalPackagesFolder));
+        }
+
+        settings.SaveToDisk();
+    }
+
+    private static string ComputeSettingsCacheIdentity(
+        ISettings settings,
+        IReadOnlyList<PackageSource> packageSources,
+        IReadOnlyList<PackageSource> auditSources,
+        IReadOnlyList<NuGetPackageSourceMapping> packageSourceMappings)
+    {
+        var hash = new XxHash3();
+
+        foreach (var configPath in settings.GetConfigFilePaths())
+        {
+            AppendCacheIdentityValue(hash, "config-path");
+            AppendCacheIdentityValue(hash, configPath);
+        }
+
+        AppendPackageSources(hash, "package-source", packageSources);
+        AppendPackageSources(hash, "audit-source", auditSources);
+
+        var signatureValidationMode = settings
+            .GetSection(ConfigurationConstants.Config)?
+            .Items
+            .OfType<AddItem>()
+            .LastOrDefault(static item => string.Equals(
+                item.Key,
+                "signatureValidationMode",
+                StringComparison.OrdinalIgnoreCase))?
+            .Value;
+        if (signatureValidationMode is not null)
+        {
+            AppendCacheIdentityValue(hash, "signature-validation-mode");
+            AppendCacheIdentityValue(hash, signatureValidationMode);
+        }
+
+        var trustedSigners = settings
+            .GetSection(ConfigurationConstants.TrustedSigners)?
+            .Items
+            .OfType<TrustedSignerItem>()
+            .OrderBy(static signer => signer.GetType().Name, StringComparer.Ordinal)
+            .ThenBy(static signer => signer.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray() ?? [];
+        foreach (var trustedSigner in trustedSigners)
+        {
+            AppendCacheIdentityValue(hash, "trusted-signer");
+            AppendCacheIdentityValue(hash, trustedSigner.GetType().Name);
+            AppendSettingItemAttributes(hash, trustedSigner);
+            foreach (var certificate in trustedSigner.Certificates
+                .OrderBy(static certificate => certificate.Fingerprint, StringComparer.OrdinalIgnoreCase))
+            {
+                AppendCacheIdentityValue(hash, "trusted-signer-certificate");
+                AppendSettingItemAttributes(hash, certificate);
+            }
+        }
+
+        foreach (var mapping in packageSourceMappings)
+        {
+            AppendCacheIdentityValue(hash, "package-source-mapping");
+            AppendCacheIdentityValue(hash, mapping.SourceKey);
+            foreach (var pattern in mapping.Patterns)
+            {
+                AppendCacheIdentityValue(hash, pattern);
+            }
+        }
+
+        var pathContext = NuGetPathContext.Create(settings);
+        AppendCacheIdentityValue(hash, "global-packages");
+        AppendCacheIdentityValue(hash, pathContext.UserPackageFolder);
+        foreach (var fallbackPackageFolder in pathContext.FallbackPackageFolders)
+        {
+            AppendCacheIdentityValue(hash, "fallback-packages");
+            AppendCacheIdentityValue(hash, fallbackPackageFolder);
+        }
+
+        return Convert.ToHexString(hash.GetCurrentHash());
+    }
+
+    private static void AppendSettingItemAttributes(XxHash3 hash, SettingItem item)
+    {
+        foreach (var attribute in item.GetAttributes().OrderBy(static attribute => attribute.Key, StringComparer.Ordinal))
+        {
+            AppendCacheIdentityValue(hash, attribute.Key);
+            AppendCacheIdentityValue(hash, attribute.Value);
+        }
+    }
+
+    private static void AppendPackageSources(
+        XxHash3 hash,
+        string kind,
+        IReadOnlyList<PackageSource> sources)
+    {
+        foreach (var source in sources)
+        {
+            AppendCacheIdentityValue(hash, kind);
+            AppendCacheIdentityValue(hash, source.Name);
+            AppendCacheIdentityValue(hash, source.Source);
+            AppendCacheIdentityValue(hash, source.IsEnabled.ToString(CultureInfo.InvariantCulture));
+            AppendCacheIdentityValue(hash, source.ProtocolVersion.ToString(CultureInfo.InvariantCulture));
+            AppendCacheIdentityValue(hash, source.AllowInsecureConnections.ToString(CultureInfo.InvariantCulture));
+            AppendCacheIdentityValue(hash, source.DisableTLSCertificateValidation.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
+    private static void AppendCacheIdentityValue(XxHash3 hash, string value)
+    {
+        hash.Append(Encoding.UTF8.GetBytes(value.Length.ToString(CultureInfo.InvariantCulture)));
+        hash.Append(":"u8);
+        hash.Append(Encoding.UTF8.GetBytes(value));
+        hash.Append("\n"u8);
+    }
+
+    private static NuGetSourceInfo CreateSourceInfo(PackageSource source, byte[] identityKey)
+        => new(
+            source.Name,
+            NuGetSourceIdentity.Compute(source.Source, identityKey),
+            source.IsEnabled,
+            source.Credentials is not null,
+            source.ClientCertificates is { Count: > 0 });
 
     /// <summary>
     /// Records one operation's output the way the aspire-managed helper wrote it to stderr.
@@ -577,7 +869,9 @@ internal sealed class NuGetClient(
     /// exception message when the operation failed. This buffers the same text for <see cref="NuGetOperationException"/>
     /// and also streams each entry to the debug log, where the CLI logged successful operations' stderr.
     /// </remarks>
-    private sealed class NuGetOperationOutput(ILogger logger) : INuGetLogger
+    private sealed class NuGetOperationOutput(
+        ILogger logger,
+        IReadOnlyList<string>? sensitiveSources = null) : INuGetLogger
     {
         private readonly Lock _lock = new();
         private readonly StringBuilder _text = new();
@@ -601,6 +895,8 @@ internal sealed class NuGetClient(
 
         public void WriteLine(string text)
         {
+            text = PackageSourceRedactor.RedactOccurrences(text, sensitiveSources ?? []);
+
             // The CLI read the helper's stderr line by line and re-joined it with AppendLine, which normalized any
             // line breaks embedded in a message to Environment.NewLine. Split the same way so the text matches.
             lock (_lock)
@@ -618,7 +914,8 @@ internal sealed class NuGetClient(
         /// Logs text the helper wrote to stdout. The CLI only surfaced stdout when an operation failed, so it goes to
         /// the debug log without becoming part of <see cref="Text"/>.
         /// </summary>
-        public void WriteDiagnostic(string text) => logger.LogDebug("{Message}", text);
+        public void WriteDiagnostic(string text) =>
+            logger.LogDebug("{Message}", PackageSourceRedactor.RedactOccurrences(text, sensitiveSources ?? []));
 
         public void Log(NuGetLogLevel level, string data)
         {
@@ -664,9 +961,45 @@ internal sealed class NuGetClient(
     /// <summary>
     /// Sends NuGet output that has no helper equivalent to the debug log only.
     /// </summary>
-    private sealed class DiagnosticNuGetLogger(ILogger logger) : INuGetLogger
+    internal sealed class DiagnosticNuGetLogger(ILogger logger) : INuGetLogger
     {
-        public void Log(NuGetLogLevel level, string data) => logger.LogDebug("{Message}", data);
+        private readonly Lock _lock = new();
+        private readonly Dictionary<string, int> _sourceRegistrations = new(StringComparer.Ordinal);
+        private string[] _sensitiveSources = [];
+
+        internal IDisposable RegisterSensitiveSources(IReadOnlyList<string> sensitiveSources)
+        {
+            var registeredSources = sensitiveSources
+                .Where(static source => !string.IsNullOrEmpty(source))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+
+            lock (_lock)
+            {
+                foreach (var source in registeredSources)
+                {
+                    _sourceRegistrations[source] = _sourceRegistrations.GetValueOrDefault(source) + 1;
+                }
+
+                _sensitiveSources = [.. _sourceRegistrations.Keys];
+            }
+
+            return new SensitiveSourceScope(this, registeredSources);
+        }
+
+        public void Log(NuGetLogLevel level, string data)
+        {
+            string[] sensitiveSources;
+            lock (_lock)
+            {
+                sensitiveSources = _sensitiveSources;
+            }
+
+            logger.LogDebug(
+                "{Message}",
+                PackageSourceRedactor.RedactOccurrences(data, sensitiveSources));
+        }
+
         public void Log(NuGetLogMessage message) => Log(message.Level, message.Message);
 
         public Task LogAsync(NuGetLogLevel level, string data)
@@ -688,6 +1021,42 @@ internal sealed class NuGetClient(
         public void LogMinimal(string data) => Log(NuGetLogLevel.Minimal, data);
         public void LogVerbose(string data) => Log(NuGetLogLevel.Verbose, data);
         public void LogWarning(string data) => Log(NuGetLogLevel.Warning, data);
+
+        private void UnregisterSensitiveSources(IReadOnlyList<string> sensitiveSources)
+        {
+            lock (_lock)
+            {
+                foreach (var source in sensitiveSources)
+                {
+                    var registrationCount = _sourceRegistrations[source];
+                    if (registrationCount == 1)
+                    {
+                        _sourceRegistrations.Remove(source);
+                    }
+                    else
+                    {
+                        _sourceRegistrations[source] = registrationCount - 1;
+                    }
+                }
+
+                _sensitiveSources = [.. _sourceRegistrations.Keys];
+            }
+        }
+
+        private sealed class SensitiveSourceScope(
+            DiagnosticNuGetLogger logger,
+            IReadOnlyList<string> sensitiveSources) : IDisposable
+        {
+            private int _disposed;
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) == 0)
+                {
+                    logger.UnregisterSensitiveSources(sensitiveSources);
+                }
+            }
+        }
     }
 
     private static class NativeAotNuGetTrustStore

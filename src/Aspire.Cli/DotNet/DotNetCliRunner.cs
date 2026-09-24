@@ -116,6 +116,11 @@ internal sealed class ProcessInvocationOptions
     public Func<string, bool>? EnvironmentVariableFilter { get; set; }
 
     /// <summary>
+    /// Environment variables to apply to the spawned process.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? EnvironmentVariables { get; set; }
+
+    /// <summary>
     /// Index of the first argument that is user-supplied AppHost input rather than a CLI-owned
     /// option, for invocations whose argument list has no <c>--</c> separator to key off. Leave
     /// <see langword="null"/> when the separator is present or the whole list is CLI-owned.
@@ -167,6 +172,7 @@ internal sealed class ProcessInvocationOptions
         Detached = Detached,
         DetachedUnixLauncherPathOverride = DetachedUnixLauncherPathOverride,
         EnvironmentVariableFilter = EnvironmentVariableFilter,
+        EnvironmentVariables = EnvironmentVariables,
         AppHostArgumentStartIndex = AppHostArgumentStartIndex,
         GracefulShutdownSignaler = GracefulShutdownSignaler,
         ShutdownService = ShutdownService,
@@ -217,6 +223,13 @@ internal sealed class DotNetCliRunner(
 
         // Build the final environment variables by merging caller-provided env with dotnet-specific settings.
         var finalEnv = env?.ToDictionary() ?? new Dictionary<string, string>();
+        if (options.EnvironmentVariables is not null)
+        {
+            foreach (var (name, value) in options.EnvironmentVariables)
+            {
+                finalEnv[name] = value;
+            }
+        }
         ConfigureDotNetEnvironment(finalEnv);
         AddAspireCliPathEnvironment(finalEnv, projectFile);
         processActivity.AddContextToEnvironment(finalEnv);
@@ -407,6 +420,7 @@ internal sealed class DotNetCliRunner(
             Detached = options.Detached,
             DetachedUnixLauncherPathOverride = options.DetachedUnixLauncherPathOverride,
             EnvironmentVariableFilter = options.EnvironmentVariableFilter,
+            EnvironmentVariables = options.EnvironmentVariables,
             // Without this the redaction boundary is lost between the runner and the process
             // factory, and a direct AppHost launch would log its forwarded arguments verbatim.
             AppHostArgumentStartIndex = options.AppHostArgumentStartIndex,
