@@ -10,10 +10,11 @@
   "docsRequired": false,
   "emoji": "🔐",
   "firstMergedAt": "2026-09-23T06:41:01Z",
-  "lastMergedAt": "2026-09-23T06:41:01Z",
+  "lastMergedAt": "2026-09-24T02:50:54Z",
   "name": "Reject empty OTLP API keys",
   "owner": "JamesNK",
   "prs": [
-    20363
+    20363,
+    20408
   ]
 }

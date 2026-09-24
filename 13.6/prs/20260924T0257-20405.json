@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Backport of #20158 to release/13.6; new entry for the embedded Project v2 migration skill",
+  "mergedAt": "2026-09-24T02:57:48Z",
+  "number": 20405,
+  "runDate": "2026-09-24T06:10:43Z",
+  "status": "included",
+  "title": "[release/13.6] Prepare Project v2 migration skill bundle integration"
+}

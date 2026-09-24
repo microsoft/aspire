@@ -10,10 +10,11 @@
   "docsRequired": true,
   "emoji": "🍪",
   "firstMergedAt": "2026-09-23T06:21:43Z",
-  "lastMergedAt": "2026-09-23T06:21:43Z",
+  "lastMergedAt": "2026-09-24T02:49:11Z",
   "name": "Scope dashboard cookies by application name",
   "owner": "JamesNK",
   "prs": [
-    20299
+    20299,
+    20407
   ]
 }

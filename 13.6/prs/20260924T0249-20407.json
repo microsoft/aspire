@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backport of #20299 to release/13.6; grouped into existing 'Scope dashboard cookies by application name' entry",
+  "mergedAt": "2026-09-24T02:49:11Z",
+  "number": 20407,
+  "runDate": "2026-09-24T06:10:43Z",
+  "status": "included",
+  "title": "[release/13.6] Scope dashboard cookies and resource state by application name"
+}

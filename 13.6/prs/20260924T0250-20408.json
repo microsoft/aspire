@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backport of #20363 to release/13.6; grouped into existing 'Reject empty OTLP API keys' entry",
+  "mergedAt": "2026-09-24T02:50:54Z",
+  "number": 20408,
+  "runDate": "2026-09-24T06:10:43Z",
+  "status": "included",
+  "title": "[release/13.6] Reject empty OTLP API keys"
+}

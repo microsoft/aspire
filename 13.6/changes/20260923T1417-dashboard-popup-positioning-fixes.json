@@ -1,6 +1,6 @@
 {
   "area": "Dashboard",
-  "areaEmoji": "\ud83d\udcca",
+  "areaEmoji": "📊",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -10,12 +10,13 @@
     1728
   ],
   "docsRequired": false,
-  "emoji": "\ud83e\udded",
+  "emoji": "🧭",
   "firstMergedAt": "2026-09-23T14:17:49Z",
-  "lastMergedAt": "2026-09-23T14:17:49Z",
+  "lastMergedAt": "2026-09-24T02:52:04Z",
   "name": "Dashboard popup positioning fixes",
   "owner": "JamesNK",
   "prs": [
-    20362
+    20362,
+    20410
   ]
 }

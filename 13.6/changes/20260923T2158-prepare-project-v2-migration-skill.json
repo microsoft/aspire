@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The Aspire CLI's agent-init skill installer now embeds the official attested Project v2 migration skill, giving AI coding agents an approval-first workflow for migrating AppHosts to Project v2.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧭",
+  "firstMergedAt": "2026-09-24T02:57:48Z",
+  "lastMergedAt": "2026-09-24T02:57:48Z",
+  "name": "Project v2 migration skill for AI agents",
+  "owner": "karolz-ms",
+  "prs": [
+    20405
+  ]
+}
