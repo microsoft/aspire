@@ -5,5 +5,5 @@
 
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
-ASPIRE012 | Usage | Error | Container resources cannot be projected as containers, [Documentation](https://aka.ms/aspire/diagnostics/ASPIRE012)
+ASPIRE012 | Usage | Error | Resource cannot be projected to the requested shape, [Documentation](https://aka.ms/aspire/diagnostics/ASPIRE012)
 ASPIRE013 | Usage | Warning | Resolve connection-string access through the effective resource, [Documentation](https://aka.ms/aspire/diagnostics/ASPIRE013)

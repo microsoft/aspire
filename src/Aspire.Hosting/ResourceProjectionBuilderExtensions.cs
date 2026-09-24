@@ -4,6 +4,8 @@
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
+#pragma warning disable ASPIREPROJECTIONS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 namespace Aspire.Hosting;
 
 /// <summary>
@@ -79,9 +81,9 @@ public static class ResourceProjectionBuilderExtensions
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when any required argument is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when <paramref name="builder"/> is already a <see cref="ContainerResource"/>, when the projection does
-    /// not use the owner's name, when it does not share the owner's annotation collection, or when the resource is
-    /// already projected as an incompatible container type.
+    /// Thrown when the owner or projection has a fixed model shape, when the owner is already a
+    /// <see cref="ContainerResource"/>, when the projection does not use the owner's name or annotation collection,
+    /// or when the resource is already projected as an incompatible container type.
     /// </exception>
     [Experimental("ASPIREPROJECTIONS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Integration authoring primitive — integrations export their own RunAs/PublishAs overloads.")]
@@ -97,7 +99,7 @@ public static class ResourceProjectionBuilderExtensions
         ArgumentNullException.ThrowIfNull(createProjection);
         ArgumentNullException.ThrowIfNull(configure);
 
-        if (TryGetProjectionRegistration(builder, operation, out var addRegistration) is not { } registration)
+        if (TryGetProjectionRegistration<T, TContainer>(builder, operation, out var addRegistration) is not { } registration)
         {
             return builder;
         }
@@ -116,24 +118,16 @@ public static class ResourceProjectionBuilderExtensions
         return builder;
     }
 
-    private static ResourceProjectionAnnotation? TryGetProjectionRegistration<T>(
+    private static ResourceProjectionAnnotation? TryGetProjectionRegistration<T, TProjection>(
         IResourceBuilder<T> builder,
         DistributedApplicationOperation operation,
         out bool addRegistration)
         where T : IResource
+        where TProjection : class, IResource
     {
         addRegistration = false;
 
-        // C# cannot express "T is not a ContainerResource", so the constraint is enforced here. A container already
-        // carries an effective runtime shape directly; sharing its image, endpoint, and lifecycle annotations with
-        // another selected view would make both shapes active at once. This is checked before the operation gate so
-        // the mistake surfaces in both run and publish rather than only in one of them.
-        if (builder.Resource is ContainerResource)
-        {
-            throw new InvalidOperationException(
-                $"The resource '{builder.Resource.Name}' is already a container and cannot be projected to another resource shape. " +
-                $"Configure it directly instead.");
-        }
+        ValidateProjectionCompatibility(builder.Resource, typeof(TProjection));
 
         if (builder.ApplicationBuilder.ExecutionContext.Operation != operation)
         {
@@ -151,6 +145,8 @@ public static class ResourceProjectionBuilderExtensions
 
     private static void ValidateProjection(IResource owner, IResource projection, string projectionKind)
     {
+        ValidateProjectionCompatibility(owner, projection.GetType());
+
         // A projection stands in for its owner, so it must share the owner's identity and annotation storage.
         // Validating both here turns an easy authoring mistake into an actionable error instead of a projection
         // that silently drops configuration or competes with the owner for a name.
@@ -173,6 +169,41 @@ public static class ResourceProjectionBuilderExtensions
                 $"Override '{nameof(IResource.Annotations)}' on '{projection.GetType().Name}' to return the owner's annotations.");
         }
     }
+
+    private static void ValidateProjectionCompatibility(IResource owner, Type projectionType)
+    {
+        if (owner is IResourceWithoutProjections)
+        {
+            throw new InvalidOperationException(
+                $"The resource '{owner.Name}' has a fixed model shape and cannot be projected.");
+        }
+
+        if (typeof(IResourceWithoutProjections).IsAssignableFrom(projectionType))
+        {
+            throw new InvalidOperationException(
+                $"The resource type '{projectionType.Name}' has a fixed model shape and cannot be used as a projection.");
+        }
+
+        if (owner is ContainerResource &&
+            typeof(ContainerResource).IsAssignableFrom(projectionType))
+        {
+            throw new InvalidOperationException(
+                $"The container resource '{owner.Name}' cannot be projected to container type '{projectionType.Name}'. " +
+                "Configure the container directly or project it to a different resource shape.");
+        }
+
+        if (IsExecutableShape(owner.GetType()) &&
+            IsExecutableShape(projectionType))
+        {
+            throw new InvalidOperationException(
+                $"The executable resource '{owner.Name}' cannot be projected to executable type '{projectionType.Name}'. " +
+                "Configure the executable directly or project it to a different resource shape.");
+        }
+    }
+
+    private static bool IsExecutableShape(Type resourceType) =>
+        typeof(ExecutableResource).IsAssignableFrom(resourceType) ||
+        typeof(ProjectResource).IsAssignableFrom(resourceType);
 
     /// <summary>
     /// Projects the resource onto another effective resource shape for the specified operation.
@@ -202,9 +233,9 @@ public static class ResourceProjectionBuilderExtensions
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when any required argument is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when <paramref name="builder"/> is already a <see cref="ContainerResource"/>, when the projection is
-    /// the owner, does not use the owner's name, does not share the owner's annotations, or conflicts with a
-    /// projection type already selected for the active operation.
+    /// Thrown when the owner or projection has a fixed model shape, when the source and target shapes are
+    /// incompatible, when the projection is the owner, does not use the owner's name or annotations, or conflicts
+    /// with a projection type already selected for the active operation.
     /// </exception>
     [Experimental("ASPIREPROJECTIONS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Integration authoring primitive — integrations export their own operation-specific overloads.")]
@@ -220,7 +251,7 @@ public static class ResourceProjectionBuilderExtensions
         ArgumentNullException.ThrowIfNull(createProjection);
         ArgumentNullException.ThrowIfNull(configure);
 
-        if (TryGetProjectionRegistration(builder, operation, out var addRegistration) is not { } registration)
+        if (TryGetProjectionRegistration<T, TProjection>(builder, operation, out var addRegistration) is not { } registration)
         {
             return builder;
         }
@@ -254,7 +285,7 @@ public static class ResourceProjectionBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configure);
 
-        if (TryGetProjectionRegistration(builder, operation, out var addRegistration) is not { } registration)
+        if (TryGetProjectionRegistration<T, ContainerResource>(builder, operation, out var addRegistration) is not { } registration)
         {
             return builder;
         }
@@ -290,7 +321,7 @@ public static class ResourceProjectionBuilderExtensions
     /// </remarks>
     // Hidden from container resources in the generated SDKs. Polyglot callers have no analyzer, so without
     // this the method would be offered on every container type and only fail at run time.
-    [AspireExport(RunSyncOnBackgroundThread = true, ExcludeTargetTypes = [typeof(ContainerResource)])]
+    [AspireExport(RunSyncOnBackgroundThread = true, ExcludeTargetTypes = [typeof(ContainerResource), typeof(IResourceWithoutProjections)])]
     public static IResourceBuilder<T> RunAsContainerImage<T>(this IResourceBuilder<T> builder, string image, Action<IResourceBuilder<ContainerResource>>? configure = null)
         where T : IResource
     {

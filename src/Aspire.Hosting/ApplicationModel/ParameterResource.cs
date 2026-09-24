@@ -6,13 +6,17 @@ using Aspire.Dashboard.Model;
 using Aspire.Hosting.Resources;
 using static Aspire.Hosting.Resources.MessageStrings;
 
+#pragma warning disable ASPIREPROJECTIONS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// Represents a parameter resource.
 /// </summary>
-public class ParameterResource : Resource, IExpressionValue
+public class ParameterResource : Resource, IExpressionValue, IResourceWithoutProjections
 {
+#pragma warning restore ASPIREPROJECTIONS001
+
     private readonly Lazy<string> _lazyValue;
     private readonly Func<ParameterDefault?, string> _valueGetter;
     private string? _configurationKey;

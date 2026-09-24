@@ -20,17 +20,17 @@ public partial class AppHostAnalyzer
             isEnabledByDefault: true,
             helpLinkUri: $"https://aka.ms/aspire/diagnostics/{ModelNameMustBeValidId}");
 
-        private const string ContainerResourceCannotBeProjectedId = "ASPIRE012";
-        internal static readonly DiagnosticDescriptor s_containerResourceCannotBeProjected = new(
-            id: ContainerResourceCannotBeProjectedId,
-            title: "Container resources cannot be projected as containers",
-            messageFormat: "'{0}' is already a container resource, so '{1}' cannot be used on it. Configure the container directly instead.",
+        private const string InvalidResourceProjectionId = "ASPIRE012";
+        internal static readonly DiagnosticDescriptor s_invalidResourceProjection = new(
+            id: InvalidResourceProjectionId,
+            title: "Resource cannot be projected to the requested shape",
+            messageFormat: "Projection API '{0}' cannot project resource type '{1}' to '{2}': {3}",
             category: "Usage",
-            // Error rather than Warning: the hosting library throws unconditionally for this, so the code cannot
-            // work at runtime. There is no legitimate case where suppressing it produces a working AppHost.
+            // Error rather than Warning: the hosting library rejects these source and target combinations
+            // unconditionally, so suppressing the diagnostic cannot produce a working AppHost.
             DiagnosticSeverity.Error,
             isEnabledByDefault: true,
-            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{ContainerResourceCannotBeProjectedId}");
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{InvalidResourceProjectionId}");
 
         private const string ConnectionStringAccessMustBeResolvedId = "ASPIRE013";
         internal static readonly DiagnosticDescriptor s_connectionStringAccessMustBeResolved = new(
@@ -44,7 +44,7 @@ public partial class AppHostAnalyzer
 
         public static readonly ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics = ImmutableArray.Create(
             s_modelNameMustBeValid,
-            s_containerResourceCannotBeProjected,
+            s_invalidResourceProjection,
             s_connectionStringAccessMustBeResolved
         );
     }

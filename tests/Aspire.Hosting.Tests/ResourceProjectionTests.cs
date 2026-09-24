@@ -28,6 +28,7 @@ public class ResourceProjectionTests
         }
 
         AssertProjectionExperimental(typeof(IContainerProjection<,>));
+        AssertProjectionExperimental(typeof(IResourceWithoutProjections));
         Assert.Empty(typeof(ResourceProjectionBuilderExtensions).GetCustomAttributes<ExperimentalAttribute>());
 
         var projectionMethods = typeof(ResourceProjectionBuilderExtensions)
@@ -53,6 +54,9 @@ public class ResourceProjectionTests
             runAsContainerImageMethods,
             method => method.GetGenericArguments().Length == 2);
         Assert.Empty(userFacingRunAsContainerImage.GetCustomAttributes<ExperimentalAttribute>());
+        Assert.Contains(
+            typeof(IResourceWithoutProjections),
+            userFacingRunAsContainerImage.GetCustomAttribute<AspireExportAttribute>()!.ExcludeTargetTypes!);
         AssertProjectionExperimental(typedRunAsContainerImage);
 
         var asContainer = typeof(ContainerResourceExtensions).GetMethod(
@@ -1063,21 +1067,20 @@ public class ResourceProjectionTests
     }
 
     [Fact]
-    public void ProjectingAContainerResourceThrows()
+    public void ProjectingAContainerResourceToAnotherContainerThrows()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
-        // C# has no negative generic constraint, so a container reaching a projection API can only be caught here.
         var container = builder.AddContainer("cache", "redis");
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => container.RunAsContainerImage("contoso/other:1.0"));
 
-        Assert.Contains("already a container", exception.Message);
+        Assert.Contains("cannot be projected to container", exception.Message);
     }
 
     [Fact]
-    public void ProjectingAContainerResourceThrowsEvenWhenTheOperationDoesNotMatch()
+    public void ProjectingAContainerResourceToAnotherContainerThrowsEvenWhenTheOperationDoesNotMatch()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -1086,6 +1089,95 @@ public class ResourceProjectionTests
         // The guard runs ahead of the operation gate so the authoring mistake is not hidden in one mode.
         Assert.Throws<InvalidOperationException>(
             () => container.RunAsContainerImage("contoso/other:1.0"));
+    }
+
+    [Fact]
+    public void ContainerResourceCanBeProjectedToExecutableResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var container = builder.AddContainer("worker", "contoso/worker:1.0");
+        ExecutableTestProjection? projection = null;
+
+        container.WithResourceProjection(
+            DistributedApplicationOperation.Run,
+            () => new ExecutableTestProjection(container.Resource),
+            executable => projection = executable.Resource);
+
+        Assert.NotNull(projection);
+        Assert.Same(projection, Assert.Single(builder.Resources));
+        Assert.Same(container.Resource, projection.GetOwnerOrSelf());
+
+        var model = new DistributedApplicationModel(builder.Resources);
+        Assert.Empty(model.GetContainerResources());
+        Assert.Same(projection, Assert.Single(model.GetExecutableResources()));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ExecutableShapesCannotBeProjectedToAnotherExecutableShape(bool projectOwner)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var owner = builder.AddResource<IResource>(
+            projectOwner
+                ? new ProjectResource("worker")
+                : new ExecutableResource("worker", "worker", "."));
+        var factoryInvoked = false;
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            owner.WithResourceProjection(
+                DistributedApplicationOperation.Run,
+                () =>
+                {
+                    factoryInvoked = true;
+                    return new ExecutableTestProjection(owner.Resource);
+                },
+                _ => { }));
+
+        Assert.Contains("cannot be projected to executable", exception.Message);
+        Assert.False(factoryInvoked);
+    }
+
+    [Fact]
+    public void FixedShapeResourceCannotBeProjected()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var parameter = builder.AddParameter("connection");
+        var factoryInvoked = false;
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            parameter.WithResourceProjection(
+                DistributedApplicationOperation.Run,
+                () =>
+                {
+                    factoryInvoked = true;
+                    return new EffectiveTestResource(new PlainOwnerResource(parameter.Resource.Name));
+                },
+                _ => { }));
+
+        Assert.Contains("fixed model shape", exception.Message);
+        Assert.False(factoryInvoked);
+    }
+
+    [Fact]
+    public void FixedShapeResourceCannotBeUsedAsProjection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var owner = builder.AddResource(new PlainOwnerResource("worker"));
+        var factoryInvoked = false;
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            owner.WithResourceProjection(
+                DistributedApplicationOperation.Run,
+                () =>
+                {
+                    factoryInvoked = true;
+                    return new ParameterResource(owner.Resource.Name, _ => "value");
+                },
+                _ => { }));
+
+        Assert.Contains("fixed model shape", exception.Message);
+        Assert.False(factoryInvoked);
     }
 
     [Fact]
@@ -1467,6 +1559,12 @@ public class ResourceProjectionTests
     private sealed class PlainOwnerResource(string name) : Resource(name);
 
     private sealed class EffectiveTestResource(PlainOwnerResource owner) : Resource(owner.Name)
+    {
+        public override ResourceAnnotationCollection Annotations => owner.Annotations;
+    }
+
+    private sealed class ExecutableTestProjection(IResource owner)
+        : ExecutableResource(owner.Name, "worker", ".")
     {
         public override ResourceAnnotationCollection Annotations => owner.Annotations;
     }
