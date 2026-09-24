@@ -128,6 +128,15 @@ fluent-dropdown > [slot="control"] {
     align-self: center;
 }
 
+fluent-dropdown > button[slot="control"] {
+    /* Prevent the selected text from expanding a FluentField grid track past the dropdown width. */
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Fluent's placeholder state follows option selection, which can be empty even when a combobox has custom text. */
 fluent-dropdown[type="combobox"]:not([disabled]) > input[slot="control"]:not(:placeholder-shown) {
     color: var(--colorNeutralForeground1);
