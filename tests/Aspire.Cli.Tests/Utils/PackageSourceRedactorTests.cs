@@ -69,4 +69,21 @@ public class PackageSourceRedactorTests
 
         Assert.Equal(expected, result);
     }
+
+    [Fact]
+    public void RedactOccurrences_RedactsKnownCredentialsInDerivedResourceUrls()
+    {
+        const string source =
+            "https://user:p%40ss@feed.example.com/v3/index.json?sig=secret&se=expiry#fragment";
+        const string diagnostic =
+            "GET https://user:p%40ss@cdn.example.com/v3-flatcontainer/package/index.json" +
+            "?se=expiry&cache=hit&sig=secret#fragment; secret remains ordinary text.";
+
+        var result = PackageSourceRedactor.RedactOccurrences(diagnostic, [source]);
+
+        Assert.Equal(
+            "GET https://***@cdn.example.com/v3-flatcontainer/package/index.json" +
+            "?***&cache=hit&***#***; secret remains ordinary text.",
+            result);
+    }
 }

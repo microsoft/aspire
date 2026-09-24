@@ -82,8 +82,7 @@ internal static class PackageSourceRedactor
         }
 
         var replacements = sensitiveSources
-            .SelectMany(static source => GetDiagnosticSpellings(source)
-                .Select(spelling => (Spelling: spelling, Replacement: RedactForDisplay(source))))
+            .SelectMany(GetDiagnosticReplacements)
             .DistinctBy(static replacement => replacement.Spelling, StringComparer.Ordinal)
             .OrderByDescending(static replacement => replacement.Spelling.Length);
 
@@ -93,6 +92,20 @@ internal static class PackageSourceRedactor
         }
 
         return value;
+    }
+
+    private static IEnumerable<(string Spelling, string Replacement)> GetDiagnosticReplacements(string source)
+    {
+        var displaySource = RedactForDisplay(source);
+        foreach (var spelling in GetDiagnosticSpellings(source))
+        {
+            yield return (spelling, displaySource);
+
+            foreach (var replacement in GetCredentialComponentReplacements(spelling))
+            {
+                yield return replacement;
+            }
+        }
     }
 
     private static IEnumerable<string> GetDiagnosticSpellings(string source)
@@ -120,4 +133,54 @@ internal static class PackageSourceRedactor
         }
     }
 
+    private static IEnumerable<(string Spelling, string Replacement)> GetCredentialComponentReplacements(
+        string sourceSpelling)
+    {
+        var trimmedSource = sourceSpelling.Trim();
+        if (!Uri.TryCreate(trimmedSource, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            yield break;
+        }
+
+        // Extract delimiter-qualified components from a validated source such as:
+        //   https://user:password@host/v3/index.json?sig=secret&se=expiry#fragment
+        // Matching the delimiters avoids replacing bare credential values in unrelated text while
+        // still protecting the same material when NuGet reports another protocol resource URL.
+        var schemeDelimiter = trimmedSource.IndexOf("://", StringComparison.Ordinal);
+        var authorityStart = schemeDelimiter >= 0 ? schemeDelimiter + 3 : 0;
+        var authorityEnd = trimmedSource.IndexOfAny(['/', '?', '#'], authorityStart);
+        if (authorityEnd < 0)
+        {
+            authorityEnd = trimmedSource.Length;
+        }
+
+        if (schemeDelimiter >= 0 && !string.IsNullOrEmpty(uri.UserInfo))
+        {
+            var authority = trimmedSource[authorityStart..authorityEnd];
+            var userInfoEnd = authority.LastIndexOf('@');
+            if (userInfoEnd > 0)
+            {
+                yield return ($"://{authority[..userInfoEnd]}@", "://***@");
+            }
+        }
+
+        var queryStart = trimmedSource.IndexOf('?', authorityEnd);
+        var fragmentStart = trimmedSource.IndexOf('#', authorityEnd);
+        if (queryStart >= 0 && (fragmentStart < 0 || queryStart < fragmentStart))
+        {
+            var queryEnd = fragmentStart >= 0 ? fragmentStart : trimmedSource.Length;
+            foreach (var parameter in trimmedSource[(queryStart + 1)..queryEnd]
+                .Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                yield return ($"?{parameter}", "?***");
+                yield return ($"&{parameter}", "&***");
+            }
+        }
+
+        if (fragmentStart >= 0 && fragmentStart + 1 < trimmedSource.Length)
+        {
+            yield return (trimmedSource[fragmentStart..], "#***");
+        }
+    }
 }

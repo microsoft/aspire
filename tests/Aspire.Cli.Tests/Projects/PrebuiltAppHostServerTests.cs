@@ -3163,6 +3163,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string channelSource = "https://feed.blob.core.windows.net/packages/index.json?sig=secret-sig";
+        const string derivedResource =
+            "https://feed.blob.core.windows.net/packages/v3-flatcontainer/package/index.json?sig=secret-sig";
         var buildCalled = false;
         ProcessInvocationOptions? buildOptions = null;
         var dotNetCliRunner = new TestDotNetCliRunner
@@ -3173,7 +3175,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 buildOptions = options;
                 WriteDependencyGraphSpec(projectFilePath, (projectFilePath.FullName, channelSource));
                 options.StandardErrorCallback?.Invoke(
-                    $"NU1301: Unable to load the service index for source {channelSource}.");
+                    $"NU1301: Unable to load the package resource {derivedResource}.");
                 return 1;
             }
         };
@@ -3210,7 +3212,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.True(buildOptions.SuppressLogging);
             Assert.NotNull(result.Output);
             var output = string.Join(Environment.NewLine, result.Output.GetLines().Select(static line => line.Line));
-            Assert.Contains("https://feed.blob.core.windows.net/packages/index.json", output);
+            Assert.Contains(
+                "https://feed.blob.core.windows.net/packages/v3-flatcontainer/package/index.json?***",
+                output);
             Assert.DoesNotContain("secret-sig", output);
         }
         finally

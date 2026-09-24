@@ -384,11 +384,14 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         using var first = diagnosticLogger.RegisterSensitiveSources([firstSource]);
         using var second = diagnosticLogger.RegisterSensitiveSources([secondSource]);
 
-        diagnosticLogger.LogDebug($"Credential provider checked {firstSource} and {secondSource}.");
+        diagnosticLogger.LogDebug(
+            "Credential provider checked https://first-cdn.example/v3-flatcontainer/package/index.json?sig=first-secret " +
+            "and https://second-cdn.example/v3-flatcontainer/package/index.json?sig=second-secret.");
 
         var record = Assert.Single(logger.Collector.GetSnapshot());
         Assert.Equal(
-            "Credential provider checked https://first.example/v3/index.json and https://second.example/v3/index.json.",
+            "Credential provider checked https://first-cdn.example/v3-flatcontainer/package/index.json?*** " +
+            "and https://second-cdn.example/v3-flatcontainer/package/index.json?***.",
             record.Message);
     }
 
