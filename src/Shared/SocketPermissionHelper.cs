@@ -155,16 +155,19 @@ internal static class SocketPermissionHelper
             var existingSecurity = directory.GetAccessControl();
             var rules = existingSecurity.GetAccessRules(true, true, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>().ToArray();
             var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
+            var isInheritanceDisabled = existingSecurity.AreAccessRulesProtected;
+            var isOwnedByCurrentUser = user.Equals(existingSecurity.GetOwner(typeof(SecurityIdentifier)));
+
             // Hex1b can add SYSTEM to a PTY directory after startup. This does not grant
             // access to other ordinary users and must not prevent subsequent terminals.
-            if (!existingSecurity.AreAccessRulesProtected ||
-                !user.Equals(existingSecurity.GetOwner(typeof(SecurityIdentifier))) ||
-                rules.Any(rule => rule.AccessControlType != AccessControlType.Allow ||
-                    (!user.Equals(rule.IdentityReference) && !system.Equals(rule.IdentityReference))) ||
-                !rules.Any(rule => user.Equals(rule.IdentityReference) &&
-                    rule.FileSystemRights == FileSystemRights.FullControl &&
-                    rule.InheritanceFlags == (InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit) &&
-                    rule.PropagationFlags == PropagationFlags.None))
+            var hasOnlyAllowedRules = rules.All(rule => rule.AccessControlType == AccessControlType.Allow &&
+                (user.Equals(rule.IdentityReference) || system.Equals(rule.IdentityReference)));
+            var hasInheritableFullControl = rules.Any(rule => user.Equals(rule.IdentityReference) &&
+                rule.FileSystemRights == FileSystemRights.FullControl &&
+                rule.InheritanceFlags == (InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit) &&
+                rule.PropagationFlags == PropagationFlags.None);
+
+            if (!isInheritanceDisabled || !isOwnedByCurrentUser || !hasOnlyAllowedRules || !hasInheritableFullControl)
             {
                 throw new IOException($"The configured socket directory '{directory.FullName}' must have a protected owner-only ACL with inheritable full control for the current user (SYSTEM is also allowed). Set those permissions or choose a new dedicated directory.");
             }
