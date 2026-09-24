@@ -99,7 +99,7 @@ public sealed class CompletionTests(ITestOutputHelper output)
         foreach (var candidate in new[] { "name with space", "name'quote", "name\"quote", "name\\tail", "name$(touch completion-executed)", "name`touch completion-executed`" })
         {
             await auto.RunCommandAsync($"export COMPLETION_TEST_VALUE={AspireCliShellCommandHelpers.QuoteBashArg(candidate)}", counter);
-            foreach (var quote in new[] { "", "'", "\"" })
+            foreach (var quote in new[] { "", "'", "\"", "$'" })
             {
                 await auto.TypeAsync($"echo 'ignored; separator'; aspire {quote}na");
                 await auto.KeyAsync(Hex1bKey.Tab);

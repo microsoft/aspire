@@ -28,9 +28,78 @@ internal static class CompletionScripts
         {
             "bash" => """
                 # Bash completion for Aspire. Source this file from ~/.bashrc.
+                _aspire_decode_ansi_c()
+                {
+                    local value="$1" encoded='' character digits limit code i
+                    # Bash 3.2 differs from newer versions for these control-escape forms.
+                    local control_backslash=$'\c\\' incomplete_control=$'\c'
+                    # printf %b differs from $'...': \c stops output, \0 accepts an extra
+                    # octal digit, and escaped quotes/? remain escaped. Normalize those
+                    # differences without evaluating input as shell code.
+                    # https://www.gnu.org/software/bash/manual/html_node/ANSI_002dC-Quoting.html
+                    for ((i = 0; i < ${#value}; i++)); do
+                        character="${value:i:1}"
+                        if [[ "$character" != '\' || i+1 -eq ${#value} ]]; then
+                            encoded+="$character"
+                            continue
+                        fi
+                        i=$((i+1))
+                        character="${value:i:1}"
+                        case "$character" in
+                            "'"|'"'|'?') encoded+="$character" ;;
+                            [0-7]|x|u|U)
+                                digits=''
+                                case "$character" in
+                                    [0-7]) digits="$character"; limit=3 ;;
+                                    x) limit=2 ;;
+                                    u) limit=4 ;;
+                                    U) limit=8 ;;
+                                esac
+                                while [[ ${#digits} -lt $limit && i+1 -lt ${#value} ]]; do
+                                    if [[ "$character" == [0-7] ]]; then
+                                        [[ "${value:i+1:1}" == [0-7] ]] || break
+                                    else
+                                        [[ "${value:i+1:1}" == [[:xdigit:]] ]] || break
+                                    fi
+                                    i=$((i+1))
+                                    digits+="${value:i:1}"
+                                done
+                                if [[ "$character" == [0-7] ]]; then
+                                    encoded+="\0$digits"
+                                elif [[ -n "$digits" ]]; then
+                                    encoded+="\\$character$digits"
+                                else
+                                    encoded+="\\\\$character"
+                                fi
+                                ;;
+                            c)
+                                if [[ i+1 -lt ${#value} ]]; then
+                                    i=$((i+1))
+                                    character="${value:i:1}"
+                                    if [[ "$character" == '\' && "${value:i+1:1}" == '\' && ${#control_backslash} -eq 1 ]]; then i=$((i+1)); fi
+                                    if [[ "$character" == '?' ]]; then
+                                        encoded+=$'\c?'
+                                    else
+                                        printf -v code '%d' "'$character"
+                                        printf -v character '\\0%03o' "$((code & 31))"
+                                        encoded+="$character"
+                                    fi
+                                else
+                                    encoded+="\\${incomplete_control}"
+                                fi
+                                ;;
+                            *) encoded+="\\$character" ;;
+                        esac
+                    done
+                    # Restore the caller's character locale for \u and \U, while the scanner
+                    # uses byte offsets to match Bash's COMP_POINT. printf -v preserves newlines.
+                    LC_ALL="$2" printf -v REPLY '%b' "$encoded"
+                }
+
                 _aspire_complete()
                 {
-                    local line suggestion word='' quote='' character escaped=false started=false i text
+                    local line suggestion word='' quote='' character escaped=false started=false i text ansi='' REPLY code
+                    local character_locale="${LC_ALL:-${LC_CTYPE:-${LANG:-C}}}"
                     local -a arguments=()
                     local LC_ALL=C
                     COMPREPLY=()
@@ -42,7 +111,20 @@ internal static class CompletionScripts
                     # commands in COMP_LINE; COMP_WORDS also splits option values at '=' and ':'.
                     for ((i = 0; i < ${#line}; i++)); do
                         character="${line:i:1}"
-                        if [[ "$escaped" == true ]]; then
+                        if [[ "$quote" == ansi ]]; then
+                            if [[ "$escaped" == true ]]; then
+                                ansi+="\\$character"
+                                escaped=false
+                            elif [[ "$character" == '\' ]]; then
+                                escaped=true
+                            elif [[ "$character" == "'" ]]; then
+                                _aspire_decode_ansi_c "$ansi" "$character_locale"
+                                word+="$REPLY"
+                                quote=''
+                            else
+                                ansi+="$character"
+                            fi
+                        elif [[ "$escaped" == true ]]; then
                             if [[ "$quote" == '"' && "$character" != '$' && "$character" != '`' &&
                                   "$character" != '"' && "$character" != '\' && "$character" != $'\n' ]]; then
                                 word+='\'
@@ -60,6 +142,16 @@ internal static class CompletionScripts
                             fi
                         else
                             case "$character" in
+                                '$')
+                                    if [[ "${line:i+1:1}" == "'" ]]; then
+                                        quote=ansi
+                                        ansi=''
+                                        i=$((i+1))
+                                    else
+                                        word+="$character"
+                                    fi
+                                    started=true
+                                    ;;
                                 "'"|'"') quote="$character"; started=true ;;
                                 ' '|$'\t'|$'\r')
                                     if [[ "$started" == true ]]; then arguments+=("$word"); fi
@@ -75,7 +167,13 @@ internal static class CompletionScripts
                             esac
                         fi
                     done
-                    [[ "$escaped" == false ]] || word+='\'
+                    if [[ "$quote" == ansi ]]; then
+                        [[ "$escaped" == false ]] || ansi+='\'
+                        _aspire_decode_ansi_c "$ansi" "$character_locale"
+                        word+="$REPLY"
+                    else
+                        [[ "$escaped" == false ]] || word+='\'
+                    fi
                     arguments+=("$word")
 
                     while IFS= read -r suggestion; do
@@ -88,7 +186,18 @@ internal static class CompletionScripts
                             text=''
                             for ((i = 0; i < ${#suggestion}; i++)); do
                                 character="${suggestion:i:1}"
-                                if [[ "$quote" == "'" && "$character" == "'" ]]; then
+                                if [[ "$quote" == ansi ]]; then
+                                    case "$character" in
+                                        "'"|\\) text+="\\$character" ;;
+                                        *)
+                                            printf -v code '%d' "'$character"
+                                            if [[ $code -lt 32 || $code -eq 127 ]]; then
+                                                printf -v character '\\%03o' "$code"
+                                            fi
+                                            text+="$character"
+                                            ;;
+                                    esac
+                                elif [[ "$quote" == "'" && "$character" == "'" ]]; then
                                     text+="'\''"
                                 else
                                     if [[ "$quote" == '"' && ( "$character" == '\' || "$character" == '"' ||

@@ -135,6 +135,16 @@ public class CompletionScriptTests(ITestOutputHelper outputHelper)
     [InlineData("echo x | aspire config get a\\:b", new[] { "config", "get", "a:b" })]
     [InlineData("aspire run --apphost='a b' --log-level ", new[] { "run", "--apphost=a b", "--log-level", "" })]
     [InlineData("aspire config get \"a\\qb", new[] { "config", "get", "a\\qb" })]
+    [InlineData("aspire config set $'a b' x", new[] { "config", "set", "a b", "x" })]
+    [InlineData("aspire config set $'a\\tb\\n' x", new[] { "config", "set", "a\tb\n", "x" })]
+    [InlineData("aspire config set $'it\\'s \\\\ literal' x", new[] { "config", "set", "it's \\ literal", "x" })]
+    [InlineData("aspire config set $'\\141\\x20\\142' x", new[] { "config", "set", "a b", "x" })]
+    [InlineData("aspire config set $'\\0123\\cA' x", new[] { "config", "set", "\n3\u0001", "x" })]
+    [InlineData("aspire config set pre$'a\\0discarded'post x", new[] { "config", "set", "preapost", "x" })]
+    [InlineData("aspire config set $'\\x\\q\\?' x", new[] { "config", "set", "\\x\\q?", "x" })]
+    [InlineData("aspire config get $'a\\tb", new[] { "config", "get", "a\tb" })]
+    [InlineData("aspire config get $'a\\\\", new[] { "config", "get", "a\\" })]
+    [InlineData("aspire config set $'$(touch completion-executed);`touch completion-executed`' x", new[] { "config", "set", "$(touch completion-executed);`touch completion-executed`", "x" })]
     public async Task Bash_QueriesOnlyDecodedCurrentCommandArguments(string line, string[] expectedArguments)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -165,6 +175,42 @@ public class CompletionScriptTests(ITestOutputHelper outputHelper)
         Assert.Equal(string.Empty, output);
         Assert.Equal(Encoding.UTF8.GetBytes(string.Join('\0', new[] { "[suggest:tokens]" }.Concat(expectedArguments)) + "\0"),
             await File.ReadAllBytesAsync(capturedPath));
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "completion-executed")));
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses a Unix executable shim and permissions.")]
+    public async Task Bash_AnsiCEscapesUseTheShellLocaleAndVersion()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var completionPath = Path.Combine(workspace.WorkspaceRoot.FullName, "completion.bash");
+        var capturedPath = Path.Combine(workspace.WorkspaceRoot.FullName, "arguments.bin");
+        var binaryPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire");
+        await File.WriteAllTextAsync(completionPath, CompletionScripts.Generate("bash"));
+        await File.WriteAllTextAsync(binaryPath, "#!/bin/sh\nprintf '%s\\0' \"$@\" > \"$CAPTURED_ARGS\"\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(binaryPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+        var script = """
+            source "$COMPLETION_SCRIPT"
+            COMP_LINE="aspire config get \$'\u263a\U0001f600\c?'"
+            COMP_POINT=${#COMP_LINE}
+            _aspire_complete
+            printf '%s\0' '[suggest:tokens]' config get $'\u263a\U0001f600\c?'
+            """;
+        var expected = await RunShellAsync("bash", ["--noprofile", "--norc", "-c", script.ReplaceLineEndings("\n")],
+            new Dictionary<string, string>
+            {
+                ["COMPLETION_SCRIPT"] = completionPath,
+                ["CAPTURED_ARGS"] = capturedPath,
+                ["PATH"] = workspace.WorkspaceRoot.FullName + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH")
+            });
+
+        // Older Bash versions retain Unicode escapes literally and decode \c? differently.
+        // Compare with the shell's own decoding rather than imposing another version's rules.
+        Assert.Equal(Encoding.UTF8.GetBytes(expected), await File.ReadAllBytesAsync(capturedPath));
     }
 
     [Fact]
@@ -245,6 +291,7 @@ public class CompletionScriptTests(ITestOutputHelper outputHelper)
         var output = await RunShellAsync("zsh", ["-f", "-c", script.ReplaceLineEndings("\n")],
             new Dictionary<string, string>
             {
+                ["COMPLETION_SCRIPT"] = completionPath,
                 ["HOME"] = workspace.WorkspaceRoot.FullName,
                 ["ZDOTDIR"] = workspace.WorkspaceRoot.FullName,
                 ["CAPTURED_ARGS"] = capturedPath,
@@ -261,6 +308,7 @@ public class CompletionScriptTests(ITestOutputHelper outputHelper)
         var startInfo = new ProcessStartInfo(executable)
         {
             UseShellExecute = false,
+            WorkingDirectory = Path.GetDirectoryName(environment["COMPLETION_SCRIPT"]),
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };

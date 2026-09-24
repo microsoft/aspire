@@ -136,7 +136,8 @@ packages, collect telemetry, or write CLI logs or first-use state. Suggestions d
 not query running resources or search package feeds.
 
 Bash and Zsh complete the current command after separators and preserve literal
-arguments inside single or double quotes. Input is decoded without evaluating
+arguments inside single or double quotes. Bash also decodes ANSI-C quotes such as
+`$'a\tb'`, including their escape sequences. Input is decoded without evaluating
 shell substitutions; accepting a suggestion must not execute its contents.
 Settings used for completion are normalized in memory without rewriting the
 configuration files.
