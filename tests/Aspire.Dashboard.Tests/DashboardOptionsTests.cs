@@ -372,6 +372,47 @@ public sealed class DashboardOptionsTests
     }
 
     [Fact]
+    public void OtlpOptions_ApiKeyMode_NullSecondaryApiKey_Succeeds()
+    {
+        var options = GetValidOptions();
+        options.Otlp.AuthMode = OtlpAuthMode.ApiKey;
+        options.Otlp.PrimaryApiKey = "primary";
+        options.Otlp.SecondaryApiKey = null;
+
+        var result = new ValidateDashboardOptions().Validate(null, options);
+
+        Assert.True(result.Succeeded);
+        Assert.Null(result.FailureMessage);
+    }
+
+    [Fact]
+    public void OtlpOptions_ApiKeyMode_EmptyPrimaryApiKey_Fails()
+    {
+        var options = GetValidOptions();
+        options.Otlp.AuthMode = OtlpAuthMode.ApiKey;
+        options.Otlp.PrimaryApiKey = "";
+
+        var result = new ValidateDashboardOptions().Validate(null, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal($"PrimaryApiKey is required when OTLP authentication mode is API key. Specify a {DashboardConfigNames.DashboardOtlpPrimaryApiKeyName.ConfigKey} value.", result.FailureMessage);
+    }
+
+    [Fact]
+    public void OtlpOptions_ApiKeyMode_EmptySecondaryApiKey_Fails()
+    {
+        var options = GetValidOptions();
+        options.Otlp.AuthMode = OtlpAuthMode.ApiKey;
+        options.Otlp.PrimaryApiKey = "primary";
+        options.Otlp.SecondaryApiKey = "";
+
+        var result = new ValidateDashboardOptions().Validate(null, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal($"SecondaryApiKey must not be empty when OTLP authentication mode is API key. Remove {DashboardConfigNames.DashboardOtlpSecondaryApiKeyName.ConfigKey} or specify a non-empty value.", result.FailureMessage);
+    }
+
+    [Fact]
     public async Task OtlpOptions_SuppressUnsecuredMessage_LegacyName()
     {
         await using var app = new DashboardWebApplication(builder => builder.Configuration.AddInMemoryCollection(
