@@ -360,6 +360,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         var generatedProjectDirectory = workspace.CreateDirectory("generated-project");
         var restoreDirectory = workspace.CreateDirectory("integration-restore");
+        // NuGet merges package sources and source mappings independently. Clear both sections so
+        // user-level mappings cannot silently constrain this test's deliberately isolated feed.
         await File.WriteAllTextAsync(
             Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config"),
             """
@@ -367,6 +369,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
               <packageSources>
                 <clear />
               </packageSources>
+              <packageSourceMapping>
+                <clear />
+              </packageSourceMapping>
             </configuration>
             """);
         var configuredNuGetServiceIndex = Environment.GetEnvironmentVariable(AspireCliIdentityEnvVars.NuGetServiceIndex);
