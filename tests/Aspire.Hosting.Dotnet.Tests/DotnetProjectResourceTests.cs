@@ -552,15 +552,8 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         expected.Add("Release");
 
         Assert.Equal(expected, args);
-        Assert.Equal(isProjectBuild ? 1 : 0, versionProvider.CallCount);
-        if (isProjectBuild)
-        {
-            Assert.Equal(rebuilder.WorkingDirectory, Assert.Single(versionProvider.WorkingDirectories));
-        }
-        else
-        {
-            Assert.Empty(versionProvider.WorkingDirectories);
-        }
+        Assert.Equal(1, versionProvider.CallCount);
+        Assert.Equal(rebuilder.WorkingDirectory, Assert.Single(versionProvider.WorkingDirectories));
     }
 
     [Fact]
