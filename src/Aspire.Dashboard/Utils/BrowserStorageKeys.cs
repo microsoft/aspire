@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text;
 using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Utils;
@@ -34,19 +33,7 @@ internal static class BrowserStorageKeys
 
     public static string CollapsedResourceNamesKey(string applicationName)
     {
-        ArgumentNullException.ThrowIfNull(applicationName);
-
-        var builder = new StringBuilder(applicationName.Length);
-
-        foreach (var c in applicationName)
-        {
-            if (char.IsLetterOrDigit(c))
-            {
-                builder.Append(c);
-            }
-        }
-
-        return $"{CollapsedResourceNamesKeyPrefix}{builder.ToString()}";
+        return $"{CollapsedResourceNamesKeyPrefix}{DashboardApplicationNameKey.Create(applicationName)}";
     }
 
     public static string SplitterOrientationKey(string viewKey)
