@@ -1024,7 +1024,7 @@ public static class AtsCapabilityScanner
     /// <summary>
     /// Detects method name collisions after capability expansion. Since ATS doesn't support method
     /// overloading, each (TargetTypeId, MethodName) pair must be unique. When a concrete target has
-    /// a target-specific export, it shadows matching generic exports only for that target. Ambiguous
+    /// a target-specific export, it shadows matching generic exports for that target and its derived types. Ambiguous
     /// collisions still remove later capabilities and emit warnings.
     /// </summary>
     private static void FilterMethodNameCollisions(List<AtsCapabilityInfo> capabilities, List<AtsDiagnostic> diagnostics)
@@ -1059,6 +1059,21 @@ public static class AtsCapabilityScanner
             var exactTargetCapabilities = collidingCapabilities
                 .Where(c => string.Equals(c.TargetTypeId, targetTypeId, StringComparison.Ordinal))
                 .ToList();
+
+            // An inherited concrete-target overload is still more specific than an
+            // interface overload. Without this, a subclass collision can remove the
+            // generic capability even from unrelated implementations of that interface.
+            if (exactTargetCapabilities.Count == 0)
+            {
+                exactTargetCapabilities = collidingCapabilities
+                    .Where(candidate => candidate.TargetType?.ClrType is { } candidateType &&
+                        collidingCapabilities.All(other =>
+                            other.CapabilityId == candidate.CapabilityId ||
+                            (other.TargetType?.ClrType is { } otherType &&
+                             otherType != candidateType &&
+                             otherType.IsAssignableFrom(candidateType))))
+                    .ToList();
+            }
 
             if (exactTargetCapabilities.Count == 1)
             {
