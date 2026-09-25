@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOTNETPROJECT001
 #pragma warning disable ASPIREPROJECTS001
 
 using System.Diagnostics.CodeAnalysis;
@@ -16,12 +15,9 @@ public class DotnetProjectPublicApiTests
     // ---- Experimental tagging ------------------------------------------------------
 
     [Fact]
-    public void DotnetProjectResourceIsTaggedWithExpectedExperimentalDiagnostic()
+    public void DotnetProjectResourceIsNotExperimental()
     {
-        var attribute = Assert.Single(typeof(DotnetProjectResource).GetCustomAttributes<ExperimentalAttribute>());
-
-        Assert.Equal("ASPIREDOTNETPROJECT001", attribute.DiagnosticId);
-        Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+        Assert.Empty(typeof(DotnetProjectResource).GetCustomAttributes<ExperimentalAttribute>());
     }
 
     [Fact]
@@ -32,23 +28,15 @@ public class DotnetProjectPublicApiTests
     }
 
     [Fact]
-    public void EveryPublicAddDotnetProjectOverloadIsTaggedWithExpectedExperimentalDiagnostic()
+    public void DotnetProjectHostingExtensionsAreNotExperimental()
     {
-        var overloads = typeof(DotnetProjectHostingExtensions)
-            .GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .Where(m => m.Name == nameof(DotnetProjectHostingExtensions.AddDotnetProject))
-            .ToList();
+        Assert.Empty(typeof(DotnetProjectHostingExtensions).GetCustomAttributes<ExperimentalAttribute>());
 
-        // Guards against silently losing coverage if an overload is added or removed.
-        Assert.Equal(2, overloads.Count);
+        var methods = typeof(DotnetProjectHostingExtensions)
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly);
 
-        foreach (var method in overloads)
-        {
-            var attribute = Assert.Single(method.GetCustomAttributes<ExperimentalAttribute>());
-
-            Assert.Equal("ASPIREDOTNETPROJECT001", attribute.DiagnosticId);
-            Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
-        }
+        Assert.NotEmpty(methods);
+        Assert.All(methods, method => Assert.Empty(method.GetCustomAttributes<ExperimentalAttribute>()));
     }
 
     // ---- DotnetProjectResource constructor guards --------------------------------
