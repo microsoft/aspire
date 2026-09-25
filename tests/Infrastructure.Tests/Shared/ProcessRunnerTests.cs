@@ -6,6 +6,7 @@ using Xunit;
 
 namespace Infrastructure.Tests;
 
+[Trait("Category", "AgenticWorkflow")]
 public sealed class ProcessRunnerTests(ITestOutputHelper output)
 {
     [Fact]

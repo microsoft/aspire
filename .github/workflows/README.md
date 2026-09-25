@@ -28,10 +28,16 @@ changes.
 
 `validate-agentic-workflows.yml` recompiles with the pinned gh-aw version, checks
 for generated-file drift, runs `gh aw lint --shellcheck` as a blocking lint gate,
-and runs `Infrastructure.Tests`. Compile-time lint diagnostics alone are not a
-blocking gate. The lint command owns the actionlint image and compatibility
-exceptions; `.github/actionlint.yaml` only scopes the known stale-check output
-workaround to the affected generated workflows.
+and runs the `Category=AgenticWorkflow` contracts in `Infrastructure.Tests`.
+Class-level traits group generated-workflow, validation trigger/drift, and shared
+process-runner tests without including unrelated negative-test diagnostics.
+Apply this trait to new agentic contract classes so dedicated validation includes them.
+Main CI covers selector routing when the trigger map or lint policy changes.
+
+Compile-time lint diagnostics alone are not a blocking gate. The lint command
+owns the actionlint image and compatibility exceptions; `.github/actionlint.yaml`
+only scopes the known stale-check output workaround to the affected generated
+workflows.
 
 Explicit action versions in Markdown survive recompilation, so update deprecated
 inputs and action runtimes in the sources, not just the generated YAML. The

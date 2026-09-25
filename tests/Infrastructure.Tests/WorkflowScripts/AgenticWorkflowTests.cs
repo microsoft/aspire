@@ -7,6 +7,7 @@ using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests;
 
+[Trait("Category", "AgenticWorkflow")]
 public sealed class AgenticWorkflowTests
 {
     private static readonly string s_workflowsPath = Path.Combine(RepoRoot.Path, ".github", "workflows");

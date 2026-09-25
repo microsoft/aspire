@@ -8,6 +8,7 @@ using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests;
 
+[Trait("Category", "AgenticWorkflow")]
 public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
 {
     private const string WorkflowRelativePath = ".github/workflows/validate-agentic-workflows.yml";

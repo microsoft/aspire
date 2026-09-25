@@ -5,7 +5,7 @@ name: Validate Agentic Workflows
 # files never triggers the main build/test workflow. This dedicated job gives them their own
 # deterministic, path-triggered validation: recompile the Markdown sources with the repository-pinned
 # gh-aw CLI, prove the committed .lock.yml/agentics-maintenance files are not stale, and run the
-# complete Infrastructure.Tests suite so workflow-specific behavioral contracts cannot be skipped. See
+# trait-scoped agentic contracts in Infrastructure.Tests. See
 # https://github.com/microsoft/aspire/issues/20446.
 on:
   pull_request:
@@ -72,10 +72,11 @@ jobs:
         run: ./restore.sh
 
       - name: Run Infrastructure.Tests agentic workflow contracts
-        # Agentic workflow contracts span multiple test classes. Keep the complete project here:
-        # a class filter previously reduced this validation to six tests and skipped real consumers.
+        # Class-level traits include generated-workflow, trigger/drift, and process-runner contracts.
+        # Main CI covers selector routing when the trigger map or lint policy changes.
         run: |
           dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj \
             --no-launch-profile -- \
+            --filter-trait "Category=AgenticWorkflow" \
             --filter-not-trait "quarantined=true" \
             --filter-not-trait "outerloop=true"
