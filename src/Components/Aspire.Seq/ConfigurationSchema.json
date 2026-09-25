@@ -69,6 +69,14 @@
                   "type": "string",
                   "description": "Gets or sets optional headers for the connection."
                 },
+                "MaxRequestSizeBytes": {
+                  "type": "integer",
+                  "description": "Gets or sets the maximum size, in bytes, of a request message the exporter will send. Default value: 67108864 (64 MiB)."
+                },
+                "MaxResponseSizeBytes": {
+                  "type": "integer",
+                  "description": "Gets or sets the maximum size, in bytes, of a response message the exporter will accept. Default value: 4194304 (4 MiB)."
+                },
                 "Protocol": {
                   "enum": [
                     "Grpc",
@@ -134,6 +142,14 @@
                 "Headers": {
                   "type": "string",
                   "description": "Gets or sets optional headers for the connection."
+                },
+                "MaxRequestSizeBytes": {
+                  "type": "integer",
+                  "description": "Gets or sets the maximum size, in bytes, of a request message the exporter will send. Default value: 67108864 (64 MiB)."
+                },
+                "MaxResponseSizeBytes": {
+                  "type": "integer",
+                  "description": "Gets or sets the maximum size, in bytes, of a response message the exporter will accept. Default value: 4194304 (4 MiB)."
                 },
                 "Protocol": {
                   "enum": [

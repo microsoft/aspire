@@ -1064,8 +1064,8 @@ internal sealed class AspireSkillsInstaller(
 
     private static bool HasLegacyCacheLayout(string versionCacheDirectory)
     {
-        return Directory.Exists(Path.Combine(versionCacheDirectory, "skills")) ||
-            File.Exists(Path.Combine(versionCacheDirectory, "skill-manifest.json")) ||
+        return Directory.Exists(Path.Combine(versionCacheDirectory, AspireSkillsBundleLayout.SkillsDirectoryName)) ||
+            File.Exists(Path.Combine(versionCacheDirectory, AspireSkillsBundleLayout.ManifestFileName)) ||
             File.Exists(Path.Combine(versionCacheDirectory, ArchiveSha512FileName)) ||
             File.Exists(Path.Combine(versionCacheDirectory, GitHubArchiveSha256FileName)) ||
             File.Exists(Path.Combine(versionCacheDirectory, GitHubAttestationVerifiedFileName)) ||
@@ -1076,8 +1076,8 @@ internal sealed class AspireSkillsInstaller(
     {
         // Older CLIs stored extracted files directly in the version directory. Remove only
         // those known entries so digest-addressed children created by newer CLIs remain intact.
-        TryDeleteDirectory(Path.Combine(versionCacheDirectory, "skills"));
-        TryDeleteFile(Path.Combine(versionCacheDirectory, "skill-manifest.json"));
+        TryDeleteDirectory(Path.Combine(versionCacheDirectory, AspireSkillsBundleLayout.SkillsDirectoryName));
+        TryDeleteFile(Path.Combine(versionCacheDirectory, AspireSkillsBundleLayout.ManifestFileName));
         TryDeleteFile(Path.Combine(versionCacheDirectory, ArchiveSha512FileName));
         TryDeleteFile(Path.Combine(versionCacheDirectory, GitHubArchiveSha256FileName));
         TryDeleteFile(Path.Combine(versionCacheDirectory, GitHubAttestationVerifiedFileName));
