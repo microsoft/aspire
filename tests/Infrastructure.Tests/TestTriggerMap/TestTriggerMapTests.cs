@@ -470,7 +470,27 @@ public sealed class TestTriggerMapTests
             ["test:Infrastructure.Tests"]
         },
         {
-            "eng/scripts/aspire-skills-bundle.common.ps1",
+            "eng/scripts/telemetry-hooks.common.ps1",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            "eng/scripts/update-telemetry-hooks.ps1",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            "eng/scripts/verify-telemetry-hooks.ps1",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            ".github/workflows/update-telemetry-hooks.yml",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            ".github/workflows/verify-telemetry-hooks.yml",
+            ["test:Infrastructure.Tests"]
+        },
+        {
+            ".github/workflows/verify-telemetry-hook-changes.yml",
             ["test:Infrastructure.Tests"]
         },
         {
@@ -793,8 +813,6 @@ public sealed class TestTriggerMapTests
     [InlineData("eng/scripts/verify-cli-tool-nupkg.ps1")]
     [InlineData("eng/scripts/stabilization-smoke-init-restore.sh")]
     [InlineData("eng/generate-catalog.ps1")]
-    [InlineData("eng/scripts/update-aspire-skills-bundle.ps1")]
-    [InlineData("eng/scripts/verify-aspire-skills-bundle.ps1")]
     public void PathHandledOutsideSelectorDoesNotForceTestSelection(string path)
     {
         var result = SelectWithRealMap(path);

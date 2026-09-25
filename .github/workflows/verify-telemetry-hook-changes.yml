@@ -26,7 +26,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
-          $allowedHeadRef = 'update-aspire-skills-bundle'
+          $allowedHeadRef = 'update-telemetry-hooks'
           $protectedPaths = @(
               'src/Aspire.Cli/Agents/Hooks/track-telemetry.sh',
               'src/Aspire.Cli/Agents/Hooks/track-telemetry.ps1'
