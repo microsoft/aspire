@@ -72,19 +72,25 @@ public sealed class TestTriggerMapTests
         Assert.Equal(["ALL"], targets);
     }
 
-    [Theory]
-    [InlineData(".github/workflows/normalize-mtp-exit-code.sh", "ALL")]
-    [InlineData(".github/workflows/normalize-mtp-exit-code.ps1", "ALL")]
-    [InlineData(".github/workflows/normalize-mtp-exit-code.sh", "job:deployment-e2e")]
-    [InlineData(".github/workflows/classify-deployment-test-exit-code.sh", "job:deployment-e2e")]
-    public void MtpExitCodeScriptsSelectTheirWorkflowConsumers(string path, string expectedTarget)
+    [Fact]
+    public void MtpExitCodeNormalizerRuleSelectsAllConsumers()
     {
+        var rule = Assert.Single(
+            s_map.PathRules,
+            rule => rule.Paths.Any(path => path.Contains("normalize-mtp-exit-code", StringComparison.Ordinal)));
+
+        Assert.Equal(["ALL", "job:deployment-e2e"], rule.Targets);
+    }
+
+    [Fact]
+    public void DeploymentTestRunnerSelectsDeploymentWorkflow()
+    {
+        const string path = ".github/workflows/run-deployment-test.sh";
         var targets = s_map.PathRules
             .Where(rule => rule.Paths.Any(glob => TestTriggerMap.GlobMatches(glob, path)))
-            .SelectMany(rule => rule.Targets)
-            .ToHashSet(StringComparer.Ordinal);
+            .SelectMany(rule => rule.Targets);
 
-        Assert.Contains(expectedTarget, targets);
+        Assert.Contains("job:deployment-e2e", targets);
     }
 
     [Fact]

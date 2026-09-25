@@ -144,9 +144,10 @@ MTP MSBuild integration injects `TestingPlatformCommandLineArguments` automatica
 Because `dotnet test` still returns its aggregated exit code after the test module
 applies `--ignore-exit-code 8`, the non-NuGet paths in `run-tests.yml` normalize
 the result through `normalize-mtp-exit-code.sh` or
-`normalize-mtp-exit-code.ps1`. The Deployment E2E workflow uses the same Bash
-normalizer before deciding whether to set its failure output. Other nonzero exit
-codes remain failures.
+`normalize-mtp-exit-code.ps1`. The Deployment E2E workflow runs its complete
+test command through `run-deployment-test.sh`, which uses the same Bash
+normalizer before deciding whether to set its failure output. Other nonzero
+exit codes remain failures.
 
 ## Backward compatibility
 
