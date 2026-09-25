@@ -64,7 +64,7 @@
     --colorNeutralStroke3: #e5e5e5;
     --aspire-button-hover-border: #c2c2c2;
     --aspire-link-button-pressed-background: #efefef;
-    --dashboard-run-select-hover-background: color-mix(in srgb, var(--colorNeutralBackground3) 65%, var(--aspire-page-background));
+    --dashboard-run-select-hover-background: color-mix(in srgb, var(--colorNeutralBackground3) 40%, var(--aspire-page-background));
     --dashboard-run-select-pressed-background: color-mix(in srgb, var(--colorNeutralBackground3) 80%, var(--aspire-page-background));
     --colorBrandBackground: #512bd4;
     --colorBrandBackgroundHover: #7455dd;
