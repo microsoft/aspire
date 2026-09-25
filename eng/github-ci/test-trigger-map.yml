@@ -238,6 +238,7 @@ path_rules:
       - eng/testing/CITestsProperties.props
       - .github/workflows/tests.yml
       - .github/workflows/run-tests.yml
+      - .github/workflows/normalize-mtp-exit-code.*
     targets: [ALL]
     reason: matrix, enumeration, and runner infrastructure can affect any regular PR test lane
 
@@ -330,6 +331,8 @@ path_rules:
       - tests/Aspire.Deployment.EndToEnd.Tests/**
       - src/Aspire.ProjectTemplates/**
       - .github/workflows/deployment-tests.yml
+      - .github/workflows/normalize-mtp-exit-code.sh
+      - .github/workflows/classify-deployment-test-exit-code.sh
     targets: [job:deployment-e2e]
     reason: SCHEDULE/DISPATCH-ONLY today; ProjectTemplates is a Layer-1 blind spot; Azure/Cli/TypeSystem/Managed production projects are in affected_project_rules
   - paths:

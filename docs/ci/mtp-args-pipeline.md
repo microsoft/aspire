@@ -142,8 +142,11 @@ dotnet test --project <path> --no-build -- \
 MTP MSBuild integration injects `TestingPlatformCommandLineArguments` automatically (includes `--filter-not-trait "category=failing"` and TRX filename). These args are complementary to the explicit `-- <args>`.
 
 Because `dotnet test` still returns its aggregated exit code after the test module
-applies `--ignore-exit-code 8`, the non-NuGet paths in `run-tests.yml` explicitly
-map exit code 8 to success. Other nonzero exit codes remain failures.
+applies `--ignore-exit-code 8`, the non-NuGet paths in `run-tests.yml` normalize
+the result through `normalize-mtp-exit-code.sh` or
+`normalize-mtp-exit-code.ps1`. The Deployment E2E workflow uses the same Bash
+normalizer before deciding whether to set its failure output. Other nonzero exit
+codes remain failures.
 
 ## Backward compatibility
 

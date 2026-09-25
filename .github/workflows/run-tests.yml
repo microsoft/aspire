@@ -549,12 +549,11 @@ jobs:
             --results-directory ${{ github.workspace }}/testresults \
             ${{ inputs.extraTestArgs }} || TEST_EXIT_CODE=$?
 
-          # `--ignore-exit-code 8` only remaps the test module's exit code. `dotnet test`
-          # aggregates the run and still returns 8 when every selected test is skipped.
-          if [ "$TEST_EXIT_CODE" -eq 8 ]; then
-            echo "All selected tests were skipped; treating MTP exit code 8 as success."
-            TEST_EXIT_CODE=0
-          fi
+          # `--ignore-exit-code 8` only remaps the test module's exit code. Normalize the
+          # aggregated `dotnet test` result with the same helper exercised by Infrastructure.Tests.
+          NORMALIZED_TEST_EXIT_CODE=0
+          bash .github/workflows/normalize-mtp-exit-code.sh "$TEST_EXIT_CODE" || NORMALIZED_TEST_EXIT_CODE=$?
+          TEST_EXIT_CODE=$NORMALIZED_TEST_EXIT_CODE
 
           # Persist the MTP exit code so the "Verify test results exist" gate can classify the outcome
           # (test failure vs. infrastructure/crash) even though we exit 0 below in quarantine mode.
@@ -620,12 +619,10 @@ jobs:
               ${{ inputs.extraTestArgs }}
             $testExitCode = $LASTEXITCODE
 
-            # `--ignore-exit-code 8` only remaps the test module's exit code. `dotnet test`
-            # aggregates the run and still returns 8 when every selected test is skipped.
-            if ($testExitCode -eq 8) {
-              Write-Host "All selected tests were skipped; treating MTP exit code 8 as success."
-              $testExitCode = 0
-            }
+            # `--ignore-exit-code 8` only remaps the test module's exit code. Normalize the
+            # aggregated `dotnet test` result with the same helper exercised by Infrastructure.Tests.
+            & .github/workflows/normalize-mtp-exit-code.ps1 -ExitCode $testExitCode
+            $testExitCode = $LASTEXITCODE
           }
           finally {
             # Stop heartbeat monitor

@@ -72,6 +72,21 @@ public sealed class TestTriggerMapTests
         Assert.Equal(["ALL"], targets);
     }
 
+    [Theory]
+    [InlineData(".github/workflows/normalize-mtp-exit-code.sh", "ALL")]
+    [InlineData(".github/workflows/normalize-mtp-exit-code.ps1", "ALL")]
+    [InlineData(".github/workflows/normalize-mtp-exit-code.sh", "job:deployment-e2e")]
+    [InlineData(".github/workflows/classify-deployment-test-exit-code.sh", "job:deployment-e2e")]
+    public void MtpExitCodeScriptsSelectTheirWorkflowConsumers(string path, string expectedTarget)
+    {
+        var targets = s_map.PathRules
+            .Where(rule => rule.Paths.Any(glob => TestTriggerMap.GlobMatches(glob, path)))
+            .SelectMany(rule => rule.Targets)
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Contains(expectedTarget, targets);
+    }
+
     [Fact]
     public void ExtensionUnitWorkflowChangesSelectUnitAndE2eJobs()
     {

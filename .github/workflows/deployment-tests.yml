@@ -598,9 +598,7 @@ jobs:
           test_exit_code=$?
           set -e
           echo "Test run exit code: $test_exit_code"
-          if [ "$test_exit_code" -ne 0 ] && [ "$test_exit_code" -ne 8 ]; then
-            echo "test_failed=true" >> $GITHUB_OUTPUT
-          fi
+          bash .github/workflows/classify-deployment-test-exit-code.sh "$test_exit_code"
 
       - name: Collect Aspire CLI logs
         if: always()
