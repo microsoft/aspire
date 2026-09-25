@@ -199,20 +199,15 @@ public partial class MainLayoutTests : DashboardTestContext
     [Theory]
     [InlineData(BrowserStorageKeys.NavMenuExpanded)]
     [InlineData(BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey)]
-    public void OnInitialize_DisconnectedWhileReadingBrowserStorage_StopsInitialization(string disconnectedKey)
+    public void OnInitialize_BrowserStorageReadFails_ContinuesInitialization(string failedKey)
     {
         var readKeys = new List<string>();
         var localStorage = new TestLocalStorage
         {
-            OnBeforeGetUnprotectedAsync = key =>
+            OnGetUnprotectedAsync = key =>
             {
                 readKeys.Add(key);
-                if (key == disconnectedKey)
-                {
-                    throw new JSDisconnectedException("The circuit disconnected.");
-                }
-
-                return Task.CompletedTask;
+                return key == failedKey ? (false, false) : (true, key == BrowserStorageKeys.NavMenuExpanded);
             }
         };
         SetupMainLayoutServices(localStorage: localStorage);
@@ -223,18 +218,15 @@ public partial class MainLayoutTests : DashboardTestContext
         });
 
         Assert.Equal(
-            disconnectedKey == BrowserStorageKeys.NavMenuExpanded
-                ? [BrowserStorageKeys.NavMenuExpanded]
-                : [BrowserStorageKeys.NavMenuExpanded, BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey],
+            [BrowserStorageKeys.NavMenuExpanded, BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey, BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey],
             readKeys);
-        Assert.Empty(_messageBarProvider!.FindComponents<DashboardMessageBar>());
-        Assert.Contains("nav-collapsed", cut.Find(".layout").ClassList);
+        Assert.Contains(failedKey == BrowserStorageKeys.NavMenuExpanded ? "nav-collapsed" : "nav-expanded", cut.Find(".layout").ClassList);
+        var messageBarProvider = _messageBarProvider!;
+        messageBarProvider.WaitForAssertion(() => Assert.Single(messageBarProvider.FindComponents<DashboardMessageBar>()));
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void OnInitialize_DisconnectedWhileRestoringRunSelection_StopsInitialization(bool disconnectOnSet)
+    [Fact]
+    public void OnInitialize_DisconnectedWhileSavingRunSelection_StopsInitialization()
     {
         var runStore = new FluentUISetupHelpers.TestDashboardRunStore(
         [
@@ -256,11 +248,6 @@ public partial class MainLayoutTests : DashboardTestContext
             {
                 Assert.Equal(BrowserStorageKeys.SelectedDashboardRunId, key);
                 readCount++;
-                if (!disconnectOnSet)
-                {
-                    throw new JSDisconnectedException("The circuit disconnected.");
-                }
-
                 return (true, "stale");
             },
             OnSetAsync = (key, value) =>
@@ -279,7 +266,7 @@ public partial class MainLayoutTests : DashboardTestContext
         });
 
         Assert.Equal(1, readCount);
-        Assert.Equal(disconnectOnSet ? 1 : 0, writeCount);
+        Assert.Equal(1, writeCount);
         Assert.Equal(0, JSInterop.Invocations.Count(invocation => invocation.Identifier == "window.getBrowserInfo"));
         Assert.Empty(_messageBarProvider!.FindComponents<DashboardMessageBar>());
         Assert.Contains("nav-collapsed", cut.Find(".layout").ClassList);

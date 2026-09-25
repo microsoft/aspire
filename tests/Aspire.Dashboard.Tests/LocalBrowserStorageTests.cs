@@ -10,7 +10,9 @@ using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
 using Xunit;
@@ -130,6 +132,94 @@ public class LocalBrowserStorageTests
     }
 
     [Fact]
+    public async Task GetUnprotectedAsync_DisconnectedCircuit_FailureWithoutLogging()
+    {
+        var testJsonRuntime = new TestJSRuntime
+        {
+            OnInvoke = _ => throw new JSDisconnectedException("The circuit disconnected.")
+        };
+        var sink = new TestSink();
+        var logger = new TestLogger<LocalBrowserStorage>(new TestLoggerFactory(sink, enabled: true));
+        var localStorage = CreateBrowserLocalStorage(testJsonRuntime, logger: logger);
+
+        var result = await localStorage.GetUnprotectedAsync<int>("MyKey").DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Empty(sink.Writes);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetAsync_DisconnectedCircuit_FailureWithoutLogging(bool useSessionStorage)
+    {
+        var testJsonRuntime = new TestJSRuntime
+        {
+            OnInvoke = _ => throw new JSDisconnectedException("The circuit disconnected.")
+        };
+        var sink = new TestSink();
+        var loggerFactory = new TestLoggerFactory(sink, enabled: true);
+        var storage = CreateBrowserStorage(testJsonRuntime, loggerFactory, useSessionStorage);
+
+        var result = await storage.GetAsync<int>("MyKey").DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Empty(sink.Writes);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetAsync_NoValue_FailureWithoutLogging(bool useSessionStorage)
+    {
+        var testJsonRuntime = new TestJSRuntime();
+        var sink = new TestSink();
+        var loggerFactory = new TestLoggerFactory(sink, enabled: true);
+        var storage = CreateBrowserStorage(testJsonRuntime, loggerFactory, useSessionStorage);
+
+        var result = await storage.GetAsync<int>("MyKey").DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Empty(sink.Writes);
+    }
+
+    [Fact]
+    public async Task GetUnprotectedAsync_JSFailure_LogsWarning()
+    {
+        var exception = new JSException("Browser storage unavailable.");
+        var testJsonRuntime = new TestJSRuntime { OnInvoke = _ => throw exception };
+        var sink = new TestSink();
+        var logger = new TestLogger<LocalBrowserStorage>(new TestLoggerFactory(sink, enabled: true));
+        var localStorage = CreateBrowserLocalStorage(testJsonRuntime, logger: logger);
+
+        var result = await localStorage.GetUnprotectedAsync<int>("MyKey").DefaultTimeout();
+
+        Assert.False(result.Success);
+        var log = Assert.Single(sink.Writes);
+        Assert.Equal(LogLevel.Warning, log.LogLevel);
+        Assert.Same(exception, log.Exception);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetAsync_JSFailure_LogsInformation(bool useSessionStorage)
+    {
+        var exception = new JSException("Browser storage unavailable.");
+        var testJsonRuntime = new TestJSRuntime { OnInvoke = _ => throw exception };
+        var sink = new TestSink();
+        var loggerFactory = new TestLoggerFactory(sink, enabled: true);
+        var storage = CreateBrowserStorage(testJsonRuntime, loggerFactory, useSessionStorage);
+
+        var result = await storage.GetAsync<int>("MyKey").DefaultTimeout();
+
+        Assert.False(result.Success);
+        var log = Assert.Single(sink.Writes);
+        Assert.Equal(LogLevel.Information, log.LogLevel);
+        Assert.Same(exception, log.Exception);
+    }
+
+    [Fact]
     public async Task SetUnprotectedAsync_UsesCircuitOptionsJsonTypeInfoResolvers()
     {
         var resolver = new TrackingJsonTypeInfoResolver();
@@ -141,16 +231,26 @@ public class LocalBrowserStorageTests
         Assert.Equal(typeof(int), resolver.RequestedType);
     }
 
-    private static LocalBrowserStorage CreateBrowserLocalStorage(TestJSRuntime testJsonRuntime, CircuitOptions? circuitOptions = null)
+    private static LocalBrowserStorage CreateBrowserLocalStorage(
+        TestJSRuntime testJsonRuntime,
+        CircuitOptions? circuitOptions = null,
+        ILogger<LocalBrowserStorage>? logger = null)
     {
         circuitOptions ??= CreateCircuitOptions(DashboardJsonSerializerContext.Default);
 
         return new LocalBrowserStorage(
             testJsonRuntime,
             new ProtectedLocalStorage(testJsonRuntime, new TestDataProtector()),
-            NullLogger<LocalBrowserStorage>.Instance,
+            logger ?? NullLogger<LocalBrowserStorage>.Instance,
             Options.Create(circuitOptions));
     }
+
+    private static IBrowserStorage CreateBrowserStorage(TestJSRuntime testJsonRuntime, TestLoggerFactory loggerFactory, bool useSessionStorage)
+        => useSessionStorage
+            ? new SessionBrowserStorage(
+                new ProtectedSessionStorage(testJsonRuntime, new TestDataProtector()),
+                new TestLogger<SessionBrowserStorage>(loggerFactory))
+            : CreateBrowserLocalStorage(testJsonRuntime, logger: new TestLogger<LocalBrowserStorage>(loggerFactory));
 
     private static CircuitOptions CreateCircuitOptions(IJsonTypeInfoResolver resolver)
     {
