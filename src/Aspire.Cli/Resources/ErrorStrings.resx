@@ -263,8 +263,8 @@
     <comment>{0} is the file path, {1} is the exception message</comment>
   </data>
   <data name="CodegenVersionSkewWarning" xml:space="preserve">
-    <value>The installed Aspire CLI version ({0}) differs from the configured Aspire SDK version ({1}). If you run into errors, run 'aspire update' to align them.</value>
-    <comment>{0} is the CLI version, {1} is the SDK version configured in aspire.config.json.</comment>
+    <value>The installed Aspire CLI version ({0}) differs from the Aspire SDK version ({1}) used for code generation. If you run into errors, update the Aspire CLI to match or exceed the SDK version.</value>
+    <comment>{0} is the CLI version, {1} is the SDK version used for code generation, including the target version during aspire update.</comment>
   </data>
   <data name="LegacyTypeScriptAppHostWarning" xml:space="preserve">
     <value>This project uses the legacy 'apphost.ts' layout. Run 'aspire update --migrate' to upgrade to the recommended 'apphost.mts' format. The legacy layout continues to work — this is a non-blocking warning.</value>
