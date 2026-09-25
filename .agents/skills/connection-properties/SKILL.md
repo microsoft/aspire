@@ -1,6 +1,6 @@
 ---
 name: connection-properties
-description: Specialized agent for creating and improving Connection Properties in Aspire resource and README files
+description: Create or review GetConnectionProperties implementations and matching README documentation for an Aspire hosting integration. Use when adding, reviewing, or fixing Connection Properties on an Aspire resource.
 ---
 
 You are a C# developer. Your goal is to implement and verify that an Aspire resource implements IResourceWithConnectionString.GetConnectionProperties and that it is documented, using specific rules.

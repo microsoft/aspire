@@ -38,80 +38,7 @@ Instructions for GitHub Copilot and other AI coding agents working with the Aspi
 
 ### Conditional Test Selection
 
-When reviewing a pull request, check whether `eng/github-ci/test-trigger-map.yml`
-needs to change if the diff:
-
-* Adds, removes, or renames a test project.
-* Adds or changes a CI job, reusable workflow, or `run_*` selection gate.
-* Adds or changes a script, configuration file, or other loose input consumed by
-  CI or tests but not represented by an MSBuild project reference.
-* Adds, removes, or changes a runtime-only dependency on a repository-built
-  package, template, or fixture. Examples include packages loaded by `aspire
-  add`, generated AppHosts, package filters in E2E tests, and files copied into
-  an E2E workspace.
-* Adds, removes, or conditionally changes `QuarantinedTest`, `ActiveIssue`, or
-  `OuterloopTest` on an E2E scenario with runtime-only dependencies.
-
-Do not request manual mappings for files evaluated by projects in the
-`Aspire.slnx`-rooted ProjectGraph; Layer 1 owns them. For Layer 2 blind spots,
-verify that the map routes each path to its actual consumer, uses `ALL` for
-broad shared inputs, or explicitly classifies paths handled by unconditional or
-dedicated workflows and paths with no PR-CI consumer. A gated job implemented by
-a reusable workflow must route changes to that workflow file to the job target
-and keep its `run_*` output wiring consistent.
-
-For runtime-only consumers that ProjectGraph cannot see, require an
-`affected_project_rules` entry for actual production/non-test project consumers,
-a `path_rules` entry for loose or runtime inputs not represented by
-ProjectGraph, or a `derived_targets` entry when selecting one test inherently
-requires another target. Because `affected_project_rules` evaluate only
-production projects and never match projects under `tests/`, a runtime-only test
-or test-support consumer must use path or derived-target routing instead.
-Project-name patterns use globs, not regular expressions. For expensive or
-class-sharded targets, prefer exact project names; use a family glob only when
-every current and future matching project should run that target. When a PR
-changes the packages or fixtures an E2E scenario consumes, add or remove the
-corresponding trigger-map entry in the same PR.
-
-For a dedicated package-input directory in `path_rules`, prefer one stable
-directory glob when enumerating individual files or RIDs would let a new input
-silently miss its consumers. Split by RID only when the savings justify that
-maintenance risk and focused coverage guards every deliberate exclusion. Do
-not flag intentional cross-RID over-selection when the rule records this
-resilience tradeoff.
-
-Keep each trigger-map `reason` concise: state what the rule covers or why the
-target consumes the input. Add detail only for a non-obvious relationship or
-constraint. Do not use `reason` to narrate the PR, duplicate the full rule, or
-record investigation history. The `targets` field is the source of truth for
-the target list; do not enumerate those target names again in `reason`. A
-category-level description is sufficient; the reason does not need to explain
-every target or make the rule self-contained. Keep discussion of alternative
-rule shapes or why a glob was split or broadened in the PR or maintenance
-documentation.
-
-Apply that precision to expensive or class-sharded selector-gated work. For
-smaller unsharded jobs, prefer safe broad routing when an exhaustive consumer
-list would add fragility for little CI savings. Do not expand or refine advisory
-targets that gate no PR jobs in an unrelated PR focused on PR-gated work; audit
-them when their workflow or routing is intentionally in scope.
-
-Match runtime-only edges to the target's execution lane. A regular-PR target is
-justified only by scenarios that run in regular PR CI; quarantined, disabled,
-and outerloop-only consumers do not qualify. When a scheduling attribute moves
-a scenario into or out of regular PR CI, update the exact trigger-map edge and
-focused regression coverage in the same PR.
-
-Selector behavior changes should include focused coverage in
-`tests/Infrastructure.Tests/TestTriggerMap/`. Audit the complete curated
-consumer and path lists whenever a PR changes routing or runtime consumption;
-tests are regression guards, not a second copy of that audit. Cover each
-distinct heavy-target routing boundary with a representative positive, record
-deliberate exclusions in focused negative cases, and add a structural assertion
-when the same consumer list is intentionally duplicated across rule types.
-Treat a relaxed negative expectation as a signal to verify the consuming
-workflow's artifacts and execution lane. See `docs/ci/test-trigger-map.md` for
-the map vocabulary and maintenance guidance.
+See the code-review skill's Test Trigger Map guidance, and docs/ci/test-trigger-map.md, for eng/github-ci/test-trigger-map.yml routing rules.
 
 ### Official Azure Pipelines validation
 
@@ -161,29 +88,7 @@ When reviewing pull requests:
 
 ### Pinned GitHub Actions and the Actions Allow-List
 
-Third-party actions in `.github/workflows/**` are pinned to immutable commit SHAs
-(`owner/repo[/path]@<sha>`). The repository/enterprise GitHub Actions policy allows only
-specific SHAs, and that allow-list lives in repository/organization settings, outside git.
-A workflow that references a SHA missing from the allow-list fails at runtime with an
-"actions not allowed" error, even though the PR itself builds and reviews cleanly.
-
-When authoring or reviewing any change that modifies a pinned action SHA (including
-bulk regeneration such as gh-aw workflow updates):
-
-* Identify every changed `owner/repo[/path]@<sha>` reference in the diff.
-* Verify each newly introduced SHA is permitted by the repository/enterprise allowed-actions
-  policy. Verify by SHA, not by tag name.
-* Coordinate the allow-list update in repository/organization settings as part of the same
-  change, before merging. The PR cannot make that settings change itself, so the PR
-  description must call out which SHAs an admin needs to add.
-* Treat a changed pin without a confirmed matching allow-list update as a blocking review
-  issue.
-* Do not request allow-list changes when a pin is unchanged, or for first-party
-  `actions/*` actions already covered by policy.
-
-Example: PR #20209 bumped `dotnet/issue-labeler/*` from `46125e85e6a568dc712f358c39f35317366f5eed`
-(v2.0.0) to `160b6b1e1e8d36da09beb34ef1e4806d2c0520a3` (v2.2.0) without the corresponding
-allow-list update, which broke the labeler workflows (issue #20277).
+See the code-review skill's Pinned GitHub Actions guidance for the pinned-action SHA allow-list review procedure.
 
 ## Formatting
 
@@ -503,40 +408,9 @@ These switches can be repeated to run tests on multiple classes or methods at on
 
 Example: `[QuarantinedTest("..issue url..")]`
 
-### Quarantine/Unquarantine via GitHub Commands (Preferred)
+### Quarantine/Unquarantine
 
-Use these commands in any issue or PR comment. They require write access to the repository.
-
-```bash
-# Quarantine a flaky test (creates a new PR)
-/quarantine-test Namespace.Type.Method https://github.com/microsoft/aspire/issues/1234
-
-# Quarantine multiple tests at once
-/quarantine-test TestMethod1 TestMethod2 https://github.com/microsoft/aspire/issues/1234
-
-# Quarantine and push to an existing PR
-/quarantine-test TestMethod https://github.com/microsoft/aspire/issues/1234 --target-pr https://github.com/microsoft/aspire/pull/5678
-
-# Unquarantine a test (creates a new PR)
-/unquarantine-test Namespace.Type.Method
-
-# Unquarantine and push to an existing PR
-/unquarantine-test TestMethod --target-pr https://github.com/microsoft/aspire/pull/5678
-```
-
-When you comment on a PR, the changes are automatically pushed to that PR's branch (no need for `--target-pr`).
-
-### Quarantine/Unquarantine via Local Tool
-
-For local development, use the QuarantineTools directly:
-
-```bash
-# Quarantine a test
-dotnet run --project tools/QuarantineTools -- -q -i https://github.com/microsoft/aspire/issues/1234 Full.Namespace.Type.Method
-
-# Unquarantine a test
-dotnet run --project tools/QuarantineTools -- -u Full.Namespace.Type.Method
-```
+Use `/quarantine-test <test-name(s)> <issue-url> [--target-pr <pr-url>]` or `/unquarantine-test <test-name(s)> [--target-pr <pr-url>]` as an issue/PR comment (requires write access; auto-pushes to the PR you comment on), or locally run `dotnet run --project tools/QuarantineTools -- -q -i <issue-url> <Namespace.Type.Method>` / `-u <Namespace.Type.Method>`. Full command syntax and behavior: `.github/workflows/README.md`.
 
 ## Disabled tests (ActiveIssue)
 
@@ -546,31 +420,9 @@ dotnet run --project tools/QuarantineTools -- -u Full.Namespace.Type.Method
 
 Example: `[ActiveIssue("https://github.com/microsoft/aspire/issues/1234")]`
 
-### Disable/Enable via GitHub Commands (Preferred)
+### Disable/Enable (ActiveIssue)
 
-```bash
-# Disable a test due to an active issue (creates a new PR)
-/disable-test Namespace.Type.Method https://github.com/microsoft/aspire/issues/1234
-
-# Disable and push to an existing PR
-/disable-test TestMethod https://github.com/microsoft/aspire/issues/1234 --target-pr https://github.com/microsoft/aspire/pull/5678
-
-# Enable a previously disabled test (creates a new PR)
-/enable-test Namespace.Type.Method
-
-# Enable and push to an existing PR
-/enable-test TestMethod --target-pr https://github.com/microsoft/aspire/pull/5678
-```
-
-### Disable/Enable via Local Tool
-
-```bash
-# Disable a test with ActiveIssue
-dotnet run --project tools/QuarantineTools -- -q -m activeissue -i https://github.com/microsoft/aspire/issues/1234 Full.Namespace.Type.Method
-
-# Enable a test (remove ActiveIssue)
-dotnet run --project tools/QuarantineTools -- -u -m activeissue Full.Namespace.Type.Method
-```
+Use `/disable-test <test-name(s)> <issue-url> [--target-pr <pr-url>]` or `/enable-test <test-name(s)> [--target-pr <pr-url>]` as an issue/PR comment, or locally run `dotnet run --project tools/QuarantineTools -- -q -m activeissue -i <issue-url> <Namespace.Type.Method>` / `-u -m activeissue <Namespace.Type.Method>`. Full command syntax: `.github/workflows/README.md`.
 
 ## Outerloop tests
 
