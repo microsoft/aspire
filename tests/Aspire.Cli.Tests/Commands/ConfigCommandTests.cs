@@ -739,6 +739,52 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("true", featuresObject["polyglotSupportEnabled"]?.ToString());
     }
 
+    [Theory]
+    [InlineData("features:experimentalPolyglot:java", "features.experimentalPolyglot:java")]
+    [InlineData("features.experimentalPolyglot:java", "features:experimentalPolyglot:java")]
+    public async Task ConfigSetCommand_WithColonInFeatureName_CreatesLoadableLocalConfig(string key, string deleteKey)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, "{}");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+
+        var setResult = command.Parse($"config set {key} true");
+        Assert.Equal(0, await setResult.InvokeAsync().DefaultTimeout());
+
+        var json = JsonNode.Parse(await File.ReadAllTextAsync(configPath))?.AsObject();
+        Assert.NotNull(json);
+        var features = Assert.IsType<JsonObject>(json["features"]);
+        var feature = Assert.Single(features);
+        Assert.Equal(KnownFeatures.ExperimentalPolyglotJava, feature.Key);
+        Assert.Equal("true", feature.Value?.GetValue<string>());
+
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(config?.Features);
+        Assert.True(config.Features[KnownFeatures.ExperimentalPolyglotJava]);
+
+        var reloadedServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var reloadedProvider = reloadedServices.BuildServiceProvider();
+        Assert.True(reloadedProvider.GetRequiredService<IFeatures>()
+            .IsFeatureEnabled(KnownFeatures.ExperimentalPolyglotJava, defaultValue: false));
+
+        var configurationService = reloadedProvider.GetRequiredService<IConfigurationService>();
+        var localConfiguration = await configurationService.GetLocalConfigurationAsync();
+        Assert.Equal("true", localConfiguration[$"features.{KnownFeatures.ExperimentalPolyglotJava}"]);
+
+        var getResult = reloadedProvider.GetRequiredService<Aspire.Cli.Commands.RootCommand>()
+            .Parse($"config get {key}");
+        Assert.Equal(0, await getResult.InvokeAsync().DefaultTimeout());
+
+        var deleteResult = reloadedProvider.GetRequiredService<Aspire.Cli.Commands.RootCommand>()
+            .Parse($"config delete {deleteKey}");
+        Assert.Equal(0, await deleteResult.InvokeAsync().DefaultTimeout());
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("{}"), JsonNode.Parse(await File.ReadAllTextAsync(configPath))));
+    }
+
     [Fact]
     public async Task ConfigSetCommand_ColonThenDot_NoDuplicateKeys()
     {
