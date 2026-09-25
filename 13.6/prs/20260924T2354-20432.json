@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backport of #20414: animates terminal dock on first open.",
+  "mergedAt": "2026-09-24T23:54:31Z",
+  "number": 20432,
+  "runDate": "2026-09-25T00:10:22Z",
+  "status": "included",
+  "title": "[release/13.6] Animate terminal dock on first open"
+}

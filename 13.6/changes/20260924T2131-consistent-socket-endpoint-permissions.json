@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Aspire now applies consistent default permissions to the Unix domain sockets it creates and the parent directories within the user's ~/.aspire folder, reducing the risk of unintended local access.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-09-24T21:31:22Z",
+  "lastMergedAt": "2026-09-24T21:31:22Z",
+  "name": "Consistent socket and directory permissions",
+  "owner": "mitchdenny",
+  "prs": [
+    20427
+  ]
+}

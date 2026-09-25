@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backport of #20413: fixes dashboard shortcut availability in standalone mode.",
+  "mergedAt": "2026-09-24T21:28:27Z",
+  "number": 20431,
+  "runDate": "2026-09-25T00:10:22Z",
+  "status": "included",
+  "title": "[release/13.6] Fix dashboard shortcut availability"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Standalone dashboards without the resource service no longer advertise or execute shortcuts for the unavailable Resources and Console Logs pages, and shortcut help now reflects the running configuration.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⌨️",
+  "firstMergedAt": "2026-09-24T21:28:27Z",
+  "lastMergedAt": "2026-09-24T21:28:27Z",
+  "name": "Fix dashboard shortcut availability",
+  "owner": "JamesNK",
+  "prs": [
+    20431
+  ]
+}

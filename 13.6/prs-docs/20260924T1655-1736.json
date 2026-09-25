@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Corrects existing docs guidance on endpoint resolution; not tied to a new product PR in this milestone.",
+  "mergedAt": "2026-09-24T16:55:22Z",
+  "number": 1736,
+  "runDate": "2026-09-25T00:10:44Z",
+  "status": "excluded",
+  "title": "Correct context-based endpoint resolution guidance"
+}

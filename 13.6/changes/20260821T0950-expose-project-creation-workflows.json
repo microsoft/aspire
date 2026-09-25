@@ -8,7 +8,9 @@
     "@SankeerthNara"
   ],
   "description": "The Aspire pane now offers a \"Create with Aspire...\" action to start the `aspire new` and `aspire init` project creation flows directly from the toolbar, instead of requiring the Command Palette.",
-  "docsPrs": [],
+  "docsPrs": [
+    1749
+  ],
   "docsRequired": true,
   "emoji": "✨",
   "firstMergedAt": "2026-08-21T09:50:56Z",

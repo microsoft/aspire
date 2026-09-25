@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Trace details Events grid cells no longer show internal scrollbars when span events contain nested attribute grids, keeping event names and attributes fully visible.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🖱️",
+  "firstMergedAt": "2026-09-24T21:23:20Z",
+  "lastMergedAt": "2026-09-24T21:23:20Z",
+  "name": "Fix scrollbars in Events grid cells",
+  "owner": "JamesNK",
+  "prs": [
+    20429
+  ]
+}

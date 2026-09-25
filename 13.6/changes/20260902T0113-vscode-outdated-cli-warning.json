@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "VS Code now warns when the Aspire CLI selected for an active extension operation is outdated for its installed published release lane, for example when a stable CLI is older than the latest stable release.",
-  "docsPrs": [],
+  "docsPrs": [
+    1608
+  ],
   "docsRequired": true,
   "emoji": "⚠️",
   "firstMergedAt": "2026-09-02T01:13:26Z",

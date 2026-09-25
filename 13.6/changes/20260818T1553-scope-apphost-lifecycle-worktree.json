@@ -8,7 +8,9 @@
     "@Shaurya2k06"
   ],
   "description": "Running an AppHost from a linked git worktree in VS Code no longer conflicts with the primary checkout's ports and user secrets, and `aspire stop` without `--apphost` no longer stops an AppHost running in a nested linked worktree.",
-  "docsPrs": [],
+  "docsPrs": [
+    1745
+  ],
   "docsRequired": false,
   "emoji": "🌳",
   "firstMergedAt": "2026-08-18T15:53:24Z",

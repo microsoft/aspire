@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Long selected resource names in dashboard dropdowns are now truncated with an ellipsis instead of being hard-cut, making it clear the value is shortened.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "✂️",
+  "firstMergedAt": "2026-09-24T21:29:30Z",
+  "lastMergedAt": "2026-09-24T21:29:30Z",
+  "name": "Fix truncation of selected dropdown values",
+  "owner": "JamesNK",
+  "prs": [
+    20430
+  ]
+}

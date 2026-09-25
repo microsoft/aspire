@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Documents isolated/launchProfile options for VS Code AppHost start tool, matching PR #19384 (Scope AppHost lifecycle by git worktree).",
+  "mergedAt": "2026-09-24T20:56:46Z",
+  "number": 1745,
+  "runDate": "2026-09-25T00:10:44Z",
+  "status": "included",
+  "title": "Document Aspire agent lifecycle options"
+}

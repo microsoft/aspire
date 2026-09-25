@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backport of #20330: consistent local socket and endpoint permissions.",
+  "mergedAt": "2026-09-24T21:31:22Z",
+  "number": 20427,
+  "runDate": "2026-09-25T00:10:22Z",
+  "status": "included",
+  "title": "[release/13.6] Set local socket directory and endpoint permissions consistently"
+}

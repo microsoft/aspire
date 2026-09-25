@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #19670 (Warn when VS Code uses an outdated Aspire CLI).",
+  "mergedAt": "2026-09-24T23:24:45Z",
+  "number": 1608,
+  "runDate": "2026-09-25T00:10:44Z",
+  "status": "included",
+  "title": "[docs] Document VS Code outdated Aspire CLI warning"
+}

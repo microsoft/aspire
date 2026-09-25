@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs-site frontend UI change (environment badge); not an Aspire product feature.",
+  "mergedAt": "2026-09-24T19:28:26Z",
+  "number": 1743,
+  "runDate": "2026-09-25T00:10:44Z",
+  "status": "excluded",
+  "title": "Add configurable environment badge beside the header brand"
+}

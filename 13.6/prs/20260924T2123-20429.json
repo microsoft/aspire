@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backport of #20425: fixes scrollbars in dashboard Events grid cells.",
+  "mergedAt": "2026-09-24T21:23:20Z",
+  "number": 20429,
+  "runDate": "2026-09-25T00:10:22Z",
+  "status": "included",
+  "title": "[release/13.6] Prevent scrollbars in dashboard Events grid cells"
+}

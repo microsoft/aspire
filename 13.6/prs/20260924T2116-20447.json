@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Engineering-only fix for official CI pipeline test timeout; no user-facing product change.",
+  "mergedAt": "2026-09-24T21:16:52Z",
+  "number": 20447,
+  "runDate": "2026-09-25T00:10:22Z",
+  "status": "excluded",
+  "title": "[release/13.6] Fix official template test timeout"
+}
