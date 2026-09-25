@@ -1370,6 +1370,32 @@ Configuration for polyglot app hosts:
 
 **Language persistence:** On first `aspire run`, if `language` is not set, the CLI detects it from file patterns and saves it to `settings.json`. Subsequent runs use the persisted value.
 
+### Project-local experimental language flags
+
+The experimental polyglot AppHost flags use the same flat naming pattern:
+`experimentalPolyglotJava`, `experimentalPolyglotGo`, `experimentalPolyglotPython`,
+and `experimentalPolyglotRust`. To enable Java for a single AppHost, run this from
+its project directory:
+
+```console
+aspire config set features.experimentalPolyglotJava true
+```
+
+This writes a single key in the `features` dictionary of `aspire.config.json`:
+
+```json
+{
+  "features": {
+    "experimentalPolyglotJava": "true"
+  }
+}
+```
+
+The configuration reader accepts both `"true"` and `true` for feature values.
+Existing project or global configurations using `experimentalPolyglot:java`,
+`experimentalPolyglot:go`, `experimentalPolyglot:python`, or
+`experimentalPolyglot:rust` must rename those keys to the flat names above.
+
 ### Application settings
 
 Polyglot AppHosts use the standard .NET configuration convention. The managed application builder loads these optional files from the directory containing the AppHost:

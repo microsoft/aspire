@@ -2124,7 +2124,7 @@ function getAspireCliEnvironment(extraEnv = {}) {
     ...(enableJavaE2E ? {
       ASPIRE_REPO_ROOT: repoRoot,
       features__polyglotSupportEnabled: 'true',
-      features__experimentalPolyglot__java: 'true',
+      features__experimentalPolyglotJava: 'true',
     } : {}),
     ...extraEnv,
   };
