@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Text.Json;
 using Aspire.TestUtilities;
 using Xunit;
@@ -59,35 +58,32 @@ public sealed class AgenticWorkflowTests(ITestOutputHelper output)
         Assert.Contains("SC2086", result.Output, StringComparison.Ordinal);
     }
 
-    private static async Task<(int ExitCode, string Output)> RunActionlintAsync(
+    private Task<ProcessResult> RunActionlintAsync(
         string workingDirectory,
         IReadOnlyCollection<string> workflowPaths)
     {
-        using var process = new Process();
-        process.StartInfo.FileName = "docker";
-        process.StartInfo.ArgumentList.Add("run");
-        process.StartInfo.ArgumentList.Add("--rm");
-        process.StartInfo.ArgumentList.Add("-v");
-        process.StartInfo.ArgumentList.Add($"{workingDirectory}:/workdir");
-        process.StartInfo.ArgumentList.Add("-w");
-        process.StartInfo.ArgumentList.Add("/workdir");
-        process.StartInfo.ArgumentList.Add(ActionlintImage);
-        process.StartInfo.ArgumentList.Add("-pyflakes=");
+        List<string> arguments =
+        [
+            "run",
+            "--rm",
+            "-v",
+            $"{workingDirectory}:/workdir",
+            "-w",
+            "/workdir",
+            ActionlintImage,
+            "-pyflakes=",
+        ];
         foreach (var workflowPath in workflowPaths)
         {
-            process.StartInfo.ArgumentList.Add(workflowPath);
+            arguments.Add(workflowPath);
         }
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.RedirectStandardError = true;
 
-        process.Start();
-        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        var output = await stdoutTask + await stderrTask;
-
-        return (process.ExitCode, output);
+        return ProcessRunner.RunAsync(
+            output,
+            "docker",
+            arguments,
+            workingDirectory,
+            timeout: TimeSpan.FromMinutes(2));
     }
 
     [Fact]

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using Aspire.TestUtilities;
 using Microsoft.Extensions.FileSystemGlobbing;
 using Xunit;
@@ -52,9 +51,11 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
             File.AppendAllText(GetFullPath(workspace, changedPath), "changed\n");
         }
 
-        var result = await RunScriptAsync(
-            workspace,
-            Scalar(Step(Steps(LoadWorkflow()), "Verify generated files are up to date"), "run"));
+        var result = await ProcessRunner.RunAsync(
+            output,
+            "bash",
+            ["-c", Scalar(Step(Steps(LoadWorkflow()), "Verify generated files are up to date"), "run")],
+            workspace.Path);
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("Generated agentic workflow files are not up to date:", result.Output, StringComparison.Ordinal);
@@ -74,27 +75,6 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
         CommitAll(workspace, "Create baseline");
 
         return workspace;
-    }
-
-    private static async Task<(int ExitCode, string Output)> RunScriptAsync(
-        TemporaryWorkspace workspace,
-        string script)
-    {
-        using var process = new Process();
-        process.StartInfo.FileName = "bash";
-        process.StartInfo.ArgumentList.Add("-c");
-        process.StartInfo.ArgumentList.Add(script);
-        process.StartInfo.WorkingDirectory = workspace.Path;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.RedirectStandardError = true;
-
-        process.Start();
-        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        var output = await stdoutTask + await stderrTask;
-        return (process.ExitCode, output);
     }
 
     private static void WriteFile(TemporaryWorkspace workspace, string relativePath, string contents)
