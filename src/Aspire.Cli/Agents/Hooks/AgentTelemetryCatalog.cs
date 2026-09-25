@@ -51,7 +51,7 @@ internal sealed partial class AgentTelemetryCatalog
                 throw new InvalidDataException($"The bundled skill manifest contains duplicate skill '{name}'.");
             }
 
-            if (skill.Files is not { } files)
+            if (skill.Files is not { Length: > 0 } files)
             {
                 throw new InvalidDataException($"The bundled skill '{name}' is missing its file inventory.");
             }
