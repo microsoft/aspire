@@ -28,11 +28,6 @@
     grid-area: toolbar;
 }
 
-/* The summary pane can be narrower than a full-page toolbar when log details are open. */
-::deep .logs-summary-layout > .main-toolbar.filter-toolbar > .toolbar-end {
-    flex-wrap: wrap;
-}
-
 ::deep .logs-summary-layout > .logs-grid-container {
     grid-area: main;
     min-width: 0;
