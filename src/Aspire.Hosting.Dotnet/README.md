@@ -5,7 +5,7 @@ Use this integration to model, configure, and orchestrate C# projects and file-b
 `Aspire.Hosting.Python`, and `Aspire.Hosting.JavaScript`.
 
 > [!NOTE]
-> `AddDotnetProject` is experimental and is exposed under the `ASPIREDOTNETPROJECT001` diagnostic.
+> `Aspire.Hosting.Dotnet` is a prerelease package.
 > Its API surface may change in future releases.
 
 ## Getting started
