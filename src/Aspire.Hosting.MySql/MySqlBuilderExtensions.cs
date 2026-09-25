@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+#pragma warning disable ASPIRETERMINAL001
 
+using System.Globalization;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.MySql;
@@ -88,6 +90,53 @@ public static class MySqlBuilderExtensions
                           context.EnvironmentVariables[PasswordEnvVarName] = resource.PasswordParameter;
                       })
                       .WithHealthCheck(healthCheckKey);
+    }
+
+    /// <summary>
+    /// Adds a REPL command that opens an authenticated MySQL shell in the dashboard terminal dock.
+    /// </summary>
+    /// <param name="builder">The MySQL server resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// This command is opt-in and available only in run mode. Dashboard users who can execute resource commands
+    /// can run commands with the resource's configured credentials. Enable it only for trusted dashboard users,
+    /// especially when sharing the dashboard through a tunnel or remote development environment.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddMySql("mysql").WithRepl();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<MySqlServerResource> WithRepl(this IResourceBuilder<MySqlServerResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
+    }
+
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(MySqlServerResource resource, CancellationToken cancellationToken)
+    {
+        var port = resource.PrimaryEndpoint.TargetPort ?? throw new DistributedApplicationException("The MySQL REPL port is not available.");
+        var password = await resource.PasswordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(password))
+        {
+            throw new DistributedApplicationException("The MySQL REPL password is not available.");
+        }
+
+        return new TerminalLaunchOptions
+        {
+            Title = $"mysql ({resource.Name})",
+            Executable = "mysql",
+            Arguments = ["--no-defaults", "--no-login-paths", "--user=root", "--host=127.0.0.1", $"--port={port.ToString(CultureInfo.InvariantCulture)}"],
+            EnvironmentVariables =
+            {
+                // The bundled MySQL 9.7 client still supports MYSQL_PWD. Forward it by name
+                // through the container runtime so the password never appears in argv or SQL history.
+                ["MYSQL_PWD"] = password
+            }
+        };
     }
 
     /// <summary>
