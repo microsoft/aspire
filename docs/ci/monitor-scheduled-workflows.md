@@ -35,7 +35,7 @@ The watch-list lives in
 **Full-watch entries** — workflows whose `failure` conclusion *unambiguously*
 means "broken". The watchdog files an issue on any failure conclusion:
 
-- `generate-api-diffs`, `generate-ats-diffs`
+- `generate-api-diffs`, `generate-ats-diffs` (main and configured release branches)
 - `refresh-manifests`
 - `update-dependencies`, `update-ai-foundry-models`,
   `update-azure-vm-sizes`, `update-aspire-skills-bundle`

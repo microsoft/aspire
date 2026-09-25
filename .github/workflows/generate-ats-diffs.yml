@@ -2,6 +2,12 @@ name: Generate ATS Diffs
 
 on:
   workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Target branch (main or release/*)'
+        required: true
+        default: main
+        type: string
   schedule:
     - cron: '0 16 * * *' # 8am PST (16:00 UTC)
 
@@ -13,8 +19,23 @@ jobs:
   generate-and-pr:
     runs-on: ubuntu-latest
     if: ${{ github.repository_owner == 'microsoft' }}
+    strategy:
+      matrix:
+        # Add active release branches here; do not run against historical releases automatically.
+        target_branch: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('[{0}]', toJSON(inputs.target_branch)) || '["main","release/13.6"]') }}
     steps:
+      - name: Validate target branch
+        env:
+          TARGET_BRANCH: ${{ matrix.target_branch }}
+        run: |
+          case "$TARGET_BRANCH" in
+            main|release/*) git check-ref-format --branch "$TARGET_BRANCH" >/dev/null ;;
+            *) echo "::error::Target branch must be main or release/*"; exit 1 ;;
+          esac
+
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ matrix.target_branch }}
 
       - name: Restore
         run: ./restore.sh
@@ -125,9 +146,8 @@ jobs:
         uses: ./.github/actions/create-pull-request
         with:
           token: ${{ steps.app-token.outputs.token }}
-          branch: update-ats-diffs
-          base: main
-          labels: |
-            NO-MERGE
-          title: "[Automated] Update ATS API Surface Area"
+          branch: ${{ matrix.target_branch == 'main' && 'update-ats-diffs' || format('update-ats-diffs-{0}', matrix.target_branch) }}
+          base: ${{ matrix.target_branch }}
+          labels: ${{ matrix.target_branch == 'main' && 'NO-MERGE' || '' }}
+          title: ${{ matrix.target_branch == 'main' && '[Automated] Update ATS API Surface Area' || format('[Automated] Update ATS API Surface Area ({0})', matrix.target_branch) }}
           body: "Auto-generated update to the ATS (Aspire Type System) capability surface to compare current surface vs latest release. This should only be merged once this surface area ships in a new release."
