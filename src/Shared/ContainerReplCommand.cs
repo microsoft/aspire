@@ -3,7 +3,6 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Publishing;
-using Aspire.Hosting.Terminals;
 using Microsoft.Extensions.DependencyInjection;
 
 #pragma warning disable ASPIRETERMINAL001
