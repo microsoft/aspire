@@ -389,9 +389,11 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
 
         if (OperatingSystem.IsWindows() && (startInfo.IsolateConsole || startInfo.KillOnParentExit || startInfo.Detached))
         {
-            // CreateNoWindow gives the child its own hidden console, so DCP stop-process-tree can
-            // AttachConsole to it and send CTRL_C_EVENT without also signalling the CLI. Children that
-            // only need parent-exit protection or detachment keep sharing the CLI's console.
+            // CreateNoWindow (CREATE_NO_WINDOW) still allocates a new console for the child, just
+            // without a visible window; unlike DETACHED_PROCESS, the child is attached to a console.
+            // That lets DCP stop-process-tree AttachConsole to it and send CTRL_C_EVENT without also
+            // signalling the CLI (covered by IsolatedProcessTests). Children that only need
+            // parent-exit protection or detachment keep sharing the CLI's console.
             psi.CreateNoWindow = startInfo.IsolateConsole;
             // KillOnParentExit assigns the child to a kill-on-close job atomically at creation. Unix
             // children rely on the cooperative parent-liveness watchdog instead (see LayoutProcessRunner).

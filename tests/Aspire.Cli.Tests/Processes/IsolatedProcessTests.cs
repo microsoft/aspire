@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.Versioning;
+using System.Text;
 using Aspire.Cli.Processes;
 
 namespace Aspire.Cli.Tests.Processes;
@@ -120,6 +122,58 @@ public class IsolatedProcessTests
         Assert.Same(detached ? nullHandle : null, psi.StandardErrorHandle);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [SupportedOSPlatform("windows")]
+    public async Task StartAsync_OnWindows_IsolateConsole_ChildReceivesCtrlCThroughItsOwnConsole(bool killOnParentExit)
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows-only test.");
+
+        // Mirror Program.Main: clear any inherited "ignore CTRL+C" attribute so the child, which
+        // inherits it across CreateProcess, can observe CTRL_C_EVENT regardless of how the test host
+        // was launched.
+        WindowsProcessInterop.SetConsoleCtrlHandler(nint.Zero, add: false);
+
+        var startInfo = new IsolatedProcessStartInfo
+        {
+            FileName = "ping.exe",
+            WorkingDirectory = Environment.CurrentDirectory,
+            IsolateConsole = true,
+            KillOnParentExit = killOnParentExit,
+        };
+        startInfo.ArgumentList.Add("-n");
+        startInfo.ArgumentList.Add("120");
+        startInfo.ArgumentList.Add("127.0.0.1");
+
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var child = new IsolatedProcess(startInfo);
+        child.OutputDataReceived += (_, _) => started.TrySetResult();
+        await child.StartAsync(CancellationToken.None);
+        child.BeginOutputReadLine();
+        child.BeginErrorReadLine();
+
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+            var signal = await SendCtrlCThroughAttachedConsoleAsync(child.Id);
+            Assert.True(signal.ExitStatus.ExitCode == 0, $"Signaler exited with {signal.ExitStatus.ExitCode}: {signal.StandardError}");
+
+            await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
+
+            // STATUS_CONTROL_C_EXIT: ping handled CTRL+C and exited, rather than being killed.
+            Assert.Equal(unchecked((int)0xC000013A), child.ExitCode);
+        }
+        finally
+        {
+            if (!child.HasExited)
+            {
+                child.Kill(entireProcessTree: true);
+            }
+        }
+    }
+
     [Fact]
     public async Task Start_CallbackThrows_PumpDrainsToEndAndFaultsStandardOutputClosed()
     {
@@ -226,6 +280,44 @@ public class IsolatedProcessTests
         await child.DisposeAsync();
 
         await Assert.ThrowsAsync<ObjectDisposedException>(() => child.StartAsync(CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Performs the same console-signal sequence as DCP's <c>stop-process-tree</c> on Windows,
+    /// from a separate process so the test host's console attachment is never changed:
+    /// attach to the target's console, ignore CTRL+C in the signaler, and send CTRL_C_EVENT to
+    /// every process attached to that console. AttachConsole fails if the target has no console.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    private static async Task<ProcessTextOutput> SendCtrlCThroughAttachedConsoleAsync(int processId)
+    {
+        var script = $$"""
+            $ErrorActionPreference = 'Stop'
+            Add-Type -Namespace AspireTests -Name ConsoleSignal -MemberDefinition @'
+            [DllImport("kernel32.dll", SetLastError = true)] public static extern bool FreeConsole();
+            [DllImport("kernel32.dll", SetLastError = true)] public static extern bool AttachConsole(uint processId);
+            [DllImport("kernel32.dll", SetLastError = true)] public static extern bool SetConsoleCtrlHandler(IntPtr handler, bool add);
+            [DllImport("kernel32.dll", SetLastError = true)] public static extern bool GenerateConsoleCtrlEvent(uint ctrlEvent, uint processGroupId);
+            '@
+            [void][AspireTests.ConsoleSignal]::FreeConsole()
+            if (-not [AspireTests.ConsoleSignal]::AttachConsole({{processId}})) { [Console]::Error.WriteLine("AttachConsole failed: " + [Runtime.InteropServices.Marshal]::GetLastWin32Error()); exit 2 }
+            if (-not [AspireTests.ConsoleSignal]::SetConsoleCtrlHandler([IntPtr]::Zero, $true)) { [Console]::Error.WriteLine("SetConsoleCtrlHandler failed: " + [Runtime.InteropServices.Marshal]::GetLastWin32Error()); exit 3 }
+            if (-not [AspireTests.ConsoleSignal]::GenerateConsoleCtrlEvent(0, 0)) { [Console]::Error.WriteLine("GenerateConsoleCtrlEvent failed: " + [Runtime.InteropServices.Marshal]::GetLastWin32Error()); exit 4 }
+            exit 0
+            """;
+
+        // -EncodedCommand avoids Windows PowerShell's command-line quote handling for the script.
+        var startInfo = new ProcessStartInfo("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script))])
+        {
+            // DCP is launched the same way: its own hidden console, so it can FreeConsole/AttachConsole
+            // without touching the console the test host is attached to.
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        return await Process.RunAndCaptureTextAsync(startInfo, timeout.Token);
     }
 
     private static (string FileName, IReadOnlyList<string> Arguments) GetEchoCommand(string text)
