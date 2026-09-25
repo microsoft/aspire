@@ -2,89 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
-using Aspire.TestUtilities;
 using Xunit;
 using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests;
 
-public sealed class AgenticWorkflowTests(ITestOutputHelper output)
+public sealed class AgenticWorkflowTests
 {
-    private const string ActionlintImage = "rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667";
     private static readonly string s_workflowsPath = Path.Combine(RepoRoot.Path, ".github", "workflows");
-
-    [Fact]
-    [RequiresFeature(TestFeature.Docker)]
-    public async Task GeneratedWorkflowsPassActionlint()
-    {
-        var lockFiles = Directory.EnumerateFiles(s_workflowsPath, "*.lock.yml")
-            .Select(path => Path.GetRelativePath(RepoRoot.Path, path))
-            .Order()
-            .ToArray();
-        Assert.NotEmpty(lockFiles);
-
-        var result = await RunActionlintAsync(RepoRoot.Path, lockFiles);
-
-        Assert.True(result.ExitCode == 0, result.Output);
-    }
-
-    [Fact]
-    [RequiresFeature(TestFeature.Docker)]
-    public async Task ActionlintRejectsShellcheckViolations()
-    {
-        using var workspace = TemporaryWorkspace.Create(output);
-        var configPath = Path.Combine(workspace.Path, ".github", "actionlint.yaml");
-        var workflowPath = Path.Combine(workspace.Path, ".github", "workflows", "shellcheck.lock.yml");
-        Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
-        Directory.CreateDirectory(Path.GetDirectoryName(workflowPath)!);
-        File.Copy(Path.Combine(RepoRoot.Path, ".github", "actionlint.yaml"), configPath);
-        await File.WriteAllTextAsync(
-            workflowPath,
-            """
-            name: Shellcheck violation
-            on: push
-            jobs:
-              validate:
-                runs-on: ubuntu-latest
-                steps:
-                  - run: |
-                      value="hello world"
-                      echo $value
-            """);
-
-        var result = await RunActionlintAsync(workspace.Path, [".github/workflows/shellcheck.lock.yml"]);
-
-        Assert.Equal(1, result.ExitCode);
-        Assert.Contains("SC2086", result.Output, StringComparison.Ordinal);
-    }
-
-    private Task<ProcessResult> RunActionlintAsync(
-        string workingDirectory,
-        IReadOnlyCollection<string> workflowPaths)
-    {
-        List<string> arguments =
-        [
-            "run",
-            "--rm",
-            "-v",
-            $"{workingDirectory}:/workdir",
-            "-w",
-            "/workdir",
-            ActionlintImage,
-            "-pyflakes=",
-        ];
-        foreach (var workflowPath in workflowPaths)
-        {
-            arguments.Add(workflowPath);
-        }
-
-        return ProcessRunner.RunAsync(
-            output,
-            "docker",
-            arguments,
-            workingDirectory,
-            timeout: TimeSpan.FromMinutes(2));
-    }
 
     [Fact]
     public void GeneratedWorkflowsMatchBootstrapCompiler()

@@ -46,7 +46,7 @@ jobs:
           # Purging catches source deletions that leave orphaned generated workflows. Refreshing
           # action pins ensures a committed edit to actions-lock.json cannot survive validation.
           gh aw compile --purge --force-refresh-action-pins \
-            --validate --actionlint --shellcheck --no-check-update
+            --validate --no-check-update
 
       - name: Verify generated files are up to date
         run: |
@@ -60,6 +60,9 @@ jobs:
             printf '%s\n' "$changes"
             exit 1
           fi
+
+      - name: Lint generated agentic workflows
+        run: gh aw lint --shellcheck
 
       - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         with:

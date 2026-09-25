@@ -26,6 +26,13 @@ by the same full compilation despite not having a `.lock.yml` suffix. Do not edi
 generated workflows manually. The second compilation should produce no further
 changes.
 
+`validate-agentic-workflows.yml` recompiles with the pinned gh-aw version, checks
+for generated-file drift, runs `gh aw lint --shellcheck` as a blocking lint gate,
+and runs `Infrastructure.Tests`. Compile-time lint diagnostics alone are not a
+blocking gate. The lint command owns the actionlint image and compatibility
+exceptions; `.github/actionlint.yaml` only scopes the known stale-check output
+workaround to the affected generated workflows.
+
 Explicit action versions in Markdown survive recompilation, so update deprecated
 inputs and action runtimes in the sources, not just the generated YAML. The
 `client-id` input to `actions/create-github-app-token` replaces `app-id`; the
