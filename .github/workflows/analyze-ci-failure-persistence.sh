@@ -82,6 +82,21 @@ sanitize_document()
     if $document_type == "cause" then
       if (.title | type) == "string" then .title |= sanitize_single_line else . end |
       if (.test_name | type) == "string" then .test_name |= sanitize_single_line else . end |
+      # Current-run test names originate in analyzer-authored cause files.
+      # Make them safe to validate, log, and render without changing their identity.
+      if (.tests | type) == "array" then
+        .tests |= map(if (.name | type) == "string" then .name |= sanitize_single_line else . end)
+      else . end |
+      # Historical occurrences can predate the current multi-test validation rules.
+      # Reapply the persisted name bound before replay can render those records.
+      if (.occurrences | type) == "array" then
+        .occurrences |= map(
+          if (.tests | type) == "array" then
+            .tests |= map(if (.name | type) == "string" then
+              .name |= (sanitize_single_line | .[0:500])
+            else . end)
+          else . end)
+      else . end |
       if (.error_pattern | type) == "string" then .error_pattern |= sanitize_multiline else . end
     elif $document_type == "analysis" then
       if (.failed_jobs | type) == "array" then
@@ -746,16 +761,356 @@ finally:
 PY
 }
 
+# Persist the display-only fields needed to recreate the current occurrence row
+# after merging has settled which stored evidence is authoritative.
+backfill_occurrence_publication()
+{
+  local cause_file="$1"
+  local trusted_failed_jobs_file="$2"
+  local run_id="$3"
+  local run_attempt="$4"
+  local run_scope="$5"
+  local output_file="$6"
+  local occurrence_file
+  local publication_cause_file
+  local jobs_table
+  local issue_context
+
+  if [ ! -f "$cause_file" ] ||
+     [ ! -f "$trusted_failed_jobs_file" ] ||
+     [[ ! "$run_id" =~ ^[1-9][0-9]*$ ]] ||
+     [[ ! "$run_attempt" =~ ^[1-9][0-9]*$ ]] ||
+     { [ "$run_scope" != "main" ] && [ "$run_scope" != "pull-request" ]; }; then
+    echo "::error::Invalid occurrence publication input" >&2
+    return 1
+  fi
+
+  occurrence_file=$(mktemp)
+  publication_cause_file=$(mktemp)
+  jq \
+    --argjson run_id "$run_id" \
+    --argjson run_attempt "$run_attempt" '
+      first(
+        .occurrences[]? |
+        select(
+          .run_id == $run_id and
+          (if has("run_attempt") then .run_attempt else 1 end) == $run_attempt
+        )
+      ) // empty
+    ' "$cause_file" > "$occurrence_file"
+  if [ ! -s "$occurrence_file" ]; then
+    echo "::error::Stored cause is missing the current occurrence" >&2
+    rm -f "$occurrence_file" "$publication_cause_file"
+    return 1
+  fi
+
+  if jq -e '
+      (.issue_jobs_table | type) == "string" and
+      (.issue_jobs_table | length) > 0 and
+      (.issue_context | type) == "string" and
+      (.issue_context | test("^(main|unavailable|#[1-9][0-9]*)$")) and
+      (.issue_row_needs_refresh != true)
+    ' "$occurrence_file" >/dev/null; then
+    cp "$cause_file" "$output_file"
+    rm -f "$occurrence_file" "$publication_cause_file"
+    return
+  fi
+
+  jq -n \
+    --arg id "$(jq -r '.id' "$cause_file")" \
+    --arg type "$(jq -r '.type' "$cause_file")" \
+    --slurpfile causes "$cause_file" \
+    --slurpfile occurrences "$occurrence_file" '
+      ($occurrences[0]) as $occurrence |
+      {
+        id: $id,
+        type: $type
+      } +
+      # Legacy flaky records can predate structured per-job tests. Preserve
+      # their scalar label for issue display without promoting it into identity.
+      (if $type == "flaky-test" and
+          (($occurrence.tests | type) != "array") and
+          ((($occurrence.job_ids | type) == "array") or
+           ((($occurrence.job | type) == "string") and
+            (($occurrence.job | length) > 0))) and
+          (($causes[0].test_name | type) == "string") and
+          (($causes[0].test_name | length) > 0) then
+        {test_name: $causes[0].test_name}
+      else
+        {}
+      end) +
+      (if ($occurrence.job_ids | type) == "array" then
+        {job_ids: $occurrence.job_ids}
+      elif ($occurrence.tests | type) == "array" then
+        {
+          job_ids: (
+            reduce $occurrence.tests[] as $test
+              ([]; if index($test.job_id) == null then
+                . + [$test.job_id]
+              else
+                .
+              end)
+          )
+        }
+      else
+        {}
+      end) +
+      (if ($occurrence.tests | type) == "array" then
+        {tests: $occurrence.tests}
+      else
+        {}
+      end) +
+      (if (($occurrence.job | type) == "string") and
+          (($occurrence.job | length) > 0) and
+          (($occurrence.issue_row_needs_refresh == true) or
+           ((($occurrence.job_ids | type) != "array") and
+            (($occurrence.tests | type) != "array"))) then
+        {job_names: [$occurrence.job]}
+      else
+        {}
+      end)
+    ' > "$publication_cause_file"
+
+  jobs_table=$(bash "$0" cause-job-names \
+    "$publication_cause_file" "$trusted_failed_jobs_file" table)
+  # Persisted history can predate current validation. Only a positive JSON
+  # integer is trusted as PR context; malformed legacy metadata falls through
+  # to the authenticated run-scope fallback.
+  issue_context=$(jq -r \
+    --arg run_scope "$run_scope" '
+      if $run_scope == "main" then
+        "main"
+      elif ((.pr_number | type) == "number") and
+         (.pr_number > 0) and
+         (.pr_number == (.pr_number | floor)) then
+        "#" + (.pr_number | floor | tostring)
+      else
+        "unavailable"
+      end
+    ' "$occurrence_file")
+
+  jq \
+    --argjson run_id "$run_id" \
+    --argjson run_attempt "$run_attempt" \
+    --arg jobs_table "$jobs_table" \
+    --arg issue_context "$issue_context" \
+    --arg run_scope "$run_scope" '
+      .occurrences |= map(
+        if .run_id == $run_id and
+           (if has("run_attempt") then .run_attempt else 1 end) == $run_attempt then
+          .issue_jobs_table = $jobs_table |
+          .issue_context = $issue_context |
+          .run_scope = $run_scope |
+          if .issue_uses_stored_job_label == true or
+             ((.job | type) == "string" and
+              (.job | length) > 0 and
+              ((.issue_row_needs_refresh == true) or
+               (((.job_ids | type) != "array") and
+                ((.tests | type) != "array")))) then
+            .issue_uses_stored_job_label = true
+          else
+            .
+          end
+        else
+          .
+        end
+      )
+    ' "$cause_file" > "$output_file"
+  rm -f "$occurrence_file" "$publication_cause_file"
+}
+
+# Render the complete ordered managed-row projection solely from stored memory.
+stored_occurrence_rows()
+{
+  local cause_file="$1"
+  local runs_directory="${2:-}"
+  local expected_repository="${GITHUB_REPOSITORY:-microsoft/aspire}"
+  local trusted_main_runs='{}'
+
+  if [ ! -f "$cause_file" ]; then
+    echo "::error::Stored cause file is required" >&2
+    return 1
+  fi
+
+  if [ -n "$runs_directory" ] && [ -d "$runs_directory" ]; then
+    local run_summary
+    for run_summary in "$runs_directory"/*.json; do
+      [ -f "$run_summary" ] || continue
+      local run_file_name
+      run_file_name=$(basename "$run_summary")
+      if [[ "$run_file_name" =~ ^([1-9][0-9]*)\.json$ ]]; then
+        local file_run_id="${BASH_REMATCH[1]}"
+        if jq -e --argjson file_run_id "$file_run_id" '
+            (.run_id | type) == "number" and
+            .run_id == $file_run_id and
+            .run_scope == "main"
+          ' "$run_summary" >/dev/null 2>&1; then
+          trusted_main_runs=$(jq -c \
+            --arg run_id "$file_run_id" \
+            '. + {($run_id): "main"}' <<< "$trusted_main_runs")
+        fi
+      fi
+    done
+  fi
+
+  jq \
+    --arg repository "$expected_repository" \
+    --argjson trusted_main_runs "$trusted_main_runs" \
+    "$JQ_SANITIZE_DEFS"'
+    def render_code_span:
+      (([scan("`+") | length] | max // 0) + 1) as $delimiter_length |
+      ("`" * $delimiter_length) + " " + . + " " + ("`" * $delimiter_length);
+    def table_text:
+      sanitize_single_line |
+      .[0:120] |
+      gsub("\\|"; "\\|") |
+      render_code_span;
+    . as $cause |
+    [(.occurrences // [] | sort_by(.observed_at // .occurred_at))[] |
+      . as $occurrence |
+      ($occurrence.observed_at // $occurrence.occurred_at // "") as $observed_at |
+      (if ($occurrence | has("run_scope")) then
+         (if $occurrence.run_scope == "main" or
+             $occurrence.run_scope == "pull-request" then
+            $occurrence.run_scope
+          else
+            ""
+          end)
+       else
+         ($trusted_main_runs[($occurrence.run_id | tostring)] // "")
+       end) as $effective_run_scope |
+      ($occurrence | has("run_attempt")) as $has_run_attempt |
+      ($occurrence | if has("run_attempt") then .run_attempt else null end) as $run_attempt |
+      # Modern metadata must identify one exact run attempt:
+      #   attempt 1 -> https://github.com/microsoft/aspire/actions/runs/123/attempts/1
+      #   attempt 2 -> https://github.com/microsoft/aspire/actions/runs/123/attempts/2
+      # Legacy records without run_attempt retain their historical run-only URL.
+      (if (($occurrence.run_id | type) == "number") and
+          ($occurrence.run_id > 0) and
+          ($occurrence.run_id == ($occurrence.run_id | floor)) and
+          (($has_run_attempt | not) or
+           ((($run_attempt | type) == "number") and
+            ($run_attempt > 0) and
+            ($run_attempt == ($run_attempt | floor)))) then
+        "https://github.com/" + $repository + "/actions/runs/" +
+        ($occurrence.run_id | tostring)
+      else
+        ""
+      end) as $base_run_url |
+      ($base_run_url +
+        (if $has_run_attempt then
+          "/attempts/" + ($run_attempt | tostring)
+        else
+          ""
+        end)) as $expected_run_url |
+      if (($occurrence.run_id | type) != "number") or
+         ($occurrence.run_id <= 0) or
+         ($occurrence.run_id != ($occurrence.run_id | floor)) or
+         ($has_run_attempt and
+          ((($run_attempt | type) != "number") or
+           ($run_attempt <= 0) or
+           ($run_attempt != ($run_attempt | floor)))) or
+         (($occurrence.run_url | type) != "string") or
+         (($occurrence.run_url != $expected_run_url) and
+          (($has_run_attempt and
+            $run_attempt == 1 and
+            $occurrence.run_url == $base_run_url) | not)) or
+         (($observed_at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T")) | not)
+      then
+        error("stored occurrence cannot be rendered")
+      else
+        ($observed_at | split("T")[0]) as $date |
+        (if (($occurrence.issue_jobs_table | type) == "string") and
+            (($occurrence.issue_jobs_table | length) > 0) then
+          $occurrence.issue_jobs_table
+        elif (($occurrence.job_names | type) == "array") and
+             (($occurrence.job_names | length) > 0) then
+          ([$occurrence.job_names[] | table_text] +
+            (if ($occurrence.tests | type) == "array" then
+              [$occurrence.tests[0:20][] | .name | table_text]
+            elif ($cause.type == "flaky-test") and
+                 (($cause.test_name | type) == "string") and
+                 (($cause.test_name | length) > 0) then
+              [$cause.test_name | table_text]
+            else
+              []
+            end) |
+            join("<br>"))
+        elif (($occurrence.job | type) == "string") and
+             (($occurrence.job | length) > 0) then
+          (($occurrence.job | table_text) +
+            (if ($occurrence.tests | type) == "array" then
+              ([$occurrence.tests[0:20][] | .name | table_text] |
+                if length == 0 then "" else "<br>" + join("<br>") end) +
+              (if ($occurrence.tests | length) > 20 then
+                "<br>` \(($occurrence.tests | length) - 20) more tests in the linked run `"
+              else
+                ""
+              end)
+            elif ($cause.type == "flaky-test") and
+                 (($cause.test_name | type) == "string") and
+                 (($cause.test_name | length) > 0) then
+              "<br>" + ($cause.test_name | table_text)
+            else
+              ""
+            end))
+        else
+          error("stored occurrence is missing displayable jobs")
+        end) as $jobs_table |
+        (if $effective_run_scope == "main" or
+            $cause.type == "main-repository-breakage" then
+          "main"
+        elif $effective_run_scope == "pull-request" then
+          (if (($occurrence.issue_context | type) == "string") and
+              ($occurrence.issue_context | test("^#[1-9][0-9]*$")) then
+            $occurrence.issue_context
+          elif (($occurrence.pr_number | type) == "number") and
+               ($occurrence.pr_number > 0) and
+               ($occurrence.pr_number == ($occurrence.pr_number | floor)) then
+            "#" + ($occurrence.pr_number | floor | tostring)
+          else
+            "unavailable"
+          end)
+        elif (($occurrence.issue_context | type) == "string") and
+             ($occurrence.issue_context | test("^(main|unavailable|#[1-9][0-9]*)$")) then
+          $occurrence.issue_context
+        elif (($occurrence.pr_number | type) == "number") and
+             ($occurrence.pr_number > 0) and
+             ($occurrence.pr_number == ($occurrence.pr_number | floor)) then
+          "#" + ($occurrence.pr_number | floor | tostring)
+        else
+          "unavailable"
+        end) as $context |
+        "| \($date) | [\($occurrence.run_id)](\($expected_run_url)) | \($jobs_table) | \($context) |"
+      end
+    ]
+  ' "$cause_file"
+}
+
 render_issue_occurrences()
 {
+  # Rebuild only the publisher-managed occurrence section while preserving
+  # operator-authored issue text outside it.
+  #
+  # The current body supplies only the operator-authored prefix and suffix.
+  # occurrence_rows_file supplies every canonical row from persisted history,
+  # including the attempt being published or replayed.
+  #
+  # The stored row sequence is authoritative: it repairs stale or missing issue
+  # rows, keeps delayed replay from reordering history, and ensures body trimming
+  # retains the newest evidence. max_bytes is the final issue-body budget, and
+  # output_file receives the rebuilt body.
   local current_body_file="$1"
   local new_occurrence_row="$2"
   local total_occurrence_count="$3"
   local output_file="$4"
-  local max_bytes="$5"
+  local occurrence_rows_file="$5"
+  local max_bytes="$6"
+  local expected_repository="${GITHUB_REPOSITORY:-microsoft/aspire}"
   local output_temp
 
   if [ ! -f "$current_body_file" ] ||
+     [ ! -f "$occurrence_rows_file" ] ||
      [[ ! "$total_occurrence_count" =~ ^[1-9][0-9]*$ ]] ||
      [[ ! "$max_bytes" =~ ^[1-9][0-9]*$ ]]; then
     echo "::error::Invalid occurrence renderer input" >&2
@@ -766,12 +1121,61 @@ render_issue_occurrences()
   if ! jq -nj \
       --rawfile body "$current_body_file" \
       --arg new_row "$new_occurrence_row" \
+      --arg repository "$expected_repository" \
       --argjson total "$total_occurrence_count" \
-      --argjson max_bytes "$max_bytes" '
+      --argjson max_bytes "$max_bytes" \
+      --slurpfile occurrence_rows "$occurrence_rows_file" '
       def normalized_body:
         $body | gsub("\r\n"; "\n");
+      # Accept only workflow run links, with an optional explicit retry:
+      #   https://github.com/microsoft/aspire/actions/runs/123
+      #   https://github.com/microsoft/aspire/actions/runs/123/attempts/2
+      # Reject zero or noncanonical IDs, job links, query strings, fragments,
+      # and malformed repository paths.
+      def is_occurrence_url:
+        startswith("https://github.com/" + $repository + "/actions/runs/") and
+        test(
+          "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/runs/" +
+          "[1-9][0-9]*(/attempts/[1-9][0-9]*)?$"
+        );
+      # A managed row has the exact Date | Build | Job | Context table shape:
+      #   | 2026-09-23 | [123](https://github.com/microsoft/aspire/actions/runs/123) | Ubuntu | #42 |
+      # The visible build ID must identify the linked run; reject misleading
+      # pairs such as [999](.../actions/runs/123), along with noncanonical URLs
+      # and rows with another context shape.
+      def occurrence_parts:
+        (capture(
+          "^\\| [0-9]{4}-[0-9]{2}-[0-9]{2} \\| " +
+          "\\[(?<label>[1-9][0-9]*)\\]\\(" +
+          "(?<url>https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/runs/" +
+          "(?<run>[1-9][0-9]*)(/attempts/[1-9][0-9]*)?)" +
+          "\\) \\| (?:[^|\\n]|\\\\\\|)+ \\| (main|unavailable|#[1-9][0-9]*) \\|$"
+        ) // null);
       def is_occurrence_row:
-        test("^\\| [0-9]{4}-[0-9]{2}-[0-9]{2} \\| \\[[0-9]+\\]\\(https://github\\.com/[^\\n]+\\) \\| .* \\| (main|unavailable|#[0-9]+) \\|$");
+        occurrence_parts as $parts |
+        if $parts == null then false
+        else $parts.label == $parts.run and ($parts.url | is_occurrence_url)
+        end;
+      # An unmarked legacy table can contain an old or edited repository link.
+      # Recognize its generated row shape only to find the replaceable table
+      # boundary; the replacement rows still come exclusively from validated
+      # stored memory. A mismatched label/link pair remains ambiguous.
+      def is_replaceable_legacy_occurrence_row:
+        occurrence_parts as $parts |
+        $parts != null and $parts.label == $parts.run;
+      def resembles_occurrence_row:
+        test("^\\| [0-9]{4}-[0-9]{2}-[0-9]{2} \\|");
+      # Reuse the validated row parse so identity, ordering, and display cannot
+      # disagree about which run an occurrence represents.
+      def occurrence_url:
+        occurrence_parts as $parts |
+        if $parts != null and
+           $parts.label == $parts.run and
+           ($parts.url | is_occurrence_url) then
+          $parts.url
+        else
+          error("invalid occurrence row")
+        end;
       def section($rows):
         "<!-- ci-failure-occurrences:start -->\n" +
         "## Occurrences\n\n" +
@@ -779,15 +1183,15 @@ render_issue_occurrences()
         "| Date | Build | Job | Context |\n" +
         "|------|-------|-----|----|\n" +
         ($rows | join("\n")) + "\n" +
-        "<!-- ci-failure-occurrences:end -->\n";
-      def render($prefix; $rows):
-        ($prefix | sub("\n+$"; "")) + "\n\n" + section($rows);
-      def fit($prefix; $rows):
-        render($prefix; $rows) as $rendered |
+        "<!-- ci-failure-occurrences:end -->";
+      def render($prefix; $suffix; $rows):
+        ($prefix | sub("\n+$"; "")) + "\n\n" + section($rows) + $suffix;
+      def fit($prefix; $suffix; $rows):
+        render($prefix; $suffix; $rows) as $rendered |
         if ($rendered | utf8bytelength) <= $max_bytes then
           $rendered
         elif ($rows | length) > 1 then
-          fit($prefix; $rows[1:])
+          fit($prefix; $suffix; $rows[1:])
         else
           error("occurrence section cannot fit within the publication budget")
         end;
@@ -797,10 +1201,18 @@ render_issue_occurrences()
           error("ambiguous managed occurrence section")
         else
           ($start_parts[1] | split("<!-- ci-failure-occurrences:end -->")) as $end_parts |
-          if ($end_parts | length) != 2 or ($end_parts[1] | test("^\\s*$") | not) then
+          if ($end_parts | length) != 2 then
             error("ambiguous managed occurrence section")
           else
-            { prefix: $start_parts[0], managed: $end_parts[0], legacy: false }
+            # The explicit end marker separates workflow-owned rows from later
+            # operator notes. Preserve that suffix exactly and include it in the
+            # issue-body budget instead of treating it as malformed history.
+            {
+              prefix: $start_parts[0],
+              managed: $end_parts[0],
+              suffix: (if $end_parts[1] == "" then "\n" else $end_parts[1] end),
+              legacy: false
+            }
           end
         end;
       def legacy_parts:
@@ -808,10 +1220,70 @@ render_issue_occurrences()
         if ($parts | length) != 2 then
           error("unsupported legacy occurrence section")
         else
-          { prefix: $parts[0], managed: ("## Occurrences\n" + $parts[1]), legacy: true }
+          ("## Occurrences\n" + $parts[1]) as $legacy |
+          ($legacy | split("\n")) as $lines |
+          ([range(0; ($lines | length)) |
+            select(
+              $lines[.] == "| Date | Build | Job | Context |" or
+              $lines[.] == "| Date | Build | Job | PR |"
+            )]) as $header_indexes |
+          if ($lines[0] != "## Occurrences") or
+             ($header_indexes | length) != 1
+          then
+            error("unsupported legacy occurrence section")
+          else
+            $header_indexes[0] as $header_index |
+            if $header_index == 0 or
+               ($header_index + 1) >= ($lines | length) or
+               $lines[$header_index + 1] != "|------|-------|-----|----|" or
+               any($lines[1:$header_index][];
+                 length > 0 and
+                 (test("^Showing [0-9]+ most recent of [0-9]+ occurrences\\.$") | not)) or
+               ([$lines[1:$header_index][] |
+                 select(test("^Showing [0-9]+ most recent of [0-9]+ occurrences\\.$"))] | length) > 1
+            then
+              error("unsupported legacy occurrence section")
+            else
+              ($header_index + 2) as $row_start |
+              ([range($row_start; ($lines | length)) |
+                select(($lines[.] | is_replaceable_legacy_occurrence_row) | not)] |
+                if length == 0 then ($lines | length) else .[0] end) as $suffix_start |
+              ($lines[$suffix_start:]) as $suffix_lines |
+              # Legacy issues have no end marker. Treat only the contiguous
+              # generated table as workflow-owned, preserve later operator
+              # notes, and reject rows interleaved with that suffix.
+              if any($suffix_lines[]; resembles_occurrence_row) then
+                error("ambiguous legacy occurrence section")
+              else
+                {
+                  prefix: $parts[0],
+                  managed: ($lines[0:$suffix_start] | join("\n")),
+                  suffix: (
+                    if ($suffix_lines | length) == 0
+                    then "\n"
+                    else "\n" + ($suffix_lines | join("\n"))
+                    end
+                  ),
+                  legacy: true
+                }
+              end
+            end
+          end
         end;
-      if ($new_row | is_occurrence_row | not) then
+      # Rendering must be based on the complete persisted history. Reject
+      # partial, duplicated, or malformed canonical rows rather than retaining
+      # editable issue-body content as if it were stored evidence.
+      if ($occurrence_rows | length) != 1 or
+         (($occurrence_rows[0] | type) != "array") or
+         (($occurrence_rows[0] | length) != $total) or
+         (all($occurrence_rows[0][]; type == "string" and is_occurrence_row) | not) or
+         (([$occurrence_rows[0][] | occurrence_url] | unique | length) != $total)
+      then
+        error("invalid stored occurrence rows")
+      elif ($new_row | is_occurrence_row | not) then
         error("invalid occurrence row")
+      elif ($occurrence_rows[0] | index($new_row)) == null then
+        error("new occurrence row is absent from stored history")
       else
         (if (normalized_body | contains("<!-- ci-failure-occurrences:start -->")) or
             (normalized_body | contains("<!-- ci-failure-occurrences:end -->")) then
@@ -827,15 +1299,20 @@ render_issue_occurrences()
           ($parts.legacy == false or . != "| Date | Build | Job | PR |") and
           . != "|------|-------|-----|----|" and
           (test("^Showing [0-9]+ most recent of [0-9]+ occurrences\\.$") | not) and
-          (is_occurrence_row | not))
+          (resembles_occurrence_row | not))
         then
           error("unsupported occurrence section contents")
         else
-          ([$lines[] | select(is_occurrence_row)] + [$new_row]) as $rows |
-          if $total < ($rows | length) then
-            error("occurrence total is smaller than the rendered history")
+          # Issue rows are a projection of memory, not another history store.
+          # Replace the complete managed section so edits, duplicates, missing
+          # rows, and previously trimmed rows are repaired from canonical data.
+          fit($parts.prefix; $parts.suffix; $occurrence_rows[0]) as $rendered |
+          # Avoid a no-op issue edit when replay only differs in trailing
+          # newlines; this keeps publication idempotent.
+          if (normalized_body | sub("\n+$"; "")) == ($rendered | sub("\n+$"; "")) then
+            $body
           else
-            fit($parts.prefix; $rows)
+            $rendered
           end
         end
       end
@@ -875,7 +1352,7 @@ migrate_main_issue_body()
           error("ambiguous managed occurrence section")
         else
           ($start_parts[1] | split("<!-- ci-failure-occurrences:end -->")) as $end_parts |
-          if ($end_parts | length) != 2 or ($end_parts[1] | test("^\\s*$") | not) then
+          if ($end_parts | length) != 2 then
             error("ambiguous managed occurrence section")
           else
             {
@@ -883,8 +1360,9 @@ migrate_main_issue_body()
               occurrences: (
                 "<!-- ci-failure-occurrences:start -->" +
                 $end_parts[0] +
-                "<!-- ci-failure-occurrences:end -->\n"
-              )
+                "<!-- ci-failure-occurrences:end -->"
+              ),
+              suffix: (if $end_parts[1] == "" then "\n" else $end_parts[1] end)
             }
           end
         end;
@@ -893,7 +1371,7 @@ migrate_main_issue_body()
         if ($parts | length) != 2 then
           error("unsupported legacy occurrence section")
         else
-          {prefix: $parts[0], occurrences: ("## Occurrences\n" + $parts[1])}
+          {prefix: $parts[0], occurrences: ("## Occurrences\n" + $parts[1]), suffix: ""}
         end;
       def parts:
         if (normalized | contains("<!-- ci-failure-occurrences:start -->")) or
@@ -930,7 +1408,8 @@ migrate_main_issue_body()
            else ""
            end) +
           "\n\n" +
-          $current_parts.occurrences
+          $current_parts.occurrences +
+          $current_parts.suffix
         ) as $output |
         if ($output | utf8bytelength) <= $max_bytes then
           $output
@@ -1099,14 +1578,46 @@ case "$COMMAND" in
       "$ARTIFACT_FILE" "$OUTPUT_DIRECTORY" \
       "${4:-10000}" "${5:-1073741824}" "${6:-104857600}" "${7:-}" "${8:-trx}"
     ;;
+  backfill-occurrence-publication)
+    CAUSE_FILE="${2:?cause file is required}"
+    TRUSTED_FAILED_JOBS_FILE="${3:?trusted failed jobs file is required}"
+    RUN_ID="${4:?run ID is required}"
+    RUN_ATTEMPT="${5:?run attempt is required}"
+    RUN_SCOPE="${6:?run scope is required}"
+    OUTPUT_FILE="${7:?output file is required}"
+    backfill_occurrence_publication \
+      "$CAUSE_FILE" "$TRUSTED_FAILED_JOBS_FILE" "$RUN_ID" "$RUN_ATTEMPT" \
+      "$RUN_SCOPE" "$OUTPUT_FILE"
+    ;;
+  stored-occurrence-rows)
+    CAUSE_FILE="${2:?cause file is required}"
+    stored_occurrence_rows "$CAUSE_FILE" "${3:-}"
+    ;;
+  select-occurrence-row)
+    OCCURRENCE_ROWS_FILE="${2:?occurrence rows file is required}"
+    RUN_ID="${3:?run ID is required}"
+    OCCURRENCE_URL="${4:?occurrence URL is required}"
+
+    # In "| date | [123](url) | jobs | context |", the second field is the
+    # publisher-owned Build column. Labels may legitimately repeat the URL.
+    jq -er \
+      --arg build_column "[${RUN_ID}](${OCCURRENCE_URL})" '
+        [.[] | select((split(" | ")[1] // "") == $build_column)] |
+        if length == 1 then .[0]
+        else error("current occurrence row is missing or ambiguous")
+        end
+      ' "$OCCURRENCE_ROWS_FILE"
+    ;;
   render-issue-occurrences)
     CURRENT_BODY_FILE="${2:?current issue body file is required}"
     NEW_OCCURRENCE_ROW="${3:?new occurrence row is required}"
     TOTAL_OCCURRENCE_COUNT="${4:?total occurrence count is required}"
     OUTPUT_FILE="${5:?output file is required}"
-    MAX_BYTES="${6:-65000}"
+    OCCURRENCE_ROWS_FILE="${6:?occurrence rows file is required}"
+    MAX_BYTES="${7:-65000}"
     render_issue_occurrences \
-      "$CURRENT_BODY_FILE" "$NEW_OCCURRENCE_ROW" "$TOTAL_OCCURRENCE_COUNT" "$OUTPUT_FILE" "$MAX_BYTES"
+      "$CURRENT_BODY_FILE" "$NEW_OCCURRENCE_ROW" "$TOTAL_OCCURRENCE_COUNT" \
+      "$OUTPUT_FILE" "$OCCURRENCE_ROWS_FILE" "$MAX_BYTES"
     ;;
   migrate-main-issue-body)
     CURRENT_BODY_FILE="${2:?current issue body file is required}"
@@ -1157,33 +1668,308 @@ case "$COMMAND" in
     TRUSTED_FAILED_JOBS_FILE="${3:?trusted failed jobs file is required}"
     FORMAT="${4:?format is required}"
 
+    # Derive every human-facing job/test label from the same trusted
+    # associations so issue headings and occurrence rows cannot disagree.
     jq -er \
       --arg format "$FORMAT" \
       --slurpfile trusted_jobs "$TRUSTED_FAILED_JOBS_FILE" "$JQ_SANITIZE_DEFS"'
         def render_code_span:
           (([scan("`+") | length] | max // 0) + 1) as $delimiter_length |
           ("`" * $delimiter_length) + " " + . + " " + ("`" * $delimiter_length);
-        .job_ids as $job_ids |
-        [
-          $job_ids[] as $job_id |
-          [$trusted_jobs[0][] | select(.id == $job_id) | .name][0]
-        ] as $job_names |
+        . as $cause |
+        # Modern causes preserve exact test/job observations. The scalar
+        # fallback exists only to render older records and does not promote a
+        # historical display label into cause identity.
+        ((.tests | type) == "array") as $has_explicit_tests |
+        (if $has_explicit_tests then .tests
+         elif .type == "flaky-test" and
+              (.test_name | type) == "string" and
+              (.job_ids | type) == "array" then
+           [.job_ids[] | {name: $cause.test_name, job_id: .}]
+         else [] end) as $tests |
+        ((.job_names | type) == "array") as $has_explicit_job_names |
+        (if (.job_ids | type) == "array" then .job_ids else [] end) as $job_ids |
+        (if $has_explicit_job_names then
+          .job_names
+        else
+          [
+            $job_ids[] as $job_id |
+            [$trusted_jobs[0][] | select(.id == $job_id) | .name][0]
+          ]
+        end) as $job_names |
+        # A job-only legacy occurrence has no numeric association to promote,
+        # but its scalar test label remains useful descriptive history.
+        ($has_explicit_job_names and
+         ($job_names | length) == 1 and
+         ($has_explicit_tests | not) and
+         .type == "flaky-test" and
+         (.test_name | type) == "string" and
+         (.test_name | length) > 0) as $has_legacy_scalar_job_name |
         if any($job_names[]; type != "string" or length == 0) then
           error("cause references an unknown trusted failed job")
         else
+          # Apply the job display budget first, then show only tests belonging
+          # to visible jobs. Hidden jobs must not consume the test budget or
+          # leave the heading and occurrence row showing different evidence.
           $job_names
-          | map(sanitize_single_line | .[0:500])
+          | map(sanitize_single_line | .[0:120]) as $all_job_names
+          | ($job_ids[0:20]) as $visible_job_ids
+          | ($all_job_names[0:20]) as $visible_job_names
+          | (($all_job_names | length) - ($visible_job_names | length)) as $remaining_job_count
+          | ([$tests[] | . as $test |
+              select(($visible_job_ids | index($test.job_id)) != null)][0:20]) as $visible_tests
           | if $format == "plain" then
-              join(", ")
+              ($visible_job_names | join(", ")) +
+              (if $remaining_job_count > 0 then
+                ", \($remaining_job_count) more jobs"
+              else "" end)
             elif $format == "display" then
-              map(render_code_span) | join("<br>")
+              ([$visible_job_names[] | render_code_span] +
+                (if $remaining_job_count > 0 then
+                  ["` \($remaining_job_count) more jobs `"]
+                else [] end)) |
+              join("<br>")
             elif $format == "table" then
-              map(gsub("\\|"; "\\|") | render_code_span) | join("<br>")
+              # A literal pipe inside a job or test name would otherwise start a
+              # new Markdown table column. For example, "A|B" renders as "A\|B".
+              ($visible_job_names | to_entries | map(
+                  . as $entry |
+                  ($entry.value | gsub("\\|"; "\\|") | render_code_span) +
+                  ((if $has_explicit_job_names and
+                       ($visible_job_names | length) == 1 then
+                      $visible_tests
+                    else
+                      [$visible_tests[] |
+                        select(.job_id == $visible_job_ids[$entry.key])]
+                    end) |
+                    map(.name | sanitize_single_line | .[0:120] |
+                      gsub("\\|"; "\\|") | render_code_span) |
+                    if length == 0 then "" else "<br>" + join("<br>") end) +
+                  (if $has_legacy_scalar_job_name and $entry.key == 0 then
+                    "<br>" + ($cause.test_name | sanitize_single_line | .[0:120] |
+                      gsub("\\|"; "\\|") | render_code_span)
+                  else
+                    ""
+                  end)
+                ) +
+                  (if $remaining_job_count > 0 then
+                    ["` \($remaining_job_count) more jobs `"]
+                  else [] end) |
+                join("<br>")) +
+                (if ($tests | length) > ($visible_tests | length) then
+                  "<br>` \(($tests | length) - ($visible_tests | length)) more tests in the linked run `"
+                else "" end)
+            elif $format == "tests-display" then
+              if $has_explicit_tests then
+                ([$visible_tests[] |
+                    .name | sanitize_single_line | .[0:120] | render_code_span] +
+                  (if ($tests | length) > ($visible_tests | length) then
+                    ["` \(($tests | length) - ($visible_tests | length)) more tests in the linked run `"]
+                  else [] end)) |
+                join("<br>")
+              else
+                ""
+              end
             else
               error("unsupported cause job name format")
             end
         end
       ' "$CAUSE_FILE"
+    ;;
+  # Produce the issue-facing view of one occurrence. First publication uses the
+  # validated current evidence; replay uses the immutable stored occurrence so
+  # a partial issue failure cannot rewrite history. The workflow consumes the
+  # returned display labels, date, URL, context, and refresh state when building
+  # the managed occurrence row and issue heading.
+  publication-occurrence)
+    CAUSE_FILE="${2:?cause file is required}"
+    STORED_CAUSE_FILE="${3:?stored cause file is required}"
+    TRUSTED_FAILED_JOBS_FILE="${4:?trusted failed jobs file is required}"
+    RUN_ID="${5:?run ID is required}"
+    RUN_ATTEMPT="${6:?run attempt is required}"
+    RUN_URL="${7:?run URL is required}"
+    ANALYZED_AT="${8:?analysis timestamp is required}"
+    RUN_SCOPE="${9:?run scope is required}"
+    PR_NUMBER="${10:?PR number is required}"
+
+    SOURCE_CAUSE_FILE="$CAUSE_FILE"
+    TEMP_CAUSE_FILE=""
+    STORED_OCCURRENCE_FILE=""
+    REFRESH_REQUIRED="false"
+    OCCURRENCE_URL="${RUN_URL}/attempts/${RUN_ATTEMPT}"
+    OCCURRENCE_DATE="${ANALYZED_AT%%T*}"
+    if [ "$RUN_SCOPE" = "main" ]; then
+      OCCURRENCE_CONTEXT="main"
+    elif [ "$PR_NUMBER" = "0" ]; then
+      OCCURRENCE_CONTEXT="unavailable"
+    else
+      OCCURRENCE_CONTEXT="#${PR_NUMBER}"
+    fi
+
+    # Memory is pushed before issue side effects. A replay must therefore render
+    # from the immutable stored occurrence instead of changed analyzer output.
+    # Historical occurrences can lack numeric job IDs, so stored tests provide
+    # the flaky fallback while older non-flaky records keep current job rendering.
+    if [ -f "$STORED_CAUSE_FILE" ]; then
+      STORED_OCCURRENCE_FILE=$(mktemp)
+      jq \
+        --argjson run_id "$RUN_ID" \
+        --argjson run_attempt "$RUN_ATTEMPT" '
+          first(
+            .occurrences[]? |
+            select(
+              .run_id == $run_id and
+              (if has("run_attempt") then .run_attempt else 1 end) == $run_attempt
+            )
+          ) // empty
+        ' "$STORED_CAUSE_FILE" > "$STORED_OCCURRENCE_FILE"
+      # This branch is replay recovery: preserve the published date, link,
+      # context, jobs, and tests from the matching stored attempt. It adapts
+      # both current structured evidence and legacy job labels to the shared
+      # renderer without letting a later analyzer run revise occurrence history.
+      if [ -s "$STORED_OCCURRENCE_FILE" ]; then
+        REFRESH_REQUIRED=$(jq -r '.issue_row_needs_refresh == true' "$STORED_OCCURRENCE_FILE")
+        OCCURRENCE_DATE=$(jq -er '(.observed_at // .occurred_at) | split("T")[0]' "$STORED_OCCURRENCE_FILE")
+        STORED_RUN_URL=$(jq -er '.run_url' "$STORED_OCCURRENCE_FILE")
+        STORED_RUN_BASE_URL="https://github.com/${GITHUB_REPOSITORY:-microsoft/aspire}/actions/runs/${RUN_ID}"
+        STORED_RUN_ATTEMPT_URL="${STORED_RUN_BASE_URL}/attempts/${RUN_ATTEMPT}"
+        if [ "$STORED_RUN_URL" = "$STORED_RUN_ATTEMPT_URL" ] ||
+           { [ "$RUN_ATTEMPT" = "1" ] && [ "$STORED_RUN_URL" = "$STORED_RUN_BASE_URL" ]; }; then
+          OCCURRENCE_URL="$STORED_RUN_ATTEMPT_URL"
+        else
+          echo "::error::Stored occurrence URL does not identify the selected run attempt" >&2
+          rm -f "$STORED_OCCURRENCE_FILE"
+          return 1
+        fi
+        STORED_PR_NUMBER=$(jq -r '
+          if ((.pr_number | type) == "number") and
+             (.pr_number > 0) and
+             (.pr_number == (.pr_number | floor)) then
+            .pr_number | floor
+          else
+            0
+          end
+        ' "$STORED_OCCURRENCE_FILE")
+        if [ "$RUN_SCOPE" = "main" ]; then
+          OCCURRENCE_CONTEXT="main"
+        elif [ "$STORED_PR_NUMBER" -gt 0 ]; then
+          OCCURRENCE_CONTEXT="#${STORED_PR_NUMBER}"
+        else
+          OCCURRENCE_CONTEXT="unavailable"
+        fi
+        if jq -e '
+            ((.job_ids | type) == "array") or
+            ((.tests | type) == "array")
+          ' "$STORED_OCCURRENCE_FILE" >/dev/null; then
+          # Reconstruct the minimum cause-shaped input needed by the shared
+          # renderer. This keeps all publication surfaces on one formatting
+          # path without copying mutable cause-level metadata into the replay.
+          TEMP_CAUSE_FILE=$(mktemp)
+          jq -n \
+            --arg id "$(jq -r '.id' "$STORED_CAUSE_FILE")" \
+            --arg type "$(jq -r '.type' "$STORED_CAUSE_FILE")" \
+            --slurpfile occurrences "$STORED_OCCURRENCE_FILE" '
+              ($occurrences[0]) as $occurrence |
+              {
+                id: $id,
+                type: $type,
+                job_ids: (
+                  if ($occurrence.job_ids | type) == "array" then
+                    $occurrence.job_ids
+                  else
+                    reduce $occurrence.tests[] as $test
+                      ([]; if index($test.job_id) == null then
+                        . + [$test.job_id]
+                      else
+                        .
+                      end)
+                  end
+                )
+              } +
+              (if ($occurrence.tests | type) == "array" then
+                {tests: $occurrence.tests}
+              else
+                {}
+              end) +
+              # Legacy enrichment keeps a historical grouped label separate
+              # from the authenticated job/test evidence. Persisting this
+              # choice lets later issue recreation reproduce the same display.
+              (if (($occurrence.issue_uses_stored_job_label == true) or
+                   ($occurrence.issue_row_needs_refresh == true)) and
+                  (($occurrence.job | type) == "string") and
+                  (($occurrence.job | length) > 0) then
+                {job_names: [$occurrence.job]}
+              else
+                {}
+              end)
+            ' > "$TEMP_CAUSE_FILE"
+          SOURCE_CAUSE_FILE="$TEMP_CAUSE_FILE"
+        elif jq -e '(.job | type) == "string" and (.job | length) > 0' \
+            "$STORED_OCCURRENCE_FILE" >/dev/null; then
+          TEMP_CAUSE_FILE=$(mktemp)
+          jq -n \
+            --arg id "$(jq -r '.id' "$STORED_CAUSE_FILE")" \
+            --arg type "$(jq -r '.type' "$STORED_CAUSE_FILE")" \
+            --arg job "$(jq -r '.job' "$STORED_OCCURRENCE_FILE")" '
+              {
+                id: $id,
+                type: $type,
+                # Legacy job labels can contain comma-joined display names.
+                # Keep the stored label intact rather than inventing job IDs.
+                job_names: [$job]
+              }
+            ' > "$TEMP_CAUSE_FILE"
+          SOURCE_CAUSE_FILE="$TEMP_CAUSE_FILE"
+        fi
+      fi
+    fi
+
+    JOBS_DISPLAY=$(bash "$0" cause-job-names \
+      "$SOURCE_CAUSE_FILE" "$TRUSTED_FAILED_JOBS_FILE" display)
+    JOBS_TABLE=$(bash "$0" cause-job-names \
+      "$SOURCE_CAUSE_FILE" "$TRUSTED_FAILED_JOBS_FILE" table)
+    TESTS_DISPLAY=$(bash "$0" cause-job-names \
+      "$SOURCE_CAUSE_FILE" "$TRUSTED_FAILED_JOBS_FILE" tests-display)
+    rm -f "${TEMP_CAUSE_FILE:-}" "${STORED_OCCURRENCE_FILE:-}"
+    jq -n \
+      --arg jobs_display "$JOBS_DISPLAY" \
+      --arg jobs_table "$JOBS_TABLE" \
+      --arg tests_display "$TESTS_DISPLAY" \
+      --arg occurrence_date "$OCCURRENCE_DATE" \
+      --arg occurrence_url "$OCCURRENCE_URL" \
+      --arg occurrence_context "$OCCURRENCE_CONTEXT" \
+      --argjson refresh_required "$REFRESH_REQUIRED" '
+        {
+          jobs_display: $jobs_display,
+          jobs_table: $jobs_table,
+          tests_display: $tests_display,
+          occurrence_date: $occurrence_date,
+          occurrence_url: $occurrence_url,
+          occurrence_context: $occurrence_context,
+          refresh_required: $refresh_required
+        }
+      '
+    ;;
+  # Remove issue_row_needs_refresh from the matching stored occurrence after
+  # its managed issue row has been updated. If publication fails, leaving the
+  # marker tells replay to retry; markers for other run attempts remain.
+  clear-occurrence-refresh)
+    CAUSE_FILE="${2:?cause file is required}"
+    RUN_ID="${3:?run ID is required}"
+    RUN_ATTEMPT="${4:?run attempt is required}"
+    OUTPUT_FILE="${5:?output file is required}"
+    jq \
+      --argjson run_id "$RUN_ID" \
+      --argjson run_attempt "$RUN_ATTEMPT" '
+        .occurrences |= map(
+          if .run_id == $run_id and
+             (if has("run_attempt") then .run_attempt else 1 end) == $run_attempt then
+            del(.issue_row_needs_refresh)
+          else
+            .
+          end
+        )
+      ' "$CAUSE_FILE" > "$OUTPUT_FILE"
     ;;
   add-occurrence)
     CAUSE_FILE="${2:?cause file is required}"
@@ -1191,15 +1977,39 @@ case "$COMMAND" in
     RUN_URL="${4:?run URL is required}"
     JOB_NAMES="${5:?job names are required}"
     ANALYZED_AT="${6:?analysis timestamp is required}"
+    RUN_SCOPE="${7:?run scope is required}"
     PR_NUMBER=$(trusted_pr_number)
+    RUN_ATTEMPT=$(jq -er '
+      (if has("run_attempt") then .run_attempt else 1 end) |
+      select(type == "number" and . > 0 and . == floor)
+    ' "$RUN_CONTEXT_FILE")
 
+    # Store current job/test observations on the occurrence, not on the stable
+    # cause identity. The run attempt keeps retries of the same run distinct.
     jq \
       --argjson run_id "$RUN_ID" \
+      --argjson run_attempt "$RUN_ATTEMPT" \
       --arg run_url "$RUN_URL" \
       --arg job "$JOB_NAMES" \
       --argjson pr_number "$PR_NUMBER" \
       --arg observed_at "$ANALYZED_AT" \
-      '. + {occurrences: [{run_id: $run_id, run_url: $run_url, job: $job, pr_number: $pr_number, observed_at: $observed_at}]}' \
+      --arg run_scope "$RUN_SCOPE" \
+      '. as $cause |
+       (if (.job_ids | type) == "array" then
+          {job_ids: .job_ids}
+        else {} end) as $job_details |
+       (if .type == "flaky-test" then
+          {tests: (if (.tests | type) == "array" then .tests
+                   elif (.test_name | type) == "string" and (.job_ids | type) == "array" then
+                     [.job_ids[] | {name: $cause.test_name, job_id: .}]
+                   else [] end)}
+        else {} end) as $test_details |
+       . + {occurrences: ([
+         {run_id: $run_id, run_attempt: $run_attempt,
+           run_url: ($run_url + "/attempts/" + ($run_attempt | tostring)),
+           job: $job, pr_number: $pr_number, observed_at: $observed_at,
+           run_scope: $run_scope} + $job_details + $test_details
+       ])}' \
       "$CAUSE_FILE"
     ;;
   merge-cause)
@@ -1207,13 +2017,89 @@ case "$COMMAND" in
     EXISTING_CAUSE_FILE="${3:?existing cause file is required}"
     OUTPUT_FILE="${4:?output file is required}"
 
+    # Occurrences are immutable once they have an explicit run attempt. Only a
+    # legacy run-only record may be enriched with newly authenticated attempt-1
+    # evidence, while preserving its original observation time and descriptive
+    # fields so historical replay remains faithful.
     jq -s '
+      def occurrence_attempt:
+        if has("run_attempt") then
+          if ((.run_attempt | type) == "number") and
+             (.run_attempt > 0) and
+             (.run_attempt == (.run_attempt | floor)) then
+            .run_attempt
+          else
+            error("stored occurrence has invalid run attempt")
+          end
+        else
+          1
+        end;
       .[0] as $new | .[1] as $existing |
-      ($existing | del(.job_ids, .job_names)) * {
+      (($existing.occurrences // []) | map(
+        . as $occurrence |
+        ($occurrence | occurrence_attempt) as $validated_attempt |
+        .
+      )) as $existing_occurrences |
+      (($new.occurrences // []) | map(
+        . as $occurrence |
+        ($occurrence | occurrence_attempt) as $validated_attempt |
+        .
+      )) as $incoming_occurrences |
+      ($existing | del(.job_ids, .job_names, .tests)) * {
         occurrences: (
-          [($existing.occurrences // [])[], ($new.occurrences // [])[]]
-          | unique_by(.run_id)
-          | sort_by(.observed_at)
+          reduce ($incoming_occurrences[]) as $incoming
+            ($existing_occurrences;
+              ([.[] |
+                (.run_id == $incoming.run_id) and
+                ((. | occurrence_attempt) == ($incoming | occurrence_attempt))
+              ] | index(true)) as $index |
+              if $index == null then
+                . + [$incoming]
+              elif ((.[$index].run_attempt | type) == "number") and
+                   (.[$index].run_attempt > 0) and
+                   (.[$index].run_attempt == (.[$index].run_attempt | floor)) then
+                .
+              else
+                .[$index] = (
+                  .[$index] as $stored |
+                  ($stored * $incoming) |
+                  .observed_at = ($stored.observed_at // $stored.occurred_at // $incoming.observed_at) |
+                  .pr_number = (
+                    if (($stored.pr_number | type) == "number") and
+                       ($stored.pr_number >= 0) and
+                       ($stored.pr_number == ($stored.pr_number | floor)) then
+                      $stored.pr_number
+                    else
+                      .pr_number
+                    end
+                  ) |
+                  .run_scope = (
+                    if $stored.run_scope == "main" or
+                       $stored.run_scope == "pull-request" then
+                      $stored.run_scope
+                    else
+                      .run_scope
+                    end
+                  ) |
+                  if (($stored.job | type) == "string") and
+                     (($stored.job | length) > 0) then
+                    .job = $stored.job |
+                    if $existing.type != "flaky-test" then
+                      del(.job_ids)
+                    else
+                      .
+                    end
+                  else
+                    .
+                  end |
+                  if (($incoming.tests | type) == "array") then
+                    .issue_row_needs_refresh = true
+                  else
+                    .
+                  end
+                )
+              end)
+          | sort_by(.observed_at // .occurred_at)
         )
       }
     ' "$NEW_CAUSE_FILE" "$EXISTING_CAUSE_FILE" > "$OUTPUT_FILE"
@@ -1221,15 +2107,23 @@ case "$COMMAND" in
   render-prior-cause)
     CAUSE_FILE="${2:?cause file is required}"
 
-    sanitize_document cause "$CAUSE_FILE" /dev/stdout | jq -c '{
+    # Recent verified tests help the analyzer recognize a recurring mechanism,
+    # but remain bounded occurrence evidence rather than stable cause identity.
+    sanitize_document cause "$CAUSE_FILE" /dev/stdout | jq -c "$JQ_SANITIZE_DEFS"'
+    {
       id,
       type,
       title: ((.title // .id // "") | .[0:238]),
       test_name: (if .test_name then .test_name[0:500] else null end),
+      recent_tests: [(.occurrences // [] | sort_by(.observed_at // .occurred_at) | last | .tests // [])[0:20][] |
+        {name: (.name | sanitize_single_line | .[0:500]), job_id}],
       issue_url: (.issue_url // null),
       error_pattern: ((.error_pattern // "") | .[0:500]),
       occurrence_count: ((.occurrences // []) | length),
-      last_seen: ((.occurrences // [] | sort_by(.observed_at) | last | .observed_at) // null)
+      last_seen: ((.occurrences // [] |
+        sort_by(.observed_at // .occurred_at) |
+        last |
+        (.observed_at // .occurred_at)) // null)
     }' | sed 's/^/    /'
     ;;
   write-run-summary)

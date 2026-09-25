@@ -4,6 +4,7 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Text;
 using System.Text.Json;
 using Aspire.TestUtilities;
 using Xunit;
@@ -839,6 +840,205 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorAcceptsThreeTestsSharingOneCauseAcrossJobs()
+    {
+        await WriteValidationFixtureAsync(
+            """
+            {"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},
+             "failed_jobs":[{"id":1,"classification":"flaky-test"},{"id":2,"classification":"flaky-test"}],
+             "failed_tests":[
+               {"name":"Tests.First","job":"Windows","error":"timeout","classification":"flaky","reason":"Same timeout"},
+               {"name":"Tests.Second","job":"Windows","error":"timeout","classification":"flaky","reason":"Same timeout"},
+               {"name":"Tests.Third","job":"Linux","error":"timeout","classification":"flaky","reason":"Same timeout"}],
+             "causes":["browser-timeout"]}
+            """,
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":1,"name":"Windows"},{"id":2,"name":"Linux"}]""",
+            "browser-timeout.json",
+            """
+            {"id":"browser-timeout","type":"flaky-test","title":"Browser timeout","error_pattern":"timeout",
+             "job_ids":[1,2],"tests":[{"name":"Tests.First","job_id":1},{"name":"Tests.Second","job_id":1},{"name":"Tests.Third","job_id":2}]}
+            """);
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.True(result.ExitCode == 0, result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorTracksGroupedFlakyTestsWithoutCreatingACodeIssueCause()
+    {
+        await WriteValidationFixtureAsync(
+            """
+            {"run_id":123,"run_scope":"pull-request","verdict":"mixed","pr":{"number":42},
+             "failed_jobs":[{"id":1,"classification":"code-issue"},{"id":2,"classification":"flaky-test"}],
+             "failed_tests":[
+               {"name":"Tests.Deterministic","job":"Build","error":"compiler error","classification":"code-issue","reason":"PR change"},
+               {"name":"Tests.First","job":"Windows","error":"timeout","classification":"flaky","reason":"Same timeout"},
+               {"name":"Tests.Second","job":"Windows","error":"timeout","classification":"flaky","reason":"Same timeout"}],
+             "causes":["browser-timeout"]}
+            """,
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":1,"name":"Build"},{"id":2,"name":"Windows"}]""",
+            "browser-timeout.json",
+            """{"id":"browser-timeout","type":"flaky-test","title":"Browser timeout","error_pattern":"timeout","job_ids":[2],"tests":[{"name":"Tests.First","job_id":2},{"name":"Tests.Second","job_id":2}]}""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.True(result.ExitCode == 0, result.Output);
+    }
+
+    [Theory]
+    [InlineData("""[{"name":"Tests.First","job_id":1},{"name":"Tests.First","job_id":1}]""")]
+    [InlineData("""[{"name":"Tests.First","job_id":2}]""")]
+    [InlineData("""[{"name":"Tests.First","job_id":1},{"name":"Tests.Invented","job_id":1}]""")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsDuplicateOrUntrustedCauseObservations(string tests)
+    {
+        await WriteValidationFixtureAsync(
+            """
+            {"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},
+             "failed_jobs":[{"id":1,"classification":"flaky-test"},{"id":2,"classification":"flaky-test"}],
+             "failed_tests":[{"name":"Tests.First","job":"Windows","error":"timeout","classification":"flaky","reason":"Intermittent"}],
+             "causes":["browser-timeout"]}
+            """,
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":1,"name":"Windows"},{"id":2,"name":"Linux"}]""",
+            "browser-timeout.json",
+            $$"""{"id":"browser-timeout","type":"flaky-test","title":"Browser timeout","error_pattern":"timeout","job_ids":[1,2],"tests":{{tests}}}""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsMixedLegacyAndStructuredTestIdentity()
+    {
+        await WriteValidationFixtureAsync(
+            """
+            {"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},
+             "failed_jobs":[{"id":1,"classification":"flaky-test"}],
+             "failed_tests":[{"name":"Tests.First","job":"Windows","error":"timeout","classification":"flaky","reason":"Intermittent"}],
+             "causes":["browser-timeout"]}
+            """,
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":1,"name":"Windows"}]""",
+            "browser-timeout.json",
+            """
+            {"id":"browser-timeout","type":"flaky-test","title":"Browser timeout","error_pattern":"timeout",
+             "job_ids":[1],"test_name":"Tests.First","tests":[{"name":"Tests.First","job_id":1}]}
+            """);
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Cause browser-timeout.json contains unsupported or publisher-owned fields",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsTwoCausesClaimingTheSameTestAndJob()
+    {
+        await WriteValidationFixtureAsync(
+            """
+            {"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},
+             "failed_jobs":[{"id":1,"classification":"flaky-test"}],
+             "failed_tests":[{"name":"Tests.First","job":"Windows","error":"timeout","classification":"flaky","reason":"Intermittent"}],
+             "causes":["one","two"]}
+            """,
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":1,"name":"Windows"}]""",
+            new Dictionary<string, string>
+            {
+                ["one.json"] = """{"id":"one","type":"flaky-test","title":"One","error_pattern":"timeout","job_ids":[1],"tests":[{"name":"Tests.First","job_id":1}]}""",
+                ["two.json"] = """{"id":"two","type":"flaky-test","title":"Two","error_pattern":"timeout","job_ids":[1],"tests":[{"name":"Tests.First","job_id":1}]}""",
+            });
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("exactly one cause", result.Output, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Tests.First / Tests.Second")]
+    [InlineData("")]
+    [InlineData("Windows")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorAcceptsVerifiedObservationsForLegacyCause(string historicalTestName)
+    {
+        await WriteValidationFixtureAsync(
+            """
+            {"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},
+             "failed_jobs":[{"id":1,"classification":"flaky-test"}],
+             "failed_tests":[{"name":"Tests.First","job":"Windows","error":"timeout","classification":"flaky","reason":"Intermittent"}],
+             "causes":["browser-timeout"]}
+            """,
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":1,"name":"Windows"}]""",
+            "browser-timeout.json",
+            """{"id":"browser-timeout","type":"flaky-test","title":"Browser timeout","error_pattern":"timeout","job_ids":[1],"tests":[{"name":"Tests.First","job_id":1}]}""");
+        var priorCausesDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "ci-failure-data", "prior-causes")).FullName;
+        await File.WriteAllTextAsync(
+            Path.Combine(priorCausesDirectory, "browser-timeout.json"),
+            JsonSerializer.Serialize(new
+            {
+                id = "browser-timeout",
+                type = "flaky-test",
+                title = "Stored failure",
+                test_name = historicalTestName,
+                error_pattern = "timeout",
+                issue_url = "https://github.com/microsoft/aspire/issues/42",
+            }));
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.True(result.ExitCode == 0, result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorLeavesExistingCauseDiagnosticCompatibilityToSemanticClassification()
+    {
+        await WriteValidationFixtureAsync(
+            """
+            {"run_id":123,"run_scope":"pull-request","verdict":"flaky-test","pr":{"number":42},
+             "failed_jobs":[{"id":2,"classification":"flaky-test"}],
+             "failed_tests":[{"name":"Tests.NewShard","job":"Linux","error":"Browser endpoint timed out after 60 seconds","classification":"flaky","reason":"Intermittent"}],
+             "causes":["browser-timeout"]}
+            """,
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":2,"name":"Linux"}]""",
+            "browser-timeout.json",
+            """{"id":"browser-timeout","type":"flaky-test","title":"Browser debugger timeout","error_pattern":"Browser endpoint timed out after 60 seconds","job_ids":[2],"tests":[{"name":"Tests.NewShard","job_id":2}]}""");
+        var priorCausesDirectory = Directory.CreateDirectory(
+            Path.Combine(_workspace.Path, "ci-failure-data", "prior-causes")).FullName;
+        await File.WriteAllTextAsync(
+            Path.Combine(priorCausesDirectory, "browser-timeout.json"),
+            """
+            {
+              "id": "browser-timeout",
+              "type": "flaky-test",
+              "title": "Browser debugger timeout",
+              "test_name": "Tests.OldShard",
+              "error_pattern": "Browser endpoint timed out after 30 seconds",
+              "issue_url": "https://github.com/microsoft/aspire/issues/42"
+            }
+            """);
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.True(result.ExitCode == 0, result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
     public async Task AnalysisValidatorRejectsFailedTestWithoutTrustedEvidence()
     {
         await WriteValidationFixtureAsync(
@@ -912,14 +1112,14 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
-            "::error::Every flaky test and job must be covered by a matching cause",
+            "::error::Every flaky test and job must be covered by exactly one cause",
             result.Output,
             StringComparison.Ordinal);
     }
 
     [Fact]
     [RequiresTools(["bash", "jq"])]
-    public async Task AnalysisValidatorAcceptsCompleteFlakyCoverageWithDuplicateJobNames()
+    public async Task AnalysisValidatorRejectsAmbiguousFailedTestJobNames()
     {
         await WriteValidationFixtureAsync(
             """
@@ -942,7 +1142,36 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
 
-        Assert.Equal(0, result.ExitCode);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Analysis failed_tests do not match trusted test failure evidence",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsAmbiguousCauseObservationOnCodeIssueJob()
+    {
+        await WriteValidationFixtureAsync(
+            """
+            {"run_id":123,"run_scope":"pull-request","verdict":"mixed","pr":{"number":42},
+             "failed_jobs":[{"id":1,"classification":"code-issue"},{"id":2,"classification":"code-issue"}],
+             "failed_tests":[{"name":"Tests.Flaky","job":"Tests","error":"timeout","classification":"flaky","reason":"Intermittent"}],
+             "causes":["browser-timeout"]}
+            """,
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":1,"name":"Tests"},{"id":2,"name":"Tests"}]""",
+            "browser-timeout.json",
+            """{"id":"browser-timeout","type":"flaky-test","title":"Browser timeout","error_pattern":"timeout","job_ids":[1],"tests":[{"name":"Tests.Flaky","job_id":1}]}""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Analysis failed_tests do not match trusted test failure evidence",
+            result.Output,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1140,7 +1369,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
-            "::error::Flaky-test cause must reference a validated flaky test",
+            "::error::Cause flaky-failure.json references an unknown or incompatible failed job or test",
             result.Output,
             StringComparison.Ordinal);
     }
@@ -1293,6 +1522,68 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "::error::Analysis exceeds the 10-cause publication budget",
             result.Output,
             StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(200, true)]
+    [InlineData(201, false)]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorEnforcesVerifiedObservationBoundary(int observationCount, bool expectedSuccess)
+    {
+        var failedTests = Enumerable.Range(1, observationCount)
+            .Select(index => new
+            {
+                name = $"Tests.Flaky{index:D3}",
+                job = "Tests",
+                error = "Timed out",
+                stack_trace = "at Tests.Flaky",
+                classification = "flaky",
+                reason = "Intermittent",
+            })
+            .ToArray();
+        var observations = failedTests
+            .Select(test => new { test.name, job_id = 123 })
+            .ToArray();
+        await WriteValidationFixtureAsync(
+            JsonSerializer.Serialize(new
+            {
+                run_id = 123,
+                run_scope = "pull-request",
+                verdict = "flaky-test",
+                pr = new { number = 42 },
+                failed_jobs = new[] { new { id = 123, classification = "flaky-test" } },
+                failed_tests = failedTests,
+                causes = new[] { "timeout" },
+            }),
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            "timeout.json",
+            JsonSerializer.Serialize(new
+            {
+                id = "timeout",
+                type = "flaky-test",
+                title = "Timeout",
+                error_pattern = "Timed out",
+                job_ids = new[] { 123 },
+                tests = observations,
+            }));
+
+        var result = await RunValidationScriptAsync(
+            Path.Combine(_workspace.Path, "output.json"),
+            TimeSpan.FromMinutes(2));
+
+        if (expectedSuccess)
+        {
+            Assert.True(result.ExitCode == 0, result.Output);
+        }
+        else
+        {
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains(
+                "::error::Cause timeout.json contains unsupported or publisher-owned fields",
+                result.Output,
+                StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -1640,6 +1931,29 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """[{"id":123,"name":"Tests"}]""",
             "nuget-timeout.json",
             $$"""{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out","job_ids":[123],"{{field}}":"{{value}}"}""");
+
+        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "::error::Cause nuget-timeout.json contains unsupported or publisher-owned fields",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task AnalysisValidatorRejectsStructuredTestsOnInfrastructureCause()
+    {
+        await WriteValidationFixtureAsync(
+            """{"run_id":123,"run_scope":"pull-request","verdict":"transient-infra","pr":{"number":42},"failed_jobs":[{"id":123,"classification":"transient-infra"}],"failed_tests":[],"causes":["nuget-timeout"]}""",
+            """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+            """[{"id":123,"name":"Tests"}]""",
+            "nuget-timeout.json",
+            """
+            {"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out",
+             "job_ids":[123],"tests":[{"name":"Tests.Flaky","job_id":123}]}
+            """);
 
         var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
 
@@ -2350,6 +2664,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "main",
                 "0",
                 "Build",
+                "",
                 "| 2026-08-31 | [123](https://github.com/microsoft/aspire/actions/runs/123) | Build | main |",
                 bodyPath,
                 metadataPath,
@@ -2435,6 +2750,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "main",
                 "0",
                 "Build",
+                "",
                 "| occurrence |",
                 bodyPath,
                 metadataPath,
@@ -2513,6 +2829,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "pull-request",
                 "42",
                 "Tests",
+                "",
                 "| current occurrence |",
                 bodyPath,
                 metadataPath,
@@ -2523,6 +2840,1512 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "Showing 1 most recent of 3 occurrences.",
             await File.ReadAllTextAsync(bodyPath),
             StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Tests.First / Tests.Second")]
+    [InlineData("")]
+    [InlineData("Windows")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueRendererShowsVerifiedTestsRatherThanLegacyDisplayName(string legacyTestName)
+    {
+        var causePath = Path.Combine(_workspace.Path, "flaky-failure.json");
+        var bodyPath = Path.Combine(_workspace.Path, "issue-body.md");
+        var metadataPath = Path.Combine(_workspace.Path, "issue-metadata.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            JsonSerializer.Serialize(new
+            {
+                id = "flaky-failure",
+                type = "flaky-test",
+                title = "Browser timeout",
+                test_name = legacyTestName,
+                error_pattern = "timeout",
+                occurrences = new[]
+                {
+                    new
+                    {
+                        run_id = 123,
+                        tests = new[]
+                        {
+                            new { name = "Tests.First", job_id = 1 },
+                            new { name = "Tests.Second", job_id = 1 },
+                        },
+                    },
+                },
+            }));
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
+            [
+                causePath,
+                "unused-run-context.json",
+                "unused-last-success.json",
+                "unused-triggering-merge.json",
+                "unused-history-status.json",
+                "https://github.com/microsoft/aspire/actions/runs/123",
+                "pull-request",
+                "42",
+                "Windows",
+                "` Tests.First `<br>` Tests.Second `",
+                "| current occurrence |",
+                bodyPath,
+                metadataPath,
+            ]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var body = await File.ReadAllTextAsync(bodyPath);
+        Assert.Contains("` Tests.First `", body, StringComparison.Ordinal);
+        Assert.Contains("` Tests.Second `", body, StringComparison.Ordinal);
+        Assert.DoesNotContain($"` {legacyTestName} `", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CauseJobTableListsVerifiedTestsUnderTrustedJobs()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """{"id":"browser-timeout","type":"flaky-test","job_ids":[1,2],"tests":[{"name":"Tests.First|case","job_id":1},{"name":"Tests.Second","job_id":1},{"name":"Tests.Third","job_id":2}]}""");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """[{"id":1,"name":"Windows"},{"id":2,"name":"Linux"}]""");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["cause-job-names", causePath, jobsPath, "table"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(
+            "` Windows `<br>` Tests.First\\|case `<br>` Tests.Second `<br>` Linux `<br>` Tests.Third `\n",
+            result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CauseJobTableListsVerifiedScalarTestUnderEachTrustedJob()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """{"id":"browser-timeout","type":"flaky-test","job_ids":[1,2],"test_name":"Tests.Flaky"}""");
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """[{"id":1,"name":"Windows"},{"id":2,"name":"Linux"}]""");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["cause-job-names", causePath, jobsPath, "table"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(
+            "` Windows `<br>` Tests.Flaky `<br>` Linux `<br>` Tests.Flaky `\n",
+            result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CauseJobTableBoundsLargeGroupsWithoutLosingOccurrenceEvidence()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            JsonSerializer.Serialize(new
+            {
+                id = "timeout",
+                type = "flaky-test",
+                job_ids = new[] { 1 },
+                tests = Enumerable.Range(1, 21).Select(index => new { name = $"Tests.{index}", job_id = 1 }),
+            }));
+        await File.WriteAllTextAsync(jobsPath, """[{"id":1,"name":"Windows"}]""");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["cause-job-names", causePath, jobsPath, "table"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Contains("` Tests.20 `", result.Output, StringComparison.Ordinal);
+        Assert.Contains("` 1 more tests in the linked run `", result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("` Tests.21 `", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CauseJobTableFiltersTestsToVisibleJobsBeforeApplyingTheDisplayLimit()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        var jobs = Enumerable.Range(1, 21)
+            .Select(index => new { id = index, name = $"Job{index:D3}" })
+            .ToArray();
+        var tests = Enumerable.Range(1, 20)
+            .Select(index => new { name = $"Hidden{index:D3}", job_id = 21 })
+            .Concat(Enumerable.Range(1, 20)
+                .Select(index => new { name = $"Visible{index:D3}", job_id = index }))
+            .ToArray();
+        await File.WriteAllTextAsync(
+            causePath,
+            JsonSerializer.Serialize(new
+            {
+                id = "large-group",
+                type = "flaky-test",
+                job_ids = jobs.Select(job => job.id),
+                tests,
+            }));
+        await File.WriteAllTextAsync(jobsPath, JsonSerializer.Serialize(jobs));
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["cause-job-names", causePath, jobsPath, "table"]);
+        var testsDisplay = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["cause-job-names", causePath, jobsPath, "tests-display"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.True(testsDisplay.ExitCode == 0, testsDisplay.Output);
+        Assert.Contains("` Job001 `<br>` Visible001 `", result.Output, StringComparison.Ordinal);
+        Assert.Contains("` Job020 `<br>` Visible020 `", result.Output, StringComparison.Ordinal);
+        Assert.Contains("` 1 more jobs `", result.Output, StringComparison.Ordinal);
+        Assert.Contains("` 20 more tests in the linked run `", result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Hidden001", result.Output, StringComparison.Ordinal);
+        Assert.Contains("` Visible001 `", testsDisplay.Output, StringComparison.Ordinal);
+        Assert.Contains("` Visible020 `", testsDisplay.Output, StringComparison.Ordinal);
+        Assert.Contains("` 20 more tests in the linked run `", testsDisplay.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Hidden001", testsDisplay.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueHeadingUsesSameVisibleTestsAsPublicationOccurrence()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var storedCausePath = Path.Combine(_workspace.Path, "stored-cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        var bodyPath = Path.Combine(_workspace.Path, "issue-body.md");
+        var metadataPath = Path.Combine(_workspace.Path, "issue-metadata.json");
+        var jobs = Enumerable.Range(1, 21)
+            .Select(index => new { id = index, name = $"Job{index:D3}" })
+            .ToArray();
+        var tests = Enumerable.Range(1, 20)
+            .Select(index => new { name = $"Hidden{index:D3}", job_id = 21 })
+            .Concat(Enumerable.Range(1, 20)
+                .Select(index => new { name = $"Visible{index:D3}", job_id = index }))
+            .ToArray();
+        await File.WriteAllTextAsync(
+            causePath,
+            JsonSerializer.Serialize(new
+            {
+                id = "large-group",
+                type = "flaky-test",
+                title = "Grouped flaky tests",
+                error_pattern = "timeout",
+                job_ids = jobs.Select(job => job.id),
+                tests,
+            }));
+        await File.WriteAllTextAsync(
+            storedCausePath,
+            JsonSerializer.Serialize(new
+            {
+                id = "large-group",
+                type = "flaky-test",
+                title = "Grouped flaky tests",
+                error_pattern = "timeout",
+                occurrences = new[]
+                {
+                    new
+                    {
+                        run_id = 123,
+                        run_attempt = 1,
+                        run_url = "https://github.com/microsoft/aspire/actions/runs/123",
+                        observed_at = "2026-08-31T12:00:00Z",
+                        pr_number = 42,
+                        job_ids = jobs.Select(job => job.id),
+                        tests,
+                    },
+                },
+            }));
+        await File.WriteAllTextAsync(jobsPath, JsonSerializer.Serialize(jobs));
+
+        var publicationResult = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "publication-occurrence",
+                causePath,
+                storedCausePath,
+                jobsPath,
+                "123",
+                "1",
+                "https://github.com/microsoft/aspire/actions/runs/123",
+                "2026-08-31T12:00:00Z",
+                "pull-request",
+                "42",
+            ]);
+
+        Assert.True(publicationResult.ExitCode == 0, publicationResult.Output);
+        using var publication = JsonDocument.Parse(publicationResult.Output);
+        var jobsDisplay = publication.RootElement.GetProperty("jobs_display").GetString()!;
+        var jobsTable = publication.RootElement.GetProperty("jobs_table").GetString()!;
+        var testsDisplay = publication.RootElement.GetProperty("tests_display").GetString()!;
+        var issueResult = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, IssueScriptRelativePath),
+            [
+                storedCausePath,
+                "unused-run-context.json",
+                "unused-last-success.json",
+                "unused-triggering-merge.json",
+                "unused-history-status.json",
+                "https://github.com/microsoft/aspire/actions/runs/123",
+                "pull-request",
+                "42",
+                jobsDisplay,
+                testsDisplay,
+                $"| 2026-08-31 | [123](https://github.com/microsoft/aspire/actions/runs/123) | {jobsTable} | #42 |",
+                bodyPath,
+                metadataPath,
+            ]);
+
+        Assert.True(issueResult.ExitCode == 0, issueResult.Output);
+        var body = await File.ReadAllTextAsync(bodyPath);
+        Assert.Contains("Build error leg or test failing:", body, StringComparison.Ordinal);
+        Assert.Equal(2, body.Split("Visible001", StringSplitOptions.None).Length - 1);
+        Assert.Equal(2, body.Split("Visible020", StringSplitOptions.None).Length - 1);
+        Assert.Contains("` 20 more tests in the linked run `", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Hidden001", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationOccurrenceUsesExactCurrentAttemptUrl()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var storedCausePath = Path.Combine(_workspace.Path, "missing-stored-cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """{"id":"runner-timeout","type":"infra-failure","job_ids":[456]}""");
+        await File.WriteAllTextAsync(jobsPath, """[{"id":456,"name":"Tests"}]""");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "publication-occurrence",
+                causePath,
+                storedCausePath,
+                jobsPath,
+                "123",
+                "1",
+                "https://github.com/microsoft/aspire/actions/runs/123",
+                "2026-09-23T12:00:00Z",
+                "main",
+                "42",
+            ]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var output = JsonDocument.Parse(result.Output);
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/actions/runs/123/attempts/1",
+            output.RootElement.GetProperty("occurrence_url").GetString());
+        Assert.Equal("main", output.RootElement.GetProperty("occurrence_context").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationOccurrenceUsesStoredModernAttemptEvidenceOnReplay()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var storedCausePath = Path.Combine(_workspace.Path, "stored-cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "job_ids":[456],
+              "tests":[{"name":"Tests.Replay","job_id":456}]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            storedCausePath,
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":2,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123/attempts/2",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":42,
+                "run_scope":"main",
+                "issue_context":"#42",
+                "tests":[{"name":"Tests.Original","job_id":456}]
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(jobsPath, """[{"id":456,"name":"Tests"}]""");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "publication-occurrence",
+                causePath,
+                storedCausePath,
+                jobsPath,
+                "123",
+                "2",
+                "https://github.com/microsoft/aspire/actions/runs/999",
+                "2026-09-23T12:00:00Z",
+                "main",
+                "0",
+            ]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var output = JsonDocument.Parse(result.Output);
+        Assert.False(output.RootElement.GetProperty("refresh_required").GetBoolean());
+        Assert.Equal("2026-08-01", output.RootElement.GetProperty("occurrence_date").GetString());
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/actions/runs/123/attempts/2",
+            output.RootElement.GetProperty("occurrence_url").GetString());
+        Assert.Equal("main", output.RootElement.GetProperty("occurrence_context").GetString());
+        Assert.Contains("Tests.Original", output.RootElement.GetProperty("jobs_table").GetString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("Tests.Replay", output.RootElement.GetProperty("jobs_table").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationOccurrencePreservesStoredLegacyGroupedLabelOnIssueRecreation()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var storedCausePath = Path.Combine(_workspace.Path, "stored-cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "job_ids":[456,789],
+              "tests":[
+                {"name":"Tests.First","job_id":456},
+                {"name":"Tests.Second","job_id":789}
+              ]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            storedCausePath,
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":42,
+                "job":"Legacy grouped label",
+                "job_ids":[456,789],
+                "tests":[
+                  {"name":"Tests.First","job_id":456},
+                  {"name":"Tests.Second","job_id":789}
+                ],
+                "issue_jobs_table":"` Legacy grouped label `<br>` Tests.First `<br>` Tests.Second `",
+                "issue_uses_stored_job_label":true
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """[{"id":456,"name":"Current Windows"},{"id":789,"name":"Current Linux"}]""");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "publication-occurrence",
+                causePath,
+                storedCausePath,
+                jobsPath,
+                "123",
+                "1",
+                "https://github.com/microsoft/aspire/actions/runs/123",
+                "2026-09-23T12:00:00Z",
+                "pull-request",
+                "42",
+            ]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var output = JsonDocument.Parse(result.Output);
+        Assert.False(output.RootElement.GetProperty("refresh_required").GetBoolean());
+        Assert.Equal(
+            "` Legacy grouped label `",
+            output.RootElement.GetProperty("jobs_display").GetString());
+        Assert.Equal(
+            "` Legacy grouped label `<br>` Tests.First `<br>` Tests.Second `",
+            output.RootElement.GetProperty("jobs_table").GetString());
+        Assert.Equal(
+            "` Tests.First `<br>` Tests.Second `",
+            output.RootElement.GetProperty("tests_display").GetString());
+        Assert.DoesNotContain("Current Windows", result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Current Linux", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationOccurrenceUsesStoredLegacyNonFlakyJobLabelOnReplay()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var storedCausePath = Path.Combine(_workspace.Path, "stored-cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """{"id":"runner-timeout","type":"infra-failure","job_ids":[456]}""");
+        await File.WriteAllTextAsync(
+            storedCausePath,
+            """
+            {
+              "id":"runner-timeout",
+              "type":"infra-failure",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":42,
+                "job":"Stored Legacy Tests"
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(jobsPath, """[{"id":456,"name":"Current Tests"}]""");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "publication-occurrence",
+                causePath,
+                storedCausePath,
+                jobsPath,
+                "123",
+                "1",
+                "https://github.com/microsoft/aspire/actions/runs/123",
+                "2026-09-23T12:00:00Z",
+                "pull-request",
+                "42",
+            ]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var output = JsonDocument.Parse(result.Output);
+        Assert.False(output.RootElement.GetProperty("refresh_required").GetBoolean());
+        Assert.Equal("2026-08-01", output.RootElement.GetProperty("occurrence_date").GetString());
+        Assert.Equal("` Stored Legacy Tests `", output.RootElement.GetProperty("jobs_table").GetString());
+        Assert.Equal(string.Empty, output.RootElement.GetProperty("tests_display").GetString());
+    }
+
+    [Theory]
+    [InlineData("\"42\"", "pull-request", "unavailable")]
+    [InlineData("\"42\"", "main", "main")]
+    [InlineData("42", "main", "main")]
+    [InlineData("1.5", "pull-request", "unavailable")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationOccurrenceFallsBackFromMalformedStoredPrNumber(
+        string prNumberJson,
+        string runScope,
+        string expectedContext)
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var storedCausePath = Path.Combine(_workspace.Path, "stored-cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """{"id":"runner-timeout","type":"infra-failure","job":"Current Tests"}""");
+        await File.WriteAllTextAsync(
+            storedCausePath,
+            $$"""
+            {
+              "id":"runner-timeout",
+              "type":"infra-failure",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":{{prNumberJson}},
+                "job":"Stored Legacy Tests"
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(jobsPath, "[]");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "publication-occurrence",
+                causePath,
+                storedCausePath,
+                jobsPath,
+                "123",
+                "1",
+                "https://github.com/microsoft/aspire/actions/runs/123",
+                "2026-09-23T12:00:00Z",
+                runScope,
+                "42",
+            ]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var output = JsonDocument.Parse(result.Output);
+        Assert.Equal(expectedContext, output.RootElement.GetProperty("occurrence_context").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task OccurrencePublicationBackfillUsesMergedLegacyDateAndJob()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        var outputPath = Path.Combine(_workspace.Path, "updated-cause.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """
+            {
+              "id":"runner-timeout",
+              "type":"infra-failure",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":42,
+                "job":"Stored Legacy Tests",
+                "issue_row_needs_refresh":true
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(jobsPath, "[]");
+
+        var backfill = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "backfill-occurrence-publication",
+                causePath,
+                jobsPath,
+                "123",
+                "1",
+                "pull-request",
+                outputPath,
+            ]);
+
+        Assert.True(backfill.ExitCode == 0, backfill.Output);
+        using var cause = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        var occurrence = cause.RootElement.GetProperty("occurrences")[0];
+        Assert.Equal("` Stored Legacy Tests `", occurrence.GetProperty("issue_jobs_table").GetString());
+        Assert.Equal("#42", occurrence.GetProperty("issue_context").GetString());
+        Assert.Equal("pull-request", occurrence.GetProperty("run_scope").GetString());
+        Assert.True(occurrence.GetProperty("issue_row_needs_refresh").GetBoolean());
+
+        var rows = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["stored-occurrence-rows", outputPath]);
+
+        Assert.True(rows.ExitCode == 0, rows.Output);
+        Assert.Equal(
+            [
+                "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1) | ` Stored Legacy Tests ` | #42 |",
+            ],
+            Assert.IsType<string[]>(JsonSerializer.Deserialize<string[]>(rows.Output)));
+    }
+
+    [Theory]
+    [InlineData("\"42\"", "pull-request", "unavailable")]
+    [InlineData("\"42\"", "main", "main")]
+    [InlineData("1.5", "pull-request", "unavailable")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task OccurrencePublicationBackfillFallsBackFromMalformedLegacyPrNumber(
+        string prNumberJson,
+        string runScope,
+        string expectedContext)
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        var outputPath = Path.Combine(_workspace.Path, "updated-cause.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            $$"""
+            {
+              "id":"runner-timeout",
+              "type":"infra-failure",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":{{prNumberJson}},
+                "job":"Stored Legacy Tests",
+                "issue_row_needs_refresh":true
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(jobsPath, "[]");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "backfill-occurrence-publication",
+                causePath,
+                jobsPath,
+                "123",
+                "1",
+                runScope,
+                outputPath,
+            ]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var cause = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        Assert.Equal(
+            expectedContext,
+            cause.RootElement.GetProperty("occurrences")[0].GetProperty("issue_context").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task OccurrencePublicationBackfillRejectsCachedZeroPrContext()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        var outputPath = Path.Combine(_workspace.Path, "updated-cause.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """
+            {
+              "id":"runner-timeout",
+              "type":"infra-failure",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123/attempts/1",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":0,
+                "run_scope":"pull-request",
+                "job":"Tests",
+                "issue_jobs_table":"` Tests `",
+                "issue_context":"#0"
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(jobsPath, "[]");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "backfill-occurrence-publication",
+                causePath,
+                jobsPath,
+                "123",
+                "1",
+                "pull-request",
+                outputPath,
+            ]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var output = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        Assert.Equal(
+            "unavailable",
+            output.RootElement.GetProperty("occurrences")[0].GetProperty("issue_context").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task OccurrencePublicationBackfillPreservesLegacyScalarTestNameWithNumericJobs()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        var outputPath = Path.Combine(_workspace.Path, "updated-cause.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "test_name":"Tests.Legacy",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":42,
+                "job_ids":[456],
+                "issue_row_needs_refresh":true
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(jobsPath, """[{"id":456,"name":"Tests"}]""");
+
+        var backfill = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "backfill-occurrence-publication",
+                causePath,
+                jobsPath,
+                "123",
+                "1",
+                "pull-request",
+                outputPath,
+            ]);
+
+        Assert.True(backfill.ExitCode == 0, backfill.Output);
+        using var cause = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        var occurrence = cause.RootElement.GetProperty("occurrences")[0];
+        Assert.Equal(
+            "` Tests `<br>` Tests.Legacy `",
+            occurrence.GetProperty("issue_jobs_table").GetString());
+
+        var rows = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["stored-occurrence-rows", outputPath]);
+
+        Assert.True(rows.ExitCode == 0, rows.Output);
+        Assert.Equal(
+            [
+                "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1) | ` Tests `<br>` Tests.Legacy ` | #42 |",
+            ],
+            Assert.IsType<string[]>(JsonSerializer.Deserialize<string[]>(rows.Output)));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task OccurrencePublicationBackfillUsesTrustedJobsForModernStructuredTests()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        var outputPath = Path.Combine(_workspace.Path, "updated-cause.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "test_name":"Tests.Legacy",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":42,
+                "job":"Current grouped summary",
+                "job_ids":[456],
+                "tests":[{"name":"Tests.Structured","job_id":456}]
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(jobsPath, """[{"id":456,"name":"Tests"}]""");
+
+        var backfill = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "backfill-occurrence-publication",
+                causePath,
+                jobsPath,
+                "123",
+                "1",
+                "pull-request",
+                outputPath,
+            ]);
+
+        Assert.True(backfill.ExitCode == 0, backfill.Output);
+        using var cause = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        Assert.Equal(
+            "` Tests `<br>` Tests.Structured `",
+            cause.RootElement.GetProperty("occurrences")[0].GetProperty("issue_jobs_table").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task OccurrencePublicationBackfillPreservesLegacyGroupedJobWithStructuredTests()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        var outputPath = Path.Combine(_workspace.Path, "updated-cause.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "test_name":"Tests.Legacy",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":42,
+                "job":"Legacy grouped label",
+                "job_ids":[456,789],
+                "tests":[
+                  {"name":"Tests.First","job_id":456},
+                  {"name":"Tests.Second","job_id":789}
+                ],
+                "issue_row_needs_refresh":true
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            jobsPath,
+            """[{"id":456,"name":"Current Windows"},{"id":789,"name":"Current Linux"}]""");
+
+        var backfill = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "backfill-occurrence-publication",
+                causePath,
+                jobsPath,
+                "123",
+                "1",
+                "pull-request",
+                outputPath,
+            ]);
+
+        Assert.True(backfill.ExitCode == 0, backfill.Output);
+        using var cause = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        Assert.Equal(
+            "` Legacy grouped label `<br>` Tests.First `<br>` Tests.Second `",
+            cause.RootElement.GetProperty("occurrences")[0].GetProperty("issue_jobs_table").GetString());
+        Assert.True(
+            cause.RootElement.GetProperty("occurrences")[0]
+                .GetProperty("issue_uses_stored_job_label").GetBoolean());
+
+        var rows = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["stored-occurrence-rows", outputPath]);
+
+        Assert.True(rows.ExitCode == 0, rows.Output);
+        Assert.Equal(
+            [
+                "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1) | ` Legacy grouped label `<br>` Tests.First `<br>` Tests.Second ` | #42 |",
+            ],
+            Assert.IsType<string[]>(JsonSerializer.Deserialize<string[]>(rows.Output)));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task OccurrencePublicationBackfillPreservesJobOnlyLegacyFlakyFallback()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        var outputPath = Path.Combine(_workspace.Path, "updated-cause.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "test_name":"Tests.Legacy",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":42,
+                "job":"Stored Legacy Tests",
+                "issue_row_needs_refresh":true
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(jobsPath, "[]");
+
+        var backfill = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "backfill-occurrence-publication",
+                causePath,
+                jobsPath,
+                "123",
+                "1",
+                "pull-request",
+                outputPath,
+            ]);
+
+        Assert.True(backfill.ExitCode == 0, backfill.Output);
+        using var cause = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        Assert.Equal(
+            "` Stored Legacy Tests `<br>` Tests.Legacy `",
+            cause.RootElement.GetProperty("occurrences")[0].GetProperty("issue_jobs_table").GetString());
+
+        var rows = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["stored-occurrence-rows", outputPath]);
+
+        Assert.True(rows.ExitCode == 0, rows.Output);
+        Assert.Equal(
+            [
+                "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1) | ` Stored Legacy Tests `<br>` Tests.Legacy ` | #42 |",
+            ],
+            Assert.IsType<string[]>(JsonSerializer.Deserialize<string[]>(rows.Output)));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task SelectOccurrenceRowMatchesOnlyTheBuildColumn()
+    {
+        var rowsPath = Path.Combine(_workspace.Path, "occurrence-rows.json");
+        const string occurrenceUrl = "https://github.com/microsoft/aspire/actions/runs/123/attempts/2";
+        const string expectedRow =
+            "| 2026-08-02 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/2) | ` Tests ` | #42 |";
+        await File.WriteAllTextAsync(
+            rowsPath,
+            $$"""
+            [
+              "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Tests [retry]({{occurrenceUrl}}) ` | #42 |",
+              "{{expectedRow}}"
+            ]
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["select-occurrence-row", rowsPath, "123", occurrenceUrl]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(expectedRow, result.Output.Trim());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [RequiresTools(["bash", "jq"])]
+    public async Task SelectOccurrenceRowRejectsMissingOrDuplicateBuildColumns(bool duplicateBuildColumn)
+    {
+        var rowsPath = Path.Combine(_workspace.Path, "occurrence-rows.json");
+        const string occurrenceUrl = "https://github.com/microsoft/aspire/actions/runs/123/attempts/2";
+        const string matchingRow =
+            "| 2026-08-02 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/2) | ` Tests ` | #42 |";
+        var rows = duplicateBuildColumn
+            ? new[] { matchingRow, matchingRow }
+            :
+            [
+                $"| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Tests [retry]({occurrenceUrl}) ` | #42 |",
+            ];
+        await File.WriteAllTextAsync(rowsPath, JsonSerializer.Serialize(rows));
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["select-occurrence-row", rowsPath, "123", occurrenceUrl]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("current occurrence row is missing or ambiguous", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task StoredOccurrenceRowsUseCanonicalProjectionAndDeterministicLegacyFallback()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "test_name":"Tests.LegacyFallback",
+              "occurrences":[
+                {
+                  "run_id":123,
+                  "run_attempt":1,
+                  "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                  "observed_at":"2026-08-01T12:00:00Z",
+                  "pr_number":0,
+                  "run_scope":"main",
+                  "issue_jobs_table":"` Canonical `",
+                  "issue_context":"main"
+                },
+                {
+                  "run_id":124,
+                  "run_attempt":1,
+                  "run_url":"https://github.com/microsoft/aspire/actions/runs/124",
+                  "observed_at":"2026-08-02T12:00:00Z",
+                  "pr_number":0,
+                  "job":"Legacy | Job"
+                }
+              ]
+            }
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["stored-occurrence-rows", causePath]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(
+            [
+                "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1) | ` Canonical ` | main |",
+                "| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124/attempts/1) | ` Legacy \\| Job `<br>` Tests.LegacyFallback ` | unavailable |",
+            ],
+            Assert.IsType<string[]>(JsonSerializer.Deserialize<string[]>(result.Output)));
+    }
+
+    [Theory]
+    [InlineData("42", "#42")]
+    [InlineData("42.0", "#42")]
+    [InlineData("\"42\"", "unavailable")]
+    [InlineData("\"0\"", "unavailable")]
+    [InlineData("null", "unavailable")]
+    [InlineData("true", "unavailable")]
+    [InlineData("false", "unavailable")]
+    [InlineData("0", "unavailable")]
+    [InlineData("-1", "unavailable")]
+    [InlineData("1.5", "unavailable")]
+    [InlineData("[42]", "unavailable")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task StoredOccurrenceRowsRequirePositiveIntegerPrNumber(
+        string prNumberJson,
+        string expectedContext)
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            $$"""
+            {
+              "id":"runner-timeout",
+              "type":"infra-failure",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":{{prNumberJson}},
+                "job":"Tests"
+              }]
+            }
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["stored-occurrence-rows", causePath]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(
+            [
+                $"| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1) | ` Tests ` | {expectedContext} |",
+            ],
+            Assert.IsType<string[]>(JsonSerializer.Deserialize<string[]>(result.Output)));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task StoredOccurrenceRowsRecoverLegacyMainScopeFromTrustedRunSummary()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var runsDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "runs")).FullName;
+        await File.WriteAllTextAsync(
+            causePath,
+            """
+            {
+              "id":"runner-timeout",
+              "type":"infra-failure",
+              "occurrences":[{
+                "run_id":123,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":0,
+                "job":"Tests"
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(runsDirectory, "123.json"),
+            """{"run_id":123,"run_scope":"main"}""");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["stored-occurrence-rows", causePath, runsDirectory]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(
+            [
+                "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Tests ` | main |",
+            ],
+            Assert.IsType<string[]>(JsonSerializer.Deserialize<string[]>(result.Output)));
+    }
+
+    [Theory]
+    [InlineData("""{"run_id":124,"run_scope":"main"}""")]
+    [InlineData("""{"run_id":123,"run_scope":"pull-request"}""")]
+    [InlineData("""{"run_id":"123","run_scope":"main"}""")]
+    [InlineData("""{"run_id":123,"run_scope":"unexpected"}""")]
+    [InlineData("{}")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task StoredOccurrenceRowsIgnoreUntrustedLegacyRunScopeRecovery(string runSummary)
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var runsDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "runs")).FullName;
+        await File.WriteAllTextAsync(
+            causePath,
+            """
+            {
+              "id":"runner-timeout",
+              "type":"infra-failure",
+              "occurrences":[{
+                "run_id":123,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":0,
+                "job":"Tests"
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(Path.Combine(runsDirectory, "123.json"), runSummary);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["stored-occurrence-rows", causePath, runsDirectory]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(
+            [
+                "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Tests ` | unavailable |",
+            ],
+            Assert.IsType<string[]>(JsonSerializer.Deserialize<string[]>(result.Output)));
+    }
+
+    [Theory]
+    [InlineData("main", "42", "#43", "main")]
+    [InlineData("main", "42", "#0", "main")]
+    [InlineData("pull-request", "42", "main", "#42")]
+    [InlineData("pull-request", "42", "#0", "#42")]
+    [InlineData("pull-request", "0", "#0", "unavailable")]
+    [InlineData("pull-request", "0", "#042", "unavailable")]
+    [InlineData("pull-request", "0", "#43", "#43")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task StoredOccurrenceRowsUseAuthenticatedScopeBeforeLegacyContext(
+        string runScope,
+        string prNumberJson,
+        string issueContext,
+        string expectedContext)
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            $$"""
+            {
+              "id":"runner-timeout",
+              "type":"infra-failure",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123/attempts/1",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":{{prNumberJson}},
+                "run_scope":"{{runScope}}",
+                "issue_context":"{{issueContext}}",
+                "job":"Tests"
+              }]
+            }
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["stored-occurrence-rows", causePath]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(
+            [
+                $"| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1) | ` Tests ` | {expectedContext} |",
+            ],
+            Assert.IsType<string[]>(JsonSerializer.Deserialize<string[]>(result.Output)));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task StoredOccurrenceRowsRejectCrossRepositoryRunUrl()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/attacker/other/actions/runs/123",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":42,
+                "job":"Tests"
+              }]
+            }
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["stored-occurrence-rows", causePath],
+            new Dictionary<string, string>
+            {
+                ["GITHUB_REPOSITORY"] = "microsoft/aspire",
+            });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("stored occurrence cannot be rendered", result.Output, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(-1, "https://github.com/microsoft/aspire/actions/runs/123", "https://github.com/microsoft/aspire/actions/runs/123")]
+    [InlineData(1, "https://github.com/microsoft/aspire/actions/runs/123", "https://github.com/microsoft/aspire/actions/runs/123/attempts/1")]
+    [InlineData(1, "https://github.com/microsoft/aspire/actions/runs/123/attempts/1", "https://github.com/microsoft/aspire/actions/runs/123/attempts/1")]
+    [InlineData(2, "https://github.com/microsoft/aspire/actions/runs/123/attempts/2", "https://github.com/microsoft/aspire/actions/runs/123/attempts/2")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task StoredOccurrenceRowsCanonicalizeAttemptUrl(
+        int runAttempt,
+        string runUrl,
+        string expectedRunUrl)
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var occurrence = new Dictionary<string, object?>
+        {
+            ["run_id"] = 123,
+            ["run_url"] = runUrl,
+            ["observed_at"] = "2026-08-01T12:00:00Z",
+            ["pr_number"] = 42,
+            ["job"] = "Tests",
+        };
+        if (runAttempt >= 0)
+        {
+            occurrence["run_attempt"] = runAttempt;
+        }
+
+        await File.WriteAllTextAsync(
+            causePath,
+            JsonSerializer.Serialize(new
+            {
+                id = "browser-timeout",
+                type = "flaky-test",
+                occurrences = new[] { occurrence },
+            }));
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["stored-occurrence-rows", causePath],
+            new Dictionary<string, string>
+            {
+                ["GITHUB_REPOSITORY"] = "microsoft/aspire",
+            });
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains($"[123]({expectedRunUrl})", result.Output, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("0", "https://github.com/microsoft/aspire/actions/runs/123")]
+    [InlineData("false", "https://github.com/microsoft/aspire/actions/runs/123")]
+    [InlineData("null", "https://github.com/microsoft/aspire/actions/runs/123")]
+    [InlineData("\"2\"", "https://github.com/microsoft/aspire/actions/runs/123/attempts/2")]
+    [InlineData("1", "https://github.com/microsoft/aspire/actions/runs/123/attempts/2")]
+    [InlineData("2", "https://github.com/microsoft/aspire/actions/runs/123")]
+    [InlineData("2", "https://github.com/microsoft/aspire/actions/runs/123/attempts/3")]
+    [InlineData("2", "https://github.com/microsoft/aspire/actions/runs/124/attempts/2")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task StoredOccurrenceRowsRejectMismatchedAttemptUrl(string runAttemptJson, string runUrl)
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            $$"""
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":{{runAttemptJson}},
+                "run_url":"{{runUrl}}",
+                "observed_at":"2026-08-01T12:00:00Z",
+                "pr_number":42,
+                "job":"Tests"
+              }]
+            }
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["stored-occurrence-rows", causePath],
+            new Dictionary<string, string>
+            {
+                ["GITHUB_REPOSITORY"] = "microsoft/aspire",
+            });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("stored occurrence cannot be rendered", result.Output, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("0", 123)]
+    [InlineData("false", 123)]
+    [InlineData("null", 123)]
+    [InlineData("\"1\"", 123)]
+    [InlineData("false", 124)]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CauseMergeRejectsMalformedStoredRunAttempt(string runAttemptJson, int storedRunId)
+    {
+        var newCausePath = Path.Combine(_workspace.Path, "new-cause.json");
+        var existingCausePath = Path.Combine(_workspace.Path, "existing-cause.json");
+        var outputPath = Path.Combine(_workspace.Path, "merged-cause.json");
+        await File.WriteAllTextAsync(
+            newCausePath,
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "observed_at":"2026-08-02T12:00:00Z",
+                "job":"Current Tests"
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            existingCausePath,
+            $$"""
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "occurrences":[{
+                "run_id":{{storedRunId}},
+                "run_attempt":{{runAttemptJson}},
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/{{storedRunId}}",
+                "occurred_at":"2026-08-01T12:00:00Z",
+                "job":"Legacy Tests"
+              }]
+            }
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["merge-cause", newCausePath, existingCausePath, outputPath]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("stored occurrence has invalid run attempt", result.Output, StringComparison.Ordinal);
+        Assert.Equal(0, new FileInfo(outputPath).Length);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CauseJobNamesBoundMaximumUnicodeGroupsBeforeCrossingProcessBoundaries()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        var emojiSuffix = string.Concat(Enumerable.Repeat("😀", 496));
+        var jobs = Enumerable.Range(1, 200)
+            .Select(index => new { id = index, name = $"Job{index:D3}{emojiSuffix}" })
+            .ToArray();
+        var tests = Enumerable.Range(1, 200)
+            .Select(index => new { name = $"Test{index:D3}{emojiSuffix}", job_id = index })
+            .ToArray();
+        await File.WriteAllTextAsync(
+            causePath,
+            JsonSerializer.Serialize(new
+            {
+                id = "large-group",
+                type = "flaky-test",
+                job_ids = jobs.Select(job => job.id),
+                tests,
+            }));
+        await File.WriteAllTextAsync(jobsPath, JsonSerializer.Serialize(jobs));
+
+        var plain = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["cause-job-names", causePath, jobsPath, "plain"]);
+        var display = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["cause-job-names", causePath, jobsPath, "display"]);
+        var table = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["cause-job-names", causePath, jobsPath, "table"]);
+
+        Assert.Equal(0, plain.ExitCode);
+        Assert.Equal(0, display.ExitCode);
+        Assert.Equal(0, table.ExitCode);
+        Assert.Contains("180 more jobs", plain.Output, StringComparison.Ordinal);
+        Assert.Contains("` 180 more jobs `", display.Output, StringComparison.Ordinal);
+        Assert.Contains("` 180 more jobs `", table.Output, StringComparison.Ordinal);
+        Assert.Contains("` 180 more tests in the linked run `", table.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Job021", table.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Test021", table.Output, StringComparison.Ordinal);
+        Assert.True(Encoding.UTF8.GetByteCount(plain.Output) < 32_000);
+        Assert.True(Encoding.UTF8.GetByteCount(display.Output) < 32_000);
+        Assert.True(Encoding.UTF8.GetByteCount(table.Output) < 64_000);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationOccurrenceKeepsMaximumUnicodeLegacyRefreshFileBacked()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var storedCausePath = Path.Combine(_workspace.Path, "stored-cause.json");
+        var jobsPath = Path.Combine(_workspace.Path, "failed-jobs.json");
+        var emojiSuffix = string.Concat(Enumerable.Repeat("😀", 496));
+        var tests = Enumerable.Range(1, 200)
+            .Select(index => new { name = $"Test{index:D3}{emojiSuffix}", job_id = index })
+            .ToArray();
+        await File.WriteAllTextAsync(
+            causePath,
+            JsonSerializer.Serialize(new
+            {
+                id = "large-group",
+                type = "flaky-test",
+                job_ids = new[] { 1 },
+                tests = new[] { new { name = "Current", job_id = 1 } },
+            }));
+        await File.WriteAllTextAsync(
+            storedCausePath,
+            JsonSerializer.Serialize(new
+            {
+                id = "large-group",
+                type = "flaky-test",
+                occurrences = new[]
+                {
+                    new
+                    {
+                        run_id = 123,
+                        run_attempt = 1,
+                        run_url = "https://github.com/microsoft/aspire/actions/runs/123",
+                        observed_at = "2026-08-01T12:00:00Z",
+                        pr_number = 42,
+                        tests,
+                        issue_row_needs_refresh = true,
+                    },
+                },
+            }));
+        await File.WriteAllTextAsync(
+            jobsPath,
+            JsonSerializer.Serialize(
+                Enumerable.Range(1, 200)
+                    .Select(index => new { id = index, name = $"Job{index:D3}" })));
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "publication-occurrence",
+                causePath,
+                storedCausePath,
+                jobsPath,
+                "123",
+                "1",
+                "https://github.com/microsoft/aspire/actions/runs/123",
+                "2026-08-31T12:00:00Z",
+                "pull-request",
+                "42",
+            ]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var output = JsonDocument.Parse(result.Output);
+        Assert.True(output.RootElement.GetProperty("refresh_required").GetBoolean());
+        Assert.Equal("2026-08-01", output.RootElement.GetProperty("occurrence_date").GetString());
+        Assert.Contains("Job001", output.RootElement.GetProperty("jobs_table").GetString(), StringComparison.Ordinal);
+        Assert.Contains("180 more tests in the linked run", output.RootElement.GetProperty("jobs_table").GetString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("Test021", output.RootElement.GetProperty("jobs_table").GetString(), StringComparison.Ordinal);
+        Assert.True(Encoding.UTF8.GetByteCount(result.Output) < 64_000);
     }
 
     [Fact]
@@ -2579,7 +4402,8 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Contains("{ [ \"$TRANSIENT_JOB_COUNT\" -eq 0 ] && [ \"$FLAKY_TEST_COUNT\" -eq 0 ]; }", validationScript, StringComparison.Ordinal);
         Assert.Contains("A mixed verdict for main requires a main-breakage job and cause plus transient job or test evidence and cause\"\nexit 1", validationScript, StringComparison.Ordinal);
         Assert.Contains("A mixed verdict for a pull request requires a code-issue job plus transient job or test evidence and a transient cause\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Every flaky test and job must be covered by a matching cause\"\nexit 1", validationScript, StringComparison.Ordinal);
+        Assert.Contains("Every flaky test and job must be covered by exactly one cause\"\nexit 1", validationScript, StringComparison.Ordinal);
+        Assert.Contains("--slurpfile flaky_causes \"$FLAKY_CAUSES_FILE\"", validationScript, StringComparison.Ordinal);
 
         Assert.Contains("### If failures include Transient Test Failures and no deterministic failures:", s_sourceWorkflow, StringComparison.Ordinal);
         Assert.Contains("### If ALL failures are Non-Transient PR Code Issues:", s_sourceWorkflow, StringComparison.Ordinal);
@@ -2609,11 +4433,19 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
-            "A `flaky-test` cause MUST include a `test_name` that exactly matches a `failed_tests` entry classified as `\"flaky\"`",
+            "A `flaky-test` cause MUST include a nonempty array of at most 200 distinct current-run `{name, job_id}` observations.",
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
             "If any of this run's tracked failures match an existing cause, you MUST reuse that cause's `id`",
+            s_sourceWorkflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Cause matching is a semantic classification performed by you.",
+            s_sourceWorkflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "it cannot mechanically determine whether current diagnostics represent the same underlying mechanism as a prior cause",
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -2625,7 +4457,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
-            "every flaky `{name, job}` test identity with an exactly matching `flaky-test` cause",
+            "every flaky `{name, job}` test identity with exactly one `flaky-test` cause",
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -2637,9 +4469,24 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             s_sourceWorkflow,
             StringComparison.Ordinal);
         Assert.Contains(
-            "The publisher derives display names from trusted job metadata and removes `job_ids` before storing the stable cause definition.",
+            "The publisher stores these observations with the run occurrence, not as immutable cause identity.",
             s_sourceWorkflow,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CustomJobFailuresStillCreateFailureIssues()
+    {
+        var sourceWorkflow = ReadWorkflow("analyze-ci-failure.md");
+        var compiledWorkflow = ReadWorkflow("analyze-ci-failure.lock.yml");
+
+        // Publisher rejection can happen before any cause issue or PR comment
+        // exists, so gh-aw's failed-job issue may be the only alert.
+        Assert.DoesNotContain("report-failed-jobs: false", sourceWorkflow, StringComparison.Ordinal);
+        Assert.Contains("- name: Report failed jobs", compiledWorkflow, StringComparison.Ordinal);
+        Assert.Contains("report_failed_jobs.cjs", compiledWorkflow, StringComparison.Ordinal);
+        Assert.Contains("- name: Handle agent failure", compiledWorkflow, StringComparison.Ordinal);
+        Assert.Contains("GH_AW_FAILURE_REPORT_AS_ISSUE: \"true\"", compiledWorkflow, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2668,6 +4515,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "# ── 4. Post PR comment using the analysis JSON ──");
 
             Assert.Contains("RUN_ID=\"$TRUSTED_RUN_ID\"", publisher, StringComparison.Ordinal);
+            Assert.Contains(
+                "RUN_ATTEMPT=$(jq -er '.run_attempt | select(type == \"number\" and . > 0 and . == floor)' \"$RUN_CONTEXT_FILE\")",
+                publisher,
+                StringComparison.Ordinal);
             Assert.Contains("RUN_SCOPE=\"$TRUSTED_RUN_SCOPE\"", publisher, StringComparison.Ordinal);
             Assert.DoesNotContain("TRUSTED_PR_NUMBERS", publisher, StringComparison.Ordinal);
             Assert.Contains("RUN_URL=$(jq -r '.html_url // \"\"' ci-failure-data/run.json)", publisher, StringComparison.Ordinal);
@@ -2680,14 +4531,17 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "cause-job-names \"$CAUSE_FILE\" \"$TRUSTED_FAILED_JOBS_FILE\" plain",
                 publisher,
                 StringComparison.Ordinal);
+            Assert.Contains("publication-occurrence", publisher, StringComparison.Ordinal);
+            Assert.Contains("CAUSE_JOBS=$(jq -r '.jobs_display'", publisher, StringComparison.Ordinal);
+            Assert.Contains("CAUSE_TESTS=$(jq -r '.tests_display'", publisher, StringComparison.Ordinal);
+            Assert.Contains("backfill-occurrence-publication", publisher, StringComparison.Ordinal);
             Assert.Contains(
-                "cause-job-names \"$CAUSE_FILE\" \"$TRUSTED_FAILED_JOBS_FILE\" display",
+                "stored-occurrence-rows \"$CAUSE_STORED\" memory-repo/runs",
                 publisher,
                 StringComparison.Ordinal);
-            Assert.Contains(
-                "cause-job-names \"$CAUSE_FILE\" \"$TRUSTED_FAILED_JOBS_FILE\" table",
-                publisher,
-                StringComparison.Ordinal);
+            Assert.Contains("select-occurrence-row", publisher, StringComparison.Ordinal);
+            Assert.Contains("\"$CAUSE_JOBS\" \"$CAUSE_TESTS\"", publisher, StringComparison.Ordinal);
+            Assert.Contains("ISSUE_ROW_REFRESH_REQUIRED=$(jq -r '.refresh_required'", publisher, StringComparison.Ordinal);
             Assert.Contains("migrate-main-issue-body", publisher, StringComparison.Ordinal);
             Assert.Contains(
                 "--title \"$ISSUE_TITLE\" --body-file \"$MIGRATED_BODY_FILE\"",
@@ -2700,7 +4554,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Assert.Contains("OCCURRENCE_BODY_AVAILABLE=\"false\"", publisher, StringComparison.Ordinal);
             Assert.Contains("OCCURRENCE_BODY_AVAILABLE=\"true\"", publisher, StringComparison.Ordinal);
             Assert.Equal(
-                2,
+                3,
                 publisher.Split(
                     "[ \"$OCCURRENCE_BODY_AVAILABLE\" = \"true\" ]",
                     StringSplitOptions.None).Length - 1);
@@ -2709,7 +4563,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Assert.DoesNotContain("jq empty \"$CAUSE_FILE\"", publisher, StringComparison.Ordinal);
             Assert.DoesNotContain("grep -qP", publisher, StringComparison.Ordinal);
             Assert.DoesNotContain("cp \"$ANALYSIS_FILE\"", publisher, StringComparison.Ordinal);
-            Assert.Contains("jq 'del(.job_ids, .job_names)'", publisher, StringComparison.Ordinal);
+            Assert.Contains("jq 'del(.job_ids, .job_names, .tests)'", publisher, StringComparison.Ordinal);
             Assert.Contains("merge-cause", publisher, StringComparison.Ordinal);
             Assert.Contains("\"$CAUSE_STORED\" \"$RUN_CONTEXT_FILE\"", publisher, StringComparison.Ordinal);
             Assert.Contains("Stored cause ID must match its filename: ${CAUSE_BASENAME_DISPLAY}", publisher, StringComparison.Ordinal);
@@ -2738,11 +4592,12 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Assert.Contains("[\"**Type**: \" + $cause_type]", publisher, StringComparison.Ordinal);
             Assert.True(
                 publisher.IndexOf("git -C memory-repo push origin \"HEAD:$MEMORY_BRANCH\"", StringComparison.Ordinal) <
-                publisher.IndexOf("# ── 2. Create or update issues for each cause ──", StringComparison.Ordinal));
+                publisher.IndexOf("PUBLICATION_OCCURRENCE=$(bash .github/workflows/analyze-ci-failure-persistence.sh", StringComparison.Ordinal));
             Assert.Contains(
-                "\"$ANALYSIS_FILE\" \"$TRUSTED_FAILED_JOBS_FILE\" \"$RUN_URL\" > \"$COMMENT_FILE\"",
+                "\"$ANALYSIS_FILE\" \"$TRUSTED_FAILED_JOBS_FILE\" \"$OCCURRENCE_URL\" > \"$COMMENT_FILE\"",
                 workflow,
                 StringComparison.Ordinal);
+            Assert.Contains("OCCURRENCE_URL=\"${RUN_URL}/attempts/${RUN_ATTEMPT}\"", workflow, StringComparison.Ordinal);
         });
         Assert.Contains(".user.login == \"github-actions[bot]\"", s_persistenceScript, StringComparison.Ordinal);
         Assert.Contains("startswith(\"<!-- analyze-ci-failure -->\\n\")", s_persistenceScript, StringComparison.Ordinal);
@@ -2750,6 +4605,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Contains("LAST_SUCCESSFUL_SHA=$(jq -r '.head_sha // \"unknown\"' \"$LAST_SUCCESSFUL_RUN_FILE\")", s_issueScript, StringComparison.Ordinal);
         Assert.Contains("sanitize-json-field \"$TRIGGERING_MERGE_FILE\" title 238", s_issueScript, StringComparison.Ordinal);
         Assert.Contains("TRIGGERING_MERGE_TITLE_CODE=$(render_code_span \"$TRIGGERING_MERGE_TITLE\")", s_issueScript, StringComparison.Ordinal);
+        Assert.DoesNotContain(".occurrences // [] | last | .tests", s_issueScript, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -4244,6 +6100,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
                 ["ANALYSIS_DIR"] = Path.Combine(_workspace.Path, "ci-analysis-output"),
                 ["GH_TOKEN"] = "test-token",
+                ["REPO"] = "microsoft/aspire",
                 ["GIT_CALL_LOG"] = gitCallLog,
                 ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
             });
@@ -4296,6 +6153,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 ["ANALYSIS_DIR"] = Path.Combine(_workspace.Path, "ci-analysis-output"),
                 ["GH_CALL_LOG"] = ghCallLog,
                 ["GH_TOKEN"] = "test-token",
+                ["REPO"] = "microsoft/aspire",
                 ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
                 ["TMPDIR"] = tempDirectory,
             });
@@ -4310,16 +6168,1073 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     [Theory]
-    [InlineData("main-repository-breakage", 122, false)]
-    [InlineData("main-repository-breakage", 122, true)]
-    [InlineData("main-repository-breakage", 123, false)]
-    [InlineData("main-repository-breakage", 123, true)]
-    [InlineData("infra-failure", 122, true)]
+    [InlineData("none")]
+    [InlineData("legacy-refresh")]
+    [InlineData("modern-replay")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationStepCreatesIssueFromStoredOccurrenceEvidence(string storedOccurrence)
+    {
+        await PreparePublicationStepFixtureAsync();
+        var modernReplay = storedOccurrence == "modern-replay";
+        var freshTestName = modernReplay ? "Tests.Replay" : "Tests.Flaky";
+        var storedTestName = modernReplay ? "Tests.Original" : "Tests.Flaky";
+        var analysisDirectory = Path.Combine(_workspace.Path, "ci-analysis-output");
+        var causesDirectory = Directory.CreateDirectory(Path.Combine(analysisDirectory, "causes")).FullName;
+        await File.WriteAllTextAsync(
+            Path.Combine(analysisDirectory, "analysis-result.json"),
+            $$"""
+            {
+              "verdict":"flaky-test",
+              "failed_jobs":[{"id":456,"classification":"flaky-test","reason":"Intermittent timeout"}],
+              "failed_tests":[{"name":"{{freshTestName}}","job":"Tests","error":"Timed out","classification":"flaky","reason":"Intermittent"}],
+              "causes":["browser-timeout"]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(causesDirectory, "browser-timeout.json"),
+            $$"""
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "title":"Browser timeout",
+              "error_pattern":"Timed out",
+              "job_ids":[456],
+              "tests":[{"name":"{{freshTestName}}","job_id":456}]
+            }
+            """);
+        var storedCausePath = Path.Combine(_workspace.Path, "stored-cause.json");
+        if (storedOccurrence == "legacy-refresh")
+        {
+            await File.WriteAllTextAsync(
+                storedCausePath,
+                """
+                {
+                  "id":"browser-timeout",
+                  "type":"flaky-test",
+                  "title":"Browser timeout",
+                  "test_name":"Legacy grouped label",
+                  "error_pattern":"Timed out",
+                  "occurrences":[{
+                    "run_id":123,
+                    "run_attempt":1,
+                    "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                    "job":"Tests",
+                    "pr_number":42,
+                    "occurred_at":"2026-08-01T00:00:00Z",
+                    "tests":[{"name":"Tests.Flaky","job_id":456}],
+                    "issue_row_needs_refresh":true
+                  }]
+                }
+                """);
+        }
+        else if (modernReplay)
+        {
+            // Memory was pushed by an earlier attempt whose issue creation failed,
+            // so the occurrence is immutable and has no issue link or refresh marker.
+            await File.WriteAllTextAsync(
+                storedCausePath,
+                """
+                {
+                  "id":"browser-timeout",
+                  "type":"flaky-test",
+                  "title":"Browser timeout",
+                  "error_pattern":"Timed out",
+                  "occurrences":[{
+                    "run_id":123,
+                    "run_attempt":1,
+                    "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                    "job":"Tests",
+                    "pr_number":42,
+                    "observed_at":"2026-08-01T00:00:00Z",
+                    "job_ids":[456],
+                    "tests":[{"name":"Tests.Original","job_id":456}]
+                  }]
+                }
+                """);
+        }
+
+        var run = await RunPublicationStepWithIssueStubsAsync(
+            storedOccurrence == "none"
+                ? new Dictionary<string, string>()
+                : new Dictionary<string, string> { ["browser-timeout"] = await File.ReadAllTextAsync(storedCausePath) });
+
+        Assert.True(run.Result.ExitCode == 0, run.Result.Output);
+        Assert.Equal("[CI Failure] Browser timeout", await File.ReadAllTextAsync(run.CreatedTitlePath));
+        Assert.Equal("ci-failure-cause,test-failure", await File.ReadAllTextAsync(run.CreatedLabelsPath));
+        var createdBody = await File.ReadAllTextAsync(run.CreatedBodyPath);
+        Assert.Contains("<!-- ci-failure-cause:browser-timeout -->", createdBody, StringComparison.Ordinal);
+        Assert.Contains("<!-- ci-failure-cause-type:flaky-test -->", createdBody, StringComparison.Ordinal);
+        Assert.Contains($"` {storedTestName} `", createdBody, StringComparison.Ordinal);
+        Assert.Contains("[123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1)", createdBody, StringComparison.Ordinal);
+        if (storedOccurrence == "legacy-refresh")
+        {
+            Assert.Contains(
+                "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1)",
+                createdBody,
+                StringComparison.Ordinal);
+        }
+        else if (modernReplay)
+        {
+            Assert.Contains(
+                "Build error leg or test failing: ` Tests ` / ` Tests.Original `",
+                createdBody,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1) | ` Tests `<br>` Tests.Original ` | #42 |",
+                createdBody,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain("Tests.Replay", createdBody, StringComparison.Ordinal);
+        }
+
+        using var storedCause = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "memory-repo", "causes", "browser-timeout.json")));
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/issues/88",
+            storedCause.RootElement.GetProperty("issue_url").GetString());
+        var occurrence = Assert.Single(
+            storedCause.RootElement.GetProperty("occurrences").EnumerateArray().ToArray());
+        Assert.Equal(
+            storedTestName,
+            occurrence.GetProperty("tests")[0].GetProperty("name").GetString());
+        Assert.False(occurrence.TryGetProperty("issue_row_needs_refresh", out _));
+        if (modernReplay)
+        {
+            using var originalCause = JsonDocument.Parse(await File.ReadAllTextAsync(storedCausePath));
+            var originalOccurrence = originalCause.RootElement.GetProperty("occurrences")[0];
+            foreach (var propertyName in new[]
+            {
+                "run_id",
+                "run_attempt",
+                "run_url",
+                "job",
+                "pr_number",
+                "observed_at",
+                "job_ids",
+                "tests",
+            })
+            {
+                Assert.True(JsonElement.DeepEquals(
+                    originalOccurrence.GetProperty(propertyName),
+                    occurrence.GetProperty(propertyName)));
+            }
+            Assert.Equal(
+                "` Tests `<br>` Tests.Original `",
+                occurrence.GetProperty("issue_jobs_table").GetString());
+            Assert.Equal("#42", occurrence.GetProperty("issue_context").GetString());
+            Assert.Equal("pull-request", occurrence.GetProperty("run_scope").GetString());
+        }
+        Assert.Collection(
+            run.Calls.Where(call => call.StartsWith("gh issue ", StringComparison.Ordinal)),
+            call => Assert.StartsWith("gh issue create --repo microsoft/aspire ", call, StringComparison.Ordinal));
+        await AssertIssueLinkPushedAfterIssueMutationAsync(
+            run,
+            "browser-timeout",
+            "https://github.com/microsoft/aspire/issues/88");
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationStepRecreatesIssueWithAllStoredOccurrences()
+    {
+        await PreparePublicationStepFixtureAsync();
+        var analysisDirectory = Path.Combine(_workspace.Path, "ci-analysis-output");
+        var causesDirectory = Directory.CreateDirectory(Path.Combine(analysisDirectory, "causes")).FullName;
+        await File.WriteAllTextAsync(
+            Path.Combine(analysisDirectory, "analysis-result.json"),
+            """
+            {
+              "verdict":"flaky-test",
+              "failed_jobs":[{"id":456,"classification":"flaky-test","reason":"Intermittent timeout"}],
+              "failed_tests":[{"name":"Tests.Replay","job":"Tests","error":"Timed out","classification":"flaky","reason":"Intermittent"}],
+              "causes":["browser-timeout"]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(causesDirectory, "browser-timeout.json"),
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "title":"Browser timeout",
+              "error_pattern":"Timed out",
+              "job_ids":[456],
+              "tests":[{"name":"Tests.Replay","job_id":456}]
+            }
+            """);
+        var storedCause =
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "title":"Browser timeout",
+              "error_pattern":"Timed out",
+              "occurrences":[
+                {
+                  "run_id":100,
+                  "run_attempt":1,
+                  "run_url":"https://github.com/microsoft/aspire/actions/runs/100",
+                  "job":"Tests",
+                  "pr_number":40,
+                  "observed_at":"2026-07-01T00:00:00Z",
+                  "job_ids":[456],
+                  "tests":[{"name":"Tests.Original","job_id":456}]
+                },
+                {
+                  "run_id":123,
+                  "run_attempt":1,
+                  "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                  "job":"Tests",
+                  "pr_number":42,
+                  "observed_at":"2026-08-01T00:00:00Z",
+                  "job_ids":[456],
+                  "tests":[{"name":"Tests.Original","job_id":456}]
+                }
+              ]
+            }
+            """;
+
+        var run = await RunPublicationStepWithIssueStubsAsync(
+            new Dictionary<string, string> { ["browser-timeout"] = storedCause });
+
+        Assert.True(run.Result.ExitCode == 0, run.Result.Output);
+        var createdBody = await File.ReadAllTextAsync(run.CreatedBodyPath);
+        Assert.Contains("Showing 2 most recent of 2 occurrences.", createdBody, StringComparison.Ordinal);
+        Assert.Contains(
+            "| 2026-07-01 | [100](https://github.com/microsoft/aspire/actions/runs/100/attempts/1) | ` Tests `<br>` Tests.Original ` | #40 |",
+            createdBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1) | ` Tests `<br>` Tests.Original ` | #42 |",
+            createdBody,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("Tests.Replay", createdBody, StringComparison.Ordinal);
+
+        using var persistedCause = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "memory-repo", "causes", "browser-timeout.json")));
+        using var originalCause = JsonDocument.Parse(storedCause);
+        var originalOccurrences = originalCause.RootElement.GetProperty("occurrences").EnumerateArray().ToArray();
+        var persistedOccurrences = persistedCause.RootElement.GetProperty("occurrences").EnumerateArray().ToArray();
+        Assert.True(JsonElement.DeepEquals(originalOccurrences[0], persistedOccurrences[0]));
+        Assert.True(JsonElement.DeepEquals(
+            originalOccurrences[1].GetProperty("tests"),
+            persistedOccurrences[1].GetProperty("tests")));
+        Assert.Equal(
+            "` Tests `<br>` Tests.Original `",
+            persistedOccurrences[1].GetProperty("issue_jobs_table").GetString());
+        await AssertIssueLinkPushedAfterIssueMutationAsync(
+            run,
+            "browser-timeout",
+            "https://github.com/microsoft/aspire/issues/88");
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationStepRediscoversClosedIssueByMarkerWhenMemoryLinkIsMissing()
+    {
+        await PreparePublicationStepFixtureAsync();
+        var analysisDirectory = Path.Combine(_workspace.Path, "ci-analysis-output");
+        var causesDirectory = Directory.CreateDirectory(Path.Combine(analysisDirectory, "causes")).FullName;
+        await File.WriteAllTextAsync(
+            Path.Combine(analysisDirectory, "analysis-result.json"),
+            """
+            {
+              "verdict":"flaky-test",
+              "failed_jobs":[{"id":456,"classification":"flaky-test","reason":"Intermittent timeout"}],
+              "failed_tests":[{"name":"Tests.Replay","job":"Tests","error":"Timed out","classification":"flaky","reason":"Intermittent"}],
+              "causes":["browser-timeout"]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(causesDirectory, "browser-timeout.json"),
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "title":"Browser timeout",
+              "error_pattern":"Timed out",
+              "job_ids":[456],
+              "tests":[{"name":"Tests.Replay","job_id":456}]
+            }
+            """);
+        // An earlier attempt pushed this occurrence, then failed before its issue link
+        // reached memory. The issue itself was later closed by a maintainer.
+        var storedCause =
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "title":"Browser timeout",
+              "error_pattern":"Timed out",
+              "occurrences":[
+                {
+                  "run_id":100,
+                  "run_attempt":1,
+                  "run_url":"https://github.com/microsoft/aspire/actions/runs/100",
+                  "job":"Tests",
+                  "pr_number":40,
+                  "observed_at":"2026-07-01T00:00:00Z",
+                  "job_ids":[456],
+                  "tests":[{"name":"Tests.Original","job_id":456}]
+                },
+                {
+                  "run_id":123,
+                  "run_attempt":1,
+                  "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                  "job":"Tests",
+                  "pr_number":42,
+                  "observed_at":"2026-08-01T00:00:00Z",
+                  "job_ids":[456],
+                  "tests":[{"name":"Tests.Original","job_id":456}]
+                }
+              ]
+            }
+            """;
+        var issueBody =
+            """
+            <!-- ci-failure-cause:browser-timeout -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            ## Build Information
+
+            Build: https://github.com/microsoft/aspire/actions/runs/100
+
+            **Type**: flaky-test
+
+            ## Operator notes
+
+            Preserve this note. Related: <!-- ci-failure-cause:other-cause -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-07-01 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Tests `<br>` Tests.Original ` | #40 |
+            <!-- ci-failure-occurrences:end -->
+            """.ReplaceLineEndings("\n");
+        var decoyOpenIssues = JsonSerializer.Serialize(new object[]
+        {
+            new object[]
+            {
+                new
+                {
+                    number = 70,
+                    body = "Duplicate report for triage.\n<!-- ci-failure-cause:browser-timeout -->\n<!-- ci-failure-cause-type:flaky-test -->",
+                },
+                new
+                {
+                    number = 71,
+                    body = "<!-- ci-failure-cause:browser-timeout -->\n<!-- ci-failure-cause-type:infra-failure -->\n\n**Type**: infra-failure",
+                },
+            },
+        });
+        var closedIssues = JsonSerializer.Serialize(new object[]
+        {
+            new object[]
+            {
+                new
+                {
+                    number = 76,
+                    body = "<!-- ci-failure-cause:browser-timeout-v2 -->\n<!-- ci-failure-cause-type:flaky-test -->",
+                },
+            },
+            new object[] { new { number = 77, body = issueBody } },
+        });
+        var issue77 = JsonSerializer.Serialize(new
+        {
+            number = 77,
+            state = "closed",
+            pull_request = (object?)null,
+            labels = new[] { new { name = "ci-failure-cause" } },
+            body = issueBody,
+        });
+
+        var run = await RunPublicationStepWithIssueStubsAsync(
+            new Dictionary<string, string> { ["browser-timeout"] = storedCause },
+            new Dictionary<int, string> { [77] = issue77 },
+            decoyOpenIssues,
+            closedIssues);
+
+        Assert.True(run.Result.ExitCode == 0, run.Result.Output);
+        Assert.Collection(
+            run.Calls.Where(call => call.StartsWith("gh issue ", StringComparison.Ordinal)),
+            call => Assert.StartsWith("gh issue edit 77 --repo microsoft/aspire --body-file ", call, StringComparison.Ordinal),
+            call => Assert.Equal("gh issue reopen 77 --repo microsoft/aspire", call));
+        Assert.False(File.Exists(run.CreatedBodyPath));
+
+        var editedBody = await File.ReadAllTextAsync(run.EditedBodyPath(77));
+        Assert.StartsWith(
+            "<!-- ci-failure-cause:browser-timeout -->\n<!-- ci-failure-cause-type:flaky-test -->\n",
+            editedBody,
+            StringComparison.Ordinal);
+        Assert.Contains("Preserve this note.", editedBody, StringComparison.Ordinal);
+        Assert.Contains("Showing 2 most recent of 2 occurrences.", editedBody, StringComparison.Ordinal);
+        Assert.Contains(
+            "| 2026-07-01 | [100](https://github.com/microsoft/aspire/actions/runs/100/attempts/1) | ` Tests `<br>` Tests.Original ` | #40 |",
+            editedBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1) | ` Tests `<br>` Tests.Original ` | #42 |",
+            editedBody,
+            StringComparison.Ordinal);
+        Assert.Equal(1, editedBody.Split("[123](", StringSplitOptions.None).Length - 1);
+        Assert.DoesNotContain("Tests.Replay", editedBody, StringComparison.Ordinal);
+
+        using var persistedCause = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "memory-repo", "causes", "browser-timeout.json")));
+        using var originalCause = JsonDocument.Parse(storedCause);
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/issues/77",
+            persistedCause.RootElement.GetProperty("issue_url").GetString());
+        var originalOccurrences = originalCause.RootElement.GetProperty("occurrences").EnumerateArray().ToArray();
+        var persistedOccurrences = persistedCause.RootElement.GetProperty("occurrences").EnumerateArray().ToArray();
+        Assert.Equal(2, persistedOccurrences.Length);
+        Assert.True(JsonElement.DeepEquals(originalOccurrences[0], persistedOccurrences[0]));
+        foreach (var propertyName in new[]
+        {
+            "run_id",
+            "run_attempt",
+            "run_url",
+            "job",
+            "pr_number",
+            "observed_at",
+            "job_ids",
+            "tests",
+        })
+        {
+            Assert.True(JsonElement.DeepEquals(
+                originalOccurrences[1].GetProperty(propertyName),
+                persistedOccurrences[1].GetProperty(propertyName)));
+        }
+        Assert.Equal(
+            "` Tests `<br>` Tests.Original `",
+            persistedOccurrences[1].GetProperty("issue_jobs_table").GetString());
+        Assert.Equal("#42", persistedOccurrences[1].GetProperty("issue_context").GetString());
+        Assert.Equal("pull-request", persistedOccurrences[1].GetProperty("run_scope").GetString());
+        await AssertIssueLinkPushedAfterIssueMutationAsync(
+            run,
+            "browser-timeout",
+            "https://github.com/microsoft/aspire/issues/77");
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationStepDoesNotTreatOperatorNoteLinkAsRecordedOccurrence()
+    {
+        await PreparePublicationStepFixtureAsync();
+        var analysisDirectory = Path.Combine(_workspace.Path, "ci-analysis-output");
+        var causesDirectory = Directory.CreateDirectory(Path.Combine(analysisDirectory, "causes")).FullName;
+        await File.WriteAllTextAsync(
+            Path.Combine(analysisDirectory, "analysis-result.json"),
+            """
+            {
+              "verdict":"flaky-test",
+              "failed_jobs":[{"id":456,"classification":"flaky-test","reason":"Intermittent timeout"}],
+              "failed_tests":[{"name":"Tests.Replay","job":"Tests","error":"Timed out","classification":"flaky","reason":"Intermittent"}],
+              "causes":["browser-timeout"]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(causesDirectory, "browser-timeout.json"),
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "title":"Browser timeout",
+              "error_pattern":"Timed out",
+              "job_ids":[456],
+              "tests":[{"name":"Tests.Replay","job_id":456}]
+            }
+            """);
+        var storedCause =
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "title":"Browser timeout",
+              "error_pattern":"Timed out",
+              "issue_url":"https://github.com/microsoft/aspire/issues/77",
+              "occurrences":[
+                {
+                  "run_id":100,
+                  "run_attempt":1,
+                  "run_url":"https://github.com/microsoft/aspire/actions/runs/100",
+                  "job":"Tests",
+                  "pr_number":40,
+                  "observed_at":"2026-07-01T00:00:00Z",
+                  "job_ids":[456],
+                  "tests":[{"name":"Tests.Original","job_id":456}]
+                },
+                {
+                  "run_id":123,
+                  "run_attempt":1,
+                  "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                  "job":"Tests",
+                  "pr_number":42,
+                  "observed_at":"2026-08-01T00:00:00Z",
+                  "job_ids":[456],
+                  "tests":[{"name":"Tests.Original","job_id":456}]
+                }
+              ]
+            }
+            """;
+        var issueBody =
+            """
+            <!-- ci-failure-cause:browser-timeout -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            ## Build Information
+
+            Build: https://github.com/microsoft/aspire/actions/runs/100
+
+            **Type**: flaky-test
+
+            ## Operator notes
+
+            Compare [123](https://github.com/microsoft/aspire/actions/runs/123) with the earlier failure.
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 1 most recent of 2 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-07-01 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Tests `<br>` Tests.Original ` | #40 |
+            <!-- ci-failure-occurrences:end -->
+            """.ReplaceLineEndings("\n");
+        var issue77 = JsonSerializer.Serialize(new
+        {
+            number = 77,
+            state = "open",
+            pull_request = (object?)null,
+            labels = new[] { new { name = "ci-failure-cause" } },
+            body = issueBody,
+        });
+
+        var run = await RunPublicationStepWithIssueStubsAsync(
+            new Dictionary<string, string> { ["browser-timeout"] = storedCause },
+            new Dictionary<int, string> { [77] = issue77 });
+
+        Assert.True(run.Result.ExitCode == 0, run.Result.Output);
+        var editedBody = await File.ReadAllTextAsync(run.EditedBodyPath(77));
+        Assert.Contains(
+            "Compare [123](https://github.com/microsoft/aspire/actions/runs/123) with the earlier failure.",
+            editedBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1) | ` Tests `<br>` Tests.Original ` | #42 |",
+            editedBody,
+            StringComparison.Ordinal);
+        Assert.Equal(2, editedBody.Split("[123](", StringSplitOptions.None).Length - 1);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationStepKeepsUnrelatedCauseIssuesSeparateWithinOneRun()
+    {
+        await PreparePublicationStepFixtureAsync();
+        var analysisDirectory = Path.Combine(_workspace.Path, "ci-analysis-output");
+        var causesDirectory = Directory.CreateDirectory(Path.Combine(analysisDirectory, "causes")).FullName;
+        await File.WriteAllTextAsync(
+            Path.Combine(_workspace.Path, "ci-failure-data", "failed-jobs.json"),
+            """[{"id":456,"name":"Tests"},{"id":457,"name":"Database tests"}]""");
+        await File.WriteAllTextAsync(
+            Path.Combine(analysisDirectory, "analysis-result.json"),
+            """
+            {
+              "verdict":"flaky-test",
+              "failed_jobs":[
+                {"id":456,"classification":"flaky-test","reason":"Browser timeout"},
+                {"id":457,"classification":"flaky-test","reason":"Database timeout"}
+              ],
+              "failed_tests":[
+                {"name":"Tests.Browser","job":"Tests","error":"Timed out","classification":"flaky","reason":"Intermittent"},
+                {"name":"Tests.Database","job":"Database tests","error":"Connection timed out","classification":"flaky","reason":"Intermittent"}
+              ],
+              "causes":["browser-timeout","database-timeout"]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(causesDirectory, "browser-timeout.json"),
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "title":"Browser timeout",
+              "error_pattern":"Timed out",
+              "job_ids":[456],
+              "tests":[{"name":"Tests.Browser","job_id":456}]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(causesDirectory, "database-timeout.json"),
+            """
+            {
+              "id":"database-timeout",
+              "type":"flaky-test",
+              "title":"Database timeout",
+              "error_pattern":"Connection timed out",
+              "job_ids":[457],
+              "tests":[{"name":"Tests.Database","job_id":457}]
+            }
+            """);
+        var linkedCause =
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "title":"Browser timeout",
+              "error_pattern":"Timed out",
+              "issue_url":"https://github.com/microsoft/aspire/issues/77",
+              "occurrences":[{
+                "run_id":100,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/100",
+                "job":"Tests",
+                "pr_number":40,
+                "observed_at":"2026-07-01T00:00:00Z",
+                "job_ids":[456],
+                "tests":[{"name":"Tests.Browser","job_id":456}]
+              }]
+            }
+            """;
+        var linkedIssueBody =
+            """
+            <!-- ci-failure-cause:browser-timeout -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            **Type**: flaky-test
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-07-01 | [100](https://github.com/microsoft/aspire/actions/runs/100) | ` Tests `<br>` Tests.Browser ` | #40 |
+            <!-- ci-failure-occurrences:end -->
+            """.ReplaceLineEndings("\n");
+        var linkedIssue = JsonSerializer.Serialize(new
+        {
+            number = 77,
+            state = "open",
+            pull_request = (object?)null,
+            labels = new[] { new { name = "ci-failure-cause" } },
+            body = linkedIssueBody,
+        });
+
+        var run = await RunPublicationStepWithIssueStubsAsync(
+            new Dictionary<string, string> { ["browser-timeout"] = linkedCause },
+            new Dictionary<int, string> { [77] = linkedIssue });
+
+        Assert.True(run.Result.ExitCode == 0, run.Result.Output);
+        Assert.Collection(
+            run.Calls.Where(call => call.StartsWith("gh issue ", StringComparison.Ordinal)),
+            call => Assert.StartsWith("gh issue edit 77 --repo microsoft/aspire --body-file ", call, StringComparison.Ordinal),
+            call => Assert.StartsWith("gh issue create --repo microsoft/aspire ", call, StringComparison.Ordinal));
+
+        var linkedEditedBody = await File.ReadAllTextAsync(run.EditedBodyPath(77));
+        Assert.Contains(
+            "[123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1) | ` Tests `<br>` Tests.Browser ` | #42 |",
+            linkedEditedBody,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("database-timeout", linkedEditedBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Tests.Database", linkedEditedBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Database tests", linkedEditedBody, StringComparison.Ordinal);
+
+        Assert.Equal("[CI Failure] Database timeout", await File.ReadAllTextAsync(run.CreatedTitlePath));
+        var createdBody = await File.ReadAllTextAsync(run.CreatedBodyPath);
+        Assert.StartsWith(
+            "<!-- ci-failure-cause:database-timeout -->\n<!-- ci-failure-cause-type:flaky-test -->\n",
+            createdBody,
+            StringComparison.Ordinal);
+        Assert.Contains("` Database tests `<br>` Tests.Database `", createdBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("browser-timeout", createdBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Tests.Browser", createdBody, StringComparison.Ordinal);
+
+        using var persistedLinkedCause = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "memory-repo", "causes", "browser-timeout.json")));
+        using var persistedCreatedCause = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "memory-repo", "causes", "database-timeout.json")));
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/issues/77",
+            persistedLinkedCause.RootElement.GetProperty("issue_url").GetString());
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/issues/88",
+            persistedCreatedCause.RootElement.GetProperty("issue_url").GetString());
+        Assert.Equal(
+            ["Tests.Database"],
+            persistedCreatedCause.RootElement.GetProperty("occurrences").EnumerateArray()
+                .SelectMany(occurrence => occurrence.GetProperty("tests").EnumerateArray())
+                .Select(test => test.GetProperty("name").GetString()));
+        await AssertIssueLinkPushedAfterIssueMutationAsync(
+            run,
+            "database-timeout",
+            "https://github.com/microsoft/aspire/issues/88");
+        using var linkedCauseLinkPush = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(run.OutputDirectory, "pushed-causes", "2", "browser-timeout.json")));
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/issues/77",
+            linkedCauseLinkPush.RootElement.GetProperty("issue_url").GetString());
+    }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(true, false, true)]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationStepRefreshesLegacyFlakyIssueRowAndPreservesOperatorText(
+        bool alreadyEnriched,
+        bool hasOperatorSuffix,
+        bool issueRowAlreadyCurrent)
+    {
+        await PreparePublicationStepFixtureAsync();
+        var analysisDirectory = Path.Combine(_workspace.Path, "ci-analysis-output");
+        var causesDirectory = Directory.CreateDirectory(Path.Combine(analysisDirectory, "causes")).FullName;
+        await File.WriteAllTextAsync(
+            Path.Combine(analysisDirectory, "analysis-result.json"),
+            """
+            {
+              "verdict":"flaky-test",
+              "failed_jobs":[{"id":456,"classification":"flaky-test","reason":"Intermittent timeout"}],
+              "failed_tests":[{"name":"Tests.Flaky","job":"Tests","error":"Timed out","classification":"flaky","reason":"Intermittent"}],
+              "causes":["browser-timeout"]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(causesDirectory, "browser-timeout.json"),
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "title":"Browser timeout",
+              "error_pattern":"Timed out",
+              "job_ids":[456],
+              "tests":[{"name":"Tests.Flaky","job_id":456}]
+            }
+            """);
+
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-issue-body.md");
+        var editedBodyPath = Path.Combine(_workspace.Path, "edited-issue-body.md");
+        var storedCausePath = Path.Combine(_workspace.Path, "stored-cause.json");
+        var issueJobCell = issueRowAlreadyCurrent
+            ? "` Tests `<br>` Tests.Flaky `"
+            : "` Tests `";
+        var issueBuildUrl = issueRowAlreadyCurrent
+            ? "https://github.com/microsoft/aspire/actions/runs/123/attempts/1"
+            : "https://github.com/microsoft/aspire/actions/runs/123";
+        var currentBody =
+            $$"""
+            <!-- ci-failure-cause:browser-timeout -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            ## Operator notes
+
+            Preserve this note.
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [123]({{issueBuildUrl}}) | {{issueJobCell}} | #42 |
+            <!-- ci-failure-occurrences:end -->
+            """;
+        if (hasOperatorSuffix)
+        {
+            currentBody += Environment.NewLine + "Operator text after the managed section." + Environment.NewLine;
+        }
+        await File.WriteAllTextAsync(currentBodyPath, currentBody);
+        var storedOccurrence = alreadyEnriched
+            ? """
+                {
+                  "run_id":123,
+                  "run_attempt":1,
+                  "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                  "job":"Tests",
+                  "pr_number":42,
+                  "observed_at":"2026-08-01T00:00:00Z",
+                  "tests":[{"name":"Tests.Flaky","job_id":456}],
+                  "issue_row_needs_refresh":true
+                }
+                """
+            : """
+                {
+                  "run_id":123,
+                  "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                  "job":"Tests",
+                  "pr_number":42,
+                  "observed_at":"2026-08-01T00:00:00Z"
+                }
+                """;
+        await File.WriteAllTextAsync(
+            storedCausePath,
+            $$"""
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "title":"Browser timeout",
+              "test_name":"Legacy grouped label",
+              "error_pattern":"Timed out",
+              "issue_url":"https://github.com/microsoft/aspire/issues/77",
+              "occurrences":[{{storedOccurrence}}]
+            }
+            """);
+
+        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "git"),
+            """
+            #!/usr/bin/env bash
+            if [ "$1" = "clone" ]; then
+              mkdir -p memory-repo/causes
+              cp "$STORED_CAUSE_PATH" memory-repo/causes/browser-timeout.json
+              exit 0
+            fi
+            exit 0
+            """);
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "gh"),
+            """
+            #!/usr/bin/env bash
+            if [ "$1" = "api" ] && [ "$2" = "repos/microsoft/aspire/issues/77" ]; then
+              if [ "${3:-}" = "--jq" ]; then
+                cat "$CURRENT_BODY_PATH"
+              else
+                jq -n --rawfile body "$CURRENT_BODY_PATH" \
+                  '{state:"open",pull_request:null,labels:[{name:"ci-failure-cause"}],body:$body}'
+              fi
+              exit 0
+            fi
+            if [ "$1" = "issue" ] && [ "$2" = "edit" ] && [ "$3" = "77" ]; then
+              shift 3
+              while [ "$#" -gt 0 ]; do
+                case "$1" in
+                  --body-file)
+                    cp "$2" "$EDITED_BODY_PATH"
+                    shift 2
+                    ;;
+                  *)
+                    shift
+                    ;;
+                esac
+              done
+              exit 0
+            fi
+            exit 99
+            """);
+
+        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", "Publish analysis data and comment on PR")
+            .Replace("${{ github.repository }}", "microsoft/aspire", StringComparison.Ordinal);
+        var result = await RunProcessAsync(
+            "bash",
+            ["-c", script],
+            new Dictionary<string, string>
+            {
+                ["CURRENT_BODY_PATH"] = currentBodyPath,
+                ["EDITED_BODY_PATH"] = editedBodyPath,
+                ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["ANALYSIS_DIR"] = analysisDirectory,
+                ["GH_TOKEN"] = "test-token",
+                ["REPO"] = "microsoft/aspire",
+                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+                ["STORED_CAUSE_PATH"] = storedCausePath,
+            });
+
+        Assert.Equal(0, result.ExitCode);
+        using var storedCause = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "memory-repo", "causes", "browser-timeout.json")));
+        var occurrence = Assert.Single(storedCause.RootElement.GetProperty("occurrences").EnumerateArray().ToArray());
+        Assert.Equal("2026-08-01T00:00:00Z", occurrence.GetProperty("observed_at").GetString());
+        Assert.Equal("Tests.Flaky", occurrence.GetProperty("tests")[0].GetProperty("name").GetString());
+        Assert.False(occurrence.TryGetProperty("issue_row_needs_refresh", out _));
+        var issueEditExpected = !issueRowAlreadyCurrent;
+        Assert.Equal(issueEditExpected, File.Exists(editedBodyPath));
+        if (issueEditExpected)
+        {
+            var editedBody = await File.ReadAllTextAsync(editedBodyPath);
+            Assert.Contains("Preserve this note.", editedBody, StringComparison.Ordinal);
+            Assert.Contains(
+                "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1) | ` Tests `<br>` Tests.Flaky ` | #42 |",
+                editedBody,
+                StringComparison.Ordinal);
+            Assert.Equal(1, editedBody.Split("[123](", StringSplitOptions.None).Length - 1);
+            Assert.Equal(
+                hasOperatorSuffix,
+                editedBody.Contains("Operator text after the managed section.", StringComparison.Ordinal));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PublicationStepUsesImmutableModernOccurrenceOnReplay(bool issueRowAlreadyPresent)
+    {
+        await PreparePublicationStepFixtureAsync();
+        var analysisDirectory = Path.Combine(_workspace.Path, "ci-analysis-output");
+        var causesDirectory = Directory.CreateDirectory(Path.Combine(analysisDirectory, "causes")).FullName;
+        await File.WriteAllTextAsync(
+            Path.Combine(analysisDirectory, "analysis-result.json"),
+            """
+            {
+              "verdict":"flaky-test",
+              "failed_jobs":[{"id":456,"classification":"flaky-test","reason":"Intermittent timeout"}],
+              "failed_tests":[{"name":"Tests.Replay","job":"Tests","error":"Timed out","classification":"flaky","reason":"Intermittent"}],
+              "causes":["browser-timeout"]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(causesDirectory, "browser-timeout.json"),
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "title":"Browser timeout",
+              "error_pattern":"Timed out",
+              "job_ids":[456],
+              "tests":[{"name":"Tests.Replay","job_id":456}]
+            }
+            """);
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-issue-body.md");
+        var storedCausePath = Path.Combine(_workspace.Path, "stored-cause.json");
+        var editedBodyPath = Path.Combine(_workspace.Path, "edited-issue-body.md");
+        var occurrenceRow = issueRowAlreadyPresent
+            ? "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1) | ` Tests `<br>` Tests.Original ` | #42 |"
+            : string.Empty;
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            $$"""
+            <!-- ci-failure-cause:browser-timeout -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            {{occurrenceRow}}
+            <!-- ci-failure-occurrences:end -->
+            """);
+        await File.WriteAllTextAsync(
+            storedCausePath,
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "title":"Browser timeout",
+              "error_pattern":"Timed out",
+              "issue_url":"https://github.com/microsoft/aspire/issues/77",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "job":"Tests",
+                "pr_number":42,
+                "observed_at":"2026-08-01T00:00:00Z",
+                "tests":[{"name":"Tests.Original","job_id":456}]
+              }]
+            }
+            """);
+
+        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "git"),
+            """
+            #!/usr/bin/env bash
+            if [ "$1" = "clone" ]; then
+              mkdir -p memory-repo/causes
+              cp "$STORED_CAUSE_PATH" memory-repo/causes/browser-timeout.json
+            fi
+            exit 0
+            """);
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "gh"),
+            """
+            #!/usr/bin/env bash
+            if [ "$1" = "api" ] && [ "$2" = "repos/microsoft/aspire/issues/77" ]; then
+              if [ "${3:-}" = "--jq" ]; then
+                cat "$CURRENT_BODY_PATH"
+              else
+                jq -n --rawfile body "$CURRENT_BODY_PATH" \
+                  '{state:"open",pull_request:null,labels:[{name:"ci-failure-cause"}],body:$body}'
+              fi
+              exit 0
+            fi
+            if [ "$1" = "issue" ] && [ "$2" = "edit" ]; then
+              shift 3
+              while [ "$#" -gt 0 ]; do
+                case "$1" in
+                  --body-file)
+                    cp "$2" "$EDITED_BODY_PATH"
+                    shift 2
+                    ;;
+                  *)
+                    shift
+                    ;;
+                esac
+              done
+              exit 0
+            fi
+            exit 99
+            """);
+
+        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", "Publish analysis data and comment on PR")
+            .Replace("${{ github.repository }}", "microsoft/aspire", StringComparison.Ordinal);
+        var result = await RunProcessAsync(
+            "bash",
+            ["-c", script],
+            new Dictionary<string, string>
+            {
+                ["CURRENT_BODY_PATH"] = currentBodyPath,
+                ["EDITED_BODY_PATH"] = editedBodyPath,
+                ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["ANALYSIS_DIR"] = analysisDirectory,
+                ["GH_TOKEN"] = "test-token",
+                ["REPO"] = "microsoft/aspire",
+                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+                ["STORED_CAUSE_PATH"] = storedCausePath,
+            });
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(!issueRowAlreadyPresent, File.Exists(editedBodyPath));
+        if (!issueRowAlreadyPresent)
+        {
+            var editedBody = await File.ReadAllTextAsync(editedBodyPath);
+            Assert.Contains(
+                "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1) | ` Tests `<br>` Tests.Original ` | #42 |",
+                editedBody,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain("Tests.Replay", editedBody, StringComparison.Ordinal);
+        }
+        using var storedCause = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(_workspace.Path, "memory-repo", "causes", "browser-timeout.json")));
+        var occurrence = Assert.Single(storedCause.RootElement.GetProperty("occurrences").EnumerateArray().ToArray());
+        Assert.Equal("Tests.Original", occurrence.GetProperty("tests")[0].GetProperty("name").GetString());
+    }
+
+    [Theory]
+    [InlineData("main-repository-breakage", 122, false, false)]
+    [InlineData("main-repository-breakage", 122, true, false)]
+    [InlineData("main-repository-breakage", 123, false, false)]
+    [InlineData("main-repository-breakage", 123, true, false)]
+    [InlineData("infra-failure", 122, true, false)]
+    [InlineData("infra-failure", 122, false, true)]
     [RequiresTools(["bash", "jq"])]
     public async Task PublicationStepSafelyUpdatesExistingCauseIssue(
         string causeType,
         int existingRunId,
-        bool hasUnsupportedTrailingContent)
+        bool hasOperatorSuffix,
+        bool issueClosed)
     {
         await PreparePublicationStepFixtureAsync();
         var analysisDirectory = Path.Combine(_workspace.Path, "ci-analysis-output");
@@ -4352,6 +7267,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         var editedBodyPath = Path.Combine(_workspace.Path, "edited-issue-body.md");
         var editedTitlePath = Path.Combine(_workspace.Path, "edited-issue-title.txt");
         var editedLabelsPath = Path.Combine(_workspace.Path, "edited-issue-labels.txt");
+        var reopenedPath = Path.Combine(_workspace.Path, "reopened-issue.txt");
         var currentBody =
             $$"""
             <!-- ci-failure-cause:main-failure -->
@@ -4384,7 +7300,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             | 2026-08-01 | [{{existingRunId}}](https://github.com/microsoft/aspire/actions/runs/{{existingRunId}}) | ` Build ` | main |
             <!-- ci-failure-occurrences:end -->
             """;
-        if (hasUnsupportedTrailingContent)
+        if (hasOperatorSuffix)
         {
             currentBody += Environment.NewLine + "Operator text after the managed section." + Environment.NewLine;
         }
@@ -4430,8 +7346,8 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
               if [ "${3:-}" = "--jq" ]; then
                 cat "$CURRENT_BODY_PATH"
               else
-                jq -n --rawfile body "$CURRENT_BODY_PATH" \
-                  '{state:"open",pull_request:null,labels:[{name:"ci-failure-cause"}],body:$body}'
+                jq -n --arg state "$EXISTING_ISSUE_STATE" --rawfile body "$CURRENT_BODY_PATH" \
+                  '{state:$state,pull_request:null,labels:[{name:"ci-failure-cause"}],body:$body}'
               fi
               exit 0
             fi
@@ -4461,6 +7377,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
               done
               exit 0
             fi
+            if [ "$1" = "issue" ] && [ "$2" = "reopen" ] && [ "$3" = "77" ]; then
+              touch "$REOPENED_PATH"
+              exit 0
+            fi
             exit 99
             """);
 
@@ -4475,19 +7395,36 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 ["EDITED_BODY_PATH"] = editedBodyPath,
                 ["EDITED_LABELS_PATH"] = editedLabelsPath,
                 ["EDITED_TITLE_PATH"] = editedTitlePath,
+                ["EXISTING_ISSUE_STATE"] = issueClosed ? "closed" : "open",
                 ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
                 ["ANALYSIS_DIR"] = Path.Combine(_workspace.Path, "ci-analysis-output"),
                 ["GH_TOKEN"] = "test-token",
+                ["REPO"] = "microsoft/aspire",
                 ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+                ["REOPENED_PATH"] = reopenedPath,
                 ["STORED_CAUSE_PATH"] = storedCausePath,
             });
 
         Assert.Equal(0, result.ExitCode);
+        Assert.Equal(issueClosed, File.Exists(reopenedPath));
         if (!isMainBreakage)
         {
             Assert.False(File.Exists(editedTitlePath));
-            Assert.False(File.Exists(editedBodyPath));
             Assert.False(File.Exists(editedLabelsPath));
+            Assert.True(File.Exists(editedBodyPath));
+            var infraEditedBody = await File.ReadAllTextAsync(editedBodyPath);
+            Assert.Contains("Preserve this note.", infraEditedBody, StringComparison.Ordinal);
+            Assert.Contains(
+                $"[{existingRunId}](https://github.com/microsoft/aspire/actions/runs/{existingRunId})",
+                infraEditedBody,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "[123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1)",
+                infraEditedBody,
+                StringComparison.Ordinal);
+            Assert.Equal(
+                hasOperatorSuffix,
+                infraEditedBody.Contains("Operator text after the managed section.", StringComparison.Ordinal));
             return;
         }
 
@@ -4497,17 +7434,18 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal(
             "ci-failure-cause,main-ci-break",
             await File.ReadAllTextAsync(editedLabelsPath));
-        if (hasUnsupportedTrailingContent)
-        {
-            Assert.False(File.Exists(editedBodyPath));
-            return;
-        }
-
         var editedBody = await File.ReadAllTextAsync(editedBodyPath);
         Assert.DoesNotContain("PR #19999", editedBody, StringComparison.Ordinal);
         Assert.Contains("Main branch CI failure at trusted-failure", editedBody, StringComparison.Ordinal);
+        Assert.Contains(
+            "Build: https://github.com/microsoft/aspire/actions/runs/123/attempts/1",
+            editedBody,
+            StringComparison.Ordinal);
         Assert.Contains("Preserve this note.", editedBody, StringComparison.Ordinal);
-        Assert.Contains("[123](https://github.com/microsoft/aspire/actions/runs/123)", editedBody, StringComparison.Ordinal);
+        Assert.Contains("[123](https://github.com/microsoft/aspire/actions/runs/123/attempts/1)", editedBody, StringComparison.Ordinal);
+        Assert.Equal(
+            hasOperatorSuffix,
+            editedBody.Contains("Operator text after the managed section.", StringComparison.Ordinal));
         Assert.Equal(1, editedBody.Split("[123](", StringSplitOptions.None).Length - 1);
         if (existingRunId == 122)
         {
@@ -4602,6 +7540,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         await PreparePublicationStepFixtureAsync();
         var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
         var ghCallLog = Path.Combine(_workspace.Path, "gh-calls.log");
+        var commentBodyPath = Path.Combine(_workspace.Path, "comment-body.md");
         await WriteExecutableAsync(
             Path.Combine(fakeBinDirectory, "gh"),
             """
@@ -4610,7 +7549,16 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             case "$*" in
               "api repos/microsoft/aspire/pulls/42") echo '{"state":"open","locked":false}' ;;
               "api repos/microsoft/aspire/issues/42/comments --paginate"*) : ;;
-              "pr comment 42 --repo microsoft/aspire --body-file "*) : ;;
+              "pr comment 42 --repo microsoft/aspire --body-file "*)
+                while [ "$#" -gt 0 ]; do
+                  if [ "$1" = "--body-file" ]; then
+                    cp "$2" "${COMMENT_BODY_PATH}"
+                    exit 0
+                  fi
+                  shift
+                done
+                exit 99
+                ;;
               *) exit 99 ;;
             esac
             """);
@@ -4624,6 +7572,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             {
                 ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
                 ["ANALYSIS_DIR"] = Path.Combine(_workspace.Path, "ci-analysis-output"),
+                ["COMMENT_BODY_PATH"] = commentBodyPath,
                 ["GH_CALL_LOG"] = ghCallLog,
                 ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
             });
@@ -4632,6 +7581,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Contains(
             await File.ReadAllLinesAsync(ghCallLog),
             call => call.StartsWith("pr comment 42 --repo microsoft/aspire --body-file ", StringComparison.Ordinal));
+        Assert.Contains(
+            "https://github.com/microsoft/aspire/actions/runs/123/attempts/1",
+            await File.ReadAllTextAsync(commentBodyPath),
+            StringComparison.Ordinal);
     }
 
     [Theory]
@@ -5930,7 +8883,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         var result = await RunBashScriptAsync(
             Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
-            ["add-occurrence", causeFile, "123", "https://github.com/run/123", "Tests", "2026-08-31T12:00:00Z"],
+            ["add-occurrence", causeFile, "123", "https://github.com/run/123", "Tests", "2026-08-31T12:00:00Z", runScope],
             new Dictionary<string, string>
             {
                 ["CI_FAILURE_DATA_DIR"] = failureDataDirectory,
@@ -5938,7 +8891,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
         Assert.Equal(0, result.ExitCode);
         using var output = JsonDocument.Parse(result.Output);
-        Assert.Equal(expectedPrNumber, output.RootElement.GetProperty("occurrences")[0].GetProperty("pr_number").GetRawText());
+        var occurrence = output.RootElement.GetProperty("occurrences")[0];
+        Assert.Equal(expectedPrNumber, occurrence.GetProperty("pr_number").GetRawText());
+        Assert.Equal("https://github.com/run/123/attempts/1", occurrence.GetProperty("run_url").GetString());
     }
 
     [Fact]
@@ -5967,6 +8922,432 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal(
             [1, 2],
             output.RootElement.GetProperty("occurrences").EnumerateArray().Select(item => item.GetProperty("run_id").GetInt32()));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CauseMergePreservesLegacyIdentityAndRecordsSeparateVerifiedAttempts()
+    {
+        var dataDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "ci-failure-data")).FullName;
+        var runContext = Path.Combine(dataDirectory, "run-context.json");
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        var existingPath = Path.Combine(_workspace.Path, "existing.json");
+        var nextPath = Path.Combine(_workspace.Path, "next.json");
+        var mergedPath = Path.Combine(_workspace.Path, "merged.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """{"id":"browser-timeout","type":"flaky-test","title":"Changed title","error_pattern":"timeout","job_ids":[1],"tests":[{"name":"Tests.First","job_id":1},{"name":"Tests.Second","job_id":1}]}""");
+        await File.WriteAllTextAsync(
+            existingPath,
+            """{"id":"browser-timeout","type":"flaky-test","title":"Original title","test_name":"Old label / other test","error_pattern":"timeout","issue_url":"https://github.com/microsoft/aspire/issues/42","occurrences":[{"run_id":123,"run_url":"https://github.com/microsoft/aspire/actions/runs/123","job":"Windows","observed_at":"2026-08-30T12:00:00Z"}]}""");
+        await File.WriteAllTextAsync(runContext, """{"run_scope":"pull-request","run_attempt":2,"pr_numbers":"42"}""");
+
+        var occurrence = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["add-occurrence", causePath, "123", "https://github.com/microsoft/aspire/actions/runs/123", "Windows", "2026-08-31T12:00:00Z", "pull-request"],
+            new Dictionary<string, string> { ["CI_FAILURE_DATA_DIR"] = dataDirectory });
+        Assert.True(occurrence.ExitCode == 0, occurrence.Output);
+        await File.WriteAllTextAsync(nextPath, occurrence.Output);
+
+        var merged = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["merge-cause", nextPath, existingPath, mergedPath]);
+        Assert.True(merged.ExitCode == 0, merged.Output);
+
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(mergedPath));
+        var cause = document.RootElement;
+        Assert.Equal("Old label / other test", cause.GetProperty("test_name").GetString());
+        Assert.Equal("Original title", cause.GetProperty("title").GetString());
+        Assert.Equal("https://github.com/microsoft/aspire/issues/42", cause.GetProperty("issue_url").GetString());
+        var attempts = cause.GetProperty("occurrences").EnumerateArray().ToArray();
+        Assert.Equal(2, attempts.Length);
+        Assert.Equal(2, attempts[1].GetProperty("run_attempt").GetInt32());
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/actions/runs/123/attempts/2",
+            attempts[1].GetProperty("run_url").GetString());
+        Assert.Equal(
+            ["Tests.First", "Tests.Second"],
+            attempts[1].GetProperty("tests").EnumerateArray().Select(item => item.GetProperty("name").GetString()));
+        Assert.False(attempts[0].TryGetProperty("tests", out _));
+
+        var replayPath = Path.Combine(_workspace.Path, "replay.json");
+        var replay = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["merge-cause", nextPath, mergedPath, replayPath]);
+        Assert.True(replay.ExitCode == 0, replay.Output);
+        using var replayed = JsonDocument.Parse(await File.ReadAllTextAsync(replayPath));
+        Assert.Equal(2, replayed.RootElement.GetProperty("occurrences").GetArrayLength());
+
+        var prior = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-prior-cause", replayPath]);
+        Assert.True(prior.ExitCode == 0, prior.Output);
+        using var priorSummary = JsonDocument.Parse(prior.Output.Trim());
+        Assert.Equal(
+            ["Tests.First", "Tests.Second"],
+            priorSummary.RootElement.GetProperty("recent_tests").EnumerateArray()
+                .Select(item => item.GetProperty("name").GetString()));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CauseMergeEnrichesLegacyAttemptOneOccurrenceWithoutRewritingJobLabel()
+    {
+        var newCausePath = Path.Combine(_workspace.Path, "new-cause.json");
+        var existingCausePath = Path.Combine(_workspace.Path, "existing-cause.json");
+        var outputPath = Path.Combine(_workspace.Path, "merged-cause.json");
+        await File.WriteAllTextAsync(
+            newCausePath,
+            """
+            {
+              "id": "browser-timeout",
+              "type": "flaky-test",
+              "title": "Changed title",
+              "error_pattern": "timeout",
+              "occurrences": [
+                {
+                  "run_id": 123,
+                  "run_attempt": 1,
+                  "run_url": "https://github.com/microsoft/aspire/actions/runs/123",
+                  "job": "Windows tests",
+                  "pr_number": 42,
+                  "run_scope": "main",
+                  "observed_at": "2026-09-22T00:00:00Z",
+                  "job_ids": [1],
+                  "tests": [{"name":"Tests.First","job_id":1}]
+                }
+              ]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            existingCausePath,
+            """
+            {
+              "id": "browser-timeout",
+              "type": "flaky-test",
+              "title": "Original title",
+              "test_name": "Legacy grouped label",
+              "error_pattern": "timeout",
+              "issue_url": "https://github.com/microsoft/aspire/issues/42",
+              "occurrences": [
+                {
+                  "run_id": 123,
+                  "run_url": "https://github.com/microsoft/aspire/actions/runs/123",
+                  "job": "Legacy Windows label",
+                  "pr_number": 41,
+                  "run_scope": "pull-request",
+                  "operator_note": "preserve this",
+                  "occurred_at": "2026-01-01T00:00:00Z"
+                }
+              ]
+            }
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["merge-cause", newCausePath, existingCausePath, outputPath]);
+
+        Assert.Equal(0, result.ExitCode);
+        using var output = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        var cause = output.RootElement;
+        Assert.Equal("Original title", cause.GetProperty("title").GetString());
+        Assert.Equal("Legacy grouped label", cause.GetProperty("test_name").GetString());
+        Assert.Equal("https://github.com/microsoft/aspire/issues/42", cause.GetProperty("issue_url").GetString());
+        var occurrences = cause.GetProperty("occurrences").EnumerateArray().ToArray();
+        var occurrence = Assert.Single(occurrences);
+        Assert.Equal(1, occurrence.GetProperty("run_attempt").GetInt32());
+        Assert.Equal("Legacy Windows label", occurrence.GetProperty("job").GetString());
+        Assert.Equal(41, occurrence.GetProperty("pr_number").GetInt32());
+        Assert.Equal("pull-request", occurrence.GetProperty("run_scope").GetString());
+        Assert.Equal("preserve this", occurrence.GetProperty("operator_note").GetString());
+        Assert.Equal("2026-01-01T00:00:00Z", occurrence.GetProperty("observed_at").GetString());
+        Assert.True(occurrence.GetProperty("issue_row_needs_refresh").GetBoolean());
+        Assert.Equal(1, occurrence.GetProperty("job_ids")[0].GetInt32());
+        Assert.Equal(
+            "Tests.First",
+            occurrence.GetProperty("tests")[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CauseMergeFallsBackFromMalformedStoredContext()
+    {
+        var newCausePath = Path.Combine(_workspace.Path, "new-cause.json");
+        var existingCausePath = Path.Combine(_workspace.Path, "existing-cause.json");
+        var outputPath = Path.Combine(_workspace.Path, "merged-cause.json");
+        await File.WriteAllTextAsync(
+            newCausePath,
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "occurrences":[{
+                "run_id":123,
+                "run_attempt":1,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "observed_at":"2026-08-02T12:00:00Z",
+                "job":"Current Tests",
+                "pr_number":42,
+                "run_scope":"main",
+                "job_ids":[1],
+                "tests":[{"name":"Tests.First","job_id":1}]
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            existingCausePath,
+            """
+            {
+              "id":"browser-timeout",
+              "type":"flaky-test",
+              "occurrences":[{
+                "run_id":123,
+                "run_url":"https://github.com/microsoft/aspire/actions/runs/123",
+                "occurred_at":"2026-08-01T12:00:00Z",
+                "job":"Legacy Tests",
+                "pr_number":"41",
+                "run_scope":"unsupported"
+              }]
+            }
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["merge-cause", newCausePath, existingCausePath, outputPath]);
+
+        Assert.Equal(0, result.ExitCode);
+        using var output = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        var occurrence = Assert.Single(output.RootElement.GetProperty("occurrences").EnumerateArray());
+        Assert.Equal(42, occurrence.GetProperty("pr_number").GetInt32());
+        Assert.Equal("main", occurrence.GetProperty("run_scope").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CauseMergeOrdersLegacyOccurredAtChronologically()
+    {
+        var newCausePath = Path.Combine(_workspace.Path, "new-cause.json");
+        var existingCausePath = Path.Combine(_workspace.Path, "existing-cause.json");
+        var outputPath = Path.Combine(_workspace.Path, "merged-cause.json");
+        await File.WriteAllTextAsync(
+            newCausePath,
+            """
+            {
+              "id": "browser-timeout",
+              "type": "flaky-test",
+              "title": "Browser timeout",
+              "error_pattern": "timeout",
+              "occurrences": [{
+                "run_id": 123,
+                "run_attempt": 1,
+                "run_url": "https://github.com/microsoft/aspire/actions/runs/123",
+                "job": "Windows tests",
+                "pr_number": 42,
+                "observed_at": "2026-08-01T00:00:00Z",
+                "tests": [{"name":"Tests.First","job_id":1}]
+              }]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            existingCausePath,
+            """
+            {
+              "id": "browser-timeout",
+              "type": "flaky-test",
+              "title": "Browser timeout",
+              "error_pattern": "timeout",
+              "occurrences": [{
+                "run_id": 124,
+                "run_url": "https://github.com/microsoft/aspire/actions/runs/124",
+                "job": "Linux tests",
+                "pr_number": 43,
+                "occurred_at": "2026-09-01T00:00:00Z"
+              }]
+            }
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["merge-cause", newCausePath, existingCausePath, outputPath]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var output = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        Assert.Equal(
+            [123, 124],
+            output.RootElement.GetProperty("occurrences").EnumerateArray()
+                .Select(occurrence => occurrence.GetProperty("run_id").GetInt32()));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PriorCauseUsesLegacyOccurredAtForRecentEvidence()
+    {
+        var causePath = Path.Combine(_workspace.Path, "cause.json");
+        await File.WriteAllTextAsync(
+            causePath,
+            """
+            {
+              "id": "browser-timeout",
+              "type": "flaky-test",
+              "title": "Browser timeout",
+              "error_pattern": "timeout",
+              "occurrences": [
+                {
+                  "run_id": 123,
+                  "observed_at": "2026-07-15T00:00:00Z",
+                  "tests": [{"name":"Tests.Older","job_id":1}]
+                },
+                {
+                  "run_id": 124,
+                  "occurred_at": "2026-08-01T00:00:00Z",
+                  "tests": [{"name":"Tests.LegacyRecent","job_id":2}]
+                }
+              ]
+            }
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-prior-cause", causePath]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var output = JsonDocument.Parse(result.Output.Trim());
+        Assert.Equal("2026-08-01T00:00:00Z", output.RootElement.GetProperty("last_seen").GetString());
+        Assert.Equal(
+            ["Tests.LegacyRecent"],
+            output.RootElement.GetProperty("recent_tests").EnumerateArray()
+                .Select(test => test.GetProperty("name").GetString()));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CauseMergePreservesLegacyNonFlakyJobLabelWithoutInventingJobIds()
+    {
+        var newCausePath = Path.Combine(_workspace.Path, "new-cause.json");
+        var existingCausePath = Path.Combine(_workspace.Path, "existing-cause.json");
+        var outputPath = Path.Combine(_workspace.Path, "merged-cause.json");
+        await File.WriteAllTextAsync(
+            newCausePath,
+            """
+            {
+              "id": "runner-timeout",
+              "type": "infra-failure",
+              "title": "Changed title",
+              "error_pattern": "timeout",
+              "occurrences": [
+                {
+                  "run_id": 123,
+                  "run_attempt": 1,
+                  "run_url": "https://github.com/microsoft/aspire/actions/runs/123",
+                  "job": "Current Tests",
+                  "pr_number": 42,
+                  "observed_at": "2026-09-22T00:00:00Z",
+                  "job_ids": [456]
+                }
+              ]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            existingCausePath,
+            """
+            {
+              "id": "runner-timeout",
+              "type": "infra-failure",
+              "title": "Original title",
+              "error_pattern": "timeout",
+              "occurrences": [
+                {
+                  "run_id": 123,
+                  "run_url": "https://github.com/microsoft/aspire/actions/runs/123",
+                  "job": "Stored Legacy Tests",
+                  "pr_number": 42,
+                  "observed_at": "2026-01-01T00:00:00Z"
+                }
+              ]
+            }
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["merge-cause", newCausePath, existingCausePath, outputPath]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var output = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        var occurrence = Assert.Single(output.RootElement.GetProperty("occurrences").EnumerateArray());
+        Assert.Equal(1, occurrence.GetProperty("run_attempt").GetInt32());
+        Assert.Equal("Stored Legacy Tests", occurrence.GetProperty("job").GetString());
+        Assert.False(occurrence.TryGetProperty("job_ids", out _));
+        Assert.Equal("2026-01-01T00:00:00Z", occurrence.GetProperty("observed_at").GetString());
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task CauseMergeKeepsModernOccurrenceImmutableOnReplay()
+    {
+        var newCausePath = Path.Combine(_workspace.Path, "new-cause.json");
+        var existingCausePath = Path.Combine(_workspace.Path, "existing-cause.json");
+        var outputPath = Path.Combine(_workspace.Path, "merged-cause.json");
+        await File.WriteAllTextAsync(
+            newCausePath,
+            """
+            {
+              "id": "browser-timeout",
+              "type": "flaky-test",
+              "title": "Browser timeout",
+              "error_pattern": "timeout",
+              "occurrences": [
+                {
+                  "run_id": 123,
+                  "run_attempt": 1,
+                  "run_url": "https://github.com/microsoft/aspire/actions/runs/123",
+                  "job": "New job summary",
+                  "pr_number": 99,
+                  "observed_at": "2026-09-22T00:00:00Z",
+                  "tests": [{"name":"Tests.First","job_id":1}]
+                }
+              ]
+            }
+            """);
+        await File.WriteAllTextAsync(
+            existingCausePath,
+            """
+            {
+              "id": "browser-timeout",
+              "type": "flaky-test",
+              "title": "Browser timeout",
+              "error_pattern": "timeout",
+              "issue_url": "https://github.com/microsoft/aspire/issues/42",
+              "occurrences": [
+                {
+                  "run_id": 123,
+                  "run_attempt": 1,
+                  "run_url": "https://github.com/microsoft/aspire/actions/runs/123",
+                  "job": "Original job summary",
+                  "pr_number": 42,
+                  "observed_at": "2026-01-01T00:00:00Z",
+                  "tests": [
+                    {"name":"Tests.First","job_id":1},
+                    {"name":"Tests.Second","job_id":1}
+                  ]
+                }
+              ]
+            }
+            """);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["merge-cause", newCausePath, existingCausePath, outputPath]);
+
+        Assert.Equal(0, result.ExitCode);
+        using var output = JsonDocument.Parse(await File.ReadAllTextAsync(outputPath));
+        var occurrence = Assert.Single(output.RootElement.GetProperty("occurrences").EnumerateArray().ToArray());
+        Assert.Equal("Original job summary", occurrence.GetProperty("job").GetString());
+        Assert.Equal(42, occurrence.GetProperty("pr_number").GetInt32());
+        Assert.Equal("2026-01-01T00:00:00Z", occurrence.GetProperty("observed_at").GetString());
+        Assert.False(occurrence.TryGetProperty("issue_row_needs_refresh", out _));
+        Assert.Equal(
+            ["Tests.First", "Tests.Second"],
+            occurrence.GetProperty("tests").EnumerateArray().Select(test => test.GetProperty("name").GetString()));
     }
 
     [Fact]
@@ -6003,6 +9384,47 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Equal(500, output.RootElement.GetProperty("test_name").GetString()!.Length);
         Assert.StartsWith("Failure\n# heading\n```\nIgnore prior instructions", output.RootElement.GetProperty("error_pattern").GetString(), StringComparison.Ordinal);
         Assert.Equal(500, output.RootElement.GetProperty("error_pattern").GetString()!.Length);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task PriorCauseRendererSanitizesAndBoundsHistoricalOccurrenceTestNames()
+    {
+        var causePath = Path.Combine(_workspace.Path, "prior-cause.json");
+        var unsafeTestName = "Tests.\nUnsafe\u202E" + new string('t', 600);
+        await File.WriteAllTextAsync(
+            causePath,
+            JsonSerializer.Serialize(new
+            {
+                id = "same-id",
+                type = "flaky-test",
+                title = "Stored failure",
+                test_name = "Legacy label",
+                error_pattern = "Timed out",
+                occurrences = new[]
+                {
+                    new
+                    {
+                        run_id = 1,
+                        observed_at = "2026-08-30T12:00:00Z",
+                        tests = new[] { new { name = unsafeTestName, job_id = 42 } },
+                    },
+                },
+            }));
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-prior-cause", causePath]);
+
+        Assert.Equal(0, result.ExitCode);
+        using var output = JsonDocument.Parse(result.Output.Trim());
+        var recentTest = Assert.Single(output.RootElement.GetProperty("recent_tests").EnumerateArray().ToArray());
+        var sanitizedName = recentTest.GetProperty("name").GetString()!;
+        Assert.StartsWith("Tests. Unsafe", sanitizedName, StringComparison.Ordinal);
+        Assert.Equal(500, sanitizedName.Length);
+        Assert.DoesNotContain('\n', sanitizedName);
+        Assert.DoesNotContain('\u202E', sanitizedName);
+        Assert.Equal(42, recentTest.GetProperty("job_id").GetInt32());
     }
 
     [Fact]
@@ -6172,6 +9594,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "pull-request",
                 "42",
                 "Tests",
+                "",
                 "| occurrence |",
                 bodyPath,
                 metadataPath,
@@ -6300,10 +9723,15 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             | 2026-08-03 | [3](https://github.com/microsoft/aspire/actions/runs/3) | ` {{largeJob}}-newest ` | main |
             """.ReplaceLineEndings("\r\n"));
         var newRow = $"| 2026-08-04 | [4](https://github.com/microsoft/aspire/actions/runs/4) | ` {largeJob}-new ` | main |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            $"| 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` {largeJob}-oldest ` | main |",
+            $"| 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` {largeJob}-middle ` | main |",
+            $"| 2026-08-03 | [3](https://github.com/microsoft/aspire/actions/runs/3) | ` {largeJob}-newest ` | main |",
+            newRow);
 
         var result = await RunBashScriptAsync(
             Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
-            ["render-issue-occurrences", currentBodyPath, newRow, "4", outputPath, "2500"]);
+            ["render-issue-occurrences", currentBodyPath, newRow, "4", outputPath, occurrenceRowsPath, "2500"]);
 
         Assert.Equal(0, result.ExitCode);
         var outputBody = await File.ReadAllTextAsync(outputPath);
@@ -6316,6 +9744,685 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         Assert.Contains("-new", outputBody, StringComparison.Ordinal);
         Assert.Contains("<!-- ci-failure-occurrences:start -->", outputBody, StringComparison.Ordinal);
         Assert.Contains("<!-- ci-failure-occurrences:end -->", outputBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererKeepsNewestRowsWhenReplayingOlderRun()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        var largeJob = new string('x', 900);
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            $$"""
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 2 most recent of 2 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` {{largeJob}}-middle ` | main |
+            | 2026-08-03 | [125](https://github.com/microsoft/aspire/actions/runs/125) | ` {{largeJob}}-newest ` | main |
+            <!-- ci-failure-occurrences:end -->
+            """);
+        var replayedRow =
+            $"| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` {largeJob}-oldest ` | main |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            replayedRow,
+            $"| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` {largeJob}-middle ` | main |",
+            $"| 2026-08-03 | [125](https://github.com/microsoft/aspire/actions/runs/125) | ` {largeJob}-newest ` | main |");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, replayedRow, "3", outputPath, occurrenceRowsPath, "2500"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var outputBody = await File.ReadAllTextAsync(outputPath);
+        Assert.Equal(
+            $$"""
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 2 most recent of 3 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` {{largeJob}}-middle ` | main |
+            | 2026-08-03 | [125](https://github.com/microsoft/aspire/actions/runs/125) | ` {{largeJob}}-newest ` | main |
+            <!-- ci-failure-occurrences:end -->
+            """.ReplaceLineEndings("\n") + "\n",
+            outputBody.ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererKeepsLaterAttemptOfOlderRunWithinBudget()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        var largeJob = new string('x', 900);
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            $$"""
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 2 most recent of 2 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` {{largeJob}}-middle ` | main |
+            | 2026-08-03 | [125](https://github.com/microsoft/aspire/actions/runs/125) | ` {{largeJob}}-newest-run ` | main |
+            <!-- ci-failure-occurrences:end -->
+            """);
+        var replayedRow =
+            $"| 2026-08-03 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/2) | ` {largeJob}-newest-attempt ` | main |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            $"| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` {largeJob}-middle ` | main |",
+            $"| 2026-08-03 | [125](https://github.com/microsoft/aspire/actions/runs/125) | ` {largeJob}-newest-run ` | main |",
+            replayedRow);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, replayedRow, "3", outputPath, occurrenceRowsPath, "2500"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(
+            $$"""
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 2 most recent of 3 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-03 | [125](https://github.com/microsoft/aspire/actions/runs/125) | ` {{largeJob}}-newest-run ` | main |
+            | 2026-08-03 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/2) | ` {{largeJob}}-newest-attempt ` | main |
+            <!-- ci-failure-occurrences:end -->
+            """.ReplaceLineEndings("\n") + "\n",
+            (await File.ReadAllTextAsync(outputPath)).ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererKeepsSeparateAttemptsOfOneRun()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            """
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |
+            <!-- ci-failure-occurrences:end -->
+            """);
+        var newRow =
+            "| 2026-08-02 | [123](https://github.com/microsoft/aspire/actions/runs/123/attempts/2) | ` Windows `<br>` Tests.First ` | #42 |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |",
+            newRow);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, newRow, "2", outputPath, occurrenceRowsPath, "2500"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var body = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("Showing 2 most recent of 2 occurrences.", body, StringComparison.Ordinal);
+        Assert.Contains("[123](https://github.com/microsoft/aspire/actions/runs/123) |", body, StringComparison.Ordinal);
+        Assert.Contains("[123](https://github.com/microsoft/aspire/actions/runs/123/attempts/2)", body, StringComparison.Ordinal);
+        Assert.Contains("` Tests.First `", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererReplacesOneMatchingBuildRowInPlace()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            """
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 2 most recent of 2 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |
+            | 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` Linux ` | #42 |
+            <!-- ci-failure-occurrences:end -->
+            """);
+        var newRow =
+            "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows `<br>` Tests.First ` | #42 |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            newRow,
+            "| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` Linux ` | #42 |");
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, newRow, "2", outputPath, occurrenceRowsPath, "2500"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var body = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains(newRow, body, StringComparison.Ordinal);
+        Assert.Contains("[124](https://github.com/microsoft/aspire/actions/runs/124)", body, StringComparison.Ordinal);
+        Assert.Equal(1, body.Split("[123](", StringSplitOptions.None).Length - 1);
+        Assert.Contains("Showing 2 most recent of 2 occurrences.", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererRepairsOrderWhenMatchingRowIsAlreadyCurrent()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        var currentRow =
+            "| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` Linux ` | #42 |";
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            $$"""
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 2 most recent of 2 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            {{currentRow}}
+            | 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |
+            <!-- ci-failure-occurrences:end -->
+            """);
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |",
+            currentRow);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, currentRow, "2", outputPath, occurrenceRowsPath, "2500"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(
+            $$"""
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 2 most recent of 2 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |
+            {{currentRow}}
+            <!-- ci-failure-occurrences:end -->
+            """.ReplaceLineEndings("\n") + "\n",
+            (await File.ReadAllTextAsync(outputPath)).ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererRepairsDuplicateMatchingBuildRows()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            """
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 2 most recent of 2 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |
+            | 2026-08-02 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Linux ` | #42 |
+            <!-- ci-failure-occurrences:end -->
+            """);
+        var newRow =
+            "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows `<br>` Tests.First ` | #42 |";
+        var canonicalOtherRow =
+            "| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` Linux ` | #42 |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(newRow, canonicalOtherRow);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, newRow, "2", outputPath, occurrenceRowsPath, "2500"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var outputBody = await File.ReadAllTextAsync(outputPath);
+        Assert.Equal(1, outputBody.Split("[123](", StringSplitOptions.None).Length - 1);
+        Assert.Contains(newRow, outputBody, StringComparison.Ordinal);
+        Assert.Contains(canonicalOtherRow, outputBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererRepairsDuplicateAndMissingOtherRows()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        var currentRow =
+            "| 2026-08-03 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` macOS ` | #42 |";
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            $$"""
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 3 most recent of 3 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |
+            | 2026-08-02 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Linux ` | #42 |
+            {{currentRow}}
+            <!-- ci-failure-occurrences:end -->
+            """);
+        var canonicalFirstRow =
+            "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |";
+        var canonicalMissingRow =
+            "| 2026-08-04 | [125](https://github.com/microsoft/aspire/actions/runs/125) | ` Linux ARM64 ` | #42 |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            canonicalFirstRow,
+            currentRow,
+            canonicalMissingRow);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, currentRow, "3", outputPath, occurrenceRowsPath, "2500"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var outputBody = await File.ReadAllTextAsync(outputPath);
+        Assert.Equal(1, outputBody.Split("[123](", StringSplitOptions.None).Length - 1);
+        Assert.Contains(canonicalFirstRow, outputBody, StringComparison.Ordinal);
+        Assert.Contains(currentRow, outputBody, StringComparison.Ordinal);
+        Assert.Contains(canonicalMissingRow, outputBody, StringComparison.Ordinal);
+        Assert.Contains("Showing 3 most recent of 3 occurrences.", outputBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererReplacesUntrackedOtherRowFromStoredHistory()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        var currentRow =
+            "| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` Linux ` | #42 |";
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            $$"""
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 2 most recent of 2 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |
+            {{currentRow}}
+            <!-- ci-failure-occurrences:end -->
+            """);
+        var canonicalFirstRow =
+            "| 2026-08-01 | [125](https://github.com/microsoft/aspire/actions/runs/125) | ` Windows ARM64 ` | #42 |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(canonicalFirstRow, currentRow);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, currentRow, "2", outputPath, occurrenceRowsPath, "2500"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var outputBody = await File.ReadAllTextAsync(outputPath);
+        Assert.DoesNotContain("/runs/123", outputBody, StringComparison.Ordinal);
+        Assert.Contains(canonicalFirstRow, outputBody, StringComparison.Ordinal);
+        Assert.Contains(currentRow, outputBody, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("https://github.com/")]
+    [InlineData("https://github.com/microsoft/aspire/actions/runs/0")]
+    [InlineData("https://github.com/microsoft/aspire/actions/runs/0123")]
+    [InlineData("https://github.com/microsoft/aspire/actions/runs/123/attempts/0")]
+    [InlineData("https://github.com/microsoft/aspire/actions/runs/123/attempts/01")]
+    [InlineData("https://github.com/micro?soft/aspire/actions/runs/123")]
+    [InlineData("https://github.com/attacker/other/actions/runs/123")]
+    [InlineData("https://github.com/microsoft/aspire/actions/runs/123?check_suite_focus=true")]
+    [InlineData("https://github.com/microsoft/aspire/actions/runs/123/job/456")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererRepairsRowsWithUnparseableBuildUrls(string invalidUrl)
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            $$"""
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 2 most recent of 2 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [123]({{invalidUrl}}) | ` Windows ` | #42 |
+            | 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` Linux ` | #42 |
+            <!-- ci-failure-occurrences:end -->
+            """);
+        var newRow =
+            "| 2026-08-03 | [125](https://github.com/microsoft/aspire/actions/runs/125) | ` macOS ` | #42 |";
+        var canonicalFirstRow =
+            "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |";
+        var canonicalSecondRow =
+            "| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` Linux ` | #42 |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            canonicalFirstRow,
+            canonicalSecondRow,
+            newRow);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, newRow, "3", outputPath, occurrenceRowsPath, "2500"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var outputBody = await File.ReadAllTextAsync(outputPath);
+        Assert.DoesNotContain($"[123]({invalidUrl})", outputBody, StringComparison.Ordinal);
+        Assert.Contains(canonicalFirstRow, outputBody, StringComparison.Ordinal);
+        Assert.Contains(canonicalSecondRow, outputBody, StringComparison.Ordinal);
+        Assert.Contains(newRow, outputBody, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(
+        "| 2026-08-02 | [0](https://github.com/microsoft/aspire/actions/runs/0) | ` Linux ` | #42 |")]
+    [InlineData(
+        "| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124/attempts/0) | ` Linux ` | #42 |")]
+    [InlineData(
+        "| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` Linux ` | #0 |")]
+    [InlineData(
+        "| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` Linux ` | #042 |")]
+    [InlineData(
+        "| 2026-08-02 | [124](https://github.com/micro?soft/aspire/actions/runs/124) | ` Linux ` | #42 |")]
+    [InlineData(
+        "| 2026-08-02 | [124](https://github.com/attacker/other/actions/runs/124) | ` Linux ` | #42 |")]
+    [InlineData(
+        "| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` Linux ` | unexpected | #42 |")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererRejectsMalformedStoredRows(string newRow)
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            """
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |
+            <!-- ci-failure-occurrences:end -->
+            """);
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |",
+            newRow);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, newRow, "2", outputPath, occurrenceRowsPath, "2500"]);
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Contains("invalid stored occurrence rows", result.Output, StringComparison.Ordinal);
+        Assert.False(File.Exists(outputPath));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererRepairsExistingRowWithExtraTableColumn()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            """
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | unexpected | #42 |
+            <!-- ci-failure-occurrences:end -->
+            """);
+        var canonicalFirstRow =
+            "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |";
+        var newRow =
+            "| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` Linux ` | #42 |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(canonicalFirstRow, newRow);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, newRow, "2", outputPath, occurrenceRowsPath, "2500"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var outputBody = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains(canonicalFirstRow, outputBody, StringComparison.Ordinal);
+        Assert.Contains(newRow, outputBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("unexpected", outputBody, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererAcceptsEscapedPipesAndCanonicalAttemptUrl(int runAttempt)
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            """
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |
+            <!-- ci-failure-occurrences:end -->
+            """);
+        var newRow =
+            $"| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124/attempts/{runAttempt}) | ` Linux\\|ARM64 `<br>` Tests.A\\|B ` | #42 |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |",
+            newRow);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, newRow, "2", outputPath, occurrenceRowsPath, "2500"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Contains(newRow, await File.ReadAllTextAsync(outputPath), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererRepairsExistingRowWhoseBuildLabelDoesNotMatchRun()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            """
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [999](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |
+            <!-- ci-failure-occurrences:end -->
+            """);
+        var canonicalFirstRow =
+            "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |";
+        var newRow =
+            "| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` Linux ` | #42 |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(canonicalFirstRow, newRow);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, newRow, "2", outputPath, occurrenceRowsPath, "2500"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var outputBody = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains(canonicalFirstRow, outputBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("[999](", outputBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererRejectsNewRowWhoseBuildLabelDoesNotMatchRun()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            """
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |
+            <!-- ci-failure-occurrences:end -->
+            """);
+        var newRow =
+            "| 2026-08-02 | [999](https://github.com/microsoft/aspire/actions/runs/124) | ` Linux ` | #42 |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            "| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |",
+            newRow);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, newRow, "2", outputPath, occurrenceRowsPath, "2500"]);
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Contains("invalid stored occurrence rows", result.Output, StringComparison.Ordinal);
+        Assert.False(File.Exists(outputPath));
+    }
+
+    [Theory]
+    [InlineData(
+        """["| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |"]""",
+        "invalid stored occurrence rows")]
+    [InlineData(
+        """["| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |","| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |"]""",
+        "invalid stored occurrence rows")]
+    [InlineData(
+        """["| 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |","| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124/attempts/0) | ` Linux ` | #42 |"]""",
+        "invalid stored occurrence rows")]
+    [InlineData(
+        """["| 2026-08-03 | [125](https://github.com/microsoft/aspire/actions/runs/125) | ` macOS ` | #42 |","| 2026-08-04 | [126](https://github.com/microsoft/aspire/actions/runs/126) | ` Linux ARM64 ` | #42 |"]""",
+        "new occurrence row is absent from stored history")]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererRejectsInvalidStoredOccurrenceRows(
+        string occurrenceRows,
+        string expectedError)
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        var occurrenceRowsPath = Path.Combine(_workspace.Path, "occurrence-rows.json");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            """
+            <!-- ci-failure-cause:flaky -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            <!-- ci-failure-occurrences:start -->
+            ## Occurrences
+
+            Showing 1 most recent of 1 occurrences.
+
+            | Date | Build | Job | Context |
+            |------|-------|-----|----|
+            | 2026-08-01 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Windows ` | #42 |
+            <!-- ci-failure-occurrences:end -->
+            """);
+        await File.WriteAllTextAsync(occurrenceRowsPath, occurrenceRows);
+        var newRow =
+            "| 2026-08-02 | [124](https://github.com/microsoft/aspire/actions/runs/124) | ` Linux ` | #42 |";
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["render-issue-occurrences", currentBodyPath, newRow, "2", outputPath, occurrenceRowsPath, "2500"]);
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Contains(expectedError, result.Output, StringComparison.Ordinal);
+        Assert.False(File.Exists(outputPath));
     }
 
     [Fact]
@@ -6458,16 +10565,26 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             | Date | Build | Job | PR |
             |------|-------|-----|----|
             | 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | #123 |
+
+            ## Operator notes
+
+            Preserve this note after the legacy table.
             """.ReplaceLineEndings("\r\n"));
+        var newRow =
+            "| 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` Tests ` | #124 |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            "| 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | #123 |",
+            newRow);
 
         var result = await RunBashScriptAsync(
             Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
             [
                 "render-issue-occurrences",
                 currentBodyPath,
-                "| 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` Tests ` | #124 |",
+                newRow,
                 "2",
                 outputPath,
+                occurrenceRowsPath,
             ]);
 
         Assert.Equal(0, result.ExitCode);
@@ -6488,8 +10605,158 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             | 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | #123 |
             | 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` Tests ` | #124 |
             <!-- ci-failure-occurrences:end -->
-            """.ReplaceLineEndings("\n") + "\n",
+
+            ## Operator notes
+
+            Preserve this note after the legacy table.
+            """.ReplaceLineEndings("\n"),
             (await File.ReadAllTextAsync(outputPath)).ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererRepairsLegacyCrossRepositoryRow()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            """
+            <!-- ci-failure-cause:test-failure -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            **Type**: flaky-test
+
+            ## Occurrences
+
+            | Date | Build | Job | PR |
+            |------|-------|-----|----|
+            | 2026-08-01 | [1](https://github.com/attacker/other/actions/runs/1) | ` Tests ` | #123 |
+
+            ## Operator notes
+
+            Preserve this note after the legacy table.
+            """);
+        var canonicalLegacyRow =
+            "| 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | #123 |";
+        var newRow =
+            "| 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` Tests ` | #124 |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(canonicalLegacyRow, newRow);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "render-issue-occurrences",
+                currentBodyPath,
+                newRow,
+                "2",
+                outputPath,
+                occurrenceRowsPath,
+            ],
+            new Dictionary<string, string>
+            {
+                ["GITHUB_REPOSITORY"] = "microsoft/aspire",
+            });
+
+        Assert.Equal(0, result.ExitCode);
+        var outputBody = await File.ReadAllTextAsync(outputPath);
+        Assert.DoesNotContain("attacker/other", outputBody, StringComparison.Ordinal);
+        Assert.Contains(canonicalLegacyRow, outputBody, StringComparison.Ordinal);
+        Assert.Contains(newRow, outputBody, StringComparison.Ordinal);
+        Assert.Contains("Preserve this note after the legacy table.", outputBody, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererRejectsRowsInterleavedWithLegacyOperatorText()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            """
+            <!-- ci-failure-cause:test-failure -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            **Type**: flaky-test
+
+            ## Occurrences
+
+            | Date | Build | Job | PR |
+            |------|-------|-----|----|
+            | 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | #123 |
+
+            Preserve this operator note.
+
+            | 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` Tests ` | #124 |
+            """);
+        var newRow =
+            "| 2026-08-03 | [3](https://github.com/microsoft/aspire/actions/runs/3) | ` Tests ` | #125 |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            "| 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | #123 |",
+            "| 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` Tests ` | #124 |",
+            newRow);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "render-issue-occurrences",
+                currentBodyPath,
+                newRow,
+                "3",
+                outputPath,
+                occurrenceRowsPath,
+            ]);
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Contains("ambiguous legacy occurrence section", result.Output, StringComparison.Ordinal);
+        Assert.False(File.Exists(outputPath));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "jq"])]
+    public async Task IssueOccurrenceRendererRejectsMalformedRowAtLegacySuffixBoundary()
+    {
+        var currentBodyPath = Path.Combine(_workspace.Path, "current-body.md");
+        var outputPath = Path.Combine(_workspace.Path, "updated-body.md");
+        await File.WriteAllTextAsync(
+            currentBodyPath,
+            """
+            <!-- ci-failure-cause:test-failure -->
+            <!-- ci-failure-cause-type:flaky-test -->
+
+            **Type**: flaky-test
+
+            ## Occurrences
+
+            | Date | Build | Job | PR |
+            |------|-------|-----|----|
+            | 2026-08-01 | [999](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | #123 |
+
+            ## Operator notes
+
+            Preserve this note.
+            """);
+        var newRow =
+            "| 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` Tests ` | #124 |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            "| 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | #123 |",
+            newRow);
+
+        var result = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            [
+                "render-issue-occurrences",
+                currentBodyPath,
+                newRow,
+                "2",
+                outputPath,
+                occurrenceRowsPath,
+            ]);
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.Contains("ambiguous legacy occurrence section", result.Output, StringComparison.Ordinal);
+        Assert.False(File.Exists(outputPath));
     }
 
     [Fact]
@@ -6516,15 +10783,21 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             | 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | #123 |
             <!-- ci-failure-occurrences:end -->
             """.ReplaceLineEndings("\n"));
+        var newRow =
+            "| 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` Tests ` | #124 |";
+        var occurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            "| 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | #123 |",
+            newRow);
 
         var result = await RunBashScriptAsync(
             Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
             [
                 "render-issue-occurrences",
                 currentBodyPath,
-                "| 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` Tests ` | #124 |",
+                newRow,
                 "2",
                 outputPath,
+                occurrenceRowsPath,
             ]);
 
         Assert.Equal(2, result.ExitCode);
@@ -6556,24 +10829,37 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             | 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | main |
             <!-- ci-failure-occurrences:end -->
             """.ReplaceLineEndings("\r\n"));
+        var firstNewRow =
+            "| 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` Tests ` | main |";
+        var secondNewRow =
+            "| 2026-08-03 | [3](https://github.com/microsoft/aspire/actions/runs/3) | ` Tests ` | main |";
+        var firstOccurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            "| 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | main |",
+            firstNewRow);
+        var secondOccurrenceRowsPath = await WriteOccurrenceRowsFileAsync(
+            "| 2026-08-01 | [1](https://github.com/microsoft/aspire/actions/runs/1) | ` Tests ` | main |",
+            firstNewRow,
+            secondNewRow);
 
         var firstResult = await RunBashScriptAsync(
             Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
             [
                 "render-issue-occurrences",
                 currentBodyPath,
-                "| 2026-08-02 | [2](https://github.com/microsoft/aspire/actions/runs/2) | ` Tests ` | main |",
+                firstNewRow,
                 "2",
                 firstOutputPath,
+                firstOccurrenceRowsPath,
             ]);
         var secondResult = await RunBashScriptAsync(
             Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
             [
                 "render-issue-occurrences",
                 firstOutputPath,
-                "| 2026-08-03 | [3](https://github.com/microsoft/aspire/actions/runs/3) | ` Tests ` | main |",
+                secondNewRow,
                 "3",
                 secondOutputPath,
+                secondOccurrenceRowsPath,
             ]);
 
         Assert.Equal(0, firstResult.ExitCode);
@@ -6620,6 +10906,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "pull-request",
                 "42",
                 "Tests",
+                "",
                 $"| 2026-08-04 | [123](https://github.com/microsoft/aspire/actions/runs/123) | {new string('x', 65000)} | #42 |",
                 bodyPath,
                 metadataPath,
@@ -6642,13 +10929,23 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "- name: Publish analysis data and comment on PR",
                 "- name: Comment on PR");
 
+            Assert.Contains("backfill-occurrence-publication", publisher, StringComparison.Ordinal);
+            Assert.Contains("stored-occurrence-rows", publisher, StringComparison.Ordinal);
             Assert.Contains("render-issue-occurrences", publisher, StringComparison.Ordinal);
+            Assert.Contains(
+                "Issue updates can then rebuild every managed row from",
+                publisher,
+                StringComparison.Ordinal);
             Assert.Contains(
                 "::warning::Issue #${EXISTING_ISSUE} has an unsupported occurrence section. Skipping occurrence update.",
                 publisher,
                 StringComparison.Ordinal);
             Assert.Contains(
                 "::warning::Cause issue body exceeds the publication budget. Skipping issue creation.",
+                publisher,
+                StringComparison.Ordinal);
+            Assert.Contains(
+                "::warning::Canonical cause issue body exceeds the publication budget. Skipping issue creation.",
                 publisher,
                 StringComparison.Ordinal);
         });
@@ -6694,6 +10991,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "main",
                 "0",
                 "Build",
+                "",
                 "| occurrence |",
                 bodyPath,
                 metadataPath,
@@ -6738,6 +11036,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         var testResult = await RunBashScriptAsync(
             Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
             ["cause-job-names", testCausePath, trustedJobsPath, "display"]);
+        var testDisplayResult = await RunBashScriptAsync(
+            Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
+            ["cause-job-names", testCausePath, trustedJobsPath, "tests-display"]);
         var tableResult = await RunBashScriptAsync(
             Path.Combine(RepoRoot.Path, PersistenceScriptRelativePath),
             ["cause-job-names", multiJobCausePath, trustedJobsPath, "table"]);
@@ -6750,6 +11051,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "https://github.com/microsoft/aspire/actions/runs/42",
                 plainResult.Output.Trim(),
                 "2026-08-31T00:00:00Z",
+                "main",
             ]);
 
         Assert.Equal(0, buildResult.ExitCode);
@@ -6762,6 +11064,8 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             plainResult.Output);
         Assert.Equal(0, testResult.ExitCode);
         Assert.Equal("` Tests Windows `\n", testResult.Output);
+        Assert.Equal(0, testDisplayResult.ExitCode);
+        Assert.Equal("\n", testDisplayResult.Output);
         Assert.Equal(0, tableResult.ExitCode);
         Assert.Equal(
             "` Tests Windows `<br>`` Build \\| [Linux](https://evil.example) @reviewers `quoted` ``\n",
@@ -6772,6 +11076,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Assert.Equal(
                 "Tests Windows, Build | [Linux](https://evil.example) @reviewers `quoted`",
                 occurrence.RootElement.GetProperty("occurrences")[0].GetProperty("job").GetString());
+            Assert.Equal(
+                [2, 1],
+                occurrence.RootElement.GetProperty("occurrences")[0].GetProperty("job_ids")
+                    .EnumerateArray().Select(item => item.GetInt32()));
         }
 
         var buildBodyPath = Path.Combine(_workspace.Path, "build-body.md");
@@ -6790,6 +11098,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "pull-request",
                 "42",
                 buildResult.Output.TrimEnd(),
+                "",
                 "| build occurrence |",
                 buildBodyPath,
                 buildMetadataPath,
@@ -6806,6 +11115,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 "pull-request",
                 "42",
                 testResult.Output.TrimEnd(),
+                "",
                 "| test occurrence |",
                 testBodyPath,
                 testMetadataPath,
@@ -6826,13 +11136,10 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     [Fact]
     public void PublicationDoesNotRenderUnavailablePrAsNumber()
     {
-        ForEachExecutableWorkflow(workflow =>
-        {
-            Assert.Contains(
-                "elif [ \"$PR_NUMBER\" = \"0\" ]; then\nOCCURRENCE_CONTEXT=\"unavailable\"",
-                workflow,
-                StringComparison.Ordinal);
-        });
+        Assert.Contains(
+            "elif [ \"$PR_NUMBER\" = \"0\" ]; then\n      OCCURRENCE_CONTEXT=\"unavailable\"",
+            s_persistenceScript,
+            StringComparison.Ordinal);
         Assert.Contains(
             "  if [ \"$RUN_SCOPE\" = \"pull-request\" ] && [ \"$PR_NUMBER\" != \"0\" ]; then\n    echo \"Pull request: #${PR_NUMBER}\"",
             s_issueScript,
@@ -6911,7 +11218,9 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     private static string ReadWorkflow(string fileName)
         => File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", fileName));
 
-    private async Task<CommandResult> RunValidationScriptAsync(string agentOutputPath)
+    private async Task<CommandResult> RunValidationScriptAsync(
+        string agentOutputPath,
+        TimeSpan? timeout = null)
     {
         var scriptPath = Path.Combine(RepoRoot.Path, ValidationScriptRelativePath);
         Assert.True(File.Exists(scriptPath), $"Expected validation helper at '{ValidationScriptRelativePath}'.");
@@ -6931,8 +11240,8 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         // Read both streams concurrently to avoid deadlock when the validator emits diagnostics.
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
         var stderrTask = process.StandardError.ReadToEndAsync();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await process.WaitForExitAsync(timeout.Token);
+        using var timeoutSource = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(30));
+        await process.WaitForExitAsync(timeoutSource.Token);
 
         return new CommandResult(process.ExitCode, await stdoutTask + await stderrTask);
     }
@@ -7080,6 +11389,13 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         return fakeGhPath;
     }
 
+    private async Task<string> WriteOccurrenceRowsFileAsync(params string[] rows)
+    {
+        var path = Path.Combine(_workspace.Path, $"occurrence-rows-{Guid.NewGuid():N}.json");
+        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(rows));
+        return path;
+    }
+
     private async Task PreparePublicationStepFixtureAsync()
     {
         var workflowDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, ".github", "workflows")).FullName;
@@ -7108,6 +11424,188 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Path.Combine(failureDataDirectory, "run.json"),
             """{"html_url":"https://github.com/microsoft/aspire/actions/runs/123"}""");
         await File.WriteAllTextAsync(Path.Combine(_workspace.Path, "output.json"), """{"items":[]}""");
+    }
+
+    // Runs the real publication step against fake git/gh commands. The git fake keeps a
+    // local "remote" copy of memory-repo so `diff --cached --quiet` reports real changes
+    // and every push snapshots the cause files it published. Both fakes append to one
+    // call log, so tests can order memory pushes relative to issue side effects.
+    private async Task<PublicationStepRun> RunPublicationStepWithIssueStubsAsync(
+        IReadOnlyDictionary<string, string> storedCauses,
+        IReadOnlyDictionary<int, string>? existingIssues = null,
+        string openIssuePages = "[[]]",
+        string closedIssuePages = "[[]]")
+    {
+        var outputDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "publication-output")).FullName;
+        var storedCausesDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "stored-causes")).FullName;
+        var issuesDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "existing-issues")).FullName;
+        foreach (var (causeId, cause) in storedCauses)
+        {
+            await File.WriteAllTextAsync(Path.Combine(storedCausesDirectory, $"{causeId}.json"), cause);
+        }
+        foreach (var (issueNumber, issue) in existingIssues ?? new Dictionary<int, string>())
+        {
+            await File.WriteAllTextAsync(Path.Combine(issuesDirectory, $"{issueNumber}.json"), issue);
+        }
+        var openIssuePagesPath = Path.Combine(outputDirectory, "open-issue-pages.json");
+        var closedIssuePagesPath = Path.Combine(outputDirectory, "closed-issue-pages.json");
+        await File.WriteAllTextAsync(openIssuePagesPath, openIssuePages);
+        await File.WriteAllTextAsync(closedIssuePagesPath, closedIssuePages);
+
+        var callLog = Path.Combine(outputDirectory, "calls.log");
+        var fakeBinDirectory = Directory.CreateDirectory(Path.Combine(_workspace.Path, "fake-bin")).FullName;
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "git"),
+            """
+            #!/usr/bin/env bash
+            echo "git $*" >> "$CALL_LOG"
+            if [ "$1" = "clone" ]; then
+              mkdir -p memory-repo/causes memory-repo/runs "$REMOTE_MEMORY_DIR"
+              cp -R "$STORED_CAUSES_DIR/." memory-repo/causes/
+              cp -R memory-repo/. "$REMOTE_MEMORY_DIR/"
+              exit 0
+            fi
+            if [ "$1" = "-C" ] && [ "$3" = "diff" ]; then
+              diff -r "$2" "$REMOTE_MEMORY_DIR" > /dev/null
+              exit $?
+            fi
+            if [ "$1" = "-C" ] && [ "$3" = "push" ]; then
+              push_number=$(grep -c '^git -C memory-repo push ' "$CALL_LOG")
+              rm -rf "$REMOTE_MEMORY_DIR"
+              mkdir -p "$REMOTE_MEMORY_DIR" "$PUSHED_CAUSES_DIR/$push_number"
+              cp -R "$2/." "$REMOTE_MEMORY_DIR/"
+              cp -R "$2/causes/." "$PUSHED_CAUSES_DIR/$push_number/"
+            fi
+            exit 0
+            """);
+        await WriteExecutableAsync(
+            Path.Combine(fakeBinDirectory, "gh"),
+            """
+            #!/usr/bin/env bash
+            echo "gh $*" >> "$CALL_LOG"
+            if [ "$1" = "api" ] && [[ "$*" == *" --slurp repos/microsoft/aspire/issues "* ]]; then
+              if [[ "$*" == *"-f state=open"* ]]; then
+                cat "$OPEN_ISSUE_PAGES_PATH"
+              else
+                cat "$CLOSED_ISSUE_PAGES_PATH"
+              fi
+              exit 0
+            fi
+            if [ "$1" = "api" ] && [[ "$2" =~ ^repos/microsoft/aspire/issues/([0-9]+)$ ]]; then
+              issue_path="$EXISTING_ISSUES_DIR/${BASH_REMATCH[1]}.json"
+              [ -f "$issue_path" ] || exit 1
+              if [ "${3:-}" = "--jq" ]; then
+                jq -r "$4" "$issue_path"
+              else
+                cat "$issue_path"
+              fi
+              exit 0
+            fi
+            if [ "$1" = "issue" ] && [ "$2" = "edit" ]; then
+              issue_number="$3"
+              shift 3
+              while [ "$#" -gt 0 ]; do
+                case "$1" in
+                  --body-file)
+                    cp "$2" "$OUTPUT_DIR/edited-issue-${issue_number}-body.md"
+                    shift 2
+                    ;;
+                  *)
+                    shift
+                    ;;
+                esac
+              done
+              exit 0
+            fi
+            if [ "$1" = "issue" ] && [ "$2" = "reopen" ]; then
+              exit 0
+            fi
+            if [ "$1" = "issue" ] && [ "$2" = "create" ]; then
+              shift 2
+              while [ "$#" -gt 0 ]; do
+                case "$1" in
+                  --title)
+                    printf '%s' "$2" > "$OUTPUT_DIR/created-issue-title.txt"
+                    shift 2
+                    ;;
+                  --label)
+                    printf '%s' "$2" > "$OUTPUT_DIR/created-issue-labels.txt"
+                    shift 2
+                    ;;
+                  --body-file)
+                    cp "$2" "$OUTPUT_DIR/created-issue-body.md"
+                    shift 2
+                    ;;
+                  *)
+                    shift
+                    ;;
+                esac
+              done
+              echo "https://github.com/microsoft/aspire/issues/88"
+              exit 0
+            fi
+            exit 99
+            """);
+
+        var script = ExtractWorkflowRunScript("analyze-ci-failure.lock.yml", "Publish analysis data and comment on PR")
+            .Replace("${{ github.repository }}", "microsoft/aspire", StringComparison.Ordinal);
+        var result = await RunProcessAsync(
+            "bash",
+            ["-c", script],
+            new Dictionary<string, string>
+            {
+                ["ANALYSIS_DIR"] = Path.Combine(_workspace.Path, "ci-analysis-output"),
+                ["CALL_LOG"] = callLog,
+                ["CLOSED_ISSUE_PAGES_PATH"] = closedIssuePagesPath,
+                ["EXISTING_ISSUES_DIR"] = issuesDirectory,
+                ["GH_AW_AGENT_OUTPUT"] = Path.Combine(_workspace.Path, "output.json"),
+                ["GH_TOKEN"] = "test-token",
+                ["OPEN_ISSUE_PAGES_PATH"] = openIssuePagesPath,
+                ["OUTPUT_DIR"] = outputDirectory,
+                ["PATH"] = $"{fakeBinDirectory}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}",
+                ["PUSHED_CAUSES_DIR"] = Path.Combine(outputDirectory, "pushed-causes"),
+                ["REMOTE_MEMORY_DIR"] = Path.Combine(outputDirectory, "remote-memory"),
+                ["REPO"] = "microsoft/aspire",
+                ["STORED_CAUSES_DIR"] = storedCausesDirectory,
+            });
+        var calls = File.Exists(callLog) ? await File.ReadAllLinesAsync(callLog) : [];
+        return new PublicationStepRun(result, outputDirectory, calls);
+    }
+
+    // The link push must be a second, distinct memory push: the first publishes the
+    // occurrence before any issue side effect, and the last publishes the issue URL
+    // after every create/edit/reopen so a failed link push can be recovered by marker.
+    private static async Task AssertIssueLinkPushedAfterIssueMutationAsync(
+        PublicationStepRun run,
+        string causeId,
+        string expectedIssueUrl)
+    {
+        var pushIndexes = run.Calls
+            .Select((call, index) => (call, index))
+            .Where(entry => entry.call == "git -C memory-repo push origin HEAD:memory/ci-failure-analysis")
+            .Select(entry => entry.index)
+            .ToArray();
+        var mutationIndexes = run.Calls
+            .Select((call, index) => (call, index))
+            .Where(entry =>
+                entry.call.StartsWith("gh issue create ", StringComparison.Ordinal) ||
+                entry.call.StartsWith("gh issue edit ", StringComparison.Ordinal) ||
+                entry.call.StartsWith("gh issue reopen ", StringComparison.Ordinal))
+            .Select(entry => entry.index)
+            .ToArray();
+        Assert.Equal(2, pushIndexes.Length);
+        Assert.NotEmpty(mutationIndexes);
+        Assert.True(pushIndexes[0] < mutationIndexes.Min(), string.Join(Environment.NewLine, run.Calls));
+        Assert.True(pushIndexes[1] > mutationIndexes.Max(), string.Join(Environment.NewLine, run.Calls));
+
+        using var occurrencePush = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(run.OutputDirectory, "pushed-causes", "1", $"{causeId}.json")));
+        using var linkPush = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(run.OutputDirectory, "pushed-causes", "2", $"{causeId}.json")));
+        Assert.NotEqual(
+            expectedIssueUrl,
+            occurrencePush.RootElement.TryGetProperty("issue_url", out var earlyUrl) ? earlyUrl.GetString() : null);
+        Assert.Equal(expectedIssueUrl, linkPush.RootElement.GetProperty("issue_url").GetString());
     }
 
     private static async Task WriteExecutableAsync(string path, string script)
@@ -7383,6 +11881,17 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     private sealed record CommandResult(int ExitCode, string Output);
+
+    private sealed record PublicationStepRun(CommandResult Result, string OutputDirectory, IReadOnlyList<string> Calls)
+    {
+        public string CreatedBodyPath => Path.Combine(OutputDirectory, "created-issue-body.md");
+
+        public string CreatedLabelsPath => Path.Combine(OutputDirectory, "created-issue-labels.txt");
+
+        public string CreatedTitlePath => Path.Combine(OutputDirectory, "created-issue-title.txt");
+
+        public string EditedBodyPath(int issueNumber) => Path.Combine(OutputDirectory, $"edited-issue-{issueNumber}-body.md");
+    }
 
     private sealed record RerunHarnessResult(string[] Failed, int[] Reruns, string[] Infos, string[] Warnings);
 }

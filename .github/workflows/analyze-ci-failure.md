@@ -743,6 +743,7 @@ safe-outputs:
         - name: Publish analysis data and comment on PR
           env:
             ANALYSIS_DIR: ${{ steps.download-analysis.outputs.download-path }}
+            REPO: ${{ github.repository }}
           run: |
             set -euo pipefail
 
@@ -759,17 +760,17 @@ safe-outputs:
             TRUSTED_RUN_SCOPE=$(jq -r '.run_scope' "$RUN_CONTEXT_FILE")
             VERDICT=$(jq -r '.verdict' "$ANALYSIS_FILE")
 
-            REPO="${{ github.repository }}"
+            : "${REPO:?REPO is required}"
             MEMORY_BRANCH="memory/ci-failure-analysis"
 
             # Read fields from the analysis JSON
             RUN_ID="$TRUSTED_RUN_ID"
+            RUN_ATTEMPT=$(jq -er '.run_attempt | select(type == "number" and . > 0 and . == floor)' "$RUN_CONTEXT_FILE")
             RUN_SCOPE="$TRUSTED_RUN_SCOPE"
             RUN_URL=$(jq -r '.html_url // ""' ci-failure-data/run.json)
             ANALYZED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
             PR_NUMBER=$(bash .github/workflows/analyze-ci-failure-persistence.sh pr-number)
 
-            # ── 1. Set up memory branch and merge cause data ──
             # Skip persisting data for code-issue verdicts — these are not
             # actionable by CI automation and would just add noise.
             if [ "$VERDICT" = "code-issue" ]; then
@@ -787,15 +788,10 @@ safe-outputs:
               git -C memory-repo config user.name "github-actions[bot]"
               git -C memory-repo config user.email "github-actions[bot]@users.noreply.github.com"
 
-              # Store run summary under runs/ directory
               mkdir -p "memory-repo/runs"
               bash .github/workflows/analyze-ci-failure-persistence.sh write-run-summary \
                 "$ANALYSIS_FILE" "memory-repo/runs/${RUN_ID}.json" "$ANALYZED_AT"
 
-              # Store individual cause files under causes/ (shared across runs).
-              # Each cause file accumulates occurrences over time. The agent
-              # writes cause definitions (no occurrences); we build the occurrence
-              # from the run summary and merge it into the stored cause file.
               if [ -d "$CAUSES_DIR" ]; then
                 mkdir -p "memory-repo/causes"
 
@@ -810,10 +806,10 @@ safe-outputs:
                   CAUSE_JOBS_PLAIN=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
                     cause-job-names "$CAUSE_FILE" "$TRUSTED_FAILED_JOBS_FILE" plain)
 
-                  # Add an occurrences array with this run's entry to the agent's cause file
                   CAUSE_WITH_OCC=$(bash .github/workflows/analyze-ci-failure-persistence.sh add-occurrence \
-                    "$CAUSE_FILE" "$RUN_ID" "$RUN_URL" "$CAUSE_JOBS_PLAIN" "$ANALYZED_AT" |
-                    jq 'del(.job_ids, .job_names)')
+                    "$CAUSE_FILE" "$RUN_ID" "$RUN_URL" "$CAUSE_JOBS_PLAIN" \
+                    "$ANALYZED_AT" "$RUN_SCOPE" |
+                    jq 'del(.job_ids, .job_names, .tests)')
 
                   if [ -f "$EXISTING" ]; then
                     CURRENT_CAUSE_TYPE=$(jq -r '.type // ""' "$EXISTING")
@@ -827,7 +823,7 @@ safe-outputs:
                       echo "::error::Stored cause ${CAUSE_BASENAME_DISPLAY} cannot change type from ${CURRENT_CAUSE_TYPE_DISPLAY} to ${CAUSE_TYPE_DISPLAY}"
                       exit 1
                     fi
-                    if [ "$CAUSE_TYPE" = "flaky-test" ]; then
+                    if [ "$CAUSE_TYPE" = "flaky-test" ] && ! jq -e 'has("tests")' "$CAUSE_FILE" >/dev/null; then
                       CURRENT_CAUSE_TEST_NAME=$(jq -r 'if (.test_name | type) == "string" then .test_name else "" end' "$EXISTING")
                       CAUSE_TEST_NAME=$(jq -r '.test_name' "$CAUSE_FILE")
                       if [ "$CURRENT_CAUSE_TEST_NAME" != "$CAUSE_TEST_NAME" ]; then
@@ -846,6 +842,16 @@ safe-outputs:
                   else
                     echo "$CAUSE_WITH_OCC" > "$EXISTING"
                   fi
+
+                  # Persist the canonical issue projection after merging so a
+                  # legacy enrichment keeps the stored observation date and job
+                  # label. Issue updates can then rebuild every managed row from
+                  # memory instead of trusting editable issue-body history.
+                  bash .github/workflows/analyze-ci-failure-persistence.sh \
+                    backfill-occurrence-publication \
+                    "$EXISTING" "$TRUSTED_FAILED_JOBS_FILE" \
+                    "$RUN_ID" "$RUN_ATTEMPT" "$RUN_SCOPE" "${EXISTING}.tmp"
+                  mv "${EXISTING}.tmp" "$EXISTING"
                 done
                 CAUSE_COUNT=$(find "memory-repo/causes" -name '*.json' -type f 2>/dev/null | wc -l)
                 echo "Persisted cause files to causes/ (${CAUSE_COUNT} total)"
@@ -863,35 +869,30 @@ safe-outputs:
                 echo "Memory branch updated with analysis for run ${RUN_ID}"
               fi
 
-            # ── 2. Create or update issues for each cause ──
             if [ -d "$CAUSES_DIR" ]; then
-              # Build occurrence info from the run summary for issue updates
-              # Build the occurrence table row for this run
-              OCC_DATE=$(echo "$ANALYZED_AT" | cut -dT -f1)
-              if [ "$RUN_SCOPE" = "main" ]; then
-                OCCURRENCE_CONTEXT="main"
-              elif [ "$PR_NUMBER" = "0" ]; then
-                OCCURRENCE_CONTEXT="unavailable"
-              else
-                OCCURRENCE_CONTEXT="#${PR_NUMBER}"
-              fi
               for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                 [ -f "$CAUSE_FILE" ] || continue
 
                 CAUSE_ID=$(jq -r '.id' "$CAUSE_FILE")
-
                 CAUSE_TYPE=$(jq -r '.type' "$CAUSE_FILE")
-                CAUSE_JOBS=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
-                  cause-job-names "$CAUSE_FILE" "$TRUSTED_FAILED_JOBS_FILE" display)
-                CAUSE_JOBS_TABLE=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
-                  cause-job-names "$CAUSE_FILE" "$TRUSTED_FAILED_JOBS_FILE" table)
-                NEW_OCCURRENCE_ROW="| ${OCC_DATE} | [${RUN_ID}](${RUN_URL}) | ${CAUSE_JOBS_TABLE} | ${OCCURRENCE_CONTEXT} |"
-
                 CAUSE_STORED="memory-repo/causes/${CAUSE_ID}.json"
+                PUBLICATION_OCCURRENCE=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
+                  publication-occurrence \
+                  "$CAUSE_FILE" "$CAUSE_STORED" "$TRUSTED_FAILED_JOBS_FILE" \
+                  "$RUN_ID" "$RUN_ATTEMPT" "$RUN_URL" "$ANALYZED_AT" "$RUN_SCOPE" "$PR_NUMBER")
+                CAUSE_JOBS=$(jq -r '.jobs_display' <<< "$PUBLICATION_OCCURRENCE")
+                CAUSE_TESTS=$(jq -r '.tests_display' <<< "$PUBLICATION_OCCURRENCE")
+                OCCURRENCE_URL=$(jq -r '.occurrence_url' <<< "$PUBLICATION_OCCURRENCE")
+                ISSUE_ROW_REFRESH_REQUIRED=$(jq -r '.refresh_required' <<< "$PUBLICATION_OCCURRENCE")
+                TOTAL_OCCURRENCE_COUNT=$(jq '.occurrences | length' "$CAUSE_STORED")
+                OCCURRENCE_ROWS_FILE=$(mktemp)
+                bash .github/workflows/analyze-ci-failure-persistence.sh \
+                  stored-occurrence-rows "$CAUSE_STORED" memory-repo/runs > "$OCCURRENCE_ROWS_FILE"
+                NEW_OCCURRENCE_ROW=$(bash .github/workflows/analyze-ci-failure-persistence.sh \
+                  select-occurrence-row "$OCCURRENCE_ROWS_FILE" "$RUN_ID" "$OCCURRENCE_URL")
                 MARKER="<!-- ci-failure-cause:${CAUSE_ID} -->"
                 TYPE_MARKER="<!-- ci-failure-cause-type:${CAUSE_TYPE} -->"
 
-                # Check if the stored cause file already has a linked issue
                 EXISTING_ISSUE=""
                 if [ -f "$CAUSE_STORED" ]; then
                   STORED_ISSUE_URL=$(jq -r '.issue_url // empty' "$CAUSE_STORED")
@@ -934,6 +935,7 @@ safe-outputs:
                     if ! bash .github/workflows/analyze-ci-failure-persistence.sh \
                         cache-cause-issues "$REPO" "$OPEN_ISSUES_CACHE" "$CLOSED_ISSUES_CACHE"; then
                       echo "::error::Cause issue lookup failed. Refusing to create an issue from incomplete results."
+                      rm -f "$OCCURRENCE_ROWS_FILE"
                       exit 1
                     fi
                     ISSUES_CACHE_LOADED="true"
@@ -1006,30 +1008,31 @@ safe-outputs:
                   BODY_FILE=""
                   BODY_SOURCE_FILE="$CURRENT_BODY_FILE"
                   OCCURRENCE_BODY_AVAILABLE="false"
-                  # Anchor the pattern with '(' from the markdown link to avoid
-                  # partial matches (e.g., run 123 matching run 1234).
-                  if grep -qF "[${RUN_ID}](" "$CURRENT_BODY_FILE"; then
-                    echo "Occurrence for run ${RUN_ID} already recorded in issue #${EXISTING_ISSUE}. Skipping."
-                  else
-                    BODY_FILE=$(mktemp)
-                    TOTAL_OCCURRENCE_COUNT=$(jq '.occurrences | length' "$CAUSE_STORED")
-                    set +e
-                    bash .github/workflows/analyze-ci-failure-persistence.sh render-issue-occurrences \
-                      "$CURRENT_BODY_FILE" "$NEW_OCCURRENCE_ROW" "$TOTAL_OCCURRENCE_COUNT" "$BODY_FILE"
-                    OCCURRENCE_RENDER_STATUS=$?
-                    set -e
-                    if [ "$OCCURRENCE_RENDER_STATUS" -eq 0 ]; then
-                      BODY_SOURCE_FILE="$BODY_FILE"
-                      OCCURRENCE_BODY_AVAILABLE="true"
-                    elif [ "$OCCURRENCE_RENDER_STATUS" -eq 2 ]; then
-                      echo "::warning::Issue #${EXISTING_ISSUE} has an unsupported occurrence section. Skipping occurrence update."
+                  ISSUE_ROW_ALREADY_CURRENT="false"
+                  BODY_FILE=$(mktemp)
+                  set +e
+                  bash .github/workflows/analyze-ci-failure-persistence.sh render-issue-occurrences \
+                    "$CURRENT_BODY_FILE" "$NEW_OCCURRENCE_ROW" "$TOTAL_OCCURRENCE_COUNT" \
+                    "$BODY_FILE" "$OCCURRENCE_ROWS_FILE"
+                  OCCURRENCE_RENDER_STATUS=$?
+                  set -e
+                  if [ "$OCCURRENCE_RENDER_STATUS" -eq 0 ]; then
+                    if cmp -s "$CURRENT_BODY_FILE" "$BODY_FILE"; then
+                      ISSUE_ROW_ALREADY_CURRENT="true"
                       rm -f "$BODY_FILE"
                       BODY_FILE=""
                     else
-                      echo "::error::Unable to render occurrence history for issue #${EXISTING_ISSUE}."
-                      rm -f "$CURRENT_BODY_FILE" "$BODY_FILE"
-                      exit "$OCCURRENCE_RENDER_STATUS"
+                      BODY_SOURCE_FILE="$BODY_FILE"
+                      OCCURRENCE_BODY_AVAILABLE="true"
                     fi
+                  elif [ "$OCCURRENCE_RENDER_STATUS" -eq 2 ]; then
+                    echo "::warning::Issue #${EXISTING_ISSUE} has an unsupported occurrence section. Skipping occurrence update."
+                    rm -f "$BODY_FILE"
+                    BODY_FILE=""
+                  else
+                    echo "::error::Unable to render occurrence history for issue #${EXISTING_ISSUE}."
+                    rm -f "$CURRENT_BODY_FILE" "$BODY_FILE"
+                    exit "$OCCURRENCE_RENDER_STATUS"
                   fi
 
                   if [ "$CAUSE_TYPE" = "main-repository-breakage" ]; then
@@ -1044,7 +1047,7 @@ safe-outputs:
                       ci-failure-data/last-successful-main-run.json \
                       ci-failure-data/triggering-merge-pr.json \
                       ci-failure-data/candidate-merge-history-status.json \
-                      "$RUN_URL" "$RUN_SCOPE" "$PR_NUMBER" "$CAUSE_JOBS" \
+                      "$OCCURRENCE_URL" "$RUN_SCOPE" "$PR_NUMBER" "$CAUSE_JOBS" "$CAUSE_TESTS" \
                       "$NEW_OCCURRENCE_ROW" "$CANONICAL_BODY_FILE" "$ISSUE_METADATA_FILE"
                     MIGRATED_BODY_AVAILABLE="false"
                     if bash .github/workflows/analyze-ci-failure-persistence.sh \
@@ -1081,6 +1084,13 @@ safe-outputs:
                   else
                     echo "Updated issue #${EXISTING_ISSUE} for cause: ${CAUSE_ID}"
                   fi
+                  if [ "$ISSUE_ROW_REFRESH_REQUIRED" = "true" ] &&
+                     { [ "$OCCURRENCE_BODY_AVAILABLE" = "true" ] ||
+                       [ "$ISSUE_ROW_ALREADY_CURRENT" = "true" ]; }; then
+                    ISSUE_ROW_REFRESH_PUBLISHED="true"
+                  else
+                    ISSUE_ROW_REFRESH_PUBLISHED="false"
+                  fi
                 else
                   # Create a new issue for this cause
                   BODY_FILE=$(mktemp)
@@ -1091,18 +1101,39 @@ safe-outputs:
                     ci-failure-data/last-successful-main-run.json \
                     ci-failure-data/triggering-merge-pr.json \
                     ci-failure-data/candidate-merge-history-status.json \
-                    "$RUN_URL" "$RUN_SCOPE" "$PR_NUMBER" "$CAUSE_JOBS" \
+                    "$OCCURRENCE_URL" "$RUN_SCOPE" "$PR_NUMBER" "$CAUSE_JOBS" "$CAUSE_TESTS" \
                     "$NEW_OCCURRENCE_ROW" "$BODY_FILE" "$ISSUE_METADATA_FILE"
                   ISSUE_RENDER_STATUS=$?
                   set -e
                   if [ "$ISSUE_RENDER_STATUS" -eq 2 ]; then
                     echo "::warning::Cause issue body exceeds the publication budget. Skipping issue creation."
-                    rm -f "$BODY_FILE" "$ISSUE_METADATA_FILE"
+                    rm -f "$BODY_FILE" "$ISSUE_METADATA_FILE" "$OCCURRENCE_ROWS_FILE"
                     continue
                   elif [ "$ISSUE_RENDER_STATUS" -ne 0 ]; then
-                    rm -f "$BODY_FILE" "$ISSUE_METADATA_FILE"
+                    rm -f "$BODY_FILE" "$ISSUE_METADATA_FILE" "$OCCURRENCE_ROWS_FILE"
                     exit "$ISSUE_RENDER_STATUS"
                   fi
+
+                  # New issues use the same memory-authoritative row set as
+                  # updates. This matters when replay recreates an issue after
+                  # several occurrences were already persisted.
+                  RENDERED_BODY_FILE=$(mktemp)
+                  set +e
+                  bash .github/workflows/analyze-ci-failure-persistence.sh \
+                    render-issue-occurrences \
+                    "$BODY_FILE" "$NEW_OCCURRENCE_ROW" "$TOTAL_OCCURRENCE_COUNT" \
+                    "$RENDERED_BODY_FILE" "$OCCURRENCE_ROWS_FILE"
+                  OCCURRENCE_RENDER_STATUS=$?
+                  set -e
+                  if [ "$OCCURRENCE_RENDER_STATUS" -eq 2 ]; then
+                    echo "::warning::Canonical cause issue body exceeds the publication budget. Skipping issue creation."
+                    rm -f "$BODY_FILE" "$RENDERED_BODY_FILE" "$ISSUE_METADATA_FILE" "$OCCURRENCE_ROWS_FILE"
+                    continue
+                  elif [ "$OCCURRENCE_RENDER_STATUS" -ne 0 ]; then
+                    rm -f "$BODY_FILE" "$RENDERED_BODY_FILE" "$ISSUE_METADATA_FILE" "$OCCURRENCE_ROWS_FILE"
+                    exit "$OCCURRENCE_RENDER_STATUS"
+                  fi
+                  mv "$RENDERED_BODY_FILE" "$BODY_FILE"
 
                   ISSUE_TITLE=$(jq -r '.title' "$ISSUE_METADATA_FILE")
                   LABELS=$(jq -r '.labels' "$ISSUE_METADATA_FILE")
@@ -1118,7 +1149,16 @@ safe-outputs:
                     jq --arg url "$CREATED_ISSUE_URL" '.issue_url = $url' "$CAUSE_STORED" > "${CAUSE_STORED}.tmp" \
                       && mv "${CAUSE_STORED}.tmp" "$CAUSE_STORED"
                   fi
+                  ISSUE_ROW_REFRESH_PUBLISHED="$ISSUE_ROW_REFRESH_REQUIRED"
                 fi
+
+                if [ "$ISSUE_ROW_REFRESH_PUBLISHED" = "true" ]; then
+                  bash .github/workflows/analyze-ci-failure-persistence.sh \
+                    clear-occurrence-refresh \
+                    "$CAUSE_STORED" "$RUN_ID" "$RUN_ATTEMPT" "${CAUSE_STORED}.tmp"
+                  mv "${CAUSE_STORED}.tmp" "$CAUSE_STORED"
+                fi
+                rm -f "$OCCURRENCE_ROWS_FILE"
               done
               rm -f "${OPEN_ISSUES_CACHE:-}" "${CLOSED_ISSUES_CACHE:-}"
             fi
@@ -1148,7 +1188,9 @@ safe-outputs:
             RUN_CONTEXT_FILE="ci-failure-data/run-context.json"
             TRUSTED_FAILED_JOBS_FILE="ci-failure-data/failed-jobs.json"
             RUN_SCOPE=$(jq -r '.run_scope' "$RUN_CONTEXT_FILE")
+            RUN_ATTEMPT=$(jq -er '.run_attempt | select(type == "number" and . > 0 and . == floor)' "$RUN_CONTEXT_FILE")
             RUN_URL=$(jq -r '.html_url // ""' ci-failure-data/run.json)
+            OCCURRENCE_URL="${RUN_URL}/attempts/${RUN_ATTEMPT}"
             PR_NUMBERS=$(jq -r '.pr_numbers' "$RUN_CONTEXT_FILE")
             REPO="${{ github.repository }}"
 
@@ -1199,7 +1241,7 @@ safe-outputs:
             trap 'rm -f "$COMMENT_FILE" "$COMMENT_REQUEST_FILE"' EXIT
             COMMENT_FILE=$(mktemp)
             bash .github/workflows/analyze-ci-failure-comment.sh \
-              "$ANALYSIS_FILE" "$TRUSTED_FAILED_JOBS_FILE" "$RUN_URL" > "$COMMENT_FILE"
+              "$ANALYSIS_FILE" "$TRUSTED_FAILED_JOBS_FILE" "$OCCURRENCE_URL" > "$COMMENT_FILE"
 
             if [ -n "$EXISTING_COMMENT_ID" ]; then
               COMMENT_REQUEST_FILE=$(mktemp)
@@ -1548,12 +1590,15 @@ When a failure is classified as `flaky-test`, `infra-failure`, or `main-reposito
 If any of this run's tracked failures match an existing cause, you MUST reuse that cause's `id` when writing the cause file in Step 3b. This allows the publish job to merge occurrences into the existing cause rather than creating duplicates. Do NOT attempt to match code-issue failures against prior causes — those are not tracked.
 
 A failure matches an existing cause only when its failure category, failing phase, and current diagnostic agree:
-- For flaky tests: the test actually ran and failed, its full test name matches `test_name`, and its observed error/stack trace substantially matches the prior cause's `error_pattern`.
+- For flaky tests: the tests actually ran and failed, and their observed error/stack trace substantially matches the prior cause's `error_pattern` and failure mechanism. The affected tests may differ between runs; the cause is the mechanism, not the test or job name.
 - For infra failures: the current failed operation and diagnostic substantially match the prior infra-failure cause, including relevant HTTP status or exit codes.
 - For main repository breakages: the deterministic failure substantially matches the `error_pattern` of a prior main-repository-breakage cause
 - A job or shard name is not a test name. A failed prerequisite and a skipped test cannot match a test failure, even if the job name is identical.
+- Older causes may have a scalar `test_name` containing a joined display label, a job name, or no name at all. These are historical descriptions, not verified test identities. Prefer `recent_tests` (when available) as evidence, and compare current diagnostics before reusing the cause. Do not split historical causes or attach an unrelated failure to a catch-all solely because its job or error code is similar.
 
-When reusing an existing cause, keep the same `id` and `type`. Copy the existing `title`, `test_name`, and `error_pattern` when practical; the publisher treats the previously stored values as authoritative and will not let a later run rewrite them. Add the current run's `job_ids` as described below and add the cause ID to the `causes` array in the run summary.
+Cause matching is a semantic classification performed by you. The publisher verifies the provenance and exact identity of current test/job observations, but it cannot mechanically determine whether current diagnostics represent the same underlying mechanism as a prior cause. Prior cause IDs, titles, patterns, and recent tests are evidence for that decision, not a publisher-enforced identity key. Reusing the wrong cause ID is an analysis-classification error, not an authenticated reassignment of test or job identity.
+
+When reusing an existing cause, keep the same `id` and `type`. Copy the existing `title` and `error_pattern` when practical; the publisher treats the previously stored values (including an old `test_name` and issue link, if any) as authoritative and will not let a later run rewrite them. Add the current run's `job_ids` and verified `tests` as described below and add the cause ID to the `causes` array in the run summary.
 
 ### Step 3: Write the analysis JSON files
 
@@ -1629,11 +1674,11 @@ Field details:
 - The validator replaces `error`, `stack_trace`, `standard_output`, and `standard_error` with bounded trusted artifact values before publication.
 - `failed_tests[].reason`: A single-line explanation, limited to 500 characters.
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
-- `causes`: An array of at most 10 cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts. `causes` MUST cover every `transient-infra` failed job with an `infra-failure` cause, every `flaky-test` failed job with a `flaky-test` cause, every flaky `{name, job}` test identity with an exactly matching `flaky-test` cause, and every `main-repository-breakage` failed job with a `main-repository-breakage` cause. `code-issue` jobs are exempt. Group failures only when they have the same underlying root cause and, for flaky failures, the same test identity. The 10-cause publication budget is fail-closed: never combine or omit distinct flaky tests merely to fit within it.
+- `causes`: An array of at most 10 cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts. `causes` MUST cover every `transient-infra` failed job with an `infra-failure` cause, every `flaky-test` failed job with a `flaky-test` cause, every flaky `{name, job}` test identity with exactly one `flaky-test` cause, and every `main-repository-breakage` failed job with a `main-repository-breakage` cause. `code-issue` jobs are exempt. Group failures only when the current evidence supports the same underlying mechanism, not merely to fit the budget. The 10-cause publication budget fails closed rather than omitting or combining unrelated failures.
 
 #### 3b. Per-cause files
 
-For each distinct underlying cause that is NOT a pull-request code issue, write a separate JSON file to `/tmp/gh-aw/agent/causes/<cause-id>.json`. The `<cause-id>` should be a filesystem-safe identifier derived from the cause (e.g., sanitized test name for flaky tests, or a short descriptive slug for infrastructure issues and main repository breakages). Do NOT create cause files for `code-issue` classifications — those are the PR author's responsibility and are not tracked as recurring CI problems.
+For each distinct underlying cause that is NOT a pull-request code issue, write a separate JSON file to `/tmp/gh-aw/agent/causes/<cause-id>.json`. The `<cause-id>` should be a filesystem-safe identifier derived from the failure mechanism (e.g., `browser-debugger-timeout` for a recurring timeout). Do NOT create cause files for `code-issue` classifications — those are the PR author's responsibility and are not tracked as recurring CI problems.
 
 Each cause file must follow this schema:
 
@@ -1642,23 +1687,26 @@ Each cause file must follow this schema:
   "id": "cause-id",
   "type": "flaky-test | infra-failure | main-repository-breakage",
   "title": "Human-readable short description of the cause",
-  "test_name": "Fully.Qualified.TestName (required for flaky-test)",
+  "tests": [
+    {"name": "Fully.Qualified.FirstTest", "job_id": 123456789},
+    {"name": "Fully.Qualified.SecondTest", "job_id": 123456789}
+  ],
   "error_pattern": "The key error message or pattern that identifies this cause",
   "job_ids": [123456789]
 }
 ```
 
 Field details:
-- `id`: Must match the filename (without `.json`). Use lowercase with hyphens. For flaky tests, derive from the test name (e.g., `aspire-hosting-tests-mytest`). For infra failures, use a descriptive slug (e.g., `nuget-feed-timeout`, `docker-registry-rate-limit`).
+- `id`: Must match the filename (without `.json`). Use lowercase with hyphens and identify the cause, not a job or test that happened to encounter it (e.g., `browser-debugger-timeout`, `nuget-feed-timeout`).
 - `type`: One of `"flaky-test"`, `"infra-failure"`, or `"main-repository-breakage"`. Do NOT create cause files for pull-request code-issue classifications.
 - `title`: A brief, single-line human-readable description of at most 238 characters (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
-- `test_name`: A `flaky-test` cause MUST include a `test_name` that exactly matches a `failed_tests` entry classified as `"flaky"`, limited to 500 characters. Omit this field for infrastructure failures; infrastructure causes MUST NOT include a non-empty `test_name`.
+- `tests`: A `flaky-test` cause MUST include a nonempty array of at most 200 distinct current-run `{name, job_id}` observations. Each name must exactly match a `failed_tests` entry classified as `"flaky"` in the trusted job with that numeric ID; use the exact test name, not a joined label. Every flaky test/job pair must belong to exactly one cause, including in mixed verdicts. Omit `tests` for infrastructure and main-breakage causes. The publisher stores these observations with the run occurrence, not as immutable cause identity.
 - `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the structured test data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue, up to 500 characters. Use LF for multiline text and omit ANSI styling or other control characters.
-- `job_ids`: A non-empty array of unique numeric IDs for the failed jobs where this cause occurred. Use only IDs from the trusted failed-job summary; do not write job names. An `infra-failure` cause may reference only `transient-infra` jobs, and a `main-repository-breakage` cause may reference only `main-repository-breakage` jobs. Every job referenced by a `flaky-test` cause must have a `"flaky"` `failed_tests` entry whose `name` exactly matches the cause's `test_name` and whose `job` exactly matches that trusted job name.
+- `job_ids`: A non-empty array of unique numeric IDs for the failed jobs where this cause occurred. Use only IDs from the trusted failed-job summary; do not write job names. An `infra-failure` cause may reference only `transient-infra` jobs, and a `main-repository-breakage` cause may reference only `main-repository-breakage` jobs. Every job referenced by a `flaky-test` cause must have at least one observation in `tests` with that ID; no observation may reference an unlisted job.
 
 Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON. The publisher derives display names from trusted job metadata and removes `job_ids` before storing the stable cause definition.
 
-Create the `/tmp/gh-aw/agent/causes/` directory and write one `.json` file per distinct cause, with at most 10 cause files for the run. Multiple failed tests with the same root cause (e.g., same infrastructure error) can be grouped into a single cause file. When a failure matches an existing prior cause, use the same filename (`<cause-id>.json`) so the publish job merges correctly.
+Create the `/tmp/gh-aw/agent/causes/` directory and write one `.json` file per distinct cause, with at most 10 cause files for the run. Multiple failed tests with the same root cause can be grouped into a single cause file even across jobs. When a failure matches an existing prior cause, use the same filename (`<cause-id>.json`) so the publish job merges correctly.
 
 ### Step 4: Take action
 
