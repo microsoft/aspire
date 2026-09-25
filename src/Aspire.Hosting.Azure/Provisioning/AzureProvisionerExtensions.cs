@@ -54,8 +54,11 @@ public static class AzureProvisionerExtensions
         builder.Services.TryAddSingleton<IBicepProvisioner, BicepProvisioner>();
 
         // Register the new internal services for testability
+        builder.Services.TryAddSingleton<ArmClientOptions>();
         builder.Services.TryAddSingleton<IArmClientProvider>(sp =>
-            new DefaultArmClientProvider(new ArmClientOptions(), sp.GetService<TimeProvider>() ?? TimeProvider.System));
+            new DefaultArmClientProvider(
+                sp.GetRequiredService<ArmClientOptions>(),
+                sp.GetService<TimeProvider>() ?? TimeProvider.System));
         builder.Services.TryAddSingleton<ISecretClientProvider, DefaultSecretClientProvider>();
         builder.Services.TryAddSingleton<IBicepCompiler, BicepCliCompiler>();
         builder.Services.TryAddSingleton<IAzurePrincipalProvider, DefaultAzurePrincipalProvider>();
