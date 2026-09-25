@@ -43,6 +43,7 @@
     --aspire-font-sans: "Geist", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     --aspire-font-mono: "Cascadia Mono", "Geist Mono", Consolas, ui-monospace, "Courier New", monospace;
     --aspire-font-display: "Poppins", var(--aspire-font-sans);
+    --aspire-brand-hover-brightness: 1.1;
     --fontFamilyBase: var(--aspire-font-sans);
     --fontFamilyMonospace: var(--aspire-font-mono);
     --aspire-control-height: 28px;
@@ -245,6 +246,7 @@
 
 [data-theme="dark"] {
     color-scheme: dark;
+    --aspire-brand-hover-brightness: 0.9;
     --aspire-page-background: #221e2d;
     --aspire-shell-background: #000000;
     --aspire-control-background: #2d2937;
