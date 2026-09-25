@@ -60,7 +60,7 @@ internal sealed partial class AgentTelemetryCatalog
                 var path = AspireSkillsBundleProvider.NormalizeRelativePath(file?.RelativePath).Replace('\\', '/');
                 // SKILL.md is an invocation, not a reference. Evals, scripts, and other manifest
                 // assets must not become new telemetry dimensions merely because they are shipped.
-                if (path.StartsWith("references/", StringComparison.Ordinal))
+                if (path.StartsWith(AspireSkillsBundleLayout.ReferencesDirectoryName + "/", StringComparison.Ordinal))
                 {
                     references.Add($"{name}/{path}");
                 }
@@ -69,11 +69,17 @@ internal sealed partial class AgentTelemetryCatalog
 
         // The manifest does not yet describe MCP tools. Retain the canonical tool allowlist until
         // structured tool metadata is available, without parsing shell declarations for skills.
+        // The script contains one shell declaration in this form:
+        //   ASPIRE_MCP_TOOLS="doctor list_resources ..."
+        // McpToolsDeclaration matches the entire declaration and captures the quoted text as "values".
         var declarations = McpToolsDeclaration().Matches(script);
         if (declarations.Count != 1)
         {
             throw new InvalidDataException("The bundled telemetry hook must declare ASPIRE_MCP_TOOLS exactly once.");
         }
+
+        // A null separator makes string.Split treat all Unicode whitespace as delimiters. Removing
+        // empty entries allows the captured tool identifiers to be separated by repeated whitespace.
         var tools = declarations[0].Groups["values"].Value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         if (tools.Length == 0 || tools.Any(tool => !ToolIdentifier().IsMatch(tool)))
         {
@@ -104,9 +110,9 @@ internal sealed partial class AgentTelemetryCatalog
         while (tar.GetNextEntry() is { } entry)
         {
             // The manifest is at the archive root or one wrapper directory below it:
-            // skill-manifest.json or aspire-skills-v0.0.3/skill-manifest.json.
+            // The manifest is either at the root or inside one versioned wrapper directory.
             var parts = entry.Name.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            if (parts is not (["skill-manifest.json"] or [_, "skill-manifest.json"]))
+            if (parts is not ([AspireSkillsBundleLayout.ManifestFileName] or [_, AspireSkillsBundleLayout.ManifestFileName]))
             {
                 continue;
             }
@@ -119,7 +125,7 @@ internal sealed partial class AgentTelemetryCatalog
                 ?? throw new InvalidDataException("The bundled skill manifest is empty.");
         }
 
-        return manifest ?? throw new InvalidDataException("The bundled skills archive is missing skill-manifest.json.");
+        return manifest ?? throw new InvalidDataException($"The bundled skills archive is missing {AspireSkillsBundleLayout.ManifestFileName}.");
     }
 
     // ASPIRE_MCP_TOOLS="doctor list_resources ..." is literal, whitespace-separated data.

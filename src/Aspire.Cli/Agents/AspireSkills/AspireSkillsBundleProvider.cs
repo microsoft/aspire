@@ -37,9 +37,6 @@ internal interface IAspireSkillsBundleProvider
 
 internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 {
-    private const string ManifestFileName = "skill-manifest.json";
-    private const string SkillsDirectoryName = "skills";
-    private const string SkillFileName = "SKILL.md";
     private const int MaxSkillNameLength = 64;
     private const int MaxSkillDescriptionLength = 1024;
 
@@ -116,7 +113,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     {
         ArgumentNullException.ThrowIfNull(bundleDirectory);
 
-        var manifestPath = Path.Combine(bundleDirectory.FullName, ManifestFileName);
+        var manifestPath = Path.Combine(bundleDirectory.FullName, AspireSkillsBundleLayout.ManifestFileName);
         if (!File.Exists(manifestPath))
         {
             throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle manifest was not found at '{0}'.", manifestPath));
@@ -209,7 +206,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
             var installExcludedRelativePaths = (skill.InstallExcludedRelativePaths ?? [])
                 .Select(NormalizeRelativePath)
                 .ToArray();
-            if (installExcludedRelativePaths.Contains(SkillFileName, StringComparer.OrdinalIgnoreCase))
+            if (installExcludedRelativePaths.Contains(AspireSkillsBundleLayout.SkillFileName, StringComparer.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' cannot exclude SKILL.md from installation.", skillName));
             }
@@ -241,7 +238,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
                 }
 
                 files.Add(validatedFile);
-                hasSkillFile |= string.Equals(validatedFile.RelativePath, SkillFileName, StringComparison.Ordinal);
+                hasSkillFile |= string.Equals(validatedFile.RelativePath, AspireSkillsBundleLayout.SkillFileName, StringComparison.Ordinal);
             }
 
             if (!hasSkillFile)
@@ -276,7 +273,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
     private static SkillAssetFile ValidateFile(DirectoryInfo bundleDirectory, string skillName, SkillBundleFile file)
     {
         var relativePath = NormalizeRelativePath(file.RelativePath);
-        var fullPath = Path.Combine(bundleDirectory.FullName, SkillsDirectoryName, skillName, relativePath);
+        var fullPath = Path.Combine(bundleDirectory.FullName, AspireSkillsBundleLayout.SkillsDirectoryName, skillName, relativePath);
         if (!File.Exists(fullPath))
         {
             throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle file '{0}' in skill '{1}' was not found.", relativePath, skillName));
@@ -316,7 +313,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
         using var stream = new MemoryStream(bytes, writable: false);
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
         var content = reader.ReadToEnd();
-        if (string.Equals(relativePath, SkillFileName, StringComparison.Ordinal))
+        if (string.Equals(relativePath, AspireSkillsBundleLayout.SkillFileName, StringComparison.Ordinal))
         {
             ValidateSkillFileFrontmatter(skillName, content);
         }
@@ -574,14 +571,14 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
     private static DirectoryInfo FindBundleRoot(string extractionDirectory)
     {
-        var rootManifestPath = Path.Combine(extractionDirectory, ManifestFileName);
+        var rootManifestPath = Path.Combine(extractionDirectory, AspireSkillsBundleLayout.ManifestFileName);
         if (File.Exists(rootManifestPath))
         {
             return new DirectoryInfo(extractionDirectory);
         }
 
         var packageDirectory = Path.Combine(extractionDirectory, "package");
-        var packageManifestPath = Path.Combine(packageDirectory, ManifestFileName);
+        var packageManifestPath = Path.Combine(packageDirectory, AspireSkillsBundleLayout.ManifestFileName);
         if (File.Exists(packageManifestPath))
         {
             return new DirectoryInfo(packageDirectory);
@@ -589,7 +586,7 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
         var topLevelBundleDirectories = Directory
             .EnumerateDirectories(extractionDirectory)
-            .Where(directory => File.Exists(Path.Combine(directory, ManifestFileName)))
+            .Where(directory => File.Exists(Path.Combine(directory, AspireSkillsBundleLayout.ManifestFileName)))
             .ToArray();
 
         if (topLevelBundleDirectories.Length == 1)
@@ -599,10 +596,10 @@ internal sealed class AspireSkillsBundleProvider : IAspireSkillsBundleProvider
 
         if (topLevelBundleDirectories.Length > 1)
         {
-            throw new InvalidOperationException("Downloaded Aspire skills package contains multiple skill-manifest.json files.");
+            throw new InvalidOperationException($"Downloaded Aspire skills package contains multiple {AspireSkillsBundleLayout.ManifestFileName} files.");
         }
 
-        throw new InvalidOperationException("Downloaded Aspire skills package does not contain skill-manifest.json.");
+        throw new InvalidOperationException($"Downloaded Aspire skills package does not contain {AspireSkillsBundleLayout.ManifestFileName}.");
     }
 
     private static void CopyDirectory(string sourceDirectory, string targetDirectory)
