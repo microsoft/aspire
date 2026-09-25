@@ -1,0 +1,98 @@
+{
+  "run_id": 36078415005,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/36078415005",
+  "run_scope": "main",
+  "analyzed_at": "2026-09-25T02:00:30Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20400,
+    "title": "Fix AppHost tree E2E row recycling race",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-apphost-flake-investigation",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20400",
+    "merged_at": "2026-09-25T00:37:45Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "59831d794f99c4477c6a79def8e8d7c19db85b94",
+    "failed_sha": "13ccbf1edddf3a7d50691eac61d485112b90d4c9",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "18fdf4ba2871903105c7274d499a20b7e66f6968",
+        "message": "[main] Update dependencies from microsoft/dcp (#20450) This pull request updates the following dependencies [marker]: <> (Begin:ca933625-6bed-4cef-95d3-a9cff8f51c9d) ## From https://github.com/microsoft/dcp - **Subscription**: [ca933625-6bed-4cef-95d3-a9cff8f51c9d](https://maestro.dot.net/subscriptions?search=ca933625-6bed-4cef-95d3-a9cff8f51c9d) - **Build**: [0.26.4](https://dev.azure.com/dnceng/internal/_build/results?buildId=3086807) ([333808](https://maestro.dot.net/channel/1648/github:micro",
+        "html_url": "https://github.com/microsoft/aspire/commit/18fdf4ba2871903105c7274d499a20b7e66f6968",
+        "pull_request": {
+          "number": 20450,
+          "title": "[main] Update dependencies from microsoft/dcp",
+          "url": "https://github.com/microsoft/aspire/pull/20450",
+          "merged_at": "2026-09-24T23:34:04Z"
+        }
+      },
+      {
+        "sha": "846bea9d60bb253081afbb4d9714827ffedd1871",
+        "message": "Stabilize Blazor browser debugger E2E setup and profile isolation (#20312) ## Description Make the Blazor browser-debugger E2E fixtures independent and ensure their debugger prerequisite is installed before starting the application. - Give each managed proof a unique browser profile under the runner-owned temporary root, so a lock left by an earlier scenario cannot block a later one. The runner removes profiles after VS Code exits; tests do not delete live browser locks or dismiss the old-sessio",
+        "html_url": "https://github.com/microsoft/aspire/commit/846bea9d60bb253081afbb4d9714827ffedd1871",
+        "pull_request": {
+          "number": 20312,
+          "title": "Stabilize Blazor browser debugger E2E setup and profile isolation",
+          "url": "https://github.com/microsoft/aspire/pull/20312",
+          "merged_at": "2026-09-24T23:43:11Z"
+        }
+      },
+      {
+        "sha": "13ccbf1edddf3a7d50691eac61d485112b90d4c9",
+        "message": "Fix AppHost tree E2E row recycling race (#20400) ## Description Fixes #20335 ExTester can recycle a tree row between lookup and `getLabel()`, causing the AppHost discovery test to read `Deploy AppHost` instead of `AspireE2E.AppHost.csproj`. Capture labels and parent/child relationships in one snapshot for read-only assertions, revalidate handle-based lookups, and add deterministic regression coverage. Production extension behavior is unchanged. ### Validation - [Full CI passed](https://github.co",
+        "html_url": "https://github.com/microsoft/aspire/commit/13ccbf1edddf3a7d50691eac61d485112b90d4c9",
+        "pull_request": {
+          "number": 20400,
+          "title": "Fix AppHost tree E2E row recycling race",
+          "url": "https://github.com/microsoft/aspire/pull/20400",
+          "merged_at": "2026-09-25T00:37:45Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "id": 107903373589,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/36078415005/job/107903373589",
+      "classification": "flaky-test",
+      "reason": "Two NodeFunctionalTests (VerifyNodeAppWorks, VerifyNpmAppWorks) failed because the shared NodeAppFixture timed out (Polly Timeout 1 minute -> TaskCanceledException) during InitializeAsync while waiting for the node app to become ready on windows-latest. This matches a known recurring timing-related flaky pattern for this fixture, not code changed by the candidate merges (Deno/npm/node app tests, DCP dependency update, and Blazor E2E stabilization).",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.JavaScript.Tests.NodeFunctionalTests.VerifyNodeAppWorks",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.NodeAppFixture' threw in InitializeAsync\n---- Polly.Timeout.TimeoutRejectedException : The operation didn't complete within the allowed timeout of '00:01:00'.\n-------- System.Threading.Tasks.TaskCanceledException : A task was canceled.\n------------ System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "----- Inner Stack Trace -----\n   at Polly.Utils.ExceptionUtilities.TrySetStackTrace[T](T exception)\n   at Polly.Timeout.TimeoutResilienceStrategy.ExecuteCore[TResult,TState](Func`3 callback, ResilienceContext context, TState state)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.ExecutionContextCallback(Object s)\n   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.MoveNext(Thread threadPoolThread)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.MoveNext()\n   at System.Threading.Tasks.AwaitTaskContinuation.RunOrScheduleAction(IAsyncStateMachineBox box, Boolean allowInlining)\n   at System.Threading.Tasks.Task.RunContinuations(Object continuationObject)\n   at System.Runtime.CompilerServices.AsyncValueTaskMethodBuilder`1.SetResult(TResult result)\n   at Polly.Utils.Pipeline.BridgeComponent`1.<ExecuteCore>g__ConvertValueTaskAsync|4_0[TResult,TState](ValueTask`1 valueTask, ResilienceContext resilienceContext)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.ExecutionContextCallback(Object s)\n   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.MoveNext(Thread threadPoolThread)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.MoveNext()\n   at System.Threading.Tasks.AwaitTaskContinuation.RunOrScheduleAction(IAsyncStateMachineBox box, Boolean allowInlining)\n   at System.Threading.Tasks.Task.RunContinuations(Object continuationObject)\n   at System.Runtime.CompilerServices.AsyncValueTaskMethodBuilder`1.SetResult(TResult result)\n   at Polly.Retry.RetryResilienceStrategy`1.ExecuteCore[TState](Func`3 callback, Resilien",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Timeout-based fixture initialization failure with no correlated code change in candidate merges; matches known recurring pattern for NodeAppFixture on windows-latest runners."
+    },
+    {
+      "name": "Aspire.Hosting.JavaScript.Tests.NodeFunctionalTests.VerifyNpmAppWorks",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.NodeAppFixture' threw in InitializeAsync\n---- Polly.Timeout.TimeoutRejectedException : The operation didn't complete within the allowed timeout of '00:01:00'.\n-------- System.Threading.Tasks.TaskCanceledException : A task was canceled.\n------------ System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "----- Inner Stack Trace -----\n   at Polly.Utils.ExceptionUtilities.TrySetStackTrace[T](T exception)\n   at Polly.Timeout.TimeoutResilienceStrategy.ExecuteCore[TResult,TState](Func`3 callback, ResilienceContext context, TState state)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.ExecutionContextCallback(Object s)\n   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.MoveNext(Thread threadPoolThread)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.MoveNext()\n   at System.Threading.Tasks.AwaitTaskContinuation.RunOrScheduleAction(IAsyncStateMachineBox box, Boolean allowInlining)\n   at System.Threading.Tasks.Task.RunContinuations(Object continuationObject)\n   at System.Runtime.CompilerServices.AsyncValueTaskMethodBuilder`1.SetResult(TResult result)\n   at Polly.Utils.Pipeline.BridgeComponent`1.<ExecuteCore>g__ConvertValueTaskAsync|4_0[TResult,TState](ValueTask`1 valueTask, ResilienceContext resilienceContext)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.ExecutionContextCallback(Object s)\n   at System.Threading.ExecutionContext.RunInternal(ExecutionContext executionContext, ContextCallback callback, Object state)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.MoveNext(Thread threadPoolThread)\n   at System.Runtime.CompilerServices.AsyncTaskMethodBuilder`1.AsyncStateMachineBox`1.MoveNext()\n   at System.Threading.Tasks.AwaitTaskContinuation.RunOrScheduleAction(IAsyncStateMachineBox box, Boolean allowInlining)\n   at System.Threading.Tasks.Task.RunContinuations(Object continuationObject)\n   at System.Runtime.CompilerServices.AsyncValueTaskMethodBuilder`1.SetResult(TResult result)\n   at Polly.Retry.RetryResilienceStrategy`1.ExecuteCore[TState](Func`3 callback, Resilien",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same shared NodeAppFixture InitializeAsync timeout as VerifyNodeAppWorks; both tests share the same class fixture and fail together due to fixture-level readiness timeout, not code changes."
+    }
+  ],
+  "causes": [
+    "hosting-javascript-nodeappfixture-initializeasync-timeout",
+    "hosting-javascript-nodeappfixture-npmapp-initializeasync-timeout"
+  ]
+}
