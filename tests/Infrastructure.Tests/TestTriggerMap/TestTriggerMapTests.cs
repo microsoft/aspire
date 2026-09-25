@@ -73,6 +73,27 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
+    public void MtpExitCodeNormalizerRuleSelectsAllConsumers()
+    {
+        var rule = Assert.Single(
+            s_map.PathRules,
+            rule => rule.Paths.Any(path => path.Contains("normalize-mtp-exit-code", StringComparison.Ordinal)));
+
+        Assert.Equal(["ALL", "job:deployment-e2e"], rule.Targets);
+    }
+
+    [Fact]
+    public void DeploymentTestRunnerSelectsDeploymentWorkflow()
+    {
+        const string path = ".github/workflows/run-deployment-test.sh";
+        var targets = s_map.PathRules
+            .Where(rule => rule.Paths.Any(glob => TestTriggerMap.GlobMatches(glob, path)))
+            .SelectMany(rule => rule.Targets);
+
+        Assert.Contains("job:deployment-e2e", targets);
+    }
+
+    [Fact]
     public void ExtensionUnitWorkflowChangesSelectUnitAndE2eJobs()
     {
         const string workflow = ".github/workflows/extension-unit-tests.yml";

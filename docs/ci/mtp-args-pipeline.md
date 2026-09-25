@@ -53,7 +53,7 @@ overrides declared in an individual test project are reflected in the final argu
 
 | Arg | Purpose |
 |-----|---------|
-| `--ignore-exit-code 8` | Don't fail the test run when zero tests match filters ([MTP exit codes](https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-exit-codes)) |
+| `--ignore-exit-code 8` | Don't fail the test run when zero tests match filters ([MTP exit codes](https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-exit-codes)). This only remaps the exit code of the test module itself: `dotnet test` computes its own exit code from the aggregated run and still reports 8, so a caller that must treat "zero tests ran" as success has to classify the exit code itself. |
 | `--crashdump` | Collect crash dumps on test host crash |
 | `--hangdump` | Enable hang detection and hang dump handling |
 | `--hangdump-type none` | Disable hang dump file creation; hang detection and timeout handling still occur, but no dump file is generated |
@@ -140,6 +140,17 @@ dotnet test --project <path> --no-build -- \
 ```
 
 MTP MSBuild integration injects `TestingPlatformCommandLineArguments` automatically (includes `--filter-not-trait "category=failing"` and TRX filename). These args are complementary to the explicit `-- <args>`.
+
+Starting with the .NET 11 SDK, `dotnet test` decides the zero-tests result for
+the whole run from its
+[aggregated results](https://learn.microsoft.com/dotnet/core/tools/dotnet-test-mtp#whole-run-and-per-module-minimums).
+`--ignore-exit-code 8` still makes direct test-module execution return 0, but an
+all-empty or all-skipped `dotnet test` run returns 8 from the orchestrator. The
+non-NuGet paths in `run-tests.yml` therefore normalize the result through
+`normalize-mtp-exit-code.sh` or `normalize-mtp-exit-code.ps1`. The Deployment
+E2E workflow runs its complete test command through `run-deployment-test.sh`,
+which uses the same Bash normalizer before deciding whether to set its failure
+output. Other nonzero exit codes remain failures.
 
 ## Backward compatibility
 

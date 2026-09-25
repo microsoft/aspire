@@ -242,6 +242,11 @@ path_rules:
     reason: matrix, enumeration, and runner infrastructure can affect any regular PR test lane
 
   - paths:
+      - .github/workflows/normalize-mtp-exit-code.*
+    targets: [ALL, job:deployment-e2e]
+    reason: shared MTP exit normalization is consumed by regular test lanes and Deployment E2E
+
+  - paths:
       - .github/workflows/build-packages.yml
     targets: [BUILD_PACKAGE_CONSUMERS]
     reason: this reusable workflow only produces NuGet artifacts, so only jobs/tests that list build_packages or require NuGets are affected
@@ -330,6 +335,7 @@ path_rules:
       - tests/Aspire.Deployment.EndToEnd.Tests/**
       - src/Aspire.ProjectTemplates/**
       - .github/workflows/deployment-tests.yml
+      - .github/workflows/run-deployment-test.sh
     targets: [job:deployment-e2e]
     reason: SCHEDULE/DISPATCH-ONLY today; ProjectTemplates is a Layer-1 blind spot; Azure/Cli/TypeSystem/Managed production projects are in affected_project_rules
   - paths:
