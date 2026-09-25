@@ -1,0 +1,19 @@
+{
+  "name": "polyglot-typescript-npm-validation",
+  "version": "1.0.0",
+  "type": "module",
+  "packageManager": "npm@10.0.0",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "dev": "tsc --noEmit --watch"
+  },
+  "dependencies": {
+    "vscode-jsonrpc": "^8.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "nodemon": "^3.1.14",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3"
+  }
+}

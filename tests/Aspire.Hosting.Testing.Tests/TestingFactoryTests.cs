@@ -16,7 +16,7 @@ public class TestingFactoryTests(DistributedApplicationFixture<Projects.TestingA
     private readonly DistributedApplication _app = fixture.Application;
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public void HasEndPoints()
     {
         // Get an endpoint from a resource
@@ -26,7 +26,7 @@ public class TestingFactoryTests(DistributedApplicationFixture<Projects.TestingA
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task CanGetConnectionStringFromAddConnectionString()
     {
         // Get a connection string from a resource
@@ -37,7 +37,7 @@ public class TestingFactoryTests(DistributedApplicationFixture<Projects.TestingA
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public void CanGetResources()
     {
         var appModel = _app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -45,7 +45,7 @@ public class TestingFactoryTests(DistributedApplicationFixture<Projects.TestingA
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task HttpClientGetTest()
     {
         // Wait for the application to be ready
@@ -59,7 +59,7 @@ public class TestingFactoryTests(DistributedApplicationFixture<Projects.TestingA
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public void SetsCorrectContentRoot()
     {
         var appModel = _app.Services.GetRequiredService<IHostEnvironment>();
@@ -67,7 +67,7 @@ public class TestingFactoryTests(DistributedApplicationFixture<Projects.TestingA
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/4650")]
     public async Task SelectsFirstLaunchProfile()
     {

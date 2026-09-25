@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
@@ -18,6 +19,7 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSessionAndUrlState<Metrics.MetricsViewModel, Metrics.MetricsPageState>
 {
+    private static readonly EnumerableGridSort<OtlpInstrumentSummary> s_instrumentDescriptionSort = EnumerableGridSort<OtlpInstrumentSummary>.ByAscending(item => item.Description);
     private SelectViewModel<ResourceTypeDetails> _selectResource = null!;
     private List<SelectViewModel<TimeSpan>> _durations = null!;
     private static readonly TimeSpan s_defaultDuration = TimeSpan.FromMinutes(5);
@@ -60,7 +62,12 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
     public required ISessionStorage SessionStorage { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
+
+    [Inject]
+    public required ITelemetryRepositoryWriter TelemetryRepositoryWriter { get; init; }
 
     [Inject]
     public required ILogger<Metrics> Logger { get; init; }
@@ -176,7 +183,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
     private void UpdateInstruments(MetricsViewModel viewModel)
     {
         var selectedInstance = viewModel.SelectedResource.Id?.GetResourceKey();
-        viewModel.Instruments = selectedInstance != null ? TelemetryRepository.GetInstrumentsSummaries(selectedInstance.Value) : null;
+        viewModel.Instruments = selectedInstance != null ? TelemetryRepository.GetInstrumentSummaries(selectedInstance.Value) : null;
     }
 
     private void UpdateResources()
@@ -236,8 +243,8 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
 
     private Task ClearMetrics(ResourceKey? key)
     {
-        TelemetryRepository.ClearMetrics(key);
-        return Task.CompletedTask;
+        DataSource.EnsureWritable();
+        return TelemetryRepositoryWriter.ClearMetricsAsync(key);
     }
 
     private Task HandleSelectedDurationChangedAsync()
@@ -249,7 +256,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
         ? string.Format(
             CultureInfo.CurrentCulture,
             Loc[nameof(Dashboard.Resources.Metrics.PauseInProgressText)],
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value, MillisecondsDisplay.Truncated))
+            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value))
         : null;
 
     public sealed class MetricsViewModel
@@ -330,7 +337,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
                 if (selectedResourceKey != null)
                 {
                     // If there are more instruments than before then update the UI.
-                    var instruments = TelemetryRepository.GetInstrumentsSummaries(selectedResourceKey.Value);
+                    var instruments = TelemetryRepository.GetInstrumentSummaries(selectedResourceKey.Value);
 
                     if (PageViewModel.Instruments is null || instruments.Count != PageViewModel.Instruments.Count)
                     {

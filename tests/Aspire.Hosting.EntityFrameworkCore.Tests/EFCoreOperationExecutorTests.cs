@@ -141,9 +141,7 @@ public class EFCoreOperationExecutorTests
         var toolResource = CreateToolResource(_ => Task.FromResult(CommandResults.Failure("tool startup failed")));
 
         using var executor = new EFCoreOperationExecutor(
-            project.Resource,
-            targetProjectPath: null,
-            contextTypeName: null,
+            new EFMigrationResource("migrations", project.Resource, dbContextTypeName: null),
             NullLogger.Instance,
             CancellationToken.None,
             app.Services,
@@ -164,9 +162,7 @@ public class EFCoreOperationExecutorTests
         var toolResource = CreateToolResource(_ => Task.FromResult(CommandResults.Canceled()));
 
         using var executor = new EFCoreOperationExecutor(
-            project.Resource,
-            targetProjectPath: null,
-            contextTypeName: null,
+            new EFMigrationResource("migrations", project.Resource, dbContextTypeName: null),
             NullLogger.Instance,
             CancellationToken.None,
             app.Services,
@@ -176,6 +172,41 @@ public class EFCoreOperationExecutorTests
 
         Assert.False(result.Success);
         Assert.Equal("dotnet-ef command was canceled.", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task GatherToolArgumentsAsync_ReplaysLaunchAndOrdinaryCallbacksForSequentialCommands()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var tool = builder.AddDotnetTool("ef-tool", "dotnet-ef")
+            .WithArgs("persistent");
+        using var app = builder.Build();
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+
+        var firstCommand = new CommandLineArgsCallbackAnnotation(args => args.Add("first"));
+        tool.Resource.Annotations.Add(firstCommand);
+
+        var firstArguments = await EFResourceBuilderExtensions.GatherToolArgumentsAsync(
+            tool.Resource,
+            executionContext,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        tool.Resource.Annotations.Remove(firstCommand);
+        tool.Resource.Annotations.Add(new CommandLineArgsCallbackAnnotation(args => args.Add("second")));
+
+        var secondArguments = await EFResourceBuilderExtensions.GatherToolArgumentsAsync(
+            tool.Resource,
+            executionContext,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(
+            new[] { "tool", "exec", "dotnet-ef", "--yes", "--", "persistent", "first" },
+            firstArguments.Cast<string>());
+        Assert.Equal(
+            new[] { "tool", "exec", "dotnet-ef", "--yes", "--", "persistent", "second" },
+            secondArguments.Cast<string>());
     }
 
     private static DotnetToolResource CreateToolResource(Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand)

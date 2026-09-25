@@ -14,10 +14,13 @@
     <Compile Include="..\Common\HealthChecksExtensions.cs" Link="HealthChecksExtensions.cs" />
     <Compile Include="..\Common\ConnectionStringValidation.cs" Link="ConnectionStringValidation.cs" />
     <Compile Include="..\Common\EntityFrameworkUtils.cs" Link="EntityFrameworkUtils.cs" />
+    <Compile Include="..\Common\ConnectionStringConfigurationExtensions.cs" Link="ConnectionStringConfigurationExtensions.cs" />
+    <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" Link="EnvironmentVariableNameEncoder.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.Data.SqlClient.Extensions.Azure" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />

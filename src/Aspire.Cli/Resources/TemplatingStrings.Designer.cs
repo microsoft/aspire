@@ -169,15 +169,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to An error occurred while trusting the certificates: {0}.
-        /// </summary>
-        public static string CertificateTrustError {
-            get {
-                return ResourceManager.GetString("CertificateTrustError", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Create NuGet.config for selected channels?.
         /// </summary>
         public static string CreateNugetConfigConfirmation {
@@ -237,6 +228,21 @@ namespace Aspire.Cli.Resources {
         public static string No {
             get {
                 return ResourceManager.GetString("No", resourceCulture);
+            }
+        }
+
+        public static string NoMatchingLocalTemplatePackage {
+            get {
+                return ResourceManager.GetString("NoMatchingLocalTemplatePackage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Template version &apos;{0}&apos; was not found..
+        /// </summary>
+        public static string TemplateVersionNotFound {
+            get {
+                return ResourceManager.GetString("TemplateVersionNotFound", resourceCulture);
             }
         }
 
@@ -480,6 +486,15 @@ namespace Aspire.Cli.Resources {
         public static string RunAspireRun {
             get {
                 return ResourceManager.GetString("RunAspireRun", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to [yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/].
+        /// </summary>
+        public static string SourceOverrideNotPersistedWarning {
+            get {
+                return ResourceManager.GetString("SourceOverrideNotPersistedWarning", resourceCulture);
             }
         }
 

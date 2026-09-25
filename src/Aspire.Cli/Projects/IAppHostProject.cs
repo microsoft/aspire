@@ -42,6 +42,11 @@ internal sealed class UpdatePackagesContext
     /// Enables non-interactive selection via CLI options (e.g. <c>--nuget-config-dir</c>).
     /// </summary>
     public required Interaction.PromptBinding<string?> NuGetConfigDirBinding { get; init; }
+
+    /// <summary>
+    /// Gets additional file edits to include in the project's confirmation and apply phase.
+    /// </summary>
+    public IReadOnlyList<UpdateStep> AdditionalUpdateSteps { get; init; } = [];
 }
 
 /// <summary>
@@ -169,6 +174,11 @@ internal interface IAppHostProject
     string DisplayName { get; }
 
     /// <summary>
+    /// Gets whether this project type supports selecting a launch profile explicitly.
+    /// </summary>
+    bool SupportsLaunchProfiles { get; }
+
+    /// <summary>
     /// Gets the file patterns to search for when detecting apphosts.
     /// Examples: ["*.csproj", "*.fsproj", "apphost.cs"] or ["apphost.ts"]
     /// </summary>
@@ -215,7 +225,6 @@ internal interface IAppHostProject
 
     /// <summary>
     /// Validates that a candidate file is a valid AppHost for this project type.
-    /// This does deeper validation beyond just file pattern matching.
     /// </summary>
     /// <param name="appHostFile">The candidate AppHost file to validate.</param>
     /// <param name="cancellationToken">A cancellation token.</param>

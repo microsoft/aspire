@@ -12,7 +12,21 @@
 			"outFiles": [
 				"${workspaceFolder}/extension/dist/**/*.js"
 			],
-			"preLaunchTask": "npm: watch extension",
+			"preLaunchTask": "tasks: watch extension",
+			"cwd": "${workspaceFolder}/extension"
+		},
+		{
+			"name": "Run Extension (Go debugging playground)",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}/extension",
+				"${workspaceFolder}/playground/GoDebugging"
+			],
+			"outFiles": [
+				"${workspaceFolder}/extension/dist/**/*.js"
+			],
+			"preLaunchTask": "tasks: watch extension",
 			"cwd": "${workspaceFolder}/extension"
 		},
 		{
@@ -25,7 +39,7 @@
 			"outFiles": [
 				"${workspaceFolder}/extension/dist/**/*.js"
 			],
-			"preLaunchTask": "npm: watch extension",
+			"preLaunchTask": "tasks: watch extension",
 			"env": {
 				"ASPIRE_CLI_STOP_ON_ENTRY": "true"
 			},
@@ -41,7 +55,7 @@
 			"outFiles": [
 				"${workspaceFolder}/extension/dist/**/*.js"
 			],
-			"preLaunchTask": "npm: watch extension",
+			"preLaunchTask": "tasks: watch extension",
 			"env": {
 				"ASPIRE_APPHOST_STOP_ON_ENTRY": "true"
 			},
@@ -57,7 +71,7 @@
 			"outFiles": [
 				"${workspaceFolder}/extension/dist/**/*.js"
 			],
-			"preLaunchTask": "npm: watch extension",
+			"preLaunchTask": "tasks: watch extension",
 			"env": {
 				"ASPIRE_CLI_STOP_ON_ENTRY": "true",
 				"ASPIRE_APPHOST_STOP_ON_ENTRY": "true"

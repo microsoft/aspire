@@ -13,7 +13,7 @@ internal static class LoggingUtils
     {
         services.AddLogging(configure =>
         {
-            // The AddUrlGroup health check makes use of http client factory.
+            // HTTP health checks use named HttpClient instances.
             configure.AddFilter($"System.Net.Http.HttpClient.{healthCheckName}.LogicalHandler", LogLevel.None);
             configure.AddFilter($"System.Net.Http.HttpClient.{healthCheckName}.ClientHandler", LogLevel.None);
         });

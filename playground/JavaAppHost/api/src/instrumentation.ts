@@ -31,9 +31,9 @@ if (env.OTEL_EXPORTER_OTLP_ENDPOINT) {
     instrumentations: [getNodeAutoInstrumentations()],
   });
 
-  sdk.start().catch((error) => {
-    console.error('Failed to start OpenTelemetry NodeSDK:', error);
-  });
+  // NodeSDK.start() returns void, so there is no promise to attach a rejection handler to;
+  // calling .catch() on its result throws a TypeError before the server ever starts.
+  sdk.start();
 
   process.on('SIGTERM', () => {
     sdk.shutdown().finally(() => process.exit(0));

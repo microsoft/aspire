@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Cli.Commands.Sdk;
 using Aspire.TypeSystem;
 
@@ -70,6 +71,19 @@ internal interface IAppHostRpcClient : IAsyncDisposable
     /// <param name="assemblyNames">The assembly names to filter capabilities by.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     Task<CapabilitiesInfo> GetCapabilitiesForAssembliesAsync(IReadOnlyList<string> assemblyNames, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Exports the canonical API reference document for a package in the target language.
+    /// </summary>
+    /// <remarks>
+    /// Calls the <c>exportApi</c> RPC method. The document is language-defined and is returned as raw
+    /// JSON so the CLI never has to understand or reshape it.
+    /// </remarks>
+    /// <param name="languageId">The target language identifier.</param>
+    /// <param name="packageName">The package to export documentation for.</param>
+    /// <param name="packageVersion">The exact resolved version of the package.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    Task<JsonElement> ExportApiAsync(string languageId, string packageName, string packageVersion, CancellationToken cancellationToken);
 
     // ═══════════════════════════════════════════════════════════════
     // GENERIC INVOKE (for future/custom calls)

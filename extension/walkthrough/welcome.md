@@ -1,26 +1,13 @@
-# Welcome to Aspire
+# Your whole app, one F5 away
 
-Aspire streamlines building, running, debugging, and deploying distributed apps. Define your services, databases, and front ends in code — then launch and debug everything with a single command.
+An **AppHost** is the map of your distributed app: services, databases, containers, front ends, and the connections between them.
 
-### Key benefits
+With Aspire, you can:
 
-- **Unified development experience** — launch and debug your entire distributed application with a single command
-- **Code-first configuration** — define your app's architecture in code, no complex config files required
-- **Local orchestration** — automatically handle service startup, dependencies, and connections during development
-- **Deployment flexibility** — deploy to Kubernetes, cloud providers, or your own servers using the same architecture definition
-- **Extensible** — integrate with your favorite tools and services through a rich ecosystem of [integrations](https://aspire.dev/integrations/gallery/)
+- **Define** your app in code, with code completion and version control built in.
+- **Run** every resource in the right order and **debug** supported application resources from one editor.
+- **See** resource health, endpoints, logs, traces, and metrics in the Aspire Dashboard.
 
-### How it works
+Bring the stack you already use. Aspire works across languages, frameworks, containers, and cloud services.
 
-1. Define your services and their connections in an **AppHost**
-2. Run everything locally with a single command
-3. Monitor it all through the **Aspire Dashboard**
-4. Deploy the same architecture definition to production
-
-Aspire uses a code-first approach — your infrastructure definition lives alongside your code, with type safety, code completion, and version control built in.
-
-### Works with your stack
-
-Aspire is polyglot — it works with **C#**, **Python**, **JavaScript**, **TypeScript**, **Go**, **Java**, and more.
-
-[Learn more on aspire.dev](https://aspire.dev/docs/)
+[See how Aspire works](https://aspire.dev/get-started/first-app/)

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -12,6 +12,10 @@
     <RunOnAzdoHelixLinux>false</RunOnAzdoHelixLinux>
     <RunOnGithubActionsMacOS>true</RunOnGithubActionsMacOS>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Aspire.Tests.Utils" />
+  </ItemGroup>
 
   <!-- The CLI bootstrap reads AspireCliChannel from typeof(Aspire.Cli.Program).Assembly — the
        production DLL — via IdentityChannelReader, registered as IIdentityChannelReader in Program.cs.
@@ -41,16 +45,20 @@
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="NuGet.Commands" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.ProjectModel" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.Credentials" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.Protocol" VersionOverride="$(NuGetPackageVersionForCli)" />
+    <PackageReference Include="NuGet.Resolver" VersionOverride="$(NuGetPackageVersionForCli)" />
     <PackageReference Include="StreamJsonRpc" VersionOverride="$(StreamJsonRpcPackageVersionForCli)" />
     <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
-
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)Logging\*.cs" LinkBase="shared/Logging" />
     <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" Link="shared/TestModuleInitializer.cs" />
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
-    <Compile Include="$(TestsSharedDir)TemporaryRepo.cs" Link="shared\TemporaryRepo.cs" />
-    <Compile Include="$(TestsSharedDir)TempDirectory.cs" Link="shared\TempDirectory.cs" />
+    <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared\TemporaryWorkspace.cs" />
+    <Compile Include="$(TestsSharedDir)TestProcesses.cs" Link="shared\TestProcesses.cs" />
   </ItemGroup>
 
 </Project>

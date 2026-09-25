@@ -1,6 +1,6 @@
 {
   "appHost": {
-    "path": "apphost.ts",
+    "path": "apphost.mts",
     "language": "typescript/nodejs"
   },
   "profiles": {
@@ -15,6 +15,7 @@
     }
   },
   "packages": {
-    "Aspire.Hosting.EntityFrameworkCore": ""
+    "Aspire.Hosting.EntityFrameworkCore": "",
+    "Aspire.Hosting.Dotnet": ""
   }
 }

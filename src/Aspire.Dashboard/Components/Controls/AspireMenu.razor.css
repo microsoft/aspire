@@ -1,0 +1,73 @@
+span.aspire-menu-secondary-action-container {
+    align-items: center;
+    align-self: stretch;
+    display: flex;
+    grid-column: 4;
+    grid-row: 1;
+    justify-content: center;
+}
+
+::deep .aspire-menu-secondary-action {
+    opacity: 0;
+    visibility: hidden;
+    padding: 0;
+    width: 20px;
+    min-width: 20px;
+    height: 20px;
+    min-height: 20px;
+}
+
+::deep .aspire-menu-secondary-action::part(control) {
+    background-color: transparent;
+}
+
+::deep .aspire-menu-secondary-action:hover::part(control) {
+    background-color: var(--colorNeutralBackground2Hover);
+}
+
+fluent-menu-item:hover > span[slot="end"] ::deep .aspire-menu-secondary-action,
+fluent-menu-item:focus-within > span[slot="end"] ::deep .aspire-menu-secondary-action,
+::deep .aspire-menu-secondary-action.selected {
+    opacity: 1;
+    visibility: visible;
+}
+
+@media (hover: none) {
+    fluent-menu-item > span[slot="end"] ::deep .aspire-menu-secondary-action {
+        opacity: 1;
+        visibility: visible;
+    }
+}
+
+/* Match FluentUI's 32px menu-item icon track so the resource identity and actions share
+   one visual axis. Extra vertical space distinguishes the identity from a clickable item. */
+.aspire-menu-header {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    align-items: center;
+    box-sizing: border-box;
+    min-height: 36px;
+    margin-bottom: 4px;
+    padding: 0px 8px 4px 4px;
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
+    color: var(--colorNeutralForeground3);
+    font-family: var(--fontFamilyBase);
+    font-size: var(--fontSizeBase300);
+    font-weight: var(--fontWeightSemibold);
+    line-height: var(--lineHeightBase300);
+    cursor: default;
+    user-select: none;
+}
+
+.aspire-menu-header ::deep .aspire-menu-header-icon {
+    grid-column: 1;
+    justify-self: center;
+}
+
+.aspire-menu-header-text {
+    grid-column: 2;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

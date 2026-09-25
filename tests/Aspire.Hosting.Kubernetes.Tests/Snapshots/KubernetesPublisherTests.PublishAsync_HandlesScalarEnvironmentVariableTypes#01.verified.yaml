@@ -1,0 +1,13 @@
+﻿parameters: {}
+secrets: {}
+config:
+  myapp:
+    BOOL_TRUE: "true"
+    BOOL_FALSE: "false"
+    INT_VALUE: "42"
+    DOUBLE_VALUE: "3.14"
+    DATETIMEOFFSET_VALUE: "01/02/2024 03:04:05 +00:00"
+    TIMESPAN_VALUE: "01:30:00"
+    URI_VALUE: "https://example.com/path"
+    NULLABLE_INT_WITH_VALUE: "7"
+    STRING_VALUE: "hello"

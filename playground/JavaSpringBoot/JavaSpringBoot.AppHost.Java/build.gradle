@@ -1,0 +1,81 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        // Must match the release the Aspire CLI compiles the AppHost with, which is Java 25. The
+        // scaffolded AppHost uses an implicitly declared class with an instance main method, finalized
+        // in Java 25 by JEP 512 (https://openjdk.org/jeps/512). Targeting anything lower makes the
+        // editor report the AppHost's own entry point as a syntax error.
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+
+    // The toolchain alone is not enough for the IDE. Buildship reads sourceCompatibility/
+    // targetCompatibility to pick the Eclipse compliance level it hands the Java language server, and
+    // it does not derive them from the toolchain. Without these, the language server compiles at its
+    // own default and reports "'Compact Source Files and Instance Main Methods' is only available with
+    // source level 25 and above" against AppHost.java, even though `gradle build` succeeds.
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+repositories {
+    mavenCentral()
+}
+
+sourceSets {
+    main {
+        java {
+            // Two source roots, and both are needed.
+            //
+            // '.' holds AppHost.java. It sits beside this build file rather than under src/main/java so
+            // that its paths to the sibling services stay identical to the C# AppHost's ("../catalog").
+            //
+            // '.aspire/modules' holds the Aspire Java SDK, which the CLI generates as source laid out by
+            // package: .aspire/modules/aspire/AspireBuilder.java declares `package aspire;`. A source root
+            // has to be the directory a package path is relative to, so the SDK needs a root of its own;
+            // covering it from '.' instead makes `import aspire.*` resolve to nothing, because that root
+            // expects those files under ./aspire.
+            //
+            // Gradle is what makes this expressible. Maven allows a single <sourceDirectory>, and neither
+            // build-helper-maven-plugin's add-source goal nor <generatedSourcesDirectory> is honoured by
+            // the Maven importer inside the Java language server, so a Maven AppHost laid out this way
+            // opens with unresolved Aspire imports.
+            srcDirs = ['.', '.aspire/modules']
+
+            // Eclipse, and so the Java language server, and so VS Code, refuses to build a project whose
+            // source folders nest without an explicit exclusion. '.aspire/modules' nests inside '.', so
+            // exclude it from that root; the excludes are relative to each source root, which is why this
+            // does not also exclude the SDK from its own root.
+            exclude 'src/**', 'build/**', 'bin/**', '.gradle/**', '.aspire/**'
+
+            // Clearing the resources source set below stops Gradle copying this directory into build
+            // output, but it does not stop Eclipse, and so the Java language server. Eclipse copies every
+            // non-excluded file in a source folder to that folder's output directory, so rooting the java
+            // source set at '.' also lands gradlew, the wrapper, build.gradle and aspire.config.json in
+            // bin/main. Restricting the source folder to .java files is what makes Eclipse's own copy a
+            // no-op; the pattern changes nothing for Gradle, which only ever compiles .java from here.
+            include '**/*.java'
+        }
+
+        // Rooting the java source set at '.' also points the resources source set at '.', because the
+        // java plugin defaults both to the same convention. processResources would then copy every
+        // non-.java file in this directory — .gradle/, .aspire/, gradlew, the wrapper jar — into
+        // build/resources/main and bin/main. The Java language server digests those copies, and throws
+        // "Problem refreshing workspace ... NoSuchFileException: .../bin/main/.gradle" as soon as Gradle
+        // deletes the originals. The AppHost ships no resources, so give the set no roots at all.
+        resources {
+            srcDirs = []
+        }
+    }
+}
+
+// The AppHost's only dependency is the Aspire SDK above, which is generated as source rather than
+// resolved as an artifact. Real AppHosts add third-party dependencies here, which is the main reason to
+// adopt a build tool: the CLI stages whatever is declared onto the AppHost's classpath before compiling.
+dependencies {
+}

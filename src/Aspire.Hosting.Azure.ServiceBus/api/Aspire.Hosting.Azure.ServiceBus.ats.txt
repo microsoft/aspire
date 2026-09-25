@@ -20,7 +20,7 @@ Aspire.Hosting.Azure.ServiceBus/Aspire.Hosting.Azure.AzureServiceBusCorrelationF
   SendTo: string # Address to send to.
   SessionId: string # Session identifier.
   Subject: string # Application specific label.
-Aspire.Hosting.Azure.ServiceBus/Aspire.Hosting.Azure.AzureServiceBusRule # Represents a Service Bus Rule. Initializes a new instance of the  class.
+Aspire.Hosting.Azure.ServiceBus/Aspire.Hosting.Azure.AzureServiceBusRule # Represents a Service Bus Rule. Initializes a new instance of the `AzureServiceBusRule` class.
   CorrelationFilter: Aspire.Hosting.Azure.ServiceBus/Aspire.Hosting.Azure.AzureServiceBusCorrelationFilter # Properties of correlation filter.
   FilterType: enum:Aspire.Hosting.Azure.AzureServiceBusFilterType # Filter type that is evaluated against a BrokeredMessage.
   Name: string # The rule name.

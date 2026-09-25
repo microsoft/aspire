@@ -1,0 +1,11 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "env.module.bicep",
+  "params": {
+    "environmentName": "{environmentName.value}",
+    "sharedRg": "{sharedRg.value}",
+    "shared_mi_outputs_id": "{shared-mi.outputs.id}",
+    "registryName": "{registryName.value}",
+    "userPrincipalId": ""
+  }
+}

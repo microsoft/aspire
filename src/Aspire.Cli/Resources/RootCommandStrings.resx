@@ -129,6 +129,9 @@
   <data name="BannerVersionFormat" xml:space="preserve">
     <value>CLI — version {0}</value>
   </data>
+  <data name="IdentityOverrideNotice" xml:space="preserve">
+    <value>Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</value>
+  </data>
   <data name="DebugArgumentDescription" xml:space="preserve">
     <value>Enable debug logging to the console</value>
   </data>
@@ -158,5 +161,20 @@ The Aspire CLI collects usage data. It is collected by Microsoft and is used to 
 
 Read more about Aspire CLI telemetry: {0}</value>
     <comment>{0} is a clickable URL</comment>
+  </data>
+  <data name="CompletionsDescription" xml:space="preserve">
+    <value>Generate shell completion scripts</value>
+  </data>
+  <data name="CompletionScriptDescription" xml:space="preserve">
+    <value>Write a shell completion script to standard output</value>
+  </data>
+  <data name="CompletionShellDescription" xml:space="preserve">
+    <value>Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</value>
+  </data>
+  <data name="CompletionShellRequired" xml:space="preserve">
+    <value>Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</value>
+  </data>
+  <data name="InvalidCompletionRequest" xml:space="preserve">
+    <value>Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</value>
   </data>
 </root>

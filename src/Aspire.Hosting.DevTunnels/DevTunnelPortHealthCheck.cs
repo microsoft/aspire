@@ -6,40 +6,42 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Aspire.Hosting.DevTunnels;
 
-internal sealed class DevTunnelPortHealthCheck(DevTunnelResource tunnelResource, int port) : IHealthCheck
+internal sealed class DevTunnelPortHealthCheck(DevTunnelPortResource portResource) : IHealthCheck
 {
-    private readonly DevTunnelResource _tunnelResource = tunnelResource ?? throw new ArgumentNullException(nameof(tunnelResource));
+    private readonly DevTunnelPortResource _portResource = portResource ?? throw new ArgumentNullException(nameof(portResource));
 
-    private readonly int _port = port;
-
-    public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
         try
         {
+            var tunnelResource = _portResource.DevTunnel;
+            var port = await _portResource.GetTunnelPortAsync(cancellationToken).ConfigureAwait(false);
             var tunnelStatus = tunnelResource.LastKnownStatus;
             if (tunnelStatus is null)
             {
-                return Task.FromResult(HealthCheckResult.Unhealthy(string.Format(CultureInfo.CurrentCulture, Resources.MessageStrings.DevTunnelPortUnhealthy_StatusUnknown, _port, _tunnelResource.TunnelId)));
+                return HealthCheckResult.Unhealthy(string.Format(CultureInfo.CurrentCulture, Resources.MessageStrings.DevTunnelPortUnhealthy_StatusUnknown, port, tunnelResource.TunnelId));
             }
 
             if (tunnelStatus.HostConnections == 0)
             {
-                return Task.FromResult(HealthCheckResult.Unhealthy(string.Format(CultureInfo.CurrentCulture, Resources.MessageStrings.DevTunnelUnhealthy_NoActiveHostConnections, _tunnelResource.TunnelId)));
+                return HealthCheckResult.Unhealthy(string.Format(CultureInfo.CurrentCulture, Resources.MessageStrings.DevTunnelUnhealthy_NoActiveHostConnections, tunnelResource.TunnelId));
             }
 
-            var portStatus = tunnelStatus.Ports?.FirstOrDefault(p => p.PortNumber == _port);
+            var portStatus = tunnelStatus.Ports?.FirstOrDefault(p => p.PortNumber == port);
 
             // Check that port is active
             if (portStatus?.PortUri is null)
             {
-                return Task.FromResult(HealthCheckResult.Unhealthy(string.Format(CultureInfo.CurrentCulture, Resources.MessageStrings.DevTunnelUnhealthy_PortInactive, _tunnelResource.TunnelId, _port)));
+                return HealthCheckResult.Unhealthy(string.Format(CultureInfo.CurrentCulture, Resources.MessageStrings.DevTunnelUnhealthy_PortInactive, tunnelResource.TunnelId, port));
             }
 
-            return Task.FromResult(HealthCheckResult.Healthy(string.Format(CultureInfo.CurrentCulture, Resources.MessageStrings.DevTunnelPortHealthy, _port, _tunnelResource.TunnelId)));
+            return HealthCheckResult.Healthy(string.Format(CultureInfo.CurrentCulture, Resources.MessageStrings.DevTunnelPortHealthy, port, tunnelResource.TunnelId));
         }
         catch (Exception ex)
         {
-            return Task.FromResult(HealthCheckResult.Unhealthy(string.Format(CultureInfo.CurrentCulture, Resources.MessageStrings.DevTunnelPortUnhealthy_Error, _port, _tunnelResource.TunnelId, ex.Message), ex));
+            var tunnelResource = _portResource.DevTunnel;
+            var port = _portResource.TargetEndpoint.TargetPort?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
+            return HealthCheckResult.Unhealthy(string.Format(CultureInfo.CurrentCulture, Resources.MessageStrings.DevTunnelPortUnhealthy_Error, port, tunnelResource.TunnelId, ex.Message), ex);
         }
     }
 }

@@ -99,11 +99,51 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
         Assert.Equal(expectedUrl, result.Output.Trim());
     }
 
-    [Fact]
-    public async Task ConstructAspireCliUrl_WithVersion_ReturnsCiDotNetUrl()
+    [Theory]
+    [InlineData("13.3.5", "linux-x64", "tar.gz", "https://github.com/microsoft/aspire/releases/download/v13.3.5/aspire-cli-linux-x64-13.3.5.tar.gz")]
+    [InlineData("v13.3.5", "win-x64", "zip", "https://github.com/microsoft/aspire/releases/download/v13.3.5/aspire-cli-win-x64-13.3.5.zip")]
+    public async Task ConstructAspireCliUrl_WithStableVersion_ReturnsGitHubReleaseUrl(
+        string version, string rid, string ext, string expectedUrl)
     {
         using var env = new TestEnvironment();
-        var version = "13.2.0-preview.1.25366.3";
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            $"construct_aspire_cli_url '{version}' 'release' '{rid}' '{ext}'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal(expectedUrl, result.Output.Trim());
+    }
+
+    [Theory]
+    [InlineData("13.3.5", "linux-x64", "tar.gz", "https://github.com/microsoft/aspire/releases/download/v13.3.5/aspire-cli-linux-x64-13.3.5.tar.gz.sha512")]
+    [InlineData("v13.3.5", "win-x64", "zip", "https://github.com/microsoft/aspire/releases/download/v13.3.5/aspire-cli-win-x64-13.3.5.zip.sha512")]
+    public async Task ConstructAspireCliUrl_WithStableVersionAndChecksum_ReturnsGitHubReleaseChecksumUrl(
+        string version, string rid, string ext, string expectedUrl)
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            $"construct_aspire_cli_url '{version}' 'release' '{rid}' '{ext}' 'true'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal(expectedUrl, result.Output.Trim());
+    }
+
+    [Theory]
+    [InlineData("13.3.0-dev")]
+    [InlineData("13.3.0-preview.1.25366.3")]
+    [InlineData("13.3.0-local")]
+    public async Task ConstructAspireCliUrl_WithPrereleaseVersion_ReturnsCiDotNetUrl(string version)
+    {
+        using var env = new TestEnvironment();
         using var cmd = new ScriptFunctionCommand(
             s_releaseScript,
             $"construct_aspire_cli_url '{version}' 'release' 'linux-x64' 'tar.gz'",
@@ -113,17 +153,16 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
         var result = await cmd.ExecuteAsync();
 
         result.EnsureSuccessful();
-        var url = result.Output.Trim();
-        Assert.Contains("ci.dot.net/public/aspire", url);
-        Assert.Contains(version, url);
-        Assert.Contains("linux-x64", url);
+        Assert.Equal($"https://ci.dot.net/public/aspire/{version}/aspire-cli-linux-x64-{version}.tar.gz", result.Output.Trim());
     }
 
-    [Fact]
-    public async Task ConstructAspireCliUrl_WithVersionAndChecksum_ReturnsChecksumUrl()
+    [Theory]
+    [InlineData("13.3.0-dev")]
+    [InlineData("13.3.0-preview.1.25366.3")]
+    [InlineData("13.3.0-local")]
+    public async Task ConstructAspireCliUrl_WithPrereleaseVersionAndChecksum_ReturnsCiDotNetChecksumUrl(string version)
     {
         using var env = new TestEnvironment();
-        var version = "13.2.0-preview.1.25366.3";
         using var cmd = new ScriptFunctionCommand(
             s_releaseScript,
             $"construct_aspire_cli_url '{version}' 'release' 'linux-x64' 'tar.gz' 'true'",
@@ -180,6 +219,36 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
         Assert.DoesNotContain("dotnet", descriptor, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("ga/daily", descriptor, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("rc/daily", descriptor, StringComparison.OrdinalIgnoreCase);
+    }
+
+    #endregion
+
+    #region validate_content_type
+
+    [Fact]
+    public async Task ValidateContentType_GitHubReleaseRedirectWithHtmlIntermediateResponse_Succeeds()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            """
+            secure_curl() {
+                cat <<'HEADERS'
+            HTTP/2 302
+            content-type: text/html; charset=utf-8
+
+            HTTP/2 200
+            content-type: application/octet-stream
+            HEADERS
+            }
+            validate_content_type 'https://github.com/microsoft/aspire/releases/download/v13.3.5/aspire-cli-linux-x64-13.3.5.tar.gz'
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
     }
 
     #endregion
@@ -355,6 +424,36 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("not supported", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    #endregion
+
+    #region setup_cli_bundle
+
+    [Fact]
+    public async Task SetupCliBundle_InvokesSetupAndPropagatesFailure()
+    {
+        using var env = new TestEnvironment();
+        var cliPath = Path.Combine(env.TempDirectory, "aspire");
+        var capturePath = Path.Combine(env.TempDirectory, "setup-args.txt");
+        await File.WriteAllTextAsync(cliPath, ($$"""
+            #!/bin/sh
+            printf '%s\n' "$@" > "{{capturePath}}"
+            exit 23
+            """).ReplaceLineEndings("\n"));
+        FileHelper.MakeExecutable(cliPath);
+
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            $"INSTALLED_CLI_PATH='{cliPath}'; INSTALLED_CLI_OS=\"$(detect_os)\"; INSTALLED_CLI_ARCH=\"$(get_cli_architecture_from_architecture '<auto>')\"; DRY_RUN=false; setup_cli_bundle",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Equal("setup", (await File.ReadAllTextAsync(capturePath)).Trim());
+        Assert.Contains("bundle setup failed", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     #endregion

@@ -1,12 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Net.Http.Json;
 using System.Text.Json;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Dashboard.Otlp.Model;
-using Aspire.Otlp.Serialization;
 using Aspire.Dashboard.Utils;
+using Aspire.Otlp.Serialization;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
@@ -18,7 +18,7 @@ namespace Aspire.Cli.Mcp.Tools;
 /// MCP tool for listing structured logs for a specific distributed trace.
 /// Gets log data directly from the Dashboard telemetry API.
 /// </summary>
-internal sealed class ListTraceStructuredLogsTool(IDashboardInfoProvider dashboardInfoProvider, IHttpClientFactory httpClientFactory, ILogger<ListTraceStructuredLogsTool> logger) : CliMcpTool
+internal sealed class ListTraceStructuredLogsTool(IDashboardInfoProvider dashboardInfoProvider, IAuxiliaryBackchannelMonitor? auxiliaryBackchannelMonitor, IHttpClientFactory httpClientFactory, ILogger<ListTraceStructuredLogsTool> logger) : CliMcpTool
 {
     public override string Name => KnownMcpTools.ListTraceStructuredLogs;
 
@@ -90,6 +90,18 @@ internal sealed class ListTraceStructuredLogsTool(IDashboardInfoProvider dashboa
 
             var apiResponse = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse, cancellationToken).ConfigureAwait(false);
             var resourceLogs = apiResponse?.Data?.ResourceLogs;
+
+            // Filter out logs from resources that are excluded from MCP.
+            if (resourceLogs is not null && auxiliaryBackchannelMonitor is not null)
+            {
+                var excludedNames = await McpToolHelpers.GetExcludedResourceNamesAsync(auxiliaryBackchannelMonitor, cancellationToken).ConfigureAwait(false);
+                if (excludedNames.Count > 0)
+                {
+                    resourceLogs = resourceLogs
+                        .Where(rl => rl.Resource?.GetServiceName() is not { } name || !excludedNames.Contains(name))
+                        .ToArray();
+                }
+            }
 
             var (logsData, limitMessage) = SharedAIHelpers.GetStructuredLogsJson(
                 resourceLogs,

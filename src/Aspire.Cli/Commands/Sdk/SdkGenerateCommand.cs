@@ -5,8 +5,6 @@ using System.CommandLine;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands.Sdk;
@@ -22,6 +20,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
 {
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
+    private readonly IAppHostServerSessionFactory _serverSessionFactory;
     private readonly ILogger<SdkGenerateCommand> _logger;
 
     private static readonly Argument<FileInfo> s_integrationArgument = new("integration")
@@ -42,16 +41,14 @@ internal sealed class SdkGenerateCommand : BaseCommand
     public SdkGenerateCommand(
         ILanguageDiscovery languageDiscovery,
         IAppHostServerProjectFactory appHostServerProjectFactory,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IInteractionService interactionService,
+        IAppHostServerSessionFactory serverSessionFactory,
         ILogger<SdkGenerateCommand> logger,
-        AspireCliTelemetry telemetry)
-        : base("generate", "Generate typed SDKs from an Aspire integration library for use in other languages.", features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("generate", "Generate typed SDKs from an Aspire integration library for use in other languages.", services)
     {
         _languageDiscovery = languageDiscovery;
         _appHostServerProjectFactory = appHostServerProjectFactory;
+        _serverSessionFactory = serverSessionFactory;
         _logger = logger;
 
         Arguments.Add(s_integrationArgument);
@@ -68,19 +65,19 @@ internal sealed class SdkGenerateCommand : BaseCommand
         // Validate the integration project exists
         if (!integrationProject.Exists)
         {
-            return CommandResult.Failure(ExitCodeConstants.FailedToFindProject, $"Integration project not found: {integrationProject.FullName}");
+            return CommandResult.Failure(CliExitCodes.FailedToFindProject, $"Integration project not found: {integrationProject.FullName}");
         }
 
         if (!integrationProject.Extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase))
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, $"Expected a .csproj file, got: {integrationProject.Extension}");
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Expected a .csproj file, got: {integrationProject.Extension}");
         }
 
         // Resolve the language info
         var languageInfo = await GetLanguageInfoAsync(language, cancellationToken);
         if (languageInfo is null)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, $"Unsupported language: {language}");
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Unsupported language: {language}");
         }
 
         // Create output directory if it doesn't exist
@@ -129,7 +126,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
             var integrations = new List<IntegrationReference>();
             if (codeGenPackage is not null)
             {
-                integrations.Add(IntegrationReference.FromPackage(codeGenPackage, VersionHelper.GetDefaultTemplateVersion()));
+                integrations.Add(IntegrationReference.FromPackage(codeGenPackage, ExecutionContext.IdentityVersion));
             }
 
             // Add the integration project as a project reference
@@ -140,9 +137,9 @@ internal sealed class SdkGenerateCommand : BaseCommand
             _logger.LogDebug("Building AppHost server for SDK generation");
 
             var prepareResult = await appHostServerProject.PrepareAsync(
-                VersionHelper.GetDefaultTemplateVersion(),
+                ExecutionContext.IdentityVersion,
                 integrations,
-                cancellationToken);
+                cancellationToken: cancellationToken);
 
             if (!prepareResult.Success)
             {
@@ -154,14 +151,14 @@ internal sealed class SdkGenerateCommand : BaseCommand
                         InteractionService.DisplayMessage(KnownEmojis.Wrench, line);
                     }
                 }
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            await using var serverSession = AppHostServerSession.Start(
-                appHostServerProject,
-                environmentVariables: null,
-                debug: false,
-                _logger);
+            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
+            // Short-lived RPC session: StartAsync() spawns the server. We never observe the
+            // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
+            // activity scope and the only failure mode we care about surfaces via the RPC call below.
+            await serverSession.StartAsync();
 
             // Connect and generate code
             var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
@@ -193,7 +190,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
 
             InteractionService.DisplaySuccess($"Generated {generatedFiles.Count} files in {outputDir.FullName}");
 
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
         }
         finally
         {

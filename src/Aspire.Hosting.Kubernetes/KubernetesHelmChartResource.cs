@@ -26,6 +26,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// <see cref="KubernetesHelmChartExtensions.WithDestroy(IResourceBuilder{KubernetesHelmChartResource})"/>.
 /// </para>
 /// </remarks>
+/// <ats-remarks />
 /// <example>
 /// <code>
 /// var k8s = builder.AddKubernetesEnvironment("k8s");
@@ -40,7 +41,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// </code>
 /// </example>
 [AspireExport]
-public class KubernetesHelmChartResource : Resource, IResourceWithParent<KubernetesEnvironmentResource>
+public sealed class KubernetesHelmChartResource : Resource, IResourceWithParent<KubernetesEnvironmentResource>
 {
     /// <summary>
     /// Initializes a new instance of <see cref="KubernetesHelmChartResource"/>.

@@ -55,11 +55,11 @@ public class ConformanceTests : ConformanceTests<TableServiceClient, AzureDataTa
             ("""{"Aspire": { "Azure": { "Data":{ "Tables": { "ServiceUri": "http://YOUR_URI", "ClientOptions": {"Retry": {"NetworkTimeout": "3S"}}}}}}}""", "The string value is not a match for the indicated regular expression")
         };
 
-    protected override string[] RequiredLogCategories => new string[]
-    {
-        "Azure.Identity",
-        "Azure.Core"
-    };
+    protected override RequiredLogCategory[] RequiredLogCategories =>
+    [
+        new("Azure.Identity"),
+        new("Azure.Core"),
+    ];
 
     protected override bool SupportsKeyedRegistrations => true;
 

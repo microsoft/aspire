@@ -22,7 +22,7 @@ internal sealed class OutputCollector
     /// <summary>
     /// Creates an OutputCollector that only buffers output in memory.
     /// </summary>
-    public OutputCollector() : this(null, "AppHost")
+    public OutputCollector() : this(null, CliLogFormat.Categories.AppHost)
     {
     }
 
@@ -30,8 +30,8 @@ internal sealed class OutputCollector
     /// Creates an OutputCollector that buffers output and optionally logs to disk.
     /// </summary>
     /// <param name="fileLogger">Optional file logger for writing output to disk.</param>
-    /// <param name="category">Category for log entries (e.g., "Build", "AppHost").</param>
-    public OutputCollector(FileLoggerProvider? fileLogger, string category = "AppHost")
+    /// <param name="category">Category for log entries.</param>
+    public OutputCollector(FileLoggerProvider? fileLogger, string category = CliLogFormat.Categories.AppHost)
     {
         _fileLogger = fileLogger;
         _category = category;

@@ -4,32 +4,32 @@
 #pragma warning disable ASPIREAZURE003
 
 using Aspire.Hosting.Kubernetes;
-using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureKubernetesIngressTests
+public class AzureKubernetesIngressTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public async Task AksAddIngress_WithRoute_GeneratesIngressInHelmOutput()
+    public async Task AksAddIngress_WithPath_GeneratesIngressInHelmOutput()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var ingress = aks.AddIngress("public")
             .WithIngressClass("nginx");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
-        ingress.WithRoute("/", api.GetEndpoint("http"));
+        ingress.WithPath("/", api.GetEndpoint("http"));
 
         var app = builder.Build();
         app.Run();
 
         // With AKS, the Helm output goes to the inner K8S env subdirectory
-        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         Assert.True(File.Exists(ingressPath), $"Expected ingress YAML at {ingressPath}");
 
         var content = await File.ReadAllTextAsync(ingressPath);
@@ -40,7 +40,8 @@ public class AzureKubernetesIngressTests
     [Fact]
     public void AksAddIngress_HasCorrectParent()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var ingress = aks.AddIngress("public");
 
@@ -52,7 +53,8 @@ public class AzureKubernetesIngressTests
     [Fact]
     public void AksAddGateway_HasCorrectParent()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var gateway = aks.AddGateway("public");
 
@@ -63,7 +65,8 @@ public class AzureKubernetesIngressTests
     [Fact]
     public async Task WithLoadBalancer_OnGateway_AnnotatesAndDefaultsClass()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
 
@@ -86,7 +89,8 @@ public class AzureKubernetesIngressTests
     [Fact]
     public async Task WithLoadBalancer_OnIngress_AnnotatesAndDefaultsClass()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
 
@@ -109,7 +113,8 @@ public class AzureKubernetesIngressTests
     [Fact]
     public async Task WithLoadBalancer_RespectsExplicitGatewayClass()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
         var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
 
@@ -128,5 +133,49 @@ public class AzureKubernetesIngressTests
 
         Assert.True(gateway.Resource.GatewayAnnotations.ContainsKey("alb.networking.azure.io/alb-name"));
         Assert.True(gateway.Resource.GatewayAnnotations.ContainsKey("alb.networking.azure.io/alb-namespace"));
+    }
+
+    [Fact]
+    public void AksAddIngress_WithPath_NonExternalEndpoint_ThrowsOnPublish()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var ingress = aks.AddIngress("public").WithIngressClass("nginx");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        ingress.WithPath("/", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+        var aggregate = Assert.Throws<AggregateException>(app.Run);
+        var ex = aggregate.Flatten().InnerExceptions.OfType<InvalidOperationException>().First(e => e.Message.Contains("WithExternalHttpEndpoints"));
+
+        Assert.Contains("myapi", ex.Message);
+        Assert.Contains("WithExternalHttpEndpoints", ex.Message);
+    }
+
+    [Fact]
+    public void AksAddGateway_WithRoute_NonExternalEndpoint_ThrowsOnPublish()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var gateway = aks.AddGateway("public").WithGatewayClass("nginx");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway.WithRoute("/", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+        var aggregate = Assert.Throws<AggregateException>(app.Run);
+        var ex = aggregate.Flatten().InnerExceptions.OfType<InvalidOperationException>().First(e => e.Message.Contains("WithExternalHttpEndpoints"));
+
+        Assert.Contains("myapi", ex.Message);
+        Assert.Contains("WithExternalHttpEndpoints", ex.Message);
     }
 }

@@ -13,22 +13,49 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class TestExtensionInteractionService(IServiceProvider serviceProvider) : IExtensionInteractionService
 {
+    private readonly object _displayLock = new();
+
     public ConsoleOutput Console { get; set; }
     public bool SupportsLinks { get; set; }
     public Action<string>? DisplayErrorCallback { get; set; }
     public Action<string>? DisplaySubtleMessageCallback { get; set; }
     public Action<string>? DisplayConsoleWriteLineMessage { get; set; }
     public Action? LaunchAppHostCallback { get; set; }
+    public Func<Task>? LaunchAppHostAsyncCallback { get; set; }
     public Action? NotifyAppHostStartupCompletedCallback { get; set; }
     public Action<DashboardUrlsState>? DisplayDashboardUrlsCallback { get; set; }
-    public Action<string, string?, bool>? StartDebugSessionCallback { get; set; }
+    public Action<string, string?, bool, DebugSessionOptions?>? StartDebugSessionCallback { get; set; }
+    public Action<string, bool, string?>? WriteDebugSessionMessageCallback { get; set; }
+    public Action<ExtensionAppHostLogEntry>? WriteAppHostLogEntryCallback { get; set; }
     public Action<string, bool>? ConsoleDisplaySubtleMessageCallback { get; set; }
+    public Func<string?, string, string?, CancellationToken, Task<bool>>? TryDisplayCommandFailureAsyncCallback { get; set; }
+    public Func<string, bool, bool>? ConfirmCallback { get; set; }
+    public Func<string, Func<string, ValidationResult>?, bool, bool, PromptBinding<string?>?, CancellationToken, Task<string>>? PromptForStringCallback { get; set; }
+    public Func<string, IReadOnlyList<string>, string>? SelectionCallback { get; set; }
+    public Func<IRenderable, Func<Action<IRenderable>, Task>, Task>? DisplayLiveAsyncCallback { get; set; }
+    public List<(OutputLineStream Stream, string Line)> DisplayedLines { get; } = [];
+    public List<string> DisplayedErrors { get; } = [];
+    public List<(string ErrorMessage, IReadOnlyList<InteractionMessageAction> Actions)> DisplayedErrorsWithActions { get; } = [];
+    public List<(KnownEmoji Emoji, string Message, ConsoleOutput? ConsoleOverride)> DisplayedMessages { get; } = [];
+    public List<(KnownEmoji Emoji, string Message, IReadOnlyList<InteractionMessageAction> Actions, ConsoleOutput? ConsoleOverride)> DisplayedMessagesWithActions { get; } = [];
+    public bool FlushAsyncCalled { get; private set; }
 
     public IExtensionBackchannel Backchannel { get; } = serviceProvider.GetRequiredService<IExtensionBackchannel>();
+
+    public Task FlushAsync(CancellationToken cancellationToken = default)
+    {
+        FlushAsyncCalled = true;
+        return Task.CompletedTask;
+    }
 
     public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
         return action();
+    }
+
+    public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null)
+    {
+        return action(_ => { });
     }
 
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false)
@@ -38,25 +65,41 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
 
     public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
     {
+        if (PromptForStringCallback is not null)
+        {
+            return PromptForStringCallback(promptText, validator, isSecret, required, binding, cancellationToken);
+        }
+
         return Task.FromResult(binding?.DefaultValue ?? string.Empty);
     }
 
-    public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+    public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default)
     {
         return PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken);
     }
 
     public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
-        if (!choices.Any())
+        var choicesArray = choices.ToArray();
+        if (choicesArray.Length == 0)
         {
             throw new EmptyChoicesException($"No items available for selection: {promptText}");
         }
 
-        return Task.FromResult(choices.First());
+        if (SelectionCallback is not null)
+        {
+            var selected = SelectionCallback(promptText, choicesArray.Select(choiceFormatter).ToArray());
+            var matchingChoice = choicesArray.FirstOrDefault(c => string.Equals(choiceFormatter(c), selected, StringComparison.Ordinal));
+            if (matchingChoice is not null)
+            {
+                return Task.FromResult(matchingChoice);
+            }
+        }
+
+        return Task.FromResult(choicesArray.First());
     }
 
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
     {
         if (!choices.Any())
         {
@@ -78,11 +121,36 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
 
     public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
+        lock (_displayLock)
+        {
+            DisplayedErrors.Add(errorMessage);
+        }
         DisplayErrorCallback?.Invoke(errorMessage);
     }
 
-    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
+    public void DisplayError(string errorMessage, IReadOnlyList<InteractionMessageAction> actions, bool allowMarkup = false)
     {
+        lock (_displayLock)
+        {
+            DisplayedErrorsWithActions.Add((errorMessage, actions));
+        }
+        DisplayErrorCallback?.Invoke(errorMessage);
+    }
+
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
+    {
+        lock (_displayLock)
+        {
+            DisplayedMessages.Add((emoji, message, consoleOverride));
+        }
+    }
+
+    public void DisplayMessage(KnownEmoji emoji, string message, IReadOnlyList<InteractionMessageAction> actions, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
+    {
+        lock (_displayLock)
+        {
+            DisplayedMessagesWithActions.Add((emoji, message, actions, consoleOverride));
+        }
     }
 
     public void DisplaySuccess(string message, bool allowMarkup = false)
@@ -99,6 +167,16 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
         NotifyAppHostStartupCompletedCallback?.Invoke();
     }
 
+    public Task<bool> TryDisplayCommandFailureAsync(
+        string? errorMessage,
+        string cliLogFilePath,
+        string? appHostCliLogFilePath,
+        CancellationToken cancellationToken)
+    {
+        return TryDisplayCommandFailureAsyncCallback?.Invoke(errorMessage, cliLogFilePath, appHostCliLogFilePath, cancellationToken)
+            ?? Task.FromResult(false);
+    }
+
     public void DisplayConsolePlainText(string message)
     {
         DisplayConsoleWriteLineMessage?.Invoke(message);
@@ -106,25 +184,33 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
 
     public Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug, DebugSessionOptions? options = null)
     {
-        StartDebugSessionCallback?.Invoke(workingDirectory, projectFile, debug);
+        StartDebugSessionCallback?.Invoke(workingDirectory, projectFile, debug, options);
         return Task.CompletedTask;
     }
 
     public void WriteDebugSessionMessage(string message, bool stdout, string? textStyle)
     {
+        WriteDebugSessionMessageCallback?.Invoke(message, stdout, textStyle);
+    }
+
+    public void WriteAppHostLogEntry(ExtensionAppHostLogEntry entry)
+    {
+        WriteAppHostLogEntryCallback?.Invoke(entry);
     }
 
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)
     {
+        DisplayedLines.AddRange(lines);
     }
 
-    public void DisplayCancellationMessage()
+    public void DisplayCancellationMessage(string? message = null, ConsoleOutput? consoleOverride = null)
     {
     }
 
     public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(true);
+        var defaultValue = binding?.DefaultValue ?? false;
+        return Task.FromResult(ConfirmCallback?.Invoke(promptText, defaultValue) ?? true);
     }
 
     public void DisplaySubtleMessage(string message, bool allowMarkup = false)
@@ -171,6 +257,11 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
 
     public Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback)
     {
+        if (DisplayLiveAsyncCallback is not null)
+        {
+            return DisplayLiveAsyncCallback(initialRenderable, callback);
+        }
+
         return callback(_ => { });
     }
 
@@ -196,10 +287,13 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
         LogMessageCallback?.Invoke(logLevel, message);
     }
 
-    public Task LaunchAppHostAsync(string projectFile, List<string> arguments, List<EnvVar> environment, bool debug)
+    public async Task LaunchAppHostAsync(string projectFile, List<string> arguments, List<EnvVar> environment, bool debug)
     {
         LaunchAppHostCallback?.Invoke();
-        return Task.CompletedTask;
+        if (LaunchAppHostAsyncCallback is not null)
+        {
+            await LaunchAppHostAsyncCallback().ConfigureAwait(false);
+        }
     }
 
     public void ConsoleDisplaySubtleMessage(string message, bool allowMarkup = false)

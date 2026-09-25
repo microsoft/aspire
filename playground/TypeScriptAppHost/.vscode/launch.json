@@ -5,7 +5,7 @@
             "name": "Run AppHost",
             "type": "aspire",
             "request": "launch",
-            "program": "${workspaceFolder}/apphost.ts"
+            "program": "${workspaceFolder}/apphost.mts"
         }
     ]
 }

@@ -2,13 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES002
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Cli;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -24,7 +24,8 @@ internal sealed class PipelineExecutor(
     IPipelineActivityReporter activityReporter,
     IDistributedApplicationEventing eventing,
     BackchannelService backchannelService,
-    IPipelineActivityReporter pipelineActivityReporter) : BackgroundService
+    IPipelineActivityReporter pipelineActivityReporter,
+    IConfiguration configuration) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -39,6 +40,14 @@ internal sealed class PipelineExecutor(
             {
                 logger.LogDebug("Waiting for backchannel connection before publishing.");
                 await backchannelService.BackchannelConnected.ConfigureAwait(false);
+            }
+
+            // Step inspection is driven over the backchannel. Return before publishing events and
+            // pipeline execution; resolving metadata over the backchannel can still invoke user
+            // step-resolution callbacks before the CLI stops the AppHost.
+            if (configuration.GetValue<bool>("Pipeline:ListSteps"))
+            {
+                return;
             }
 
             var step = await pipelineActivityReporter.CreateStepAsync("pipeline-execution", stoppingToken).ConfigureAwait(false);

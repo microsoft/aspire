@@ -1,6 +1,6 @@
 {
   "appHost": {
-    "path": "AppHost/apphost.ts",
+    "path": "AppHost/apphost.mts",
     "language": "typescript/nodejs"
   },
   "packages": {

@@ -7,7 +7,7 @@ using Aspire.Cli.Tests.TestServices;
 
 namespace Aspire.Cli.Tests.Projects;
 
-public class DefaultLanguageDiscoveryTests
+public class DefaultLanguageDiscoveryTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task GetAvailableLanguagesAsync_ReturnsCSharpLanguage()
@@ -46,7 +46,9 @@ public class DefaultLanguageDiscoveryTests
         var typescript = languages.FirstOrDefault(l => l.LanguageId.Value == "typescript/nodejs");
         Assert.NotNull(typescript);
         Assert.Equal("TypeScript (Node.js)", typescript.DisplayName);
+        Assert.Contains("apphost.mts", typescript.DetectionPatterns);
         Assert.Contains("apphost.ts", typescript.DetectionPatterns);
+        Assert.Equal("apphost.mts", typescript.AppHostFileName);
     }
 
     [Fact]
@@ -101,6 +103,8 @@ public class DefaultLanguageDiscoveryTests
     [InlineData("apphost.cs", KnownLanguageId.CSharp)]
     [InlineData("AppHost.cs", KnownLanguageId.CSharp)]
     [InlineData("APPHOST.CS", KnownLanguageId.CSharp)]
+    [InlineData("apphost.mts", "typescript/nodejs")]
+    [InlineData("AppHost.mts", "typescript/nodejs")]
     [InlineData("apphost.ts", "typescript/nodejs")]
     [InlineData("AppHost.ts", "typescript/nodejs")]
     public void GetLanguageByFile_ReturnsCorrectLanguage(string fileName, string expectedLanguageId)
@@ -166,6 +170,43 @@ public class DefaultLanguageDiscoveryTests
         Assert.Equal(languageId, language.LanguageId.Value);
     }
 
+    /// <summary>
+    /// Covers the two hops an AppHost makes on the way to a project handler: the recursive scan that
+    /// locates the file, and the language resolution that runs on whatever the scan returned.
+    /// </summary>
+    /// <remarks>
+    /// The two hops match differently, which is easy to misread as a gap. <see cref="LanguageInfo.FindInDirectory"/>
+    /// passes each pattern to <c>Directory.EnumerateFiles</c>, which accepts a relative directory in the
+    /// pattern, so <c>src/main/java/AppHost.java</c> locates the conventional Maven and Gradle layout.
+    /// <c>GetLanguageByFile</c> then sees only <c>FileInfo.Name</c>, so that same pattern cannot match
+    /// there and resolution happens through the bare <c>AppHost.java</c> pattern instead. Both patterns
+    /// are therefore load-bearing, and dropping the bare one as redundant would leave a conventional
+    /// AppHost that is found but has no language.
+    /// </remarks>
+    [Theory]
+    [InlineData("AppHost.java")]
+    [InlineData("src/main/java/AppHost.java")]
+    public void JavaAppHostIsBothLocatedAndResolvedInEveryLayout(string relativePath)
+    {
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.ExperimentalPolyglotJava, true);
+        var discovery = new DefaultLanguageDiscovery(features);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostPath = Path.Combine(workspace.Path, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(appHostPath)!);
+        File.WriteAllText(appHostPath, "void main(String[] args) { }");
+
+        var java = discovery.GetLanguageById(new LanguageId(KnownLanguageId.Java));
+        Assert.NotNull(java);
+
+        var located = java.FindInDirectory(workspace.Path);
+        Assert.Equal(appHostPath, located);
+
+        var language = discovery.GetLanguageByFile(new FileInfo(located!));
+        Assert.NotNull(language);
+        Assert.Equal(KnownLanguageId.Java, language.LanguageId.Value);
+    }
     [Fact]
     public void GetLanguageById_ReturnsNullForUnknownLanguage()
     {

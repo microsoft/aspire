@@ -11,7 +11,7 @@ public class FirstTimeUseNoticeSentinelTests(ITestOutputHelper outputHelper)
     public void Exists_WhenSentinelFileDoesNotExist_ReturnsFalse()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sentinel = new FirstTimeUseNoticeSentinel(workspace.WorkspaceRoot.FullName);
 
         // Act
@@ -25,7 +25,7 @@ public class FirstTimeUseNoticeSentinelTests(ITestOutputHelper outputHelper)
     public void Exists_WhenSentinelFileExists_ReturnsTrue()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cliDir = Path.Combine(workspace.WorkspaceRoot.FullName, "cli");
         Directory.CreateDirectory(cliDir);
         var sentinelFilePath = Path.Combine(cliDir, "cli.firstUseSentinel");
@@ -43,7 +43,7 @@ public class FirstTimeUseNoticeSentinelTests(ITestOutputHelper outputHelper)
     public void CreateIfNotExists_WhenSentinelFileDoesNotExist_CreatesFile()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sentinel = new FirstTimeUseNoticeSentinel(workspace.WorkspaceRoot.FullName);
 
         // Act
@@ -58,7 +58,7 @@ public class FirstTimeUseNoticeSentinelTests(ITestOutputHelper outputHelper)
     public void CreateIfNotExists_WhenSentinelFileAlreadyExists_DoesNotThrow()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cliDir = Path.Combine(workspace.WorkspaceRoot.FullName, "cli");
         Directory.CreateDirectory(cliDir);
         var sentinelFilePath = Path.Combine(cliDir, "cli.firstUseSentinel");
@@ -77,7 +77,7 @@ public class FirstTimeUseNoticeSentinelTests(ITestOutputHelper outputHelper)
     public void CreateIfNotExists_WhenDirectoryDoesNotExist_CreatesDirectoryAndFile()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var nonExistentDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "non-existent-dir");
         var sentinel = new FirstTimeUseNoticeSentinel(nonExistentDirectory);
 

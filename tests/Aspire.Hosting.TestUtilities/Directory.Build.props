@@ -1,0 +1,19 @@
+<Project>
+  <PropertyGroup>
+    <!--
+      TestDistributedApplicationBuilder lives in this assembly. DistributedApplicationTestingBuilder
+      locates the application host by walking the call stack for the first assembly that carries the
+      'dcpclipath' AssemblyMetadata attribute, which is only emitted for Aspire host projects
+      (IsAspireHost=true imports the Aspire.Hosting.AppHost build targets). Consumers call
+      TestDistributedApplicationBuilder.Create() through this assembly, so this assembly's frame must
+      supply that metadata. Without IsAspireHost=true the lookup throws
+      "No application host assembly was found." This mirrors Aspire.Hosting.Tests, which is where
+      these helpers previously lived.
+    -->
+    <IsAspireHost>true</IsAspireHost>
+    <AspireUseCliBundle>false</AspireUseCliBundle>
+    <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
+  </PropertyGroup>
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+</Project>

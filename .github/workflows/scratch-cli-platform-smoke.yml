@@ -1,0 +1,101 @@
+name: Scratch CLI Platform Smoke Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number whose dogfood packages should be tested
+        required: true
+        type: number
+      workflow_run_id:
+        description: CI workflow run containing the native CLI archives
+        required: true
+        type: number
+
+permissions:
+  actions: read
+  contents: read
+
+run-name: "CLI platform smoke tests for PR #${{ inputs.pr_number }} (run ${{ inputs.workflow_run_id }})"
+
+jobs:
+  source:
+    name: Resolve artifact source
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Resolve artifact source commit
+        id: source
+        shell: pwsh
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+          WORKFLOW_RUN_ID: ${{ inputs.workflow_run_id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+
+          $run = gh api "/repos/$env:GITHUB_REPOSITORY/actions/runs/$env:WORKFLOW_RUN_ID" | ConvertFrom-Json
+          $pullRequest = @($run.pull_requests) |
+            Where-Object { $_.number -eq [int]$env:PR_NUMBER } |
+            Select-Object -First 1
+
+          if ($null -eq $pullRequest) {
+            throw "Workflow run $env:WORKFLOW_RUN_ID is not associated with PR #$env:PR_NUMBER."
+          }
+
+          $headSha = [string]$pullRequest.head.sha
+          if ([string]::IsNullOrWhiteSpace($headSha)) {
+            throw "Workflow run $env:WORKFLOW_RUN_ID did not report the head commit for PR #$env:PR_NUMBER."
+          }
+
+          "sha=$headSha" >> $env:GITHUB_OUTPUT
+
+  smoke:
+    name: ${{ matrix.name }}
+    needs: source
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu x64
+            runner: ubuntu-latest
+            artifact_suffix: linux-x64
+            max_startup_seconds: 120
+            resource_ready_timeout_seconds: 120
+          - name: Ubuntu ARM64
+            runner: ubuntu-24.04-arm
+            artifact_suffix: linux-arm64
+            max_startup_seconds: 180
+            resource_ready_timeout_seconds: 180
+          - name: Windows x64
+            runner: windows-latest
+            artifact_suffix: windows-x64
+            max_startup_seconds: 120
+            resource_ready_timeout_seconds: 120
+          - name: Windows ARM64
+            runner: windows-11-arm
+            artifact_suffix: windows-arm64
+            max_startup_seconds: 180
+            resource_ready_timeout_seconds: 300
+          - name: macOS x64
+            runner: macos-15-intel
+            artifact_suffix: macos-x64
+            max_startup_seconds: 180
+            resource_ready_timeout_seconds: 180
+          - name: macOS ARM64
+            runner: macos-latest
+            artifact_suffix: macos-arm64
+            max_startup_seconds: 120
+            resource_ready_timeout_seconds: 120
+    uses: ./.github/workflows/cli-starter-validation.yml
+    with:
+      runner: ${{ matrix.runner }}
+      artifactSuffix: ${{ matrix.artifact_suffix }}
+      maxStartupSeconds: ${{ matrix.max_startup_seconds }}
+      resourceReadyTimeoutSeconds: ${{ matrix.resource_ready_timeout_seconds }}
+      prNumber: ${{ inputs.pr_number }}
+      workflowRunId: ${{ format('{0}', inputs.workflow_run_id) }}
+      checkoutRef: ${{ needs.source.outputs.sha }}

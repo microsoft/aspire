@@ -37,6 +37,7 @@ public sealed class ContainerBuildOptionsCallbackAnnotation(Func<ContainerBuildO
 /// Context for configuring container build options via a callback.
 /// </summary>
 [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport(ExposeProperties = true)]
 public sealed class ContainerBuildOptionsCallbackContext
 {
     /// <summary>
@@ -52,13 +53,13 @@ public sealed class ContainerBuildOptionsCallbackContext
         IServiceProvider services,
         ILogger logger,
         CancellationToken cancellationToken,
-        DistributedApplicationExecutionContext? executionContext = null)
+        DistributedApplicationExecutionContext executionContext)
     {
         Resource = resource ?? throw new ArgumentNullException(nameof(resource));
         Services = services ?? throw new ArgumentNullException(nameof(services));
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         CancellationToken = cancellationToken;
-        ExecutionContext = executionContext;
+        ExecutionContext = executionContext ?? throw new ArgumentNullException(nameof(executionContext));
     }
 
     /// <summary>
@@ -84,7 +85,12 @@ public sealed class ContainerBuildOptionsCallbackContext
     /// <summary>
     /// Gets the distributed application execution context.
     /// </summary>
-    public DistributedApplicationExecutionContext? ExecutionContext { get; }
+    /// <remarks>
+    /// Use <see cref="DistributedApplicationExecutionContext.IsPublishMode"/> or
+    /// <see cref="DistributedApplicationExecutionContext.IsRunMode"/> to vary build options
+    /// (for example <see cref="TargetPlatform"/>) between local run and publish operations.
+    /// </remarks>
+    public DistributedApplicationExecutionContext ExecutionContext { get; }
 
     /// <summary>
     /// Gets or sets the destination for the container image.
@@ -94,6 +100,12 @@ public sealed class ContainerBuildOptionsCallbackContext
     /// <summary>
     /// Gets or sets the output path for the container archive.
     /// </summary>
+    /// <remarks>
+    /// For .NET SDK publishing, a non-existent path with any filename extension is an archive filename.
+    /// End a directory path with the platform's directory separator to make directory intent explicit,
+    /// especially when its name contains a period. Prefer an explicit archive filename to avoid ambiguity.
+    /// Other container image builders may interpret this path as an output directory.
+    /// </remarks>
     public string? OutputPath { get; set; }
 
     /// <summary>

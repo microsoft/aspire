@@ -5,12 +5,10 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:16179;http://localhost:16180",
+      "applicationUrl": "https://DotnetTool.dev.localhost:16179;http://DotnetTool.dev.localhost:16180",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:17119",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:17119",
         "ASPIRE_SHOW_DASHBOARD_RESOURCES": "true"
       }
     },
@@ -18,12 +16,10 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:16180",
+      "applicationUrl": "http://DotnetTool.dev.localhost:16180",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17120",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:17120",
         "ASPIRE_SHOW_DASHBOARD_RESOURCES": "true",
         "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
       }
@@ -32,11 +28,10 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "commandLineArgs": "--publisher manifest --output-path aspire-manifest.json",
-      "applicationUrl": "http://localhost:16180",
+      "applicationUrl": "http://DotnetTool.dev.localhost:16180",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17120"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     }
   }

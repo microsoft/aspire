@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run Rust AppHost",
+            "type": "aspire",
+            "request": "launch",
+            "program": "${workspaceFolder}/apphost.rs"
+        },
+        {
+            "name": "Run C# AppHost",
+            "type": "aspire",
+            "request": "launch",
+            "program": "${workspaceFolder}/Rust.AppHost/Rust.AppHost.csproj"
+        }
+    ]
+}

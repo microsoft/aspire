@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class FoundryConnectionPropertiesTests
+public class FoundryConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void FoundryResourceGetConnectionPropertiesReturnsExpectedValues_Azure()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var aiFoundry = builder.AddFoundry("aifoundry");
 
         var properties = ((IResourceWithConnectionString)aiFoundry.Resource).GetConnectionProperties().ToArray();
@@ -22,13 +22,18 @@ public class FoundryConnectionPropertiesTests
             {
                 Assert.Equal("Uri", property.Key);
                 Assert.Equal("{aifoundry.outputs.aiFoundryApiEndpoint}", property.Value.ValueExpression);
+            },
+            property =>
+            {
+                Assert.Equal("AIInferenceUri", property.Key);
+                Assert.Equal("{aifoundry.outputs.aiFoundryApiEndpoint}models", property.Value.ValueExpression);
             });
     }
 
     [Fact]
     public void FoundryResourceGetConnectionPropertiesReturnsExpectedValues_Local()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var aiFoundry = builder.AddFoundry("aifoundry").RunAsFoundryLocal();
 
         // These would be set when the resource starts
@@ -42,6 +47,11 @@ public class FoundryConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("Uri", property.Key);
+                Assert.Equal("http://localhost:8080/", property.Value.ValueExpression);
+            },
+            property =>
+            {
+                Assert.Equal("AIInferenceUri", property.Key);
                 Assert.Equal("http://localhost:8080/", property.Value.ValueExpression);
             },
             property =>

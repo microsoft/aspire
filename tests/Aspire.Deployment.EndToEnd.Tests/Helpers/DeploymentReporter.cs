@@ -10,6 +10,11 @@ namespace Aspire.Deployment.EndToEnd.Tests.Helpers;
 /// </summary>
 internal static class DeploymentReporter
 {
+    // xUnit's dynamic-skip contract: a dynamically skipped test (Assert.Skip in xunit.v3) throws an
+    // exception whose Message starts with this token, with the skip reason appended. We mirror the
+    // literal here because xUnit's Assert.DynamicSkipToken is a private const and not referenceable.
+    private const string XunitDynamicSkipToken = "$XunitDynamicSkip$";
+
     /// <summary>
     /// Reports a successful deployment with URLs to the GitHub step summary.
     /// </summary>
@@ -70,6 +75,15 @@ internal static class DeploymentReporter
         string errorMessage,
         string? logs = null)
     {
+        // A transient Azure-capacity Assert.Skip (see WaitForPipelineSuccessAsync) flows through the
+        // same generic `catch (Exception)` that deployment tests use to report real failures. Detect
+        // the dynamic-skip token so a skip is not reported as a deployment failure in the step summary
+        // — the run already records the test as skipped, not failed.
+        if (errorMessage.StartsWith(XunitDynamicSkipToken, StringComparison.Ordinal))
+        {
+            return;
+        }
+
         var summaryPath = DeploymentE2ETestHelpers.GetGitHubStepSummaryPath();
         if (string.IsNullOrEmpty(summaryPath))
         {

@@ -18,7 +18,7 @@ public class ConformanceTests : ConformanceTests<IChatClient, ChatCompletionsCli
 
     protected override string ActivitySourceName => "Experimental.Microsoft.Extensions.AI";
 
-    protected override string[] RequiredLogCategories => ["Azure.Identity"];
+    protected override RequiredLogCategory[] RequiredLogCategories => [new("Azure.Identity")];
 
     protected override string? ConfigurationSectionName => "Aspire:Azure:AI:Inference";
 
@@ -70,7 +70,7 @@ public class ConformanceTests : ConformanceTests<IChatClient, ChatCompletionsCli
     }
 
     protected override void SetHealthCheck(ChatCompletionsClientSettings options, bool enabled)
-        => throw new NotImplementedException();
+        => options.DisableHealthChecks = !enabled;
 
     protected override void SetMetrics(ChatCompletionsClientSettings options, bool enabled)
         => options.DisableMetrics = !enabled;

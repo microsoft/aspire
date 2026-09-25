@@ -28,6 +28,44 @@ public class BackchannelLoggerProviderTests
         Assert.Equal(LogLevel.Information, snapshot[0].LogLevel);
         Assert.Equal(LogLevel.Warning, snapshot[1].LogLevel);
         Assert.Equal(LogLevel.Error, snapshot[2].LogLevel);
+        Assert.Equal([1, 2, 3], snapshot.Select(entry => entry.SequenceNumber));
+        var generationId = snapshot[0].GenerationId;
+        Assert.NotEqual(Guid.Empty, generationId);
+        Assert.All(snapshot, entry => Assert.Equal(generationId, entry.GenerationId));
+    }
+
+    [Fact]
+    public void Log_UsesDistinctGenerationForEachProvider()
+    {
+        using var provider1 = new BackchannelLoggerProvider();
+        using var provider2 = new BackchannelLoggerProvider();
+
+        provider1.CreateLogger("TestCategory").LogInformation("Provider 1");
+        provider2.CreateLogger("TestCategory").LogInformation("Provider 2");
+
+        var (snapshot1, subscriberId1, _) = provider1.Subscribe();
+        var (snapshot2, subscriberId2, _) = provider2.Subscribe();
+        provider1.Unsubscribe(subscriberId1);
+        provider2.Unsubscribe(subscriberId2);
+
+        Assert.NotEqual(Assert.Single(snapshot1).GenerationId, Assert.Single(snapshot2).GenerationId);
+    }
+
+    [Fact]
+    public void Log_CapturesExceptionSeparatelyFromFormattedMessage()
+    {
+        using var provider = new BackchannelLoggerProvider();
+        var logger = provider.CreateLogger("TestCategory");
+        var exception = new InvalidOperationException("boom");
+
+        logger.LogError(exception, "Request failed");
+
+        var (snapshot, subscriberId, _) = provider.Subscribe();
+        provider.Unsubscribe(subscriberId);
+
+        var entry = Assert.Single(snapshot);
+        Assert.Equal("Request failed", entry.Message);
+        Assert.Equal(exception.ToString(), entry.Exception);
     }
 
     [Fact]
@@ -49,7 +87,9 @@ public class BackchannelLoggerProviderTests
         Assert.Equal(1000, snapshot.Count);
         // First entry should be "Message 1" (index 0 was evicted)
         Assert.Equal("Message 1", snapshot[0].Message);
+        Assert.Equal(2, snapshot[0].SequenceNumber);
         Assert.Equal("Message 1000", snapshot[999].Message);
+        Assert.Equal(1001, snapshot[999].SequenceNumber);
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"apphost/modules/aspire"
@@ -16,6 +17,20 @@ func main() {
 	// Factory methods on builder
 	// ===================================================================
 
+	aks := builder.AddAzureKubernetesEnvironment("aks")
+	aks.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		cluster := infrastructure.GetContainerServiceManagedCluster()
+		if err := cluster.SetIsRbacEnabled(true).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if _, err := cluster.IsRbacEnabled(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
+	if aks.Err() != nil {
+		log.Fatalf(aspire.FormatError(aks.Err()))
+	}
+
 	// AddContainer (pre-existing)
 	container := builder.AddContainer("mycontainer", "nginx")
 	if err = container.Err(); err != nil {
@@ -25,7 +40,7 @@ func main() {
 	container.WithOtlpExporter(&aspire.WithOtlpExporterOptions{Protocol: &genericOtlpProtocol})
 	taggedContainer := builder.AddContainer("mytaggedcontainer", &aspire.AddContainerOptions{
 		Image: "nginx",
-		Tag:   "stable-alpine",
+		Tag:   aspire.StringPtr("stable-alpine"),
 	})
 	if err = taggedContainer.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
@@ -36,6 +51,38 @@ func main() {
 	if err = dockerContainer.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
+	dockerfileFactory := func(factoryContext aspire.DockerfileFactoryContext) string {
+		_ = factoryContext.Resource()
+		return `FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+WORKDIR /app
+ENTRYPOINT ["dotnet", "App.dll"]
+`
+	}
+	dockerFactoryContainer := builder.AddDockerfileFactory("dockerfactoryapp", "./app", dockerfileFactory,
+		&aspire.AddDockerfileFactoryOptions{Stage: aspire.StringPtr("runtime")})
+	if err = dockerFactoryContainer.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+	configureDockerfileBuilder := func(dockerfileContext aspire.DockerfileBuilderCallbackContext) {
+		dockerfileBuilder := dockerfileContext.Builder()
+		dockerfileBuilder.Arg("BASE_IMAGE", &aspire.ArgOptions{DefaultValue: aspire.StringPtr("mcr.microsoft.com/dotnet/runtime:8.0")})
+		buildStage := dockerfileBuilder.From("mcr.microsoft.com/dotnet/sdk:8.0", &aspire.FromOptions{StageName: aspire.StringPtr("build")})
+		buildStage.WorkDir("/src")
+		buildStage.Copy("./src", "/src")
+		buildStage.Run("echo building dockerfile")
+		runtimeStage := dockerfileBuilder.From("mcr.microsoft.com/dotnet/runtime:8.0", &aspire.FromOptions{StageName: aspire.StringPtr("runtime")})
+		runtimeStage.CopyFrom("build", "/src", "/app")
+		runtimeStage.Entrypoint([]string{"dotnet", "App.dll"})
+	}
+	dockerBuilderContainer := builder.AddDockerfileBuilder("dockerbuilderapp", "./app", configureDockerfileBuilder,
+		&aspire.AddDockerfileBuilderOptions{Stage: aspire.StringPtr("runtime")})
+	if err = dockerBuilderContainer.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+	dockerContainer.WithDockerfileBuilder("./app", configureDockerfileBuilder,
+		&aspire.WithDockerfileBuilderOptions{Stage: aspire.StringPtr("runtime")})
+	dockerFactoryContainer.WithDockerfileFactory("./app", dockerfileFactory,
+		&aspire.WithDockerfileFactoryOptions{Stage: aspire.StringPtr("runtime")})
 
 	// AddExecutable (pre-existing)
 	exe := builder.AddExecutable("myexe", "echo", ".", []string{"hello"})
@@ -97,6 +144,17 @@ func main() {
 			Secret:  aspire.BoolPtr(true),
 			Persist: aspire.BoolPtr(true),
 		})
+	customInputType := aspire.InputTypeNumber
+	customInputParam := builder.AddParameter("custom-input")
+	customInputParam.WithCustomInput(&aspire.ParameterCustomInputOptions{
+		InputType:   &customInputType,
+		Label:       aspire.StringPtr("Worker Count"),
+		Placeholder: aspire.StringPtr("Enter number (1-10)"),
+		Options: map[string]string{
+			"one": "One",
+			"two": "Two",
+		},
+	})
 
 	// ===================================================================
 	// Container-specific methods on ContainerResource
@@ -116,6 +174,29 @@ func main() {
 		CustomCertificatesDestination:    aspire.StringPtr("/usr/lib/ssl/aspire/custom"),
 		DefaultCertificateBundlePaths:    []string{"/etc/ssl/certs/ca-certificates.crt"},
 		DefaultCertificateDirectoryPaths: []string{"/etc/ssl/certs", "/usr/local/share/ca-certificates"},
+	})
+	container.WithContainerFiles("/usr/lib/aspire/container-files", ".", &aspire.ContainerFilesOptions{
+		DefaultOwner: aspire.Float64Ptr(1000),
+		DefaultGroup: aspire.Float64Ptr(1000),
+		Umask:        aspire.Float64Ptr(0o022),
+	})
+
+	// WithContainerFilesCallback — build entries dynamically via the context factory methods
+	container.WithContainerFilesCallback("/usr/lib/aspire/container-files", func(filesCtx aspire.ContainerFileSystemCallbackContext, _ *aspire.CancellationToken) []aspire.ContainerFileSystemItem {
+		filesServices := filesCtx.Services()
+		filesLoggerFactory := filesServices.GetLoggerFactory()
+		filesLogger := filesLoggerFactory.CreateLogger("ValidationAppHost.ContainerFilesCallback")
+		_ = filesLogger.LogInformation("ContainerFilesCallback services")
+
+		appConfig := filesCtx.CreateFile("app.conf", &aspire.CreateFileOptions{Contents: aspire.StringPtr("key=value"), Mode: aspire.Float64Ptr(0o644)})
+		nestedConfig := filesCtx.CreateFile("nested.conf", &aspire.CreateFileOptions{Contents: aspire.StringPtr("nested=true")})
+		confDir := filesCtx.CreateDirectory("conf.d", []aspire.ContainerFileSystemItem{nestedConfig}, &aspire.CreateDirectoryOptions{Mode: aspire.Float64Ptr(0o755)})
+		cert := filesCtx.CreateCertificateFile("server.pem", &aspire.CreateCertificateFileOptions{Contents: aspire.StringPtr("-----BEGIN CERTIFICATE-----")})
+		return []aspire.ContainerFileSystemItem{appConfig, confDir, cert}
+	}, &aspire.ContainerFilesOptions{
+		DefaultOwner: aspire.Float64Ptr(1000),
+		DefaultGroup: aspire.Float64Ptr(1000),
+		Umask:        aspire.Float64Ptr(0o022),
 	})
 
 	// WithImageRegistry
@@ -143,6 +224,7 @@ func main() {
 		&aspire.AddConnectionStringOptions{EnvironmentVariableNameOrExpression: expr})
 
 	envConnectionString := builder.AddConnectionString("envcs")
+	externalService := builder.AddExternalService("external-service", "https://example.com")
 
 	// ===================================================================
 	// ResourceBuilderExtensions on ContainerResource
@@ -162,6 +244,9 @@ func main() {
 
 	// WithEnvironment — with connection string resource
 	container.WithEnvironment("MY_CONN", envConnectionString)
+
+	// WithEnvironment — with external service resource
+	container.WithEnvironment("MY_EXTERNAL_SERVICE", externalService)
 
 	// ExcludeFromManifest
 	container.ExcludeFromManifest()
@@ -192,6 +277,16 @@ func main() {
 
 	// WithRelationship
 	project.WithReference(cache)
+	project.WithEndpointsInEnvironment([]string{"https"})
+	if err = builder.AddHealthCheck("custom_check", func(args ...any) *aspire.HealthCheckResult {
+		return &aspire.HealthCheckResult{
+			Status:      aspire.HealthStatusHealthy,
+			Description: aspire.StringPtr("custom health check"),
+			Data:        map[string]string{"custom": "value"},
+		}
+	}); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
 	// WithIconName
 	iconVariant := aspire.IconVariantFilled
@@ -217,6 +312,15 @@ func main() {
 
 	// WithRequiredCommand
 	container.WithRequiredCommand("docker")
+
+	// WithRequiredCommandValidation
+	container.WithRequiredCommandValidation("docker", func(validationCtx aspire.RequiredCommandValidationContext) aspire.RequiredCommandValidationResult {
+		validationServices := validationCtx.Services()
+		validationLoggerFactory := validationServices.GetLoggerFactory()
+		validationLogger := validationLoggerFactory.CreateLogger("ValidationAppHost.RequiredCommandValidation")
+		_ = validationLogger.LogInformation("RequiredCommandValidation services")
+		return validationCtx.Success()
+	})
 
 	// ===================================================================
 	// DotnetToolResourceExtensions — all With-tool methods are fluent
@@ -337,6 +441,7 @@ func main() {
 	builderExecutionContext := builder.ExecutionContext()
 	executionContextServiceProvider := builderExecutionContext.ServiceProvider()
 	_ = executionContextServiceProvider.GetDistributedApplicationModel()
+	resourceCommandService := executionContextServiceProvider.GetResourceCommandService()
 
 	// Subscriptions (typed callbacks)
 	beforeStartSub := builder.SubscribeBeforeStart(func(e aspire.BeforeStartEvent) {
@@ -377,6 +482,26 @@ func main() {
 		_ = beforeStartServices.GetDistributedApplicationModel()
 	})
 
+	beforePublishSub := builder.SubscribeBeforePublish(func(e aspire.BeforePublishEvent) {
+		beforePublishModel := e.Model()
+		_, _ = beforePublishModel.GetResources()
+		_ = beforePublishModel.FindResourceByName("mycontainer")
+		beforePublishServices := e.Services()
+		beforePublishLoggerFactory := beforePublishServices.GetLoggerFactory()
+		beforePublishLogger := beforePublishLoggerFactory.CreateLogger("ValidationAppHost.BeforePublish")
+		_ = beforePublishLogger.LogInformation("BeforePublish")
+	})
+
+	afterPublishSub := builder.SubscribeAfterPublish(func(e aspire.AfterPublishEvent) {
+		afterPublishModel := e.Model()
+		_, _ = afterPublishModel.GetResources()
+		_ = afterPublishModel.FindResourceByName("mycontainer")
+		afterPublishServices := e.Services()
+		afterPublishLoggerFactory := afterPublishServices.GetLoggerFactory()
+		afterPublishLogger := afterPublishLoggerFactory.CreateLogger("ValidationAppHost.AfterPublish")
+		_ = afterPublishLogger.LogInformation("AfterPublish")
+	})
+
 	afterResourcesSub := builder.SubscribeAfterResourcesCreated(func(e aspire.AfterResourcesCreatedEvent) {
 		afterResourcesModel := e.Model()
 		_, _ = afterResourcesModel.GetResources()
@@ -390,6 +515,8 @@ func main() {
 	builderEventing := builder.Eventing()
 	_ = builderEventing.Unsubscribe(beforeStartSub)
 	_ = builderEventing.Unsubscribe(afterResourcesSub)
+	_ = builderEventing.Unsubscribe(beforePublishSub)
+	_ = builderEventing.Unsubscribe(afterPublishSub)
 
 	// Resource events — typed callbacks
 	_ = container.OnBeforeResourceStarted(func(e aspire.BeforeResourceStartedEvent) {
@@ -452,11 +579,293 @@ func main() {
 	_ = container.WithExplicitStart()
 	_ = container.WithUrl("http://localhost:8080")
 	_ = container.WithUrl(expr)
+	_ = container.WithHealthCheck("custom_check")
 	_ = container.WithHttpHealthCheck()
 	_ = container.WithHttpHealthCheck()
+	updateCommandState := func(ctx aspire.UpdateCommandStateContext) aspire.ResourceCommandState {
+		updateStateServices := ctx.Services()
+		updateStateLoggerFactory := updateStateServices.GetLoggerFactory()
+		updateStateLogger := updateStateLoggerFactory.CreateLogger("ValidationAppHost.UpdateCommandState")
+		_ = updateStateLogger.LogInformation("UpdateCommandState services")
+		snapshot, err := ctx.ResourceSnapshot()
+		if err != nil || snapshot.HealthStatus == nil {
+			return aspire.ResourceCommandStateDisabled
+		}
+		if *snapshot.HealthStatus == aspire.HealthStatusHealthy {
+			return aspire.ResourceCommandStateEnabled
+		}
+		return aspire.ResourceCommandStateDisabled
+	}
+	_ = container.WithCommand("noop", "Noop", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		return &aspire.ExecuteCommandResult{Success: true}
+	}, &aspire.WithCommandOptions{
+		CommandOptions: &aspire.CommandOptions{
+			UpdateState: updateCommandState,
+		},
+	})
+	validateCommandArguments := func(ctx aspire.InputsDialogValidationContext) {
+		validationServices := ctx.Services()
+		validationLoggerFactory := validationServices.GetLoggerFactory()
+		validationLogger := validationLoggerFactory.CreateLogger("ValidationAppHost.ValidateCommandArguments")
+		_ = validationLogger.LogInformation("Validate command arguments services")
+	}
+	_ = container.WithCommand("echo", "Echo", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		echoServices := ctx.Services()
+		echoLoggerFactory := echoServices.GetLoggerFactory()
+		echoLogger := echoLoggerFactory.CreateLogger("ValidationAppHost.EchoCommand")
+		_ = echoLogger.LogInformation("Echo command services")
+		message, err := ctx.Arguments().Value("message")
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+		return &aspire.ExecuteCommandResult{Success: message == "hello"}
+	}, &aspire.WithCommandOptions{
+		CommandOptions: &aspire.CommandOptions{
+			Arguments: []*aspire.InteractionInput{
+				{
+					Name:      "message",
+					InputType: aspire.InputTypeText,
+					Required:  aspire.BoolPtr(true),
+				},
+			},
+			ValidateArguments: validateCommandArguments,
+		},
+	})
 	_ = container.WithCommand("restart", "Restart", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
-		_ = ctx
-		return &aspire.ExecuteCommandResult{}
+		cancellationToken, err := ctx.CancellationToken()
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+		result, err := resourceCommandService.ExecuteCommandAsync(container, "echo", &aspire.ExecuteCommandAsyncOptions{Arguments: map[string]string{"message": "hello"}, CancellationToken: cancellationToken})
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		return result
+	})
+
+	container.WithHttpsCertificateConfiguration(func(certCtx aspire.HttpsCertificateConfigurationCallbackAnnotationContext) {
+		certificatePath := certCtx.CertificatePath()
+		keyPath := certCtx.KeyPath()
+		certArgs := certCtx.Arguments()
+		_ = certArgs.Add("--certificate")
+		_ = certArgs.Add(certificatePath)
+		_ = certArgs.Add("--key")
+		_ = certArgs.Add(keyPath)
+		certEnv := certCtx.Environment()
+		_ = certEnv.Set("Kestrel__Certificates__Path", certificatePath)
+		_ = certEnv.Set("Kestrel__Certificates__KeyPath", keyPath)
+	})
+
+	_ = container.SubscribeHttpsEndpointsUpdate(func(httpsCtx aspire.HttpsEndpointUpdateCallbackContext) {
+		httpsServices := httpsCtx.Services()
+		httpsLoggerFactory := httpsServices.GetLoggerFactory()
+		httpsLogger := httpsLoggerFactory.CreateLogger("ValidationAppHost.HttpsEndpointsUpdate")
+		_ = httpsLogger.LogInformation("HttpsEndpointsUpdate services")
+	})
+
+	_ = container.WithContainerBuildOptions(func(buildCtx aspire.ContainerBuildOptionsCallbackContext) {
+		destination := aspire.ContainerImageDestinationRegistry
+		imageFormat := aspire.ContainerImageFormatOci
+		targetPlatform := aspire.ContainerTargetPlatformLinuxAmd64
+		buildCtx.SetDestination(&destination).
+			SetImageFormat(&imageFormat).
+			SetTargetPlatform(&targetPlatform).
+			SetOutputPath(aspire.StringPtr("./artifacts/container-image")).
+			SetLocalImageName(aspire.StringPtr("validation-image")).
+			SetLocalImageTag(aspire.StringPtr("latest"))
+		buildServices := buildCtx.Services()
+		buildLoggerFactory := buildServices.GetLoggerFactory()
+		buildLogger := buildLoggerFactory.CreateLogger("ValidationAppHost.ContainerBuildOptions")
+		_ = buildLogger.LogInformation("ContainerBuildOptions services")
+	})
+
+	// Test bench for the polyglot IInteractionService API: prompts for a region, then dynamically
+	// loads the available zones for that region into a second choice input. Reached via the command's
+	// service provider (Services().GetInteractionService()), which only prompts when the
+	// interaction service is available (the interactive dashboard path).
+	_ = container.WithCommand("pick-zone", "Pick Zone", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		interactionService := ctx.Services().GetInteractionService()
+
+		available, err := interactionService.IsAvailable()
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+		if !available {
+			return &aspire.ExecuteCommandResult{Success: true, Message: aspire.StringPtr("Interaction service is not available.")}
+		}
+
+		regionInput := interactionService.CreateChoiceInput("region", &aspire.CreateChoiceInputOptions{
+			Choices: []*aspire.InteractionChoiceOption{{Value: "us", Label: "United States"}, {Value: "eu", Label: "Europe"}},
+		})
+
+		zoneInput := interactionService.CreateChoiceInput("zone").WithDynamicLoading(func(loadContext aspire.InteractionInputLoadContext) {
+			region, _ := loadContext.Inputs().Value("region")
+			zones := []*aspire.InteractionChoiceOption{{Value: "us-east", Label: "US East"}, {Value: "us-west", Label: "US West"}}
+			if region == "eu" {
+				zones = []*aspire.InteractionChoiceOption{{Value: "eu-west", Label: "EU West"}, {Value: "eu-north", Label: "EU North"}}
+			}
+			_ = loadContext.Input().SetChoiceOptions(zones)
+		})
+
+		result := interactionService.PromptInputs("Pick a zone", "Choose a region, then pick a zone from the dynamically loaded options.", []aspire.InteractionInputBuilder{regionInput, zoneInput})
+
+		canceled, err := result.Canceled()
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+		return &aspire.ExecuteCommandResult{Success: !canceled, Canceled: aspire.BoolPtr(canceled)}
+	})
+
+	// Exhaustive coverage of the remaining IInteractionService surface so every newly added member is
+	// exercised by the polyglot typecheck: all prompt overloads, every input factory and builder method,
+	// the dynamic-loading context accessors/setters, and the option/result DTO fields.
+	_ = container.WithCommand("interaction-showcase", "Interaction Showcase", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		interactionService := ctx.Services().GetInteractionService()
+
+		available, err := interactionService.IsAvailable()
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+		if !available {
+			return &aspire.ExecuteCommandResult{Success: true, Message: aspire.StringPtr("Interaction service is not available.")}
+		}
+
+		confirmIntent := aspire.MessageIntentConfirmation
+		confirmation, err := interactionService.PromptConfirmation("Confirm", "Proceed?", &aspire.PromptConfirmationOptions{
+			Options: &aspire.InteractionMessageBoxOptions{
+				PrimaryButtonText:     aspire.StringPtr("Yes"),
+				SecondaryButtonText:   aspire.StringPtr("No"),
+				ShowSecondaryButton:   aspire.BoolPtr(true),
+				ShowDismiss:           aspire.BoolPtr(true),
+				EnableMessageMarkdown: aspire.BoolPtr(true),
+				Intent:                &confirmIntent,
+			},
+		})
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		infoIntent := aspire.MessageIntentInformation
+		messageBox, err := interactionService.PromptMessageBox("Notice", "Read this.", &aspire.PromptMessageBoxOptions{
+			Options: &aspire.InteractionMessageBoxOptions{PrimaryButtonText: aspire.StringPtr("OK"), Intent: &infoIntent},
+		})
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		warnIntent := aspire.MessageIntentWarning
+		notification, err := interactionService.PromptNotification("Heads up", "Something happened.", &aspire.PromptNotificationOptions{
+			Options: &aspire.InteractionNotificationOptions{
+				Intent:      &warnIntent,
+				LinkText:    aspire.StringPtr("Learn more"),
+				LinkUrl:     aspire.StringPtr("https://aspire.dev"),
+				ShowDismiss: aspire.BoolPtr(true),
+			},
+		})
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		progress, err := interactionService.PromptProgress("Completing **work**...", &aspire.PromptProgressOptions{
+			Options: &aspire.InteractionProgressOptions{
+				Title:                 aspire.StringPtr("Progress"),
+				PrimaryButtonText:     aspire.StringPtr("Cancel"),
+				EnableMessageMarkdown: aspire.BoolPtr(true),
+				Work: func(progressContext aspire.ProgressContext) {
+					_, _ = progressContext.CancellationToken()
+				},
+			},
+		})
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		textInput := interactionService.CreateTextInput("name", &aspire.CreateInteractionInputOptions{
+			Label:                     aspire.StringPtr("Name"),
+			Description:               aspire.StringPtr("Your **name**"),
+			EnableDescriptionMarkdown: aspire.BoolPtr(true),
+			Required:                  aspire.BoolPtr(true),
+			Placeholder:               aspire.StringPtr("Jane Doe"),
+			Value:                     aspire.StringPtr("Jane"),
+			MaxLength:                 aspire.Float64Ptr(64),
+			Disabled:                  aspire.BoolPtr(false),
+		})
+		secretInput := interactionService.CreateSecretInput("password", &aspire.CreateInteractionInputOptions{Required: aspire.BoolPtr(true)})
+		booleanInput := interactionService.CreateBooleanInput("enabled", &aspire.CreateInteractionInputOptions{Value: aspire.StringPtr("true")})
+		numberInput := interactionService.CreateNumberInput("count", &aspire.CreateInteractionInputOptions{Value: aspire.StringPtr("1")})
+		choiceInput := interactionService.CreateChoiceInput("color", &aspire.CreateChoiceInputOptions{
+			Choices: []*aspire.InteractionChoiceOption{{Value: "r", Label: "Red"}, {Value: "g", Label: "Green"}},
+			Options: &aspire.CreateInteractionInputOptions{AllowCustomChoice: aspire.BoolPtr(true)},
+		})
+		presetInput := interactionService.CreateTextInput("greeting").WithValue("hello")
+		sizeInput := interactionService.CreateChoiceInput("size").WithChoiceOptions([]*aspire.InteractionChoiceOption{{Value: "s", Label: "Small"}, {Value: "l", Label: "Large"}})
+		dependentInput := interactionService.CreateChoiceInput("shade").WithDynamicLoading(func(loadContext aspire.InteractionInputLoadContext) {
+			input := loadContext.Input()
+			inputName, _ := input.GetName()
+			color, _ := loadContext.Inputs().Value("color")
+			shades := []*aspire.InteractionChoiceOption{{Value: "lime", Label: "Lime"}, {Value: "forest", Label: "Forest"}}
+			if color == "r" {
+				shades = []*aspire.InteractionChoiceOption{{Value: "crimson", Label: "Crimson"}, {Value: "scarlet", Label: "Scarlet"}}
+			}
+			_ = input.SetChoiceOptions(shades)
+			_ = input.SetValue(inputName)
+		}, &aspire.DynamicLoadingOptions{AlwaysLoadOnStart: aspire.BoolPtr(true), DependsOnInputs: []string{"color"}})
+
+		single, err := interactionService.PromptInput("Single input", "Enter a value.", interactionService.CreateTextInput("solo"), &aspire.PromptInputOptions{
+			Options: &aspire.InteractionInputsDialogOptions{
+				PrimaryButtonText: aspire.StringPtr("Save"),
+				ValidationCallback: func(validationContext aspire.InputsDialogValidationContext) {
+					solo, _ := validationContext.Inputs().Value("solo")
+					if solo == "" {
+						_ = validationContext.AddValidationError("solo", "A value is required.")
+					}
+				},
+			},
+		})
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		multi := interactionService.PromptInputs("Multiple inputs", "Fill out the form.",
+			[]aspire.InteractionInputBuilder{textInput, secretInput, booleanInput, numberInput, choiceInput, presetInput, sizeInput, dependentInput},
+			&aspire.PromptInputsOptions{
+				Options: &aspire.InteractionInputsDialogOptions{
+					PrimaryButtonText:     aspire.StringPtr("Submit"),
+					EnableMessageMarkdown: aspire.BoolPtr(true),
+					ValidationCallback: func(validationContext aspire.InputsDialogValidationContext) {
+						name, _ := validationContext.Inputs().Value("name")
+						if name == "bad" {
+							_ = validationContext.AddValidationError("name", "Name cannot be 'bad'.")
+						}
+					},
+				},
+			})
+
+		selectedColor, _ := multi.Inputs().Value("color")
+		soloValue := ""
+		if single.Input != nil && single.Input.Value != nil {
+			soloValue = *single.Input.Value
+		}
+
+		multiCanceled, err := multi.Canceled()
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		success := !confirmation.Canceled &&
+			confirmation.Value != nil && *confirmation.Value &&
+			!messageBox.Canceled &&
+			!notification.Canceled &&
+			!progress.Canceled &&
+			!single.Canceled &&
+			!multiCanceled
+
+		return &aspire.ExecuteCommandResult{
+			Success:  success,
+			Canceled: aspire.BoolPtr(multiCanceled),
+			Message:  aspire.StringPtr(fmt.Sprintf("color=%s solo=%s", selectedColor, soloValue)),
+		}
 	})
 
 	app, err := builder.Build()

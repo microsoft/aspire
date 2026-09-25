@@ -1,6 +1,6 @@
-# Aspire.Hosting.Azure.Cosmos library
+# Azure Cosmos DB hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure Azure CosmosDB.
+Use this integration to model, configure, and orchestrate Azure CosmosDB in an Aspire solution.
 
 ## Getting started
 
@@ -8,29 +8,24 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 
 - Azure subscription - [create one for free](https://azure.microsoft.com/free/)
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Azure Cosmos DB Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Azure.CosmosDB` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Azure.CosmosDB
+```bash
+aspire add Aspire.Hosting.Azure.CosmosDB
 ```
 
 ## Configure Azure Provisioning for local development
 
-Adding Azure resources to the Aspire application model will automatically enable development-time provisioning
+Adding Azure resources to the AppHost model will automatically enable development-time provisioning
 for Azure resources so that you don't need to configure them manually. Provisioning requires a number of settings
-to be available via .NET configuration. Set these values in user secrets in order to allow resources to be configured
-automatically.
+to be available via AppHost configuration. From your AppHost directory, set these values with `aspire secret set`:
 
-```json
-{
-    "Azure": {
-      "SubscriptionId": "<your subscription id>",
-      "ResourceGroupPrefix": "<prefix for the resource group>",
-      "Location": "<azure location>"
-    }
-}
+```bash
+aspire secret set Azure:SubscriptionId "<your subscription id>"
+aspire secret set Azure:ResourceGroupPrefix "<prefix for the resource group>"
+aspire secret set Azure:Location "<azure location>"
 ```
 
 > NOTE: Developers must have Owner access to the target subscription so that role assignments
@@ -38,7 +33,9 @@ automatically.
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a Cosmos DB connection and consume the connection using the following methods:
+In the AppHost, add a Cosmos DB connection and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var cosmosdb = builder.AddAzureCosmosDB("cdb").AddCosmosDatabase("cosmosdb");
@@ -47,26 +44,13 @@ var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(cosmosdb);
 ```
 
-The `WithReference` method passes that connection information into a connection string named `cosmosdb` in the `MyService` project. In the _Program.cs_ file of `MyService`, the connection can be consumed using the client library [Aspire.Microsoft.Azure.Cosmos](https://www.nuget.org/packages/Aspire.Microsoft.Azure.Cosmos):
+**TypeScript**
 
-```csharp
-builder.AddAzureCosmosClient("cosmosdb");
-```
+```typescript
+const cosmosdb = await builder.addAzureCosmosDB("cdb").addCosmosDatabase("cosmosdb");
 
-### Emulator usage
-
-Aspire supports the usage of the Azure Cosmos DB emulator to use the emulator, add the following to your AppHost project:
-
-```csharp
-// AppHost
-var cosmosdb = builder.AddAzureCosmosDB("cosmos").RunAsEmulator();
-```
-
-When the AppHost starts up a local container running the Azure CosmosDB will also be started:
-
-```csharp
-// Service code
-builder.AddAzureCosmosClient("cosmos");
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(cosmosdb);
 ```
 
 ## Connection Properties
@@ -103,8 +87,9 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
-* https://learn.microsoft.com/azure/cosmos-db/nosql/sdk-dotnet-v3
-* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-cosmos-db/azure-cosmos-db-host/
+* https://learn.microsoft.com/azure/cosmos-db/nosql/
 
 ## Feedback & contributing
 

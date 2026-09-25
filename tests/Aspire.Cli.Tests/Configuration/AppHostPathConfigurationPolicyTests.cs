@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Configuration;
-using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.Configuration;
@@ -37,7 +36,7 @@ public class AppHostPathConfigurationPolicyTests(ITestOutputHelper outputHelper)
     [InlineData("""{ "appHost:path": "AppHost.csproj" }""", "appHost.path")]
     public void TryFindAppHostPathKey_ReturnsConfiguredKey(string json, string expectedKey)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var path = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         File.WriteAllText(path, json);
 
@@ -51,7 +50,7 @@ public class AppHostPathConfigurationPolicyTests(ITestOutputHelper outputHelper)
     [InlineData("true")]
     public void TryFindAppHostPathKey_ReturnsFalse_WhenFileContainsNonObjectJson(string json)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var path = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         File.WriteAllText(path, json);
 
@@ -61,7 +60,7 @@ public class AppHostPathConfigurationPolicyTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryFindAppHostPathKey_ReturnsFalse_WhenNoAppHostPathIsConfigured()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var path = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         File.WriteAllText(path, """{ "appHost": { "language": "typescript/nodejs" }, "channel": "daily" }""");
 
@@ -73,7 +72,7 @@ public class AppHostPathConfigurationPolicyTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryFindAppHostPathKey_ReturnsFalse_WhenFileContainsInvalidJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var path = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         File.WriteAllText(path, """{ "appHost": { "path": "AppHost.csproj" }""");
 
@@ -83,7 +82,7 @@ public class AppHostPathConfigurationPolicyTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryFindAppHostPathKey_ReturnsFalse_WhenFileDoesNotExist()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var path = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
 
         Assert.False(ConfigurationHelper.TryLoadSettingsFile(path, out _));

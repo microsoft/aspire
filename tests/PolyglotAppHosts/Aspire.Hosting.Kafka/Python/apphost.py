@@ -13,7 +13,7 @@ with create_builder() as builder:
     kafka_with_ui.with_data_volume()
     # withDataBindMount — adds a data bind mount
     kafka2 = builder.add_kafka("resource")
-    kafka2.with_data_bind_mount()
+    kafka2.with_data_bind_mount("./data")
     # ---- Property access on KafkaServerResource ----
     _endpoint = kafka.primary_endpoint
     _host = kafka.host

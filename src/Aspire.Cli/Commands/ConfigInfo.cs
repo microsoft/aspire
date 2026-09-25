@@ -13,6 +13,8 @@ namespace Aspire.Cli.Commands;
 /// <param name="GlobalSettingsSchema">Schema for the global settings.json file structure (excludes local-only properties).</param>
 /// <param name="ConfigFileSchema">Schema for the aspire.config.json file structure.</param>
 /// <param name="Capabilities">List of CLI capabilities advertised to extensions.</param>
+// `aspire config info --json` uses this shape and the nested schema records below;
+// keep docs/specs/cli-output-formats.md in sync when changing them.
 internal sealed record ConfigInfo(
     string LocalSettingsPath,
     string GlobalSettingsPath,

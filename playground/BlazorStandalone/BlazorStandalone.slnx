@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="BlazorStandalone.AppHost/BlazorStandalone.AppHost.csproj" />
+  <Project Path="BlazorStandalone/BlazorStandalone.csproj" />
+  <Project Path="BlazorStandalone.ClientServiceDefaults/BlazorStandalone.ClientServiceDefaults.csproj" />
+  <Project Path="BlazorStandalone.WeatherApi/BlazorStandalone.WeatherApi.csproj" />
+  <Project Path="BlazorStandalone.TimeApi/BlazorStandalone.TimeApi.csproj" />
+  <Project Path="../Playground.ServiceDefaults/Playground.ServiceDefaults.csproj" />
+</Solution>

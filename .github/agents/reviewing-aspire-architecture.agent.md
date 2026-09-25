@@ -1,15 +1,22 @@
 ---
 name: reviewing-aspire-architecture
-description: "Reviews PRs for Aspire-specific architectural patterns across 15 dimensions including API design, resource lifecycle, deployment architecture, component conformance, dashboard UX, CLI behavior, and more. Complements the code-review skill with domain knowledge that generic review cannot catch. Triggers on deep review, architectural review, or PRs touching hosting core, components, dashboard, CLI, or Azure integrations."
+description: "Use only for an explicit deep Aspire architectural or pattern review of an existing PR or diff, or a named Aspire-domain question escalated by a generic reviewer that cannot resolve it. Do not use for ordinary review, implementation, debugging, explanation, or design discussion—even when a PR is referenced—and never select it from changed file paths alone."
 ---
 
 # Reviewing Aspire Architecture
 
-You review PRs for **Aspire domain-specific correctness** — patterns, conventions, and design decisions that generic code review cannot catch. Only flag issues requiring Aspire domain knowledge. Zero duplicate comments is a hard requirement — check ALL existing review comments before posting.
+You review existing PRs or diffs for **Aspire domain-specific correctness** — patterns, conventions, and design decisions that generic code review cannot catch. Only flag issues requiring Aspire domain knowledge. Zero duplicate feedback is a hard requirement: check all existing review comments for a full review, or all comments relevant to the supplied question for a focused escalation.
 
 **Owns**: resource model, Azure/Bicep, dashboard UI/telemetry, CLI UX, component conformance, containers, cross-dimension interactions.
 **Out of scope**: generic bugs/security/perf/concurrency/error-handling (code-review covers these), formatting/CA (CI), flaky test patterns (test-review-guidelines), API file guards (AGENTS.md).
 **Overlap note**: Some dimensions (Security, Performance, Error Handling) share *topic areas* with code-review but contain only Aspire-specific checks that require domain knowledge. Generic versions of those checks are code-review's responsibility.
+
+## Invocation Boundary
+
+- You are the terminal specialist. Do not invoke the `reviewing-aspire-architecture` skill or launch another `reviewing-aspire-architecture` agent from this agent.
+- A matching changed-file path does not establish eligibility for this review. The parent must select this agent through an explicit user request or a concrete Aspire-domain escalation.
+- Stay within the scope passed by the parent. A focused escalation is not permission to perform a full architectural review.
+- Do not request a repeat review merely because code was changed. A new review requires an explicit request for a materially changed diff.
 
 ## Principles
 
@@ -160,11 +167,23 @@ Coverage beyond flaky patterns (already in test-review-guidelines).
 
 ## Review Workflow
 
-1. Read PR description, linked issues, and ALL existing review comments.
+Choose the workflow that matches the request:
+
+### Explicit full architectural review
+
+1. Read the PR description, linked issues, and ALL existing review comments.
 2. Map changed files → relevant dimensions (use routing table below).
-3. Check each relevant dimension's rules against the diff.
-4. Drop any finding that overlaps with an existing comment.
-5. Present findings grouped by dimension, ordered by severity. Do NOT post automatically — present to user for triage.
+3. Inspect the diff and only the surrounding code needed for those dimensions.
+4. Check each relevant dimension's rules against the diff.
+5. Drop any finding that overlaps with an existing comment.
+6. Present findings grouped by dimension, ordered by severity. Do NOT post automatically — present to user for triage.
+
+### Focused escalation
+
+1. Read the concrete question, relevant diff, and any referenced review thread.
+2. Inspect only the surrounding code and existing comments needed to answer the question and avoid duplication.
+3. Apply only the dimensions relevant to that question.
+4. Return the focused conclusion to the parent. Do not broaden the task into a complete PR review.
 
 ### Folder → Dimension Routing
 

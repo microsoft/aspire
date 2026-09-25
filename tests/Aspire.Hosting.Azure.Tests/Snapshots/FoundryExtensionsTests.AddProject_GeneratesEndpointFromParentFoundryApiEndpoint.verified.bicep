@@ -7,8 +7,6 @@ param userPrincipalId string = ''
 
 param foundry_outputs_name string
 
-param project_acr_outputs_name string
-
 resource foundry 'Microsoft.CognitiveServices/accounts@2025-09-01' existing = {
   name: foundry_outputs_name
 }
@@ -26,20 +24,6 @@ resource project 'Microsoft.CognitiveServices/accounts/projects@2025-09-01' = {
     'aspire-resource-name': 'project'
   }
   parent: foundry
-}
-
-resource project_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {
-  name: project_acr_outputs_name
-}
-
-resource project_acr_AcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(project_acr.id, project.id, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d'))
-  properties: {
-    principalId: project.identity.principalId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
-    principalType: 'ServicePrincipal'
-  }
-  scope: project_acr
 }
 
 resource project_ai 'Microsoft.Insights/components@2020-02-02' = {
@@ -88,11 +72,5 @@ output name string = '${foundry_outputs_name}/project'
 output endpoint string = project.properties.endpoints['AI Foundry API']
 
 output principalId string = project.identity.principalId
-
-output AZURE_CONTAINER_REGISTRY_ENDPOINT string = project_acr.properties.loginServer
-
-output AZURE_CONTAINER_REGISTRY_NAME string = project_acr_outputs_name
-
-output AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID string = project.identity.principalId
 
 output APPLICATION_INSIGHTS_CONNECTION_STRING string = project_ai.properties.ConnectionString

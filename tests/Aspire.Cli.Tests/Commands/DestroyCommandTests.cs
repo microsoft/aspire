@@ -19,9 +19,9 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DestroyCommandWithHelpArgumentReturnsZero()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -34,9 +34,9 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DestroyCommandFailsWithInvalidProjectFile()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetCliRunnerFactory = (sp) =>
             {
@@ -57,15 +57,15 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("destroy --apphost invalid.csproj");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
     [Fact]
     public async Task DestroyCommandPassesCorrectStepArgument()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -124,10 +124,10 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--non-interactive destroy")]
     public async Task DestroyCommandFailsFastWhenNonInteractiveWithoutYes(string commandLine)
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostStarted = false;
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -152,7 +152,7 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse(commandLine);
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         var error = Assert.Single(result.Errors);
         Assert.Equal(string.Format(System.Globalization.CultureInfo.CurrentCulture, SharedCommandStrings.NonInteractiveRequiresYesFormat, "destroy"), error.Message);
         Assert.False(appHostStarted);
@@ -164,9 +164,9 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--non-interactive destroy --yes")]
     public async Task DestroyCommandForwardsYesFlag(string commandLine)
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -221,10 +221,10 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DestroyCommandIncludesOutputPathWhenSpecified()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testOutputPath = Path.Combine(Path.GetTempPath(), "test-destroy");
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -279,9 +279,9 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DestroyCommandReturnsNonZeroExitCodeWhenDestroyActivitiesFail()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -326,7 +326,7 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("destroy --yes");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode);
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
 
         static async IAsyncEnumerable<PublishingActivity> GetFailedDestroyActivities([EnumeratorCancellation] CancellationToken cancellationToken)
         {

@@ -99,7 +99,7 @@ public class AddMilvusTests(ITestOutputHelper testOutputHelper)
             .WithEndpoint("grpc", e =>
             {
                 e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", MilvusPortGrpc);
-                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-milvus.dev.internal", MilvusPortGrpc, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-milvus.dev.internal", MilvusPortGrpc, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
             });
 
         var projectA = appBuilder.AddProject<ProjectA>("projecta", o => o.ExcludeLaunchProfile = true)
@@ -109,9 +109,10 @@ public class AddMilvusTests(ITestOutputHelper testOutputHelper)
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectA.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
         var servicesKeysCount = config.Keys.Count(k => k.StartsWith("ConnectionStrings__"));
-        Assert.Equal(1, servicesKeysCount);
+        Assert.Equal(2, servicesKeysCount);
 
         Assert.Contains(config, kvp => kvp.Key == "ConnectionStrings__my-milvus" && kvp.Value == "Endpoint=http://localhost:19530;Key=root:pass");
+        Assert.Contains(config, kvp => kvp.Key == "ConnectionStrings__my_milvus" && kvp.Value == "Endpoint=http://localhost:19530;Key=root:pass");
 
         var container1 = appBuilder.AddContainer("container1", "fake")
             .WithReference(milvus);
@@ -120,9 +121,10 @@ public class AddMilvusTests(ITestOutputHelper testOutputHelper)
         var containerConfig = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(container1.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
         var containerServicesKeysCount = containerConfig.Keys.Count(k => k.StartsWith("ConnectionStrings__"));
-        Assert.Equal(1, containerServicesKeysCount);
+        Assert.Equal(2, containerServicesKeysCount);
 
         Assert.Contains(containerConfig, kvp => kvp.Key == "ConnectionStrings__my-milvus" && kvp.Value == "Endpoint=http://my-milvus.dev.internal:19530;Key=root:pass");
+        Assert.Contains(containerConfig, kvp => kvp.Key == "ConnectionStrings__my_milvus" && kvp.Value == "Endpoint=http://my-milvus.dev.internal:19530;Key=root:pass");
     }
 
     [Fact]
@@ -199,6 +201,19 @@ public class AddMilvusTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(ProtocolType.Tcp, grpcEndpoint.Protocol);
         Assert.Equal("http2", grpcEndpoint.Transport);
         Assert.Equal("http", grpcEndpoint.UriScheme);
+    }
+
+    [Fact]
+    public void WithAttuHidesTheAttuResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var milvus = builder.AddMilvus("milvus").WithAttu();
+
+        var attu = Assert.Single(builder.Resources.OfType<AttuResource>());
+        var hidden = Assert.Single(attu.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+        Assert.Single(attu.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Parent" && r.Resource == milvus.Resource);
+        Assert.Single(attu.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == milvus.Resource);
     }
 
     private sealed class ProjectA : IProjectMetadata

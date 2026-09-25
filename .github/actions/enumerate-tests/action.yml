@@ -6,6 +6,22 @@ inputs:
     type: string
     default: ''
     description: 'Additional MSBuild arguments passed to the test matrix generation step (e.g., /p:IncludeTemplateTests=true /p:OnlyDeploymentTests=true)'
+  checkout:
+    required: false
+    default: 'true'
+    description: 'Whether to check out the repo. Set false when the caller has already checked out (e.g. a prior select-tests step in the same job whose working tree must be preserved).'
+  restore:
+    required: false
+    default: 'true'
+    description: 'Whether to set up .NET, bootstrap the Arcade toolset, and restore the class-mode split test projects. Set false when the caller has already restored in the same job.'
+  setupDotNet:
+    required: false
+    default: 'true'
+    description: 'Whether to run actions/setup-dotnet. Set false when the caller has already installed the SDK in the same job (e.g. via dotnet.sh). Only consulted when restore is true; global.json declares tools.runtimes, so Arcade installs the SDK into repo-local .dotnet regardless and a system SDK is never read.'
+  beforeBuildPropsPath:
+    required: false
+    default: ''
+    description: 'Path to an OverrideProjectToBuild props file (imported by eng/Build.props via $(BeforeBuildPropsPath)) that restricts the -test build, and thus the enumeration, to a subset of test projects. Empty enumerates everything.'
 
 # Output format: JSON with structure {"include": [{...}, ...]}
 # Each entry contains:
@@ -31,30 +47,87 @@ runs:
   using: "composite"
   steps:
     - name: Checkout code
+      if: ${{ inputs.checkout == 'true' }}
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
     - name: Set up .NET Core
+      if: ${{ inputs.restore == 'true' && inputs.setupDotNet == 'true' }}
       uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
       with:
         global-json-file: ${{ github.workspace }}/global.json
 
-    - name: Restore
+    - name: Clean test enumeration artifacts
       shell: bash
-      run: ./restore.sh
+      run: |
+        find artifacts -name '*.tests-metadata.json' -delete 2>/dev/null || true
+        find artifacts -name '*.tests-partitions.json' -delete 2>/dev/null || true
+        rm -f artifacts/canonical-test-matrix.json artifacts/ClassModeTestProjects.props artifacts/ToolsetBootstrap.props
 
-    - name: Build ExtractTestPartitions tool
+    - name: Bootstrap Arcade toolset
+      if: ${{ inputs.restore == 'true' }}
       shell: bash
-      run: dotnet build tools/ExtractTestPartitions/ExtractTestPartitions.csproj -c Release --nologo -v quiet
+      run: |
+        mkdir -p artifacts
+        cat > artifacts/ToolsetBootstrap.props <<'EOF'
+        <Project>
+          <ItemGroup>
+            <OverrideProjectToBuild Include="$(RepoRoot)tools/ExtractTestPartitions/ExtractTestPartitions.csproj" />
+          </ItemGroup>
+        </Project>
+        EOF
+        ./restore.sh /p:BeforeBuildPropsPath=${{ github.workspace }}/artifacts/ToolsetBootstrap.props
 
-    - name: Generate canonical test matrix
+    - name: Generate metadata and source partitions
       shell: bash
       run: >
         ./build.sh -test
         /p:TestRunnerName=TestEnumerationRunsheetBuilder
         /p:TestMatrixOutputPath=artifacts/canonical-test-matrix.json
         /p:GenerateCIPartitions=true
+        /p:TestEnumerationMetadataOnly=true
+        /p:SkipGenerateCanonicalTestMatrix=true
+        ${{ inputs.beforeBuildPropsPath != '' && format('/p:BeforeBuildPropsPath={0}', inputs.beforeBuildPropsPath) || '' }}
         /bl
         ${{ inputs.buildArgs }}
+
+    - name: Find class-mode split test projects
+      id: class_mode
+      shell: pwsh
+      run: >
+        ./eng/scripts/write-class-mode-test-props.ps1
+        -ArtifactsDir artifacts
+        -OutputPropsPath ${{ github.workspace }}/artifacts/ClassModeTestProjects.props
+        -GitHubOutputName count
+
+    - name: Restore class-mode split test projects
+      if: ${{ inputs.restore == 'true' && steps.class_mode.outputs.count != '0' }}
+      shell: bash
+      run: ./restore.sh /p:BeforeBuildPropsPath=${{ github.workspace }}/artifacts/ClassModeTestProjects.props
+
+    - name: Build ExtractTestPartitions tool
+      if: ${{ steps.class_mode.outputs.count != '0' }}
+      shell: bash
+      run: dotnet build tools/ExtractTestPartitions/ExtractTestPartitions.csproj -c Release --nologo -v quiet
+
+    - name: Generate class partitions and canonical test matrix
+      if: ${{ steps.class_mode.outputs.count != '0' }}
+      shell: bash
+      run: >
+        ./build.sh -test
+        /p:TestRunnerName=TestEnumerationRunsheetBuilder
+        /p:TestMatrixOutputPath=artifacts/canonical-test-matrix.json
+        /p:GenerateCIPartitions=true
+        /p:BeforeBuildPropsPath=${{ github.workspace }}/artifacts/ClassModeTestProjects.props
+        /bl
+        ${{ inputs.buildArgs }}
+
+    - name: Generate canonical test matrix
+      if: ${{ steps.class_mode.outputs.count == '0' }}
+      shell: pwsh
+      run: >
+        ./eng/scripts/build-test-matrix.ps1
+        -ArtifactsDir artifacts
+        -OutputMatrixFile artifacts/canonical-test-matrix.json
 
     - name: Expand matrix for GitHub Actions
       id: expand_matrix

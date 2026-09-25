@@ -7,6 +7,31 @@
         <target state="translated">L’application doit être démarrée avant de résoudre les points de terminaison ou les chaînes de connexion.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardDisabledExceptionMessage">
+        <source>The dashboard is not enabled for this application.</source>
+        <target state="new">The dashboard is not enabled for this application.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardTestingPublishModeExceptionMessage">
+        <source>Dashboard testing is not supported in publish mode.</source>
+        <target state="new">Dashboard testing is not supported in publish mode.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlApplicationNotStartedExceptionMessage">
+        <source>The application must be started before retrieving the dashboard URL.</source>
+        <target state="new">The application must be started before retrieving the dashboard URL.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlPublishModeExceptionMessage">
+        <source>The dashboard URL is not available in publish mode.</source>
+        <target state="new">The dashboard URL is not available in publish mode.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlUnavailableExceptionMessage">
+        <source>The dashboard URL is not available.</source>
+        <target state="new">The dashboard URL is not available.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="EndpointForResourceNotFoundExceptionMessage">
         <source>Endpoint '{0}' for resource '{1}' not found.</source>
         <target state="translated">Le point de terminaison « {0} » de la ressource « {1} » est introuvable.</target>

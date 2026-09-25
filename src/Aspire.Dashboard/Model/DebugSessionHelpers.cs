@@ -10,7 +10,7 @@ namespace Aspire.Dashboard.Model;
 
 internal static class DebugSessionHelpers
 {
-    public static HttpClient CreateHttpClient(Uri? debugSessionUri, string? token, X509Certificate2? cert, Func<HttpClientHandler, HttpMessageHandler>? createHandler)
+    public static HttpClient CreateHttpClient(Uri? debugSessionUri, string? token, X509Certificate2? cert, Func<HttpClientHandler, HttpMessageHandler>? createHandler, string? dcpInstanceId = null)
     {
         var handler = new HttpClientHandler();
         if (cert is not null)
@@ -46,9 +46,13 @@ internal static class DebugSessionHelpers
         }
 
         client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Aspire Dashboard");
-        if (token != null)
+        if (token is not null)
         {
             client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Bearer {token}");
+        }
+        if (!string.IsNullOrEmpty(dcpInstanceId))
+        {
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Microsoft-Developer-DCP-Instance-ID", dcpInstanceId);
         }
 
         return client;

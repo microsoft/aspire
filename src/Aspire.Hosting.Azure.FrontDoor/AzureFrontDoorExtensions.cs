@@ -20,19 +20,13 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class AzureFrontDoorExtensions
 {
-    // Azure resource name length limits (from Azure portal).
-    private const int ProfileNameMaxLength = 90;
-    private const int EndpointNameMaxLength = 46;
-    private const int OriginGroupNameMaxLength = 90;
-    private const int OriginNameMaxLength = 90;
-    private const int RouteNameMaxLength = 90;
-
     /// <summary>
     /// Adds an Azure Front Door resource to the application model.
     /// </summary>
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// Azure Front Door is a global, scalable entry point that uses the Microsoft global edge network to create
@@ -58,7 +52,8 @@ public static class AzureFrontDoorExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds an Azure Front Door resource")]
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<AzureFrontDoorResource> AddAzureFrontDoor(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -76,7 +71,6 @@ public static class AzureFrontDoorExtensions
             var profile = new CdnProfile(infrastructure.AspireResource.GetBicepIdentifier())
             {
                 SkuName = CdnSkuName.StandardAzureFrontDoor,
-                Name = BicepFunction.Take(BicepFunction.Interpolate($"{infrastructure.AspireResource.Name}-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), ProfileNameMaxLength),
                 Location = new AzureLocation("Global"),
                 Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
             };
@@ -89,7 +83,6 @@ public static class AzureFrontDoorExtensions
             {
                 var originResource = originAnnotation.Resource;
                 var originBicepId = Infrastructure.NormalizeBicepIdentifier(originResource.Name);
-                var originName = originResource.Name.ToLowerInvariant();
 
                 var endpointReference = GetOriginEndpoint(originResource);
 
@@ -105,7 +98,6 @@ public static class AzureFrontDoorExtensions
                 var endpoint = new FrontDoorEndpoint($"{originBicepId}Endpoint")
                 {
                     Parent = profile,
-                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), EndpointNameMaxLength),
                     Location = new AzureLocation("Global")
                 };
                 infrastructure.Add(endpoint);
@@ -114,7 +106,6 @@ public static class AzureFrontDoorExtensions
                 var originGroup = new FrontDoorOriginGroup($"{originBicepId}OriginGroup")
                 {
                     Parent = profile,
-                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-og-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), OriginGroupNameMaxLength),
                     HealthProbeSettings = new HealthProbeSettings
                     {
                         ProbeProtocol = probeProtocol,
@@ -129,21 +120,24 @@ public static class AzureFrontDoorExtensions
                 };
                 infrastructure.Add(originGroup);
 
-                // Origin
                 var origin = new FrontDoorOrigin($"{originBicepId}Origin")
                 {
                     Parent = originGroup,
-                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-origin-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), OriginNameMaxLength),
                     HostName = hostParam,
                     OriginHostHeader = hostParam
                 };
+                // The same Aspire resource can resolve to a different backend hostname between deployments.
+                // Include the hostname in the resource-group-scoped hash so a backend change creates a new
+                // origin instead of reusing the existing origin's Azure identity.
+                origin.Name = BicepFunction.Take(
+                    BicepFunction.Interpolate($"{originBicepId.Replace('_', '-')}Origin-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id, hostParam)}"),
+                    origin.GetResourceNameRequirements().MaxLength);
                 infrastructure.Add(origin);
 
                 // Route
                 var route = new FrontDoorRoute($"{originBicepId}Route")
                 {
                     Parent = endpoint,
-                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-route-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), RouteNameMaxLength),
                     OriginGroupId = originGroup.Id,
                     PatternsToMatch = ["/*"],
                     ForwardingProtocol = ForwardingProtocol.HttpsOnly,
@@ -166,7 +160,7 @@ public static class AzureFrontDoorExtensions
         var resource = new AzureFrontDoorResource(name, configureInfrastructure);
 
         return builder.ExecutionContext.IsPublishMode
-            ? builder.AddResource(resource)
+            ? builder.AddResource(resource).WithIconName("GlobeArrowForward")
             : builder.CreateResourceBuilder(resource);
     }
 
@@ -179,6 +173,7 @@ public static class AzureFrontDoorExtensions
     /// <param name="builder">The Azure Front Door resource builder.</param>
     /// <param name="resource">The resource to add as an origin (e.g., a project, container, or other compute resource with endpoints).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <example>
     /// Add multiple origins (each gets its own Front Door endpoint):
@@ -189,7 +184,7 @@ public static class AzureFrontDoorExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds an origin (backend) to the Azure Front Door resource")]
+    [AspireExport]
     public static IResourceBuilder<AzureFrontDoorResource> WithOrigin<T>(
         this IResourceBuilder<AzureFrontDoorResource> builder,
         IResourceBuilder<T> resource) where T : IComputeResource, IResourceWithEndpoints
@@ -211,14 +206,9 @@ public static class AzureFrontDoorExtensions
 
     private static IComputeEnvironmentResource GetEffectiveComputeEnvironment(IResource resource)
     {
-        if (resource.GetComputeEnvironment() is { } computeEnvironment)
+        if (ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(resource, out var computeEnvironment))
         {
             return computeEnvironment;
-        }
-
-        if (resource.GetDeploymentTargetAnnotation()?.ComputeEnvironment is { } deploymentComputeEnvironment)
-        {
-            return deploymentComputeEnvironment;
         }
 
         throw new InvalidOperationException(

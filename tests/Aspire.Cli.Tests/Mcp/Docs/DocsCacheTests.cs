@@ -18,7 +18,7 @@ public class DocsCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FetchDocsAsync_PersistsFriendlyLlmsCacheFileName()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
         var configuration = new ConfigurationBuilder().Build();
         var cache = CreateCache(workspace, memoryCache);
@@ -46,7 +46,7 @@ public class DocsCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetIndexAsync_ClearsLegacyUrlBackedDocsFiles_WhenModernIndexExists()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
         var cache = CreateCache(workspace, memoryCache);
         var contentCache = CreateContentCache(workspace, memoryCache);
@@ -126,5 +126,6 @@ public class DocsCacheTests(ITestOutputHelper outputHelper)
             new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")),
-            "test.log");
+            "test.log",
+            identityChannel: "local");
 }

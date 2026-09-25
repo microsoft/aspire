@@ -8,6 +8,8 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
+using Aspire.Cli.Certificates;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Microsoft.AspNetCore.Certificates.Generation;
@@ -35,7 +37,7 @@ internal sealed class MacOSCertificateManager : CertificateManager
 
     // Well-known location where Aspire.Hosting caches dev-cert key material to avoid
     // triggering macOS Keychain access prompts at app-host startup time.
-    private static readonly string s_aspireDevCertsCacheDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "dev-certs", "https");
+    private static readonly string s_aspireDevCertsCacheDirectory = CertificateHelpers.AspireDevCertsHttpsCacheDirectory;
 
     // Verify the certificate {0} for the SSL and X.509 Basic Policy.
     private const string MacOSVerifyCertificateCommandLine = "security";
@@ -111,14 +113,11 @@ internal sealed class MacOSCertificateManager : CertificateManager
             {
                 Log.MacOSTrustCommandStart($"{MacOSTrustCertificateCommandLine} {s_macOSTrustCertificateCommandLineArguments}{tmpFile}");
             }
-
-            // Process.Run doesn't support argument string, only ProcessStartInfo or IList<string>.
-            // The trust command arguments are built as a single string with embedded quotes, so we
-            // pass them through ProcessStartInfo.Arguments to preserve the exact quoting.
-            var status = Process.Run(new ProcessStartInfo(MacOSTrustCertificateCommandLine) { Arguments = s_macOSTrustCertificateCommandLineArguments + tmpFile });
-            if (status.ExitCode != 0)
+            var processResult = CertificateProcessRunner.Run(
+                new ProcessStartInfo(MacOSTrustCertificateCommandLine, s_macOSTrustCertificateCommandLineArguments + tmpFile));
+            if (processResult.ExitCode != 0)
             {
-                Log.MacOSTrustCommandError(status.ExitCode);
+                Log.MacOSTrustCommandError(processResult.ExitCode);
                 throw new InvalidOperationException("There was an error trusting the certificate.");
             }
 
@@ -175,7 +174,7 @@ internal sealed class MacOSCertificateManager : CertificateManager
             // We can't guarantee that the temp file is in a directory with sensible permissions, but we're not exporting the private key
             ExportCertificate(certificate, tmpFile, includePrivateKey: false, password: null, CertificateKeyExportFormat.Pem);
 
-            var status = Process.Run(new ProcessStartInfo(
+            var checkTrustProcessResult = CertificateProcessRunner.Run(new ProcessStartInfo(
                 MacOSVerifyCertificateCommandLine,
                 string.Format(CultureInfo.InvariantCulture, MacOSVerifyCertificateCommandLineArgumentsFormat, tmpFile))
             {
@@ -184,7 +183,7 @@ internal sealed class MacOSCertificateManager : CertificateManager
                 // the cert and replicate the command to see details.
                 RedirectStandardError = true,
             });
-            return status.ExitCode == 0 ? TrustLevel.Full : TrustLevel.None;
+            return checkTrustProcessResult.ExitCode == 0 ? TrustLevel.Full : TrustLevel.None;
         }
         finally
         {
@@ -229,11 +228,10 @@ internal sealed class MacOSCertificateManager : CertificateManager
                     certificatePath
                 ));
 
-            var status = Process.Run(processInfo);
-
-            if (status.ExitCode != 0)
+            var processResult = CertificateProcessRunner.Run(processInfo);
+            if (processResult.ExitCode != 0)
             {
-                Log.MacOSRemoveCertificateTrustRuleError(status.ExitCode);
+                Log.MacOSRemoveCertificateTrustRuleError(processResult.ExitCode);
             }
 
             Log.MacOSRemoveCertificateTrustRuleEnd();
@@ -271,14 +269,13 @@ internal sealed class MacOSCertificateManager : CertificateManager
             Log.MacOSRemoveCertificateFromKeyChainStart(keychain, GetDescription(certificate));
         }
 
-        var result = Process.RunAndCaptureText(processInfo);
-
-        if (result.ExitStatus.ExitCode != 0)
+        var processResult = CertificateProcessRunner.RunAndCaptureText(processInfo);
+        if (processResult.ExitCode != 0)
         {
-            Log.MacOSRemoveCertificateFromKeyChainError(result.ExitStatus.ExitCode);
+            Log.MacOSRemoveCertificateFromKeyChainError(processResult.ExitCode);
             throw new InvalidOperationException($@"There was an error removing the certificate with thumbprint '{certificate.Thumbprint}'.
 
-{result.StandardOutput}{result.StandardError}");
+{processResult.StandardOutput}{processResult.StandardError}");
         }
 
         Log.MacOSRemoveCertificateFromKeyChainEnd();
@@ -298,14 +295,17 @@ internal sealed class MacOSCertificateManager : CertificateManager
         var subject = subjectMatch.Groups[1].Value;
 
         // Run the find-certificate command, and look for the cert's hash in the output
-        var result = Process.RunAndCaptureText(new ProcessStartInfo(
+        using var findCertificateProcess = Process.Start(new ProcessStartInfo(
             MacOSFindCertificateOnKeychainCommandLine,
             string.Format(CultureInfo.InvariantCulture, MacOSFindCertificateOnKeychainCommandLineArgumentsFormat, subject, keychain))
         {
             RedirectStandardOutput = true
         });
 
-        var matches = Regex.Matches(result.StandardOutput, MacOSFindCertificateOutputRegex, RegexOptions.Multiline, maxRegexTimeout);
+        var output = findCertificateProcess!.StandardOutput.ReadToEnd();
+        findCertificateProcess.WaitForExit();
+
+        var matches = Regex.Matches(output, MacOSFindCertificateOutputRegex, RegexOptions.Multiline, maxRegexTimeout);
         var hashes = matches.OfType<Match>().Select(m => m.Groups[1].Value).ToList();
 
         return hashes.Any(h => string.Equals(h, certificate.Thumbprint, StringComparison.Ordinal));
@@ -327,7 +327,7 @@ internal sealed class MacOSCertificateManager : CertificateManager
 
             ExportCertificate(certificate, GetCertificateFilePath(certificate), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
 
-            var aspireLookup = GetAspireCertificateHash(certificate);
+            var aspireLookup = CertificateHelpers.GetAspireCertificateHash(certificate);
             ExportCertificate(certificate, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pfx"), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
         }
         catch (Exception ex)
@@ -363,11 +363,11 @@ internal sealed class MacOSCertificateManager : CertificateManager
             Log.MacOSAddCertificateToKeyChainStart(s_macOSUserKeychain, GetDescription(certificate));
         }
 
-        var result = Process.RunAndCaptureText(processInfo);
-
-        if (result.ExitStatus.ExitCode != 0)
+        var processResult = CertificateProcessRunner.RunAndCaptureText(processInfo);
+        if (processResult.ExitCode != 0)
         {
-            Log.MacOSAddCertificateToKeyChainError(result.ExitStatus.ExitCode, result.StandardOutput + result.StandardError);
+            var output = processResult.StandardOutput + processResult.StandardError;
+            Log.MacOSAddCertificateToKeyChainError(processResult.ExitCode, output);
             throw new InvalidOperationException("Failed to add the certificate to the keychain. Are you running in a non-interactive session perhaps?");
         }
 
@@ -399,7 +399,7 @@ internal sealed class MacOSCertificateManager : CertificateManager
             }
 
             using var diskCert = X509CertificateLoader.LoadPkcs12FromFile(onDiskPfxPath, password: null, X509KeyStorageFlags.Exportable);
-            var aspireLookup = GetAspireCertificateHash(certificate);
+            var aspireLookup = CertificateHelpers.GetAspireCertificateHash(certificate);
 
             CreateDirectoryWithPermissions(s_aspireDevCertsCacheDirectory);
 
@@ -423,13 +423,6 @@ internal sealed class MacOSCertificateManager : CertificateManager
             // Best effort — the app host will fall back to accessing the keychain directly.
         }
     }
-
-    /// <summary>
-    /// Computes the Aspire hosting cache key for a certificate, matching the convention
-    /// used by <c>DeveloperCertificateService</c>: SHA256(thumbprint) as hex.
-    /// </summary>
-    private static string GetAspireCertificateHash(X509Certificate2 certificate) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(certificate.Thumbprint)));
 
     protected override IList<X509Certificate2> GetCertificatesToRemove(StoreName storeName, StoreLocation storeLocation)
     {
@@ -548,7 +541,7 @@ internal sealed class MacOSCertificateManager : CertificateManager
         }
         else
         {
-            Directory.CreateDirectory(directoryPath, DirectoryPermissions);
+            DirectoryHelper.CreateWithOwnerOnlyPermissions(directoryPath);
         }
 #pragma warning restore CA1416 // Validate platform compatibility
     }

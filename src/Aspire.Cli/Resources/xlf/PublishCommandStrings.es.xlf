@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="es" original="../PublishCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Generate deployment artifacts for an AppHost (Preview)</source>
+        <source>Generate deployment artifacts for an AppHost</source>
         <target state="needs-review-translation">Genera artefactos de implementación para un host de aplicaciones Aspire. (Versión preliminar)</target>
         <note />
       </trans-unit>

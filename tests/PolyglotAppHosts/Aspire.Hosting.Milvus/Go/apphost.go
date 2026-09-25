@@ -47,7 +47,7 @@ func main() {
 	builder.AddMilvus("milvus-cfg").WithConfigurationFile("./milvus.yaml")
 
 	milvusChained := builder.AddMilvus("milvus-chained")
-	milvusChained.WithLifetime(aspire.ContainerLifetimePersistent)
+	milvusChained.WithPersistentLifetime()
 	milvusChained.WithDataVolume(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("milvus-chained-data")})
 	milvusChained.WithAttu()
 

@@ -130,7 +130,7 @@
     <value>The 'aspire dashboard' command requires the CLI bundle, but no bundle layout was found. The bundle provides the dashboard binary and supporting files. Run 'aspire setup --force' to extract the bundle, or reinstall the Aspire CLI.</value>
   </data>
   <data name="ManagedBinaryNotFound" xml:space="preserve">
-    <value>The CLI bundle layout was found, but the dashboard binary (aspire-managed) is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</value>
+    <value>The CLI bundle layout was found, but the Dashboard executable is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</value>
   </data>
   <data name="DashboardStarted" xml:space="preserve">
     <value>Dashboard started (PID {0}).</value>
@@ -140,6 +140,9 @@
   </data>
   <data name="StartingDashboard" xml:space="preserve">
     <value>Starting dashboard...</value>
+  </data>
+  <data name="EnsuringDashboardBundle" xml:space="preserve">
+    <value>Preparing dashboard bits...</value>
   </data>
   <data name="DashboardStartTimedOut" xml:space="preserve">
     <value>Dashboard did not become ready within the expected time.</value>
@@ -155,6 +158,12 @@
   </data>
   <data name="AllowAnonymousOptionDescription" xml:space="preserve">
     <value>Allow anonymous access to the dashboard</value>
+  </data>
+  <data name="ApplicationNameOptionDescription" xml:space="preserve">
+    <value>The application name displayed in the dashboard and used to scope persisted dashboard data</value>
+  </data>
+  <data name="PersistenceModeOptionDescription" xml:space="preserve">
+    <value>The dashboard data persistence mode: None, Run, or Resume</value>
   </data>
   <data name="ConfigFilePathOptionDescription" xml:space="preserve">
     <value>The path for a JSON configuration file</value>
@@ -184,6 +193,6 @@
     <value>Failed to start Aspire dashboard: {0}</value>
   </data>
   <data name="StoppingDashboard" xml:space="preserve">
-    <value>Stopping dashboard</value>
+    <value>Stopping dashboard.</value>
   </data>
 </root>

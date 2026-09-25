@@ -297,7 +297,7 @@ public class EndpointReferenceTests
             annotation, "localhost", 8080,
             EndpointBindingMode.SingleAddress,
             targetPortExpression: null,
-            networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+            networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
 
         var ex = Assert.Throws<InvalidOperationException>(() => annotation.AllocatedEndpoint = mismatchedEndpoint);
     }
@@ -406,6 +406,62 @@ public class EndpointReferenceTests
                 Assert.Equal("http://localhost:5000", url);
             })
         ).WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public void EndpointAnnotation_ThrowsWhenEndpointNameNotDefined_ListsAvailableEndpoints()
+    {
+        var resource = new TestResource("api-boston");
+        var httpEndpoint = new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "https", name: "http");
+        resource.Annotations.Add(httpEndpoint);
+
+        var endpointRef = new EndpointReference(resource, "https");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => endpointRef.EndpointAnnotation);
+        Assert.Contains("`https`", ex.Message);
+        Assert.Contains("`api-boston`", ex.Message);
+        Assert.Contains("Available endpoints", ex.Message);
+        Assert.Contains("`http`", ex.Message);
+    }
+
+    [Fact]
+    public void EndpointAnnotation_ThrowsWhenEndpointNameNotDefined_ListsMultipleAvailableEndpoints()
+    {
+        var resource = new TestResource("api");
+        resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http"));
+        resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "tcp", name: "grpc"));
+
+        var endpointRef = new EndpointReference(resource, "https");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => endpointRef.EndpointAnnotation);
+        Assert.Contains("`https`", ex.Message);
+        Assert.Contains("`http`", ex.Message);
+        Assert.Contains("`grpc`", ex.Message);
+    }
+
+    [Fact]
+    public void EndpointAnnotation_ThrowsWhenResourceHasNoEndpoints_MessageIsClear()
+    {
+        var resource = new TestResource("api");
+
+        var endpointRef = new EndpointReference(resource, "https");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => endpointRef.EndpointAnnotation);
+        Assert.Contains("`https`", ex.Message);
+        Assert.Contains("`api`", ex.Message);
+        Assert.Contains("no endpoints defined", ex.Message);
+    }
+
+    [Fact]
+    public void EndpointAnnotation_ThrowsWithCustomErrorMessageWhenSet()
+    {
+        var resource = new TestResource("api");
+        resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "http", name: "http"));
+
+        var endpointRef = new EndpointReference(resource, "https") { ErrorMessage = "custom message" };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => endpointRef.EndpointAnnotation);
+        Assert.Equal("custom message", ex.Message);
     }
 
     public enum ResourceKind

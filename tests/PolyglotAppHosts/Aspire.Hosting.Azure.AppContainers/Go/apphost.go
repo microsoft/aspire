@@ -15,6 +15,15 @@ func main() {
 	// === Azure Container App Environment ===
 	// Test AddAzureContainerAppEnvironment factory method
 	env := builder.AddAzureContainerAppEnvironment("myenv")
+	env.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		environment := infrastructure.GetContainerAppManagedEnvironment()
+		if err := environment.SetIsZoneRedundant(false).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if _, err := environment.IsZoneRedundant(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
 	if err := env.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -55,9 +64,24 @@ func main() {
 	// === PublishAsAzureContainerApp ===
 	// Test PublishAsAzureContainerApp on a container resource with callback
 	web := builder.AddContainer("web", "myregistry/web:latest")
-	web.PublishAsAzureContainerApp(func(infra aspire.AzureResourceInfrastructure, app aspire.ContainerApp) {
+	web.PublishAsAzureContainerApp(func(infrastructure aspire.AzureResourceInfrastructure, app aspire.ContainerApp) {
+		provisionedApp := infrastructure.GetContainerAppByIdentifier("web")
+		if err := provisionedApp.SetWorkloadProfileName("consumption").Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if _, err := provisionedApp.WorkloadProfileName(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		// Outbound addresses are service outputs, not writable configuration.
+		if count, err := provisionedApp.OutboundIPAddressList().Count(); err != nil || count != 0 {
+			log.Fatalf("Unprovisioned container app outbound address count = %v, error = %v; want 0", count, err)
+		}
 		err := app.ConfigureCustomDomain(customDomain, certificateName)
 		if err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+
+		if err := app.ConfigureScale(&aspire.AzureContainerAppScaleConfig{MinReplicas: aspire.Float64Ptr(1)}); err != nil {
 			log.Fatalf(aspire.FormatError(err))
 		}
 	})
@@ -81,8 +105,15 @@ func main() {
 	processor := builder.AddContainer("processor", "myregistry/processor:latest").
 		PublishAsAzureContainerAppJob(
 			&aspire.PublishAsAzureContainerAppJobOptions{
-				Configure: func(_ aspire.AzureResourceInfrastructure, _ aspire.ContainerAppJob) {
-					// Configure the container app job here
+				Configure: func(infrastructure aspire.AzureResourceInfrastructure, _ aspire.ContainerAppJob) {
+					provisionedJob := infrastructure.GetContainerAppJobByIdentifier("processor")
+					configuration := provisionedJob.Configuration()
+					if err := configuration.SetReplicaTimeout(float64(300)).Err(); err != nil {
+						log.Fatalf(aspire.FormatError(err))
+					}
+					if _, err := configuration.ReplicaTimeout(); err != nil {
+						log.Fatalf(aspire.FormatError(err))
+					}
 				},
 			})
 	if err := processor.Err(); err != nil {
@@ -101,7 +132,6 @@ func main() {
 		PublishAsScheduledAzureContainerAppJob("0 */6 * * *",
 			&aspire.PublishAsScheduledAzureContainerAppJobOptions{
 				Configure: func(_ aspire.AzureResourceInfrastructure, _ aspire.ContainerAppJob) {
-					// Configure the scheduled job here
 				},
 			})
 	if err := reporter.Err(); err != nil {

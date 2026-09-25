@@ -176,6 +176,17 @@ public class FormatHelpersTests
     }
 
     [Theory]
+    [InlineData("2025-12-20T13:45:30.0000000Z", "1:45:30 PM")]
+    [InlineData("2025-12-19T13:45:30.0000000Z", "12/19/2025 1:45:30 PM")]
+    public void FormatTimeWithOptionalDate_UsesTimeProviderCurrentDate(string value, string expected)
+    {
+        var provider = new FixedTimeProvider(new DateTimeOffset(2025, 12, 20, 23, 59, 59, TimeSpan.Zero));
+        var date = DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+
+        Assert.Equal(expected, FormatHelpers.FormatTimeWithOptionalDate(provider, date, cultureInfo: CultureInfo.GetCultureInfo("en-US")), ignoreWhiteSpaceDifferences: true);
+    }
+
+    [Theory]
     [InlineData("fi-FI", TimeFormat.TwentyFourHour, MillisecondsDisplay.None, "15.6.2009 13.45.30")]
     [InlineData("fi-FI", TimeFormat.TwentyFourHour, MillisecondsDisplay.Truncated, "15.6.2009 13.45.30,123")]
     [InlineData("fi-FI", TimeFormat.TwelveHour, MillisecondsDisplay.None, "15.6.2009 1.45.30 ip.")]
@@ -265,5 +276,12 @@ public class FormatHelpersTests
     private static BrowserTimeProvider CreateTimeProvider()
     {
         return new BrowserTimeProvider(NullLoggerFactory.Instance);
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
+
+        public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
     }
 }

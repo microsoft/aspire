@@ -5,12 +5,10 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:16439;http://localhost:16440",
+      "applicationUrl": "https://publishers.dev.localhost:16439;http://publishers.dev.localhost:16440",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:17209",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:17209",
         "ASPIRE_SHOW_DASHBOARD_RESOURCES": "true"
       }
     },
@@ -18,12 +16,10 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:16440",
+      "applicationUrl": "http://publishers.dev.localhost:16440",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17210",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:17210",
         "ASPIRE_SHOW_DASHBOARD_RESOURCES": "true",
         "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
       }
@@ -33,11 +29,10 @@
       "launchBrowser": true,
       "dotnetRunMessages": true,
       "commandLineArgs": "--publisher manifest --output-path publish/manifest",
-      "applicationUrl": "http://localhost:16440",
+      "applicationUrl": "http://publishers.dev.localhost:16440",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17210"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "publish-aca": {
@@ -45,11 +40,10 @@
       "launchBrowser": true,
       "dotnetRunMessages": true,
       "commandLineArgs": "--publisher azure-container-apps",
-      "applicationUrl": "http://localhost:16440",
+      "applicationUrl": "http://publishers.dev.localhost:16440",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17210"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "publish-k8s": {
@@ -57,11 +51,10 @@
       "launchBrowser": true,
       "dotnetRunMessages": true,
       "commandLineArgs": "--publisher k8s --output-path publish/k8s",
-      "applicationUrl": "http://localhost:16440",
+      "applicationUrl": "http://publishers.dev.localhost:16440",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17210"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "publish-docker-compose": {
@@ -69,11 +62,10 @@
       "launchBrowser": true,
       "dotnetRunMessages": true,
       "commandLineArgs": "--publisher docker-compose --output-path publish/docker-compose",
-      "applicationUrl": "http://localhost:16440",
+      "applicationUrl": "http://publishers.dev.localhost:16440",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17210"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "inspect-mode": {
@@ -81,11 +73,10 @@
       "launchBrowser": true,
       "dotnetRunMessages": true,
       "commandLineArgs": "--operation inspect",
-      "applicationUrl": "http://localhost:16440",
+      "applicationUrl": "http://publishers.dev.localhost:16440",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17210"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     }
   }

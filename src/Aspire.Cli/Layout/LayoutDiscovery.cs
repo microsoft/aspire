@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
@@ -36,16 +37,24 @@ public interface ILayoutDiscovery
 public sealed class LayoutDiscovery : ILayoutDiscovery
 {
     private readonly ILogger<LayoutDiscovery> _logger;
+    private readonly IEnvironment _environment;
 
-    public LayoutDiscovery(ILogger<LayoutDiscovery> logger)
+    public LayoutDiscovery(ILogger<LayoutDiscovery> logger, IEnvironment environment)
     {
         _logger = logger;
+        _environment = environment;
     }
+
+    /// <summary>
+    /// Overrides <see cref="Environment.ProcessPath"/> for relative-layout discovery.
+    /// Used in tests to simulate the CLI executable living at an arbitrary path.
+    /// </summary>
+    internal string? ProcessPathOverride { get; init; }
 
     public LayoutConfiguration? DiscoverLayout(string? projectDirectory = null)
     {
         // 1. Try environment variable for layout path
-        var envLayoutPath = Environment.GetEnvironmentVariable(BundleDiscovery.LayoutPathEnvVar);
+        var envLayoutPath = _environment.GetEnvironmentVariable(BundleDiscovery.LayoutPathEnvVar);
         if (!string.IsNullOrEmpty(envLayoutPath))
         {
             _logger.LogDebug("Found ASPIRE_LAYOUT_PATH: {Path}", envLayoutPath);
@@ -64,8 +73,45 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
             return LogEnvironmentOverrides(relativeLayout);
         }
 
+        // 3. Try the Aspire home directory. This is the auto-extract destination
+        // for sidecar-less installs (e.g. CLI binaries in read-only locations
+        // like a Nix store), so the bundle the CLI just extracted has to be
+        // discoverable here too — otherwise post-extract validation fails and
+        // every command that depends on the bundle reports extraction failed.
+        // Keep this as the last probe so colocated installs (winget, brew,
+        // dotnet-tool, script, pr, localhive) are never shadowed by a stale
+        // home-directory layout.
+        var aspireHomeLayout = TryDiscoverAspireHomeLayout();
+        if (aspireHomeLayout is not null)
+        {
+            _logger.LogDebug("Discovered layout in Aspire home: {Path}", aspireHomeLayout.LayoutPath);
+            return LogEnvironmentOverrides(aspireHomeLayout);
+        }
+
         _logger.LogDebug("No bundle layout discovered");
         return null;
+    }
+
+    private LayoutConfiguration? TryDiscoverAspireHomeLayout()
+    {
+        string aspireHome;
+        try
+        {
+            aspireHome = CliPathHelper.GetDefaultAspireHomeDirectory();
+        }
+        catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
+        {
+            _logger.LogDebug(ex, "TryDiscoverAspireHomeLayout: could not resolve Aspire home directory");
+            return null;
+        }
+
+        if (string.IsNullOrEmpty(aspireHome) || !Directory.Exists(aspireHome))
+        {
+            return null;
+        }
+
+        _logger.LogDebug("TryDiscoverAspireHomeLayout: Checking Aspire home {Path}...", aspireHome);
+        return TryInferLayout(aspireHome);
     }
 
     public string? GetComponentPath(LayoutComponent component, string? projectDirectory = null)
@@ -73,8 +119,8 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         // Check environment variable overrides first
         var envPath = component switch
         {
-            LayoutComponent.Dcp => Environment.GetEnvironmentVariable(BundleDiscovery.DcpPathEnvVar),
-            LayoutComponent.Managed => Environment.GetEnvironmentVariable(BundleDiscovery.ManagedPathEnvVar),
+            LayoutComponent.Dcp => _environment.GetEnvironmentVariable(BundleDiscovery.DcpPathEnvVar),
+            LayoutComponent.Managed => _environment.GetEnvironmentVariable(BundleDiscovery.ManagedPathEnvVar),
             _ => null
         };
 
@@ -91,7 +137,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
     public bool IsBundleModeAvailable(string? projectDirectory = null)
     {
         // Check if user explicitly wants SDK mode
-        var useSdk = Environment.GetEnvironmentVariable(BundleDiscovery.UseGlobalDotNetEnvVar);
+        var useSdk = _environment.GetEnvironmentVariable(BundleDiscovery.UseGlobalDotNetEnvVar);
         if (string.Equals(useSdk, "true", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(useSdk, "1", StringComparison.OrdinalIgnoreCase))
         {
@@ -138,18 +184,36 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
 
     private LayoutConfiguration? TryDiscoverRelativeLayout()
     {
-        // Get CLI executable location
-        var cliPath = Environment.ProcessPath;
+        var cliPath = ProcessPathOverride ?? Environment.ProcessPath;
         if (string.IsNullOrEmpty(cliPath))
         {
             _logger.LogDebug("TryDiscoverRelativeLayout: ProcessPath is null or empty");
             return null;
         }
 
+        var resolvedCliPath = CliPathHelper.ResolveSymlinkOrOriginalPath(cliPath, _logger);
+        if (!string.Equals(resolvedCliPath, cliPath, StringComparison.Ordinal))
+        {
+            _logger.LogDebug("TryDiscoverRelativeLayout: Resolved CLI path {RawPath} -> {ResolvedPath}", cliPath, resolvedCliPath);
+
+            var resolvedLayout = TryDiscoverRelativeLayout(resolvedCliPath);
+            if (resolvedLayout is not null)
+            {
+                return resolvedLayout;
+            }
+
+            _logger.LogDebug("TryDiscoverRelativeLayout: No layout found relative to resolved CLI path; trying raw path {Path}.", cliPath);
+        }
+
+        return TryDiscoverRelativeLayout(cliPath);
+    }
+
+    private LayoutConfiguration? TryDiscoverRelativeLayout(string cliPath)
+    {
         var cliDir = Path.GetDirectoryName(cliPath);
         if (string.IsNullOrEmpty(cliDir))
         {
-            _logger.LogDebug("TryDiscoverRelativeLayout: Could not get directory from ProcessPath");
+            _logger.LogDebug("TryDiscoverRelativeLayout: Could not get directory from process path {Path}", cliPath);
             return null;
         }
 
@@ -182,22 +246,29 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
 
     private LayoutConfiguration? TryInferLayout(string layoutPath)
     {
-        // New layout: a single bundle/ link whose target contains managed/ and dcp/.
+        // New layout: a single bundle/ link whose target contains managed/, dashboard/, and dcp/.
         var bundlePath = Path.Combine(layoutPath, BundleDiscovery.BundleDirectoryName);
         var bundleManagedPath = Path.Combine(bundlePath, BundleDiscovery.ManagedDirectoryName);
+        var bundleDashboardPath = Path.Combine(bundlePath, BundleDiscovery.DashboardDirectoryName);
         var bundleDcpPath = Path.Combine(bundlePath, BundleDiscovery.DcpDirectoryName);
         var managedExeName = BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName);
+        var dashboardExeName = BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName);
+        var bundleDcpExe = BundleDiscovery.GetDcpExecutablePath(bundleDcpPath);
 
         _logger.LogDebug("TryInferLayout: Checking layout at {Path}", layoutPath);
         _logger.LogDebug("  {Dir}/{Managed}/: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName, Directory.Exists(bundleManagedPath) ? "exists" : "MISSING");
+        _logger.LogDebug("  {Dir}/{Dashboard}/: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.DashboardDirectoryName, Directory.Exists(bundleDashboardPath) ? "exists" : "MISSING");
         _logger.LogDebug("  {Dir}/{Dcp}/: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName, Directory.Exists(bundleDcpPath) ? "exists" : "MISSING");
 
-        if (Directory.Exists(bundleManagedPath) && Directory.Exists(bundleDcpPath))
+        if (Directory.Exists(bundleManagedPath) && Directory.Exists(bundleDashboardPath) && Directory.Exists(bundleDcpPath))
         {
             var bundleManagedExe = Path.Combine(bundleManagedPath, managedExeName);
+            var bundleDashboardExe = Path.Combine(bundleDashboardPath, dashboardExeName);
             _logger.LogDebug("  {Dir}/{Managed}/{Exe}: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName, managedExeName, File.Exists(bundleManagedExe) ? "exists" : "MISSING");
+            _logger.LogDebug("  {Dir}/{Dashboard}/{Exe}: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.DashboardDirectoryName, dashboardExeName, File.Exists(bundleDashboardExe) ? "exists" : "MISSING");
+            _logger.LogDebug("  {Dir}/{Dcp}/{Exe}: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName, Path.GetFileName(bundleDcpExe), File.Exists(bundleDcpExe) ? "exists" : "MISSING");
 
-            if (File.Exists(bundleManagedExe))
+            if (File.Exists(bundleManagedExe) && File.Exists(bundleDashboardExe) && File.Exists(bundleDcpExe))
             {
                 _logger.LogDebug("TryInferLayout: New bundle/ layout is valid");
                 return new LayoutConfiguration
@@ -206,20 +277,24 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
                     Components = new LayoutComponents
                     {
                         Dcp = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName),
+                        Dashboard = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DashboardDirectoryName),
                         Managed = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName),
                     }
                 };
             }
         }
 
-        // Legacy layout: top-level managed/ and dcp/ directories (or reparse points).
+        // Flat layouts contain the same components directly under the layout root.
         var managedPath = Path.Combine(layoutPath, BundleDiscovery.ManagedDirectoryName);
+        var dashboardPath = Path.Combine(layoutPath, BundleDiscovery.DashboardDirectoryName);
         var dcpPath = Path.Combine(layoutPath, BundleDiscovery.DcpDirectoryName);
+        var dcpExePath = BundleDiscovery.GetDcpExecutablePath(dcpPath);
 
         _logger.LogDebug("  {Dir}/: {Exists}", BundleDiscovery.ManagedDirectoryName, Directory.Exists(managedPath) ? "exists" : "MISSING");
+        _logger.LogDebug("  {Dir}/: {Exists}", BundleDiscovery.DashboardDirectoryName, Directory.Exists(dashboardPath) ? "exists" : "MISSING");
         _logger.LogDebug("  {Dir}/: {Exists}", BundleDiscovery.DcpDirectoryName, Directory.Exists(dcpPath) ? "exists" : "MISSING");
 
-        if (!Directory.Exists(managedPath) || !Directory.Exists(dcpPath))
+        if (!Directory.Exists(managedPath) || !Directory.Exists(dashboardPath) || !Directory.Exists(dcpPath))
         {
             _logger.LogDebug("TryInferLayout: Layout rejected - missing required directories");
             return null;
@@ -227,15 +302,18 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
 
         // Check for aspire-managed executable
         var managedExePath = Path.Combine(managedPath, managedExeName);
+        var dashboardExePath = Path.Combine(dashboardPath, dashboardExeName);
         _logger.LogDebug("  managed/{ManagedExe}: {Exists}", managedExeName, File.Exists(managedExePath) ? "exists" : "MISSING");
+        _logger.LogDebug("  dashboard/{DashboardExe}: {Exists}", dashboardExeName, File.Exists(dashboardExePath) ? "exists" : "MISSING");
+        _logger.LogDebug("  dcp/{DcpExe}: {Exists}", Path.GetFileName(dcpExePath), File.Exists(dcpExePath) ? "exists" : "MISSING");
 
-        if (!File.Exists(managedExePath))
+        if (!File.Exists(managedExePath) || !File.Exists(dashboardExePath) || !File.Exists(dcpExePath))
         {
-            _logger.LogDebug("TryInferLayout: Layout rejected - aspire-managed not found");
+            _logger.LogDebug("TryInferLayout: Layout rejected - required executable not found");
             return null;
         }
 
-        _logger.LogDebug("TryInferLayout: Legacy layout is valid");
+        _logger.LogDebug("TryInferLayout: Flat layout is valid");
 
         // Infer a basic layout configuration
         return new LayoutConfiguration
@@ -250,11 +328,11 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         // Environment variables for specific components take precedence
         // These will be checked at GetComponentPath time, but we note them here for logging
 
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(BundleDiscovery.DcpPathEnvVar)))
+        if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable(BundleDiscovery.DcpPathEnvVar)))
         {
             _logger.LogDebug("DCP path override from {EnvVar}", BundleDiscovery.DcpPathEnvVar);
         }
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(BundleDiscovery.ManagedPathEnvVar)))
+        if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable(BundleDiscovery.ManagedPathEnvVar)))
         {
             _logger.LogDebug("Managed path override from {EnvVar}", BundleDiscovery.ManagedPathEnvVar);
         }
@@ -272,9 +350,18 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
             return false;
         }
 
+        var dashboardPath = layout.GetDashboardPath();
+        if (dashboardPath is null || !File.Exists(dashboardPath))
+        {
+            _logger.LogDebug("Layout validation failed: Dashboard not found at {Path}", dashboardPath);
+            return false;
+        }
+
         // Require DCP for valid layouts
         var dcpPath = layout.GetComponentPath(LayoutComponent.Dcp);
-        if (dcpPath is null || !Directory.Exists(dcpPath))
+        if (dcpPath is null ||
+            !Directory.Exists(dcpPath) ||
+            !File.Exists(BundleDiscovery.GetDcpExecutablePath(dcpPath)))
         {
             _logger.LogDebug("Layout validation failed: DCP not found");
             return false;

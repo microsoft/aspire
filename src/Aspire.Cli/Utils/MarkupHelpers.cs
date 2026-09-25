@@ -57,18 +57,55 @@ internal static class MarkupHelpers
     /// </summary>
     public static string SafeFileLink(bool supportsLinks, string filePath)
     {
+        return SafeFileLink(supportsLinks, filePath, displayName: null);
+    }
+
+    /// <summary>
+    /// Builds a clickable file-link markup string for the specified file path
+    /// when the console supports links, otherwise returns a plain-text fallback.
+    /// The displayed text is <paramref name="displayName"/> (or the full path when
+    /// <see langword="null"/>). If the path cannot be resolved to a valid URI
+    /// (e.g. it came from an external process and is malformed), the display name
+    /// is returned as escaped plain text.
+    /// </summary>
+    public static string SafeFileLink(IInteractionService interactionService, string filePath, string? displayName)
+    {
+        return SafeFileLink(interactionService.SupportsLinks, filePath, displayName);
+    }
+
+    /// <summary>
+    /// Builds a clickable file-link markup string for the specified file path
+    /// when the console supports links, otherwise returns a plain-text fallback.
+    /// The displayed text is <paramref name="displayName"/> (or the full path when
+    /// <see langword="null"/>). If the path cannot be resolved to a valid URI
+    /// (e.g. it came from an external process and is malformed), the display name
+    /// is returned as escaped plain text.
+    /// </summary>
+    public static string SafeFileLink(bool supportsLinks, string filePath, string? displayName)
+    {
         if (string.IsNullOrEmpty(filePath))
         {
             return string.Empty;
         }
 
+        displayName ??= filePath;
+
         if (!supportsLinks)
         {
-            return filePath.EscapeMarkup();
+            return displayName.EscapeMarkup();
         }
 
-        var fileUri = new Uri(Path.GetFullPath(filePath)).AbsoluteUri;
-
-        return SafeLink(supportsLinks: true, fileUri, filePath);
+        try
+        {
+            var fileUri = new Uri(Path.GetFullPath(filePath)).AbsoluteUri;
+            return SafeLink(supportsLinks: true, fileUri, displayName);
+        }
+        catch (Exception)
+        {
+            // The path may come from an external process (e.g. via backchannel) and
+            // could be malformed. Fall back to plain escaped text so the error-display
+            // path in BaseCommand doesn't throw and mask the original failure.
+            return displayName.EscapeMarkup();
+        }
     }
 }

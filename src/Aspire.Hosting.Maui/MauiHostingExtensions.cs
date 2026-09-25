@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Maui.Lifecycle;
 using Aspire.Hosting.Maui.Utilities;
 
 namespace Aspire.Hosting.Maui;
@@ -15,6 +16,9 @@ internal static class MauiHostingExtensions
     [AspireExportIgnore(Reason = "Use AddMauiProject() instead.")]
     public static void AddMauiHostingServices(this IDistributedApplicationBuilder builder)
     {
+        // Register the build queue subscriber to serialize builds per-project
+        builder.Services.TryAddEventingSubscriber<MauiBuildQueueEventSubscriber>();
+
         // Register the Android environment variable eventing subscriber
         builder.Services.TryAddEventingSubscriber<MauiAndroidEnvironmentSubscriber>();
 

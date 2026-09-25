@@ -3,8 +3,10 @@
 
 using Grpc.Core;
 using Grpc.Net.Client;
+using OpenTelemetry.Proto.Collector.Logs.V1;
 using OpenTelemetry.Proto.Collector.Metrics.V1;
 using OpenTelemetry.Proto.Common.V1;
+using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
 using OpenTelemetry.Proto.Resource.V1;
 
@@ -15,12 +17,15 @@ namespace Stress.TelemetryService;
 /// </summary>
 public class TelemetryStresser(ILogger<TelemetryStresser> logger, IConfiguration config) : BackgroundService
 {
+    private const string ExternalLogSourceName = "external-log-source";
+
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         var address = config["OTEL_EXPORTER_OTLP_ENDPOINT"]!;
         var channel = GrpcChannel.ForAddress(address);
 
-        var client = new MetricsService.MetricsServiceClient(channel);
+        var metricsClient = new MetricsService.MetricsServiceClient(channel);
+        var logsClient = new LogsService.LogsServiceClient(channel);
         var otlpApiKey = config["OTEL_EXPORTER_OTLP_HEADERS"]!.Split('=')[1];
         var metadata = new Metadata
         {
@@ -32,7 +37,8 @@ public class TelemetryStresser(ILogger<TelemetryStresser> logger, IConfiguration
         {
             value += Random.Shared.Next(0, 10);
 
-            await ExportMetrics(logger, metadata, client, value, cancellationToken);
+            await ExportMetrics(logger, metadata, metricsClient, value, cancellationToken);
+            await ExportStructuredLog(logger, metadata, logsClient, value, cancellationToken);
 
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
         }
@@ -77,6 +83,50 @@ public class TelemetryStresser(ILogger<TelemetryStresser> logger, IConfiguration
         if (response.PartialSuccess is { RejectedDataPoints: > 0 } result)
         {
             logger.LogDebug($"Export complete. Rejected count: {result.RejectedDataPoints}");
+        }
+    }
+
+    private static async Task ExportStructuredLog(ILogger<TelemetryStresser> logger, Metadata metadata, LogsService.LogsServiceClient client, int value, CancellationToken cancellationToken)
+    {
+        var timestamp = DateTimeToUnixNanoseconds(DateTime.UtcNow);
+        var request = new ExportLogsServiceRequest
+        {
+            ResourceLogs =
+            {
+                new ResourceLogs
+                {
+                    Resource = CreateResource(ExternalLogSourceName, "instance-1"),
+                    ScopeLogs =
+                    {
+                        new ScopeLogs
+                        {
+                            Scope = new InstrumentationScope { Name = "ExternalLogSource" },
+                            LogRecords =
+                            {
+                                new LogRecord
+                                {
+                                    TimeUnixNano = timestamp,
+                                    ObservedTimeUnixNano = timestamp,
+                                    SeverityNumber = SeverityNumber.Info,
+                                    SeverityText = "Information",
+                                    Body = new AnyValue { StringValue = $"Processed item {value}." },
+                                    Attributes =
+                                    {
+                                        new KeyValue { Key = "{OriginalFormat}", Value = new AnyValue { StringValue = "Processed item {ItemId}." } },
+                                        new KeyValue { Key = "ItemId", Value = new AnyValue { IntValue = value } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        var response = await client.ExportAsync(request, headers: metadata, cancellationToken: cancellationToken);
+        if (response.PartialSuccess is { RejectedLogRecords: > 0 } result)
+        {
+            logger.LogDebug("Export complete. Rejected log count: {RejectedLogCount}", result.RejectedLogRecords);
         }
     }
 

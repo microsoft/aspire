@@ -1,0 +1,15 @@
+﻿FROM --platform=$BUILDPLATFORM docker.io/library/eclipse-temurin:21-jdk AS build
+WORKDIR /app
+ENV GRADLE_USER_HOME=/root/.gradle
+COPY scripts/custom-gradlew ./scripts/custom-gradlew
+COPY scripts/gradle ./scripts/gradle
+RUN sed -i 's/\r$//' ./scripts/custom-gradlew && sh ./scripts/custom-gradlew --no-daemon --version
+COPY . .
+RUN --mount=type=cache,id=aspire-java-gradle-api,target=/root/.gradle/caches,sharing=locked \
+    mkdir -p /build && sed -i 's/\r$//' ./scripts/custom-gradlew && sh ./scripts/custom-gradlew --no-daemon -x test build && jars=$(ls build/libs/*.jar 2>/dev/null | grep -Ev '(-plain|-sources|-javadoc)\.jar$' || true) && count=$(printf '%s\n' "$jars" | grep -c . || true) && if [ "$count" != "1" ]; then echo "Aspire: expected exactly one application JAR from the build of 'api' matching build/libs/*.jar, found $count:" >&2; echo "$jars" >&2; echo "Use WithJarArtifact(\"<relative path>\") to select one." >&2; exit 1; fi && cp "$jars" /build/app.jar
+
+FROM docker.io/library/eclipse-temurin:21-jre
+WORKDIR /app
+COPY --from=build --chown=999:999 /build/app.jar /app/app.jar
+USER 999:999
+ENTRYPOINT ["java","-jar","/app/app.jar"]

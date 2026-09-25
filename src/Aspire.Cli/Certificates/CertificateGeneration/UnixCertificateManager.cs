@@ -5,8 +5,12 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
+using Aspire.Cli;
+using Aspire.Cli.Certificates;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Microsoft.AspNetCore.Certificates.Generation;
@@ -20,17 +24,14 @@ namespace Microsoft.AspNetCore.Certificates.Generation;
 /// </remarks>
 internal sealed partial class UnixCertificateManager : CertificateManager
 {
-	private const UnixFileMode DirectoryPermissions = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+    private const UnixFileMode DirectoryPermissions = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
 
     /// <summary>The name of an environment variable consumed by OpenSSL to locate certificates.</summary>
     private const string OpenSslCertificateDirectoryVariableName = "SSL_CERT_DIR";
+    private const string XdgConfigHomeVariableName = "XDG_CONFIG_HOME";
 
     private const string OpenSslCertDirectoryOverrideVariableName = "DOTNET_DEV_CERTS_OPENSSL_CERTIFICATE_DIRECTORY";
     private const string NssDbOverrideVariableName = "DOTNET_DEV_CERTS_NSSDB_PATHS";
-    // CONSIDER: we could have a distinct variable for Mozilla NSS DBs, but detecting them from the path seems sufficient for now.
-
-    private const string BrowserFamilyChromium = "Chromium";
-    private const string BrowserFamilyFirefox = "Firefox";
 
     private const string PowerShellCommand = "powershell.exe";
     private const string WslInteropPath = "/proc/sys/fs/binfmt_misc/WSLInterop";
@@ -38,27 +39,46 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     private const string WslFriendlyName = AspNetHttpsOidFriendlyName + " (WSL)";
 
     private const string OpenSslCommand = "openssl";
-    private const string CertUtilCommand = "certutil";
-
     private const int MaxHashCollisions = 10; // Something is going badly wrong if we have this many dev certs with the same hash
 
     private HashSet<string>? _availableCommands;
+    private readonly IEnvironment _environment;
+    private readonly CertificateConfiguration.NssDbOverride? _nssDbOverride;
+    private readonly Action<ProcessStartInfo> _configureCertUtilStartInfo = static _ => { };
 
-    public UnixCertificateManager(ILogger logger) : base(logger)
+    public UnixCertificateManager(ILogger logger, IEnvironment environment, CertificateConfiguration.NssDbOverride? nssDbOverride) : base(logger)
     {
+        _environment = environment;
+        _nssDbOverride = nssDbOverride;
+    }
+
+    internal UnixCertificateManager(
+        ILogger logger,
+        IEnvironment environment,
+        CertificateConfiguration.NssDbOverride? nssDbOverride,
+        Action<ProcessStartInfo> configureCertUtilStartInfo)
+        : this(logger, environment, nssDbOverride)
+    {
+        _configureCertUtilStartInfo = configureCertUtilStartInfo;
     }
 
     internal UnixCertificateManager(string subject, int version)
         : base(subject, version)
     {
+        _environment = new Aspire.Cli.HostEnvironment();
+        _nssDbOverride = null;
     }
 
     public override TrustLevel GetTrustLevel(X509Certificate2 certificate)
+        => GetTrustLevel(certificate, CancellationToken.None);
+
+    internal TrustLevel GetTrustLevel(X509Certificate2 certificate, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var sawTrustSuccess = false;
         var sawTrustFailure = false;
 
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(OpenSslCertDirectoryOverrideVariableName)))
+        if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable(OpenSslCertDirectoryOverrideVariableName)))
         {
             // Warn but don't bail.
             Log.UnixOpenSslCertificateDirectoryOverrideIgnored(OpenSslCertDirectoryOverrideVariableName);
@@ -98,7 +118,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         // Will become the name of the file on disk and the nickname in the NSS DBs
         var certificateNickname = GetCertificateNickname(certificate);
 
-        var sslCertDirString = Environment.GetEnvironmentVariable(OpenSslCertificateDirectoryVariableName);
+        var sslCertDirString = _environment.GetEnvironmentVariable(OpenSslCertificateDirectoryVariableName);
         if (string.IsNullOrEmpty(sslCertDirString))
         {
             sawTrustFailure = true;
@@ -113,11 +133,19 @@ internal sealed partial class UnixCertificateManager : CertificateManager
                 var certPath = Path.Combine(sslCertDir, certificateNickname + ".pem");
                 if (File.Exists(certPath))
                 {
-                    using var candidate = X509CertificateLoader.LoadCertificateFromFile(certPath);
-                    if (AreCertificatesEqual(certificate, candidate))
+                    try
                     {
-                        foundCert = true;
-                        break;
+                        using var candidate = X509CertificateLoader.LoadCertificateFromFile(certPath);
+                        if (AreCertificatesEqual(certificate, candidate))
+                        {
+                            foundCert = true;
+                            break;
+                        }
+                    }
+                    catch (Exception ex) when (ex is CryptographicException or IOException or UnauthorizedAccessException)
+                    {
+                        // Treat unreadable entries as a miss. A later SSL_CERT_DIR entry may still contain
+                        // the expected certificate, so only report OpenSSL as untrusted after the full search.
                     }
                 }
             }
@@ -136,25 +164,25 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         var nssDbs = GetNssDbs(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
         if (nssDbs.Count > 0)
         {
-            if (!IsCommandAvailable(CertUtilCommand))
+            if (!IsCommandAvailable(CertificateHelpers.CertUtilCommand))
             {
                 // If there are browsers but we don't have certutil, we can't check trust and,
                 // in all probability, we can't have previously established it.
-                Log.UnixMissingCertUtilCommand(CertUtilCommand);
+                Log.UnixMissingCertUtilCommand(CertificateHelpers.CertUtilCommand);
                 sawTrustFailure = true;
             }
             else
             {
                 foreach (var nssDb in nssDbs)
                 {
-                    if (IsCertificateInNssDb(certificateNickname, nssDb))
+                    if (IsCertificateInNssDb(certificateNickname, nssDb, cancellationToken))
                     {
                         sawTrustSuccess = true;
                     }
                     else
                     {
                         sawTrustFailure = true;
-                        Log.UnixNotTrustedByNss(nssDb.Path, nssDb.IsFirefox ? BrowserFamilyFirefox : BrowserFamilyChromium);
+                        Log.UnixNotTrustedByNss(nssDb.Path, nssDb.BrowserFamily);
                     }
                 }
             }
@@ -180,7 +208,8 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             store.Open(OpenFlags.ReadWrite);
             store.Add(certificate);
             store.Close();
-        };
+        }
+        ;
 
         return certificate;
     }
@@ -258,7 +287,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             }
             catch
             {
-                // If we couldn't load the file, then we also can't safely overwite it.
+                // If we couldn't load the file, then we also can't safely overwrite it.
                 Log.UnixNotOverwritingCertificate(certPath);
                 return TrustLevel.None;
             }
@@ -303,10 +332,10 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         var nssDbs = GetNssDbs(homeDirectory);
         if (nssDbs.Count > 0)
         {
-            var isCertUtilAvailable = IsCommandAvailable(CertUtilCommand);
+            var isCertUtilAvailable = IsCommandAvailable(CertificateHelpers.CertUtilCommand);
             if (!isCertUtilAvailable)
             {
-                Log.UnixMissingCertUtilCommand(CertUtilCommand);
+                Log.UnixMissingCertUtilCommand(CertificateHelpers.CertUtilCommand);
                 // We'll loop over the nssdbs anyway so they'll be listed
             }
 
@@ -323,13 +352,13 @@ internal sealed partial class UnixCertificateManager : CertificateManager
                     {
                         // If the dev cert is in the db under a different nickname, adding it will succeed (and probably even cause it to be trusted)
                         // but IsTrusted won't find it.  This is unlikely to happen in practice, so we warn here, rather than hardening IsTrusted.
-                        Log.UnixNssDbTrustFailedWithProbableConflict(nssDb.Path, nssDb.IsFirefox ? BrowserFamilyFirefox : BrowserFamilyChromium);
+                        Log.UnixNssDbTrustFailedWithProbableConflict(nssDb.Path, nssDb.BrowserFamily);
                         sawTrustFailure = true;
                     }
                 }
                 else
                 {
-                    Log.UnixNssDbTrustFailed(nssDb.Path, nssDb.IsFirefox ? BrowserFamilyFirefox : BrowserFamilyChromium);
+                    Log.UnixNssDbTrustFailed(nssDb.Path, nssDb.BrowserFamily);
                     sawTrustFailure = true;
                 }
             }
@@ -363,7 +392,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             var hasValidSslCertDir = false;
 
             // Check if SSL_CERT_DIR is already set and if certDir is already included
-            var existingSslCertDir = Environment.GetEnvironmentVariable(OpenSslCertificateDirectoryVariableName);
+            var existingSslCertDir = _environment.GetEnvironmentVariable(OpenSslCertificateDirectoryVariableName);
             if (!string.IsNullOrEmpty(existingSslCertDir))
             {
                 var existingDirs = existingSslCertDir.Split(Path.PathSeparator);
@@ -472,17 +501,19 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         if (File.Exists(certPath))
         {
             var openSslUntrustSucceeded = false;
+            var certificateFileDeleted = TryDeleteCertificateFile(certPath);
 
-            if (IsCommandAvailable(OpenSslCommand))
+            if (certificateFileDeleted)
             {
-                if (TryDeleteCertificateFile(certPath) && TryRehashOpenSslCertificates(certDir))
+                if (IsCommandAvailable(OpenSslCommand))
                 {
+                    openSslUntrustSucceeded = TryRehashOpenSslCertificates(certDir);
+                }
+                else
+                {
+                    Log.UnixMissingOpenSslCommand(OpenSslCommand);
                     openSslUntrustSucceeded = true;
                 }
-            }
-            else
-            {
-                Log.UnixMissingOpenSslCommand(OpenSslCommand);
             }
 
             if (openSslUntrustSucceeded)
@@ -504,23 +535,24 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         var nssDbs = GetNssDbs(homeDirectory);
         if (nssDbs.Count > 0)
         {
-            var isCertUtilAvailable = IsCommandAvailable(CertUtilCommand);
+            var isCertUtilAvailable = IsCommandAvailable(CertificateHelpers.CertUtilCommand);
             if (!isCertUtilAvailable)
             {
-                Log.UnixMissingCertUtilCommand(CertUtilCommand);
-                // We'll loop over the nssdbs anyway so they'll be listed
+                Log.UnixMissingCertUtilCommand(CertificateHelpers.CertUtilCommand);
             }
-
-            foreach (var nssDb in nssDbs)
+            else
             {
-                if (isCertUtilAvailable && TryRemoveCertificateFromNssDb(nickname, nssDb))
+                foreach (var nssDb in nssDbs)
                 {
-                    Log.UnixNssDbUntrustSucceeded(nssDb.Path);
-                }
-                else
-                {
-                    Log.UnixNssDbUntrustFailed(nssDb.Path);
-                    sawUntrustFailure = true;
+                    if (TryRemoveCertificateFromNssDb(nickname, nssDb))
+                    {
+                        Log.UnixNssDbUntrustSucceeded(nssDb.Path);
+                    }
+                    else
+                    {
+                        Log.UnixNssDbUntrustFailed(nssDb.Path);
+                        sawUntrustFailure = true;
+                    }
                 }
             }
         }
@@ -550,29 +582,9 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         }
         else
         {
-            Directory.CreateDirectory(directoryPath, DirectoryPermissions);
+            DirectoryHelper.CreateWithOwnerOnlyPermissions(directoryPath);
         }
 #pragma warning restore CA1416 // Validate platform compatibility
-    }
-
-    private static string GetChromiumNssDb(string homeDirectory)
-    {
-        return Path.Combine(homeDirectory, ".pki", "nssdb");
-    }
-
-    private static string GetChromiumSnapNssDb(string homeDirectory)
-    {
-        return Path.Combine(homeDirectory, "snap", "chromium", "current", ".pki", "nssdb");
-    }
-
-    private static string GetFirefoxDirectory(string homeDirectory)
-    {
-        return Path.Combine(homeDirectory, ".mozilla", "firefox");
-    }
-
-    private static string GetFirefoxSnapDirectory(string homeDirectory)
-    {
-        return Path.Combine(homeDirectory, "snap", "firefox", "common", ".mozilla", "firefox");
     }
 
     private bool IsCommandAvailable(string command)
@@ -581,48 +593,23 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         return _availableCommands.Contains(command);
     }
 
-    private static HashSet<string> FindAvailableCommands()
+    private HashSet<string> FindAvailableCommands()
     {
         var availableCommands = new HashSet<string>();
 
         // We need OpenSSL 1.1.1h or newer (to pick up https://github.com/openssl/openssl/pull/12357),
         // but, given that all of v1 is EOL, it doesn't seem worthwhile to check the version.
-        var commands = new[] { OpenSslCommand, CertUtilCommand };
+        var commands = new[] { OpenSslCommand, CertificateHelpers.CertUtilCommand };
 
-        var searchPath = Environment.GetEnvironmentVariable("PATH");
+        var environmentVariables = _environment.GetEnvironmentVariables()
+            .Where(kv => kv.Value is not null)
+            .ToDictionary(kv => kv.Name, kv => kv.Value!);
 
-        if (searchPath is null)
+        foreach (var command in commands)
         {
-            return availableCommands;
-        }
-
-        var searchFolders = searchPath.Split(Path.PathSeparator);
-
-        foreach (var searchFolder in searchFolders)
-        {
-            foreach (var command in commands)
+            if (PathLookupHelper.TryResolveExecutablePath(command, out _, environmentVariables))
             {
-                if (!availableCommands.Contains(command))
-                {
-                    try
-                    {
-                        if (File.Exists(Path.Combine(searchFolder, command)))
-                        {
-                            availableCommands.Add(command);
-                        }
-                    }
-                    catch
-                    {
-                        // It's not interesting to report (e.g.) permission errors here.
-                    }
-                }
-            }
-
-            // Stop early if we've found all the required commands.
-            // They're usually all in the same folder (/bin or /usr/bin).
-            if (availableCommands.Count == commands.Length)
-            {
-                break;
+                availableCommands.Add(command);
             }
         }
 
@@ -638,7 +625,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     /// Detects if the current environment is Windows Subsystem for Linux (WSL) with interop enabled.
     /// </summary>
     /// <returns>True if running on WSL with interop; otherwise, false.</returns>
-    private static bool IsRunningOnWslWithInterop()
+    private bool IsRunningOnWslWithInterop()
     {
         // WSL exposes special files that indicate WSL interop is enabled.
         // Either WSLInterop or WSLInterop-late may be present depending on the WSL version and configuration.
@@ -649,7 +636,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
         // Additionally check for standard WSL environment variables as a fallback.
         // WSL_INTEROP is set to the path of the interop socket.
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WSL_INTEROP")))
+        if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable("WSL_INTEROP")))
         {
             return true;
         }
@@ -691,30 +678,26 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             RedirectStandardError = true,
         };
 
-        var status = Process.Run(startInfo);
-        return status.ExitCode == 0;
+        return CertificateProcessRunner.Run(startInfo).ExitCode == 0;
     }
 
     /// <remarks>
-    /// It is the caller's responsibility to ensure that <see cref="CertUtilCommand"/> is available.
+    /// It is the caller's responsibility to ensure that <see cref="CertificateHelpers.CertUtilCommand"/> is available.
     /// </remarks>
-    private bool IsCertificateInNssDb(string nickname, NssDb nssDb)
+    private bool IsCertificateInNssDb(string nickname, NssDb nssDb, CancellationToken cancellationToken = default)
     {
         // -V will validate that a cert can be used for a given purpose, in this case, server verification.
         // There is no corresponding -V check for the "Trusted CA" status required by Firefox, so we just check for existence.
         // (The docs suggest that "-V -u A" should do this, but it seems to accept all certs.)
-        var operation = nssDb.IsFirefox ? "-L" : "-V -u V";
-
-        var startInfo = new ProcessStartInfo(CertUtilCommand, $"-d sql:{nssDb.Path} -n {nickname} {operation}")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+        var startInfo = ConfigureCertUtilStartInfo(nssDb.CreateCheckProcessStartInfo(nickname));
 
         try
         {
-            var status = Process.Run(startInfo);
-            return status.ExitCode == 0;
+            return CertificateProcessRunner.Run(startInfo, cancellationToken).ExitCode == 0;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -725,24 +708,16 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     }
 
     /// <remarks>
-    /// It is the caller's responsibility to ensure that <see cref="CertUtilCommand"/> is available.
+    /// It is the caller's responsibility to ensure that <see cref="CertificateHelpers.CertUtilCommand"/> is available.
     /// </remarks>
     private bool TryAddCertificateToNssDb(string certificatePath, string nickname, NssDb nssDb)
     {
-        // Firefox doesn't seem to respected the more correct "trusted peer" (P) usage, so we use "trusted CA" (C) instead.
-        var usage = nssDb.IsFirefox ? "C" : "P";
-
         // This silently clobbers an existing entry, so there's no need to check for existence first.
-        var startInfo = new ProcessStartInfo(CertUtilCommand, $"-d sql:{nssDb.Path} -n {nickname} -A -i {certificatePath} -t \"{usage},,\"")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+        var startInfo = ConfigureCertUtilStartInfo(nssDb.CreateAddProcessStartInfo(certificatePath, nickname));
 
         try
         {
-            var status = Process.Run(startInfo);
-            return status.ExitCode == 0;
+            return CertificateProcessRunner.Run(startInfo).ExitCode == 0;
         }
         catch (Exception ex)
         {
@@ -752,20 +727,15 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     }
 
     /// <remarks>
-    /// It is the caller's responsibility to ensure that <see cref="CertUtilCommand"/> is available.
+    /// It is the caller's responsibility to ensure that <see cref="CertificateHelpers.CertUtilCommand"/> is available.
     /// </remarks>
     private bool TryRemoveCertificateFromNssDb(string nickname, NssDb nssDb)
     {
-        var startInfo = new ProcessStartInfo(CertUtilCommand, $"-d sql:{nssDb.Path} -D -n {nickname}")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+        var startInfo = ConfigureCertUtilStartInfo(nssDb.CreateRemoveProcessStartInfo(nickname));
 
         try
         {
-            var status = Process.Run(startInfo);
-            if (status.ExitCode == 0)
+            if (CertificateProcessRunner.Run(startInfo).ExitCode == 0)
             {
                 return true;
             }
@@ -780,29 +750,17 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         }
     }
 
-    private IEnumerable<string> GetFirefoxProfiles(string firefoxDirectory)
+    private ProcessStartInfo ConfigureCertUtilStartInfo(ProcessStartInfo startInfo)
     {
-        try
-        {
-            var profiles = Directory.GetDirectories(firefoxDirectory, "*.default", SearchOption.TopDirectoryOnly).Concat(
-                Directory.GetDirectories(firefoxDirectory, "*.default-*", SearchOption.TopDirectoryOnly)); // There can be one of these for each release channel
-            if (!profiles.Any())
-            {
-                // This is noteworthy, given that we're in a firefox directory.
-                Log.UnixNoFirefoxProfilesFound(firefoxDirectory);
-            }
-            return profiles;
-        }
-        catch (Exception ex)
-        {
-            Log.UnixFirefoxProfileEnumerationException(firefoxDirectory, ex.Message);
-            return [];
-        }
+        startInfo.RedirectStandardOutput = true;
+        startInfo.RedirectStandardError = true;
+        _configureCertUtilStartInfo(startInfo);
+        return startInfo;
     }
 
     private string GetOpenSslCertificateDirectory(string homeDirectory)
     {
-        var @override = Environment.GetEnvironmentVariable(OpenSslCertDirectoryOverrideVariableName);
+        var @override = _environment.GetEnvironmentVariable(OpenSslCertDirectoryOverrideVariableName);
         if (!string.IsNullOrEmpty(@override))
         {
             Log.UnixOpenSslCertificateDirectoryOverridePresent(OpenSslCertDirectoryOverrideVariableName);
@@ -826,95 +784,27 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         }
     }
 
-    private bool TryGetNssDbOverrides(out IReadOnlyList<string> overrides)
+    internal List<NssDb> GetNssDbs(string homeDirectory)
     {
-        var nssDbOverride = Environment.GetEnvironmentVariable(NssDbOverrideVariableName);
-        if (string.IsNullOrEmpty(nssDbOverride))
+        string nssDbOverrideSource;
+        string? nssDbOverride;
+        if (_nssDbOverride is { Value.Length: > 0 } configuredOverride)
         {
-            overrides = [];
-            return false;
+            nssDbOverrideSource = configuredOverride.Source;
+            nssDbOverride = configuredOverride.Value;
+        }
+        else
+        {
+            nssDbOverrideSource = NssDbOverrideVariableName;
+            nssDbOverride = _environment.GetEnvironmentVariable(NssDbOverrideVariableName);
         }
 
-        // Normally, we'd let the caller log this, since it's not really an exceptional condition,
-        // but it's not worth duplicating the code and the work.
-        Log.UnixNssDbOverridePresent(NssDbOverrideVariableName);
-
-        var nssDbs = new List<string>();
-
-        var paths = nssDbOverride.Split(Path.PathSeparator); // May be empty - the user may not want to add browser trust
-        foreach (var path in paths)
-        {
-            var nssDb = Path.GetFullPath(path);
-            if (!Directory.Exists(nssDb))
-            {
-                Log.UnixNssDbDoesNotExist(nssDb, NssDbOverrideVariableName);
-                continue;
-            }
-            nssDbs.Add(nssDb);
-        }
-
-        overrides = nssDbs;
-        return true;
-    }
-
-    private List<NssDb> GetNssDbs(string homeDirectory)
-    {
-        var nssDbs = new List<NssDb>();
-
-        if (TryGetNssDbOverrides(out var nssDbOverrides))
-        {
-            foreach (var nssDb in nssDbOverrides)
-            {
-                // Our Firefox approach is a hack, so we'd rather under-recognize it than over-recognize it.
-                var isFirefox = nssDb.Contains("/.mozilla/firefox/", StringComparison.Ordinal);
-                nssDbs.Add(new NssDb(nssDb, isFirefox));
-            }
-
-            return nssDbs;
-        }
-
-        if (!Directory.Exists(homeDirectory))
-        {
-            Log.UnixHomeDirectoryDoesNotExist(homeDirectory, Environment.UserName);
-            return nssDbs;
-        }
-
-        // Chrome, Chromium, and Edge all use this directory
-        var chromiumNssDb = GetChromiumNssDb(homeDirectory);
-        if (Directory.Exists(chromiumNssDb))
-        {
-            nssDbs.Add(new NssDb(chromiumNssDb, isFirefox: false));
-        }
-
-        // Chromium Snap, when launched under snap confinement, uses this directory
-        // (On Ubuntu, the GUI launcher uses confinement, but the terminal does not)
-        var chromiumSnapNssDb = GetChromiumSnapNssDb(homeDirectory);
-        if (Directory.Exists(chromiumSnapNssDb))
-        {
-            nssDbs.Add(new NssDb(chromiumSnapNssDb, isFirefox: false));
-        }
-
-        var firefoxDir = GetFirefoxDirectory(homeDirectory);
-        if (Directory.Exists(firefoxDir))
-        {
-            var profileDirs = GetFirefoxProfiles(firefoxDir);
-            foreach (var profileDir in profileDirs)
-            {
-                nssDbs.Add(new NssDb(profileDir, isFirefox: true));
-            }
-        }
-
-        var firefoxSnapDir = GetFirefoxSnapDirectory(homeDirectory);
-        if (Directory.Exists(firefoxSnapDir))
-        {
-            var profileDirs = GetFirefoxProfiles(firefoxSnapDir);
-            foreach (var profileDir in profileDirs)
-            {
-                nssDbs.Add(new NssDb(profileDir, isFirefox: true));
-            }
-        }
-
-        return nssDbs;
+        return NssDb.Resolve(
+            homeDirectory,
+            _environment.GetEnvironmentVariable(XdgConfigHomeVariableName),
+            nssDbOverride,
+            nssDbOverrideSource,
+            this);
     }
 
     [GeneratedRegex("OPENSSLDIR:\\s*\"([^\"]+)\"")]
@@ -929,19 +819,20 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
         try
         {
-            var result = Process.RunAndCaptureText(new ProcessStartInfo(OpenSslCommand, $"version -d")
+            var processInfo = new ProcessStartInfo(OpenSslCommand, $"version -d")
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
-            });
+            };
 
-            if (result.ExitStatus.ExitCode != 0)
+            var processResult = CertificateProcessRunner.RunAndCaptureText(processInfo);
+            if (processResult.ExitCode != 0)
             {
                 Log.UnixOpenSslVersionFailed();
                 return false;
             }
 
-            var match = OpenSslVersionRegex.Match(result.StandardOutput);
+            var match = OpenSslVersionRegex.Match(processResult.StandardOutput);
             if (!match.Success)
             {
                 Log.UnixOpenSslVersionParsingFailed();
@@ -969,19 +860,20 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         {
             // c_rehash actually does this twice: once with -subject_hash (equivalent to -hash) and again
             // with -subject_hash_old.  Old hashes are only  needed for pre-1.0.0, so we skip that.
-            var result = Process.RunAndCaptureText(new ProcessStartInfo(OpenSslCommand, $"x509 -hash -noout -in {certificatePath}")
+            var processInfo = new ProcessStartInfo(OpenSslCommand, $"x509 -hash -noout -in {certificatePath}")
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
-            });
+            };
 
-            if (result.ExitStatus.ExitCode != 0)
+            var processResult = CertificateProcessRunner.RunAndCaptureText(processInfo);
+            if (processResult.ExitCode != 0)
             {
                 Log.UnixOpenSslHashFailed(certificatePath);
                 return false;
             }
 
-            hash = result.StandardOutput.Trim();
+            hash = processResult.StandardOutput.Trim();
             return true;
         }
         catch (Exception ex)
@@ -1068,9 +960,297 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         return true;
     }
 
-    private sealed class NssDb(string path, bool isFirefox)
+    internal abstract class NssDb(string path)
     {
         public string Path => path;
-        public bool IsFirefox => isFirefox;
+
+        public abstract string BrowserFamily { get; }
+
+        public abstract IReadOnlyList<string> CheckArguments { get; }
+
+        public abstract string TrustUsage { get; }
+
+        internal ProcessStartInfo CreateCheckProcessStartInfo(string nickname)
+        {
+            var startInfo = CreateProcessStartInfo(nickname);
+            foreach (var argument in CheckArguments)
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
+
+            return startInfo;
+        }
+
+        internal ProcessStartInfo CreateAddProcessStartInfo(string certificatePath, string nickname)
+        {
+            var startInfo = CreateProcessStartInfo(nickname);
+            startInfo.ArgumentList.Add("-A");
+            startInfo.ArgumentList.Add("-i");
+            startInfo.ArgumentList.Add(certificatePath);
+            startInfo.ArgumentList.Add("-t");
+            startInfo.ArgumentList.Add($"{TrustUsage},,");
+
+            return startInfo;
+        }
+
+        internal ProcessStartInfo CreateRemoveProcessStartInfo(string nickname)
+        {
+            var startInfo = CreateProcessStartInfo(nickname);
+            startInfo.ArgumentList.Add("-D");
+
+            return startInfo;
+        }
+
+        internal static List<NssDb> Resolve(
+            string homeDirectory,
+            string? xdgConfigHome,
+            string? nssDbOverride,
+            string nssDbOverrideVariableName,
+            UnixCertificateManager manager)
+        {
+            var nssDbs = new List<NssDb>();
+
+            if (TryGetOverrides(homeDirectory, xdgConfigHome, nssDbOverride, nssDbOverrideVariableName, nssDbs, manager))
+            {
+                // Overrides replace discovery so trust and cleanup use the caller's complete set of NSS databases.
+                return nssDbs;
+            }
+
+            if (!Directory.Exists(homeDirectory))
+            {
+                manager.Log.UnixHomeDirectoryDoesNotExist(homeDirectory, Environment.UserName);
+                return nssDbs;
+            }
+
+            ChromiumNssDb.AddDiscoveredNssDbs(homeDirectory, nssDbs);
+            FirefoxNssDb.AddDiscoveredNssDbs(homeDirectory, xdgConfigHome, nssDbs, manager);
+
+            return nssDbs;
+        }
+
+        protected static bool TryRemovePrefix(string path, string prefix, out string unprefixedPath)
+        {
+            if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                unprefixedPath = path[prefix.Length..];
+                return true;
+            }
+
+            unprefixedPath = path;
+            return false;
+        }
+
+        private ProcessStartInfo CreateProcessStartInfo(string nickname)
+        {
+            var startInfo = new ProcessStartInfo(CertificateHelpers.CertUtilCommand);
+            startInfo.ArgumentList.Add("-d");
+            startInfo.ArgumentList.Add($"sql:{Path}");
+            startInfo.ArgumentList.Add("-n");
+            startInfo.ArgumentList.Add(nickname);
+
+            return startInfo;
+        }
+
+        private static bool TryGetOverrides(
+            string homeDirectory,
+            string? xdgConfigHome,
+            string? nssDbOverride,
+            string nssDbOverrideVariableName,
+            List<NssDb> nssDbs,
+            UnixCertificateManager manager)
+        {
+            if (string.IsNullOrEmpty(nssDbOverride))
+            {
+                return false;
+            }
+
+            manager.Log.UnixNssDbOverridePresent(nssDbOverrideVariableName);
+
+            var paths = nssDbOverride.Split(System.IO.Path.PathSeparator);
+            foreach (var path in paths)
+            {
+                if (FirefoxNssDb.TryRemoveOverridePrefix(path, out var unprefixedPath))
+                {
+                    AddOverride(unprefixedPath, static nssDbPath => new FirefoxNssDb(nssDbPath), nssDbOverrideVariableName, nssDbs, manager);
+                    continue;
+                }
+
+                if (ChromiumNssDb.TryRemoveOverridePrefix(path, out unprefixedPath))
+                {
+                    AddOverride(unprefixedPath, static nssDbPath => new ChromiumNssDb(nssDbPath), nssDbOverrideVariableName, nssDbs, manager);
+                    continue;
+                }
+
+                AddOverride(
+                    path,
+                    nssDbPath => FirefoxNssDb.IsProfilePath(homeDirectory, xdgConfigHome, nssDbPath)
+                        ? new FirefoxNssDb(nssDbPath)
+                        : new ChromiumNssDb(nssDbPath),
+                    nssDbOverrideVariableName,
+                    nssDbs,
+                    manager);
+            }
+
+            return true;
+        }
+
+        private static void AddOverride(
+            string path,
+            Func<string, NssDb> createNssDb,
+            string nssDbOverrideVariableName,
+            List<NssDb> nssDbs,
+            UnixCertificateManager manager)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+
+            var nssDbPath = System.IO.Path.GetFullPath(path);
+            if (!Directory.Exists(nssDbPath))
+            {
+                manager.Log.UnixNssDbDoesNotExist(nssDbPath, nssDbOverrideVariableName);
+                return;
+            }
+
+            nssDbs.Add(createNssDb(nssDbPath));
+        }
+    }
+
+    private sealed class ChromiumNssDb(string path) : NssDb(path)
+    {
+        private const string OverridePrefixValue = "chromium=";
+        private static readonly IReadOnlyList<string> s_checkArgumentValues = ["-V", "-u", "V"];
+
+        public override string BrowserFamily => "Chromium";
+
+        public override IReadOnlyList<string> CheckArguments => s_checkArgumentValues;
+
+        public override string TrustUsage => "P";
+
+        public static bool TryRemoveOverridePrefix(string path, out string unprefixedPath)
+            => TryRemovePrefix(path, OverridePrefixValue, out unprefixedPath);
+
+        public static void AddDiscoveredNssDbs(string homeDirectory, List<NssDb> nssDbs)
+        {
+            // Chrome, Chromium, and Edge all use this directory.
+            var chromiumNssDb = System.IO.Path.Combine(homeDirectory, ".pki", "nssdb");
+            if (Directory.Exists(chromiumNssDb))
+            {
+                nssDbs.Add(new ChromiumNssDb(chromiumNssDb));
+            }
+
+            // Chromium Snap uses this directory when launched under snap confinement.
+            var chromiumSnapNssDb = System.IO.Path.Combine(homeDirectory, "snap", "chromium", "current", ".pki", "nssdb");
+            if (Directory.Exists(chromiumSnapNssDb))
+            {
+                nssDbs.Add(new ChromiumNssDb(chromiumSnapNssDb));
+            }
+        }
+    }
+
+    private sealed class FirefoxNssDb(string path) : NssDb(path)
+    {
+        private const string OverridePrefixValue = "firefox=";
+        private static readonly IReadOnlyList<string> s_checkArgumentValues = ["-L"];
+
+        public override string BrowserFamily => "Firefox";
+
+        public override IReadOnlyList<string> CheckArguments => s_checkArgumentValues;
+
+        // Firefox doesn't seem to respect the more correct "trusted peer" (P) usage.
+        public override string TrustUsage => "C";
+
+        public static bool TryRemoveOverridePrefix(string path, out string unprefixedPath)
+            => TryRemovePrefix(path, OverridePrefixValue, out unprefixedPath);
+
+        public static void AddDiscoveredNssDbs(
+            string homeDirectory,
+            string? xdgConfigHome,
+            List<NssDb> nssDbs,
+            UnixCertificateManager manager)
+        {
+            // Firefox continues using its legacy profile root when present and only uses XDG for new profiles.
+            var firefoxDirectory = GetLegacyDirectory(homeDirectory);
+            if (!Directory.Exists(firefoxDirectory))
+            {
+                firefoxDirectory = GetXdgDirectory(homeDirectory, xdgConfigHome);
+            }
+
+            AddProfiles(firefoxDirectory, nssDbs, manager);
+            AddProfiles(GetSnapDirectory(homeDirectory), nssDbs, manager);
+        }
+
+        public static bool IsProfilePath(string homeDirectory, string? xdgConfigHome, string nssDbPath)
+        {
+            if (IsPathInDirectory(nssDbPath, GetLegacyDirectory(homeDirectory)) ||
+                IsPathInDirectory(nssDbPath, GetXdgDirectory(homeDirectory, xdgConfigHome)) ||
+                IsPathInDirectory(nssDbPath, GetSnapDirectory(homeDirectory)))
+            {
+                return true;
+            }
+
+            var separator = System.IO.Path.DirectorySeparatorChar;
+            return nssDbPath.Contains($"{separator}.mozilla{separator}firefox{separator}", StringComparison.Ordinal) ||
+                nssDbPath.Contains($"{separator}.config{separator}mozilla{separator}firefox{separator}", StringComparison.Ordinal);
+        }
+
+        private static string GetLegacyDirectory(string homeDirectory)
+            => System.IO.Path.Combine(homeDirectory, ".mozilla", "firefox");
+
+        private static string GetXdgDirectory(string homeDirectory, string? xdgConfigHome)
+        {
+            var configDirectory = !string.IsNullOrEmpty(xdgConfigHome) && System.IO.Path.IsPathFullyQualified(xdgConfigHome)
+                ? xdgConfigHome
+                : System.IO.Path.Combine(homeDirectory, ".config");
+
+            return System.IO.Path.Combine(configDirectory, "mozilla", "firefox");
+        }
+
+        private static string GetSnapDirectory(string homeDirectory)
+            => System.IO.Path.Combine(homeDirectory, "snap", "firefox", "common", ".mozilla", "firefox");
+
+        private static void AddProfiles(
+            string firefoxDirectory,
+            List<NssDb> nssDbs,
+            UnixCertificateManager manager)
+        {
+            if (!Directory.Exists(firefoxDirectory))
+            {
+                return;
+            }
+
+            foreach (var profileDirectory in GetProfiles(firefoxDirectory, manager))
+            {
+                nssDbs.Add(new FirefoxNssDb(profileDirectory));
+            }
+        }
+
+        private static IEnumerable<string> GetProfiles(string firefoxDirectory, UnixCertificateManager manager)
+        {
+            try
+            {
+                var profiles = Directory.GetDirectories(firefoxDirectory, "*.default", SearchOption.TopDirectoryOnly).Concat(
+                    Directory.GetDirectories(firefoxDirectory, "*.default-*", SearchOption.TopDirectoryOnly));
+                if (!profiles.Any())
+                {
+                    manager.Log.UnixNoFirefoxProfilesFound(firefoxDirectory);
+                }
+
+                return profiles;
+            }
+            catch (Exception ex)
+            {
+                manager.Log.UnixFirefoxProfileEnumerationException(firefoxDirectory, ex.Message);
+                return [];
+            }
+        }
+
+        private static bool IsPathInDirectory(string path, string directory)
+        {
+            var directoryPrefix = System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(directory)) + System.IO.Path.DirectorySeparatorChar;
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            return path.StartsWith(directoryPrefix, comparison);
+        }
     }
 }

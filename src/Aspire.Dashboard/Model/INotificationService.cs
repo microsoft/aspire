@@ -61,7 +61,7 @@ public sealed class NotificationEntry
 {
     public required string Title { get; init; }
     public string? Body { get; init; }
-    public required MessageIntent Intent { get; init; }
+    public required MessageBarIntent Intent { get; init; }
     public DateTimeOffset Timestamp { get; set; }
     public NotificationAction? PrimaryAction { get; init; }
 }
@@ -72,7 +72,7 @@ public sealed class NotificationEntry
 public sealed class NotificationAction
 {
     public required string Text { get; init; }
-    public required Func<Task> OnClick { get; init; }
+    public required Func<IServiceProvider, Task> OnClick { get; init; }
 }
 
 /// <summary>

@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ResourceEnteredFailedState">
-        <source>Resource '{0}' entered a failed state: {1}.</source>
-        <target state="translated">O recurso "{0}" entrou em um estado de falha: {1}.</target>
+        <source>Resource '{0}' entered a failed state: {1}</source>
+        <target state="needs-review-translation">O recurso "{0}" entrou em um estado de falha: {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">

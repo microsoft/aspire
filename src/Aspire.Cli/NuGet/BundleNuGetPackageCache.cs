@@ -1,38 +1,25 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using Aspire.Cli.Bundles;
+using System.Globalization;
 using Aspire.Cli.Configuration;
-using Aspire.Cli.Layout;
+using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.NuGet;
 
 /// <summary>
-/// NuGet package cache implementation that uses the bundle's NuGetHelper tool
-/// instead of the .NET SDK's `dotnet package search` command.
+/// NuGet package cache implementation for bundled CLIs, which cannot rely on the .NET SDK's
+/// <c>dotnet package search</c> command.
 /// </summary>
-internal sealed class BundleNuGetPackageCache : INuGetPackageCache
+internal sealed class BundleNuGetPackageCache(
+    INuGetClient nuGetClient,
+    ILogger<BundleNuGetPackageCache> logger,
+    IFeatures features) : INuGetPackageCache
 {
-    private readonly IBundleService _bundleService;
-    private readonly LayoutProcessRunner _layoutProcessRunner;
-    private readonly ILogger<BundleNuGetPackageCache> _logger;
-    private readonly IFeatures _features;
-
-    public BundleNuGetPackageCache(
-        IBundleService bundleService,
-        LayoutProcessRunner layoutProcessRunner,
-        ILogger<BundleNuGetPackageCache> logger,
-        IFeatures features)
-    {
-        _bundleService = bundleService;
-        _layoutProcessRunner = layoutProcessRunner;
-        _logger = logger;
-        _features = features;
-    }
+    // The aspire-managed helper was always invoked with --take 1000.
+    private const int SearchTake = 1000;
 
     public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(
         DirectoryInfo workingDirectory,
@@ -40,15 +27,14 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         FileInfo? nugetConfigFile,
         CancellationToken cancellationToken)
     {
-        var packages = await SearchPackagesInternalAsync(
+        var packages = await SearchAsync(
             workingDirectory,
-            query: "Aspire.ProjectTemplates",
-            exactMatch: false,
+            "Aspire.ProjectTemplates",
             prerelease,
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
 
-        return packages.Where(p => p.Id.Equals("Aspire.ProjectTemplates", StringComparison.OrdinalIgnoreCase));
+        return packages.Where(package => package.Id.Equals("Aspire.ProjectTemplates", StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(
@@ -57,10 +43,9 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         FileInfo? nugetConfigFile,
         CancellationToken cancellationToken)
     {
-        var packages = await SearchPackagesInternalAsync(
+        var packages = await SearchAsync(
             workingDirectory,
-            query: "Aspire.Hosting",
-            exactMatch: false,
+            "Aspire.Hosting",
             prerelease,
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
@@ -74,15 +59,14 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         FileInfo? nugetConfigFile,
         CancellationToken cancellationToken)
     {
-        var packages = await SearchPackagesInternalAsync(
+        var packages = await SearchAsync(
             workingDirectory,
-            query: "Aspire.Cli",
-            exactMatch: false,
+            "Aspire.Cli",
             prerelease,
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
 
-        return packages.Where(p => p.Id.Equals("Aspire.Cli", StringComparison.OrdinalIgnoreCase));
+        return packages.Where(package => package.Id.Equals("Aspire.Cli", StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackagesAsync(
@@ -94,10 +78,9 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         bool useCache,
         CancellationToken cancellationToken)
     {
-        var packages = await SearchPackagesInternalAsync(
+        var packages = await SearchAsync(
             workingDirectory,
-            query: packageId,
-            exactMatch: false,
+            packageId,
             prerelease,
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
@@ -113,211 +96,94 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         bool useCache,
         CancellationToken cancellationToken)
     {
-        var packages = await SearchPackagesInternalAsync(
+        var results = await SearchClientAsync(
             workingDirectory,
-            query: exactPackageId,
-            exactMatch: true,
+            exactPackageId,
             prerelease,
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
 
-        bool FilterExactIdMatch(string? id) => string.Equals(id, exactPackageId, StringComparison.Ordinal);
-        return FilterPackages(packages, FilterExactIdMatch);
+        // The helper had no exact-match mode. The CLI ran an ordinary search for the package ID and expanded the
+        // versions of the one result whose ID matched it exactly, including its casing.
+        var exactMatch = results.FirstOrDefault(package => package.Id.Equals(exactPackageId, StringComparison.Ordinal));
+        if (exactMatch is null)
+        {
+            return [];
+        }
+
+        return exactMatch.AllVersions.Select(version => new NuGetPackage
+        {
+            Id = exactMatch.Id,
+            Version = version,
+            Source = exactMatch.Source
+        }).ToList();
     }
 
-    private async Task<IEnumerable<NuGetPackage>> SearchPackagesInternalAsync(
+    private async Task<List<NuGetPackage>> SearchAsync(
         DirectoryInfo workingDirectory,
         string query,
-        bool exactMatch,
         bool prerelease,
         FileInfo? nugetConfigFile,
         CancellationToken cancellationToken)
     {
-        // Ensure the bundle is extracted and get the layout in a single call
-        var layout = await _bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken).ConfigureAwait(false);
-        if (layout is null)
+        var results = await SearchClientAsync(
+            workingDirectory,
+            query,
+            prerelease,
+            nugetConfigFile,
+            cancellationToken).ConfigureAwait(false);
+
+        return results.Select(package => new NuGetPackage
         {
-            throw new InvalidOperationException("Bundle layout not found. Cannot perform NuGet search in bundle mode.");
-        }
+            Id = package.Id,
+            Version = package.Version,
+            Source = package.Source
+        }).ToList();
+    }
 
-        var managedPath = layout.GetManagedPath();
-        if (managedPath is null || !File.Exists(managedPath))
-        {
-            throw new InvalidOperationException("aspire-managed not found in layout.");
-        }
-
-        // Build arguments for NuGet search command (via aspire-managed nuget subcommand)
-        var args = new List<string>
-        {
-            "nuget",
-            "search",
-            "--query", query,
-            "--take", "1000",
-            "--format", "json"
-        };
-
-        if (prerelease)
-        {
-            args.Add("--prerelease");
-        }
-
-        // Pass working directory for nuget.config discovery
-        args.Add("--working-dir");
-        args.Add(workingDirectory.FullName);
-
-        // If explicit nuget.config is provided, use it
-        if (nugetConfigFile is not null)
-        {
-            args.Add("--nuget-config");
-            args.Add(nugetConfigFile.FullName);
-        }
-
-        // Enable verbose output for debugging - goes to stderr so won't mix with JSON on stdout
-        if (_logger.IsEnabled(LogLevel.Debug))
-        {
-            args.Add("--verbose");
-        }
-
-        _logger.LogDebug("Running NuGet search via aspire-managed: {Query}", query);
-        _logger.LogDebug("aspire-managed path: {ManagedPath}", managedPath);
-        _logger.LogDebug("NuGet search args: {Args}", string.Join(" ", args));
-        _logger.LogDebug("Working directory: {WorkingDir}", workingDirectory.FullName);
-
-        var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
-            managedPath,
-            args,
-            workingDirectory: workingDirectory.FullName,
-            ct: cancellationToken).ConfigureAwait(false);
-
-        // Log stderr output (verbose info from NuGetHelper)
-        if (!string.IsNullOrWhiteSpace(error))
-        {
-            _logger.LogDebug("NuGetHelper stderr: {Error}", error);
-        }
-
-        if (exitCode != 0)
-        {
-            _logger.LogError("NuGet search failed with exit code {ExitCode}", exitCode);
-            _logger.LogError("NuGet search stderr: {Error}", error);
-            _logger.LogError("NuGet search stdout: {Output}", output);
-            throw new NuGetPackageCacheException($"Package search failed: {error}");
-        }
-
-        _logger.LogDebug("NuGet search returned {Length} bytes", output?.Length ?? 0);
-
+    private async Task<IReadOnlyList<NuGetSearchResult>> SearchClientAsync(
+        DirectoryInfo workingDirectory,
+        string query,
+        bool prerelease,
+        FileInfo? nugetConfigFile,
+        CancellationToken cancellationToken)
+    {
         try
         {
-            if (string.IsNullOrEmpty(output))
-            {
-                _logger.LogWarning("NuGet search returned empty output");
-                return [];
-            }
-
-            var result = JsonSerializer.Deserialize(output, BundleSearchJsonContext.Default.BundleSearchResult);
-            if (result?.Packages is null)
-            {
-                return [];
-            }
-
-            // Convert to NuGetPackage format
-            if (!exactMatch)
-            {
-                return result.Packages.Select(p => new NuGetPackage
-                {
-                    Id = p.Id,
-                    Version = p.Version,
-                    Source = p.Source ?? string.Empty
-                }).ToList();
-            }
-            else
-            {
-                var exactMatchResultPackage = result.Packages
-                    .FirstOrDefault(p => p.Id.Equals(query, StringComparison.Ordinal));
-                if (exactMatchResultPackage is null || exactMatchResultPackage.AllVersions is null)
-                {
-                    return [];
-                }
-                return exactMatchResultPackage.AllVersions.Select(packageVersion => new NuGetPackage
-                {
-                    Id = exactMatchResultPackage.Id,
-                    Version = packageVersion,
-                    Source = exactMatchResultPackage.Source ?? string.Empty
-                }).ToList();
-            }
+            return await nuGetClient.SearchAsync(
+                query,
+                prerelease,
+                SearchTake,
+                explicitSources: [],
+                nugetConfigFile?.FullName,
+                workingDirectory.FullName,
+                cancellationToken).ConfigureAwait(false);
         }
-        catch (JsonException ex)
+        catch (NuGetOperationException ex)
         {
-            _logger.LogError(ex, "Failed to parse search results");
-            throw new NuGetPackageCacheException($"Failed to parse search results: {ex.Message}");
+            logger.LogError("NuGet search failed");
+            logger.LogError("NuGet search stderr: {Error}", ex.Output);
+
+            // The helper exited with code 1 for every search failure, and this is the message the CLI reported for it.
+            throw new NuGetPackageCacheException(
+                string.Format(CultureInfo.CurrentCulture, ErrorStrings.FailedToSearchForPackages, 1),
+                ex);
         }
     }
 
-    private IEnumerable<NuGetPackage> FilterPackages(IEnumerable<NuGetPackage> packages, Func<string, bool>? filter)
+    private IEnumerable<NuGetPackage> FilterPackages(
+        IEnumerable<NuGetPackage> packages,
+        Func<string, bool>? filter)
     {
-        var showDeprecatedPackages = _features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false);
-        var effectiveFilter = (NuGetPackage p) =>
-        {
-            if (filter is not null)
-            {
-                return filter(p.Id);
-            }
-
-            var isOfficialPackage = IsOfficialOrCommunityToolkitPackage(p.Id);
-
-            // Apply deprecated package filter unless the user wants to show deprecated packages
-            if (isOfficialPackage && !showDeprecatedPackages)
-            {
-                return !DeprecatedPackages.IsDeprecated(p.Id);
-            }
-
-            return isOfficialPackage;
-        };
-
-        return packages.Where(effectiveFilter);
+        return filter is not null
+            ? packages.Where(package => filter(package.Id))
+            : FilterDeprecatedPackages(packages.Where(package => PackageIdFilters.IsOfficialOrCommunityToolkitPackage(package.Id)));
     }
 
-    private static bool IsOfficialOrCommunityToolkitPackage(string packageName)
+    private IEnumerable<NuGetPackage> FilterDeprecatedPackages(IEnumerable<NuGetPackage> packages)
     {
-        var isHostingOrCommunityToolkitNamespaced = packageName.StartsWith("Aspire.Hosting.", StringComparison.Ordinal) ||
-               packageName.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparison.Ordinal) ||
-               packageName.Equals("Aspire.ProjectTemplates", StringComparison.Ordinal) ||
-               packageName.Equals("Aspire.Cli", StringComparison.Ordinal);
-
-        var isExcluded = packageName.StartsWith("Aspire.Hosting.AppHost") ||
-                         packageName.StartsWith("Aspire.Hosting.Sdk") ||
-                         packageName.StartsWith("Aspire.Hosting.Orchestration") ||
-                         packageName.StartsWith("Aspire.Hosting.Testing") ||
-                         packageName.StartsWith("Aspire.Hosting.Msi");
-
-        return isHostingOrCommunityToolkitNamespaced && !isExcluded;
+        return features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false)
+            ? packages
+            : packages.Where(package => !DeprecatedPackages.IsDeprecated(package.Id));
     }
 }
-
-#region JSON Models for NuGetHelper output
-
-internal sealed class BundleSearchResult
-{
-    public List<BundlePackageInfo>? Packages { get; set; }
-    public int TotalHits { get; set; }
-}
-
-internal sealed class BundlePackageInfo
-{
-    public string Id { get; set; } = "";
-    public string Version { get; set; } = "";
-    public string? Description { get; set; }
-    public string? Authors { get; set; }
-    public List<string>? AllVersions { get; set; }
-    public string? Source { get; set; }
-    public bool Deprecated { get; set; }
-}
-
-[JsonSerializable(typeof(BundleSearchResult))]
-[JsonSerializable(typeof(BundlePackageInfo))]
-[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-internal sealed partial class BundleSearchJsonContext : JsonSerializerContext
-{
-}
-
-#endregion
-

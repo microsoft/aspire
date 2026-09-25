@@ -15,7 +15,8 @@ internal static class MissingJavaScriptToolWarning
         "npx is not installed or not found in PATH.",
         "bun is not installed or not found in PATH.",
         "yarn is not installed or not found in PATH.",
-        "pnpm is not installed or not found in PATH."
+        "pnpm is not installed or not found in PATH.",
+        "deno is not installed or not found in PATH."
     ];
 
     public static bool IsMatch(IEnumerable<(OutputLineStream Stream, string Line)> lines)
@@ -31,17 +32,17 @@ internal static class MissingJavaScriptToolWarning
         return false;
     }
 
-    public static string GetMessage(DirectoryInfo directory, LanguageInfo? language)
+    public static string GetMessage(DirectoryInfo directory, LanguageInfo? language, IEnvironment environment)
     {
-        var (installCommand, installDisplayName) = GetMessageParts(directory, language);
+        var (installCommand, installDisplayName) = GetMessageParts(directory, language, environment);
         return string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFilesCreatedButNodeToolsNotFound, installCommand, installDisplayName);
     }
 
-    private static (string InstallCommand, string InstallDisplayName) GetMessageParts(DirectoryInfo directory, LanguageInfo? language)
+    private static (string InstallCommand, string InstallDisplayName) GetMessageParts(DirectoryInfo directory, LanguageInfo? language, IEnvironment environment)
     {
         if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language))
         {
-            var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, logger: null);
+            var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, environment, logger: null);
             return (TypeScriptAppHostToolchainResolver.GetInstallCommand(toolchain), TypeScriptAppHostToolchainResolver.GetDisplayName(toolchain));
         }
 

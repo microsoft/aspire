@@ -1,7 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTS001
+
 using System.Collections.Immutable;
+using System.IO.Hashing;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
@@ -14,7 +18,7 @@ internal sealed class DcpNameGenerator
     // A random suffix added to every DCP object name ensures that those names (and derived object names, for example container names)
     // are unique machine-wide with a high level of probability.
     // The length of 8 achieves that while keeping the names relatively short and readable.
-    // The second purpose of the suffix is to play a role of a unique OpenTelemetry service instance ID.
+    // The second purpose of the suffix is to play the role of a unique OpenTelemetry service instance ID for session resources.
     private const int RandomNameSuffixLength = 8;
     private readonly IConfiguration _configuration;
     private readonly IOptions<DcpOptions> _options;
@@ -34,6 +38,8 @@ internal sealed class DcpNameGenerator
 
     public void EnsureDcpInstancesPopulated(IResource resource)
     {
+        ThrowIfPersistentExecutableHasReplicas(resource);
+
         if (resource.TryGetInstances(out _))
         {
             return;
@@ -44,12 +50,7 @@ internal sealed class DcpNameGenerator
             var (name, suffix) = GetContainerName(resource);
             AddInstancesAnnotation(resource, [new DcpInstance(name, suffix, 0)]);
         }
-        else if (resource is ExecutableResource or ContainerExecutableResource)
-        {
-            var (name, suffix) = GetExecutableName(resource);
-            AddInstancesAnnotation(resource, [new DcpInstance(name, suffix, 0)]);
-        }
-        else if (resource is ProjectResource)
+        else if (resource is IDotnetProgramResource)
         {
             var replicas = resource.GetReplicaCount();
             var builder = ImmutableArray.CreateBuilder<DcpInstance>(replicas);
@@ -60,6 +61,11 @@ internal sealed class DcpNameGenerator
             }
             AddInstancesAnnotation(resource, builder.ToImmutable());
         }
+        else if (resource is ExecutableResource or ContainerExecutableResource)
+        {
+            var (name, suffix) = GetExecutableName(resource);
+            AddInstancesAnnotation(resource, [new DcpInstance(name, suffix, 0)]);
+        }
     }
 
     private static void AddInstancesAnnotation(IResource resource, ImmutableArray<DcpInstance> instances)
@@ -67,11 +73,24 @@ internal sealed class DcpNameGenerator
         resource.Annotations.Add(new DcpInstancesAnnotation(instances));
     }
 
+    private static void ThrowIfPersistentExecutableHasReplicas(IResource resource)
+    {
+        if (resource is not (ExecutableResource or ProjectResource))
+        {
+            return;
+        }
+
+        if (resource.GetReplicaCount() > 1 && resource.GetLifetimeType() == Lifetime.Persistent)
+        {
+            throw new InvalidOperationException($"Resource '{resource.Name}' uses multiple replicas and a persistent lifetime. These features do not work together.");
+        }
+    }
+
     public (string Name, string Suffix) GetContainerName(IResource container)
     {
-        var nameSuffix = container.GetContainerLifetimeType() switch
+        var nameSuffix = container.GetLifetimeType() switch
         {
-            ContainerLifetime.Session => GetRandomNameSuffix(),
+            Lifetime.Session => GetRandomNameSuffix(),
             _ => GetProjectHashSuffix(),
         };
 
@@ -80,7 +99,12 @@ internal sealed class DcpNameGenerator
 
     public (string Name, string Suffix) GetExecutableName(IResource project)
     {
-        var nameSuffix = GetRandomNameSuffix();
+        var nameSuffix = project.GetLifetimeType() switch
+        {
+            Lifetime.Session => GetRandomNameSuffix(),
+            _ => GetProjectHashSuffix(),
+        };
+
         return (GetObjectNameForResource(project, _options.Value, nameSuffix), nameSuffix);
     }
 
@@ -91,7 +115,7 @@ internal sealed class DcpNameGenerator
         var hasMultipleEndpoints = resource.Annotations.OfType<EndpointAnnotation>().Count() > 1;
         var key = NetworkServiceKey(resource, endpoint, targetNetworkId);
 
-        lock(_allServiceNames)
+        lock (_allServiceNames)
         {
             if (_networkServices.TryGetValue(key, out var name))
             {
@@ -116,7 +140,7 @@ internal sealed class DcpNameGenerator
                 }
             }
             _networkServices[key] = uniqueName;
-            return (uniqueName, true); 
+            return (uniqueName, true);
         }
     }
 
@@ -132,6 +156,16 @@ internal sealed class DcpNameGenerator
         // Compute a short hash of the content root path to differentiate between multiple AppHost projects with similar resource names
         var suffix = _configuration["AppHost:Sha256"]!.Substring(0, RandomNameSuffixLength).ToLowerInvariant();
         return suffix;
+    }
+
+    internal static string GetContainerVolumeName(string volumeName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(volumeName);
+
+        // Container runtime volume names can contain characters that are invalid in DCP object names.
+        // Hash the exact physical name so every mount of a shared volume uses the same stable state-store key.
+        var hash = XxHash128.Hash(Encoding.UTF8.GetBytes(volumeName));
+        return $"volume-{Convert.ToHexString(hash).ToLowerInvariant()}";
     }
 
     public static string GetObjectNameForResource(IResource resource, DcpOptions options, string suffix = "")

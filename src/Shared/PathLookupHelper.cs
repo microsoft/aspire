@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 
 /// <summary>
 /// Provides helper methods for looking up executables on the system PATH.
@@ -10,7 +11,7 @@ using System.Diagnostics;
 internal static class PathLookupHelper
 {
     /// <summary>
-    /// Resolves an executable path or command name to a full path by searching the system PATH.
+    /// Resolves an executable path or command name by returning explicit paths as-is or by searching the system PATH.
     /// </summary>
     /// <param name="executablePath">The executable path or command name to resolve.</param>
     /// <param name="environmentVariables">Optional environment variable overrides to use for lookup.</param>
@@ -45,6 +46,30 @@ internal static class PathLookupHelper
     }
 
     /// <summary>
+    /// Tries to resolve an executable path or command name by returning explicit paths as-is or by searching the system PATH.
+    /// </summary>
+    /// <param name="executablePath">The executable path or command name to resolve.</param>
+    /// <param name="resolvedExecutablePath">The resolved command path, or the original value when <paramref name="executablePath"/> is explicit.</param>
+    /// <param name="environmentVariables">Optional environment variable overrides to use for lookup.</param>
+    /// <returns><see langword="true"/> when the executable path is explicit or the command name was resolved; otherwise, <see langword="false"/>.</returns>
+    public static bool TryResolveExecutablePath(
+        string executablePath,
+        [NotNullWhen(true)] out string? resolvedExecutablePath,
+        IDictionary<string, string>? environmentVariables = null)
+    {
+        try
+        {
+            resolvedExecutablePath = ResolveExecutablePath(executablePath, environmentVariables);
+            return true;
+        }
+        catch (FileNotFoundException)
+        {
+            resolvedExecutablePath = null;
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Finds the full path of a command by searching the system PATH.
     /// On Windows, this also searches for executables with common extensions (.exe, .cmd, .bat, etc.).
     /// </summary>
@@ -57,6 +82,20 @@ internal static class PathLookupHelper
             : null;
 
         return FindFullPathFromPath(command, Environment.GetEnvironmentVariable("PATH"), Path.PathSeparator, FileExistsAndIsExecutable, pathExtensions);
+    }
+
+    /// <summary>
+    /// Finds all full paths of a command by searching the system PATH.
+    /// </summary>
+    /// <param name="command">The command name to search for.</param>
+    /// <returns>The matching executable paths in PATH lookup order.</returns>
+    public static IEnumerable<string> FindAllFullPathsFromPath(string command)
+    {
+        var pathExtensions = OperatingSystem.IsWindows()
+            ? Environment.GetEnvironmentVariable("PATHEXT")?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? []
+            : null;
+
+        return FindAllFullPathsFromPath(command, Environment.GetEnvironmentVariable("PATH"), Path.PathSeparator, FileExistsAndIsExecutable, pathExtensions);
     }
 
     /// <summary>
@@ -81,7 +120,39 @@ internal static class PathLookupHelper
         return FindFullPath(command, pathVariable, pathSeparator, fileExists, pathExtensions);
     }
 
+    /// <summary>
+    /// Finds all full paths of a command by searching the specified PATH variable.
+    /// </summary>
+    /// <param name="command">The command name to search for.</param>
+    /// <param name="pathVariable">The PATH environment variable value to search.</param>
+    /// <param name="pathSeparator">The character used to separate paths in the PATH variable.</param>
+    /// <param name="fileExists">A function to check if a file exists at a given path.</param>
+    /// <param name="pathExtensions">Optional array of executable extensions to try (e.g. .exe, .cmd). When provided, these extensions will be appended to the command if not already present.</param>
+    /// <returns>The matching executable paths in PATH lookup order.</returns>
+    internal static IEnumerable<string> FindAllFullPathsFromPath(string command, string? pathVariable, char pathSeparator, Func<string, bool> fileExists, string[]? pathExtensions = null)
+    {
+        Debug.Assert(!string.IsNullOrWhiteSpace(command));
+
+        // If the command already has a known extension, just search for it directly.
+        if (pathExtensions is not null && pathExtensions.Any(ext => command.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
+        {
+            return FindAllFullPaths(command, pathVariable, pathSeparator, fileExists, pathExtensions: null);
+        }
+
+        return FindAllFullPaths(command, pathVariable, pathSeparator, fileExists, pathExtensions);
+    }
+
     private static string? FindFullPath(string command, string? pathVariable, char pathSeparator, Func<string, bool> fileExists, string[]? pathExtensions)
+    {
+        foreach (var fullPath in FindAllFullPaths(command, pathVariable, pathSeparator, fileExists, pathExtensions))
+        {
+            return fullPath;
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> FindAllFullPaths(string command, string? pathVariable, char pathSeparator, Func<string, bool> fileExists, string[]? pathExtensions)
     {
         foreach (var directory in (pathVariable ?? string.Empty).Split(pathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
@@ -89,25 +160,61 @@ internal static class PathLookupHelper
             // This matches Windows command lookup behavior where directory order takes precedence.
             if (pathExtensions is not null && pathExtensions.Length > 0)
             {
+                var foundExtensionMatch = false;
                 foreach (var extension in pathExtensions)
                 {
-                    var fullPathWithExt = Path.Combine(directory, command + extension);
-                    if (fileExists(fullPathWithExt))
+                    if (TryCombine(directory, command + extension, out var fullPathWithExt) &&
+                        FileExistsSafe(fileExists, fullPathWithExt))
                     {
-                        return fullPathWithExt;
+                        yield return fullPathWithExt;
+                        foundExtensionMatch = true;
+                        break;
                     }
+                }
+
+                if (foundExtensionMatch)
+                {
+                    continue;
                 }
             }
 
             // Try exact match (for non-Windows, or as fallback on Windows if no extension match found in this directory).
-            var fullPath = Path.Combine(directory, command);
-            if (fileExists(fullPath))
+            if (TryCombine(directory, command, out var fullPath) &&
+                FileExistsSafe(fileExists, fullPath))
             {
-                return fullPath;
+                yield return fullPath;
             }
         }
+    }
 
-        return null;
+    private static bool TryCombine(string directory, string fileName, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? path)
+    {
+        try
+        {
+            path = Path.Combine(directory, fileName);
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            path = null;
+            return false;
+        }
+    }
+
+    // Wrap a possibly-throwing existence probe so callers do not have to handle
+    // the IO/permission failure modes themselves. Used by the PATH-walk above
+    // when a directory on PATH is unreadable or a candidate path is malformed
+    // in a way that File.Exists rejects with an exception rather than false.
+    private static bool FileExistsSafe(Func<string, bool> fileExists, string path)
+    {
+        try
+        {
+            return fileExists(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PathTooLongException or System.Security.SecurityException)
+        {
+            return false;
+        }
     }
 
     private static bool IsExplicitExecutablePath(string executablePath)

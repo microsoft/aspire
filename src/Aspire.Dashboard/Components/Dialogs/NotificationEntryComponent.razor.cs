@@ -16,27 +16,30 @@ public partial class NotificationEntryComponent : ComponentBase
     [Parameter]
     public EventCallback OnDismiss { get; set; }
 
+    [Inject]
+    public required IServiceProvider Services { get; init; }
+
     private string IntentClass => Entry.Intent switch
     {
-        MessageIntent.Success => "intent-success",
-        MessageIntent.Error => "intent-error",
-        MessageIntent.Warning => "intent-warning",
+        MessageBarIntent.Success => "intent-success",
+        MessageBarIntent.Error => "intent-error",
+        MessageBarIntent.Warning => "intent-warning",
         _ => "intent-info"
     };
 
     private Icon Icon => Entry.Intent switch
     {
-        MessageIntent.Success => new Icons.Filled.Size20.CheckmarkCircle(),
-        MessageIntent.Error => new Icons.Filled.Size20.DismissCircle(),
-        MessageIntent.Warning => new Icons.Filled.Size20.Warning(),
+        MessageBarIntent.Success => new Icons.Filled.Size20.CheckmarkCircle(),
+        MessageBarIntent.Error => new Icons.Filled.Size20.DismissCircle(),
+        MessageBarIntent.Warning => new Icons.Filled.Size20.Warning(),
         _ => new Icons.Filled.Size20.Info()
     };
 
     private Color IconColor => Entry.Intent switch
     {
-        MessageIntent.Success => Color.Success,
-        MessageIntent.Error => Color.Error,
-        MessageIntent.Warning => Color.Warning,
+        MessageBarIntent.Success => Color.Success,
+        MessageBarIntent.Error => Color.Error,
+        MessageBarIntent.Warning => Color.Warning,
         _ => Color.Info
     };
 
@@ -49,7 +52,7 @@ public partial class NotificationEntryComponent : ComponentBase
     {
         if (Entry.PrimaryAction is { } primaryAction)
         {
-            await primaryAction.OnClick();
+            await primaryAction.OnClick(Services);
         }
     }
 }

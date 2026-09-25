@@ -16,13 +16,26 @@ internal sealed class IntegrationLoadContext : AssemblyLoadContext
 {
     private const string SharedAssemblyName = "Aspire.TypeSystem";
 
+    /// <summary>
+    /// Gets the assembly names that this load context shares with the default
+    /// <see cref="AssemblyLoadContext"/> (resolution always defers to the default ALC).
+    /// </summary>
+    internal static IReadOnlyList<string> GetSharedAssemblyNames() => [SharedAssemblyName];
+
     private readonly string[] _probeDirectories;
+    private readonly IntegrationPackageProbeManifest _packageProbeManifest;
     private readonly ILogger _logger;
 
     internal IntegrationLoadContext(string[] probeDirectories, ILogger logger)
+        : this(probeDirectories, IntegrationPackageProbeManifest.Empty, logger)
+    {
+    }
+
+    internal IntegrationLoadContext(string[] probeDirectories, IntegrationPackageProbeManifest packageProbeManifest, ILogger logger)
         : base("Aspire.Integrations")
     {
         _probeDirectories = probeDirectories;
+        _packageProbeManifest = packageProbeManifest;
         _logger = logger;
     }
 
@@ -36,20 +49,17 @@ internal sealed class IntegrationLoadContext : AssemblyLoadContext
             // contexts, so shared contracts (ICodeGenerator, ILanguageSupport,
             // AtsContext, etc.) work across the ALC boundary without requiring
             // reflection or marshalling.
+            //
+            // Binding to the bundled (CLI) copy is safe because Aspire.TypeSystem freezes its
+            // strong-name AssemblyVersion at a fixed constant so the bundled copy satisfies the
+            // strong-named reference of any stable SDK codegen assembly (#18110, #17910). See
+            // src/Aspire.TypeSystem/Aspire.TypeSystem.csproj for the full rationale and the one
+            // residual "update your CLI" case routed to the #18125 diagnostics.
             return null;
         }
 
-        // Find the assembly in probe directories
-        string? probedPath = null;
-        foreach (var dir in _probeDirectories)
-        {
-            var path = Path.Combine(dir, $"{assemblyName.Name}.dll");
-            if (File.Exists(path))
-            {
-                probedPath = path;
-                break;
-            }
-        }
+        var probedPath = _packageProbeManifest.TryGetManagedAssemblyPath(assemblyName)
+            ?? TryResolveFromProbeDirectories(assemblyName.Name);
 
         if (probedPath is null)
         {
@@ -73,6 +83,40 @@ internal sealed class IntegrationLoadContext : AssemblyLoadContext
         return LoadFromAssemblyPath(probedPath);
     }
 
+    protected override nint LoadUnmanagedDll(string unmanagedDllName)
+    {
+        foreach (var path in _packageProbeManifest.GetNativeLibraryPaths(unmanagedDllName))
+        {
+            try
+            {
+                _logger.LogDebug("[IntegrationALC] Loading native library: {NativeLibraryName} from {Path}", unmanagedDllName, path);
+                return LoadUnmanagedDllFromPath(path);
+            }
+            catch (DllNotFoundException ex)
+            {
+                _logger.LogDebug(ex, "[IntegrationALC] Failed to load native library {NativeLibraryName} from {Path}", unmanagedDllName, path);
+            }
+            catch (BadImageFormatException ex)
+            {
+                _logger.LogDebug(ex, "[IntegrationALC] Failed to load native library {NativeLibraryName} from {Path}", unmanagedDllName, path);
+            }
+            catch (FileLoadException ex)
+            {
+                _logger.LogDebug(ex, "[IntegrationALC] Failed to load native library {NativeLibraryName} from {Path}", unmanagedDllName, path);
+            }
+            catch (IOException ex)
+            {
+                _logger.LogDebug(ex, "[IntegrationALC] Failed to load native library {NativeLibraryName} from {Path}", unmanagedDllName, path);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogDebug(ex, "[IntegrationALC] Failed to load native library {NativeLibraryName} from {Path}", unmanagedDllName, path);
+            }
+        }
+
+        return base.LoadUnmanagedDll(unmanagedDllName);
+    }
+
     private static bool TryGetDefaultContextVersion(AssemblyName assemblyName, out Version? version)
     {
         version = null;
@@ -86,5 +130,19 @@ internal sealed class IntegrationLoadContext : AssemblyLoadContext
         {
             return false;
         }
+    }
+
+    private string? TryResolveFromProbeDirectories(string assemblyName)
+    {
+        foreach (var dir in _probeDirectories)
+        {
+            var path = Path.Combine(dir, $"{assemblyName}.dll");
+            if (File.Exists(path))
+            {
+                return path;
+            }
+        }
+
+        return null;
     }
 }

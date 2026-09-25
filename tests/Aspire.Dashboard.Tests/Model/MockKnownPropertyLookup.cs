@@ -7,23 +7,23 @@ namespace Aspire.Dashboard;
 
 internal sealed class MockKnownPropertyLookup() : IKnownPropertyLookup
 {
-    private int _priority = int.MaxValue;
+    private int _sortOrder = int.MaxValue;
     private KnownProperty? _knownProperty;
 
-    public MockKnownPropertyLookup(int priority, KnownProperty? knownProperty) : this()
+    public MockKnownPropertyLookup(int sortOrder, KnownProperty? knownProperty) : this()
     {
-        _priority = priority;
+        _sortOrder = sortOrder;
         _knownProperty = knownProperty;
     }
 
-    public void Set(int priority, KnownProperty? knownProperty)
+    public void Set(int sortOrder, KnownProperty? knownProperty)
     {
-        _priority = priority;
+        _sortOrder = sortOrder;
         _knownProperty = knownProperty;
     }
 
-    public (int priority, KnownProperty? knownProperty) FindProperty(string resourceType, string uid)
+    public (int SortOrder, KnownProperty? KnownProperty) FindProperty(string uid)
     {
-        return (_priority, _knownProperty);
+        return (_sortOrder, _knownProperty);
     }
 }

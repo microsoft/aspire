@@ -15,6 +15,8 @@ namespace Aspire.Hosting.Kubernetes;
 /// <see cref="KubernetesEnvironmentExtensions.WithHelm(IResourceBuilder{KubernetesEnvironmentResource}, Action{HelmChartOptions})"/>.
 /// Each method adds a corresponding annotation to the environment resource.
 /// </remarks>
+/// <ats-remarks />
+/// <ats-summary>Provides options for configuring Helm chart deployment settings on a <ats-see cref="!:type:KubernetesEnvironmentResource" />.</ats-summary>
 [AspireExport(ExposeMethods = true)]
 public sealed partial class HelmChartOptions
 {
@@ -35,7 +37,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="namespace">The namespace name.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withNamespace dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withNamespace dispatcher export.")]
     public HelmChartOptions WithNamespace(string @namespace)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(@namespace);
@@ -51,7 +53,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="namespace">A parameter resource builder for the namespace value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withNamespace dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withNamespace dispatcher export.")]
     public HelmChartOptions WithNamespace(IResourceBuilder<ParameterResource> @namespace)
     {
         ArgumentNullException.ThrowIfNull(@namespace);
@@ -61,7 +63,10 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    [AspireExport(MethodName = "withNamespace", Description = "Sets the target Kubernetes namespace for deployment.")]
+    /// <summary>
+    /// Sets the target Kubernetes namespace for deployment.
+    /// </summary>
+    [AspireExport(MethodName = "withNamespace")]
     internal HelmChartOptions WithNamespace([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object @namespace)
     {
         ArgumentNullException.ThrowIfNull(@namespace);
@@ -79,7 +84,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="releaseName">The release name.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withReleaseName dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withReleaseName dispatcher export.")]
     public HelmChartOptions WithReleaseName(string releaseName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(releaseName);
@@ -95,7 +100,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="releaseName">A parameter resource builder for the release name value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withReleaseName dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withReleaseName dispatcher export.")]
     public HelmChartOptions WithReleaseName(IResourceBuilder<ParameterResource> releaseName)
     {
         ArgumentNullException.ThrowIfNull(releaseName);
@@ -105,7 +110,10 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    [AspireExport(MethodName = "withReleaseName", Description = "Sets the Helm release name for deployment.")]
+    /// <summary>
+    /// Sets the Helm release name for deployment.
+    /// </summary>
+    [AspireExport(MethodName = "withReleaseName")]
     internal HelmChartOptions WithReleaseName([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object releaseName)
     {
         ArgumentNullException.ThrowIfNull(releaseName);
@@ -128,7 +136,7 @@ public sealed partial class HelmChartOptions
     /// semantic version. Leading zeros are not allowed.
     /// </param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartVersion dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartVersion dispatcher export.")]
     public HelmChartOptions WithChartVersion(string version)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(version);
@@ -144,7 +152,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="version">A parameter resource builder for the chart version value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartVersion dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartVersion dispatcher export.")]
     public HelmChartOptions WithChartVersion(IResourceBuilder<ParameterResource> version)
     {
         ArgumentNullException.ThrowIfNull(version);
@@ -154,7 +162,10 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    [AspireExport(MethodName = "withChartVersion", Description = "Sets the Helm chart version for deployment.")]
+    /// <summary>
+    /// Sets the Helm chart version for deployment.
+    /// </summary>
+    [AspireExport(MethodName = "withChartVersion")]
     internal HelmChartOptions WithChartVersion([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object version)
     {
         ArgumentNullException.ThrowIfNull(version);
@@ -172,7 +183,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="name">The chart name. Must match Helm's chart-name format (alphanumeric, <c>-</c>, <c>_</c>, or <c>.</c>).</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartName dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartName dispatcher export.")]
     public HelmChartOptions WithChartName(string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -188,7 +199,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="name">A parameter resource builder for the chart name value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartName dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartName dispatcher export.")]
     public HelmChartOptions WithChartName(IResourceBuilder<ParameterResource> name)
     {
         ArgumentNullException.ThrowIfNull(name);
@@ -198,7 +209,10 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    [AspireExport(MethodName = "withChartName", Description = "Sets the Helm chart name written to the generated Chart.yaml.")]
+    /// <summary>
+    /// Sets the Helm chart name written to the generated Chart.yaml.
+    /// </summary>
+    [AspireExport(MethodName = "withChartName")]
     internal HelmChartOptions WithChartName([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object name)
     {
         ArgumentNullException.ThrowIfNull(name);
@@ -216,7 +230,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="description">The chart description.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartDescription dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartDescription dispatcher export.")]
     public HelmChartOptions WithChartDescription(string description)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
@@ -232,7 +246,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="description">A parameter resource builder for the chart description value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartDescription dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the union-based withChartDescription dispatcher export.")]
     public HelmChartOptions WithChartDescription(IResourceBuilder<ParameterResource> description)
     {
         ArgumentNullException.ThrowIfNull(description);
@@ -242,7 +256,10 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    [AspireExport(MethodName = "withChartDescription", Description = "Sets the Helm chart description written to the generated Chart.yaml.")]
+    /// <summary>
+    /// Sets the Helm chart description written to the generated Chart.yaml.
+    /// </summary>
+    [AspireExport(MethodName = "withChartDescription")]
     internal HelmChartOptions WithChartDescription([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object description)
     {
         ArgumentNullException.ThrowIfNull(description);

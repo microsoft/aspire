@@ -1,0 +1,7 @@
+﻿{
+  "type": "azure.bicep.v1",
+  "path": "tenantscoped.module.bicep",
+  "scope": {
+    "tenant": "current"
+  }
+}

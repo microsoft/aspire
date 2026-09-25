@@ -5,6 +5,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
 using Azure.Provisioning;
+using Azure.Provisioning.Authorization;
 using Azure.Provisioning.CognitiveServices;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.KeyVault;
@@ -32,8 +33,15 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     [AspireExportIgnore(Reason = "The configureProperties callback returns Azure provisioning types that are not ATS-compatible.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
-        string name,
+        [ResourceName] string name,
         Func<AzureResourceInfrastructure, CognitiveServicesConnectionProperties> configureProperties)
+        => AddConnection(builder, name, configureProperties, configureAdditionalInfrastructure: null);
+
+    private static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        string name,
+        Func<AzureResourceInfrastructure, CognitiveServicesConnectionProperties> configureProperties,
+        Action<AzureResourceInfrastructure, CognitiveServicesProject>? configureAdditionalInfrastructure)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -68,6 +76,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
                 var keyVaultConn = aspireResource.Parent.KeyVaultConn.AddAsExistingResource(infrastructure);
                 connection.DependsOn.Add(keyVaultConn);
             }
+            configureAdditionalInfrastructure?.Invoke(infrastructure, project);
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = connection.Name });
             infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = connection.Id });
         }
@@ -104,7 +113,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <summary>
     /// Adds CosmosDB to a project as a connection
     /// </summary>
-    [AspireExport("addCosmosConnection", Description = "Adds an Azure Cosmos DB connection to a Microsoft Foundry project.")]
+    [AspireExport("addCosmosConnection")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureCosmosDBResource> db)
@@ -143,7 +152,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <summary>
     /// Adds an Azure Storage account to a project as a connection.
     /// </summary>
-    [AspireExport("addStorageConnection", Description = "Adds an Azure Storage connection to a Microsoft Foundry project.")]
+    [AspireExport("addStorageConnection")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureStorageResource> storage)
@@ -188,7 +197,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// Adds a container registry connection to the Microsoft Foundry project.
     /// </summary>
     /// <returns></returns>
-    [AspireExport("addContainerRegistryConnection", Description = "Adds an Azure Container Registry connection to a Microsoft Foundry project.")]
+    [AspireExport("addContainerRegistryConnection")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureContainerRegistryResource> registry)
@@ -203,39 +212,83 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         AzureSearchResource search)
+        => builder.AddSearchConnection($"connection-{Guid.NewGuid():N}", search);
+
+    internal static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddSearchConnection(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        string name,
+        AzureSearchResource search)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(search);
 
-        return builder.AddConnection($"connection-{Guid.NewGuid():N}", (infra) =>
-        {
-            var searchService = (SearchService)search.AddAsExistingResource(infra);
-            return new AadAuthTypeConnectionProperties()
+        return builder.AddConnection(
+            name,
+            infra =>
             {
-                Category = CognitiveServicesConnectionCategory.CognitiveSearch,
-                Target = BicepFunction.Interpolate($"https://{searchService.Name}.search.windows.net"),
-                Metadata =
+                var searchService = (SearchService)search.AddAsExistingResource(infra);
+                return new AadAuthTypeConnectionProperties()
                 {
-                    { "ApiType", "Azure" },
-                    { "ResourceId", searchService.Id },
-                    { "location", searchService.Location }
-                }
-            };
-        });
+                    Category = CognitiveServicesConnectionCategory.CognitiveSearch,
+                    Target = BicepFunction.Interpolate($"https://{searchService.Name}.search.windows.net"),
+                    Metadata =
+                    {
+                        { "ApiType", "Azure" },
+                        { "ResourceId", searchService.Id },
+                        { "location", searchService.Location }
+                    }
+                };
+            },
+            (infra, project) =>
+            {
+                var searchService = (SearchService)search.AddAsExistingResource(infra);
+                var projectPrincipalId = builder.Resource.PrincipalId.AsProvisioningParameter(infra);
+                AddSearchRoleAssignment(
+                    infra,
+                    searchService,
+                    project,
+                    projectPrincipalId,
+                    SearchBuiltInRole.SearchIndexDataContributor);
+                AddSearchRoleAssignment(
+                    infra,
+                    searchService,
+                    project,
+                    projectPrincipalId,
+                    SearchBuiltInRole.SearchServiceContributor);
+            });
     }
 
     /// <summary>
     /// Adds an Azure AI Search connection to a Microsoft Foundry project.
     /// </summary>
-    [AspireExport("addSearchConnection", Description = "Adds an Azure AI Search connection to a Microsoft Foundry project.")]
+    [AspireExport("addSearchConnection")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureSearchResource> search)
     {
-        builder.WithRoleAssignments(search,
-            SearchBuiltInRole.SearchIndexDataReader,
-            SearchBuiltInRole.SearchServiceContributor);
         return builder.AddConnection(search.Resource);
+    }
+
+    private static void AddSearchRoleAssignment(
+        AzureResourceInfrastructure infrastructure,
+        SearchService searchService,
+        CognitiveServicesProject project,
+        BicepValue<Guid> projectPrincipalId,
+        SearchBuiltInRole role)
+    {
+        var roleAssignment = searchService.CreateRoleAssignment(
+            role,
+            RoleManagementPrincipalType.ServicePrincipal,
+            projectPrincipalId);
+        // Use the same name as ProjectBuilderExtension, which may already have created this
+        // (scope, principal, role) assignment. Azure rejects an equivalent assignment under
+        // a different name with RoleAssignmentExists, so both modules must derive the same GUID.
+        roleAssignment.Name = BicepFunction.CreateGuid(
+            searchService.Id,
+            project.Id,
+            roleAssignment.RoleDefinitionId);
+        infrastructure.Add(roleAssignment);
     }
 
     /// <summary>
@@ -246,7 +299,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// As such, we recommend adding this connection *before* any others, so that those connections
     /// can leverage the Key Vault connection for secret storage.
     /// </remarks>
-    [AspireExport("addKeyVaultConnection", Description = "Adds an Azure Key Vault connection to a Microsoft Foundry project.")]
+    [AspireExport("addKeyVaultConnection")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureKeyVaultResource> keyVault)
@@ -278,7 +331,10 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
             });
     }
 
-    [AspireExport("addConnection", Description = "Adds a connection to a Microsoft Foundry project.")]
+    /// <summary>
+    /// Adds a connection to a Microsoft Foundry project.
+    /// </summary>
+    [AspireExport("addConnection")]
     internal static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnectionForPolyglot(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         [AspireUnion(
@@ -325,10 +381,11 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// (e.g., <c>/subscriptions/{subId}/resourceGroups/{rg}/providers/Microsoft.Bing/accounts/{name}</c>).
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the connection resource.</returns>
-    [AspireExport(Description = "Adds a Grounding with Bing Search connection to a Microsoft Foundry project.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<BingGroundingConnectionResource> AddBingGroundingConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
-        string name,
+        [ResourceName] string name,
         string bingResourceId)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -378,10 +435,11 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// A parameter resource containing the full Azure resource ID of the Bing Search resource.
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the connection resource.</returns>
-    [AspireExport("addBingGroundingConnectionFromParameter", Description = "Adds a Grounding with Bing Search connection to a Microsoft Foundry project using a parameter.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("addBingGroundingConnectionFromParameter")]
     public static IResourceBuilder<BingGroundingConnectionResource> AddBingGroundingConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
-        string name,
+        [ResourceName] string name,
         IResourceBuilder<ParameterResource> bingResourceId)
     {
         ArgumentNullException.ThrowIfNull(builder);

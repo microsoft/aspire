@@ -3,7 +3,9 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Model;
 
@@ -14,6 +16,12 @@ public sealed class IconResolver
     private readonly ConcurrentDictionary<IconKey, Icon?> _iconCache = new();
     private readonly ILogger<IconResolver> _logger;
 
+    // Fallback icon when a command specifies an icon name that can't be resolved to a FluentUI icon.
+    private static readonly Icon s_unknownCommandIcon = new Icons.Regular.Size16.QuestionCircle();
+
+    // Default icon for highlighted commands that don't specify any icon name.
+    private static readonly Icon s_defaultHighlightedCommandIcon = new Icons.Regular.Size16.Flash();
+
     public IconResolver(ILogger<IconResolver> logger)
     {
         _logger = logger;
@@ -21,7 +29,7 @@ public sealed class IconResolver
 
     public Icon? ResolveIconName(string iconName, IconSize? desiredIconSize, IconVariant? iconVariant)
     {
-        // Icons.GetInstance isn't efficient. Cache icon lookup.
+        // Cache icon lookup and construction.
         return _iconCache.GetOrAdd(new IconKey(iconName, desiredIconSize ?? IconSize.Size20, iconVariant ?? IconVariant.Regular), key =>
         {
             // Try to get the desired size.
@@ -81,13 +89,51 @@ public sealed class IconResolver
 
     private static bool TryGetIconCore(IconKey key, IconSize size, [NotNullWhen(true)] out CustomIcon? icon)
     {
-        var iconInfo = new IconInfo
+        var iconType = GetIconContainerType(size, key.IconVariant)?.GetNestedType(key.IconName, BindingFlags.Public | BindingFlags.IgnoreCase);
+        if (iconType is not null)
         {
-            Name = key.IconName,
-            Variant = key.IconVariant,
-            Size = size
-        };
+            icon = new CustomIcon((Icon)Activator.CreateInstance(iconType)!);
+            return true;
+        }
 
-        return iconInfo.TryGetInstance(out icon);
+        icon = null;
+        return false;
+    }
+
+    // Fluent icons are nested types such as Icons.Regular.Size20.Database. Explicit container types
+    // and their annotations preserve dynamic icon lookup under Native AOT without an XML descriptor.
+    [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicNestedTypes | DynamicallyAccessedMemberTypes.NonPublicNestedTypes)]
+    private static Type? GetIconContainerType(IconSize size, IconVariant variant) => (size, variant) switch
+    {
+        (IconSize.Size16, IconVariant.Regular) => typeof(Icons.Regular.Size16),
+        (IconSize.Size20, IconVariant.Regular) => typeof(Icons.Regular.Size20),
+        (IconSize.Size24, IconVariant.Regular) => typeof(Icons.Regular.Size24),
+        (IconSize.Size16, IconVariant.Filled) => typeof(Icons.Filled.Size16),
+        (IconSize.Size20, IconVariant.Filled) => typeof(Icons.Filled.Size20),
+        (IconSize.Size24, IconVariant.Filled) => typeof(Icons.Filled.Size24),
+        _ => null
+    };
+
+    /// <summary>
+    /// Resolves the icon for a command. Returns the resolved icon, a QuestionCircle fallback
+    /// for unrecognized names, or <see langword="null"/> if no icon name is specified.
+    /// </summary>
+    public Icon? ResolveCommandIcon(string? iconName, IconVariant? iconVariant)
+    {
+        if (!string.IsNullOrEmpty(iconName))
+        {
+            return ResolveIconName(iconName, IconSize.Size16, iconVariant) ?? s_unknownCommandIcon;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Resolves the icon for a highlighted command button. Always returns a non-null icon so
+    /// highlighted commands render as compact icon buttons and never as text labels.
+    /// </summary>
+    public Icon ResolveHighlightedCommandIcon(string? iconName, IconVariant? iconVariant)
+    {
+        return ResolveCommandIcon(iconName, iconVariant) ?? s_defaultHighlightedCommandIcon;
     }
 }

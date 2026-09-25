@@ -1,8 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.AspNetCore.InternalTesting;
+using System.Runtime.CompilerServices;
 using Aspire.Cli.Projects;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.TestServices;
 
@@ -16,11 +17,16 @@ internal sealed class TestProjectLocator : IProjectLocator
 
     public Func<DirectoryInfo, AppHostDiscoveryScope, CancellationToken, Task<List<AppHostProjectCandidate>>>? FindAppHostProjectsAsyncCallback { get; set; }
 
+    public Func<DirectoryInfo, AppHostDiscoveryScope, Action<int>?, CancellationToken, IAsyncEnumerable<AppHostProjectCandidate>>? FindAppHostProjectsStreamAsyncCallback { get; set; }
+
     public Func<DirectoryInfo, AppHostDiscoveryScope, CancellationToken, Task<List<FileInfo>>>? FindAppHostProjectFilesAsyncCallback { get; set; }
 
     public Func<DirectoryInfo, AppHostDiscoveryScope, int?, CancellationToken, Task<List<FileInfo>>>? FindAppHostProjectFilesWithDepthAsyncCallback { get; set; }
 
-    public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+    public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(
+        DirectoryInfo searchDirectory,
+        AppHostDiscoveryScope scope,
+        CancellationToken cancellationToken)
     {
         if (FindAppHostProjectsAsyncCallback != null)
         {
@@ -28,6 +34,29 @@ internal sealed class TestProjectLocator : IProjectLocator
         }
 
         return [];
+    }
+
+    public async IAsyncEnumerable<AppHostProjectCandidate> FindAppHostProjectsStreamAsync(
+        DirectoryInfo searchDirectory,
+        AppHostDiscoveryScope scope,
+        Action<int>? onDirectoryEnumerated = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        if (FindAppHostProjectsStreamAsyncCallback is not null)
+        {
+            await foreach (var candidate in FindAppHostProjectsStreamAsyncCallback(searchDirectory, scope, onDirectoryEnumerated, cancellationToken).WithCancellation(cancellationToken))
+            {
+                yield return candidate;
+            }
+
+            yield break;
+        }
+
+        var candidates = await FindAppHostProjectsAsync(searchDirectory, scope, cancellationToken);
+        foreach (var candidate in candidates)
+        {
+            yield return candidate;
+        }
     }
 
     public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)

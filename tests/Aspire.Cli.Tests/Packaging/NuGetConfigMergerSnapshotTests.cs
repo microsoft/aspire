@@ -42,15 +42,14 @@ public class NuGetConfigMergerSnapshotTests
     [InlineData("pr-1234")]
     public async Task Merge_WithSimpleNuGetConfig_ProducesExpectedXml(string channelName)
     {
-        using var workspace = TemporaryWorkspace.Create(_output);
+        using var workspace = TemporaryWorkspace.CreateForCli(_output);
         var root = workspace.WorkspaceRoot;
 
         // Empty hives directory ensures deterministic channel set (no PR channels)
         var hivesDir = root.CreateSubdirectory("hives");
         // Add a deterministic PR hive for testing realistic PR channel mappings.
         hivesDir.CreateSubdirectory("pr-1234");
-        var cacheDir = new DirectoryInfo(Path.Combine(root.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(root, hivesDirectory: hivesDir);
         var packagingService = CreatePackagingService(executionContext);
 
         // Existing config purposely minimal (no packageSourceMapping yet)
@@ -92,15 +91,14 @@ public class NuGetConfigMergerSnapshotTests
     [InlineData("pr-1234")]
     public async Task Merge_WithBrokenSdkState_ProducesExpectedXml(string channelName)
     {
-        using var workspace = TemporaryWorkspace.Create(_output);
+        using var workspace = TemporaryWorkspace.CreateForCli(_output);
         var root = workspace.WorkspaceRoot;
 
         // Empty hives directory ensures deterministic channel set (no PR channels)
         var hivesDir = root.CreateSubdirectory("hives");
         // Add a deterministic PR hive for testing realistic PR channel mappings.
         hivesDir.CreateSubdirectory("pr-1234");
-        var cacheDir2 = new DirectoryInfo(Path.Combine(root.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir2, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(root, hivesDirectory: hivesDir);
         var packagingService = CreatePackagingService(executionContext);
 
         // Existing config purposely minimal (no packageSourceMapping yet)
@@ -155,15 +153,14 @@ public class NuGetConfigMergerSnapshotTests
     [InlineData("pr-1234")]
     public async Task Merge_WithDailyFeedWithExtraMappingsIsPreserved_ProducesExpectedXml(string channelName)
     {
-        using var workspace = TemporaryWorkspace.Create(_output);
+        using var workspace = TemporaryWorkspace.CreateForCli(_output);
         var root = workspace.WorkspaceRoot;
 
         // Empty hives directory ensures deterministic channel set (no PR channels)
         var hivesDir = root.CreateSubdirectory("hives");
         // Add a deterministic PR hive for testing realistic PR channel mappings.
         hivesDir.CreateSubdirectory("pr-1234");
-        var cacheDir3 = new DirectoryInfo(Path.Combine(root.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir3, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(root, hivesDirectory: hivesDir);
         var packagingService = CreatePackagingService(executionContext);
 
         // Existing config purposely minimal (no packageSourceMapping yet)
@@ -217,15 +214,14 @@ public class NuGetConfigMergerSnapshotTests
     [InlineData("pr-1234")]
     public async Task Merge_WithExtraInternalFeedIncorrectlyMapped_ProducesExpectedXml(string channelName)
     {
-        using var workspace = TemporaryWorkspace.Create(_output);
+        using var workspace = TemporaryWorkspace.CreateForCli(_output);
         var root = workspace.WorkspaceRoot;
 
         // Empty hives directory ensures deterministic channel set (no PR channels)
         var hivesDir = root.CreateSubdirectory("hives");
         // Add a deterministic PR hive for testing realistic PR channel mappings.
         hivesDir.CreateSubdirectory("pr-1234");
-        var cacheDir4 = new DirectoryInfo(Path.Combine(root.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir4, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(root, hivesDirectory: hivesDir);
         var packagingService = CreatePackagingService(executionContext);
 
         // Existing config purposely minimal (no packageSourceMapping yet)
@@ -277,15 +273,14 @@ public class NuGetConfigMergerSnapshotTests
     [InlineData("pr-1234")]
     public async Task Merge_ExtraPatternOnDailyFeedWhenOnPrFeedGetsConsolidatedWithOtherPatterns_ProducesExpectedXml(string channelName)
     {
-        using var workspace = TemporaryWorkspace.Create(_output);
+        using var workspace = TemporaryWorkspace.CreateForCli(_output);
         var root = workspace.WorkspaceRoot;
 
         // Empty hives directory ensures deterministic channel set (no PR channels)
         var hivesDir = root.CreateSubdirectory("hives");
         // Add a deterministic PR hive for testing realistic PR channel mappings.
         hivesDir.CreateSubdirectory("pr-1234");
-        var cacheDir5 = new DirectoryInfo(Path.Combine(root.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(root, hivesDir, cacheDir5, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(root, hivesDirectory: hivesDir);
         var packagingService = CreatePackagingService(executionContext);
 
         // Existing config purposely minimal (no packageSourceMapping yet)

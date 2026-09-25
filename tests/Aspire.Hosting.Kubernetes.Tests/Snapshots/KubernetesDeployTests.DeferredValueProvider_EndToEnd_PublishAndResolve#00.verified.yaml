@@ -1,0 +1,5 @@
+﻿parameters: {}
+secrets: {}
+config:
+  myapp:
+    DEFERRED_VALUE: ""

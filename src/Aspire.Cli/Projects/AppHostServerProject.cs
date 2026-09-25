@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Bundles;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
@@ -16,6 +17,7 @@ namespace Aspire.Cli.Projects;
 internal interface IAppHostServerProjectFactory
 {
     Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default);
+    Task<IAppHostServerProject> CreateAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -29,9 +31,14 @@ internal sealed class AppHostServerProjectFactory(
     BundleNuGetService bundleNuGetService,
     IDotNetSdkInstaller sdkInstaller,
     CliExecutionContext executionContext,
+    IEnvironment environment,
+    IProcessExecutionFactory processExecutionFactory,
     ILoggerFactory loggerFactory) : IAppHostServerProjectFactory
 {
-    public async Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default)
+    public Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default)
+        => CreateAsync(appPath, restoreRootConfigDirectory: null, cancellationToken);
+
+    public async Task<IAppHostServerProject> CreateAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken)
     {
         var socketPath = CliPathHelper.CreateGuestAppHostSocketPath("apphost.sock");
 
@@ -45,14 +52,36 @@ internal sealed class AppHostServerProjectFactory(
                 repoRoot,
                 dotNetCliRunner,
                 packagingService,
-                loggerFactory.CreateLogger<DotNetBasedAppHostServerProject>());
+                processExecutionFactory,
+                environment,
+                loggerFactory.CreateLogger<DotNetBasedAppHostServerProject>(),
+                logFilePath: executionContext.LogFilePath,
+                restoreRootConfigDirectory: restoreRootConfigDirectory);
         }
 
         // Priority 2: Ensure bundle is extracted and check for layout
-        var layout = await bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken);
+        var layoutLease = await bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "apphost-server", cancellationToken);
+        var layout = layoutLease?.Layout;
 
         // Priority 3: Check if we have a bundle layout with a pre-built AppHost server
         if (layout is not null && layout.GetManagedPath() is string serverPath && File.Exists(serverPath))
+        {
+            return CreatePrebuiltAppHostServer(appPath, socketPath, layout, layoutLease);
+        }
+
+        layoutLease?.Dispose();
+        throw new InvalidOperationException(
+            "No Aspire AppHost server is available. Ensure the Aspire CLI is installed " +
+            "with a valid bundle layout, or reinstall using 'aspire setup --force'.");
+    }
+
+    internal PrebuiltAppHostServer CreatePrebuiltAppHostServer(
+        string appPath,
+        string socketPath,
+        LayoutConfiguration layout,
+        BundleLayoutLease? layoutLease)
+    {
+        try
         {
             return new PrebuiltAppHostServer(
                 appPath,
@@ -63,11 +92,15 @@ internal sealed class AppHostServerProjectFactory(
                 sdkInstaller,
                 packagingService,
                 executionContext,
-                loggerFactory.CreateLogger<PrebuiltAppHostServer>());
+                processExecutionFactory,
+                environment,
+                loggerFactory.CreateLogger<PrebuiltAppHostServer>(),
+                layoutLease);
         }
-
-        throw new InvalidOperationException(
-            "No Aspire AppHost server is available. Ensure the Aspire CLI is installed " +
-            "with a valid bundle layout, or reinstall using 'aspire setup --force'.");
+        catch
+        {
+            layoutLease?.Dispose();
+            throw;
+        }
     }
 }

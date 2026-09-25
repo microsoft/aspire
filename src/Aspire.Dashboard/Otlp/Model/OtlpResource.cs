@@ -4,11 +4,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.InteropServices;
 using Aspire.Dashboard.Otlp.Storage;
 using Google.Protobuf.Collections;
 using OpenTelemetry.Proto.Common.V1;
-using OpenTelemetry.Proto.Metrics.V1;
 
 namespace Aspire.Dashboard.Otlp.Model;
 
@@ -44,9 +42,6 @@ public class OtlpResource : IOtlpResource
 
     public ResourceKey ResourceKey => new ResourceKey(ResourceName, InstanceId);
 
-    private readonly ReaderWriterLockSlim _metricsLock = new();
-    private readonly Dictionary<string, OtlpScope> _meters = new();
-    private readonly Dictionary<OtlpInstrumentKey, OtlpInstrument> _instruments = new();
     private readonly ConcurrentDictionary<KeyValuePair<string, string>[], OtlpResourceView> _resourceViews = new(ResourceViewKeyComparer.Instance);
 
     public OtlpResource(string name, string? instanceId, bool uninstrumentedPeer, OtlpContext context)
@@ -55,223 +50,6 @@ public class OtlpResource : IOtlpResource
         InstanceId = instanceId;
         UninstrumentedPeer = uninstrumentedPeer;
         Context = context;
-    }
-
-    public void AddMetrics(AddContext context, RepeatedField<ScopeMetrics> scopeMetrics)
-    {
-        _metricsLock.EnterWriteLock();
-
-        try
-        {
-            // Temporary attributes array to use when adding metrics to the instruments.
-            KeyValuePair<string, string>[]? tempAttributes = null;
-
-            foreach (var sm in scopeMetrics)
-            {
-                if (!OtlpHelpers.TryGetOrAddScope(_meters, sm.Scope, Context, TelemetryType.Metrics, out var scope))
-                {
-                    context.FailureCount += sm.Metrics.Count;
-                    continue;
-                }
-
-                foreach (var metric in sm.Metrics)
-                {
-                    OtlpInstrument instrument;
-
-                    try
-                    {
-                        if (string.IsNullOrEmpty(metric.Name))
-                        {
-                            throw new InvalidOperationException("Instrument name is required.");
-                        }
-
-                        var instrumentKey = new OtlpInstrumentKey(scope.Name, metric.Name);
-                        ref var instrumentRef = ref CollectionsMarshal.GetValueRefOrAddDefault(_instruments, instrumentKey, out _);
-                        if (instrumentRef == null)
-                        {
-                            // Adds to dictionary if not present.
-                            instrumentRef = new OtlpInstrument
-                            {
-                                Summary = new OtlpInstrumentSummary
-                                {
-                                    Name = metric.Name,
-                                    Description = metric.Description,
-                                    Unit = metric.Unit,
-                                    Type = MapMetricType(metric.DataCase),
-                                    AggregationTemporality = MapAggregationTemporality(metric),
-                                    Parent = scope
-                                },
-                                Context = Context
-                            };
-
-                            Context.Logger.LogTrace("Added metric instrument '{InstrumentName}' for scope '{ScopeName}'.", instrumentRef.Summary.Name, scope.Name);
-                        }
-
-                        instrument = instrumentRef;
-                    }
-                    catch (Exception ex)
-                    {
-                        // If we can't create the instrument then all data points for it are failures.
-                        context.FailureCount += GetMetricDataPointCount(metric);
-                        Context.Logger.LogInformation(ex, "Error adding metric instrument {MetricName}.", metric.Name);
-                        continue;
-                    }
-
-                    AddMetrics(instrument, metric, context, ref tempAttributes);
-                }
-            }
-        }
-        finally
-        {
-            _metricsLock.ExitWriteLock();
-        }
-    }
-
-    private static int GetMetricDataPointCount(Metric metric)
-    {
-        return metric.DataCase switch
-        {
-            Metric.DataOneofCase.Gauge => metric.Gauge.DataPoints.Count,
-            Metric.DataOneofCase.Sum => metric.Sum.DataPoints.Count,
-            Metric.DataOneofCase.Histogram => metric.Histogram.DataPoints.Count,
-            Metric.DataOneofCase.Summary => metric.Summary.DataPoints.Count,
-            Metric.DataOneofCase.ExponentialHistogram => metric.ExponentialHistogram.DataPoints.Count,
-            _ => 0,
-        };
-    }
-
-    private void AddMetrics(OtlpInstrument instrument, Metric metric, AddContext context, ref KeyValuePair<string, string>[]? tempAttributes)
-    {
-        switch (metric.DataCase)
-        {
-            case Metric.DataOneofCase.Gauge:
-                foreach (var d in metric.Gauge.DataPoints)
-                {
-                    try
-                    {
-                        instrument.FindScope(d.Attributes, ref tempAttributes).AddPointValue(d, Context);
-                        context.SuccessCount++;
-                    }
-                    catch (Exception ex)
-                    {
-                        context.FailureCount++;
-                        Context.Logger.LogInformation(ex, "Error adding metric.");
-                    }
-                }
-                break;
-            case Metric.DataOneofCase.Sum:
-                foreach (var d in metric.Sum.DataPoints)
-                {
-                    try
-                    {
-                        instrument.FindScope(d.Attributes, ref tempAttributes).AddPointValue(d, Context);
-                        context.SuccessCount++;
-                    }
-                    catch (Exception ex)
-                    {
-                        context.FailureCount++;
-                        Context.Logger.LogInformation(ex, "Error adding metric.");
-                    }
-                }
-                break;
-            case Metric.DataOneofCase.Histogram:
-                foreach (var d in metric.Histogram.DataPoints)
-                {
-                    try
-                    {
-                        instrument.FindScope(d.Attributes, ref tempAttributes).AddHistogramValue(d, Context);
-                        context.SuccessCount++;
-                    }
-                    catch (Exception ex)
-                    {
-                        context.FailureCount++;
-                        Context.Logger.LogInformation(ex, "Error adding metric.");
-                    }
-                }
-                break;
-            case Metric.DataOneofCase.Summary:
-                context.FailureCount += metric.Summary.DataPoints.Count;
-                Context.Logger.LogInformation("Error adding summary metrics. Summary is not supported.");
-                break;
-            case Metric.DataOneofCase.ExponentialHistogram:
-                context.FailureCount += metric.ExponentialHistogram.DataPoints.Count;
-                Context.Logger.LogInformation("Error adding exponential histogram metrics. Exponential histogram is not supported.");
-                break;
-        }
-    }
-
-    public void ClearMetrics()
-    {
-        _metricsLock.EnterWriteLock();
-
-        try
-        {
-            _instruments.Clear();
-        }
-        finally
-        {
-            _metricsLock.ExitWriteLock();
-        }
-    }
-
-    private static OtlpInstrumentType MapMetricType(Metric.DataOneofCase data)
-    {
-        return data switch
-        {
-            Metric.DataOneofCase.Gauge => OtlpInstrumentType.Gauge,
-            Metric.DataOneofCase.Sum => OtlpInstrumentType.Sum,
-            Metric.DataOneofCase.Histogram => OtlpInstrumentType.Histogram,
-            _ => OtlpInstrumentType.Unsupported
-        };
-    }
-
-    private static OtlpAggregationTemporality MapAggregationTemporality(Metric metric)
-    {
-        return metric.DataCase switch
-        {
-            Metric.DataOneofCase.Sum => (OtlpAggregationTemporality)metric.Sum.AggregationTemporality,
-            Metric.DataOneofCase.Histogram => (OtlpAggregationTemporality)metric.Histogram.AggregationTemporality,
-            Metric.DataOneofCase.ExponentialHistogram => (OtlpAggregationTemporality)metric.ExponentialHistogram.AggregationTemporality,
-            _ => OtlpAggregationTemporality.Unspecified
-        };
-    }
-
-    public OtlpInstrument? GetInstrument(string meterName, string instrumentName, DateTime? valuesStart, DateTime? valuesEnd)
-    {
-        _metricsLock.EnterReadLock();
-
-        try
-        {
-            if (!_instruments.TryGetValue(new OtlpInstrumentKey(meterName, instrumentName), out var instrument))
-            {
-                return null;
-            }
-
-            return OtlpInstrument.Clone(instrument, cloneData: true, valuesStart: valuesStart, valuesEnd: valuesEnd);
-        }
-        finally
-        {
-            _metricsLock.ExitReadLock();
-        }
-    }
-
-    public List<OtlpInstrumentSummary> GetInstrumentsSummary()
-    {
-        _metricsLock.EnterReadLock();
-
-        try
-        {
-            var instruments = new List<OtlpInstrumentSummary>(_instruments.Count);
-            foreach (var instrument in _instruments)
-            {
-                instruments.Add(instrument.Value.Summary);
-            }
-            return instruments;
-        }
-        finally
-        {
-            _metricsLock.ExitReadLock();
-        }
     }
 
     public static Dictionary<string, List<OtlpResource>> GetReplicasByResourceName(IEnumerable<OtlpResource> allResources)
@@ -288,12 +66,26 @@ public class OtlpResource : IOtlpResource
 
     internal OtlpResourceView GetView(RepeatedField<KeyValue> attributes)
     {
+        return GetView(new OtlpResourceView(this, attributes));
+    }
+
+    internal OtlpResourceView GetViewFromProperties(KeyValuePair<string, string>[] properties)
+    {
+        return GetView(new OtlpResourceView(this, properties));
+    }
+
+    private OtlpResourceView GetView(OtlpResourceView view)
+    {
         // Inefficient to create this to possibly throw it away.
-        var view = new OtlpResourceView(this, attributes);
 
         if (_resourceViews.TryGetValue(view.Properties, out var resourceView))
         {
             return resourceView;
+        }
+
+        if (_resourceViews.Count >= TelemetryRepositoryLimits.MaxResourceViewCount)
+        {
+            throw new InvalidOperationException($"Resource view limit of {TelemetryRepositoryLimits.MaxResourceViewCount} reached.");
         }
 
         return _resourceViews.GetOrAdd(view.Properties, view);
@@ -358,4 +150,21 @@ public class OtlpResource : IOtlpResource
             return hashCode.ToHashCode();
         }
     }
+}
+
+/// <summary>
+/// Compares resources by their resource key.
+/// </summary>
+internal sealed class OtlpResourceEqualityComparer : IEqualityComparer<OtlpResource>
+{
+    public static readonly OtlpResourceEqualityComparer Instance = new();
+
+    private OtlpResourceEqualityComparer()
+    {
+    }
+
+    public bool Equals(OtlpResource? x, OtlpResource? y) =>
+        ReferenceEquals(x, y) || x is not null && y is not null && x.ResourceKey == y.ResourceKey;
+
+    public int GetHashCode(OtlpResource obj) => obj.ResourceKey.GetHashCode();
 }

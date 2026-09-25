@@ -15,7 +15,7 @@ internal static class ArchiveHelper
     /// Extracts an archive to the specified directory, supporting .zip and .tar.gz formats.
     /// .zip is used for Windows CLI downloads; .tar.gz for Unix.
     /// </summary>
-    internal static async Task ExtractAsync(string archivePath, string destinationPath, CancellationToken cancellationToken)
+    internal static async Task ExtractAsync(string archivePath, string destinationPath, IEnvironment environment, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(destinationPath);
 
@@ -25,7 +25,7 @@ internal static class ArchiveHelper
         }
         else if (archivePath.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase))
         {
-            await ExtractTarGzSafeAsync(archivePath, destinationPath, cancellationToken).ConfigureAwait(false);
+            await ExtractTarGzSafeAsync(archivePath, destinationPath, environment, cancellationToken).ConfigureAwait(false);
         }
         else
         {
@@ -68,7 +68,7 @@ internal static class ArchiveHelper
         }
     }
 
-    private static async Task ExtractTarGzSafeAsync(string archivePath, string destinationPath, CancellationToken cancellationToken)
+    private static async Task ExtractTarGzSafeAsync(string archivePath, string destinationPath, IEnvironment environment, CancellationToken cancellationToken)
     {
         var normalizedDestination = Path.GetFullPath(destinationPath);
 
@@ -107,7 +107,7 @@ internal static class ArchiveHelper
                     await entry.ExtractToFileAsync(fullPath, overwrite: true, cancellationToken).ConfigureAwait(false);
 
                     // Preserve Unix file permissions from tar entry
-                    if (!OperatingSystem.IsWindows() && entry.Mode != default)
+                    if (!environment.IsWindows() && entry.Mode != default)
                     {
                         File.SetUnixFileMode(fullPath, (UnixFileMode)entry.Mode);
                     }

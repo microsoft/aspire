@@ -3,7 +3,9 @@
 
 using System.Net.Sockets;
 using Aspire.Hosting.Backchannel;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -16,6 +18,7 @@ internal sealed class BackchannelService(
     IConfiguration configuration,
     AppHostRpcTarget appHostRpcTarget,
     IDistributedApplicationEventing eventing,
+    ProfilingTelemetry profilingTelemetry,
     IServiceProvider serviceProvider)
     : BackgroundService
 {
@@ -41,35 +44,43 @@ internal sealed class BackchannelService(
                 return;
             }
 
+            SocketPermissionHelper.CreateDirectory(Path.GetDirectoryName(unixSocketPath)!, repairExisting: false);
             _socketPath = unixSocketPath;
+
+            using var activity = profilingTelemetry.StartBackchannelStartup(unixSocketPath);
 
             // Delete existing socket file if it exists (stale from previous run)
             if (File.Exists(unixSocketPath))
             {
                 logger.LogDebug("Deleting existing socket file: {SocketPath}", unixSocketPath);
                 File.Delete(unixSocketPath);
+                activity.AddBackchannelSocketDeleted();
             }
 
             logger.LogDebug("Listening for backchannel connection on socket path: {SocketPath}", unixSocketPath);
             var serverSocket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
             _serverSocket = serverSocket;
-            var endpoint = new UnixDomainSocketEndPoint(unixSocketPath);
-            serverSocket.Bind(endpoint);
+            SocketPermissionHelper.Bind(serverSocket, unixSocketPath);
             serverSocket.Listen();
+            activity.AddBackchannelListening();
 
             var backchannelReadyEvent = new BackchannelReadyEvent(serviceProvider, unixSocketPath);
             await eventing.PublishAsync(
                 backchannelReadyEvent,
                 EventDispatchBehavior.NonBlockingConcurrent,
                 stoppingToken).ConfigureAwait(false);
+            activity.AddBackchannelReadyPublished();
 
             var clientSocket = await serverSocket.AcceptAsync(stoppingToken).ConfigureAwait(false);
+            activity.AddBackchannelClientAccepted();
+
             var stream = new NetworkStream(clientSocket, true);
             var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream), appHostRpcTarget)
             {
                 ActivityTracingStrategy = new ActivityTracingStrategy()
             };
             rpc.StartListening();
+            activity.AddBackchannelRpcListening();
             _rpc = rpc;
 
             // NOTE: The PipelineExecutor will await this TCS
@@ -83,6 +94,7 @@ internal sealed class BackchannelService(
                 backchannelConnectedEvent,
                 EventDispatchBehavior.NonBlockingConcurrent,
                 stoppingToken).ConfigureAwait(false);
+            activity.AddBackchannelConnectedPublished();
         }
         catch (OperationCanceledException ex)
         {

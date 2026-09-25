@@ -4,9 +4,11 @@
 #if DEBUG
 
 using Aspire.Cli.Utils;
+using Aspire.Cli.Tests.Acquisition;
 
 namespace Aspire.Cli.Tests.Utils;
 
+[Collection(EnvVarMutatingTestCollection.Name)]
 public class AspireRepositoryDetectorTests : IDisposable
 {
     private const string RepoRootEnvironmentVariableName = "ASPIRE_REPO_ROOT";
@@ -68,6 +70,24 @@ public class AspireRepositoryDetectorTests : IDisposable
         Environment.SetEnvironmentVariable(RepoRootEnvironmentVariableName, envRoot);
 
         var nestedDirectory = Directory.CreateDirectory(Path.Combine(repoRoot, "playground", "polyglot")).FullName;
+
+        var detectedRoot = AspireRepositoryDetector.DetectRepositoryRoot(nestedDirectory);
+
+        Assert.Equal(repoRoot, detectedRoot);
+    }
+
+    [Fact]
+    public void DetectRepositoryRoot_ExplicitStartPathBypassesCachedDefaultRoot()
+    {
+        var cachedRoot = CreateTempDirectory();
+        Environment.SetEnvironmentVariable(RepoRootEnvironmentVariableName, cachedRoot);
+
+        Assert.Equal(cachedRoot, AspireRepositoryDetector.DetectRepositoryRoot());
+
+        var repoRoot = CreateTempDirectory();
+        File.WriteAllText(Path.Combine(repoRoot, "Aspire.slnx"), string.Empty);
+
+        var nestedDirectory = Directory.CreateDirectory(Path.Combine(repoRoot, "src", "Project")).FullName;
 
         var detectedRoot = AspireRepositoryDetector.DetectRepositoryRoot(nestedDirectory);
 

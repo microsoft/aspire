@@ -1,6 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable ASPIREDOTNETPROJECT001
+#pragma warning disable ASPIREPROJECTS001
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,7 +23,7 @@ public class AddEFMigrationsTests
         Assert.NotNull(migrations);
         Assert.IsAssignableFrom<IResourceBuilder<EFMigrationResource>>(migrations);
         Assert.Equal("mymigrations", migrations.Resource.Name);
-        Assert.Equal(project.Resource, migrations.Resource.ProjectResource);
+        Assert.Equal(project.Resource, migrations.Resource.StartupProjectResource);
         Assert.Equal(typeof(TestDbContext).FullName, migrations.Resource.DbContextTypeName);
     }
 
@@ -33,7 +37,7 @@ public class AddEFMigrationsTests
         Assert.NotNull(migrations);
         Assert.IsAssignableFrom<IResourceBuilder<EFMigrationResource>>(migrations);
         Assert.Equal("mymigrations", migrations.Resource.Name);
-        Assert.Equal(project.Resource, migrations.Resource.ProjectResource);
+        Assert.Equal(project.Resource, migrations.Resource.StartupProjectResource);
         Assert.Null(migrations.Resource.DbContextTypeName);
     }
 
@@ -47,7 +51,7 @@ public class AddEFMigrationsTests
         Assert.NotNull(migrations);
         Assert.IsAssignableFrom<IResourceBuilder<EFMigrationResource>>(migrations);
         Assert.Equal("mymigrations", migrations.Resource.Name);
-        Assert.Equal(project.Resource, migrations.Resource.ProjectResource);
+        Assert.Equal(project.Resource, migrations.Resource.StartupProjectResource);
         Assert.Equal(typeof(TestDbContext).FullName, migrations.Resource.DbContextTypeName);
     }
 
@@ -62,7 +66,7 @@ public class AddEFMigrationsTests
         Assert.NotNull(migrations);
         Assert.IsAssignableFrom<IResourceBuilder<EFMigrationResource>>(migrations);
         Assert.Equal("mymigrations", migrations.Resource.Name);
-        Assert.Equal(project.Resource, migrations.Resource.ProjectResource);
+        Assert.Equal(project.Resource, migrations.Resource.StartupProjectResource);
         Assert.Equal(contextTypeName, migrations.Resource.DbContextTypeName);
     }
 
@@ -79,6 +83,52 @@ public class AddEFMigrationsTests
 
         var migrationResource = Assert.Single(appModel.Resources.OfType<EFMigrationResource>());
         Assert.Equal("mymigrations", migrationResource.Name);
+    }
+
+    [Fact]
+    public void AddEFMigrationsFromDotnetProjectUsesGeneralizedStartupProject()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddDotnetProject("myproject", "MyProject.csproj", options => options.ExcludeLaunchProfile = true);
+
+        var migrations = project.AddEFMigrations("mymigrations");
+
+        Assert.Same(project.Resource, migrations.Resource.StartupProjectResource);
+#pragma warning disable CS0618
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+        {
+            _ = migrations.Resource.ProjectResource;
+        });
+#pragma warning restore CS0618
+        Assert.Contains(nameof(EFMigrationResource.StartupProjectResource), exception.Message);
+    }
+
+    [Fact]
+    public void AddEFMigrationsFromFileBasedAppThrows()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddDotnetProject("myproject", "app.cs", options => options.ExcludeLaunchProfile = true);
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+        {
+            project.AddEFMigrations("mymigrations");
+        });
+
+        Assert.Equal(
+            "EF Core migrations require a project file. Resource 'myproject' is a file-based app.",
+            exception.Message);
+    }
+
+    [Fact]
+    public void LegacyProjectResourcePropertyReturnsOriginalProject()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+        var migrations = project.AddEFMigrations("mymigrations");
+
+#pragma warning disable CS0618
+        Assert.Same(project.Resource, migrations.Resource.ProjectResource);
+#pragma warning restore CS0618
     }
 
     [Fact]
@@ -225,7 +275,48 @@ public class AddEFMigrationsTests
         Assert.False(migrations.Resource.PublishAsMigrationBundle);
     }
 
+    [Fact]
+    public async Task ToolResourceInheritsConnectionStringFromMigrationReference()
+    {
+        // The connection string the user declares via .WithReference(<db>) lands on the migration
+        // resource, not on the startup project. The dotnet-ef tool resource must inherit it so the
+        // design-time DbContext can open the database. Regression test for the
+        // "The ConnectionString property has not been initialized." failure.
+        //
+        // The forwarding under test is operation-mode agnostic, so this asserts in Publish mode where
+        // references resolve to manifest expressions synchronously. Run mode is intentionally avoided
+        // because the tool resource also eagerly inherits the startup project's endpoint references,
+        // and resolving those in Run mode awaits runtime endpoint allocation (a TaskCompletionSource
+        // only completed by DCP when the app is actually running) — which deadlocks a plain unit test.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var db = builder.AddResource(new TestDatabaseResource("db1"));
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+        project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!)
+            .WithReference(db);
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var toolResource = Assert.Single(appModel.Resources.OfType<DotnetToolResource>(), r => r.Name == "ef-tool-mymigrations");
+
+#pragma warning disable CS0618 // Type or member is obsolete
+        var env = await toolResource.GetEnvironmentVariableValuesAsync(DistributedApplicationOperation.Publish);
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        Assert.Equal("{db1.connectionString}", Assert.Contains("ConnectionStrings__db1", env));
+    }
+
     // Test classes for DbContext types
     private sealed class TestDbContext { }
     private sealed class AnotherDbContext { }
+
+    /// <summary>
+    /// A minimal test resource that implements IResourceWithConnectionString so it can be used as the
+    /// target of <c>WithReference</c> on an EF migration resource.
+    /// </summary>
+    private sealed class TestDatabaseResource(string name) : Resource(name), IResourceWithConnectionString
+    {
+        public ReferenceExpression ConnectionStringExpression =>
+            ReferenceExpression.Create($"Host=localhost;Database={Name}");
+    }
 }

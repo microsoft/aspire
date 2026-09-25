@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
-using System.Net.Http.Json;
 using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Configuration;
 using Aspire.Hosting;
@@ -142,6 +141,8 @@ public class TelemetryApiTests
 
         // Assert - wrong API key should return 401 Unauthorized
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Null(response.Content.Headers.ContentType);
+        Assert.Equal(string.Empty, await response.Content.ReadAsStringAsync().DefaultTimeout());
     }
 
     [Fact]
@@ -354,7 +355,7 @@ public class TelemetryApiTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
         try
         {
-            var response = await httpClient.GetAsync("/api/telemetry/spans?follow=true", HttpCompletionOption.ResponseHeadersRead, cts.Token).DefaultTimeout();
+            using var response = await httpClient.GetAsync("/api/telemetry/spans?follow=true", HttpCompletionOption.ResponseHeadersRead, cts.Token).DefaultTimeout();
 
             // Assert - should have NDJSON content type and streaming headers
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);

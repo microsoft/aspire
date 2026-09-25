@@ -1,3 +1,10 @@
-﻿::deep fluent-switch::part(label) {
+﻿.metric-table-container {
+    width: 1200px;
+    max-height: 40vh;
+    min-height: 120px;
+    overflow-y: auto;
+}
+
+::deep fluent-switch::part(label) {
     width: 500px;
 }

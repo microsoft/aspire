@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using System.Data;
 using System.Net;
 using Aspire.TestUtilities;
@@ -22,7 +24,7 @@ namespace Aspire.Hosting.PostgreSQL.Tests;
 public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWaitForOnPostgresServerBlocksDependentResources()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
@@ -70,7 +72,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyPgAdminResource()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
@@ -93,7 +95,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyPostgresResource()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -141,7 +143,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWithPgWeb()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
@@ -184,7 +186,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task WithDataShouldPersistStateBetweenUsages(bool useVolume)
     {
         var postgresDbName = "tempdb";
@@ -356,7 +358,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWithInitBindMount()
     {
         // Creates a script that should be executed when the container is initialized.
@@ -452,7 +454,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWithInitFiles()
     {
         // Creates a script that should be executed when the container is initialized.
@@ -536,13 +538,13 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task Postgres_WithPersistentLifetime_ReusesContainers()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
 
         // Use the same path for both runs
-        using var aspireStore = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
 
         var before = await RunContainersAsync();
         var after = await RunContainersAsync();
@@ -554,14 +556,14 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
         async Task<string?[]> RunContainersAsync()
         {
             using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper)
-                .WithTempAspireStore(aspireStore.Path)
+                .WithTempAspireStore(workspace.Path)
                 .WithResourceCleanUp(false);
 
             var passwordParameter = builder.AddParameter("pwd", "p@ssword1", secret: true);
             builder
-                .AddPostgres("resource", password: passwordParameter).WithLifetime(ContainerLifetime.Persistent)
-                .WithPgWeb(c => c.WithLifetime(ContainerLifetime.Persistent))
-                .WithPgAdmin(c => c.WithLifetime(ContainerLifetime.Persistent))
+                .AddPostgres("resource", password: passwordParameter).WithPersistentLifetime()
+                .WithPgWeb(c => c.WithPersistentLifetime())
+                .WithPgAdmin(c => c.WithPersistentLifetime())
                 .AddDatabase("mydb");
 
             var app = builder.Build();
@@ -593,7 +595,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AddDatabaseCreatesDatabaseWithCustomScript()
     {
         const string databaseName = "newdb";
@@ -627,6 +629,13 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
 
         await app.ResourceNotifications.WaitForResourceHealthyAsync(newDb.Resource.Name, cts.Token);
 
+        // Verify that the resource logger emitted feedback about the custom creation script.
+        // Logs are attributed to the parent server resource, not the database resource.
+        await app.WaitForAllTextAsync(
+            ["Executing custom creation script for database", "Completed custom creation script for database"],
+            resourceName: postgres.Resource.Name,
+            cts.Token);
+
         var conn = host.Services.GetRequiredService<NpgsqlConnection>();
 
         if (conn.State != ConnectionState.Open)
@@ -638,7 +647,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AddDatabaseCreatesDatabaseWithSpecialNames()
     {
         const string databaseName = "!']`'[\"";
@@ -680,7 +689,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AddDatabaseCreatesDatabaseResiliently()
     {
         // Creating the database multiple times should not fail
@@ -765,7 +774,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AddDatabaseCreatesMultipleDatabases()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
@@ -811,4 +820,15 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
             Assert.Equal(ConnectionState.Open, conn.State);
         }
     }
+    [Fact]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
+    public Task Postgres_WithPersistentLifetime_ReusesContainerWithDefaults()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddPostgres("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true);
+    }
+
 }

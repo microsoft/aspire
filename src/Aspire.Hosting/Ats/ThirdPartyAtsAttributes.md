@@ -2,6 +2,18 @@
 
 The ATS capability scanner discovers attributes by their **full type name**, not by concrete type reference. This means third-party integration authors can define their own copies of the ATS attributes without taking a package reference to `Aspire.Hosting`, but the copied attributes must use the same namespace and type names as the built-in ones.
 
+## Use the official analyzer package
+
+If your integration project already references `Aspire.Hosting`, you can add the `Aspire.Hosting.Integration.Analyzers` package to get the same authoring diagnostics used by in-repo Aspire integrations:
+
+```xml
+<ItemGroup>
+  <PackageReference Include="Aspire.Hosting.Integration.Analyzers" Version="<Aspire package version>" PrivateAssets="all" />
+</ItemGroup>
+```
+
+The analyzer package applies automatically when referenced, so you do not need to set `EnableAspireIntegrationAnalyzers` when you consume it directly.
+
 ## How It Works
 
 The scanner looks for attributes with these exact full type names:

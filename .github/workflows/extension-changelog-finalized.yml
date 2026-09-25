@@ -1,0 +1,33 @@
+name: VS Code extension changelog merge gate
+
+on:
+  pull_request:
+
+# This gate compares finalized extension release metadata against the current PR
+# base SHA. Base-only extension changes do not automatically re-run an existing
+# green check, so the eventual required status rule for "Extension changelog
+# finalized" must use strict/up-to-date semantics.
+permissions:
+  contents: read
+
+jobs:
+  extension_changelog_finalized:
+    name: Extension changelog finalized
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          # Release PRs need the base branch's complete history so the finalized
+          # range can be checked without ad-hoc Git credentials or marker-derived
+          # fetches. Ordinary PRs keep the inexpensive shallow checkout.
+          fetch-depth: ${{ startsWith(github.head_ref, 'extension-release/') && github.base_ref == 'main' && '0' || '1' }}
+          persist-credentials: false
+
+      - name: Verify extension changelog is finalized
+        env:
+          PR_HEAD_REF: ${{ github.head_ref }}
+          PR_BASE_REF: ${{ github.base_ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash .github/workflows/check-extension-changelog-finalized.sh

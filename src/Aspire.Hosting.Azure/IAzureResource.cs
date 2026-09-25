@@ -7,6 +7,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Represents an Azure resource, as a marker interface for <see cref="IResource"/>'s
 /// that can be deployed to an Azure resource group.
 /// </summary>
+/// <ats-summary>Represents an Azure resource, as a marker interface for <ats-see cref="!:type:IResource" />'s that can be deployed to an Azure resource group.</ats-summary>
 [AspireExport]
 public interface IAzureResource : IResource
 {

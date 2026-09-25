@@ -2,6 +2,8 @@ using Aspire.Hosting.Yarp.Transforms;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 var catalogDb = builder.AddPostgres("postgres")
@@ -29,7 +31,9 @@ basketCache.WithRedisCommander(c =>
 #endif
 
 var catalogDbApp = builder.AddProject<Projects.CatalogDb>("catalogdbapp")
-                          .WithReference(catalogDb);
+                          .WithReference(catalogDb)
+                          .WaitFor(catalogDb)
+                          .WithHttpHealthCheck("/health");
 
 if (builder.Environment.IsDevelopment() && builder.ExecutionContext.IsRunMode)
 {
@@ -51,6 +55,8 @@ if (builder.Environment.IsDevelopment() && builder.ExecutionContext.IsRunMode)
 
 var catalogService = builder.AddProject<Projects.CatalogService>("catalogservice")
                             .WithReference(catalogDb)
+                            .WaitFor(catalogDb)
+                            .WaitFor(catalogDbApp)
                             // Modify the endpoint URL
                             .WithUrlForEndpoint("https", u =>
                             {
@@ -65,40 +71,53 @@ var catalogService = builder.AddProject<Projects.CatalogService>("catalogservice
                             })
                             // Hide the http URL
                             .WithUrlForEndpoint("http", u => u.DisplayLocation = UrlDisplayLocation.DetailsOnly)
+                            .WithHttpHealthCheck("/health")
                             .WithReplicas(2);
 
 var messaging = builder.AddRabbitMQ("messaging")
                        .WithDataVolume()
-                       .WithLifetime(ContainerLifetime.Persistent)
+                       .WithPersistentLifetime()
                        .WithManagementPlugin()
                        .PublishAsContainer();
 
 var basketService = builder.AddProject("basketservice", @"..\BasketService\BasketService.csproj")
                            .WithReference(basketCache)
-                           .WithReference(messaging).WaitFor(messaging);
+                           .WaitFor(basketCache)
+                           .WithReference(messaging)
+                           .WaitFor(messaging);
 
 var frontend = builder.AddProject<Projects.MyFrontend>("frontend")
-       .WithExternalHttpEndpoints()
-       .WithReference(basketService)
-       .WithReference(catalogService)
-       // Modify the display text of the URLs
-       .WithUrls(c => c.Urls.ForEach(u => u.DisplayText = $"Online store ({u.Endpoint?.EndpointName})"))
-       // Don't show the non-HTTPS link on the resources page (details only)
-       .WithUrlForEndpoint("http", url => url.DisplayLocation = UrlDisplayLocation.DetailsOnly)
-       // Add health relative URL (show in details only)
-       .WithUrlForEndpoint("https", ep => new() { Url = "/health", DisplayText = "Health", DisplayLocation = UrlDisplayLocation.DetailsOnly })
-       .WithHttpHealthCheck("/health");
+    .WithExternalHttpEndpoints()
+    .WithReference(basketService)
+    .WaitFor(basketService)
+    .WithReference(catalogService)
+    .WaitFor(catalogService)
+    // Modify the display text of the URLs
+    .WithUrls(c => c.Urls.ForEach(u => u.DisplayText = $"Online store ({u.Endpoint?.EndpointName})"))
+    // Don't show the non-HTTPS link on the resources page (details only)
+    .WithUrlForEndpoint("http", url => url.DisplayLocation = UrlDisplayLocation.DetailsOnly)
+    // Add health relative URL (show in details only)
+    .WithUrlForEndpoint("https", ep => new() { Url = "/health", DisplayText = "Health", DisplayLocation = UrlDisplayLocation.DetailsOnly })
+    .WithHttpHealthCheck("/health");
 
 builder.AddProject<Projects.OrderProcessor>("orderprocessor", launchProfileName: "OrderProcessor")
-       .WithReference(messaging).WaitFor(messaging);
+    .WithReference(messaging)
+    .WaitFor(messaging);
 
 #if YARP_USE_CONFIG_FILE
 builder.AddYarp("apigateway")
-       .WithConfigFile("yarp.json")
-       .WithReference(basketService)
-       .WithReference(catalogService);
+    .WithConfigFile("yarp.json")
+    .WithReference(basketService)
+    .WaitFor(basketService)
+    .WithReference(catalogService)
+    .WaitFor(catalogService);
 #else
 var yarp = builder.AddYarp("apigateway");
+yarp.WithReference(basketService)
+    .WaitFor(basketService)
+    .WithReference(catalogService)
+    .WaitFor(catalogService);
+
 yarp.WithConfiguration(builder =>
 {
     // catalog 
@@ -113,11 +132,20 @@ yarp.WithConfiguration(builder =>
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging
 // of the dashboard. It is not required in end developer code. Comment out this code
-// or build with `/p:SkipDashboardReference=true`, to test end developer
-// dashboard launch experience, Refer to Directory.Build.props for the path to
-// the dashboard binary (defaults to the Aspire.Dashboard bin output in the
-// artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+// or build with `/p:SkipDashboardProjectReference=true` to test the end developer
+// dashboard launch experience. The opt-out and project reference are defined in
+// playground/Directory.Build.targets. The repo-root Directory.Build.props sets the
+// default dashboard binary path to the Aspire.Dashboard output in the artifacts dir.
+var dashboardBuilder = builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+if (builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] is { Length: > 0 } dashboardOtlpEndpoint)
+{
+    // The AppHost normally points every project at its own dashboard. Preserve an explicitly configured
+    // external endpoint for dashboard self-telemetry so its activities can be inspected separately.
+    dashboardBuilder
+        .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", dashboardOtlpEndpoint)
+        .WithEnvironment("OTEL_EXPORTER_OTLP_PROTOCOL", builder.Configuration["OTEL_EXPORTER_OTLP_PROTOCOL"] ?? "grpc")
+        .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", builder.Configuration["OTEL_EXPORTER_OTLP_HEADERS"] ?? string.Empty);
+}
 #endif
 
 builder.Build().Run();

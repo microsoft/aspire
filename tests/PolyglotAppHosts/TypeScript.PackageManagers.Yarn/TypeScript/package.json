@@ -1,0 +1,24 @@
+{
+  "name": "polyglot-typescript-yarn-validation",
+  "version": "1.0.0",
+  "type": "module",
+  "packageManager": "yarn@4.14.1",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "dev": "tsc --noEmit --watch"
+  },
+  "dependencies": {
+    "vscode-jsonrpc": "^8.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "nodemon": "^3.1.14",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3"
+  },
+  "resolutions": {
+    "brace-expansion": "5.0.9",
+    "undici": "6.28.0",
+    "tar": "7.5.22"
+  }
+}

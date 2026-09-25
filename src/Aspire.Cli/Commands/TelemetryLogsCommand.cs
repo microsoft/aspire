@@ -4,16 +4,13 @@
 using System.CommandLine;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
-using Aspire.Shared.ConsoleLogs;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -50,18 +47,14 @@ internal sealed class TelemetryLogsCommand : BaseCommand
 
     public TelemetryLogsCommand(
         IInteractionService interactionService,
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IProjectLocator projectLocator,
-        AspireCliTelemetry telemetry,
+        AppHostConnectionResolver connectionResolver,
         ICliHostEnvironment hostEnvironment,
         IHttpClientFactory httpClientFactory,
         ResourceColorMap resourceColorMap,
         TimeProvider timeProvider,
-        ILogger<TelemetryLogsCommand> logger)
-        : base("logs", TelemetryCommandStrings.LogsDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        ILogger<TelemetryLogsCommand> logger,
+        CommonCommandServices services)
+        : base("logs", TelemetryCommandStrings.LogsDescription, services)
     {
         _interactionService = interactionService;
         _hostEnvironment = hostEnvironment;
@@ -69,7 +62,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         _resourceColorMap = resourceColorMap;
         _timeProvider = timeProvider;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
+        _connectionResolver = connectionResolver;
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
@@ -101,7 +94,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         // Validate --limit value
         if (limit.HasValue && limit.Value < 1)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, TelemetryCommandStrings.LimitMustBePositive);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, TelemetryCommandStrings.LimitMustBePositive);
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
@@ -144,7 +137,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
             {
                 _interactionService.DisplayError($"Resource '{resource}' not found.");
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
 
             // Build URL with query parameters
@@ -166,7 +159,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             _logger.LogError(ex, "Failed to fetch logs from Dashboard API");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
             TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo);
-            return ExitCodeConstants.DashboardFailure;
+            return CliExitCodes.DashboardFailure;
         }
     }
 
@@ -189,7 +182,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             DisplayLogsSnapshot(json, allResources);
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> StreamLogsAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl, CancellationToken cancellationToken)
@@ -215,7 +208,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             }
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private void DisplayLogsSnapshot(string json, IReadOnlyList<IOtlpResource> allResources)

@@ -21,15 +21,15 @@ func main() {
 
 	builder.AddSqlServer("sql-volume").WithDataVolume()
 
-	builder.AddSqlServer("sql-port").WithHostPort(11433)
+	builder.AddSqlServer("sql-port").WithHostPort(aspire.Float64Ptr(11433))
 
 	customPassword := builder.AddParameter("sql-password", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
 	builder.AddSqlServer("sql-custom-pass", &aspire.AddSqlServerOptions{Password: &customPassword})
 
 	sqlChained := builder.AddSqlServer("sql-chained")
-	sqlChained.WithLifetime(aspire.ContainerLifetimePersistent)
+	sqlChained.WithPersistentLifetime()
 	sqlChained.WithDataVolume(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("sql-chained-data")})
-	sqlChained.WithHostPort(12433)
+	sqlChained.WithHostPort(aspire.Float64Ptr(12433))
 
 	sqlChained.AddDatabase("db1")
 	sqlChained.AddDatabase("db2", &aspire.AddDatabaseOptions{DatabaseName: aspire.StringPtr("customdb2")})

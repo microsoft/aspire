@@ -1,0 +1,202 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+#:sdk Microsoft.NET.Sdk.Web
+#:package Microsoft.Extensions.Http.Resilience@${MicrosoftExtensionsHttpResilienceVersion}
+#:package Microsoft.Extensions.ServiceDiscovery@${MicrosoftExtensionsServiceDiscoveryVersion}
+#:package Microsoft.Extensions.ServiceDiscovery.Yarp@${MicrosoftExtensionsServiceDiscoveryYarpVersion}
+#:package OpenTelemetry.Exporter.OpenTelemetryProtocol@${OpenTelemetryExporterOpenTelemetryProtocolVersion}
+#:package OpenTelemetry.Extensions.Hosting@${OpenTelemetryExtensionsHostingVersion}
+#:package OpenTelemetry.Instrumentation.AspNetCore@${OpenTelemetryInstrumentationAspNetCoreVersion}
+#:package OpenTelemetry.Instrumentation.Http@${OpenTelemetryInstrumentationHttpVersion}
+#:package OpenTelemetry.Instrumentation.Runtime@${OpenTelemetryInstrumentationRuntimeVersion}
+#:package Yarp.ReverseProxy@${YarpReverseProxyVersion}
+#:property PublishAot=false
+#:property ManagePackageVersionsCentrally=false
+#:property EnforceCodeStyleInBuild=false
+#:property _SkipUpgradeNetAnalyzersNuGetWarning=true
+
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.AddServiceDefaults();
+
+// Load the merged runtime manifest (produced by Aspire orchestration).
+// Hosting emits the path via the standard "staticWebAssets" config key.
+builder.WebHost.UseStaticWebAssets();
+
+// Read ClientApps configuration section (injected by Aspire hosting integration)
+var appConfigs = builder.Configuration.GetSection("ClientApps").Get<Dictionary<string, ClientAppConfiguration>>() ?? [];
+
+// Load YARP proxy config from configuration (emitted as env vars by Aspire hosting)
+var proxySection = builder.Configuration.GetSection("ReverseProxy");
+var hasProxy = proxySection.Exists();
+
+if (hasProxy)
+{
+    builder.Services.AddReverseProxy()
+        .LoadFromConfig(proxySection)
+        .AddServiceDiscoveryDestinationResolver();
+}
+
+var app = builder.Build();
+
+// HSTS tells browsers to always use HTTPS for this host, preventing future HTTP requests.
+// Only enable in non-development to avoid interfering with dev certificates and localhost.
+// See https://aka.ms/aspnetcore-hsts
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
+// Only redirect document navigations (browser URL bar / top-level navigation) from HTTP
+// to HTTPS. The Sec-Fetch-Dest header distinguishes navigations from subresource loads
+// and API fetches. This ensures the WASM client loads on HTTPS when available, making
+// OTLP and service fetch requests same-origin, without redirecting programmatic requests
+// that might legitimately target the HTTP endpoint.
+// See https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Sec-Fetch-Dest
+app.UseWhen(
+    context => string.Equals(
+        context.Request.Headers["Sec-Fetch-Dest"].ToString(),
+        "document",
+        StringComparison.OrdinalIgnoreCase),
+    branch => branch.UseHttpsRedirection());
+
+app.MapDefaultEndpoints();
+
+if (hasProxy)
+{
+    app.MapReverseProxy();
+}
+
+// Per-app: configuration endpoint + static asset serving.
+foreach (var appConfig in appConfigs.Values)
+{
+    if (!string.IsNullOrEmpty(appConfig.ConfigEndpointPath) && !string.IsNullOrEmpty(appConfig.ConfigResponse))
+    {
+        app.MapGet(appConfig.ConfigEndpointPath, () => Results.Content(appConfig.ConfigResponse!, "application/json"))
+            .WithMetadata(new ContentEncodingMetadata("identity", 1.0));
+    }
+
+    if (!string.IsNullOrEmpty(appConfig.EndpointsManifest) && File.Exists(appConfig.EndpointsManifest))
+    {
+        app.MapGroup(appConfig.PathPrefix!).MapStaticAssets(appConfig.EndpointsManifest)
+            .Add(ep =>
+            {
+                if (ep is RouteEndpointBuilder reb && reb.RoutePattern.RawText?.Contains("{**path") == true)
+                {
+                    reb.Order = int.MaxValue;
+                }
+            });
+    }
+}
+
+app.Run();
+
+sealed class ClientAppConfiguration
+{
+    public string? PathPrefix { get; set; }
+    public string? EndpointsManifest { get; set; }
+    public string? ConfigEndpointPath { get; set; }
+    public string? ConfigResponse { get; set; }
+}
+
+static class ServiceDefaultsExtensions
+{
+    public static TBuilder AddServiceDefaults<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
+    {
+        builder.ConfigureOpenTelemetry();
+        builder.AddDefaultHealthChecks();
+        builder.Services.AddServiceDiscovery();
+
+        builder.Services.ConfigureHttpClientDefaults(http =>
+        {
+            http.AddStandardResilienceHandler();
+            http.AddServiceDiscovery();
+        });
+
+        return builder;
+    }
+
+    public static TBuilder ConfigureOpenTelemetry<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
+    {
+        builder.Logging.AddOpenTelemetry(logging =>
+        {
+            logging.IncludeFormattedMessage = true;
+            logging.IncludeScopes = true;
+        });
+
+        // Suppress verbose per-request logs from ASP.NET Core and HttpClient
+        // for static assets, OTLP ingestion, and OTLP export to keep the
+        // dashboard focused on application-level activity.
+        builder.Logging.AddFilter("Microsoft.AspNetCore.StaticAssets", LogLevel.Warning);
+        builder.Logging.AddFilter("Microsoft.AspNetCore.Routing", LogLevel.Warning);
+        builder.Logging.AddFilter("System.Net.Http.HttpClient.OtlpExporter", LogLevel.Warning);
+
+        builder.Services.AddOpenTelemetry()
+            .WithMetrics(metrics =>
+            {
+                metrics.AddAspNetCoreInstrumentation()
+                    .AddHttpClientInstrumentation()
+                    .AddRuntimeInstrumentation();
+            })
+            .WithTracing(tracing =>
+            {
+                tracing.AddSource(builder.Environment.ApplicationName)
+                    .AddAspNetCoreInstrumentation(options =>
+                        options.Filter = context =>
+                        {
+                            var path = context.Request.Path.Value;
+                            return !context.Request.Path.StartsWithSegments("/health")
+                                && !context.Request.Path.StartsWithSegments("/alive")
+                                && (path is null || !path.Contains("/_otlp/", StringComparison.Ordinal));
+                        }
+                    )
+                    .AddHttpClientInstrumentation(options =>
+                        // Filter out the gateway's own OTLP export calls to the dashboard
+                        // to prevent a feedback loop (exporting traces creates new traces).
+                        options.FilterHttpRequestMessage = request =>
+                            request.RequestUri is null
+                            || !request.RequestUri.AbsolutePath.StartsWith("/v1/", StringComparison.Ordinal)
+                    );
+            });
+
+        var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        if (useOtlpExporter)
+        {
+            builder.Services.AddOpenTelemetry().UseOtlpExporter();
+        }
+
+        return builder;
+    }
+
+    public static TBuilder AddDefaultHealthChecks<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
+    {
+        builder.Services.AddHealthChecks()
+            .AddCheck("self", () => HealthCheckResult.Healthy(), ["live"]);
+
+        return builder;
+    }
+}
+
+static class EndpointExtensions
+{
+    public static WebApplication MapDefaultEndpoints(this WebApplication app)
+    {
+        if (app.Environment.IsDevelopment())
+        {
+            app.MapHealthChecks("/health");
+            app.MapHealthChecks("/alive", new HealthCheckOptions
+            {
+                Predicate = r => r.Tags.Contains("live")
+            });
+        }
+
+        return app;
+    }
+}

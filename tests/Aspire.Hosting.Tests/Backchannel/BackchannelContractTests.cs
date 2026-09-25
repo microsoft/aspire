@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.Diagnostics;
+using Aspire.Tests;
 using Microsoft.Extensions.Configuration;
 using StreamJsonRpc;
 
@@ -31,6 +32,8 @@ public class BackchannelContractTests
         typeof(ExecuteResourceCommandRequest),
         typeof(WaitForResourceRequest),
         typeof(GetPipelineStepsRequest),
+        typeof(GetTerminalInfoRequest),
+        typeof(ListTerminalsRequest),
     ];
 
     // V2 request/response types that must follow the contract
@@ -48,6 +51,11 @@ public class BackchannelContractTests
         typeof(ExecuteResourceCommandResponse),
         typeof(WaitForResourceResponse),
         typeof(GetPipelineStepsResponse),
+        typeof(GetTerminalInfoResponse),
+        typeof(TerminalReplicaInfo),
+        typeof(TerminalPeerInfo),
+        typeof(ListTerminalsResponse),
+        typeof(TerminalSummary),
         typeof(ResourceSnapshot),
         typeof(ResourceSnapshotUrl),
         typeof(ResourceSnapshotUrlDisplayProperties),
@@ -97,7 +105,10 @@ public class BackchannelContractTests
                 type != typeof(BackchannelTraceContext) &&
                 type.Name != "McpToolContentItem" &&
                 type.Name != "ResourceLogLine" &&
-                type.Name != "ResourceLogBatch")
+                type.Name != "ResourceLogBatch" &&
+                type.Name != "TerminalReplicaInfo" &&
+                type.Name != "TerminalPeerInfo" &&
+                type.Name != "TerminalSummary")
             {
                 if (!type.Name.EndsWith("Request") && !type.Name.EndsWith("Response"))
                 {
@@ -235,8 +246,8 @@ public class BackchannelContractTests
     [Fact]
     public void ActivityTracingStrategy_PropagatesW3CTraceContextOnJsonRpcRequest()
     {
-        using var listener = CreateActivityListener("test-json-rpc-trace");
         using var source = new ActivitySource("test-json-rpc-trace");
+        using var listener = ActivityListenerHelper.Create(source);
         using var clientActivity = source.StartActivity("client", ActivityKind.Client);
         Assert.NotNull(clientActivity);
 
@@ -261,9 +272,9 @@ public class BackchannelContractTests
     public void JsonRpcServerCall_RestoresTraceContextBaggage()
     {
         Activity? startedActivity = null;
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activity => startedActivity = activity);
         var telemetry = new ProfilingTelemetry(CreateConfiguration(
             (KnownConfigNames.ProfilingEnabled, "true")));
+        using var listener = ActivityListenerHelper.Create(ProfilingTelemetry.ActivitySource, onActivityStarted: activity => startedActivity = activity);
 
         using var activity = telemetry.StartJsonRpcServerCall(
             "GetCapabilitiesAsync",
@@ -283,6 +294,37 @@ public class BackchannelContractTests
         Assert.Equal("session-1", startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
     }
 
+    [Fact]
+    public void DcpRunApplication_UsesConfiguredProfilingParentWhenAmbientActivityIsNotProfiling()
+    {
+        var activities = new List<Activity>();
+        using var profilingListener = ActivityListenerHelper.Create(ProfilingTelemetry.ActivitySource, onActivityStarted: activities.Add);
+        using var processSource = new ActivitySource("test.process");
+        using var processListener = ActivityListenerHelper.Create(processSource);
+        using var processActivity = processSource.StartActivity("process npx.CMD", ActivityKind.Internal);
+        Assert.NotNull(processActivity);
+        var traceParent = processActivity.Id;
+        Assert.NotNull(traceParent);
+
+        processActivity.Stop();
+
+        using var ambientSource = new ActivitySource("test.ambient");
+        using var ambientListener = ActivityListenerHelper.Create(ambientSource);
+        using var ambientActivity = ambientSource.StartActivity("hidden ambient", ActivityKind.Internal);
+        Assert.NotNull(ambientActivity);
+
+        var configuration = CreateConfiguration(
+            (KnownConfigNames.ProfilingEnabled, "true"),
+            (KnownConfigNames.ProfilingSessionId, "session-1"),
+            (KnownConfigNames.ProfilingTraceParent, traceParent));
+
+        using var activity = ProfilingTelemetry.StartDcpRunApplication(configuration, resourceCount: 1);
+
+        var dcpActivity = Assert.Single(activities, activity => activity.OperationName == ProfilingTelemetry.Activities.DcpRunApplication);
+        Assert.Equal(processActivity.TraceId, dcpActivity.TraceId);
+        Assert.Equal(processActivity.SpanId, dcpActivity.ParentSpanId);
+    }
+
     private static bool IsAllowedCollectionType(Type type)
     {
         var genericDef = type.GetGenericTypeDefinition();
@@ -300,6 +342,11 @@ public class BackchannelContractTests
         if (propertyType == typeof(string))
         {
             return propertyName;
+        }
+
+        if (property.PropertyType == typeof(string[]))
+        {
+            return new[] { propertyName };
         }
 
         if (propertyType == typeof(bool))
@@ -350,6 +397,11 @@ public class BackchannelContractTests
                    expectedDictionary.All(item => actualDictionary.TryGetValue(item.Key, out var actualValue) && item.Value == actualValue);
         }
 
+        if (expected is string[] expectedArray && actual is string[] actualArray)
+        {
+            return expectedArray.SequenceEqual(actualArray);
+        }
+
         return Equals(expected, actual);
     }
 
@@ -362,18 +414,6 @@ public class BackchannelContractTests
             BackchannelTraceContext context => $"{nameof(BackchannelTraceContext)}({context.Baggage.Count} baggage items)",
             _ => value.ToString() ?? string.Empty
         };
-
-    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity>? activityStarted = null)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStarted = activityStarted
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
-    }
 
     private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)
     {

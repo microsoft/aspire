@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES002
-#pragma warning disable ASPIREINTERACTION001
 
 using System.Globalization;
 using System.Text;
@@ -14,6 +13,7 @@ using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Aspire.Hosting.Yaml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -30,6 +30,9 @@ internal static partial class HelmDeploymentEngine
     private const string HelmDeployTag = "helm-deploy";
     private const string HelmUninstallTag = "helm-uninstall";
     internal const string PrintSummaryTag = "print-summary";
+
+    internal static string GetKubernetesDestroyTag(string environmentName) => $"kubernetes-destroy-{environmentName}";
+    internal static string GetHelmUninstallStepName(string environmentName) => $"helm-uninstall-{environmentName}";
 
     /// <summary>
     /// Gets the environment-specific values file name, mirroring Docker Compose's .env.{envName} pattern.
@@ -120,23 +123,25 @@ internal static partial class HelmDeploymentEngine
         var model = factoryContext.PipelineContext.Model;
         var steps = new List<PipelineStep>();
 
-        // Step 0: Check prerequisites — verify Helm CLI is available
+        // Step 0: Check prerequisites — verify Helm CLI is available and meets the
+        // minimum supported version. Doing this once per environment, before any
+        // helm invocation in either the main chart deploy or AddHelmChart(...) flows,
+        // turns confusing low-level errors (unknown-flag, deprecated-flag, raw
+        // spawn errors) into a single actionable message.
+        //
+        // The validator drives everything through IHelmRunner: a missing binary
+        // surfaces as a spawn failure that the validator wraps with the same
+        // "install Helm" hint, so we deliberately don't do a separate
+        // PathLookupHelper probe here. That also lets tests inject a fake runner
+        // without needing real Helm on PATH.
         var checkPrereqStep = new PipelineStep
         {
             Name = $"check-helm-prereqs-{environment.Name}",
             Description = $"Verifies Helm CLI is available for {environment.Name}.",
-            Action = ctx =>
+            Action = async ctx =>
             {
-                var helmPath = PathLookupHelper.FindFullPathFromPath("helm");
-                if (helmPath is null)
-                {
-                    throw new InvalidOperationException(
-                        "Helm CLI not found. Install it from https://helm.sh/docs/intro/install/ " +
-                        "and ensure it is available on your PATH.");
-                }
-
-                ctx.Logger.LogDebug("Helm CLI found at: {HelmPath}", helmPath);
-                return Task.CompletedTask;
+                var helmRunner = ctx.Services.GetRequiredService<IHelmRunner>();
+                await HelmVersionValidator.EnsureMinimumVersionAsync(helmRunner, ctx.CancellationToken).ConfigureAwait(false);
             }
         };
         steps.Add(checkPrereqStep);
@@ -182,8 +187,17 @@ internal static partial class HelmDeploymentEngine
         {
             Name = $"destroy-helm-{environment.Name}",
             Description = $"Confirms and destroys the Helm deployment for {environment.Name}.",
+            Tags = [GetKubernetesDestroyTag(environment.Name)],
             Action = async ctx =>
             {
+                if (environment.SkipDestroyCleanup)
+                {
+                    ctx.Logger.LogInformation(
+                        "Skipping Helm cleanup for Kubernetes environment '{EnvironmentName}' because the cluster no longer exists.",
+                        environment.Name);
+                    return;
+                }
+
                 // Check deployment state to verify this environment was actually deployed
                 var deploymentStateManager = ctx.Services.GetRequiredService<IDeploymentStateManager>();
                 var stateSection = await deploymentStateManager.AcquireSectionAsync($"Helm:{environment.Name}", ctx.CancellationToken).ConfigureAwait(false);
@@ -202,6 +216,7 @@ internal static partial class HelmDeploymentEngine
                 // Use saved state for the confirmation message (more accurate than recomputing)
                 var @namespace = savedNamespace ?? "default";
                 await ConfirmDestroyAsync(ctx, $"Uninstall Helm release '{savedReleaseName}' from namespace '{@namespace}'? This action cannot be undone.").ConfigureAwait(false);
+
                 await HelmUninstallAsync(ctx, environment, savedReleaseName, @namespace).ConfigureAwait(false);
 
                 ctx.Summary.Add("🗑️ Helm Release", savedReleaseName);
@@ -218,9 +233,9 @@ internal static partial class HelmDeploymentEngine
         // Step 5: Helm uninstall (teardown, callable directly via aspire do without confirmation)
         var helmUninstallStep = new PipelineStep
         {
-            Name = $"helm-uninstall-{environment.Name}",
+            Name = GetHelmUninstallStepName(environment.Name),
             Description = $"Uninstalls the Helm release for {environment.Name}.",
-            Tags = [HelmUninstallTag],
+            Tags = [HelmUninstallTag, GetKubernetesDestroyTag(environment.Name)],
             Action = ctx => HelmUninstallAsync(ctx, environment)
         };
         steps.Add(helmUninstallStep);
@@ -344,6 +359,9 @@ internal static partial class HelmDeploymentEngine
         if (overrideValues.Count > 0)
         {
             var serializer = new YamlDotNet.Serialization.SerializerBuilder()
+                // Parameter values are strings. Quote them so Helm does not reinterpret values such
+                // as "01", "1.0", or "True" as numeric or boolean YAML scalars.
+                .WithEventEmitter(nextEmitter => new ForceQuotedStringsEventEmitter(nextEmitter))
                 .WithNewLine("\n")
                 .Build();
             var overrideContent = serializer.Serialize(overrideValues);
@@ -415,19 +433,9 @@ internal static partial class HelmDeploymentEngine
             {
                 var helmRunner = context.Services.GetRequiredService<IHelmRunner>();
 
-                // Verify helm is available
-                try
-                {
-                    var versionExitCode = await helmRunner.RunAsync("version --short", cancellationToken: context.CancellationToken).ConfigureAwait(false);
-                    if (versionExitCode != 0)
-                    {
-                        throw new InvalidOperationException("'helm' is installed but returned an error. Ensure 'helm' is properly configured and your cluster is accessible.");
-                    }
-                }
-                catch (Exception ex) when (ex is not InvalidOperationException and not OperationCanceledException)
-                {
-                    throw new InvalidOperationException("'helm' was not found. Please install 'helm' and ensure it is available on your PATH to deploy to Kubernetes.", ex);
-                }
+                // Helm presence + version validation already ran in
+                // check-helm-prereqs-{env}, which is a transitive predecessor of this
+                // step. No need to re-verify here.
 
                 var valuesFilePath = Path.Combine(outputPath, "values.yaml");
                 var arguments = new StringBuilder();
@@ -575,6 +583,11 @@ internal static partial class HelmDeploymentEngine
 
     private static async Task HelmUninstallAsync(PipelineStepContext context, KubernetesEnvironmentResource environment)
     {
+        if (TrySkipDestroyCleanup(context, environment))
+        {
+            return;
+        }
+
         var @namespace = await ResolveNamespaceAsync(context, environment).ConfigureAwait(false);
         var releaseName = await ResolveReleaseNameAsync(context, environment).ConfigureAwait(false);
         await HelmUninstallAsync(context, environment, releaseName, @namespace).ConfigureAwait(false);
@@ -582,6 +595,11 @@ internal static partial class HelmDeploymentEngine
 
     private static async Task HelmUninstallAsync(PipelineStepContext context, KubernetesEnvironmentResource environment, string releaseName, string @namespace)
     {
+        if (TrySkipDestroyCleanup(context, environment))
+        {
+            return;
+        }
+
         var uninstallTask = await context.ReportingStep.CreateTaskAsync(
             new MarkdownString($"Uninstalling Helm release **{releaseName}** from namespace **{@namespace}**"),
             context.CancellationToken).ConfigureAwait(false);
@@ -591,7 +609,15 @@ internal static partial class HelmDeploymentEngine
             try
             {
                 var helmRunner = context.Services.GetRequiredService<IHelmRunner>();
-                var arguments = $"uninstall {releaseName} --namespace {@namespace}";
+                // Keep the preflight inside the action so AKS destroy can skip cleanup for a cluster
+                // that no longer exists without requiring Helm on the machine.
+                await HelmVersionValidator.EnsureMinimumVersionAsync(
+                    helmRunner,
+                    context.CancellationToken).ConfigureAwait(false);
+
+                // The release can already be absent after a direct uninstall or a prior destroy whose
+                // state cleanup failed. Keep retries idempotent without masking unrelated Helm errors.
+                var arguments = $"uninstall {releaseName} --namespace {@namespace} --ignore-not-found";
 
                 if (environment.KubeConfigPath is not null)
                 {
@@ -627,6 +653,19 @@ internal static partial class HelmDeploymentEngine
                 throw;
             }
         }
+    }
+
+    private static bool TrySkipDestroyCleanup(PipelineStepContext context, KubernetesEnvironmentResource environment)
+    {
+        if (!environment.SkipDestroyCleanup)
+        {
+            return false;
+        }
+
+        context.Logger.LogInformation(
+            "Skipping Helm cleanup for Kubernetes environment '{EnvironmentName}' because the cluster no longer exists.",
+            environment.Name);
+        return true;
     }
 
     private static async Task ConfirmDestroyAsync(PipelineStepContext context, string message)

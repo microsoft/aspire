@@ -18,7 +18,7 @@ public class AzureSignalREmulatorFunctionalTest(ITestOutputHelper testOutputHelp
     [Fact]
     public async Task VerifyAzureSignalRConnectionString()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var signalR = builder.AddAzureSignalR("signalr").RunAsEmulator(e =>
         {
@@ -36,7 +36,7 @@ public class AzureSignalREmulatorFunctionalTest(ITestOutputHelper testOutputHelp
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyWaitForOnAzureSignalREmulatorBlocksDependentResources()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -72,7 +72,7 @@ public class AzureSignalREmulatorFunctionalTest(ITestOutputHelper testOutputHelp
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task VerifyAzureSignalREmulatorResource()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
@@ -85,7 +85,7 @@ public class AzureSignalREmulatorFunctionalTest(ITestOutputHelper testOutputHelp
                 ShouldHandle = new PredicateBuilder().Handle<AzureSignalRException>()
             })
             .Build();
-        using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(testOutputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var signalR = builder
             .AddAzureSignalR("signalR")
             .RunAsEmulator();

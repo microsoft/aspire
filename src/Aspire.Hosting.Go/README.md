@@ -1,6 +1,6 @@
-# Aspire.Hosting.Go library
+# Go app hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure Go applications.
+Use this integration to model, configure, and orchestrate Go applications in an Aspire solution.
 
 ## Getting started
 
@@ -9,17 +9,19 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 The **Go toolchain** (`go`) must be available on the PATH of the machine running the AppHost.
 For GoLand remote debugging, [Delve](https://github.com/go-delve/delve) (`dlv`) must also be on the PATH.
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Go library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Go` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Go
+```bash
+aspire add Aspire.Hosting.Go
 ```
 
 ## Usage example
 
-In the _AppHost.cs_ file of `AppHost`, add a Go application resource:
+In the AppHost, add a Go application resource:
+
+**C#**
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -30,6 +32,21 @@ var api = builder.AddGoApp("api", "../go-api")
     .WithOtlpExporter();
 
 builder.Build().Run();
+```
+
+**TypeScript**
+
+```typescript
+import { createBuilder } from "./.aspire/modules/aspire.mjs";
+
+const builder = await createBuilder();
+
+const api = await builder.addGoApp("api", "../go-api")
+    .withHttpEndpoint({ port: 8080 })
+    .withExternalHttpEndpoints()
+    .withOtlpExporter();
+
+await builder.build().run();
 ```
 
 The method executes the package as `go run .` from the directory containing `go.mod`.
@@ -73,7 +90,7 @@ application is replaced by a headless Delve server:
 
 ```csharp
 builder.AddGoApp("api", "../go-api")
-    .WithDelveServer(port: 2345)
+    .WithDelveServer()
     .WithHttpEndpoint(port: 8080);
 ```
 
@@ -81,6 +98,63 @@ This launches:
 ```sh
 dlv --headless=true --listen=127.0.0.1:2345 --api-version=2 debug .
 ```
+
+The default accepts one debugger client. To keep the server available after a debugger disconnects
+or allow multiple debugger clients, opt in with `AcceptMultiClient`. Configure additional Delve
+server flags with `DelveServerOptions`:
+
+```csharp
+builder.AddGoApp("api", "../go-api")
+    .WithDelveServer(new DelveServerOptions
+    {
+        AcceptMultiClient = true,
+        ContinueOnStart = true,
+        Log = true,
+        LogOutput = "rpc,dap,debugger"
+    });
+```
+
+For a TypeScript AppHost, pass the same options as an object:
+
+```typescript
+const api = await builder.addGoApp("api", "../go-api");
+await api.withDelveServer({
+    acceptMultiClient: true,
+    continueOnStart: true,
+    log: true,
+    logOutput: "rpc,dap,debugger",
+});
+```
+
+| Option | Default | Delve behavior |
+|---|---|---|
+| `Port` | `2345` | Sets the loopback listener port. |
+| `AcceptMultiClient` | `false` | Passes `--accept-multiclient` when enabled. |
+| `OnlySameUser` | `null` | Passes `--only-same-user=true` or `--only-same-user=false` when set. |
+| `ContinueOnStart` | `false` | Passes `--continue` when enabled. |
+| `Log` | `false` | Passes `--log` when enabled. |
+| `LogOutput` | `null` | Passes `--log-output=<components>` when logging is enabled and components are specified. |
+
+Set `ContinueOnStart` to `true` when you want the Go application to run immediately under Delve and
+attach a debugger later.
+
+If an IDE fails to attach, enable Delve logging first and inspect the resource logs. Some IDE and
+remote-environment combinations can cause Delve to reject the connection because it appears to come
+from a different operating system user. If the logs show that the same-user check is failing, you
+can disable that check:
+
+```csharp
+builder.AddGoApp("api", "../go-api")
+    .WithDelveServer(new DelveServerOptions
+    {
+        OnlySameUser = false,
+        Log = true,
+        LogOutput = "rpc,dap,debugger"
+    });
+```
+
+`OnlySameUser = false` maps to `--only-same-user=false`. Use it only when needed; the Delve listener
+remains bound to `127.0.0.1`.
 
 **GoLand** — create a **Go Remote** run/debug configuration (**Edit | Run Configurations**):
 - **Host**: `localhost`
@@ -98,14 +172,33 @@ dlv --headless=true --listen=127.0.0.1:2345 --api-version=2 debug .
 }
 ```
 
+**Zed** — add to `debug.json`:
+```json
+[
+  {
+    "label": "Attach to api",
+    "adapter": "Delve",
+    "request": "attach",
+    "mode": "remote",
+    "tcp_connection": {
+      "host": "127.0.0.1",
+      "port": 2345
+    },
+    "stopOnEntry": false
+  }
+]
+```
+
 Start the debug configuration after the resource appears as running in the Aspire dashboard.
 See the [JetBrains docs](https://www.jetbrains.com/help/go/attach-to-running-go-processes-with-debugger.html) for details.
 
 ## Additional documentation
 
-- [.NET Aspire documentation](https://learn.microsoft.com/dotnet/aspire)
+- https://aspire.dev/integrations/gallery/
+- https://aspire.dev/integrations/frameworks/go/go-host/
+- [Aspire documentation](https://aspire.dev/)
 - [Delve debugger](https://github.com/go-delve/delve)
 
 ## Feedback & contributing
 
-https://github.com/dotnet/aspire
+https://github.com/microsoft/aspire

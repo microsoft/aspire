@@ -43,6 +43,13 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
                 //! Aspire Rust SDK
                 //! GENERATED CODE - DO NOT EDIT
 
+                // The SDK mirrors the whole app model surface, so any single AppHost leaves most of it
+                // unused and would otherwise emit hundreds of dead_code/unused warnings on every build.
+                // Lint levels are inherited by child modules, so allowing them here covers transport,
+                // base and aspire, and keeps cargo output limited to diagnostics that come from the
+                // AppHost's own code.
+                #![allow(dead_code, unused_imports, unused_variables)]
+
                 pub mod transport;
                 pub mod base;
                 pub mod aspire;
@@ -737,8 +744,23 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
         WriteLine("        resolved_options.insert(\"Args\".to_string(), serde_json::to_value(args).unwrap_or(Value::Null));");
         WriteLine("    }");
         WriteLine("    if !resolved_options.contains_key(\"ProjectDirectory\") {");
-        WriteLine("        if let Ok(pwd) = std::env::current_dir() {");
+        // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
+        // directory (not the cwd) when matching --apphost <directory> requests.
+        WriteLine("        if let Some(project_directory) = std::env::var(\"ASPIRE_PROJECT_DIRECTORY\").ok().filter(|s| !s.is_empty()) {");
+        WriteLine("            resolved_options.insert(\"ProjectDirectory\".to_string(), Value::String(project_directory));");
+        WriteLine("        } else if let Ok(pwd) = std::env::current_dir() {");
         WriteLine("            resolved_options.insert(\"ProjectDirectory\".to_string(), Value::String(pwd.to_string_lossy().to_string()));");
+        WriteLine("        }");
+        WriteLine("    }");
+        // ASPIRE_APPHOST_FILEPATH is set by the CLI so the host reports the original AppHost file
+        // path (e.g. apphost.rs) back through GetAppHostInformationAsync. Without this the host
+        // falls back to the aspire-managed entry assembly name and the CLI cannot match
+        // --apphost <directory> against the running AppHost.
+        WriteLine("    if !resolved_options.contains_key(\"AppHostFilePath\") {");
+        WriteLine("        if let Ok(app_host_file_path) = std::env::var(\"ASPIRE_APPHOST_FILEPATH\") {");
+        WriteLine("            if !app_host_file_path.is_empty() {");
+        WriteLine("                resolved_options.insert(\"AppHostFilePath\".to_string(), Value::String(app_host_file_path));");
+        WriteLine("            }");
         WriteLine("        }");
         WriteLine("    }");
         WriteLine("    let mut args: HashMap<String, Value> = HashMap::new();");
@@ -904,7 +926,7 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             _ => "Value"
         };
 
-        return isOptional ? $"Option<{baseType}>" : baseType;
+        return isOptional || ShouldApplyNullableType(typeRef) ? $"Option<{baseType}>" : baseType;
     }
 
     /// <summary>
@@ -930,7 +952,16 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             // Use Handle directly for handle types in DTOs since Handle implements Serialize/Deserialize
             AtsTypeCategory.Handle => "Handle",
             AtsTypeCategory.Dto => MapDtoType(typeRef.TypeId),
-            AtsTypeCategory.Callback => "Value", // Callbacks can't be serialized in DTOs
+            // DTO callback properties remain weakly typed (a serde_json::Value) in Rust. Unlike Go, Java,
+            // Python, and TypeScript -- whose generators emit strongly-typed DTO callbacks and whose
+            // runtimes auto-register closures embedded in serialized DTO maps -- Rust DTOs are built on
+            // serde derive, and a Box<dyn Fn> closure is not serde-serializable. Supporting it would
+            // require serde-skipping the field plus a hand-written to_map that registers the closure via
+            // the global register_callback. This matches the existing behavior for all other DTO
+            // callbacks (e.g. HttpCommandExportOptions.PrepareRequest from PR #17950), and there is no
+            // Rust polyglot bench to validate a runtime implementation, so Rust DTO callbacks are left
+            // weakly typed as a known follow-up.
+            AtsTypeCategory.Callback => "Value",
             AtsTypeCategory.Array => $"Vec<{MapTypeRefToRustForDto(typeRef.ElementType, false)}>",
             AtsTypeCategory.List => $"Vec<{MapTypeRefToRustForDto(typeRef.ElementType, false)}>",
             AtsTypeCategory.Dict => $"HashMap<{MapTypeRefToRustForDto(typeRef.KeyType, false)}, {MapTypeRefToRustForDto(typeRef.ValueType, false)}>",
@@ -939,7 +970,7 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             _ => "Value"
         };
 
-        return isOptional ? $"Option<{baseType}>" : baseType;
+        return isOptional || ShouldApplyNullableType(typeRef) ? $"Option<{baseType}>" : baseType;
     }
 
     private string MapTypeRefToRustForExportedValue(AtsTypeRef? typeRef)
@@ -954,7 +985,7 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             return "ReferenceExpression";
         }
 
-        return typeRef.Category switch
+        var baseType = typeRef.Category switch
         {
             AtsTypeCategory.Primitive => MapPrimitiveType(typeRef.TypeId),
             AtsTypeCategory.Enum => MapEnumType(typeRef.TypeId),
@@ -964,6 +995,8 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             AtsTypeCategory.Union or AtsTypeCategory.Unknown => "Value",
             _ => "Value"
         };
+
+        return ShouldApplyNullableType(typeRef) ? $"Option<{baseType}>" : baseType;
     }
 
     private string MapHandleType(string typeId) =>
@@ -1015,13 +1048,18 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
                 AtsConstants.CancellationToken => "&CancellationToken",
                 _ => "&Value"
             };
-            return isOptional ? $"Option<{baseType}>" : baseType;
+            return isOptional || ShouldApplyNullableType(typeRef) ? $"Option<{baseType}>" : baseType;
         }
 
         // For arrays/lists of strings, use Vec<String> since we need owned values
         // For other types, use the standard mapping
         return MapTypeRefToRust(typeRef, isOptional);
     }
+
+    private static bool ShouldApplyNullableType(AtsTypeRef typeRef) =>
+        typeRef.IsNullable == true
+        && typeRef.Category is AtsTypeCategory.Primitive or AtsTypeCategory.Enum
+        && typeRef.TypeId is not (AtsConstants.Void or AtsConstants.Any or AtsConstants.CancellationToken);
 
     private static bool IsHandleType(AtsTypeRef? typeRef) =>
         typeRef?.Category == AtsTypeCategory.Handle

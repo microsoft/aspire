@@ -20,6 +20,7 @@ public static class AzureKubernetesIngressExtensions
     /// <param name="builder">The AKS environment resource builder.</param>
     /// <param name="name">The name of the ingress resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method delegates to the inner <see cref="KubernetesEnvironmentResource"/> of the AKS
@@ -28,6 +29,7 @@ public static class AzureKubernetesIngressExtensions
     /// appropriate class name.
     /// </para>
     /// </remarks>
+    /// <ats-remarks />
     /// <example>
     /// <code>
     /// var aks = builder.AddAzureKubernetesEnvironment("aks");
@@ -35,10 +37,10 @@ public static class AzureKubernetesIngressExtensions
     ///     .WithIngressClass("azure-alb-external");
     ///
     /// var api = builder.AddProject&lt;MyApi&gt;("api");
-    /// ingress.WithRoute("/api", api.GetEndpoint("http"));
+    /// ingress.WithPath("/api", api.GetEndpoint("http"));
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a Kubernetes Ingress resource to an AKS environment")]
+    [AspireExport]
     public static IResourceBuilder<KubernetesIngressResource> AddIngress(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
         [ResourceName] string name)
@@ -57,6 +59,7 @@ public static class AzureKubernetesIngressExtensions
     /// <param name="builder">The AKS environment resource builder.</param>
     /// <param name="name">The name of the gateway resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// <code>
     /// var aks = builder.AddAzureKubernetesEnvironment("aks");
@@ -67,7 +70,7 @@ public static class AzureKubernetesIngressExtensions
     /// gateway.WithRoute("/api", api.GetEndpoint("http"));
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a Kubernetes Gateway API Gateway to an AKS environment")]
+    [AspireExport]
     public static IResourceBuilder<KubernetesGatewayResource> AddGateway(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
         [ResourceName] string name)
@@ -117,7 +120,7 @@ public static class AzureKubernetesIngressExtensions
     ///     .WithHelmValue("crds.enabled", "true");
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds an external Helm chart to an AKS environment")]
+    [AspireExport]
     public static IResourceBuilder<KubernetesHelmChartResource> AddHelmChart(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
         [ResourceName] string name,
@@ -137,9 +140,11 @@ public static class AzureKubernetesIngressExtensions
     /// Routes a Kubernetes <see cref="KubernetesGatewayResource"/> through the supplied
     /// Azure Application Gateway for Containers (AGC) <see cref="AzureKubernetesLoadBalancerResource"/>.
     /// </summary>
+    /// <ats-summary>Routes a Kubernetes Gateway through an AGC ApplicationLoadBalancer</ats-summary>
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="loadBalancer">The AGC load balancer to route through.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// Writes the AGC routing annotations (<c>alb.networking.azure.io/alb-name</c> and
     /// <c>alb.networking.azure.io/alb-namespace</c>) onto the rendered Gateway and defaults
@@ -152,7 +157,7 @@ public static class AzureKubernetesIngressExtensions
     /// var gateway = aks.AddGateway("public").WithLoadBalancer(lb);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Routes a Kubernetes Gateway through an AGC ApplicationLoadBalancer")]
+    [AspireExport]
     public static IResourceBuilder<KubernetesGatewayResource> WithLoadBalancer(
         this IResourceBuilder<KubernetesGatewayResource> builder,
         IResourceBuilder<AzureKubernetesLoadBalancerResource> loadBalancer)
@@ -179,16 +184,18 @@ public static class AzureKubernetesIngressExtensions
     /// Routes a Kubernetes <see cref="KubernetesIngressResource"/> through the supplied
     /// Azure Application Gateway for Containers (AGC) <see cref="AzureKubernetesLoadBalancerResource"/>.
     /// </summary>
+    /// <ats-summary>Routes a Kubernetes Ingress through an AGC ApplicationLoadBalancer</ats-summary>
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="loadBalancer">The AGC load balancer to route through.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// Writes the AGC routing annotations (<c>alb.networking.azure.io/alb-name</c> and
     /// <c>alb.networking.azure.io/alb-namespace</c>) onto the rendered Ingress and defaults
     /// the IngressClass to <c>azure-alb-external</c> when one has not already been set via
     /// <c>WithIngressClass(...)</c>.
     /// </remarks>
-    [AspireExport("withLoadBalancerOnIngress", MethodName = "withLoadBalancer", Description = "Routes a Kubernetes Ingress through an AGC ApplicationLoadBalancer")]
+    [AspireExport("withLoadBalancerOnIngress", MethodName = "withLoadBalancer")]
     public static IResourceBuilder<KubernetesIngressResource> WithLoadBalancer(
         this IResourceBuilder<KubernetesIngressResource> builder,
         IResourceBuilder<AzureKubernetesLoadBalancerResource> loadBalancer)

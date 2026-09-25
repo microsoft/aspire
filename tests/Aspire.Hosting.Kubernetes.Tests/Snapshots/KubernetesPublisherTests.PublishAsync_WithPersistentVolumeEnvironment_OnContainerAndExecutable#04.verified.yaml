@@ -1,0 +1,40 @@
+﻿---
+apiVersion: "apps/v1"
+kind: "StatefulSet"
+metadata:
+  name: "executable-statefulset"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "executable"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: "{{ .Chart.Name }}"
+        app.kubernetes.io/component: "executable"
+        app.kubernetes.io/instance: "{{ .Release.Name }}"
+    spec:
+      containers:
+        - image: "{{ .Values.parameters.executable.executable_image }}"
+          name: "executable"
+          envFrom:
+            - configMapRef:
+                name: "executable-config"
+          volumeMounts:
+            - name: "executable-data"
+              mountPath: "/srv/executable"
+          imagePullPolicy: "IfNotPresent"
+      volumes:
+        - name: "executable-data"
+          persistentVolumeClaim:
+            claimName: "executable-data"
+      securityContext:
+        fsGroup: 2000
+        fsGroupChangePolicy: "OnRootMismatch"
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "{{ .Chart.Name }}"
+      app.kubernetes.io/component: "executable"
+      app.kubernetes.io/instance: "{{ .Release.Name }}"
+  replicas: 1

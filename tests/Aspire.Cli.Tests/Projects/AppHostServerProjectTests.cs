@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.AspNetCore.InternalTesting;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
@@ -19,7 +21,7 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDisposable
 {
-    private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(outputHelper);
+    private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
     public void Dispose()
     {
@@ -40,11 +42,117 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         // Use workspace root as repo root for testing
         var repoRoot = _workspace.WorkspaceRoot.FullName;
 
-        return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, logger);
+        return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, new TestProcessExecutionFactory(), new TestEnvironment(), logger);
     }
 
-    [Fact]
-    public async Task CreateProjectFiles_AppSettingsJson_MatchesSnapshot()
+        [Fact]
+        public async Task CreateProjectFiles_RestoreRootConfigDirectory_PreservesRelativeSources()
+        {
+                var repoRoot = _workspace.CreateDirectory("repo");
+                var appPath = _workspace.CreateDirectory("app");
+                var projectModelPath = _workspace.CreateDirectory("model");
+                var parentFeed = _workspace.CreateDirectory("parent-feed");
+                var parentConfigPath = Path.Combine(_workspace.Path, "NuGet.Config");
+                await File.WriteAllTextAsync(parentConfigPath, """
+                        <configuration>
+                            <packageSources>
+                                <clear />
+                                <add key="parent-feed" value="./parent-feed" />
+                            </packageSources>
+                            <packageSourceMapping>
+                                <clear />
+                                <packageSource key="parent-feed">
+                                    <package pattern="*" />
+                                </packageSource>
+                            </packageSourceMapping>
+                        </configuration>
+                        """);
+                var feed = repoRoot.CreateSubdirectory("feed");
+                var repoConfigPath = Path.Combine(repoRoot.FullName, "NuGet.Config");
+                await File.WriteAllTextAsync(repoConfigPath, """
+                        <configuration>
+                            <packageSources>
+                                <add key="repo-feed" value="./feed" />
+                            </packageSources>
+                            <packageSourceMapping>
+                                <packageSource key="repo-feed">
+                                    <package pattern="*" />
+                                </packageSource>
+                            </packageSourceMapping>
+                        </configuration>
+                        """);
+                await File.WriteAllTextAsync(Path.Combine(repoRoot.FullName, "Directory.Packages.props"), "<Project />");
+                await File.WriteAllTextAsync(Path.Combine(appPath.FullName, "NuGet.Config"), """
+                        <configuration>
+                            <packageSources>
+                                <clear />
+                                <add key="app-feed" value="./other-feed" />
+                            </packageSources>
+                        </configuration>
+                        """);
+                var packagingService = new TestPackagingService
+                {
+                        GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([])
+                };
+                var project = new DotNetBasedAppHostServerProject(
+                        appPath.FullName, "test.sock", repoRoot.FullName,
+                        new TestDotNetCliRunner(), packagingService,
+                        new TestProcessExecutionFactory(), new TestEnvironment(),
+                        NullLogger<DotNetBasedAppHostServerProject>.Instance,
+                        projectModelPath: projectModelPath.FullName,
+                        restoreRootConfigDirectory: repoRoot.FullName);
+
+                var (projectFilePath, _) = await project.CreateProjectFilesAsync([]).DefaultTimeout();
+
+                Assert.Equal(repoRoot.FullName, XDocument.Load(projectFilePath).Descendants("RestoreRootConfigDirectory").Single().Value);
+                Assert.False(NuGetConfigMerger.TryFindNuGetConfigInDirectory(projectModelPath, out _));
+
+                // Evaluate NuGet's actual settings without restoring packages. A relative source such as
+                // <add key="repo-feed" value="./feed" /> must resolve beside the original config file.
+                var startInfo = new ProcessStartInfo("dotnet")
+                {
+                        WorkingDirectory = projectModelPath.FullName,
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true,
+                        ArgumentList =
+                        {
+                                "msbuild", projectFilePath, "-nologo", "-target:_GetRestoreSettings",
+                                "-property:RestoreProjectStyle=PackageReference",
+                                "-getProperty:_OutputSources,_OutputConfigFilePaths"
+                        }
+                };
+                using var process = Process.Start(startInfo);
+                Assert.NotNull(process);
+                try
+                {
+                        var outputTask = process.StandardOutput.ReadToEndAsync();
+                        var errorTask = process.StandardError.ReadToEndAsync();
+                        await process.WaitForExitAsync().DefaultTimeout();
+                        var output = await outputTask.DefaultTimeout();
+                        var error = await errorTask.DefaultTimeout();
+                        Assert.True(process.ExitCode == 0, $"{output}{Environment.NewLine}{error}");
+
+                        using var document = JsonDocument.Parse(output);
+                        var properties = document.RootElement.GetProperty("Properties");
+                        var sources = properties.GetProperty("_OutputSources").GetString()!.Split(';');
+                        Assert.Equal(new[] { parentFeed.FullName, feed.FullName }.Order(StringComparer.Ordinal), sources.Order(StringComparer.Ordinal));
+                        var configPaths = properties.GetProperty("_OutputConfigFilePaths").GetString()!.Split(';');
+                        Assert.Contains(repoConfigPath, configPaths);
+                        Assert.Contains(parentConfigPath, configPaths);
+                }
+                finally
+                {
+                        if (!process.HasExited)
+                        {
+                                process.Kill(entireProcessTree: true);
+                        }
+                }
+        }
+
+        [Fact]
+        public async Task CreateProjectFiles_AppSettingsJson_MatchesSnapshot()
     {
         // Arrange
         var project = CreateProject();
@@ -160,16 +268,75 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public void DefaultSdkVersion_ReturnsValidVersion()
+    public async Task CreateProjectFiles_SkipsAspireIntegrationAnalyzerReferences()
     {
-        // Act
-        var version = DotNetBasedAppHostServerProject.DefaultSdkVersion;
+        var project = CreateProject();
+        var packages = new List<IntegrationReference>
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")
+        };
 
-        // Assert
-        Assert.NotNull(version);
-        Assert.NotEmpty(version);
-        // Should not contain '+' (commit hash should be stripped)
-        Assert.DoesNotContain("+", version);
+        var (projectPath, _) = await project.CreateProjectFilesAsync(packages).DefaultTimeout();
+
+        var doc = XDocument.Load(projectPath);
+        var skipAnalyzersElement = doc.Descendants("SkipAspireIntegrationAnalyzersReference").SingleOrDefault();
+
+        Assert.NotNull(skipAnalyzersElement);
+        Assert.Equal("true", skipAnalyzersElement.Value);
+    }
+
+    [Fact]
+    public async Task CreateProjectFiles_ExactAspirePackageRestoresInsteadOfUsingCheckoutProject()
+    {
+        var project = CreateProject();
+        var integrations = new[]
+        {
+            IntegrationReference.FromPackage(
+                "Aspire.Hosting.Redis",
+                "[13.1.0]",
+                disableLocalProjectSubstitution: true),
+            IntegrationReference.FromPackage("Aspire.Hosting.PostgreSQL", "13.1.0")
+        };
+
+        var (projectPath, _) = await project.CreateProjectFilesAsync(integrations).DefaultTimeout();
+
+        var document = XDocument.Load(projectPath);
+        var packageReference = Assert.Single(
+            document.Descendants("PackageReference"),
+            element => element.Attribute("Include")?.Value == "Aspire.Hosting.Redis");
+
+        Assert.Equal("[13.1.0]", packageReference.Attribute("VersionOverride")?.Value);
+        Assert.Null(packageReference.Attribute("Version"));
+        Assert.DoesNotContain(
+            document.Descendants("PackageReference"),
+            element => element.Attribute("Include")?.Value == "Aspire.Hosting.PostgreSQL");
+    }
+
+    [Fact]
+    public async Task CreateProjectFiles_ExactVersionRangeUsesCheckoutProjectByDefault()
+    {
+        var integrationDirectory = _workspace.WorkspaceRoot.CreateSubdirectory(
+            Path.Combine("src", "Aspire.Hosting.Redis"));
+        var integrationProjectPath = Path.Combine(integrationDirectory.FullName, "Aspire.Hosting.Redis.csproj");
+        await File.WriteAllTextAsync(integrationProjectPath, "<Project />");
+
+        var project = CreateProject();
+        var integrations = new[]
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting.Redis", "[13.1.0]")
+        };
+
+        var (projectPath, _) = await project.CreateProjectFilesAsync(integrations).DefaultTimeout();
+
+        var document = XDocument.Load(projectPath);
+        var projectReference = Assert.Single(
+            document.Descendants("ProjectReference"),
+            element => element.Attribute("Include")?.Value == integrationProjectPath);
+
+        Assert.Equal("false", projectReference.Element("IsAspireProjectResource")?.Value);
+        Assert.DoesNotContain(
+            document.Descendants("PackageReference"),
+            element => element.Attribute("Include")?.Value == "Aspire.Hosting.Redis");
     }
 
     [Fact]
@@ -281,22 +448,22 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
                 {
                     new PackageMapping("Aspire*", prOldHivePath),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-                }, nugetCache);
+                }, nugetCache, new TestFeatures(), NullLogger.Instance);
 
                 var prNewChannel = PackageChannel.CreateExplicitChannel("pr-new", PackageChannelQuality.Prerelease, new[]
                 {
                     new PackageMapping("Aspire*", prNewHivePath),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-                }, nugetCache);
+                }, nugetCache, new TestFeatures(), NullLogger.Instance);
 
-                var implicitChannel = PackageChannel.CreateImplicitChannel(nugetCache);
+                var implicitChannel = PackageChannel.CreateImplicitChannel(nugetCache, new TestFeatures(), NullLogger.Instance);
 
                 return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel, prOldChannel, prNewChannel });
             }
         };
 
         var runner = new TestDotNetCliRunner();
-        
+
         // Use a real logger to capture debug output for diagnostics
         using var loggerFactory = LoggerFactory.Create(builder =>
         {
@@ -307,7 +474,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         // Use a workspace-local ProjectModelPath for test isolation
         var projectModelPath = Path.Combine(appPath, ".aspire_server");
-        var project = new DotNetBasedAppHostServerProject(appPath, "test.sock", appPath, runner, packagingService, logger, projectModelPath);
+        var project = new DotNetBasedAppHostServerProject(appPath, "test.sock", appPath, runner, packagingService, new TestProcessExecutionFactory(), new TestEnvironment(), logger, projectModelPath);
 
         var packages = new List<IntegrationReference>
         {
@@ -351,16 +518,124 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.DoesNotContain(prOldHive.FullName, restoreSources);
     }
 
+    [Fact]
+    public async Task CreateProjectFiles_WithPackageSourceOverride_PrependsOverrideToRestoreAdditionalProjectSources()
+    {
+        // Regression for finding #2 of the 2026-05-19 post-merge review: the DotNet-based
+        // (in-repo / dogfood) AppHost path previously declared a packageSourceOverride parameter
+        // on PrepareAsync but ignored it during restore, so `aspire new --source <pr-hive>` was
+        // silently dropped in dev mode. The override now threads through CreateProjectFilesAsync
+        // and prepends to the RestoreAdditionalProjectSources list so the dogfood hive is the
+        // first source NuGet evaluates for any PackageReference fallback in this path.
+        var appPath = _workspace.WorkspaceRoot.FullName;
+        const string overrideSource = "/tmp/aspire-pr-hive/packages";
+        var aspireConfigPath = Path.Combine(appPath, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "daily"
+            }
+            """);
+
+        var nugetCache = new FakeNuGetPackageCache();
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, new[]
+        {
+            new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/fake/v3/index.json"),
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        }, nugetCache, new TestFeatures(), NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(new[] { dailyChannel })
+        };
+
+        var projectModelPath = Path.Combine(appPath, ".aspire_server");
+        var project = new DotNetBasedAppHostServerProject(
+            appPath,
+            "test.sock",
+            appPath,
+            new TestDotNetCliRunner(),
+            packagingService,
+            new TestProcessExecutionFactory(),
+            new TestEnvironment(),
+            NullLogger<DotNetBasedAppHostServerProject>.Instance,
+            projectModelPath);
+
+        var packages = new List<IntegrationReference>
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")
+        };
+
+        var (projectFilePath, _) = await project.CreateProjectFilesAsync(packages, packageSourceOverride: overrideSource, cancellationToken: CancellationToken.None).DefaultTimeout();
+
+        var projectDoc = XDocument.Load(projectFilePath);
+        var restoreSources = projectDoc.Descendants("RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
+        Assert.NotNull(restoreSources);
+        var sources = restoreSources!.Split(';');
+        // Override is prepended so the hive wins NuGet's source evaluation order when the same
+        // Aspire package version exists in both the hive and the channel feed.
+        Assert.Equal(overrideSource, sources[0]);
+        Assert.Contains("https://pkgs.dev.azure.com/fake/v3/index.json", sources);
+    }
+
+    [Fact]
+    public async Task CreateProjectFiles_WithoutPackageSourceOverride_DoesNotInjectExtraSource()
+    {
+        // Negative companion to the override regression: ensure the no-override path still emits
+        // only the channel sources (i.e., we are not accidentally introducing an empty/null
+        // source that breaks restore on the existing in-repo flow).
+        var appPath = _workspace.WorkspaceRoot.FullName;
+        var aspireConfigPath = Path.Combine(appPath, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "daily"
+            }
+            """);
+
+        var nugetCache = new FakeNuGetPackageCache();
+        const string channelFeed = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, new[]
+        {
+            new PackageMapping("Aspire*", channelFeed)
+        }, nugetCache, new TestFeatures(), NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(new[] { dailyChannel })
+        };
+
+        var projectModelPath = Path.Combine(appPath, ".aspire_server");
+        var project = new DotNetBasedAppHostServerProject(
+            appPath,
+            "test.sock",
+            appPath,
+            new TestDotNetCliRunner(),
+            packagingService,
+            new TestProcessExecutionFactory(),
+            new TestEnvironment(),
+            NullLogger<DotNetBasedAppHostServerProject>.Instance,
+            projectModelPath);
+
+        var packages = new List<IntegrationReference>
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")
+        };
+
+        var (projectFilePath, _) = await project.CreateProjectFilesAsync(packages).DefaultTimeout();
+
+        var projectDoc = XDocument.Load(projectFilePath);
+        var restoreSources = projectDoc.Descendants("RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
+        Assert.NotNull(restoreSources);
+        Assert.Equal(channelFeed, restoreSources);
+    }
+
     private static void DumpDirectoryTree(string path, ITestOutputHelper output, string indent = "")
     {
         var dirInfo = new DirectoryInfo(path);
         output.WriteLine($"{indent}{dirInfo.Name}/");
-        
+
         foreach (var file in dirInfo.GetFiles())
         {
             output.WriteLine($"{indent}  {file.Name}");
         }
-        
+
         foreach (var dir in dirInfo.GetDirectories())
         {
             DumpDirectoryTree(dir.FullName, output, indent + "  ");

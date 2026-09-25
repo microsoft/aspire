@@ -186,7 +186,7 @@ internal partial class MarkdownToSpectreConverter
                 .Select(cell => RenderTableCellToMarkup(cell, markdown)).ToList())
             .ToList();
         var plainValues = markupValues
-            .Select(static row => row.Select(static cell => cell.RemoveMarkup()).ToList())
+            .Select(static row => row.Select(static cell => StringUtils.RemoveMarkup(cell)).ToList())
             .ToList();
 
         var columnCount = markupValues.Max(static row => row.Count);

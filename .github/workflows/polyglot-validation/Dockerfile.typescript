@@ -10,17 +10,37 @@
 #
 # Note: Expects self-extracting binary and NuGet artifacts to be pre-downloaded to /workspace/artifacts/
 #
-FROM mcr.microsoft.com/devcontainers/typescript-node:22
+ARG NODE_VERSION=24
+FROM mcr.microsoft.com/devcontainers/typescript-node:${NODE_VERSION}
+ARG NODE_VERSION
+ARG TSGO_VERSION=7.0.0-dev.20260523.1
+ARG NPM_REGISTRY=https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
 
 # Ensure Yarn APT repository signing key is available (base image includes Yarn repo)
 RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/yarn-archive-keyring.gpg > /dev/null
 
-# Install system dependencies (wget, docker CLI, jq for JSON manipulation)
-RUN apt-get update && apt-get install -y \
+# Install system dependencies and verify the MCR base image provides the requested Node.js runtime.
+RUN case "$NODE_VERSION" in 22|24) ;; *) echo "Unsupported NODE_VERSION: $NODE_VERSION" >&2; exit 1 ;; esac && \
+    apt-get update && apt-get install -y \
     wget \
     docker.io \
     jq \
+    && node --version | grep -E "^v${NODE_VERSION}\\." \
     && rm -rf /var/lib/apt/lists/*
+
+# TypeScript validation fixtures intentionally cover npm, pnpm, Yarn 4+, and Bun
+# package-manager markers, so make all selected tools available in the image.
+# Install each tool directly because Corepack's package-manager downloads bypass
+# NPM_REGISTRY and would acquire pnpm and Yarn outside dotnet-public-npm.
+RUN npm install --global --force --registry "${NPM_REGISTRY}" \
+    pnpm@10.0.0 \
+    @yarnpkg/cli-dist@4.14.1 \
+    bun@1.2.0 \
+    "@typescript/native-preview@${TSGO_VERSION}" && \
+    test "$(pnpm --version)" = "10.0.0" && \
+    test "$(yarn --version)" = "4.14.1" && \
+    test "$(bun --version)" = "1.2.0" && \
+    test "$(tsgo --version)" = "Version ${TSGO_VERSION}"
 
 # Pre-configure Aspire CLI path
 ENV PATH="/root/.aspire/bin:${PATH}"

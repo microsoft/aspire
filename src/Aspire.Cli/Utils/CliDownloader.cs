@@ -19,21 +19,22 @@ internal interface ICliDownloader
 }
 
 internal class CliDownloader(
+    IEnvironment environment,
     ILogger<CliDownloader> logger,
     IInteractionService interactionService,
     IPackagingService packagingService) : ICliDownloader
 {
     private const int ArchiveDownloadTimeoutSeconds = 600;
     private const int ChecksumDownloadTimeoutSeconds = 120;
-    
+
     private static readonly HttpClient s_httpClient = new();
 
     public async Task<string> DownloadLatestCliAsync(string channelName, CancellationToken cancellationToken)
     {
         // Get the channel information from PackagingService
-        var channels = await packagingService.GetChannelsAsync(cancellationToken);
+        var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
         var channel = channels.FirstOrDefault(c => c.Name.Equals(channelName, StringComparison.OrdinalIgnoreCase));
-        
+
         if (channel is null)
         {
             throw new ArgumentException($"Unsupported channel '{channelName}'. Available channels: {string.Join(", ", channels.Select(c => c.Name))}");
@@ -70,7 +71,7 @@ internal class CliDownloader(
 
                 logger.LogDebug("Downloading checksum from {Url} to {Path}", checksumUrl, checksumPath);
                 await DownloadFileAsync(checksumUrl, checksumPath, ChecksumDownloadTimeoutSeconds, cancellationToken);
-                
+
                 return 0; // Return dummy value for ShowStatusAsync
             });
 
@@ -121,20 +122,20 @@ internal class CliDownloader(
         return $"{fileName} from {source}";
     }
 
-    private static (string os, string arch) DetectPlatform()
+    private (string os, string arch) DetectPlatform()
     {
         var os = DetectOperatingSystem();
         var arch = DetectArchitecture();
         return (os, arch);
     }
 
-    private static string DetectOperatingSystem()
+    private string DetectOperatingSystem()
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (environment.IsWindows())
         {
             return "win";
         }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        else if (environment.IsLinux())
         {
             // Check if it's musl-based (Alpine, etc.)
             try
@@ -143,8 +144,8 @@ internal class CliDownloader(
                 if (File.Exists(lddPath))
                 {
                     var result = Process.RunAndCaptureText(lddPath, ["--version"]);
-                    if (result.ExitStatus.ExitCode == 0 &&
-                        (result.StandardOutput + result.StandardError).Contains("musl", StringComparison.OrdinalIgnoreCase))
+                    // musl's ldd reports its version on stderr and may return a nonzero exit code.
+                    if ((result.StandardOutput + result.StandardError).Contains("musl", StringComparison.OrdinalIgnoreCase))
                     {
                         return "linux-musl";
                     }
@@ -156,7 +157,7 @@ internal class CliDownloader(
             }
             return "linux";
         }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        else if (environment.IsMacOS())
         {
             return "osx";
         }

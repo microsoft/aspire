@@ -17,6 +17,7 @@ namespace Aspire.Hosting.Foundry;
 /// <see cref="PromptAgentBuilderExtensions.WithReference(IResourceBuilder{AzureAISearchToolResource}, IResourceBuilder{AzureSearchResource})"/>.
 /// The connection identifier is resolved at deploy time when the agent definition is created.
 /// </remarks>
+/// <ats-remarks />
 [AspireExport]
 public class AzureAISearchToolResource : FoundryToolResource
 {

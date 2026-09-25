@@ -12,39 +12,50 @@ public partial class LocalhostTldHostnameTests(ITestOutputHelper testOutput) : T
     [GeneratedRegex(@"://([^:]+)\.dev\.localhost:")]
     private static partial Regex HostnamePattern();
 
-    public static TheoryData<string, string, string> LocalhostTldHostname_TestData() => new()
+    public static TheoryData<string, string, string, TestTargetFramework> LocalhostTldHostname_TestData()
     {
-        // templateName, projectName, expectedHostname
-        { "aspire", "my.namespace.app", "my-namespace-app" },
-        { "aspire", ".StartWithDot", "startwithdot" },
-        { "aspire", "EndWithDot.", "endwithdot" },
-        { "aspire", "My..Test__Project", "my-test-project" },
-        { "aspire", "Project123.Test456", "project123-test456" },
-        { "aspire-apphost", "my.service.name", "my-service-name" },
-        { "aspire-apphost-singlefile", "-my.service..name-", "my-service-name" },
-        { "aspire-starter", "Test_App.1", "test-app-1" },
-        { "aspire-ts-cs-starter", "My-App.Test", "my-app-test" }
-    };
+        TheoryData<string, string, string, TestTargetFramework> data = [];
+
+        foreach (var framework in new[] { TestTargetFramework.Net10, TestTargetFramework.Net11 })
+        {
+            data.Add("aspire", "my.namespace.app", "my-namespace-app", framework);
+            data.Add("aspire", ".StartWithDot", "startwithdot", framework);
+            data.Add("aspire", "EndWithDot.", "endwithdot", framework);
+            data.Add("aspire", "My..Test__Project", "my-test-project", framework);
+            data.Add("aspire", "Project123.Test456", "project123-test456", framework);
+            data.Add("aspire-apphost", "my.service.name", "my-service-name", framework);
+            data.Add("aspire-apphost-singlefile", "-my.service..name-", "my-service-name", framework);
+            data.Add("aspire-starter", "Test_App.1", "test-app-1", framework);
+            data.Add("aspire-ts-cs-starter", "My-App.Test", "my-app-test", framework);
+        }
+
+        return data;
+    }
 
     [Theory]
     [MemberData(nameof(LocalhostTldHostname_TestData))]
     [Trait("category", "basic-build")]
-    public async Task LocalhostTld_GeneratesDnsCompliantHostnames(string templateName, string projectName, string expectedHostname)
+    public async Task LocalhostTld_GeneratesDnsCompliantHostnames(string templateName, string projectName, string expectedHostname, TestTargetFramework framework)
     {
         var id = GetNewProjectId(prefix: $"localhost_tld_{templateName}");
 
-        var targetFramework = templateName switch
+        var buildEnvironment = framework switch
         {
-            "aspire-apphost-singlefile" => TestTargetFramework.None, // These templates do not support -f argument
-            _ => TestTargetFramework.Next // LocalhostTld only available on net10.0
+            TestTargetFramework.Net10 => BuildEnvironment.ForNet10SdkOnly,
+            TestTargetFramework.Net11 => BuildEnvironment.ForNet11SdkOnly,
+            _ => throw new ArgumentOutOfRangeException(nameof(framework))
         };
+
+        // Single-file AppHosts have no project file for the helper to validate, so pass -f directly.
+        var targetFramework = templateName == "aspire-apphost-singlefile" ? TestTargetFramework.None : framework;
+        var frameworkArg = templateName == "aspire-apphost-singlefile" ? $"-f {framework.ToTFMString()} " : "";
 
         await using var project = await AspireProject.CreateNewTemplateProjectAsync(
             id,
             templateName,
             _testOutput,
-            buildEnvironment: BuildEnvironment.ForNextSdkOnly, // Need Next SDK for net10.0
-            extraArgs: $"--localhost-tld -n \"{projectName}\"",
+            buildEnvironment: buildEnvironment,
+            extraArgs: $"{frameworkArg}--localhost-tld -n \"{projectName}\"",
             targetFramework,
             addEndpointsHook: false); // Don't add endpoint hook since we're just checking file generation
 

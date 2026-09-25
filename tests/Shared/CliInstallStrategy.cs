@@ -161,6 +161,20 @@ internal static class AspireCliShellCommandHelpers
         return $"dotnet tool install {GetDotnetToolInstallArgs(strategy, nupkgSourcePath, nuGetConfigPath)}";
     }
 
+    internal static string GetDotnetAddPackageCommand(string projectPath, string packageId)
+    {
+        return
+            $"PKG={QuoteBashArg(packageId)}; " +
+            $"TARGET={QuoteBashArg(projectPath)}; " +
+            "PKG_PATH=$(find \"$HOME/.aspire/hives\" -path \"*/packages/$PKG.[0-9]*.nupkg\" -type f 2>/dev/null | sort -V | tail -n 1); " +
+            "if [ -n \"$PKG_PATH\" ]; then " +
+            "PKG_FILE=$(basename \"$PKG_PATH\"); " +
+            "PKG_VERSION=${PKG_FILE#\"$PKG.\"}; " +
+            "PKG_VERSION=${PKG_VERSION%.nupkg}; " +
+            "dotnet add \"$TARGET\" package \"$PKG\" --version \"$PKG_VERSION\"; " +
+            "else dotnet add \"$TARGET\" package \"$PKG\" --prerelease; fi";
+    }
+
     private static string GetDotnetToolInstallArgs(CliInstallStrategy strategy, string? nupkgSourcePath, string? nuGetConfigPath = null)
     {
         var args = "--global Aspire.Cli";

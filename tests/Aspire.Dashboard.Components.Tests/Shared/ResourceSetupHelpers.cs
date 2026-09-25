@@ -6,7 +6,6 @@ using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
@@ -23,7 +22,7 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class ResourceSetupHelpers
 {
-    public static void SetupResourceDetails(TestContext context)
+    public static void SetupResourceDetails(BunitContext context)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(context);
         context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
@@ -39,9 +38,12 @@ internal static class ResourceSetupHelpers
         FluentUISetupHelpers.SetupFluentMenu(context);
 
         context.JSInterop.SetupVoid("scrollToTop", _ => true);
+        context.JSInterop.SetupVoid("focusElement", _ => true);
+
+        FluentUISetupHelpers.SetupFluentUIComponents(context);
     }
 
-    public static void SetupResourcesPage(TestContext context, ViewportInformation viewport, IDashboardClient? dashboardClient = null, ILocalStorage? localStorage = null)
+    public static void SetupResourcesPage(BunitContext context, ViewportInformation viewport, IDashboardClient? dashboardClient = null, ILocalStorage? localStorage = null)
     {
         FluentUISetupHelpers.SetupFluentDivider(context);
         FluentUISetupHelpers.SetupFluentInputLabel(context);
@@ -56,9 +58,10 @@ internal static class ResourceSetupHelpers
         FluentUISetupHelpers.SetupFluentMenu(context);
 
         FluentUISetupHelpers.AddCommonDashboardServices(context, localStorage: localStorage);
+        context.JSInterop.SetupVoid("focusElement", _ => true);
         context.Services.AddSingleton<IconResolver>();
         context.Services.AddSingleton<ILogger<StructuredLogs>>(NullLogger<StructuredLogs>.Instance);
-        context.Services.AddSingleton<StructuredLogsViewModel>();
+        context.Services.AddTransient<StructuredLogsViewModel>();
         context.Services.AddScoped<DashboardCommandExecutor, DashboardCommandExecutor>();
         context.Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient(isEnabled: true, initialResources: [], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
 

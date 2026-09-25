@@ -4,8 +4,8 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Net;
-using System.Net.Http.Json;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Resources;
@@ -201,7 +201,7 @@ internal static class TelemetryCommandHelpers
         if (projectFile is not null && dashboardUrl is not null)
         {
             interactionService.DisplayError(TelemetryCommandStrings.DashboardUrlAndAppHostExclusive);
-            return DashboardApiResult.Failure(ExitCodeConstants.InvalidCommand);
+            return DashboardApiResult.Failure(CliExitCodes.InvalidCommand);
         }
 
         // Direct dashboard URL mode — bypass AppHost discovery
@@ -211,7 +211,8 @@ internal static class TelemetryCommandHelpers
             var loginToken = McpToolHelpers.ExtractLoginToken(dashboardUrl);
 
             // Normalize login URLs (e.g., http://localhost:18888/login?t=abc) to base URL
-            dashboardUrl = McpToolHelpers.StripLoginPath(dashboardUrl) ?? dashboardUrl;
+            var displayDashboardUrl = McpToolHelpers.StripLoginPath(dashboardUrl) ?? dashboardUrl;
+            dashboardUrl = McpToolHelpers.NormalizeDashboardUrl(displayDashboardUrl);
 
             if (!UrlHelper.IsHttpUrl(dashboardUrl))
             {
@@ -220,7 +221,7 @@ internal static class TelemetryCommandHelpers
                     new TelemetryErrorInfo(
                         string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, dashboardUrl),
                         TelemetryCommandStrings.DashboardUrlInvalidHint));
-                return DashboardApiResult.Failure(ExitCodeConstants.InvalidCommand);
+                return DashboardApiResult.Failure(CliExitCodes.InvalidCommand);
             }
 
             // If no explicit --api-key was provided but a login token was found in the URL,
@@ -234,10 +235,10 @@ internal static class TelemetryCommandHelpers
                     var errorInfo = exchangeResult.FailureKind switch
                     {
                         TokenExchangeFailureKind.ConnectionError => new TelemetryErrorInfo(
-                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, dashboardUrl),
+                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, displayDashboardUrl),
                             TelemetryCommandStrings.DashboardConnectionFailedHint),
                         TokenExchangeFailureKind.ApiNotEnabled => new TelemetryErrorInfo(
-                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, dashboardUrl),
+                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, displayDashboardUrl),
                             TelemetryCommandStrings.DashboardApiNotEnabledHint),
                         _ => new TelemetryErrorInfo(
                             TelemetryCommandStrings.DashboardLoginTokenFailed,
@@ -245,14 +246,14 @@ internal static class TelemetryCommandHelpers
                             TelemetryCommandStrings.DashboardLoginTokenFailedAnonymousHint),
                     };
                     DisplayTelemetryError(interactionService, errorInfo);
-                    return DashboardApiResult.Failure(ExitCodeConstants.DashboardFailure);
+                    return DashboardApiResult.Failure(CliExitCodes.DashboardFailure);
                 }
 
                 apiKey = exchangeResult.ApiKey;
             }
 
             var token = apiKey ?? string.Empty;
-            return new DashboardApiResult(true, null, dashboardUrl, token, dashboardUrl, 0);
+            return new DashboardApiResult(true, null, dashboardUrl, token, displayDashboardUrl, 0);
         }
 
         var result = await connectionResolver.ResolveConnectionAsync(
@@ -279,17 +280,20 @@ internal static class TelemetryCommandHelpers
                     new TelemetryErrorInfo(
                         TelemetryCommandStrings.DashboardNotAvailable,
                         TelemetryCommandStrings.DashboardNotAvailableHint));
-                return DashboardApiResult.Failure(ExitCodeConstants.DashboardFailure);
+                return DashboardApiResult.Failure(CliExitCodes.DashboardFailure);
             }
 
             // Dashboard is optional — return success with null API info
             return new DashboardApiResult(true, connection, null, null, null, 0);
         }
 
-        // Extract dashboard base URL (without /login path) for hyperlinks
+        var apiBaseUrl = McpToolHelpers.NormalizeDashboardUrl(dashboardInfo.ApiBaseUrl);
+
+        // Extract dashboard base URL (without /login path) for hyperlinks.
+        // Preserve the original hostname (e.g. *.dev.localhost) for display URLs.
         var extractedDashboardUrl = ExtractDashboardBaseUrl(dashboardInfo.DashboardUrls?.FirstOrDefault());
 
-        return new DashboardApiResult(true, connection, dashboardInfo.ApiBaseUrl, dashboardInfo.ApiToken, extractedDashboardUrl, 0);
+        return new DashboardApiResult(true, connection, apiBaseUrl, dashboardInfo.ApiToken, extractedDashboardUrl, 0);
     }
 
     /// <summary>
@@ -460,6 +464,11 @@ internal static class TelemetryCommandHelpers
         }
     }
 
+    /// <summary>
+    /// Resolves an OTLP resource name from the dashboard telemetry resources API into resource filters used by
+    /// CLI telemetry commands, telemetry export, and telemetry MCP tools. A unique composite name identifies one
+    /// replica, an ambiguous composite name is rejected, and a base resource name resolves all matching replicas.
+    /// </summary>
     public static bool TryResolveResourceNames(
         string? resourceName,
         IList<ResourceInfoJson> resources,
@@ -478,24 +487,12 @@ internal static class TelemetryCommandHelpers
             return false;
         }
 
-        // First, try exact match on display name (full instance name like "catalogservice-abc123")
-        var exactMatch = resources.FirstOrDefault(r =>
-            string.Equals(r.GetCompositeName(), resourceName, StringComparison.OrdinalIgnoreCase));
-        if (exactMatch is not null)
+        var matches = OtlpHelpers.ResolveResourceNameMatches(resourceName, ToOtlpResources(resources));
+        if (matches.Count > 0)
         {
-            resolvedResources = [exactMatch.GetCompositeName()];
-            return true;
-        }
-
-        // Then, try matching by base name to find all replicas
-        var matchingReplicas = resources
-            .Where(r => string.Equals(r.Name, resourceName, StringComparison.OrdinalIgnoreCase))
-            .Select(r => r.GetCompositeName())
-            .ToList();
-
-        if (matchingReplicas.Count > 0)
-        {
-            resolvedResources = matchingReplicas;
+            resolvedResources = matches
+                .Select(r => r.InstanceId is null ? r.ResourceName : $"{r.ResourceName}-{r.InstanceId}")
+                .ToList();
             return true;
         }
 
@@ -573,12 +570,12 @@ internal static class TelemetryCommandHelpers
     {
         return severityNumber switch
         {
-            >= 21 => "CRIT",
-            >= 17 => "FAIL",
-            >= 13 => "WARN",
-            >= 9 => "INFO",
-            >= 5 => "DBUG",
-            >= 1 => "TRCE",
+            >= 21 => CliLogFormat.FileLevelTokens.Critical,
+            >= 17 => CliLogFormat.FileLevelTokens.Error,
+            >= 13 => CliLogFormat.FileLevelTokens.Warning,
+            >= 9 => CliLogFormat.FileLevelTokens.Information,
+            >= 5 => CliLogFormat.FileLevelTokens.Debug,
+            >= 1 => CliLogFormat.FileLevelTokens.Trace,
             _ => "-"
         };
     }
@@ -623,12 +620,12 @@ internal static class TelemetryCommandHelpers
     }
 
     /// <summary>
-    /// Converts an array of <see cref="ResourceInfoJson"/> to a list of <see cref="IOtlpResource"/> for use with <see cref="OtlpHelpers.GetResourceName"/>.
+    /// Converts resource information to a list of <see cref="IOtlpResource"/> values.
     /// </summary>
-    public static IReadOnlyList<IOtlpResource> ToOtlpResources(ResourceInfoJson[] resources)
+    public static IReadOnlyList<IOtlpResource> ToOtlpResources(IList<ResourceInfoJson> resources)
     {
-        var result = new IOtlpResource[resources.Length];
-        for (var i = 0; i < resources.Length; i++)
+        var result = new IOtlpResource[resources.Count];
+        for (var i = 0; i < resources.Count; i++)
         {
             result[i] = new SimpleOtlpResource(resources[i].Name, resources[i].InstanceId);
         }

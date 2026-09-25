@@ -1,0 +1,25 @@
+@implements IDisposable
+@using Aspire.Dashboard.Model.Interaction
+
+<FluentDialogBody Class="interaction-terminal-dialog">
+    <ChildContent>
+        <div class="interaction-message">
+            @((MarkupString)Content.Message)
+        </div>
+        <div class="interaction-terminal-container">
+            <TerminalView EndpointPathAndQuery="@EndpointPathAndQuery"
+                          Chromeless="true"
+                          AutoFit="true"
+                          ShowDimensionsPicker="false" />
+        </div>
+    </ChildContent>
+
+    <ActionTemplate>
+        @if (!string.IsNullOrEmpty(Dialog.Options.Footer.PrimaryAction.Label))
+        {
+            <FluentButton Appearance="ButtonAppearance.Default" Class="aspire-button aspire-neutral-button" OnClick="@CancelAsync">
+                @Dialog.Options.Footer.PrimaryAction.Label
+            </FluentButton>
+        }
+    </ActionTemplate>
+</FluentDialogBody>

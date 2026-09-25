@@ -24,10 +24,13 @@ export interface AppHostResourceParser {
     getSupportedExtensions(): string[];
 
     /** Returns true if the given document is an AppHost file for this language. */
-    isAppHostFile(document: vscode.TextDocument): boolean;
+    isAppHostFile(document: vscode.TextDocument): Promise<boolean>;
 
     /** Parse resource definitions from the document. */
-    parseResources(document: vscode.TextDocument): ParsedResource[];
+    parseResources(document: vscode.TextDocument): Promise<ParsedResource[]>;
+
+    /** Locates the AppHost entry point for language-specific editor guidance. */
+    findAppHostEntryPointLine?(document: vscode.TextDocument): Promise<number | undefined>;
 
     /**
      * Locates the line containing the builder construction statement
@@ -35,7 +38,19 @@ export interface AppHostResourceParser {
      * `const builder = createBuilder();` for TS/JS).
      * Returns the 0-based line of the start of the statement, or `undefined` if not found.
      */
-    findBuilderStatementLine?(document: vscode.TextDocument): number | undefined;
+    findBuilderStatementLine?(document: vscode.TextDocument): Promise<number | undefined>;
+
+    /**
+     * Narrows a set of document offsets to those that are part of executable code, dropping any that
+     * fall inside a comment or a string literal.
+     *
+     * Some editor affordances are driven by a textual scan rather than by {@link parseResources},
+     * because the signal they look for is an argument to an arbitrary chained call rather than a
+     * resource declaration. Passing the scan's offsets through here keeps a commented-out or quoted
+     * example from being treated as real code. Offsets are filtered as a batch so the document is
+     * parsed once.
+     */
+    filterActiveOffsets?(document: vscode.TextDocument, offsets: readonly number[]): Promise<number[]>;
 }
 
 const _parsers: AppHostResourceParser[] = [];
@@ -44,9 +59,15 @@ export function registerParser(parser: AppHostResourceParser): void {
     _parsers.push(parser);
 }
 
-export function getParserForDocument(document: vscode.TextDocument): AppHostResourceParser | undefined {
+export async function getParserForDocument(document: vscode.TextDocument): Promise<AppHostResourceParser | undefined> {
     const ext = getFileExtension(document.uri.fsPath);
-    return _parsers.find(p => p.getSupportedExtensions().includes(ext) && p.isAppHostFile(document));
+    for (const parser of _parsers) {
+        if (parser.getSupportedExtensions().includes(ext) && await parser.isAppHostFile(document)) {
+            return parser;
+        }
+    }
+
+    return undefined;
 }
 
 export function getAllParsers(): readonly AppHostResourceParser[] {
@@ -66,7 +87,7 @@ export function getSupportedLanguageIds(): string[] {
     return [...ids];
 }
 
-function getFileExtension(filePath: string): string {
+export function getFileExtension(filePath: string): string {
     const lastDot = filePath.lastIndexOf('.');
     return lastDot >= 0 ? filePath.substring(lastDot).toLowerCase() : '';
 }
@@ -74,8 +95,14 @@ function getFileExtension(filePath: string): string {
 function extensionToLanguageId(ext: string): string | undefined {
     switch (ext) {
         case '.cs': return 'csharp';
+        case '.mts':
+        case '.cts':
         case '.ts': return 'typescript';
+        case '.mjs':
+        case '.cjs':
         case '.js': return 'javascript';
+        case '.rs': return 'rust';
+        case '.java': return 'java';
         default: return undefined;
     }
 }

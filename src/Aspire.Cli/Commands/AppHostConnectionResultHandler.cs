@@ -30,7 +30,7 @@ internal static class AppHostConnectionResultHandler
         }
 
         interactionService.DisplayMessage(KnownEmojis.Information, errorMessage);
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private static string GetFailureMessage(AppHostConnectionResult result)

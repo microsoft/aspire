@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Commands.Sdk;
+using Aspire.Cli.Projects;
 using Aspire.TypeSystem;
 using Spectre.Console;
 using StreamJsonRpc;
@@ -37,6 +38,8 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(List<EnvVar>))]
 [JsonSerializable(typeof(List<string>))]
 [JsonSerializable(typeof(DebugSessionOptions))]
+[JsonSerializable(typeof(InteractionMessageAction[]))]
+[JsonSerializable(typeof(ExtensionAppHostLogEntry))]
 [JsonSerializable(typeof(bool?))]
 [JsonSerializable(typeof(AppHostProjectSearchResultPoco))]
 [JsonSerializable(typeof(AppHostInformation))]
@@ -46,6 +49,7 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(IAsyncEnumerable<ResourceSnapshot>))]
 [JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<ResourceSnapshot>))]
 [JsonSerializable(typeof(ResourceSnapshotCommandArgument))]
+[JsonSerializable(typeof(ResourceSnapshotCommandArgument[]))]
 [JsonSerializable(typeof(ResourceSnapshotMcpServer))]
 [JsonSerializable(typeof(ResourceLogLine))]
 [JsonSerializable(typeof(ResourceLogLine[]))]
@@ -56,17 +60,24 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(IAsyncEnumerable<ResourceLogBatch>))]
 [JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<ResourceLogBatch>))]
 [JsonSerializable(typeof(Dictionary<string, JsonElement>))]
+[JsonSerializable(typeof(Dictionary<string, JsonNode?>))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(JsonNode))]
 [JsonSerializable(typeof(CapabilitiesInfo))]
 [JsonSerializable(typeof(CommonErrorData))]
+[JsonSerializable(typeof(AppHostCodeGenerationDiagnostic))]
+[JsonSerializable(typeof(AppHostLoadedAssemblyInfo))]
+[JsonSerializable(typeof(List<AppHostLoadedAssemblyInfo>))]
 // V2 API request/response types
 [JsonSerializable(typeof(GetCapabilitiesRequest))]
+[JsonSerializable(typeof(BackchannelTraceContext))]
 [JsonSerializable(typeof(GetCapabilitiesResponse))]
 [JsonSerializable(typeof(GetAppHostInfoRequest))]
 [JsonSerializable(typeof(GetAppHostInfoResponse))]
 [JsonSerializable(typeof(GetDashboardInfoRequest))]
 [JsonSerializable(typeof(GetDashboardInfoResponse))]
+[JsonSerializable(typeof(WaitForAppHostReadyRequest))]
+[JsonSerializable(typeof(WaitForAppHostReadyResponse))]
 [JsonSerializable(typeof(GetResourcesRequest))]
 [JsonSerializable(typeof(GetResourcesResponse))]
 [JsonSerializable(typeof(WatchResourcesRequest))]
@@ -86,6 +97,21 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(PipelineStepInfo[]))]
 [JsonSerializable(typeof(GetPipelineStepsRequest))]
 [JsonSerializable(typeof(GetPipelineStepsResponse))]
+[JsonSerializable(typeof(UploadFileRequest))]
+[JsonSerializable(typeof(UploadFileResponse))]
+[JsonSerializable(typeof(FileReferenceDto[]))]
+[JsonSerializable(typeof(GetTerminalInfoRequest))]
+[JsonSerializable(typeof(GetTerminalInfoResponse))]
+[JsonSerializable(typeof(TerminalReplicaInfo))]
+[JsonSerializable(typeof(TerminalReplicaInfo[]))]
+[JsonSerializable(typeof(TerminalPeerInfo))]
+[JsonSerializable(typeof(TerminalPeerInfo[]))]
+[JsonSerializable(typeof(ListTerminalsRequest))]
+[JsonSerializable(typeof(ListTerminalsResponse))]
+[JsonSerializable(typeof(TerminalSummary))]
+[JsonSerializable(typeof(TerminalSummary[]))]
+[JsonSerializable(typeof(AppHostTerminalSummary))]
+[JsonSerializable(typeof(AppHostTerminalSummary[]))]
 internal partial class BackchannelJsonSerializerContext : JsonSerializerContext
 {
     [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2026:RequiresUnreferencedCode", Justification = "Using the Json source generator.")]

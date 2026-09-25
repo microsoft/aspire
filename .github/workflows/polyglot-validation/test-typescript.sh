@@ -23,6 +23,14 @@ cd "$WORK_DIR"
 echo "Creating TypeScript apphost project..."
 aspire init --language typescript --non-interactive -d
 
+cat <<'EOF' > appsettings.json
+{
+  "PolyglotTest": {
+    "Value": "from-appsettings"
+  }
+}
+EOF
+
 # Add Redis integration
 echo "Adding Redis integration..."
 aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
@@ -37,15 +45,15 @@ aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
     fi
 }
 
-# Insert Redis line into apphost.ts
-echo "Configuring apphost.ts with Redis..."
-if grep -q "builder.build().run()" apphost.ts; then
-    sed -i '/builder.build().run()/i\// Add Redis cache resource\nconst redis = await builder.addRedis("cache").withImageRegistry("netaspireci.azurecr.io");' apphost.ts
-    echo "✅ Redis configuration added to apphost.ts"
+# Verify appsettings.json through the generated SDK before adding Redis.
+echo "Configuring apphost.mts with appsettings validation and Redis..."
+if grep -q "builder.build().run()" apphost.mts; then
+    sed -i '/builder.build().run()/i\const appSettingsValue = await (await builder.getConfiguration()).getConfigValue("PolyglotTest:Value");\nif (appSettingsValue !== "from-appsettings") {\n    throw new Error(`Expected appsettings.json value, got "${appSettingsValue}"`);\n}\n\n// Add Redis cache resource\nconst redis = await builder.addRedis("cache").withImageRegistry("netaspireci.azurecr.io");' apphost.mts
+    echo "✅ appsettings validation and Redis configuration added to apphost.mts"
 fi
 
-echo "=== apphost.ts ==="
-cat apphost.ts
+echo "=== apphost.mts ==="
+cat apphost.mts
 
 # Run the apphost in background
 echo "Starting apphost in background..."

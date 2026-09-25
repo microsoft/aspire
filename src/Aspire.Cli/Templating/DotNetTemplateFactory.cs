@@ -3,12 +3,12 @@
 
 using System.CommandLine;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -26,9 +26,12 @@ internal class DotNetTemplateFactory(
     IFeatures features,
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
-    TemplateNuGetConfigService templateNuGetConfigService)
+    TemplateNuGetConfigService templateNuGetConfigService,
+    IEnvironment environment)
     : ITemplateFactory
 {
+    private const string NoTestFramework = "None";
+
     // Template-specific options
     private readonly Option<bool?> _localhostTldOption = new("--localhost-tld")
     {
@@ -104,8 +107,8 @@ internal class DotNetTemplateFactory(
         }
 
         // Fall back to checking for dotnet on the system PATH.
-        var dotnetFileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "dotnet.exe" : "dotnet";
-        var pathVariable = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        var dotnetFileName = environment.IsWindows() ? "dotnet.exe" : "dotnet";
+        var pathVariable = environment.GetEnvironmentVariable("PATH") ?? string.Empty;
 
         foreach (var directory in pathVariable.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
@@ -338,12 +341,12 @@ internal class DotNetTemplateFactory(
 
         var testFramework = await interactionService.PromptForSelectionAsync(
             TemplatingStrings.PromptForTFM_Prompt,
-            ["MSTest", "NUnit", "xUnit.net", TemplatingStrings.None],
-            choice => choice,
+            ["MSTest", "NUnit", "xUnit.net", NoTestFramework],
+            choice => string.Equals(choice, NoTestFramework, StringComparison.Ordinal) ? TemplatingStrings.None : choice,
             binding: binding,
             cancellationToken: cancellationToken);
 
-        if (!string.Equals(testFramework, TemplatingStrings.None, StringComparisons.CliInputOrOutput))
+        if (!string.Equals(testFramework, NoTestFramework, StringComparisons.CliInputOrOutput))
         {
             if (string.Equals(testFramework, "xUnit.net", StringComparison.OrdinalIgnoreCase))
             {
@@ -437,7 +440,7 @@ internal class DotNetTemplateFactory(
     {
         if (!await SdkInstallHelper.EnsureSdkInstalledAsync(sdkInstaller, interactionService, telemetry, cancellationToken: cancellationToken))
         {
-            return new TemplateResult(ExitCodeConstants.SdkNotInstalled);
+            return new TemplateResult(CliExitCodes.SdkNotInstalled);
         }
 
         var name = await GetProjectNameAsync(inputs, template.Name, parseResult, cancellationToken);
@@ -445,7 +448,7 @@ internal class DotNetTemplateFactory(
 
         if (outputPath is null)
         {
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
 
         return await ApplyTemplateAsync(template, inputs, name, outputPath, parseResult, extraArgsCallback, cancellationToken);
@@ -472,6 +475,7 @@ internal class DotNetTemplateFactory(
 
             var installOutcome = await templateNuGetConfigService.InstallTemplatePackageAsync(
                 selectedTemplateDetails,
+                sourceOverride: inputs.Source,
                 runner,
                 TemplatingStrings.GettingTemplates,
                 statusEmoji: KnownEmojis.Ice,
@@ -481,7 +485,7 @@ internal class DotNetTemplateFactory(
             {
                 interactionService.DisplayLines(installOutcome.OutputLines);
                 interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode));
-                return new TemplateResult(ExitCodeConstants.FailedToInstallTemplates);
+                return new TemplateResult(CliExitCodes.FailedToInstallTemplates);
             }
 
             interactionService.DisplayMessage(KnownEmojis.Package, string.Format(CultureInfo.CurrentCulture, TemplatingStrings.UsingProjectTemplatesVersion, installOutcome.TemplateVersion));
@@ -515,43 +519,73 @@ internal class DotNetTemplateFactory(
                 if (newProjectExitCode == 73)
                 {
                     interactionService.DisplayError(TemplatingStrings.ProjectAlreadyExists);
-                    return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+                    return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
                 }
 
                 interactionService.DisplayLines(newProjectCollector.GetLines());
                 interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreationFailed, newProjectExitCode));
-                return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+                return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
             }
 
             // Trust certificates (result not used since we're not launching an AppHost)
             _ = await certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
 
-            // For explicit channels, optionally create or update a NuGet.config. If none exists in the current
-            // working directory, create one in the newly created project's output directory.
-            await templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(selectedTemplateDetails.Channel, outputPath, cancellationToken);
+            // Persist the resolved channel and exact SDK version into the scaffolded project's
+            // aspire.config.json for channels whose name should be pinned (pr-<N>, daily, staging,
+            // local). Local hives can contain packages from several builds, so the version keeps
+            // later integration discovery aligned with the template package selected here.
+            // Without this pin, `aspire update` on the new project skips the local-config
+            // step in its channel-resolution precedence and falls through to either an
+            // interactive prompt (when hives exist) or the Implicit/nuget.org channel —
+            // silently moving a project scaffolded by a PR or daily CLI onto stable/nuget.org.
+            // The `stable` channel is intentionally NOT persisted (ShouldPersistChannelName
+            // excludes it): its packages live on nuget.org, so `aspire add`/`aspire restore`
+            // continue to use the ambient NuGet config without a per-project pin. Mirrors the
+            // TypeScript starter behavior in CliTemplateFactory.TypeScriptStarterTemplate.
+            if (selectedTemplateDetails.Channel.ShouldPersistChannelName())
+            {
+                var config = AspireConfigFile.LoadOrCreate(outputPath);
+                config.Channel = selectedTemplateDetails.Channel.Name;
+                config.SdkVersion = selectedTemplateDetails.Package.Version;
+                config.Save(outputPath);
+            }
+
+            // For channels that route Aspire packages to a custom feed, optionally create or update
+            // a NuGet.config. If none exists in the current working directory, create one in the
+            // newly created project's output directory. The `stable` channel is skipped inside
+            // PromptToCreateOrUpdateNuGetConfigAsync (ShouldCreateNuGetConfig) because its packages
+            // are on nuget.org and a <clear/>-based config would clobber the user's ambient sources.
+            if (!await TemplateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, selectedTemplateDetails.Channel, outputPath, cancellationToken, executionContext.NuGetServiceIndexOverride))
+            {
+                await templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(selectedTemplateDetails.Channel, outputPath, cancellationToken);
+            }
 
             interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, outputPath));
 
-            return new TemplateResult(ExitCodeConstants.Success, outputPath);
+            return new TemplateResult(CliExitCodes.Success, outputPath);
         }
         catch (OperationCanceledException)
         {
-            return new TemplateResult(ExitCodeConstants.Cancelled);
-        }
-        catch (CertificateServiceException ex)
-        {
-            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message));
-            return new TemplateResult(ExitCodeConstants.FailedToTrustCertificates);
+            return new TemplateResult(CliExitCodes.Cancelled);
         }
         catch (Exceptions.ChannelNotFoundException ex)
         {
             interactionService.DisplayError(ex.Message);
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
         catch (EmptyChoicesException ex)
         {
             interactionService.DisplayError(ex.Message);
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+        catch (NuGetPackageCacheException ex)
+        {
+            // Surface NuGet feed search failures (offline, inaccessible feed, etc.) with a friendly error
+            // instead of letting them bubble up to the top-level "unexpected error" handler. The pre-extraction
+            // init code went straight to `dotnet new install` and never invoked a NuGet search, so this catch
+            // restores parity with the prior init failure mode for these scenarios.
+            interactionService.DisplayError(ex.Message);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
     }
 
@@ -568,50 +602,24 @@ internal class DotNetTemplateFactory(
 
     private async Task<string?> GetOutputPathAsync(TemplateInputs inputs, Func<CliExecutionContext, string, string> pathDeriver, string projectName, ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var outputPath = await OutputPathHelper.ResolveOutputPathAsync(
+        var isExtensionHost = ExtensionHelper.IsExtensionHost(interactionService, out _, out _);
+        var createProjectNameSubdirectory = await OutputPathHelper.PromptExtensionCreateProjectNameSubdirectoryAsync(
+            interactionService,
+            isExtensionHost,
+            inputs.Output is not null,
+            projectName,
+            cancellationToken);
+
+        var outputPathResolver = OutputPathHelper.CreateProjectNameSubdirectoryOutputPathResolver(createProjectNameSubdirectory, projectName);
+        return await OutputPathHelper.ResolveOutputPathAsync(
             inputs.Output,
             executionContext.WorkingDirectory.FullName,
             async () =>
             {
                 var defaultPath = pathDeriver(executionContext, projectName);
                 var validator = OutputPathHelper.CreateOutputPathValidator(executionContext.WorkingDirectory.FullName);
-                return await prompter.PromptForOutputPath(defaultPath, parseResult, validator, cancellationToken);
+                return await prompter.PromptForOutputPath(defaultPath, parseResult, validator, outputPathResolver, cancellationToken);
             },
             interactionService);
-
-        if (outputPath is null)
-        {
-            return null;
-        }
-
-        // When running in extension mode (VS Code), the folder picker returns the parent
-        // directory the user selected. Append the project name as a subdirectory so the
-        // project gets its own clean folder, matching the git-clone convention.
-        if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _)
-            && !projectName.Equals(".", StringComparison.Ordinal)
-            && !projectName.Equals("..", StringComparison.Ordinal))
-        {
-            var normalizedOutputPath = Path.TrimEndingDirectorySeparator(outputPath);
-
-            if (!string.Equals(Path.GetFileName(normalizedOutputPath), projectName, StringComparison.OrdinalIgnoreCase))
-            {
-                outputPath = Path.Combine(normalizedOutputPath, projectName);
-            }
-            else
-            {
-                outputPath = normalizedOutputPath;
-            }
-
-            // Re-validate the adjusted path for non-empty directory since appending the
-            // project name may target a different directory than the one already validated.
-            var validationError = OutputPathHelper.ValidateOutputPath(outputPath, executionContext.WorkingDirectory.FullName, isExplicitOutput: inputs.Output is not null);
-            if (validationError is not null)
-            {
-                interactionService.DisplayError(validationError);
-                return null;
-            }
-        }
-
-        return outputPath;
     }
 }

@@ -6,10 +6,10 @@ using Markdig.Extensions.Tables;
 using Markdig.Syntax;
 using Spectre.Console;
 using Spectre.Console.Rendering;
-using SpectreTable = Spectre.Console.Table;
 using MarkdigTable = Markdig.Extensions.Tables.Table;
 using MarkdigTableCell = Markdig.Extensions.Tables.TableCell;
 using MarkdigTableRow = Markdig.Extensions.Tables.TableRow;
+using SpectreTable = Spectre.Console.Table;
 
 namespace Aspire.Cli.Utils.Markdown;
 

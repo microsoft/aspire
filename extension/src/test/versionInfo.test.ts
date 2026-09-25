@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { readVersionFile } from '../utils/versionInfo';
 
+import { removeDirectorySafely } from './testHelpers';
 suite('utils/versionInfo tests', () => {
 	test('readVersionFile returns SHA when .version file exists', () => {
 		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'versioninfo-test-'));
@@ -13,7 +14,7 @@ suite('utils/versionInfo tests', () => {
 			const result = readVersionFile(tmpDir);
 			assert.strictEqual(result, sha);
 		} finally {
-			fs.rmSync(tmpDir, { recursive: true });
+			removeDirectorySafely(tmpDir);
 		}
 	});
 
@@ -25,7 +26,7 @@ suite('utils/versionInfo tests', () => {
 			const result = readVersionFile(tmpDir);
 			assert.strictEqual(result, sha);
 		} finally {
-			fs.rmSync(tmpDir, { recursive: true });
+			removeDirectorySafely(tmpDir);
 		}
 	});
 
@@ -35,7 +36,7 @@ suite('utils/versionInfo tests', () => {
 			const result = readVersionFile(tmpDir);
 			assert.strictEqual(result, 'unknown');
 		} finally {
-			fs.rmSync(tmpDir, { recursive: true });
+			removeDirectorySafely(tmpDir);
 		}
 	});
 });

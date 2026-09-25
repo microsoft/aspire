@@ -63,8 +63,8 @@ internal sealed class AspireAnsiConsoleOutput : IAnsiConsoleOutput
     {
         // Check if explicit width override is set via ASPIRE_CONSOLE_WIDTH
         var consoleWidthOverride = _configuration["ASPIRE_CONSOLE_WIDTH"];
-        if (!string.IsNullOrEmpty(consoleWidthOverride) && 
-            int.TryParse(consoleWidthOverride, out var width) && 
+        if (!string.IsNullOrEmpty(consoleWidthOverride) &&
+            int.TryParse(consoleWidthOverride, out var width) &&
             width > 0)
         {
             // Cap at reasonable maximum to prevent performance issues

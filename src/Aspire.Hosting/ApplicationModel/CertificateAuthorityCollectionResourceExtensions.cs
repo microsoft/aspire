@@ -28,11 +28,11 @@ public static class CertificateAuthorityCollectionResourceExtensions
         return builder.AddResource(resource)
             .WithIconName("Certificate")
             .ExcludeFromManifest()
+            .WithHidden()
             .WithInitialState(new CustomResourceSnapshot
             {
                 ResourceType = nameof(CertificateAuthorityCollection),
                 Properties = [],
-                IsHidden = true,
                 State = KnownResourceStates.Active
             });
     }

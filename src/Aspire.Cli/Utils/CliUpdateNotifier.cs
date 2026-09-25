@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
+using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Shared;
@@ -17,12 +19,35 @@ internal interface ICliUpdateNotifier
     bool IsUpdateAvailable();
 }
 
-internal sealed record CliVersionStatus(string? CurrentVersion, string? LatestVersion, string? UpdateCommand, string? UpdateCheckError = null);
+internal sealed record CliVersionStatus(
+    string? CurrentVersion,
+    string? LatestVersion,
+    string? UpdateCommand,
+    string? UpdateCheckError = null,
+    string? LatestVersionChannel = null);
+
+/// <summary>
+/// Coarse-grained labels for the channel a recommended CLI update is being
+/// pulled from. <see cref="PackageUpdateHelpers.GetNewerVersion"/> picks
+/// between <c>newestStable</c> and <c>newestPrerelease</c> when computing
+/// the recommendation, so labelling by stable vs prerelease is faithful to
+/// the underlying decision rule. We deliberately don't try to distinguish
+/// staging from daily here — the version string alone can't reliably do so,
+/// and the user-visible doctor message only needs to convey "where to
+/// look", not the specific feed identity.
+/// </summary>
+internal static class PackageUpdateRecommendationChannels
+{
+    public const string Stable = "stable";
+    public const string Prerelease = "prerelease";
+}
 
 internal class CliUpdateNotifier(
     ILogger<CliUpdateNotifier> logger,
     INuGetPackageCache nuGetPackageCache,
-    IInteractionService interactionService) : ICliUpdateNotifier
+    IInteractionService interactionService,
+    IProcessPathProvider processPathProvider,
+    CliExecutionContext executionContext) : ICliUpdateNotifier
 {
     private IEnumerable<Shared.NuGetPackageCli>? _availablePackages;
 
@@ -33,6 +58,7 @@ internal class CliUpdateNotifier(
 
     public void NotifyIfUpdateAvailable()
     {
+        ValidateCliPackageMetadataPrefetching();
         var status = GetCachedVersionStatus();
         if (status.LatestVersion is not null)
         {
@@ -64,10 +90,26 @@ internal class CliUpdateNotifier(
     }
 
     public bool IsUpdateAvailable()
-        => GetCachedVersionStatus().LatestVersion is not null;
+    {
+        ValidateCliPackageMetadataPrefetching();
+        return GetCachedVersionStatus().LatestVersion is not null;
+    }
+
+    [Conditional("DEBUG")]
+    private void ValidateCliPackageMetadataPrefetching()
+    {
+        if (executionContext.Command is BaseCommand { PrefetchesCliPackageMetadata: false } command)
+        {
+            throw new PackageMetadataPrefetchingValidationException($"Command '{command.Name}' consumes cached CLI package metadata but does not enable {nameof(BaseCommand.PrefetchesCliPackageMetadata)}.");
+        }
+    }
 
     protected virtual SemVersion? GetCurrentVersion()
     {
+        // physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md):
+        // the update check compares the ACTUAL installed binary against the latest available
+        // package to decide whether to recommend an update, so it must read the real assembly
+        // version rather than an emulated ASPIRE_CLI_VERSION identity.
         return PackageUpdateHelpers.GetCurrentPackageVersion();
     }
 
@@ -95,8 +137,21 @@ internal class CliUpdateNotifier(
         }
 
         var newerVersion = PackageUpdateHelpers.GetNewerVersion(logger, currentVersion, _availablePackages);
-        var updateCommand = newerVersion is null ? null : DotNetToolDetection.GetDotNetToolUpdateCommand() ?? "aspire update";
-        return new CliVersionStatus(currentVersionString, newerVersion?.ToString(), updateCommand);
+        var updateCommand = newerVersion is null
+            ? null
+            : DotNetToolDetection.GetDotNetToolUpdateCommand(processPathProvider.ProcessPath)
+                ?? NpmInstallDetection.GetNpmUpdateCommand()
+                ?? "aspire update";
+        // Derive the lane the recommendation comes from so doctor can show
+        // 'Latest version is X (channel: stable)' vs '(channel: prerelease)'.
+        // GetNewerVersion picks between newestStable and newestPrerelease
+        // by exactly this rule, so re-classifying from the returned
+        // version's prerelease flag is faithful to the decision the
+        // package helper made.
+        var latestChannel = newerVersion is null
+            ? null
+            : (newerVersion.IsPrerelease ? PackageUpdateRecommendationChannels.Prerelease : PackageUpdateRecommendationChannels.Stable);
+        return new CliVersionStatus(currentVersionString, newerVersion?.ToString(), updateCommand, UpdateCheckError: null, LatestVersionChannel: latestChannel);
     }
 
     private async Task<IEnumerable<Shared.NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)

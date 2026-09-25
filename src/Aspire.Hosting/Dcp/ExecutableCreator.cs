@@ -1,511 +1,413 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREEXTENSION001
-#pragma warning disable ASPIRECERTIFICATES001
-#pragma warning disable ASPIREDOTNETTOOL
-
-using System.Diagnostics;
+using System.Collections.Immutable;
 using System.Globalization;
-using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
-using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dcp;
 
-using ExecutableConfiguration = (IExecutionConfigurationResult Configuration, ExecutablePemCertificates? PemCertificates);
-
 /// <summary>
-/// Handles preparation and creation of Executable DCP resources (project executables and plain executables).
+/// Coordinates preparation and creation of executable DCP resources.
 /// </summary>
-internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreationContext>
+internal sealed class ExecutableCreator(
+    DcpNameGenerator nameGenerator,
+    DistributedApplicationModel model,
+    DcpAppResourceStore appResources,
+    ContainerNetworkEndpointProvisioner containerNetworkEndpointProvisioner,
+    ExecutableConfigurationResolver configurationResolver,
+    IConfiguration configuration,
+    DistributedApplicationOptions distributedApplicationOptions,
+    ExecutableLaunchPolicy launchPolicy,
+    ILogger<ExecutableCreator> logger) : IObjectCreator<Executable, ContainerNetworkEndpointContext>
 {
-    private readonly IConfiguration _configuration;
-    private readonly DcpNameGenerator _nameGenerator;
-    private readonly DistributedApplicationModel _model;
-    private readonly DistributedApplicationOptions _distributedApplicationOptions;
-    private readonly DistributedApplicationExecutionContext _executionContext;
-    private readonly Locations _locations;
-    private readonly ILogger<ExecutableCreator> _logger;
-    private readonly DcpAppResourceStore _appResources;
+    private readonly DcpNameGenerator _nameGenerator = nameGenerator;
+    private readonly DistributedApplicationModel _model = model;
+    private readonly DcpAppResourceStore _appResources = appResources;
+    private readonly ContainerNetworkEndpointProvisioner _containerNetworkEndpointProvisioner = containerNetworkEndpointProvisioner;
+    private readonly ExecutableConfigurationResolver _configurationResolver = configurationResolver;
+    private readonly IConfiguration _configuration = configuration;
+    private readonly DistributedApplicationOptions _distributedApplicationOptions = distributedApplicationOptions;
+    private readonly ExecutableLaunchPolicy _launchPolicy = launchPolicy;
+    private readonly ILogger<ExecutableCreator> _logger = logger;
 
-    public ExecutableCreator(
-        IConfiguration configuration,
-        DcpNameGenerator nameGenerator,
-        DistributedApplicationModel model,
-        DistributedApplicationOptions distributedApplicationOptions,
-        DistributedApplicationExecutionContext executionContext,
-        Locations locations,
-        ILogger<ExecutableCreator> logger,
-        DcpAppResourceStore appResources)
+    public IEnumerable<RenderedModelResource<Executable>> PrepareObjects(CancellationToken cancellationToken)
     {
-        _configuration = configuration;
-        _nameGenerator = nameGenerator;
-        _model = model;
-        _distributedApplicationOptions = distributedApplicationOptions;
-        _executionContext = executionContext;
-        _locations = locations;
-        _logger = logger;
-        _appResources = appResources;
-    }
-
-    public IEnumerable<RenderedModelResource<Executable>> PrepareObjects()
-    {
-        PrepareProjectExecutables();
+        PrepareProjectExecutables(cancellationToken);
         PreparePlainExecutables();
+
         return _appResources.Get().OfType<RenderedModelResource<Executable>>();
     }
 
-    public bool IsReadyToCreate(RenderedModelResource<Executable> resource, EmptyCreationContext context)
-    {
-        var explicitStartup = resource.ModelResource.TryGetAnnotationsOfType<ExplicitStartupAnnotation>(out _);
-        return !explicitStartup;
-    }
+    public bool IsReadyToCreate(
+        RenderedModelResource<Executable> resource,
+        ContainerNetworkEndpointContext context) =>
+        !DcpModelUtilities.ShouldDeferCreateForExplicitStart(
+            resource.ModelResource,
+            resource.DcpResource.Spec.Start);
 
-    public async Task CreateObjectAsync(RenderedModelResource<Executable> er, EmptyCreationContext context, ILogger resourceLogger, IDcpObjectFactory factory, CancellationToken cancellationToken)
+    public async Task CreateObjectAsync(
+        RenderedModelResource<Executable> renderedResource,
+        ContainerNetworkEndpointContext context,
+        ILogger resourceLogger,
+        IDcpObjectFactory factory,
+        CancellationToken cancellationToken)
     {
-        if (er.DcpResource is not Executable exe)
-        {
-            throw new InvalidOperationException($"Expected an Executable resource, but got {er.DcpResourceKind} instead");
-        }
-
         cancellationToken.ThrowIfCancellationRequested();
 
-        var spec = exe.Spec;
-
-        // Don't create an args collection unless needed.  When args is null, a project run by the IDE will use the arguments provided by its launch profile.
-        // https://github.com/microsoft/aspire/blob/main/docs/specs/IDE-execution.md#launch-profile-processing-project-launch-configuration
-        spec.Args = null;
-
-        // An executable can be restarted so args must be reset to an empty state.
-        // After resetting, first apply any dotnet project related args, e.g. configuration, and then add args from the model resource.
-        if (er.DcpResource.TryGetAnnotationAsObjectList<string>(CustomResource.ResourceProjectArgsAnnotation, out var projectArgs) && projectArgs.Count > 0)
+        var configuration = await _configurationResolver
+            .ResolveAsync(
+                renderedResource,
+                resourceLogger,
+                new PrepareExecutableConfigurationGatherer(this, context, factory),
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (configuration.Configuration.Exception is not null)
         {
-            spec.Args ??= [];
-            spec.Args.AddRange(projectArgs);
+            throw new FailedToApplyEnvironmentException(
+                $"Failed to apply configuration to executable {renderedResource.ModelResource.Name}",
+                configuration.Configuration.Exception);
         }
 
-        var (configuration, pemCertificates) = await BuildExecutableConfiguration(er, resourceLogger, cancellationToken).ConfigureAwait(false);
-
-        spec.PemCertificates = pemCertificates;
-
-        var launchArgs = BuildLaunchArgs(er, spec, configuration.Arguments, spec.Args?.Count ?? 0);
-        var executableArgs = launchArgs.Where(a => a.Executable).Select(a => a.Value).ToList();
-        var displayArgs = launchArgs.Where(a => a.Display).ToList();
-        if (executableArgs.Count > 0)
+        ExecutableLaunchPlan plan;
+        try
         {
-            spec.Args ??= [];
-            spec.Args.AddRange(executableArgs);
+            plan = await ResolveLaunchPlanAsync(
+                renderedResource.ModelResource,
+                configuration.Configuration,
+                _configuration,
+                _distributedApplicationOptions,
+                _launchPolicy,
+                resourceLogger,
+                cancellationToken).ConfigureAwait(false);
         }
-        // Arg annotations are what is displayed in the dashboard.
-        er.DcpResource.SetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, displayArgs.Select(a => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive, effectiveArgumentIndex: a.EffectiveArgumentIndex)));
-
-        spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
-
-        if (configuration.Exception is not null)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            throw new FailedToApplyEnvironmentException();
+            throw;
         }
-
-        // Invoke the debug configuration callback now that endpoints are allocated.
-        // This allows launch configurations to access endpoint URLs that were not
-        // available during PrepareExecutables().
-        // "project" launch types configure their launch configs in PrepareProjectExecutables() directly;
-        // all other types (plain executables and project subtypes like azure-functions) are handled here.
-        if (er.ModelResource.SupportsDebugging(_configuration, out var supportsDebuggingAnnotation)
-            && supportsDebuggingAnnotation.LaunchConfigurationType is not "project")
+        catch (FailedToApplyEnvironmentException ex)
         {
-            var mode = _configuration[KnownConfigNames.DebugSessionRunMode] ?? ExecutableLaunchMode.NoDebug;
-            try
-            {
-                // Clear any existing launch configurations (needed for restart scenarios).
-                exe.Annotate(Executable.LaunchConfigurationsAnnotation, string.Empty);
-                supportsDebuggingAnnotation.LaunchConfigurationAnnotator(exe, mode);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to apply launch configuration for resource '{ResourceName}'. Falling back to process execution.", er.ModelResource.Name);
-                exe.Spec.ExecutionType = ExecutionType.Process;
-            }
+            resourceLogger.LogError(ex, "{Message}", ex.Message);
+            throw;
+        }
+        catch (ExecutableLaunchConfigurationException ex)
+        {
+            var failureMessage =
+                $"Failed to apply launch configuration for resource '{renderedResource.ModelResource.Name}'. " +
+                "Aspire does not retry launch configuration failures using DCP process fallback.";
+            // DcpExecutor avoids duplicating FailedToApplyEnvironmentException logs, so record the underlying
+            // launch producer failure on the resource logger before surfacing the actionable error.
+            resourceLogger.LogError(ex, "{Message}", failureMessage);
+            throw new FailedToApplyEnvironmentException(failureMessage, ex);
+        }
+        catch (Exception ex)
+        {
+            var failureMessage =
+                $"Failed to create executable launch plan for resource '{renderedResource.ModelResource.Name}'. " +
+                ex.Message;
+            // Report launch-planning failures with their specific cause without misclassifying recipe or invariant
+            // errors as IDE launch-configuration failures.
+            resourceLogger.LogError(ex, "{Message}", failureMessage);
+            throw new FailedToApplyEnvironmentException(failureMessage, ex);
         }
 
-        await factory.CreateDcpObjectsAsync([exe], cancellationToken).ConfigureAwait(false);
+        Render(renderedResource, plan, configuration.PemCertificates, _logger);
+
+        await factory
+            .CreateDcpObjectsAsync([renderedResource.DcpResource], cancellationToken)
+            .ConfigureAwait(false);
     }
 
-    private void PrepareProjectExecutables()
+    private async Task PrepareExecutableConfigurationAsync(
+        IExecutionConfigurationGathererContext context,
+        IResource resource,
+        ContainerNetworkEndpointContext endpointContext,
+        IDcpObjectFactory factory,
+        CancellationToken cancellationToken)
     {
-        var modelProjectResources = _model.GetProjectResources();
+        var endpointsByResource = new Dictionary<IResourceWithEndpoints, HashSet<EndpointAnnotation>>(ReferenceEqualityComparer.Instance);
+        var executableResources = _appResources.Get()
+            .OfType<RenderedModelResource<Executable>>()
+            .Select(executable => executable.ModelResource)
+            .ToHashSet(new ResourceNameComparer());
+        var hasContainerResources = _model.Resources.Any(resource => resource.IsContainer());
 
-        foreach (var project in modelProjectResources)
+        foreach (var endpointReference in context.GetReferences<EndpointReference>())
         {
-            if (!project.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
+            if (endpointReference.ContextNetworkID != KnownNetworkIdentifiers.DefaultAspireContainerNetwork ||
+                !endpointReference.Exists ||
+                !executableResources.Contains(endpointReference.Resource))
             {
-                throw new InvalidOperationException($"Project resource '{project.Name}' is missing required metadata."); // Should never happen.
+                continue;
+            }
+
+            if (!hasContainerResources)
+            {
+                throw new FailedToApplyEnvironmentException(
+                    $"Resource '{resource.Name}' references endpoint '{endpointReference.EndpointName}' on executable resource " +
+                    $"'{endpointReference.Resource.Name}' using the default Aspire container network, but the application does not contain any container resources.");
+            }
+
+            if (!_containerNetworkEndpointProvisioner.CanProvisionEndpoint(endpointReference.EndpointAnnotation))
+            {
+                throw new FailedToApplyEnvironmentException(
+                    $"Resource '{resource.Name}' references endpoint '{endpointReference.EndpointName}' on executable resource " +
+                    $"'{endpointReference.Resource.Name}' using the default Aspire container network, but the Aspire container tunnel only supports TCP endpoints.");
+            }
+
+            if (!endpointsByResource.TryGetValue(endpointReference.Resource, out var endpoints))
+            {
+                endpoints = new HashSet<EndpointAnnotation>(ReferenceEqualityComparer.Instance);
+                endpointsByResource.Add(endpointReference.Resource, endpoints);
+            }
+
+            endpoints.Add(endpointReference.EndpointAnnotation);
+        }
+
+        if (endpointsByResource.Count == 0)
+        {
+            return;
+        }
+
+        var hostEndpoints = endpointsByResource
+            .Select(pair => new HostResourceWithEndpoints(pair.Key, pair.Value))
+            .ToImmutableArray();
+
+        await _containerNetworkEndpointProvisioner
+            .EnsureEndpointsAsync(hostEndpoints, endpointContext, factory, cancellationToken)
+            .ConfigureAwait(false);
+
+        var allocatedEndpointTasks = hostEndpoints
+            .SelectMany(host => host.Endpoints)
+            .Select(endpoint => endpoint.AllAllocatedEndpoints.GetAllocatedEndpointAsync(
+                KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+                cancellationToken))
+            .ToArray();
+
+        await Task.WhenAll(allocatedEndpointTasks).ConfigureAwait(false);
+    }
+
+    internal static async Task<ExecutableLaunchPlan> ResolveLaunchPlanAsync(
+        IResource resource,
+        IExecutionConfigurationResult executionConfiguration,
+        IConfiguration configuration,
+        DistributedApplicationOptions distributedApplicationOptions,
+        ExecutableLaunchPolicy launchPolicy,
+        ILogger resourceLogger,
+        CancellationToken cancellationToken)
+    {
+        var recipes = resource.Annotations.OfType<ExecutableLaunchRecipeAnnotation>().ToArray();
+        if (recipes.Length != 1)
+        {
+            throw new InvalidOperationException(
+                $"Resource '{resource.Name}' must have exactly one executable launch recipe, but {recipes.Length} were found.");
+        }
+
+        var decision = launchPolicy.Decide(resource);
+        var context = new ExecutableLaunchContext(
+            resource,
+            configuration,
+            distributedApplicationOptions,
+            executionConfiguration,
+            decision,
+            resourceLogger,
+            cancellationToken);
+        var plan = await recipes[0].Recipe.CreateLaunchPlanAsync(context).ConfigureAwait(false);
+
+        if (plan.Mechanism != decision.Mechanism)
+        {
+            throw new InvalidOperationException(
+                $"The executable launch recipe for resource '{resource.Name}' returned a {plan.Mechanism} plan after {decision.Mechanism} was selected.");
+        }
+
+        if (plan.Mechanism == ExecutableLaunchMechanism.Ide && plan.LaunchConfigurations.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"The executable launch recipe for resource '{resource.Name}' selected IDE execution without producing a launch configuration.");
+        }
+
+        return plan;
+    }
+
+    internal static void Render(
+        RenderedModelResource<Executable> renderedResource,
+        ExecutableLaunchPlan plan,
+        ExecutablePemCertificates? pemCertificates,
+        ILogger logger)
+    {
+        var executable = renderedResource.DcpResource;
+        var spec = executable.Spec;
+
+        // Executable objects are reused on restart. Apply every launch field from the completed immutable plan so
+        // a failed prior attempt cannot leak stale execution type, arguments, environment, or launch metadata.
+        spec.ExecutablePath = plan.Command;
+        spec.WorkingDirectory = plan.WorkingDirectory;
+        spec.ExecutionType = plan.Mechanism switch
+        {
+            ExecutableLaunchMechanism.Process => ExecutionType.Process,
+            ExecutableLaunchMechanism.Ide => ExecutionType.IDE,
+            _ => throw new InvalidOperationException($"Unknown executable launch mechanism '{plan.Mechanism}'.")
+        };
+        spec.FallbackExecutionTypes = null;
+        spec.Args = plan.Arguments?.ToList();
+        spec.Env = plan.EnvironmentVariables
+            .Select(static variable => new EnvVar { Name = variable.Key, Value = variable.Value })
+            .ToList();
+        spec.PemCertificates = pemCertificates;
+
+        executable.Metadata.Annotations?.Remove(Executable.LaunchConfigurationsAnnotation);
+        if (plan.LaunchConfigurations.Count > 0)
+        {
+            executable.SetAnnotationAsObjectList(Executable.LaunchConfigurationsAnnotation, plan.LaunchConfigurations);
+        }
+
+        executable.SetAnnotationAsObjectList(
+            CustomResource.ResourceAppArgsAnnotation,
+            plan.DisplayArguments.Select(static argument => new AppLaunchArgumentAnnotation(
+                argument.Value,
+                argument.IsSensitive,
+                argument.EffectiveArgumentIndex)));
+
+        ApplyLifetime(renderedResource.ModelResource, spec);
+        ApplyTerminal(renderedResource.ModelResource, executable, logger);
+    }
+
+    private void PrepareProjectExecutables(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        foreach (var project in _model.GetProjectResources())
+        {
+            if (!project.TryGetProjectMetadata(out var projectMetadata))
+            {
+                throw new InvalidOperationException($"Project resource '{project.Name}' is missing required metadata.");
             }
 
             EnsureRequiredAnnotations(project);
-
             var replicas = project.GetReplicaCount();
 
             for (var i = 0; i < replicas; i++)
             {
-                var exeInstance = DcpExecutor.GetDcpInstance(project, instanceIndex: i);
-                var exe = Executable.Create(exeInstance.Name, "dotnet");
-                exe.Spec.WorkingDirectory = Path.GetDirectoryName(projectMetadata.ProjectPath);
+                var instance = DcpExecutor.GetDcpInstance(project, instanceIndex: i);
+                project.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation);
+                var executable = Executable.Create(instance.Name, executableAnnotation?.Command ?? "dotnet");
+                executable.Spec.WorkingDirectory =
+                    executableAnnotation?.WorkingDirectory ??
+                    Path.GetDirectoryName(projectMetadata.ProjectPath);
 
-                exe.Annotate(CustomResource.OtelServiceNameAnnotation, project.Name);
-                exe.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, exeInstance.Suffix);
-                exe.Annotate(CustomResource.ResourceNameAnnotation, project.Name);
-                exe.Annotate(CustomResource.ResourceReplicaCount, replicas.ToString(CultureInfo.InvariantCulture));
-                exe.Annotate(CustomResource.ResourceReplicaIndex, i.ToString(CultureInfo.InvariantCulture));
-
-                DcpExecutor.SetInitialResourceState(project, exe);
-
-                var projectArgs = new List<string>();
-
-                var isInDebugSession = !string.IsNullOrEmpty(_configuration[DcpExecutor.DebugSessionPortVar]);
-
-                if (project.SupportsDebugging(_configuration, out var supportsDebuggingAnnotation))
-                {
-                    exe.Spec.ExecutionType = ExecutionType.IDE;
-                    exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
-
-                    if (supportsDebuggingAnnotation.LaunchConfigurationType is "project")
-                    {
-                        // We want this annotation even if we are not using IDE execution; see ToSnapshot() for details.
-                        exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, CreateProjectLaunchConfiguration(project, projectMetadata));
-                    }
-                    // Non-project launch types (e.g. azure-functions) have their launch configuration
-                    // applied later in CreateExecutableAsync() after endpoints are allocated,
-                    // unless the IDE didn't send DEBUG_SESSION_INFO (handled by the fallback branch below).
-                }
-                else if (ShouldFallBackToIdeExecution(isInDebugSession, supportsDebuggingAnnotation))
-                {
-                    // Fall back to IDE execution with a standard ProjectLaunchConfiguration when:
-                    // 1. No SupportsDebuggingAnnotation exists (e.g. AddResource-based ProjectResource
-                    //    subclasses that don't call WithDebugSupport). These should get the same IDE
-                    //    treatment that AddProject provides by default.
-                    // 2. The annotation exists but the IDE did not send DEBUG_SESSION_INFO (Visual Studio
-                    //    scenario). VS handles all project resources natively, so non-"project" types
-                    //    like "azure-functions" still need IDE execution with ProjectLaunchConfiguration.
-                    exe.Spec.ExecutionType = ExecutionType.IDE;
-                    exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
-
-                    exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, CreateProjectLaunchConfiguration(project, projectMetadata));
-                }
-                else
-                {
-                    exe.Spec.ExecutionType = ExecutionType.Process;
-
-                    var projectLaunchConfiguration = new ProjectLaunchConfiguration();
-                    projectLaunchConfiguration.ProjectPath = projectMetadata.ProjectPath;
-
-                    // `dotnet watch` does not work with file-based apps yet, so we have to use `dotnet run` in that case
-                    if (_configuration.GetBool("DOTNET_WATCH") is not true || projectMetadata.IsFileBasedApp)
-                    {
-                        projectArgs.Add("run");
-                        projectArgs.Add(projectMetadata.IsFileBasedApp ? "--file" : "--project");
-                        projectArgs.Add(projectMetadata.ProjectPath);
-                        if (projectMetadata.IsFileBasedApp)
-                        {
-                            projectArgs.Add("--no-cache");
-                        }
-                        if (projectMetadata.SuppressBuild)
-                        {
-                            projectArgs.Add("--no-build");
-                        }
-                    }
-                    else
-                    {
-                        projectArgs.AddRange([
-                            "watch",
-                            "--non-interactive",
-                            "--no-hot-reload",
-                            "--project",
-                            projectMetadata.ProjectPath
-                        ]);
-                    }
-
-                    if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration))
-                    {
-                        projectArgs.AddRange(new[] { "--configuration", _distributedApplicationOptions.Configuration });
-                    }
-
-                    // We pretty much always want to suppress the normal launch profile handling
-                    // because the settings from the profile will override the ambient environment settings, which is not what we want
-                    // (the ambient environment settings for service processes come from the application model
-                    // and should be HIGHER priority than the launch profile settings).
-                    // This means we need to apply the launch profile settings manually inside CreateExecutableAsync().
-                    projectArgs.Add("--no-launch-profile");
-
-                    // We want this annotation even if we are not using IDE execution; see ToSnapshot() for details.
-                    exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, projectLaunchConfiguration);
-                }
-
-                exe.SetAnnotationAsObjectList(CustomResource.ResourceProjectArgsAnnotation, projectArgs);
-
-                var exeAppResource = new RenderedModelResource<Executable>(project, exe);
-                DcpModelUtilities.AddServicesProducedInfo(exeAppResource, _appResources.Get());
-                _appResources.Add(exeAppResource);
+                ApplyCommonAnnotations(executable, project, instance, replicas, i);
+                ApplyExplicitStart(project, executable.Spec);
+                DcpExecutor.SetInitialResourceState(project, executable);
+                AddRenderedResource(project, executable);
             }
         }
     }
 
     private void PreparePlainExecutables()
     {
-        var modelExecutableResources = _model.GetExecutableResources();
-
-        foreach (var executable in modelExecutableResources)
+        foreach (var resource in _model.GetExecutableResources())
         {
-            EnsureRequiredAnnotations(executable);
+            EnsureRequiredAnnotations(resource);
 
-            var exeInstance = DcpExecutor.GetDcpInstance(executable, instanceIndex: 0);
-            var exePath = executable.Command;
-            var exe = Executable.Create(exeInstance.Name, exePath);
-
-            // The working directory is always relative to the app host project directory (if it exists).
-            exe.Spec.WorkingDirectory = executable.WorkingDirectory;
-            exe.Annotate(CustomResource.OtelServiceNameAnnotation, executable.Name);
-            exe.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, exeInstance.Suffix);
-            exe.Annotate(CustomResource.ResourceNameAnnotation, executable.Name);
-
-            if (executable.SupportsDebugging(_configuration, out _))
+            if (!resource.TryGetInstances(out var instances))
             {
-                // Just mark as IDE execution here - the actual launch configuration callback
-                // will be invoked in CreateExecutableAsync after endpoints are allocated.
-                exe.Spec.ExecutionType = ExecutionType.IDE;
-                exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
-            }
-            else
-            {
-                exe.Spec.ExecutionType = ExecutionType.Process;
+                throw new DistributedApplicationException($"Couldn't find required {nameof(DcpInstancesAnnotation)} annotation on resource {resource.Name}.");
             }
 
-            DcpExecutor.SetInitialResourceState(executable, exe);
+            // Naming determines replica eligibility. Consume those instances without enabling
+            // replica annotations on ordinary executables that still receive only one instance.
+            foreach (var instance in instances)
+            {
+                var executable = Executable.Create(instance.Name, resource.Command);
+                executable.Spec.WorkingDirectory = resource.WorkingDirectory;
 
-            var exeAppResource = new RenderedModelResource<Executable>(executable, exe);
-            DcpModelUtilities.AddServicesProducedInfo(exeAppResource, _appResources.Get());
-            _appResources.Add(exeAppResource);
+                ApplyCommonAnnotations(executable, resource, instance, instances.Length, instance.Index);
+                ApplyExplicitStart(resource, executable.Spec);
+                DcpExecutor.SetInitialResourceState(resource, executable);
+                AddRenderedResource(resource, executable);
+            }
         }
     }
 
-    private async Task<ExecutableConfiguration> BuildExecutableConfiguration(RenderedModelResource<Executable> er, ILogger resourceLogger, CancellationToken cancellationToken)
+    private static void ApplyCommonAnnotations(
+        Executable executable,
+        IResource resource,
+        DcpInstance instance,
+        int replicaCount,
+        int replicaIndex)
     {
-        var exe = (Executable)er.DcpResource;
+        executable.Annotate(CustomResource.OtelServiceNameAnnotation, resource.Name);
+        executable.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, resource.GetOtelServiceInstanceId(instance));
+        executable.Annotate(CustomResource.ResourceNameAnnotation, resource.Name);
+        executable.Annotate(CustomResource.ResourceReplicaCount, replicaCount.ToString(CultureInfo.InvariantCulture));
+        executable.Annotate(CustomResource.ResourceReplicaIndex, replicaIndex.ToString(CultureInfo.InvariantCulture));
+    }
 
-        // Build the base paths for certificate output in the DCP session directory.
-        var certificatesRootDir = Path.Join(_locations.DcpSessionDir, exe.Metadata.Name);
-        var bundleOutputPath = Path.Join(certificatesRootDir, "cert.pem");
-        var customBundleOutputPath = Path.Join(certificatesRootDir, "bundles");
-        var certificatesOutputPath = Path.Join(certificatesRootDir, "certs");
-        var baseServerAuthOutputPath = Path.Join(certificatesRootDir, "private");
-
-        var configuration = await ExecutionConfigurationBuilder.Create(er.ModelResource)
-            .WithArgumentsConfig()
-            .WithEnvironmentVariablesConfig()
-            .WithCertificateTrustConfig(scope =>
-            {
-                var dirs = new List<string> { certificatesOutputPath };
-                if (scope == CertificateTrustScope.Append)
-                {
-                    var existing = Environment.GetEnvironmentVariable("SSL_CERT_DIR");
-                    if (!string.IsNullOrEmpty(existing))
-                    {
-                        dirs.AddRange(existing.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries));
-                    }
-                }
-
-                return new()
-                {
-                    CertificateBundlePath = ReferenceExpression.Create($"{bundleOutputPath}"),
-                    // Build the SSL_CERT_DIR value by combining the new certs directory with any existing directories.
-                    CertificateDirectoriesPath = ReferenceExpression.Create($"{string.Join(Path.PathSeparator, dirs)}"),
-                    RootCertificatesPath = certificatesRootDir,
-                };
-            })
-            .WithHttpsCertificateConfig(cert => new()
-            {
-                CertificatePath = ReferenceExpression.Create($"{Path.Join(baseServerAuthOutputPath, $"{cert.Thumbprint}.crt")}"),
-                KeyPath = ReferenceExpression.Create($"{Path.Join(baseServerAuthOutputPath, $"{cert.Thumbprint}.key")}"),
-                PfxPath = ReferenceExpression.Create($"{Path.Join(baseServerAuthOutputPath, $"{cert.Thumbprint}.pfx")}"),
-            })
-            .BuildAsync(_executionContext, resourceLogger, cancellationToken)
-            .ConfigureAwait(false);
-
-        // Add the certificates to the executable spec so they'll be placed in the DCP config
-        ExecutablePemCertificates? pemCertificates = null;
-        if (configuration.TryGetAdditionalData<CertificateTrustExecutionConfigurationData>(out var certificateTrustConfiguration)
-            && certificateTrustConfiguration.Scope != CertificateTrustScope.None
-            && certificateTrustConfiguration.Certificates.Count > 0)
+    private static void ApplyExplicitStart(IResource resource, ExecutableSpec spec)
+    {
+        if (resource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _))
         {
-            pemCertificates = new ExecutablePemCertificates
+            spec.Start = false;
+        }
+    }
+
+    private static void ApplyLifetime(IResource resource, ExecutableSpec spec)
+    {
+        spec.Persistent = null;
+        spec.MonitorPid = null;
+        spec.MonitorTimestamp = null;
+
+        if (resource.GetLifetimeType() != Lifetime.Persistent)
+        {
+            return;
+        }
+
+        spec.Persistent = true;
+        if (resource.TryGetParentProcessLifetime(out var parentProcessId, out var parentProcessTimestamp))
+        {
+            spec.MonitorPid = parentProcessId;
+            spec.MonitorTimestamp = parentProcessTimestamp;
+        }
+    }
+
+    private static void ApplyTerminal(IResource resource, Executable executable, ILogger logger)
+    {
+        executable.Spec.Terminal = null;
+        if (!resource.TryGetAnnotationsOfType<TerminalAnnotation>(out var terminalAnnotations) ||
+            terminalAnnotations.FirstOrDefault() is not { } terminalAnnotation)
+        {
+            return;
+        }
+
+        if (TryGetReplicaIndex(executable, out var replicaIndex) &&
+            replicaIndex >= 0 &&
+            replicaIndex < terminalAnnotation.TerminalHosts.Count)
+        {
+            executable.Spec.Terminal = new TerminalSpec
             {
-                Certificates = CertificateUtilities.BuildPemCertificateList(certificateTrustConfiguration.Certificates),
-                ContinueOnError = true,
+                UdsPath = terminalAnnotation.TerminalHosts[replicaIndex].Layout.ProducerUdsPath,
+                // The Aspire terminal host owns the listener at UdsPath; DCP must dial it.
+                SocketMode = "connect",
+                Cols = terminalAnnotation.Options.Columns,
+                Rows = terminalAnnotation.Options.Rows
             };
-
-            if (certificateTrustConfiguration.CustomBundlesFactories.Count > 0)
-            {
-                Directory.CreateDirectory(customBundleOutputPath);
-            }
-
-            foreach (var bundleFactory in certificateTrustConfiguration.CustomBundlesFactories)
-            {
-                var bundleId = bundleFactory.Key;
-                var bundleBytes = await bundleFactory.Value(certificateTrustConfiguration.Certificates, cancellationToken).ConfigureAwait(false);
-
-                File.WriteAllBytes(Path.Join(customBundleOutputPath, bundleId), bundleBytes);
-            }
+            return;
         }
 
-        if (configuration.TryGetAdditionalData<HttpsCertificateExecutionConfigurationData>(out var tlsCertificateConfiguration))
-        {
-            var thumbprint = tlsCertificateConfiguration.Certificate.Thumbprint;
-            var publicCertificatePem = tlsCertificateConfiguration.Certificate.ExportCertificatePem();
-            (var keyPem, var pfxBytes) = await DeveloperCertificateService.GetKeyMaterialAsync(
-                tlsCertificateConfiguration.Certificate,
-                tlsCertificateConfiguration.Password,
-                tlsCertificateConfiguration.IsKeyPathReferenced,
-                tlsCertificateConfiguration.IsPfxPathReferenced,
-                cancellationToken
-            ).ConfigureAwait(false);
-
-            if (OperatingSystem.IsWindows())
-            {
-                Directory.CreateDirectory(baseServerAuthOutputPath);
-            }
-            else
-            {
-                Directory.CreateDirectory(baseServerAuthOutputPath, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
-            }
-
-            File.WriteAllText(Path.Join(baseServerAuthOutputPath, $"{thumbprint}.crt"), publicCertificatePem);
-
-            if (keyPem is not null)
-            {
-                var keyBytes = Encoding.ASCII.GetBytes(keyPem);
-
-                // Write each of the certificate, key, and PFX assets to the temp folder
-                File.WriteAllBytes(Path.Join(baseServerAuthOutputPath, $"{thumbprint}.key"), keyBytes);
-
-                Array.Clear(keyPem, 0, keyPem.Length);
-                Array.Clear(keyBytes, 0, keyBytes.Length);
-            }
-
-            if (pfxBytes is not null)
-            {
-                File.WriteAllBytes(Path.Join(baseServerAuthOutputPath, $"{thumbprint}.pfx"), pfxBytes);
-                Array.Clear(pfxBytes, 0, pfxBytes.Length);
-            }
-        }
-
-        return (configuration, pemCertificates);
+        logger.LogWarning(
+            "Could not determine a producer UDS path for replica of resource '{ResourceName}'; terminal will not be attached for this replica.",
+            resource.Name);
     }
 
-    private static List<LaunchArgument> BuildLaunchArgs(RenderedModelResource<Executable> er, ExecutableSpec spec, IEnumerable<(string Value, bool IsSensitive)> appHostArgs, int executableArgumentStartIndex)
+    private static bool TryGetReplicaIndex(Executable executable, out int replicaIndex)
     {
-        // Launch args is the final list of args that are displayed in the UI and possibly added to the executable spec.
-        // They're built from app host resource model args and any args in the effective launch profile.
-        // Follows behavior in the IDE execution spec when in IDE execution mode:
-        // https://github.com/microsoft/aspire/blob/main/docs/specs/IDE-execution.md#project-launch-configuration-type-project
-        var appHostArgList = appHostArgs.ToList();
-        var launchArgs = new List<LaunchArgument>();
-        var nextExecutableArgumentIndex = executableArgumentStartIndex;
-
-        LaunchArgument CreateLaunchArgument(string value, bool isSensitive, bool executable, bool display)
-        {
-            var effectiveArgumentIndex = executable ? nextExecutableArgumentIndex++ : (int?)null;
-            return new(value, isSensitive, executable, display, effectiveArgumentIndex);
-        }
-
-        // If the executable is a project then include any command line args from the launch profile.
-        if (er.ModelResource is ProjectResource project)
-        {
-            // Args in the launch profile is used when:
-            // 1. The project is run as an executable. Launch profile args are combined with app host supplied args.
-            // 2. The project is run by the IDE and no app host args are specified.
-            if (spec.ExecutionType == ExecutionType.Process || (spec.ExecutionType == ExecutionType.IDE && appHostArgList.Count == 0))
-            {
-                // When the .NET project is launched from an IDE the launch profile args are automatically added.
-                // We still want to display the args in the dashboard so only add them to the custom arg annotations.
-                var executableArg = spec.ExecutionType != ExecutionType.IDE;
-
-                var launchProfileArgs = GetLaunchProfileArgs(project.GetEffectiveLaunchProfile()?.LaunchProfile);
-                if (launchProfileArgs.Count > 0 && appHostArgList.Count > 0)
-                {
-                    // If there are app host args, add a double-dash to separate them from the launch args.
-                    launchProfileArgs.Insert(0, "--");
-                }
-
-                launchArgs.AddRange(launchProfileArgs.Select(a => CreateLaunchArgument(a, isSensitive: false, executableArg, display: true)));
-            }
-        }
-        else if (er.ModelResource is DotnetToolResource)
-        {
-            var argSeparator = appHostArgList.Select((a, i) => (index: i, value: a.Value))
-                .FirstOrDefault(x => x.value == DotnetToolResourceExtensions.ArgumentSeparator);
-
-            var args = appHostArgList.Select((a, i) => (arg: a, display: i > argSeparator.index));
-            launchArgs.AddRange(args.Select(x => CreateLaunchArgument(x.arg.Value, x.arg.IsSensitive, executable: true, x.display)));
-            return launchArgs;
-        }
-
-        // In the situation where args are combined (process execution) the app host args are added after the launch profile args.
-        launchArgs.AddRange(appHostArgList.Select(a => CreateLaunchArgument(a.Value, a.IsSensitive, executable: true, display: true)));
-
-        return launchArgs;
-    }
-
-    /// <summary>
-    /// Determines whether to fall back to IDE execution for a project resource that did not
-    /// pass <see cref="ExtensionUtils.SupportsDebugging"/>. Returns <see langword="true"/> when
-    /// the app host is running inside a debug session and either the resource has no
-    /// <see cref="SupportsDebuggingAnnotation"/> (e.g. AddResource-based subclasses) or the
-    /// IDE did not send <c>DEBUG_SESSION_INFO</c> (Visual Studio scenario).
-    /// </summary>
-    private bool ShouldFallBackToIdeExecution(bool isInDebugSession, SupportsDebuggingAnnotation? supportsDebuggingAnnotation)
-    {
-        if (!isInDebugSession)
-        {
-            return false;
-        }
-
-        if (supportsDebuggingAnnotation is not null && !string.IsNullOrEmpty(_configuration[KnownConfigNames.DebugSessionInfo]))
-        {
-            return false;
-        }
-
-        return true;
-    }
-
-    private ProjectLaunchConfiguration CreateProjectLaunchConfiguration(ProjectResource project, IProjectMetadata projectMetadata)
-    {
-        var projectLaunchConfiguration = new ProjectLaunchConfiguration();
-        projectLaunchConfiguration.ProjectPath = projectMetadata.ProjectPath;
-        projectLaunchConfiguration.Mode = _configuration[KnownConfigNames.DebugSessionRunMode]
-            ?? (Debugger.IsAttached ? ExecutableLaunchMode.Debug : ExecutableLaunchMode.NoDebug);
-
-        projectLaunchConfiguration.DisableLaunchProfile = project.TryGetLastAnnotation<ExcludeLaunchProfileAnnotation>(out _);
-        // Use the effective launch profile which has fallback logic
-        if (!projectLaunchConfiguration.DisableLaunchProfile && project.GetEffectiveLaunchProfile() is NamedLaunchProfile namedLaunchProfile)
-        {
-            projectLaunchConfiguration.LaunchProfile = namedLaunchProfile.Name;
-        }
-
-        return projectLaunchConfiguration;
-    }
-
-    private static List<string> GetLaunchProfileArgs(LaunchProfile? launchProfile)
-    {
-        if (launchProfile is not null && !string.IsNullOrWhiteSpace(launchProfile.CommandLineArgs))
-        {
-            return CommandLineArgsParser.Parse(launchProfile.CommandLineArgs);
-        }
-
-        return [];
+        replicaIndex = -1;
+        return executable.Metadata.Annotations is { } annotations &&
+            annotations.TryGetValue(CustomResource.ResourceReplicaIndex, out var value) &&
+            int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out replicaIndex);
     }
 
     private void EnsureRequiredAnnotations(IResource resource)
@@ -514,5 +416,42 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         _nameGenerator.EnsureDcpInstancesPopulated(resource);
     }
 
-    private sealed record LaunchArgument(string Value, bool IsSensitive, bool Executable, bool Display, int? EffectiveArgumentIndex);
+    private void AddRenderedResource(IResource resource, Executable executable)
+    {
+        var renderedResource = new RenderedModelResource<Executable>(resource, executable);
+        DcpModelUtilities.AddServicesProducedInfo(renderedResource, _appResources.Get());
+        _appResources.Add(renderedResource);
+    }
+
+    /// <summary>
+    /// Prepares network-scoped endpoints after configuration gathering and before value resolution.
+    /// </summary>
+    private sealed class PrepareExecutableConfigurationGatherer(
+        ExecutableCreator creator,
+        ContainerNetworkEndpointContext endpointContext,
+        IDcpObjectFactory factory) : IExecutionConfigurationGatherer
+    {
+        public async ValueTask GatherAsync(
+            IExecutionConfigurationGathererContext context,
+            IResource resource,
+            ILogger resourceLogger,
+            DistributedApplicationExecutionContext executionContext,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await creator.PrepareExecutableConfigurationAsync(
+                    context,
+                    resource,
+                    endpointContext,
+                    factory,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (FailedToApplyEnvironmentException ex)
+            {
+                resourceLogger.LogError(ex, "{Message}", ex.Message);
+                throw;
+            }
+        }
+    }
 }

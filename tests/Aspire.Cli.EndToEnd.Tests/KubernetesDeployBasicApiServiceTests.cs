@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -15,9 +14,11 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
 {
     private const string ProjectName = "K8sDeployTest";
 
-    [Fact]
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     [CaptureWorkspaceOnFailure]
-    public async Task DeployK8sBasicApiService()
+    public async Task DeployK8sBasicApiService(bool useProjectV2)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -25,15 +26,19 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
 
         var clusterName = KubernetesDeployTestHelpers.GenerateUniqueClusterName();
         var k8sNamespace = $"test-{clusterName[..16]}";
+        var serverName = $"server-{clusterName}";
+        var imageName = $"{clusterName}/server";
+        var imageTag = useProjectV2 ? "project-v2" : "legacy";
+        var expectedImage = $"localhost:5001/{imageName}:{imageTag}";
+        var response = $"PASSED: basic API service is running ({clusterName}, {imageTag})";
 
         output.WriteLine($"Cluster name: {clusterName}");
         output.WriteLine($"Namespace: {k8sNamespace}");
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         // Prepare environment
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
@@ -56,6 +61,8 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
 
             var appHostCode = $$"""
                 #pragma warning disable ASPIRECOMPUTE003
+                #pragma warning disable ASPIREDOTNETPROJECT001
+                #pragma warning disable ASPIREPIPELINES003
                 using Aspire.Hosting;
                 using Aspire.Hosting.Kubernetes;
 
@@ -64,7 +71,11 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
                 var registryEndpoint = builder.AddParameter("registryendpoint");
                 var registry = builder.AddContainerRegistry("registry", registryEndpoint);
 
-                var api = builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
+                var api = {{(useProjectV2
+                    ? $"builder.AddDotnetProject(\"{serverName}\", \"../{ProjectName}.ApiService/{ProjectName}.ApiService.csproj\")"
+                    : $"builder.AddProject<Projects.{ProjectName}_ApiService>(\"{serverName}\")")}}
+                    .WithRemoteImageName("{{imageName}}")
+                    .WithRemoteImageTag("{{imageTag}}")
                     .WithExternalHttpEndpoints();
 
                 builder.AddKubernetesEnvironment("env")
@@ -77,7 +88,7 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
                 builder.Build().Run();
                 """;
 
-            var apiProgramCode = """
+            var apiProgramCode = $$"""
                 var builder = WebApplication.CreateBuilder(args);
                 builder.AddServiceDefaults();
 
@@ -86,7 +97,7 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
 
                 app.MapGet("/test-deployment", () =>
                 {
-                    return Results.Ok("PASSED: basic API service is running");
+                    return Results.Text("{{response}}");
                 });
 
                 app.Run();
@@ -96,7 +107,7 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
                 counter,
                 ProjectName,
                 Path.Combine(workspace.WorkspaceRoot.FullName, ProjectName),
-                appHostHostingPackages: ["Aspire.Hosting.Kubernetes"],
+                appHostHostingPackages: ["Aspire.Hosting.Kubernetes", "Aspire.Hosting.Dotnet"],
                 apiClientPackages: [],
                 appHostCode: appHostCode,
                 apiProgramCode: apiProgramCode,
@@ -123,27 +134,26 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
             // Phase 4: Verify the deployment
             // =====================================================================
 
+            await auto.VerifyPodImageAsync(counter, k8sNamespace, $"app.kubernetes.io/component={serverName}", expectedImage);
             await auto.VerifyDeploymentAsync(
                 counter,
                 @namespace: k8sNamespace,
-                serviceName: "server",
+                serviceName: serverName,
                 localPort: 18080,
-                testPath: "/test-deployment");
+                testPath: "/test-deployment",
+                expectedResponse: response);
 
             // =====================================================================
             // Phase 5: Cleanup
             // =====================================================================
 
             await auto.CleanupKubernetesDeploymentAsync(counter, clusterName);
-
-            await auto.TypeAsync("exit");
-            await auto.EnterAsync();
         }
         finally
         {
             await KubernetesDeployTestHelpers.CleanupKindClusterOutOfBandAsync(clusterName, output);
+            await LocalDeploymentTestHelpers.CleanupImageAsync(expectedImage, output);
+            await LocalDeploymentTestHelpers.CleanupImageAsync($"{serverName}:latest", output);
         }
-
-        await pendingRun;
     }
 }

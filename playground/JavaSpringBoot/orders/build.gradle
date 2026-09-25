@@ -1,0 +1,58 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.5.14'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    // Resolved separately from the runtime classpath: the agent instruments the JVM from the command
+    // line and must never end up on the application's own classpath. The roles are stated explicitly
+    // because Gradle 9 removed the legacy behaviour where a bare configuration was both resolvable and
+    // consumable.
+    opentelemetryAgent {
+        canBeConsumed = false
+        canBeResolved = true
+    }
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    opentelemetryAgent 'io.opentelemetry.javaagent:opentelemetry-javaagent:2.24.0'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// The AppHost points -javaagent at build/agent/opentelemetry-javaagent.jar. Fetching it here keeps a
+// ~25 MB binary out of the repository.
+// https://opentelemetry.io/docs/zero-code/java/agent/
+tasks.register('copyOpenTelemetryAgent', Copy) {
+    from configurations.opentelemetryAgent
+    into layout.buildDirectory.dir('agent')
+    rename '.*', 'opentelemetry-javaagent.jar'
+}
+
+// bootRun and bootJar both need the agent on disk before the application JVM starts.
+tasks.named('bootRun') {
+    dependsOn 'copyOpenTelemetryAgent'
+}
+
+tasks.named('classes') {
+    dependsOn 'copyOpenTelemetryAgent'
+}

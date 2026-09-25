@@ -2,12 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
+using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
 namespace Aspire.Hosting.ApplicationModel;
-
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe dashboard command arguments.
 
 /// <summary>
 /// Represents a command annotation for a resource.
@@ -66,7 +64,8 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         IconVariant? iconVariant,
         bool isHighlighted,
         ResourceCommandVisibility visibility = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api,
-        Func<InputsDialogValidationContext, Task>? validateArguments = null)
+        Func<InputsDialogValidationContext, Task>? validateArguments = null,
+        CommandProgressOptions? progress = null)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(displayName);
@@ -88,6 +87,7 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         IconVariant = iconVariant;
         IsHighlighted = isHighlighted;
         Visibility = visibility;
+        Progress = progress;
     }
 
     /// <summary>
@@ -135,13 +135,11 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// <see cref="InteractionInput.Name"/>.
     /// </para>
     /// </remarks>
-    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public IReadOnlyList<InteractionInput> Arguments { get; }
 
     /// <summary>
     /// Gets the callback that validates invocation arguments before the command callback is executed.
     /// </summary>
-    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public Func<InputsDialogValidationContext, Task>? ValidateArguments { get; }
 
     /// <summary>
@@ -169,6 +167,12 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// Gets where the command is visible to users and clients.
     /// </summary>
     public ResourceCommandVisibility Visibility { get; }
+
+    /// <summary>
+    /// Gets the progress dialog options for the command.
+    /// When <see langword="null"/>, no progress dialog is shown.
+    /// </summary>
+    public CommandProgressOptions? Progress { get; }
 }
 
 /// <summary>
@@ -216,6 +220,11 @@ public static class CommandResults
     /// Produces a success result.
     /// </summary>
     public static ExecuteCommandResult Success() => new() { Success = true };
+
+    /// <summary>
+    /// Produces a success result.
+    /// </summary>
+    public static ExecuteCommandResult Success(string message) => new() { Success = true, Message = message };
 
     /// <summary>
     /// Produces a success result with a message and result data.
@@ -349,30 +358,105 @@ public sealed class CommandResultData
 /// <summary>
 /// Context for <see cref="ResourceCommandAnnotation.UpdateState"/>.
 /// </summary>
+/// <ats-summary>Context for <ats-see cref="!:method:ResourceCommandAnnotation.UpdateState" />.</ats-summary>
 [AspireExport(ExposeProperties = true)]
 public sealed class UpdateCommandStateContext
 {
     /// <summary>
     /// The resource snapshot.
     /// </summary>
+    [AspireExportIgnore(Reason = "CustomResourceSnapshot contains object-valued properties that are not statically representable in polyglot SDKs. Use ResourceSnapshotData for the curated ATS projection.")]
     public required CustomResourceSnapshot ResourceSnapshot { get; init; }
+
+    /// <summary>
+    /// Gets the resource snapshot data available to polyglot command state callbacks.
+    /// </summary>
+    [AspireExport(MethodName = "resourceSnapshot")]
+    internal UpdateCommandStateResourceSnapshot ResourceSnapshotData => UpdateCommandStateResourceSnapshot.FromSnapshot(ResourceSnapshot);
 
     /// <summary>
     /// The service provider.
     /// </summary>
-    public required IServiceProvider ServiceProvider { get; init; }
+    [Obsolete("Use Services instead.")]
+    [AspireExportIgnore(Reason = "Obsolete alias for Services. The service provider is exposed to polyglot hosts via Services (services).")]
+    public IServiceProvider ServiceProvider
+    {
+        get => Services;
+        init => Services = value;
+    }
+
+    /// <summary>
+    /// The service provider.
+    /// </summary>
+    public required IServiceProvider Services { get; init; }
+}
+
+/// <summary>
+/// Resource snapshot data exposed to polyglot command state callbacks.
+/// </summary>
+[AspireDto]
+internal sealed class UpdateCommandStateResourceSnapshot
+{
+    /// <summary>
+    /// The type of the resource.
+    /// </summary>
+    public required string ResourceType { get; init; }
+
+    /// <summary>
+    /// The current lifecycle state text for the resource.
+    /// </summary>
+    public string? State { get; init; }
+
+    /// <summary>
+    /// The display style for the current lifecycle state.
+    /// </summary>
+    public string? StateStyle { get; init; }
+
+    /// <summary>
+    /// The current health status for the resource.
+    /// </summary>
+    public HealthStatus? HealthStatus { get; init; }
+
+    /// <summary>
+    /// The exit code of the resource.
+    /// </summary>
+    public int? ExitCode { get; init; }
+
+    internal static UpdateCommandStateResourceSnapshot FromSnapshot(CustomResourceSnapshot snapshot)
+    {
+        return new()
+        {
+            ResourceType = snapshot.ResourceType,
+            State = snapshot.State?.Text,
+            StateStyle = snapshot.State?.Style,
+            HealthStatus = snapshot.HealthStatus,
+            ExitCode = snapshot.ExitCode
+        };
+    }
 }
 
 /// <summary>
 /// Context for <see cref="ResourceCommandAnnotation.ExecuteCommand"/>.
 /// </summary>
+/// <ats-summary>Context for <ats-see cref="!:method:ResourceCommandAnnotation.ExecuteCommand" />.</ats-summary>
 [AspireExport(ExposeProperties = true)]
 public sealed class ExecuteCommandContext
 {
     /// <summary>
     /// The service provider.
     /// </summary>
-    public required IServiceProvider ServiceProvider { get; init; }
+    [Obsolete("Use Services instead.")]
+    [AspireExportIgnore(Reason = "Obsolete alias for Services. The service provider is exposed to polyglot hosts via Services (services).")]
+    public IServiceProvider ServiceProvider
+    {
+        get => Services;
+        init => Services = value;
+    }
+
+    /// <summary>
+    /// The service provider.
+    /// </summary>
+    public required IServiceProvider Services { get; init; }
 
     /// <summary>
     /// The resource name.
@@ -403,4 +487,3 @@ public sealed class ExecuteCommandContext
 
 }
 
-#pragma warning restore ASPIREINTERACTION001

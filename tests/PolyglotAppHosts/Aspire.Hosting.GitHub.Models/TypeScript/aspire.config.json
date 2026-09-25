@@ -1,9 +1,0 @@
-{
-  "appHost": {
-    "path": "apphost.ts",
-    "language": "typescript/nodejs"
-  },
-  "packages": {
-    "Aspire.Hosting.GitHub.Models": ""
-  }
-}

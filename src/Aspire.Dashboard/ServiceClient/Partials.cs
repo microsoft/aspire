@@ -4,9 +4,8 @@
 using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using Aspire.Dashboard.Model;
-using FluentUIIconVariant = Microsoft.FluentUI.AspNetCore.Components.IconVariant;
 using Aspire.Dashboard.Resources;
-using Aspire.Hosting;
+using FluentUIIconVariant = Microsoft.FluentUI.AspNetCore.Components.IconVariant;
 using Google.Protobuf.Collections;
 
 namespace Aspire.DashboardService.Proto.V1;
@@ -20,17 +19,19 @@ partial class Resource
     {
         try
         {
+            var resourceType = ValidateNotNull(ResourceType);
+
             return new()
             {
                 Name = ValidateNotNull(Name),
-                ResourceType = ValidateNotNull(ResourceType),
+                ResourceType = resourceType,
                 DisplayName = ValidateNotNull(DisplayName),
                 Uid = ValidateNotNull(Uid),
                 ReplicaIndex = replicaIndex,
                 CreationTimeStamp = ValidateNotNull(CreatedAt).ToDateTime(),
                 StartTimeStamp = StartedAt?.ToDateTime(),
                 StopTimeStamp = StoppedAt?.ToDateTime(),
-                Properties = CreatePropertyViewModels(Properties, knownPropertyLookup, logger),
+                Properties = CreatePropertyViewModels(resourceType, Properties, knownPropertyLookup, logger),
                 Environment = GetEnvironment(),
                 Urls = GetUrls(),
                 Volumes = GetVolumes(),
@@ -90,20 +91,33 @@ partial class Resource
 
         ImmutableArray<UrlViewModel> GetUrls()
         {
-            static string TranslateKnownUrlName(Url url)
+            const string ManagePrefix = "Manage (";
+
+            // Hosting integrations that hide a management UI container behind a link back to the resource(s) it
+            // manages (Redis Commander, pgAdmin, phpMyAdmin, etc.) label that link "Manage" or "Manage (Tool Name)".
+            // Localize just that common "Manage" text, keeping any "(Tool Name)" suffix as-is since it's a proper noun.
+            static string TranslateDisplayName(Url url)
             {
-                return (url.EndpointName, url.DisplayProperties.DisplayName) switch
+                var displayName = url.DisplayProperties.DisplayName;
+
+                if (displayName == "Manage")
                 {
-                    (KnownUrls.DataExplorer.EndpointName, KnownUrls.DataExplorer.DisplayText) => KnownUrlsDisplay.DataExplorer,
-                    _ => url.DisplayProperties.DisplayName
-                };
+                    return KnownUrlsDisplay.Manage;
+                }
+
+                if (displayName.StartsWith(ManagePrefix, StringComparison.Ordinal))
+                {
+                    return KnownUrlsDisplay.Manage + displayName["Manage".Length..];
+                }
+
+                return displayName;
             }
 
             // Filter out bad urls
             return (from u in Urls
                     let parsedUri = Uri.TryCreate(u.FullUrl, UriKind.Absolute, out var uri) ? uri : null
                     where parsedUri != null
-                    select new UrlViewModel(u.EndpointName, parsedUri, u.IsInternal, u.IsInactive, new UrlDisplayPropertiesViewModel(TranslateKnownUrlName(u), u.DisplayProperties.SortOrder)))
+                    select new UrlViewModel(u.EndpointName, parsedUri, u.IsInternal, u.IsInactive, new UrlDisplayPropertiesViewModel(TranslateDisplayName(u), u.DisplayProperties.SortOrder)))
                 .ToImmutableArray();
         }
 
@@ -153,19 +167,24 @@ partial class Resource
         }
     }
 
-    private ImmutableDictionary<string, ResourcePropertyViewModel> CreatePropertyViewModels(RepeatedField<ResourceProperty> properties, IKnownPropertyLookup knownPropertyLookup, ILogger logger)
+    private ImmutableDictionary<string, ResourcePropertyViewModel> CreatePropertyViewModels(string resourceType, RepeatedField<ResourceProperty> properties, IKnownPropertyLookup knownPropertyLookup, ILogger logger)
     {
         var builder = ImmutableDictionary.CreateBuilder<string, ResourcePropertyViewModel>(StringComparers.ResourcePropertyName);
+        var useLegacyMetadata = ShouldUseLegacyResourcePropertyMetadata(resourceType, properties);
 
         foreach (var property in properties)
         {
-            var (priority, knownProperty) = knownPropertyLookup.FindProperty(ResourceType, property.Name);
+            var (sortOrder, knownProperty) = knownPropertyLookup.FindProperty(property.Name);
+            var legacyMetadata = useLegacyMetadata ? LegacyResourcePropertyMetadata.Get(resourceType, property.Name) : null;
+
             var propertyViewModel = new ResourcePropertyViewModel(
                 name: ValidateNotNull(property.Name),
                 value: ValidateNotNull(property.Value),
                 isValueSensitive: property.IsSensitive,
-                knownProperty: knownProperty,
-                priority: priority)
+                knownProperty: knownProperty ?? legacyMetadata?.KnownProperty,
+                sortOrder: GetDisplaySortOrder(property, knownProperty, legacyMetadata?.SortOrder, sortOrder),
+                displayName: property.HasDisplayName ? property.DisplayName : null,
+                isHighlighted: property.IsHighlighted)
             {
                 IsValueMasked = property.IsSensitive
             };
@@ -179,6 +198,66 @@ partial class Resource
         }
 
         return builder.ToImmutable();
+    }
+
+    private static int GetDisplaySortOrder(ResourceProperty property, KnownProperty? knownProperty, int? legacySortOrder, int knownSortOrder)
+    {
+        if (legacySortOrder is { } legacyOrder)
+        {
+            // Legacy fallback metadata represents built-in producer-specific properties from
+            // older resource servers, so treat its order as producer-local.
+            return ToProducerDefinedDisplaySortOrder(legacyOrder);
+        }
+
+        if (knownProperty is not null)
+        {
+            // Generic dashboard-known properties keep their fixed dashboard sort order.
+            return knownSortOrder;
+        }
+
+        // Unknown properties with producer metadata use producer-local ordering. Unknown
+        // properties without metadata keep the default "sort last" order from the caller.
+        return property.HasSortOrder ? ToProducerDefinedDisplaySortOrder(property.SortOrder) : knownSortOrder;
+    }
+
+    private static int ToProducerDefinedDisplaySortOrder(int producerSortOrder)
+    {
+        // Producers use local sort orders for their own resource-specific properties. The
+        // dashboard normalizes those values after the generic dashboard-owned properties.
+        var producerDefinedStart = KnownResourcePropertySortOrder.GetProducerDefinedStart();
+        if (producerSortOrder <= 0)
+        {
+            return producerDefinedStart;
+        }
+
+        var sortOrder = producerDefinedStart + (long)producerSortOrder;
+        return sortOrder > int.MaxValue ? int.MaxValue : (int)sortOrder;
+    }
+
+    private static bool ShouldUseLegacyResourcePropertyMetadata(string resourceType, RepeatedField<ResourceProperty> properties)
+    {
+        // Compatibility shim for dashboards connected to resource servers that predate
+        // ResourceProperty.DisplayName/IsHighlighted/SortOrder. If any resource-specific
+        // property already carries producer metadata, trust the producer and do not apply
+        // dashboard fallback metadata to the rest of the resource.
+        var hasLegacyResourceSpecificProperty = false;
+
+        foreach (var property in properties)
+        {
+            if (LegacyResourcePropertyMetadata.Get(resourceType, property.Name) is null)
+            {
+                continue;
+            }
+
+            hasLegacyResourceSpecificProperty = true;
+
+            if (property.HasDisplayName || property.IsHighlighted || property.HasSortOrder)
+            {
+                return false;
+            }
+        }
+
+        return hasLegacyResourceSpecificProperty;
     }
 
     private T ValidateNotNull<T>(T value, [CallerArgumentExpression(nameof(value))] string? expression = null) where T : class

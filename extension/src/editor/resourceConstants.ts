@@ -12,6 +12,7 @@ export const ResourceState = {
     Exited: 'Exited',
     FailedToStart: 'FailedToStart',
     RuntimeUnhealthy: 'RuntimeUnhealthy',
+    ValueMissing: 'ValueMissing',
 } as const;
 
 // Health status values returned by the Aspire runtime
@@ -39,3 +40,13 @@ export type ResourceStateValue = typeof ResourceState[keyof typeof ResourceState
 export type HealthStatusValue = typeof HealthStatus[keyof typeof HealthStatus];
 export type StateStyleValue = typeof StateStyle[keyof typeof StateStyle];
 export type ResourceTypeValue = typeof ResourceType[keyof typeof ResourceType];
+
+// Resource command names exposed by the dashboard/CLI
+export const CommandName = {
+    SetParameter: 'set-parameter',
+} as const;
+
+// Well-known resource property names.
+export const ParameterPropertyName = {
+    Value: 'Value',
+} as const;

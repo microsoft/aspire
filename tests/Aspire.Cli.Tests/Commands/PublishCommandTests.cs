@@ -16,7 +16,7 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishCommandWithHelpArgumentReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -31,7 +31,7 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
     public async Task PublishCommandFailsWithInvalidProjectFile()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetCliRunnerFactory = (sp) =>
@@ -53,14 +53,14 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode); // Ensure the command fails
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode); // Ensure the command fails
     }
 
     [Fact]
     public async Task PublishCommandFailsWhenAppHostIsNotCompatible()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
@@ -84,14 +84,14 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.AppHostIncompatible, exitCode); // Ensure the command fails
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode); // Ensure the command fails
     }
 
     [Fact]
     public async Task PublishCommandFailsWhenAppHostBuildFails()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
@@ -115,14 +115,14 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode); // Ensure the command fails
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode); // Ensure the command fails
     }
 
     [Fact]
     public async Task PublishCommandFailsWhenAppHostCrashesBeforeBackchannelEstablished()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
@@ -158,14 +158,14 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode); // Ensure the command fails
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode); // Ensure the command fails
     }
 
     [Fact]
     public async Task PublishCommandSucceedsEndToEnd()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();

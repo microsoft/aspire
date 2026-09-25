@@ -234,6 +234,15 @@ public sealed class Service : NamedComposeMember
     public string? Ipc { get; set; }
 
     /// <summary>
+    /// Gets or sets the size of the <c>/dev/shm</c> partition for the container.
+    /// </summary>
+    /// <remarks>
+    /// The value is emitted as the Docker Compose <c>shm_size</c> service property, for example <c>128mb</c>.
+    /// </remarks>
+    [YamlMember(Alias = "shm_size")]
+    public string? ShmSize { get; set; }
+
+    /// <summary>
     /// Specifies a custom MAC (Media Access Control) address for the container's network interface.
     /// </summary>
     /// <remarks>

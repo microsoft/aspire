@@ -12,8 +12,16 @@ public partial class PauseIncomingDataSwitch : ComponentBase
     [Parameter]
     public EventCallback<bool> IsPausedChanged { get; set; }
 
+    [Parameter]
+    public bool Disabled { get; set; }
+
     private async Task OnTogglePauseCoreAsync()
     {
+        if (Disabled)
+        {
+            return;
+        }
+
         IsPaused = !IsPaused;
         await IsPausedChanged.InvokeAsync(IsPaused);
     }

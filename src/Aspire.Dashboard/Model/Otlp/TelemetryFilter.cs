@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Globalization;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Resources;
 using Microsoft.Extensions.Localization;
@@ -14,10 +13,6 @@ public abstract class TelemetryFilter : IEquatable<TelemetryFilter>
     public bool Enabled { get; set; } = true;
 
     public abstract bool Equals(TelemetryFilter? other);
-
-    public abstract IEnumerable<OtlpLogEntry> Apply(IEnumerable<OtlpLogEntry> input);
-
-    public abstract bool Apply(OtlpSpan span);
 }
 
 [DebuggerDisplay("{DebuggerDisplayText,nq}")]
@@ -42,15 +37,40 @@ public class FieldTelemetryFilter : TelemetryFilter
             KnownStructuredLogFields.OriginalFormatField => "OriginalFormat",
             KnownStructuredLogFields.CategoryField => "Category",
             KnownStructuredLogFields.EventNameField => "EventName",
+            KnownStructuredLogFields.TimestampField => "Timestamp",
             KnownTraceFields.NameField => "Name",
             KnownTraceFields.SpanIdField => "SpanId",
             KnownTraceFields.TraceIdField => "TraceId",
             KnownTraceFields.KindField => "Kind",
             KnownTraceFields.StatusField => "Status",
+            KnownTraceFields.DurationField => "Duration (ms)",
+            KnownTraceFields.TimestampField => "Timestamp",
             KnownSourceFields.NameField => "Source",
             KnownResourceFields.ServiceNameField => "Resource",
             _ => name
         };
+    }
+
+    public static bool IsNumericField(string name) => name is KnownTraceFields.DurationField;
+
+    /// <summary>
+    /// Returns true when the field represents a timestamp that should be compared as a date.
+    /// Filter values for these fields are parsed as <see cref="DateTime"/> and compared using
+    /// milliseconds stored in the field value from <see cref="OtlpSpan.GetFieldValue"/> / <see cref="OtlpLogEntry.GetFieldValue"/>.
+    /// </summary>
+    public static bool IsDateField(string name) => name is KnownTraceFields.TimestampField or KnownStructuredLogFields.TimestampField;
+
+    internal static FieldType GetFieldType(string name)
+    {
+        if (IsNumericField(name))
+        {
+            return FieldType.Numeric;
+        }
+        if (IsDateField(name))
+        {
+            return FieldType.Date;
+        }
+        return FieldType.String;
     }
 
     public static string ConditionToString(FilterCondition c, IStringLocalizer<StructuredFiltering>? loc) =>
@@ -66,119 +86,6 @@ public class FieldTelemetryFilter : TelemetryFilter
             FilterCondition.NotContains => loc?[nameof(StructuredFiltering.ConditionNotContains)] ?? "not contains",
             _ => throw new ArgumentOutOfRangeException(nameof(c), c, null)
         };
-
-    private static Func<string?, string, bool> ConditionToFuncString(FilterCondition c) =>
-        c switch
-        {
-            FilterCondition.Equals => (a, b) => string.Equals(a, b, StringComparisons.OtlpFieldValue),
-            FilterCondition.Contains => (a, b) => a != null && a.Contains(b, StringComparisons.OtlpFieldValue),
-            // Condition.GreaterThan => (a, b) => a > b,
-            // Condition.LessThan => (a, b) => a < b,
-            // Condition.GreaterThanOrEqual => (a, b) => a >= b,
-            // Condition.LessThanOrEqual => (a, b) => a <= b,
-            FilterCondition.NotEqual => (a, b) => !string.Equals(a, b, StringComparisons.OtlpFieldValue),
-            FilterCondition.NotContains => (a, b) => a != null && !a.Contains(b, StringComparisons.OtlpFieldValue),
-            _ => throw new ArgumentOutOfRangeException(nameof(c), c, null)
-        };
-
-    private static Func<DateTime, DateTime, bool> ConditionToFuncDate(FilterCondition c) =>
-        c switch
-        {
-            FilterCondition.Equals => (a, b) => a == b,
-            //Condition.Contains => (a, b) => a.Contains(b),
-            FilterCondition.GreaterThan => (a, b) => a > b,
-            FilterCondition.LessThan => (a, b) => a < b,
-            FilterCondition.GreaterThanOrEqual => (a, b) => a >= b,
-            FilterCondition.LessThanOrEqual => (a, b) => a <= b,
-            FilterCondition.NotEqual => (a, b) => a != b,
-            //Condition.NotContains => (a, b) => !a.Contains(b),
-            _ => throw new ArgumentOutOfRangeException(nameof(c), c, null)
-        };
-
-    private static Func<double, double, bool> ConditionToFuncNumber(FilterCondition c) =>
-        c switch
-        {
-            FilterCondition.Equals => (a, b) => a == b,
-            //Condition.Contains => (a, b) => a.Contains(b),
-            FilterCondition.GreaterThan => (a, b) => a > b,
-            FilterCondition.LessThan => (a, b) => a < b,
-            FilterCondition.GreaterThanOrEqual => (a, b) => a >= b,
-            FilterCondition.LessThanOrEqual => (a, b) => a <= b,
-            FilterCondition.NotEqual => (a, b) => a != b,
-            //Condition.NotContains => (a, b) => !a.Contains(b),
-            _ => throw new ArgumentOutOfRangeException(nameof(c), c, null)
-        };
-
-    public override IEnumerable<OtlpLogEntry> Apply(IEnumerable<OtlpLogEntry> input)
-    {
-        switch (Field)
-        {
-            case nameof(OtlpLogEntry.TimeStamp):
-                {
-                    var date = DateTime.Parse(Value, CultureInfo.InvariantCulture);
-                    var func = ConditionToFuncDate(Condition);
-                    return input.Where(x => func(x.TimeStamp, date));
-                }
-            case nameof(OtlpLogEntry.Severity):
-                {
-                    if (Enum.TryParse<LogLevel>(Value, ignoreCase: true, out var value))
-                    {
-                        var func = ConditionToFuncNumber(Condition);
-                        return input.Where(x => func((int)x.Severity, (double)value));
-                    }
-                    return input;
-                }
-            case nameof(OtlpLogEntry.Message):
-                {
-                    var func = ConditionToFuncString(Condition);
-                    return input.Where(x => func(x.Message, Value));
-                }
-            default:
-                {
-                    var func = ConditionToFuncString(Condition);
-                    return input.Where(x => func(OtlpLogEntry.GetFieldValue(x, Field) ?? string.Empty, Value));
-                }
-        }
-    }
-
-    public override bool Apply(OtlpSpan span)
-    {
-        var fieldValue = OtlpSpan.GetFieldValue(span, Field);
-        var isNot = Condition is FilterCondition.NotEqual or FilterCondition.NotContains;
-
-        if (!isNot)
-        {
-            // Or
-            if (fieldValue.Value1 != null && IsMatch(fieldValue.Value1, Value, Condition))
-            {
-                return true;
-            }
-            if (fieldValue.Value2 != null && IsMatch(fieldValue.Value2, Value, Condition))
-            {
-                return true;
-            }
-        }
-        else
-        {
-            // And — both values must satisfy the not-equal/not-contains condition.
-            // When Value2 is null (most fields only have one value), Value1 alone is sufficient.
-            if (fieldValue.Value1 != null && IsMatch(fieldValue.Value1, Value, Condition))
-            {
-                if (fieldValue.Value2 is null || IsMatch(fieldValue.Value2, Value, Condition))
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-
-        static bool IsMatch(string fieldValue, string filterValue, FilterCondition condition)
-        {
-            var func = ConditionToFuncString(condition);
-            return func(fieldValue, filterValue);
-        }
-    }
 
     public override bool Equals(TelemetryFilter? other)
     {
@@ -205,4 +112,11 @@ public class FieldTelemetryFilter : TelemetryFilter
 
         return true;
     }
+}
+
+internal enum FieldType
+{
+    String,
+    Numeric,
+    Date
 }

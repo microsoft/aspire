@@ -11,6 +11,9 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 /// </summary>
 internal static class TypeScriptAppHostToolchainTestHelpers
 {
+    private const string YarnConfigurationFileName = ".yarnrc.yml";
+    private const string YarnNodeModulesConfiguration = "nodeLinker: node-modules";
+
     private static readonly JsonSerializerOptions s_packageJsonSerializerOptions = new()
     {
         WriteIndented = true
@@ -39,10 +42,11 @@ internal static class TypeScriptAppHostToolchainTestHelpers
 
         if (!cleanInstallState)
         {
+            ConfigureToolchainFiles(projectRoot, toolchain);
             return;
         }
 
-        foreach (var lockFileName in new[] { "package-lock.json", "bun.lock", "bun.lockb", "pnpm-lock.yaml", "yarn.lock" })
+        foreach (var lockFileName in new[] { "package-lock.json", "bun.lock", "bun.lockb", "pnpm-lock.yaml", "yarn.lock", "deno.lock" })
         {
             var lockFilePath = Path.Combine(projectRoot, lockFileName);
             if (File.Exists(lockFilePath))
@@ -56,7 +60,67 @@ internal static class TypeScriptAppHostToolchainTestHelpers
         {
             Directory.Delete(nodeModulesPath, recursive: true);
         }
+
+        ConfigureToolchainFiles(projectRoot, toolchain);
     }
+
+    /// <summary>
+    /// Gets the restore/install command for a toolchain.
+    /// </summary>
+    internal static string GetInstallCommand(string toolchain) =>
+        $"{GetCommandName(toolchain)} install";
+
+    /// <summary>
+    /// Gets the no-emit type-check command for a toolchain.
+    /// </summary>
+    internal static string GetTypeCheckCommand(string toolchain, string tsConfigFileName) =>
+        NormalizeToolchain(toolchain) switch
+        {
+            "bun" => $"bun run tsc --noEmit -p {tsConfigFileName}",
+            "yarn" => $"yarn run tsc --noEmit -p {tsConfigFileName}",
+            "pnpm" => $"pnpm exec tsc --noEmit -p {tsConfigFileName}",
+            "npm" => $"npx --no-install tsc --noEmit -p {tsConfigFileName}",
+            // Deno type-checks with its own compiler over the AppHost graph; there is no tsc/tsconfig step.
+            "deno" => "deno check --unstable-sloppy-imports apphost.mts",
+            _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
+        };
+
+    /// <summary>
+    /// Gets the script runner command for a toolchain.
+    /// </summary>
+    internal static string GetRunScriptCommand(string toolchain, string scriptName) =>
+        NormalizeToolchain(toolchain) switch
+        {
+            // Deno runs package.json scripts via `deno task`, not `deno run` (which runs a file).
+            "deno" => $"deno task {scriptName}",
+            _ => $"{GetCommandName(toolchain)} run {scriptName}"
+        };
+
+    /// <summary>
+    /// Gets the console text that indicates watch mode is active for a toolchain.
+    /// The E2E path runs a generated compiler-watch task for every toolchain, so readiness
+    /// comes from <c>tsc --watch</c>.
+    /// </summary>
+    internal static string GetWatchModeReadyText(string toolchain)
+    {
+        _ = NormalizeToolchain(toolchain);
+
+        return "Watching for file changes.";
+    }
+
+    /// <summary>
+    /// Gets the primary lock file name a toolchain should produce after restore/install.
+    /// </summary>
+    internal static string GetLockFileName(string toolchain) =>
+        NormalizeToolchain(toolchain) switch
+        {
+            "bun" => "bun.lock",
+            "yarn" => "yarn.lock",
+            "pnpm" => "pnpm-lock.yaml",
+            "npm" => "package-lock.json",
+            "deno" => "deno.lock",
+            _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
+        };
 
     /// <summary>
     /// Gets the package manager metadata value for a toolchain.
@@ -70,8 +134,12 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             "yarn" => "yarn@4.14.1",
             "pnpm" => "pnpm@10.0.0",
             "npm" => "npm@10.0.0",
+            "deno" => "deno@2.9.0",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
+
+    internal static bool UsesCorepack(string toolchain) =>
+        NormalizeToolchain(toolchain) is "pnpm" or "yarn";
 
     /// <summary>
     /// Gets the display name for a toolchain.
@@ -85,6 +153,7 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             "yarn" => "Yarn",
             "pnpm" => "pnpm",
             "npm" => "Node.js",
+            "deno" => "Deno",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
 
@@ -100,6 +169,41 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             "yarn" => "https://yarnpkg.com/getting-started/install",
             "pnpm" => "https://pnpm.io/installation",
             "npm" => "https://nodejs.org/en/download",
+            "deno" => "https://docs.deno.com/runtime/getting_started/installation/",
+            _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
+        };
+
+    private static void ConfigureToolchainFiles(string projectRoot, string toolchain)
+    {
+        var yarnConfigPath = Path.Combine(projectRoot, YarnConfigurationFileName);
+        if (NormalizeToolchain(toolchain) == "yarn")
+        {
+            // Yarn 4 defaults to Plug'n'Play, but the generated AppHost/Vite workflows exercised
+            // here expect node_modules resolution across tsx, nodemon, and Vite.
+            File.WriteAllText(yarnConfigPath, $"{YarnNodeModulesConfiguration}{Environment.NewLine}");
+
+            var yarnLockPath = Path.Combine(projectRoot, "yarn.lock");
+            if (!File.Exists(yarnLockPath))
+            {
+                // Without a lockfile, Yarn walks up to the AppHost package.json and treats a nested
+                // Vite app as an unlisted workspace instead of an independent package.
+                File.WriteAllText(yarnLockPath, string.Empty);
+            }
+        }
+        else if (File.Exists(yarnConfigPath))
+        {
+            File.Delete(yarnConfigPath);
+        }
+    }
+
+    private static string GetCommandName(string toolchain) =>
+        NormalizeToolchain(toolchain) switch
+        {
+            "bun" => "bun",
+            "yarn" => "yarn",
+            "pnpm" => "pnpm",
+            "npm" => "npm",
+            "deno" => "deno",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
 

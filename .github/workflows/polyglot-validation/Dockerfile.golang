@@ -10,16 +10,14 @@
 #
 # Note: Expects self-extracting binary and NuGet artifacts to be pre-downloaded to /workspace/artifacts/
 #
-FROM mcr.microsoft.com/devcontainers/go:1.26-trixie
+FROM golang:1.26-trixie
 
-# Ensure Yarn APT repository signing key is available (base image includes Yarn repo)
-RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/yarn-archive-keyring.gpg > /dev/null
-
-# Install system dependencies (wget, docker CLI, jq for JSON manipulation)
+# Install system dependencies (wget, Docker CLI, jq for JSON manipulation, ICU for the Aspire CLI)
 RUN apt-get update && apt-get install -y \
     wget \
     docker.io \
     jq \
+    libicu76 \
     && rm -rf /var/lib/apt/lists/*
 
 # Pre-configure Aspire CLI path

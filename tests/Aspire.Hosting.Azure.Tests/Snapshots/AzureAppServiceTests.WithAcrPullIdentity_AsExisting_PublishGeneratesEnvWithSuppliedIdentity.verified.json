@@ -1,0 +1,12 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "env.module.bicep",
+  "params": {
+    "shared_mi_outputs_id": "{shared-mi.outputs.id}",
+    "shared_mi_outputs_clientid": "{shared-mi.outputs.clientId}",
+    "registryName": "{registryName.value}",
+    "sharedRg": "{sharedRg.value}",
+    "appServicePlanName": "{appServicePlanName.value}",
+    "userPrincipalId": ""
+  }
+}

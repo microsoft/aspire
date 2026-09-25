@@ -9,11 +9,27 @@ namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 [AspireDto]
 public class TestConfigDto
 {
+    /// <summary>
+    /// The name of the test config.
+    /// </summary>
     public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The port used by the test config.
+    /// </summary>
     public int Port { get; set; }
+
+    /// <summary>
+    /// A value indicating whether the test config is enabled.
+    /// </summary>
     public bool Enabled { get; set; }
+
+    /// <summary>
+    /// An optional test config field.
+    /// </summary>
     public string? OptionalField { get; set; }
 
+    /// <ats-summary>The default test configuration.</ats-summary>
     [AspireValue("TestConfigs")]
     public static readonly TestConfigDto Default = new()
     {
@@ -137,9 +153,24 @@ public class TestNestedDto
 /// </summary>
 public enum TestResourceStatus
 {
+    /// <summary>
+    /// The resource is pending.
+    /// </summary>
     Pending,
+
+    /// <summary>
+    /// The resource is running.
+    /// </summary>
     Running,
+
+    /// <summary>
+    /// The resource is stopped.
+    /// </summary>
     Stopped,
+
+    /// <summary>
+    /// The resource failed.
+    /// </summary>
     Failed
 }
 

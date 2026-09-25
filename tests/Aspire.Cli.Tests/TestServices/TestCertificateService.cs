@@ -15,4 +15,6 @@ internal sealed class TestCertificateService : ICertificateService
             Success = true
         });
     }
+
+    public string? ExportDevCertificatePem(CancellationToken cancellationToken) => null;
 }

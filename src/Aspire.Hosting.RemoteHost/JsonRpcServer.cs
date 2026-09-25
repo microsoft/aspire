@@ -7,7 +7,9 @@ using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
+using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.Hosting.RemoteHost.Language;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -19,8 +21,10 @@ namespace Aspire.Hosting.RemoteHost;
 internal sealed class JsonRpcServer : BackgroundService
 {
     private readonly string _socketPath;
+    private readonly bool _useDefaultSocketPath;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<JsonRpcServer> _logger;
+    private readonly RemoteHostProfilingTelemetry _profilingTelemetry;
     private Socket? _listenSocket;
     private bool _disposed;
     private int _activeClientCount;
@@ -28,16 +32,30 @@ internal sealed class JsonRpcServer : BackgroundService
     public JsonRpcServer(
         IConfiguration configuration,
         IServiceScopeFactory scopeFactory,
-        ILogger<JsonRpcServer> logger)
+        ILogger<JsonRpcServer> logger,
+        RemoteHostProfilingTelemetry profilingTelemetry)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _profilingTelemetry = profilingTelemetry;
 
         var socketPath = configuration["REMOTE_APP_HOST_SOCKET_PATH"];
-        if (string.IsNullOrEmpty(socketPath))
+        _useDefaultSocketPath = string.IsNullOrEmpty(socketPath);
+        if (string.IsNullOrEmpty(socketPath) && OperatingSystem.IsWindows())
         {
-            var tempDir = Path.GetTempPath();
-            socketPath = Path.Combine(tempDir, "aspire", "remote-app-host.sock");
+            socketPath = Path.Combine(Path.GetTempPath(), "aspire", "remote-app-host.sock");
+        }
+        else if (string.IsNullOrEmpty(socketPath))
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (string.IsNullOrEmpty(home))
+            {
+                throw new InvalidOperationException("Cannot determine the user profile for the remote AppHost socket.");
+            }
+            // Reuse the per-user backchannel directory so the standalone fallback has
+            // the same directory permissions as CLI-managed launches. The CLI normally
+            // supplies its own randomized socket path.
+            socketPath = Path.Combine(home, SocketDirectoryNames.Aspire, SocketDirectoryNames.Cli, SocketDirectoryNames.Backchannels, "remote-app-host.sock");
         }
         _socketPath = socketPath;
     }
@@ -45,35 +63,45 @@ internal sealed class JsonRpcServer : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Starting RemoteAppHost JsonRpc Server on {SocketPath}...", _socketPath);
+        var transport = OperatingSystem.IsWindows()
+            ? RemoteHostProfilingTelemetry.Values.NamedPipe
+            : RemoteHostProfilingTelemetry.Values.UnixDomainSocket;
+        using var activity = _profilingTelemetry.StartJsonRpcListen(transport);
 
-        if (OperatingSystem.IsWindows())
+        try
         {
-            await StartNamedPipeServerAsync(stoppingToken).ConfigureAwait(false);
+            if (OperatingSystem.IsWindows())
+            {
+                await StartNamedPipeServerAsync(activity, stoppingToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await StartUnixSocketServerAsync(activity, stoppingToken).ConfigureAwait(false);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            await StartUnixSocketServerAsync(stoppingToken).ConfigureAwait(false);
+            activity.SetError(ex);
+            throw;
         }
 
         _logger.LogInformation("Goodbye!");
     }
 
     [SupportedOSPlatform("windows")]
-    private async Task StartNamedPipeServerAsync(CancellationToken cancellationToken)
+    private async Task StartNamedPipeServerAsync(RemoteHostProfilingTelemetry.ActivityScope listenActivity, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Starting JsonRpc server on named pipe: {SocketPath}", _socketPath);
 
         // Create pipe security that only allows the current user to connect
         // This is equivalent to the Unix socket permission (owner read/write only)
         var pipeSecurity = new PipeSecurity();
-        var currentUser = WindowsIdentity.GetCurrent().User;
-        if (currentUser != null)
-        {
-            pipeSecurity.AddAccessRule(new PipeAccessRule(
-                currentUser,
-                PipeAccessRights.FullControl,
-                AccessControlType.Allow));
-        }
+        using var identity = WindowsIdentity.GetCurrent();
+        var currentUser = identity.User ?? throw new UnauthorizedAccessException("The current Windows user has no security identifier.");
+        pipeSecurity.AddAccessRule(new PipeAccessRule(
+            currentUser,
+            PipeAccessRights.FullControl,
+            AccessControlType.Allow));
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -92,10 +120,12 @@ internal sealed class JsonRpcServer : BackgroundService
                     outBufferSize: 0,
                     pipeSecurity);
 
+                listenActivity.AddJsonRpcServerListening();
                 await pipeServer.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
 
                 _logger.LogDebug("Client connected");
-                Interlocked.Increment(ref _activeClientCount);
+                var activeClientCount = Interlocked.Increment(ref _activeClientCount);
+                listenActivity.AddJsonRpcClientConnected(activeClientCount);
 
                 // Handle the connection in a separate task - pipe stream is owned by handler
                 _ = Task.Run(() => HandleClientStreamAsync(pipeServer, ownsStream: true, cancellationToken), cancellationToken);
@@ -115,9 +145,11 @@ internal sealed class JsonRpcServer : BackgroundService
         _logger.LogInformation("Server stopped");
     }
 
-    private async Task StartUnixSocketServerAsync(CancellationToken cancellationToken)
+    private async Task StartUnixSocketServerAsync(RemoteHostProfilingTelemetry.ActivityScope listenActivity, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Starting JsonRpc server on Unix domain socket: {SocketPath}", _socketPath);
+
+        SocketPermissionHelper.CreateDirectory(Path.GetDirectoryName(_socketPath)!, repairExisting: _useDefaultSocketPath);
 
         // Delete existing socket file if it exists
         if (File.Exists(_socketPath))
@@ -125,25 +157,11 @@ internal sealed class JsonRpcServer : BackgroundService
             File.Delete(_socketPath);
         }
 
-        // Ensure the directory exists
-        var directory = Path.GetDirectoryName(_socketPath);
-        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        var endpoint = new UnixDomainSocketEndPoint(_socketPath);
         _listenSocket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-        _listenSocket.Bind(endpoint);
-
-        // M3: Set restrictive permissions on socket file (owner read/write only)
-        // This prevents other users on the system from connecting to the socket
-        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-        {
-            File.SetUnixFileMode(_socketPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
+        SocketPermissionHelper.Bind(_listenSocket, _socketPath);
 
         _listenSocket.Listen(10);
+        listenActivity.AddJsonRpcServerListening();
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -154,7 +172,8 @@ internal sealed class JsonRpcServer : BackgroundService
                 var clientSocket = await _listenSocket.AcceptAsync(cancellationToken).ConfigureAwait(false);
 
                 _logger.LogDebug("Client connected");
-                Interlocked.Increment(ref _activeClientCount);
+                var activeClientCount = Interlocked.Increment(ref _activeClientCount);
+                listenActivity.AddJsonRpcClientConnected(activeClientCount);
 
                 // Handle the connection in a separate task - NetworkStream owns the socket
                 var stream = new NetworkStream(clientSocket, ownsSocket: true);
@@ -179,6 +198,7 @@ internal sealed class JsonRpcServer : BackgroundService
     {
         var clientId = Guid.NewGuid().ToString("N")[..8]; // Short client identifier
         var disconnectReason = "unknown";
+        using var activity = _profilingTelemetry.StartJsonRpcConnection();
 
         // Create a DI scope for this client connection
         // All scoped services (HandleRegistry, RemoteAppHostService, etc.) are per-client
@@ -196,7 +216,10 @@ internal sealed class JsonRpcServer : BackgroundService
             // Use System.Text.Json formatter instead of the default Newtonsoft.Json formatter
             var formatter = new SystemTextJsonFormatter();
             var handler = new HeaderDelimitedMessageHandler(clientStream, clientStream, formatter);
-            using var jsonRpc = new JsonRpc(handler, clientService);
+            using var jsonRpc = new JsonRpc(handler, clientService)
+            {
+                ActivityTracingStrategy = new ActivityTracingStrategy()
+            };
 
             // Add the shared CodeGenerationService as an additional target for generateCode method
             jsonRpc.AddLocalRpcTarget(codeGenerationService);
@@ -205,6 +228,7 @@ internal sealed class JsonRpcServer : BackgroundService
             jsonRpc.AddLocalRpcTarget(languageService);
 
             jsonRpc.StartListening();
+            activity.AddJsonRpcListening();
 
             // Enable bidirectional communication - allow .NET to call back to TypeScript
             clientService.SetClientConnection(jsonRpc);
@@ -244,10 +268,12 @@ internal sealed class JsonRpcServer : BackgroundService
         }
         catch (IOException ex)
         {
+            activity.SetError(ex);
             _logger.LogWarning(ex, "Client {ClientId} I/O error", clientId);
         }
         catch (Exception ex)
         {
+            activity.SetError(ex);
             _logger.LogError(ex, "Client {ClientId} unexpected error", clientId);
         }
         finally
@@ -266,6 +292,7 @@ internal sealed class JsonRpcServer : BackgroundService
             }
 
             _logger.LogDebug("Connection cleanup completed for client {ClientId}", clientId);
+            activity.AddJsonRpcConnectionClosed(disconnectReason);
 
             // Decrement active client count
             var remaining = Interlocked.Decrement(ref _activeClientCount);
@@ -281,8 +308,8 @@ internal sealed class JsonRpcServer : BackgroundService
 
             _listenSocket?.Dispose();
 
-            // Clean up socket file
-            if (File.Exists(_socketPath))
+            // Only a filesystem listener that passed directory validation can own a socket file.
+            if (_listenSocket is not null && File.Exists(_socketPath))
             {
                 try
                 {

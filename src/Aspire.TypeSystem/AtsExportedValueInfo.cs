@@ -37,4 +37,9 @@ public sealed class AtsExportedValueInfo
     /// Gets an optional XML documentation summary for the exported value.
     /// </summary>
     public string? Description { get; init; }
+
+    /// <summary>
+    /// Gets XML documentation captured for the exported value.
+    /// </summary>
+    public AtsDocumentationInfo? Documentation { get; init; }
 }

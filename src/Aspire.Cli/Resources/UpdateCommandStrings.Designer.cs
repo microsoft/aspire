@@ -50,7 +50,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Update integrations in the Aspire project. (Preview)
+        ///   Looks up a localized string similar to Update integrations and repository Aspire CLI references.
         /// </summary>
         internal static string Description {
             get {
@@ -68,6 +68,16 @@ namespace Aspire.Cli.Resources {
         }
 
     internal static string SelectChannelPrompt => ResourceManager.GetString("SelectChannelPrompt", resourceCulture);
+    internal static string RepositoryToolUpdateFormat => ResourceManager.GetString("RepositoryToolUpdateFormat", resourceCulture);
+    internal static string RepositoryToolsUpToDate => ResourceManager.GetString("RepositoryToolsUpToDate", resourceCulture);
+    internal static string UpdateRepositoryTools => ResourceManager.GetString("UpdateRepositoryTools", resourceCulture);
+    internal static string RepositoryToolsUpdated => ResourceManager.GetString("RepositoryToolsUpdated", resourceCulture);
+    internal static string RestoreRepositoryDotNetTool => ResourceManager.GetString("RestoreRepositoryDotNetTool", resourceCulture);
+    internal static string RestoreRepositoryNpmTool => ResourceManager.GetString("RestoreRepositoryNpmTool", resourceCulture);
+    internal static string UnsupportedToolVersionFormat => ResourceManager.GetString("UnsupportedToolVersionFormat", resourceCulture);
+    internal static string ToolManifestChangedFormat => ResourceManager.GetString("ToolManifestChangedFormat", resourceCulture);
+    internal static string FailedResolveNpmToolFormat => ResourceManager.GetString("FailedResolveNpmToolFormat", resourceCulture);
+    internal static string FailedReadToolManifestFormat => ResourceManager.GetString("FailedReadToolManifestFormat", resourceCulture);
     internal static string AnalyzingProjectStatus => ResourceManager.GetString("AnalyzingProjectStatus", resourceCulture);
     internal static string ProjectUpToDateMessage => ResourceManager.GetString("ProjectUpToDateMessage", resourceCulture);
     internal static string PerformUpdatesPrompt => ResourceManager.GetString("PerformUpdatesPrompt", resourceCulture);
@@ -100,18 +110,27 @@ namespace Aspire.Cli.Resources {
     internal static string MappingRemovedFormat => ResourceManager.GetString("MappingRemovedFormat", resourceCulture);
     internal static string MappingRetainedFormat => ResourceManager.GetString("MappingRetainedFormat", resourceCulture);
     internal static string FallbackParsingWarning => ResourceManager.GetString("FallbackParsingWarning", resourceCulture);
+    internal static string UpdateChannelStepDescriptionFormat => ResourceManager.GetString("UpdateChannelStepDescriptionFormat", resourceCulture);
+    internal static string ChannelNonePlaceholder => ResourceManager.GetString("ChannelNonePlaceholder", resourceCulture);
+    internal static string SdkVersionUnknownPlaceholder => ResourceManager.GetString("SdkVersionUnknownPlaceholder", resourceCulture);
     internal static string NoAppHostFoundUpdateCliPrompt => ResourceManager.GetString("NoAppHostFoundUpdateCliPrompt", resourceCulture);
     internal static string UpdateCliAfterProjectUpdatePrompt => ResourceManager.GetString("UpdateCliAfterProjectUpdatePrompt", resourceCulture);
+    internal static string UpdateCliBeforeGuestProjectUpdatePrompt => ResourceManager.GetString("UpdateCliBeforeGuestProjectUpdatePrompt", resourceCulture);
     internal static string ChannelOptionDescription => ResourceManager.GetString("ChannelOptionDescription", resourceCulture);
     internal static string ChannelOptionDescriptionWithStaging => ResourceManager.GetString("ChannelOptionDescriptionWithStaging", resourceCulture);
     internal static string QualityOptionDescription => ResourceManager.GetString("QualityOptionDescription", resourceCulture);
     internal static string QualityOptionDescriptionWithStaging => ResourceManager.GetString("QualityOptionDescriptionWithStaging", resourceCulture);
     internal static string DotNetToolSelfUpdateMessage => ResourceManager.GetString("DotNetToolSelfUpdateMessage", resourceCulture);
+    internal static string NpmSelfUpdateMessage => ResourceManager.GetString("NpmSelfUpdateMessage", resourceCulture);
+    internal static string NixSelfUpdateMessage => ResourceManager.GetString("NixSelfUpdateMessage", resourceCulture);
+    internal static string ProjectUpdateSkippedAfterCliUpdateMessage => ResourceManager.GetString("ProjectUpdateSkippedAfterCliUpdateMessage", resourceCulture);
     internal static string MigratedToNewSdkFormat => ResourceManager.GetString("MigratedToNewSdkFormat", resourceCulture);
     internal static string RemovedObsoleteAppHostPackage => ResourceManager.GetString("RemovedObsoleteAppHostPackage", resourceCulture);
     internal static string NoWritePermissionToInstallDirectory => ResourceManager.GetString("NoWritePermissionToInstallDirectory", resourceCulture);
     internal static string CheckingForUpdates => ResourceManager.GetString("CheckingForUpdates", resourceCulture);
     internal static string ApplyingUpdates => ResourceManager.GetString("ApplyingUpdates", resourceCulture);
+    internal static string RestoringPackagesAfterUpdate => ResourceManager.GetString("RestoringPackagesAfterUpdate", resourceCulture);
+    internal static string FailedToRestoreAfterUpdateFormat => ResourceManager.GetString("FailedToRestoreAfterUpdateFormat", resourceCulture);
     internal static string ExtractingNewCli => ResourceManager.GetString("ExtractingNewCli", resourceCulture);
     internal static string ExtractedNewCli => ResourceManager.GetString("ExtractedNewCli", resourceCulture);
     internal static string RegeneratingSdkCode => ResourceManager.GetString("RegeneratingSdkCode", resourceCulture);
@@ -119,5 +138,10 @@ namespace Aspire.Cli.Resources {
     internal static string SelfOptionDescription => ResourceManager.GetString("SelfOptionDescription", resourceCulture);
     internal static string YesOptionDescription => ResourceManager.GetString("YesOptionDescription", resourceCulture);
     internal static string NuGetConfigDirOptionDescription => ResourceManager.GetString("NuGetConfigDirOptionDescription", resourceCulture);
+    internal static string NoChannelFoundMatching => ResourceManager.GetString("NoChannelFoundMatching", resourceCulture);
+    internal static string PendingMigrationsHeader => ResourceManager.GetString("PendingMigrationsHeader", resourceCulture);
+    internal static string PendingMigrationsHint => ResourceManager.GetString("PendingMigrationsHint", resourceCulture);
+    internal static string MigrateOptionDescription => ResourceManager.GetString("MigrateOptionDescription", resourceCulture);
+    internal static string MigrationApplyFailedWarning => ResourceManager.GetString("MigrationApplyFailedWarning", resourceCulture);
     }
 }

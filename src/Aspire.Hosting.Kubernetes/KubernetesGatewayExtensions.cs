@@ -19,6 +19,7 @@ public static class KubernetesGatewayExtensions
     /// <param name="builder">The Kubernetes environment resource builder.</param>
     /// <param name="name">The name of the gateway resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// <code>
     /// var k8s = builder.AddKubernetesEnvironment("k8s");
@@ -29,7 +30,7 @@ public static class KubernetesGatewayExtensions
     /// gateway.WithRoute("/api", api.GetEndpoint("http"));
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a Kubernetes Gateway API Gateway resource")]
+    [AspireExport]
     public static IResourceBuilder<KubernetesGatewayResource> AddGateway(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
         [ResourceName] string name)
@@ -45,6 +46,7 @@ public static class KubernetesGatewayExtensions
         }
 
         return builder.ApplicationBuilder.AddResource(gateway)
+            .WithIconName("GlobeArrowForward")
             .ExcludeFromManifest();
     }
 
@@ -54,7 +56,8 @@ public static class KubernetesGatewayExtensions
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="className">The GatewayClass name (e.g., <c>"azure-alb-external"</c>, <c>"istio"</c>).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
-    [AspireExport(Description = "Sets the GatewayClass for a Kubernetes Gateway")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<KubernetesGatewayResource> WithGatewayClass(
         this IResourceBuilder<KubernetesGatewayResource> builder,
         string className)
@@ -72,7 +75,8 @@ public static class KubernetesGatewayExtensions
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="className">A parameter resource builder for the GatewayClass name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
-    [AspireExport("withGatewayClassParam", Description = "Sets a parameterized GatewayClass for a Kubernetes Gateway")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withGatewayClassParam")]
     public static IResourceBuilder<KubernetesGatewayResource> WithGatewayClass(
         this IResourceBuilder<KubernetesGatewayResource> builder,
         IResourceBuilder<ParameterResource> className)
@@ -85,21 +89,23 @@ public static class KubernetesGatewayExtensions
     }
 
     /// <summary>
-    /// Adds a path-based routing rule to the gateway. The rule matches all hosts and routes
-    /// traffic matching the specified path to the given endpoint's backing Kubernetes service.
-    /// This generates an <c>HTTPRoute</c> resource attached to the Gateway.
+    /// Adds a path-based routing rule to the gateway. The rule matches each hostname configured
+    /// with <see cref="WithHostname(IResourceBuilder{KubernetesGatewayResource}, string)"/>, or all
+    /// hosts when no hostname is configured, and routes matching traffic to the endpoint's backing
+    /// Kubernetes service. This generates an <c>HTTPRoute</c> resource attached to the Gateway.
     /// </summary>
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="path">The URL path to match (e.g., <c>"/"</c> or <c>"/api"</c>). Must start with <c>/</c>.</param>
     /// <param name="endpoint">The endpoint reference identifying the target service and port.</param>
-    /// <param name="pathType">The path matching strategy. Defaults to <see cref="IngressPathType.Prefix"/>.</param>
+    /// <param name="pathType">The path matching strategy. Defaults to <see cref="GatewayPathMatchType.PathPrefix"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
-    [AspireExport("withGatewayPathRoute", Description = "Adds a path-based route to a Kubernetes Gateway")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withGatewayPathRoute")]
     public static IResourceBuilder<KubernetesGatewayResource> WithRoute(
         this IResourceBuilder<KubernetesGatewayResource> builder,
         string path,
         EndpointReference endpoint,
-        IngressPathType pathType = IngressPathType.Prefix)
+        GatewayPathMatchType pathType = GatewayPathMatchType.PathPrefix)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(path);
@@ -128,15 +134,16 @@ public static class KubernetesGatewayExtensions
     /// <param name="host">The hostname to match (e.g., <c>"api.example.com"</c>).</param>
     /// <param name="path">The URL path to match. Must start with <c>/</c>.</param>
     /// <param name="endpoint">The endpoint reference identifying the target service and port.</param>
-    /// <param name="pathType">The path matching strategy. Defaults to <see cref="IngressPathType.Prefix"/>.</param>
+    /// <param name="pathType">The path matching strategy. Defaults to <see cref="GatewayPathMatchType.PathPrefix"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
-    [AspireExport("withGatewayHostRoute", Description = "Adds a host-and-path route to a Kubernetes Gateway")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withGatewayHostRoute")]
     public static IResourceBuilder<KubernetesGatewayResource> WithRoute(
         this IResourceBuilder<KubernetesGatewayResource> builder,
         string host,
         string path,
         EndpointReference endpoint,
-        IngressPathType pathType = IngressPathType.Prefix)
+        GatewayPathMatchType pathType = GatewayPathMatchType.PathPrefix)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(host);
@@ -159,13 +166,15 @@ public static class KubernetesGatewayExtensions
 
     /// <summary>
     /// Adds a hostname that this gateway's routes match. Multiple hostnames can be added by calling
-    /// this method repeatedly. Hostnames are used as <c>hostnames</c> in generated <c>HTTPRoute</c>
-    /// resources and as HTTPS listener hostnames when TLS is configured.
+    /// this method repeatedly. Routes without an explicit host apply to each configured hostname.
+    /// Hostnames are used as <c>hostnames</c> in generated <c>HTTPRoute</c> resources and as HTTPS
+    /// listener hostnames when TLS is configured.
     /// </summary>
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="hostname">The hostname to match (e.g., <c>"api.example.com"</c>).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
-    [AspireExport("withGatewayHostname", MethodName = "withHostname", Description = "Adds a hostname to a Kubernetes Gateway")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withGatewayHostname", MethodName = "withHostname")]
     public static IResourceBuilder<KubernetesGatewayResource> WithHostname(
         this IResourceBuilder<KubernetesGatewayResource> builder,
         string hostname)
@@ -183,7 +192,8 @@ public static class KubernetesGatewayExtensions
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="hostname">A parameter resource builder for the hostname value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
-    [AspireExport("withGatewayHostnameParam", Description = "Adds a parameterized hostname to a Kubernetes Gateway")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withGatewayHostnameParam")]
     public static IResourceBuilder<KubernetesGatewayResource> WithHostname(
         this IResourceBuilder<KubernetesGatewayResource> builder,
         IResourceBuilder<ParameterResource> hostname)
@@ -201,10 +211,12 @@ public static class KubernetesGatewayExtensions
     /// This does not create a separate route — existing HTTPRoutes serve both HTTP and HTTPS.
     /// The TLS configuration applies to all hostnames configured via <see cref="WithHostname(IResourceBuilder{KubernetesGatewayResource}, string)"/>.
     /// </summary>
+    /// <ats-summary>Configures TLS on a Kubernetes Gateway listener</ats-summary>
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="secretName">The name of the Kubernetes <c>kubernetes.io/tls</c> Secret.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
-    [AspireExport("withGatewayTls", MethodName = "withTls", Description = "Configures TLS on a Kubernetes Gateway listener")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withGatewayTls", MethodName = "withTls")]
     public static IResourceBuilder<KubernetesGatewayResource> WithTls(
         this IResourceBuilder<KubernetesGatewayResource> builder,
         string secretName)
@@ -224,7 +236,8 @@ public static class KubernetesGatewayExtensions
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="secretName">A parameter resource builder for the secret name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
-    [AspireExport("withGatewayTlsParam", Description = "Configures TLS on a Kubernetes Gateway with a parameterized secret")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withGatewayTlsParam")]
     public static IResourceBuilder<KubernetesGatewayResource> WithTls(
         this IResourceBuilder<KubernetesGatewayResource> builder,
         IResourceBuilder<ParameterResource> secretName)
@@ -243,7 +256,8 @@ public static class KubernetesGatewayExtensions
     /// </summary>
     /// <param name="builder">The gateway resource builder.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
-    [AspireExport("withGatewayTlsAuto", Description = "Configures TLS on a Kubernetes Gateway with an auto-generated secret")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withGatewayTlsAuto")]
     public static IResourceBuilder<KubernetesGatewayResource> WithTls(
         this IResourceBuilder<KubernetesGatewayResource> builder)
     {
@@ -264,6 +278,7 @@ public static class KubernetesGatewayExtensions
     /// <param name="key">The annotation key.</param>
     /// <param name="value">The annotation value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This sets Kubernetes <c>metadata.annotations</c> on the generated K8S Gateway resource,
@@ -275,7 +290,7 @@ public static class KubernetesGatewayExtensions
     /// <c>alb.networking.azure.io/alb-name</c> and <c>alb.networking.azure.io/alb-namespace</c>.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Adds a Kubernetes metadata annotation to a Gateway")]
+    [AspireExport]
     public static IResourceBuilder<KubernetesGatewayResource> WithGatewayAnnotation(
         this IResourceBuilder<KubernetesGatewayResource> builder,
         string key,
@@ -296,7 +311,8 @@ public static class KubernetesGatewayExtensions
     /// <param name="key">The annotation key.</param>
     /// <param name="value">A parameter resource builder for the annotation value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
-    [AspireExport("withGatewayAnnotationParam", Description = "Adds a parameterized Kubernetes metadata annotation to a Gateway")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withGatewayAnnotationParam")]
     public static IResourceBuilder<KubernetesGatewayResource> WithGatewayAnnotation(
         this IResourceBuilder<KubernetesGatewayResource> builder,
         string key,

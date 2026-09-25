@@ -2,23 +2,28 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
+using static Aspire.Hosting.Kubernetes.Tests.PipelineStepTestHelpers;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
 
-public class KubernetesGatewayTests
+public class KubernetesGatewayTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task AddGateway_WithRoute_GeneratesGatewayAndHttpRoute()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var gateway = k8s.AddGateway("public")
             .WithGatewayClass("nginx");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         gateway.WithRoute("/api", api.GetEndpoint("http"));
 
@@ -26,7 +31,7 @@ public class KubernetesGatewayTests
         app.Run();
 
         // Should generate Gateway and HTTPRoute files
-        var gatewayDir = Path.Combine(tempDir.Path, "templates", "public");
+        var gatewayDir = Path.Combine(workspace.Path, "templates", "public");
         Assert.True(Directory.Exists(gatewayDir), $"Gateway templates dir not found at {gatewayDir}");
 
         var files = Directory.GetFiles(gatewayDir);
@@ -52,21 +57,22 @@ public class KubernetesGatewayTests
     [Fact]
     public async Task AddGateway_WithHostRoute_GeneratesHostnameInHttpRoute()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var gateway = k8s.AddGateway("public").WithGatewayClass("test");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         gateway.WithRoute("api.example.com", "/", api.GetEndpoint("http"));
 
         var app = builder.Build();
         app.Run();
 
-        var gatewayDir = Path.Combine(tempDir.Path, "templates", "public");
+        var gatewayDir = Path.Combine(workspace.Path, "templates", "public");
         var routeFile = Directory.GetFiles(gatewayDir).FirstOrDefault(f => f.Contains("route"));
         Assert.NotNull(routeFile);
 
@@ -76,16 +82,168 @@ public class KubernetesGatewayTests
     }
 
     [Fact]
+    public async Task AddGateway_WithRuntimeOnlyHostnameParameter_DefersValue()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var hostname = builder.AddParameter("hostname", "localhost");
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public")
+            .WithGatewayClass("nginx")
+            .WithHostname(hostname)
+            .WithTls();
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        gateway.WithRoute("/api", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var gatewayPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
+        var routePath = Path.Combine(workspace.Path, "templates", "public", "route.yaml");
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
+
+        await Verify(File.ReadAllText(gatewayPath), "yaml")
+            .AppendContentAsFile(File.ReadAllText(routePath), "yaml")
+            .AppendContentAsFile(File.ReadAllText(valuesPath), "yaml");
+    }
+
+    [Fact]
+    public async Task AddGateway_WithHostname_AppliesToHostlessRoute()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public")
+            .WithGatewayClass("nginx")
+            .WithHostname("api.example.com")
+            .WithHostname("www.example.com");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        gateway.WithRoute("/api", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var routePath = Path.Combine(workspace.Path, "templates", "public", "route.yaml");
+
+        await Verify(File.ReadAllText(routePath), "yaml");
+    }
+
+    [Fact]
+    public void AddGateway_WithRoute_InheritsMaximumSupportedHostnames()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+        var expectedHostnames = Enumerable.Range(1, 16)
+            .Select(index => $"host-{index}.example.com")
+            .ToArray();
+
+        foreach (var hostname in expectedHostnames)
+        {
+            gateway.WithHostname(hostname);
+        }
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        gateway.WithRoute("/", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var route = Assert.Single(gateway.Resource.GeneratedHttpRoutes);
+        Assert.Equal(expectedHostnames, route.Spec.Hostnames);
+    }
+
+    [Fact]
+    public void AddGateway_WithRoute_ExceedingMaximumSupportedHostnames_ThrowsOnPublish()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+
+        foreach (var index in Enumerable.Range(1, 17))
+        {
+            gateway.WithHostname($"host-{index}.example.com");
+        }
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        gateway.WithRoute("/", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        var aggregate = Assert.Throws<AggregateException>(app.Run);
+        var exception = aggregate.Flatten().InnerExceptions
+            .Select(e => e.InnerException)
+            .OfType<InvalidOperationException>()
+            .First(e => e.Message.StartsWith("Gateway 'public'", StringComparison.Ordinal));
+
+        Assert.Equal(
+            "Gateway 'public' configures 17 hostnames that would be inherited by a hostless route, " +
+            "but Kubernetes Gateway API HTTPRoute.spec.hostnames supports at most 16 entries. " +
+            "Define explicit host-scoped routes with WithRoute(hostname, path, endpoint) so each HTTPRoute stays within the limit. " +
+            "See the Kubernetes Gateway API documentation: https://gateway-api.sigs.k8s.io/reference/api-spec/main/spec/#httproutespec",
+            exception.Message);
+    }
+
+    [Fact]
+    public void AddGateway_WithHostRoutes_DoesNotApplyInheritedHostnameLimit()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+        var hostnames = Enumerable.Range(1, 17)
+            .Select(index => $"host-{index}.example.com")
+            .ToArray();
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        foreach (var hostname in hostnames)
+        {
+            gateway.WithHostname(hostname);
+            gateway.WithRoute(hostname, "/", api.GetEndpoint("http"));
+        }
+
+        using var app = builder.Build();
+        app.Run();
+
+        Assert.Equal(hostnames.Length, gateway.Resource.GeneratedHttpRoutes.Count);
+        Assert.All(gateway.Resource.GeneratedHttpRoutes, route => Assert.Single(route.Spec.Hostnames));
+    }
+
+    [Fact]
     public async Task AddGateway_WithTls_GeneratesHttpsListener()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var gateway = k8s.AddGateway("public").WithGatewayClass("test");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         gateway
             .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
@@ -95,7 +253,7 @@ public class KubernetesGatewayTests
         app.Run();
 
         // Check Gateway has HTTPS listener
-        var gatewayFile = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var gatewayFile = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         var content = await File.ReadAllTextAsync(gatewayFile);
 
         Assert.Contains("HTTPS", content);
@@ -104,19 +262,23 @@ public class KubernetesGatewayTests
         Assert.Contains("api.example.com", content);
         // Should also have HTTP listener
         Assert.Contains("HTTP", content);
+
+        var steps = await CreateStepsAsync(app.Services, k8s.Resource);
+        Assert.Equal(["gateway-field-cleanup-env", "tls-bootstrap-env"], GatewayOrTlsStepNames(steps));
     }
 
     [Fact]
     public async Task AddGateway_WithTls_DoesNotDuplicateRoutes()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var gateway = k8s.AddGateway("public").WithGatewayClass("test");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         gateway
             .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
@@ -126,7 +288,7 @@ public class KubernetesGatewayTests
         app.Run();
 
         // Should have exactly 1 HTTPRoute file (TLS doesn't create a separate route)
-        var gatewayDir = Path.Combine(tempDir.Path, "templates", "public");
+        var gatewayDir = Path.Combine(workspace.Path, "templates", "public");
         var routeFiles = Directory.GetFiles(gatewayDir).Where(f => f.Contains("route")).ToArray();
         Assert.Single(routeFiles);
     }
@@ -134,17 +296,19 @@ public class KubernetesGatewayTests
     [Fact]
     public async Task AddGateway_MultipleRoutes_GroupsByHost()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var gateway = k8s.AddGateway("public").WithGatewayClass("test");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         var web = builder.AddContainer("myweb", "nginx")
-            .WithHttpEndpoint(targetPort: 80);
+            .WithHttpEndpoint(targetPort: 80)
+            .WithExternalHttpEndpoints();
 
         // Two routes on the same host ΓåÆ should be grouped into one HTTPRoute
         gateway.WithRoute("example.com", "/api", api.GetEndpoint("http"));
@@ -155,29 +319,76 @@ public class KubernetesGatewayTests
         var app = builder.Build();
         app.Run();
 
-        var gatewayDir = Path.Combine(tempDir.Path, "templates", "public");
+        var gatewayDir = Path.Combine(workspace.Path, "templates", "public");
         var routeFiles = Directory.GetFiles(gatewayDir).Where(f => f.Contains("route")).ToArray();
         // Should have 2 HTTPRoute files: one for example.com, one for other.com
         Assert.Equal(2, routeFiles.Length);
     }
 
-    [Fact]
-    public async Task AddGateway_NoRoutes_DoesNotGenerateYaml()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AddGateway_NoRoutes_DoesNotGenerateYamlOrTlsSteps(bool hasTls, bool hasHostname)
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
-        k8s.AddGateway("empty");
+        var gateway = k8s.AddGateway("empty");
+
+        if (hasTls)
+        {
+            gateway.WithTls("my-tls-secret");
+        }
+
+        if (hasHostname)
+        {
+            gateway.WithHostname("api.example.com");
+        }
 
         builder.AddContainer("myapi", "nginx")
             .WithHttpEndpoint(targetPort: 8080);
 
-        var app = builder.Build();
+        using var app = builder.Build();
         app.Run();
 
-        var gatewayDir = Path.Combine(tempDir.Path, "templates", "empty");
+        var gatewayDir = Path.Combine(workspace.Path, "templates", "empty");
         Assert.False(Directory.Exists(gatewayDir), $"Gateway directory should not exist at {gatewayDir}");
+
+        // Assert on the whole filtered set rather than probing known step names one by one, so a
+        // future gateway/TLS step added without the route-eligibility filter also fails here.
+        var steps = await CreateStepsAsync(app.Services, k8s.Resource);
+        Assert.Empty(GatewayOrTlsStepNames(steps));
+    }
+
+    [Fact]
+    public async Task AddGateway_NoRoutes_WarnsThatGatewayAndTlsAreSkipped()
+    {
+        // The warning is the only signal a user gets that their Gateway (and its certificate) was
+        // silently dropped, so assert its content rather than just the absence of artifacts.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var testSink = new TestSink();
+        builder.Services.AddLogging(logging => logging.AddProvider(new TestLoggerProvider(testSink)));
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        k8s.AddGateway("empty").WithTls("my-tls-secret");
+
+        builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        using var app = builder.Build();
+        app.Run();
+
+        var warning = Assert.Single(
+            testSink.Writes,
+            w => w.LogLevel == LogLevel.Warning && w.Message is not null && w.Message.Contains("empty", StringComparison.Ordinal));
+
+        Assert.Equal(
+            "Gateway 'empty' has no routes configured. The Gateway, routes, TLS certificate, and load-balancer frontend will not be created.",
+            warning.Message);
     }
 
     [Fact]
@@ -208,8 +419,8 @@ public class KubernetesGatewayTests
     [Fact]
     public async Task AddGateway_BackwardCompatible_NoGatewayNoChange()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -220,7 +431,7 @@ public class KubernetesGatewayTests
         app.Run();
 
         // Service and deployment should exist but no gateway
-        var templatesDir = Path.Combine(tempDir.Path, "templates", "myapi");
+        var templatesDir = Path.Combine(workspace.Path, "templates", "myapi");
         Assert.True(Directory.Exists(templatesDir));
 
         var files = Directory.GetFiles(templatesDir);
@@ -231,14 +442,15 @@ public class KubernetesGatewayTests
     [Fact]
     public async Task AddGateway_WithTls_NoHostname_GeneratesHttpsListenerWithoutHostname()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var gateway = k8s.AddGateway("public").WithGatewayClass("azure-alb-external");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         // WithTls() without WithHostname() — should still generate an HTTPS listener
         gateway
@@ -249,7 +461,7 @@ public class KubernetesGatewayTests
         app.Run();
 
         // Check Gateway has HTTPS listener without a hostname
-        var gatewayFile = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var gatewayFile = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         var content = await File.ReadAllTextAsync(gatewayFile);
 
         Assert.Contains("HTTPS", content);
@@ -268,6 +480,9 @@ public class KubernetesGatewayTests
         var nextListenerOrEnd = lines.FindIndex(httpsIndex + 1, l => l.StartsWith("- name:") || l == "");
         var httpsSection = lines.Skip(httpsIndex).Take((nextListenerOrEnd > httpsIndex ? nextListenerOrEnd : lines.Count) - httpsIndex);
         Assert.DoesNotContain(httpsSection, l => l.StartsWith("hostname:") || l.StartsWith("hostname "));
+
+        var steps = await CreateStepsAsync(app.Services, k8s.Resource);
+        Assert.Equal(["gateway-field-cleanup-env", "tls-fqdn-discovery-env"], GatewayOrTlsStepNames(steps));
     }
 
     [Fact]
@@ -277,14 +492,15 @@ public class KubernetesGatewayTests
         // The hostname is registered AFTER WithTls() here; the generated HTTPS listener
         // must still pick it up, otherwise cert-manager will issue a cert for the wrong
         // hostname (or fall back to the gateway's auto-assigned FQDN).
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         var gateway = k8s.AddGateway("public").WithGatewayClass("azure-alb-external");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         gateway
             .WithRoute("/", api.GetEndpoint("http"))
@@ -294,7 +510,7 @@ public class KubernetesGatewayTests
         var app = builder.Build();
         app.Run();
 
-        var gatewayFile = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var gatewayFile = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         var content = await File.ReadAllTextAsync(gatewayFile);
 
         Assert.Contains("HTTPS", content);
@@ -308,5 +524,116 @@ public class KubernetesGatewayTests
         var nextListenerOrEnd = lines.FindIndex(httpsIndex + 1, l => l.StartsWith("- name:") || l == "");
         var httpsSection = lines.Skip(httpsIndex).Take((nextListenerOrEnd > httpsIndex ? nextListenerOrEnd : lines.Count) - httpsIndex).ToList();
         Assert.Contains(httpsSection, l => l.Contains("hostname:") && l.Contains("api.example.com"));
+    }
+
+    [Fact]
+    public void AddGateway_WithRoute_NonExternalEndpoint_ThrowsOnPublish()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+
+        // Intentionally omit WithExternalHttpEndpoints — the publish-time
+        // validation must surface a clear, actionable error.
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway.WithRoute("/api", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+        var aggregate = Assert.Throws<AggregateException>(app.Run);
+        var ex = aggregate.Flatten().InnerExceptions.OfType<InvalidOperationException>().First(e => e.Message.Contains("WithExternalHttpEndpoints"));
+
+        Assert.Contains("myapi", ex.Message);
+        Assert.Contains("public", ex.Message);
+        Assert.Contains("WithExternalHttpEndpoints", ex.Message);
+    }
+
+    [Fact]
+    public void AddGateway_WithHostRoute_NonExternalEndpoint_ThrowsOnPublish()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway.WithRoute("api.example.com", "/", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+        var aggregate = Assert.Throws<AggregateException>(app.Run);
+        var ex = aggregate.Flatten().InnerExceptions.OfType<InvalidOperationException>().First(e => e.Message.Contains("WithExternalHttpEndpoints"));
+
+        Assert.Contains("myapi", ex.Message);
+        Assert.Contains("WithExternalHttpEndpoints", ex.Message);
+    }
+
+    [Fact]
+    public async Task AddGateway_WithRoute_ExternalEndpoint_Succeeds()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+
+        // WithExternalHttpEndpoints applied AFTER WithRoute to prove that
+        // authoring order does not matter — validation runs at publish time.
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway.WithRoute("/api", api.GetEndpoint("http"));
+        api.WithExternalHttpEndpoints();
+
+        var app = builder.Build();
+        app.Run();
+
+        var gatewayFile = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
+        Assert.True(File.Exists(gatewayFile));
+        var content = await File.ReadAllTextAsync(gatewayFile);
+        Assert.Contains("Gateway", content);
+    }
+
+    /// <summary>
+    /// The deployment-target step is reachable from two pipeline executions: it is RequiredBy
+    /// "before-start" and it is also part of the publish DAG. The step guards against adding a second
+    /// DeploymentTargetAnnotation, but gateway route generation runs downstream of that guard, so a
+    /// second pass appended every route again. The rendered chart hid it, because duplicate routes
+    /// share a name and overwrite each other's file — the list itself grew on every pass.
+    /// </summary>
+    [Fact]
+    public async Task AddGateway_WhenDeploymentTargetsArePreparedTwice_DoesNotDuplicateHttpRoutes()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("nginx");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        gateway.WithRoute("/api", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+
+        var steps = await CreateStepsAsync(app.Services, k8s.Resource);
+        var prepareStep = Assert.Single(steps, step => step.Name == "prepare-deployment-targets-env");
+
+        await RunStepAsync(app.Services, prepareStep);
+        await RunStepAsync(app.Services, prepareStep);
+
+        var gatewayResource = Assert.IsType<KubernetesGatewayResource>(gateway.Resource);
+        var route = Assert.Single(gatewayResource.GeneratedHttpRoutes);
+        var rule = Assert.Single(route.Spec.Rules);
+        var match = Assert.Single(rule.Matches);
+
+        Assert.Equal("/api", match.Path?.Value);
     }
 }

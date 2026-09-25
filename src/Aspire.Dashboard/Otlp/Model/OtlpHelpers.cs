@@ -4,7 +4,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -12,7 +11,9 @@ using Aspire.Dashboard.Otlp.Storage;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
 using OpenTelemetry.Proto.Common.V1;
+using OpenTelemetry.Proto.Metrics.V1;
 using OpenTelemetry.Proto.Resource.V1;
+using static OpenTelemetry.Proto.Trace.V1.Span.Types;
 
 namespace Aspire.Dashboard.Otlp.Model;
 
@@ -25,6 +26,56 @@ public static partial class OtlpHelpers
     };
 
     // Note: ShortenedIdLength is defined in the shared OtlpHelpers.cs
+
+    internal static OtlpSpanKind ConvertSpanKind(SpanKind? kind)
+    {
+        return kind switch
+        {
+            // Unspecified to Internal is intentional.
+            // "Implementations MAY assume SpanKind to be INTERNAL when receiving UNSPECIFIED."
+            SpanKind.Unspecified => OtlpSpanKind.Internal,
+            SpanKind.Internal => OtlpSpanKind.Internal,
+            SpanKind.Client => OtlpSpanKind.Client,
+            SpanKind.Server => OtlpSpanKind.Server,
+            SpanKind.Producer => OtlpSpanKind.Producer,
+            SpanKind.Consumer => OtlpSpanKind.Consumer,
+            _ => OtlpSpanKind.Unspecified
+        };
+    }
+
+    internal static int GetMetricDataPointCount(Metric metric)
+    {
+        return metric.DataCase switch
+        {
+            Metric.DataOneofCase.Gauge => metric.Gauge.DataPoints.Count,
+            Metric.DataOneofCase.Sum => metric.Sum.DataPoints.Count,
+            Metric.DataOneofCase.Histogram => metric.Histogram.DataPoints.Count,
+            Metric.DataOneofCase.Summary => metric.Summary.DataPoints.Count,
+            Metric.DataOneofCase.ExponentialHistogram => metric.ExponentialHistogram.DataPoints.Count,
+            _ => 0,
+        };
+    }
+
+    internal static void ValidateHistogramDataPoint(HistogramDataPoint point)
+    {
+        if (!double.IsFinite(point.Sum))
+        {
+            throw new InvalidOperationException("Histogram data point sum must be finite.");
+        }
+
+        if (point.BucketCounts.Count > 0 && point.ExplicitBounds.Count == 0)
+        {
+            throw new InvalidOperationException("Histogram data point has bucket counts without any explicit bounds.");
+        }
+    }
+
+    internal static void ValidateNumberDataPoint(NumberDataPoint point)
+    {
+        if (point.ValueCase == NumberDataPoint.ValueOneofCase.AsDouble && !double.IsFinite(point.AsDouble))
+        {
+            throw new InvalidOperationException("Metric data point value must be finite.");
+        }
+    }
 
     public static ResourceKey GetResourceKey(this Resource resource)
     {
@@ -467,18 +518,23 @@ public static partial class OtlpHelpers
             // Semantically when InstrumentationScope isn't set, it is equivalent with
             // an empty instrumentation scope name (unknown).
             var name = scope?.Name ?? string.Empty;
-            ref var scopeRef = ref CollectionsMarshal.GetValueRefOrAddDefault(scopes, name, out _);
-            // Adds to dictionary if not present.
-            if (scopeRef == null)
+            if (scopes.TryGetValue(name, out s))
             {
-                scopeRef = (scope != null)
-                    ? new OtlpScope(scope.Name, scope.Version, scope.Attributes.ToKeyValuePairs(context))
-                    : OtlpScope.Empty;
-
-                context.Logger.LogTrace("Added scope '{ScopeName}' to {TelemetryType}.", scopeRef.Name, telemetryType);
+                return true;
             }
 
-            s = scopeRef;
+            if (scopes.Count >= TelemetryRepositoryLimits.MaxScopeCount)
+            {
+                throw new InvalidOperationException($"Scope limit of {TelemetryRepositoryLimits.MaxScopeCount} reached for {telemetryType}. Scope '{name}' will not be added.");
+            }
+
+            s = (scope != null)
+                ? new OtlpScope(scope.Name, scope.Version, scope.Attributes.ToKeyValuePairs(context))
+                : OtlpScope.Empty;
+
+            scopes.Add(name, s);
+
+            context.Logger.LogTrace("Added scope '{ScopeName}' to {TelemetryType}.", s.Name, telemetryType);
             return true;
         }
         catch (Exception ex)

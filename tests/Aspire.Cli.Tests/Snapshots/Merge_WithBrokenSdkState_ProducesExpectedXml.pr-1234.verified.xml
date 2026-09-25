@@ -1,4 +1,4 @@
-<configuration>
+﻿<configuration>
   <packageSources>
     <clear />
     <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
@@ -10,7 +10,6 @@
     </packageSource>
     <packageSource key="{PR_HIVE}/packages">
       <package pattern="Aspire*" />
-      <package pattern="*" />
     </packageSource>
   </packageSourceMapping>
 </configuration>

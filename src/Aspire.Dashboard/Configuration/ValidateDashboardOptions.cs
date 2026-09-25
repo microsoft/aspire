@@ -26,6 +26,15 @@ public sealed class ValidateDashboardOptions : IValidateOptions<DashboardOptions
 
         var errorMessages = new List<string>();
 
+        if (options.Data.PersistenceModeParseError is { } persistenceModeParseError)
+        {
+            errorMessages.Add(persistenceModeParseError);
+        }
+        else if (!Enum.IsDefined(options.Data.PersistenceMode))
+        {
+            errorMessages.Add($"Unexpected dashboard persistence mode: {options.Data.PersistenceMode}");
+        }
+
         if (!options.Frontend.TryParseOptions(out var frontendParseErrorMessage))
         {
             errorMessages.Add(frontendParseErrorMessage);
@@ -77,6 +86,10 @@ public sealed class ValidateDashboardOptions : IValidateOptions<DashboardOptions
                     if (string.IsNullOrEmpty(options.Otlp.PrimaryApiKey))
                     {
                         errorMessages.Add($"PrimaryApiKey is required when OTLP authentication mode is API key. Specify a {DashboardConfigNames.DashboardOtlpPrimaryApiKeyName.ConfigKey} value.");
+                    }
+                    if (options.Otlp.SecondaryApiKey is { Length: 0 })
+                    {
+                        errorMessages.Add($"SecondaryApiKey must not be empty when OTLP authentication mode is API key. Remove {DashboardConfigNames.DashboardOtlpSecondaryApiKeyName.ConfigKey} or specify a non-empty value.");
                     }
                     break;
                 case OtlpAuthMode.ClientCertificate:

@@ -46,44 +46,48 @@ public class AspireKeyVaultExtensionsTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ConnectionNameWinsOverConfigSection(bool useKeyed)
+    [InlineData(true, "secrets", "ConnectionStrings:secrets")]
+    [InlineData(false, "secrets", "ConnectionStrings:secrets")]
+    [InlineData(true, "9-secrets.name", "ConnectionStrings:_9_secrets_name")]
+    [InlineData(false, "9-secrets.name", "ConnectionStrings:_9_secrets_name")]
+    public void ConnectionNameWinsOverConfigSection(bool useKeyed, string connectionName, string connectionStringKey)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
 
-        var key = useKeyed ? "secrets" : null;
+        var key = useKeyed ? connectionName : "unused";
         builder.Configuration.AddInMemoryCollection([
-            new KeyValuePair<string, string?>("Aspire:Azure:Security:KeyVault:{key}:VaultUri", "unused"),
-            new KeyValuePair<string, string?>("ConnectionStrings:secrets", ConformanceConstants.VaultUri)
+            new KeyValuePair<string, string?>($"Aspire:Azure:Security:KeyVault:{key}:VaultUri", "unused"),
+            new KeyValuePair<string, string?>(connectionStringKey, ConformanceConstants.VaultUri)
         ]);
 
         if (useKeyed)
         {
-            builder.AddKeyedAzureKeyVaultClient("secrets");
+            builder.AddKeyedAzureKeyVaultClient(connectionName);
         }
         else
         {
-            builder.AddAzureKeyVaultClient("secrets");
+            builder.AddAzureKeyVaultClient(connectionName);
         }
 
         using var host = builder.Build();
         var client = useKeyed ?
-            host.Services.GetRequiredKeyedService<SecretClient>("secrets") :
+            host.Services.GetRequiredKeyedService<SecretClient>(connectionName) :
             host.Services.GetRequiredService<SecretClient>();
 
         Assert.Equal(new Uri(ConformanceConstants.VaultUri), client.VaultUri);
     }
 
-    [Fact]
-    public void AddsKeyVaultSecretsToConfig()
+    [Theory]
+    [InlineData("secrets", "ConnectionStrings:secrets")]
+    [InlineData("9-secrets.name", "ConnectionStrings:_9_secrets_name")]
+    public void AddsKeyVaultSecretsToConfig(string connectionName, string connectionStringKey)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration.AddInMemoryCollection([
-            new KeyValuePair<string, string?>("ConnectionStrings:secrets", ConformanceConstants.VaultUri)
+            new KeyValuePair<string, string?>(connectionStringKey, ConformanceConstants.VaultUri)
         ]);
 
-        builder.Configuration.AddAzureKeyVaultSecrets("secrets", configureClientOptions: o =>
+        builder.Configuration.AddAzureKeyVaultSecrets(connectionName, configureClientOptions: o =>
         {
             o.Transport = new MockTransport(
                 CreateResponse("""

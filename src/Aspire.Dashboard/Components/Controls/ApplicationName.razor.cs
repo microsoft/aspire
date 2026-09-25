@@ -27,15 +27,54 @@ public sealed partial class ApplicationName : ComponentBase, IDisposable
 
     protected override async Task OnInitializedAsync()
     {
-        // We won't have an application name until the client has connected to the server.
+        DashboardClient.ConnectionStateChanged += OnConnectionStateChanged;
+
+        // Wait for the client to connect, but proceed after 2 seconds regardless so the
+        // page title is set even when the app host is unreachable.
         if (DashboardClient.IsEnabled && !DashboardClient.WhenConnected.IsCompletedSuccessfully)
         {
             _disposalCts = new CancellationTokenSource();
-            await DashboardClient.WhenConnected.WaitAsync(_disposalCts.Token);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(_disposalCts.Token);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(2));
+
+            try
+            {
+                await DashboardClient.WhenConnected.WaitAsync(timeoutCts.Token);
+            }
+            catch (OperationCanceledException) when (!_disposalCts.IsCancellationRequested)
+            {
+                // Timed out waiting for connection — proceed with whatever ApplicationName is available.
+            }
+        }
+    }
+
+    private async void OnConnectionStateChanged(DashboardConnectionState state)
+    {
+        if (state is not DashboardConnectionState.Connected)
+        {
+            return;
+        }
+
+        try
+        {
+            await InvokeAsync(() =>
+            {
+                UpdatePageTitle();
+                StateHasChanged();
+            });
+        }
+        catch (ObjectDisposedException)
+        {
+            // Component disposed, ignore.
         }
     }
 
     protected override void OnParametersSet()
+    {
+        UpdatePageTitle();
+    }
+
+    private void UpdatePageTitle()
     {
         string applicationName;
 
@@ -55,6 +94,7 @@ public sealed partial class ApplicationName : ComponentBase, IDisposable
 
     public void Dispose()
     {
+        DashboardClient.ConnectionStateChanged -= OnConnectionStateChanged;
         _disposalCts?.Cancel();
         _disposalCts?.Dispose();
     }

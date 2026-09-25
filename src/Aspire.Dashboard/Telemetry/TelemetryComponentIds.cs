@@ -23,5 +23,8 @@ public static class TelemetryComponentIds
     public const string InteractionMessageBox = nameof(InteractionMessageBox);
     public const string InteractionMessageBar = nameof(InteractionMessageBar);
     public const string InteractionInputsDialog = nameof(InteractionInputsDialog);
+    public const string InteractionProgressDialog = nameof(InteractionProgressDialog);
+    public const string InteractionTerminalDialog = nameof(InteractionTerminalDialog);
+    public const string TerminalDock = nameof(TerminalDock);
     public const string GenAIVisualizerDialog = nameof(GenAIVisualizerDialog);
 }

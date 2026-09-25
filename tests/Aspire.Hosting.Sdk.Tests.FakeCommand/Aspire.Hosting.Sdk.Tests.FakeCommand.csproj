@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <AssemblyName>dotnet</AssemblyName>
+    <UseAppHost>true</UseAppHost>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

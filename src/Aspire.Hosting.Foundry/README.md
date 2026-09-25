@@ -1,6 +1,6 @@
-# Aspire.Hosting.Foundry library
+# Microsoft Foundry hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure Microsoft Foundry.
+Use this integration to model, configure, and orchestrate Microsoft Foundry in an Aspire solution.
 
 ## Getting started
 
@@ -8,34 +8,31 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 
 - Azure subscription - [create one for free](https://azure.microsoft.com/free/)
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Microsoft Foundry Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Foundry` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Foundry
+```bash
+aspire add Aspire.Hosting.Foundry
 ```
 
 ## Configure Azure Provisioning for local development
 
-Adding Azure resources to the Aspire application model will automatically enable development-time provisioning
+Adding Azure resources to the AppHost model will automatically enable development-time provisioning
 for Azure resources so that you don't need to configure them manually. Provisioning requires a number of settings
-to be available via .NET configuration. Set these values in user secrets in order to allow resources to be configured
-automatically.
+to be available via AppHost configuration. From your AppHost directory, set these values with `aspire secret set`:
 
-```json
-{
-    "Azure": {
-      "SubscriptionId": "<your subscription id>",
-      "ResourceGroupPrefix": "<prefix for the resource group>",
-      "Location": "<azure location>"
-    }
-}
+```bash
+aspire secret set Azure:SubscriptionId "<your subscription id>"
+aspire secret set Azure:ResourceGroupPrefix "<prefix for the resource group>"
+aspire secret set Azure:Location "<azure location>"
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a Microsoft Foundry deployment and consume the connection using the following methods:
+In the AppHost, add a Microsoft Foundry deployment and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var chat = builder.AddFoundry("foundry")
@@ -45,51 +42,65 @@ var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(chat);
 ```
 
-The `WithReference` method passes that connection information into a connection string named `chat` in the `MyService` project.
+**TypeScript**
 
-### Configuring deployment rate limits
+```typescript
+const chat = await builder.addFoundry("foundry")
+                  .addDeployment("chat", "Phi-4", "1", "Microsoft");
 
-The `SkuCapacity` property controls the rate limit in thousands of tokens per minute (TPM). For example, a value of `10` means 10,000 TPM. The default is `1` (1,000 TPM). Use `WithProperties` to configure it:
-
-```csharp
-var chat = builder.AddFoundry("foundry")
-                  .AddDeployment("chat", "gpt-4", "1", "OpenAI")
-                  .WithProperties(d => d.SkuCapacity = 10);
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(chat);
 ```
 
-See the [Azure AI quota management](https://learn.microsoft.com/azure/ai-foundry/openai/how-to/quota) documentation for available quota limits per model and region.
+## Foundry Local usage
 
-In the _Program.cs_ file of `MyService`, the connection can be consumed using a client library like [Aspire.Azure.AI.Inference](https://www.nuget.org/packages/Aspire.Azure.AI.Inference) or [Aspire.OpenAI](https://www.nuget.org/packages/Aspire.OpenAI) if the model is compatible with the OpenAI API:
+To let Aspire start Foundry Local and download or load models with the Foundry CLI installed on the AppHost machine:
 
-Note: The `format` parameter of the `AddDeployment()` method can be found in the Microsoft Foundry portal in the details
-page of the model, right after the `Quick facts` text.
-
-#### Inference client usage
-```csharp
-builder.AddAzureChatCompletionsClient("chat")
-       .AddChatClient();
-```
-
-#### OpenAI client usage
-```csharp
-builder.AddOpenAIClient("chat")
-       .AddChatClient();
-```
-
-### Emulator usage
-
-Aspire supports the usage of Foundry Local. Add the following to your AppHost project:
+**C#**
 
 ```csharp
-// AppHost
 var chat = builder.AddFoundry("foundry")
                   .RunAsFoundryLocal()
-                  .AddDeployment("chat", "phi-3.5-mini", "1", "Microsoft");
+                  .AddDeployment("chat", FoundryModel.Local.Phi4Mini);
 ```
 
-When the AppHost starts up, the local Foundry service will also be started.
+**TypeScript**
 
-This requires the local machine to have [Foundry Local](https://learn.microsoft.com/azure/ai-foundry/foundry-local/get-started) installed and running.
+```typescript
+const chat = await builder.addFoundry('foundry')
+    .runAsFoundryLocal()
+    .addDeployment('chat', FoundryModels.Local.Phi4Mini);
+```
+
+To connect from WSL2 or Linux to an existing Foundry Local service on another host, provide its reachable endpoint. Aspire observes this service but does not start, stop, download, or load anything on the remote host, so the model must already be loaded there:
+
+**C#**
+
+```csharp
+var foundry = builder.AddFoundry("foundry")
+                     .RunAsFoundryLocal("http://windows-host:5273");
+
+var chat = foundry.AddDeployment("chat", FoundryModel.Local.Phi4Mini)
+                  .WithProperties(deployment =>
+                  {
+                      deployment.LocalModelId = "Phi-4-mini-instruct-generic-gpu:5";
+                  });
+```
+
+**TypeScript**
+
+```typescript
+const foundry = await builder.addFoundry('foundry')
+    .runAsFoundryLocal({ endpoint: 'http://windows-host:5273' });
+
+const chat = await foundry
+    .addDeployment('chat', 'Phi-3.5-mini-instruct', { modelVersion: '1', format: 'Microsoft' })
+    .withProperties(async (deployment) => {
+        await deployment.localModelId.set('Phi-3.5-mini-instruct-generic-gpu:1');
+    });
+```
+
+The endpoint must be reachable from the AppHost and every consuming resource. Set `LocalModelId` to the identifier reported by the remote service when the deployment's model name is an alias.
 
 ## Connection Properties
 
@@ -102,7 +113,10 @@ The Microsoft Foundry resource exposes the following connection properties:
 | Property Name | Description |
 |---------------|-------------|
 | `Uri` | The endpoint URI for the Microsoft Foundry resource, with the format `https://<resource_name>.services.ai.azure.com/` or the emulator service URI when running Foundry Local (e.g., `http://127.0.0.1:61799/v1`) |
+| `AIInferenceUri` | The AI inference endpoint URI, with the format `https://<resource_name>.services.ai.azure.com/models` when targeting Azure or the emulator service URI when running Foundry Local (e.g., `http://127.0.0.1:61799/v1`) |
 | `Key` | The API key when using Foundry Local |
+
+See [Migrate from Azure AI Inference to Azure OpenAI in Azure AI Foundry Models](https://learn.microsoft.com/azure/foundry/how-to/model-inference-to-openai-migration?tabs=openai) for guidance on which URI to use based on the SDK used by your application.
 
 ### Microsoft Foundry deployment
 
@@ -110,7 +124,7 @@ The Microsoft Foundry deployment resource inherits all properties from its paren
 
 | Property Name | Description |
 |---------------|-------------|
-| `ModelName` | The deployment name when targeting Azure or model identifier when running Foundry Local, e.g., `Phi-4`, `my-chat` |
+| `ModelName` | The deployment name when targeting Azure or `LocalModelId` when running Foundry Local, e.g., `Phi-4-mini-instruct-generic-gpu:5` |
 | `Format` | The deployment format, e.g., `OpenAI`, `Microsoft`, `xAi`, `Deepseek` |
 | `Version` | The deployment version, e.g., `1`, `2025-08-07` |
 
@@ -123,6 +137,20 @@ The Microsoft Foundry project resource exposes the following connection properti
 | `Uri` | The project endpoint URI, with the format `https://<account>.services.ai.azure.com/api/projects/<project>` |
 | `ConnectionString` | The connection string, with the format `Endpoint=<uri>` |
 | `ApplicationInsightsConnectionString` | The Application Insights connection string for telemetry |
+
+### Microsoft Foundry Toolbox
+
+The Toolbox resource exposes the following connection properties:
+
+| Property Name | Description |
+|---------------|-------------|
+| `Name` | The Toolbox resource name |
+| `ProjectEndpoint` | The parent Microsoft Foundry project endpoint |
+| `Uri` | The MCP consumer endpoint, or the version-specific endpoint when `Version` is set |
+| `ApiVersion` | The Toolbox data-plane API version |
+| `FoundryFeatures` | The required `Foundry-Features` request header value |
+| `AuthorizationScope` | The Microsoft Entra authorization scope for Toolbox requests |
+| `Version` | The pinned immutable version, when configured |
 
 Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `chat` becomes `CHAT_URI`.
 
@@ -160,10 +188,133 @@ var foundry = builder.AddFoundry("foundry");
 var project = foundry.AddProject("my-project");
 
 builder.AddPythonApp("agent", "./app", "main:app")
-       .PublishAsHostedAgent(project);
+       .AsHostedAgent(project);
 ```
 
 In run mode, the agent runs locally with health check endpoints and OpenTelemetry instrumentation. In publish mode, the agent is deployed as a hosted agent in Microsoft Foundry.
+
+## Toolbox usage
+
+Toolboxes bundle reusable Foundry tools behind a single MCP endpoint. Aspire creates the first
+immutable Toolbox version and promotes new versions only when the configured tools, description,
+or metadata change.
+
+**C#**
+
+```csharp
+var foundry = builder.AddFoundry("foundry");
+var project = foundry.AddProject("my-project");
+var search = builder.AddAzureSearch("search");
+
+var toolbox = project.AddToolbox("field-tools")
+    .WithDescription("Tools for field technicians.")
+    .WithWebSearchTool("web-search", "Search the public web.")
+    .WithAISearchTool("knowledge-base", search, "docs", "Search the internal knowledge base.")
+    .WithMcpTool(
+        "inventory",
+        "https://inventory.example.com/mcp",
+        new FoundryToolboxMcpToolOptions
+        {
+            ServerDescription = "Inventory MCP server.",
+            ApprovalPolicy = new()
+            {
+                Global = FoundryToolboxMcpGlobalApprovalMode.Always
+            }
+        });
+
+builder.AddProject<Projects.MyService>("service")
+    .WithReference(toolbox)
+    .WaitFor(toolbox);
+```
+
+**TypeScript**
+
+```typescript
+import { FoundryToolboxMcpGlobalApprovalMode } from "./.aspire/modules/aspire.mjs";
+
+const foundry = await builder.addFoundry("foundry");
+const project = await foundry.addProject("my-project");
+const search = await builder.addAzureSearch("search");
+
+const toolbox = await project.addToolbox("field-tools");
+await toolbox.withDescription("Tools for field technicians.");
+await toolbox.withWebSearchTool({
+    name: "web-search",
+    description: "Search the public web."
+});
+await toolbox.withAISearchTool(
+    "knowledge-base",
+    search,
+    "docs",
+    "Search the internal knowledge base.");
+await toolbox.withMcpTool("inventory", "https://inventory.example.com/mcp", {
+    serverDescription: "Inventory MCP server.",
+    approvalPolicy: {
+        global: FoundryToolboxMcpGlobalApprovalMode.Always
+    }
+});
+
+const service = await builder.addNodeApp("service", "../service", "server.js");
+await service.withReference(toolbox);
+await service.waitFor(toolbox);
+```
+
+Azure AI Search tools reference an index that must already exist and contain the data the tool should
+search. `AddAzureSearch` provisions the Search service, but neither it nor `WithAISearchTool` creates
+or populates the named index.
+
+The identity running `aspire run` or `aspire deploy` must have the
+[Foundry User role](https://learn.microsoft.com/azure/foundry/concepts/rbac-foundry) on the Foundry
+project so Aspire can manage Toolbox versions. Deployed compute resources that reference the Toolbox
+receive this role automatically on that project.
+
+MCP endpoints must be reachable from the Foundry data plane over HTTPS. For local development, use
+a development tunnel instead of a localhost endpoint. Inline credentials and headers are not
+supported. Connection-authenticated MCP servers are not currently supported by this integration.
+
+MCP approval policies are declarations returned as Toolbox discovery metadata. The Toolbox service
+does not enforce approval when a client sends `tools/call`; the consuming application must inspect
+the metadata and obtain any required approval before invocation. A custom policy can classify
+individual MCP tool names:
+
+```csharp
+new FoundryToolboxMcpApprovalPolicy
+{
+    Always = new()
+    {
+        ToolNames = ["delete-item", "update-item"],
+        ReadOnly = false
+    },
+    Never = new()
+    {
+        ToolNames = ["get-item"],
+        ReadOnly = true
+    }
+}
+```
+
+The default consumer endpoint always serves the promoted Toolbox version. Set
+`FoundryToolboxResource.Version` only when a consumer must target a specific immutable version.
+
+### Existing Toolboxes
+
+Use the existing-resource methods to validate a remote Toolbox without resolving modeled tools,
+checking Aspire ownership metadata, creating versions, or changing the default:
+
+| Method | `aspire run` | `aspire deploy` |
+|--------|--------------|-----------------|
+| `RunAsExisting()` | Validate existing | Reconcile managed |
+| `PublishAsExisting()` | Reconcile managed | Validate existing |
+| `AsExisting()` | Validate existing | Validate existing |
+
+Existing mode permits a Toolbox with no locally modeled tools. If `Version` is set, validation also
+requires that immutable version to exist; otherwise it validates the current default and exposes the
+selected value through `DeployedVersion`.
+
+Aspire ownership metadata provides best-effort coordination between deployments, not an atomic
+lease. The Toolbox API currently has no ETag or conditional update operation. Aspire re-checks the
+current default and target ownership immediately before promotion and verifies the result afterward,
+then fails rather than overwriting contradictory concurrent changes.
 
 ## Prompt agent usage
 
@@ -255,9 +406,11 @@ var agent2 = project.AddPromptAgent(chat, "agent-2").WithTool(codeInterp);
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-ai-foundry/azure-ai-foundry-host/
+* https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox
 * https://learn.microsoft.com/azure/ai-foundry/what-is-azure-ai-foundry
 * https://learn.microsoft.com/azure/ai-foundry/foundry-local/
-* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 

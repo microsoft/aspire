@@ -40,6 +40,7 @@ public static class GoHostingExtensions
     /// <param name="gcFlags">Optional compiler flags passed via <c>-gcflags</c> (e.g. <c>"all=-N -l"</c> to disable optimisations for Delve).</param>
     /// <param name="raceDetector">When <see langword="true"/>, enables the Go race detector by passing <c>-race</c> to <c>go run</c>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method executes the Go application using <c>go run .</c>. The Go toolchain resolves the
@@ -50,7 +51,7 @@ public static class GoHostingExtensions
     /// Use <see cref="WithModTidy{T}"/>, <see cref="WithModVendor{T}"/>, or <see cref="WithModDownload{T}"/>
     /// to manage module dependencies before startup, and <see cref="WithVetTool{T}"/> to run static analysis.
     /// Use <see cref="WithAppArgs{T}"/> to pass runtime program arguments, and
-    /// <see cref="WithDelveServer{T}"/> to enable remote debugging via a headless Delve server.
+    /// <see cref="WithDelveServer{T}(IResourceBuilder{T}, DelveServerOptions)"/> to enable remote debugging via a headless Delve server.
     /// </para>
     /// </remarks>
     /// <example>
@@ -67,7 +68,7 @@ public static class GoHostingExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a Go application resource")]
+    [AspireExport]
     public static IResourceBuilder<GoAppResource> AddGoApp(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -87,71 +88,71 @@ public static class GoHostingExtensions
         var resource = new GoAppResource(name, appDirectory);
 
         var rb = builder.AddResource(resource)
+            .WithIconName("Code")
             .WithArgs(ctx =>
             {
                 var programArgs = ctx.Resource.TryGetLastAnnotation<GoAppArgsAnnotation>(out var argsAnnotation)
                     ? argsAnnotation.Args
                     : [];
 
-                var hasDelve = ctx.Resource.TryGetLastAnnotation<GoDelveServerAnnotation>(out var delveAnnotation);
+                if (!ctx.Resource.TryGetLastAnnotation<GoDelveServerAnnotation>(out var delveAnnotation))
+                {
+                    // Normal run mode. The `go run [build flags] <pkg>` prefix is contributed as entrypoint
+                    // arguments by WithVSCodeDebugging(), so only the program's own arguments belong here.
+                    foreach (var arg in programArgs)
+                    {
+                        ctx.Args.Add(arg);
+                    }
+
+                    return;
+                }
+
+                // Delve debug mode — global flags MUST precede the subcommand per the Delve CLI:
+                //   dlv --headless=true --listen=127.0.0.1:PORT --api-version=2 debug [--continue] [--build-flags=...] <pkg> [-- args]
+                // See: https://www.jetbrains.com/help/go/attach-to-running-go-processes-with-debugger.html
+                // WithDelveServer removes the debug launch annotation, so this whole command line is a plain
+                // process invocation and stays in the regular argument callback.
                 var pkg = ctx.Resource.TryGetLastAnnotation<GoPackagePathAnnotation>(out var pkgAnnotation)
                     ? pkgAnnotation.PackagePath
                     : ".";
 
-                if (hasDelve)
+                ctx.Args.Add("--headless=true");
+                ctx.Args.Add($"--listen=127.0.0.1:{delveAnnotation.Port}");
+                ctx.Args.Add("--api-version=2");
+                if (delveAnnotation.AcceptMultiClient)
                 {
-                    // Delve debug mode — global flags MUST precede the subcommand per the Delve CLI:
-                    //   dlv --headless=true --listen=127.0.0.1:PORT --api-version=2 debug [--build-flags=...] <pkg> [-- args]
-                    // See: https://www.jetbrains.com/help/go/attach-to-running-go-processes-with-debugger.html
-                    ctx.Args.Add("--headless=true");
-                    ctx.Args.Add($"--listen=127.0.0.1:{delveAnnotation!.Port}");
-                    ctx.Args.Add("--api-version=2");
-                    ctx.Args.Add("debug");
-
-                    var buildFlags = BuildFlagsString(ctx.Resource);
-                    if (buildFlags.Length > 0)
+                    ctx.Args.Add("--accept-multiclient");
+                }
+                if (delveAnnotation.OnlySameUser.HasValue)
+                {
+                    ctx.Args.Add($"--only-same-user={delveAnnotation.OnlySameUser.Value.ToString().ToLowerInvariant()}");
+                }
+                if (delveAnnotation.Log)
+                {
+                    ctx.Args.Add("--log");
+                    if (!string.IsNullOrEmpty(delveAnnotation.LogOutput))
                     {
-                        ctx.Args.Add($"--build-flags={buildFlags}");
-                    }
-
-                    ctx.Args.Add(pkg);
-
-                    if (programArgs.Length > 0)
-                    {
-                        ctx.Args.Add("--");
-                        foreach (var arg in programArgs)
-                        {
-                            ctx.Args.Add(arg);
-                        }
+                        ctx.Args.Add($"--log-output={delveAnnotation.LogOutput}");
                     }
                 }
-                else
+
+                ctx.Args.Add("debug");
+                if (delveAnnotation.ContinueOnStart)
                 {
-                    // Normal run mode: go run [-race] [-tags=...] [-ldflags=...] [-gcflags=...] <pkg> [args]
-                    ctx.Args.Add("run");
+                    ctx.Args.Add("--continue");
+                }
 
-                    if (ctx.Resource.TryGetLastAnnotation<GoRaceDetectorAnnotation>(out _))
-                    {
-                        ctx.Args.Add("-race");
-                    }
+                var delveBuildFlags = BuildFlagsString(ctx.Resource);
+                if (delveBuildFlags.Length > 0)
+                {
+                    ctx.Args.Add($"--build-flags={delveBuildFlags}");
+                }
 
-                    if (ctx.Resource.TryGetLastAnnotation<GoBuildTagsAnnotation>(out var tagsAnnotation))
-                    {
-                        ctx.Args.Add($"-tags={string.Join(",", tagsAnnotation.Tags)}");
-                    }
+                ctx.Args.Add(pkg);
 
-                    if (ctx.Resource.TryGetLastAnnotation<GoLdFlagsAnnotation>(out var ldFlagsAnnotation))
-                    {
-                        ctx.Args.Add($"-ldflags={ldFlagsAnnotation.Flags}");
-                    }
-
-                    if (ctx.Resource.TryGetLastAnnotation<GoGcFlagsAnnotation>(out var gcFlagsAnnotation))
-                    {
-                        ctx.Args.Add($"-gcflags={gcFlagsAnnotation.Flags}");
-                    }
-
-                    ctx.Args.Add(pkg);
-
+                if (programArgs.Length > 0)
+                {
+                    ctx.Args.Add("--");
                     foreach (var arg in programArgs)
                     {
                         ctx.Args.Add(arg);
@@ -334,7 +335,8 @@ public static class GoHostingExtensions
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <param name="args">The program arguments (e.g., <c>"serve"</c>, <c>"--config"</c>, <c>"prod.yaml"</c>).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Passes extra arguments to the Go program at runtime (after go run . in normal mode, or after -- in Delve mode)")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithAppArgs<T>(this IResourceBuilder<T> builder, params object[] args)
         where T : GoAppResource
     {
@@ -350,7 +352,8 @@ public static class GoHostingExtensions
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Runs go mod tidy before starting the application to ensure go.sum is up to date")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithModTidy<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
     {
@@ -400,7 +403,8 @@ public static class GoHostingExtensions
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Runs go mod vendor before starting the application to cache module dependencies locally")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithModVendor<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
     {
@@ -445,7 +449,8 @@ public static class GoHostingExtensions
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Runs go mod download before starting the application to pre-fetch module dependencies into the local cache")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithModDownload<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
     {
@@ -492,7 +497,8 @@ public static class GoHostingExtensions
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Runs go vet ./... before starting the application to catch static analysis issues")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithVetTool<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
     {
@@ -541,6 +547,7 @@ public static class GoHostingExtensions
     /// Pass it at build time with <c>--secret id=gittoken,src=/path/to/token</c>.
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// Only affects the generated Dockerfile — has no effect in run mode, where the local
@@ -563,7 +570,7 @@ public static class GoHostingExtensions
     /// docker build --build-arg GIT_USER=myuser --secret id=gittoken,src=~/.git-token .
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures private Go module authentication for publish-time Dockerfile generation")]
+    [AspireExport]
     public static IResourceBuilder<T> WithGoPrivate<T>(
         this IResourceBuilder<T> builder,
         string[] privatePatterns,
@@ -590,14 +597,12 @@ public static class GoHostingExtensions
     }
 
     /// <summary>
-    /// Starts a headless Delve debug server so that any DAP-compatible client can attach remotely.
-    /// The application is launched as
-    /// <c>dlv --headless=true --listen=127.0.0.1:&lt;port&gt; --api-version=2 debug .</c>
-    /// instead of <c>go run .</c>. Delve must be available on the PATH.
+    /// Starts a headless Delve debug server so that a DAP-compatible client can attach remotely.
+    /// The application is launched with <c>dlv debug</c> instead of <c>go run</c>.
+    /// Delve must be available on the PATH.
     /// </summary>
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
-    /// <param name="port">The TCP port Delve listens on. Defaults to <c>2345</c>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>
     /// <para>
@@ -626,14 +631,82 @@ public static class GoHostingExtensions
     /// <example>
     /// <code lang="csharp">
     /// builder.AddGoApp("api", "../go-api")
-    ///        .WithDelveServer(port: 2345);
+    ///        .WithDelveServer();
     /// </code>
     /// </example>
-    [AspireExport(Description = "Starts a headless Delve server for remote debugging (GoLand, VS Code attach, any DAP client)")]
+    [AspireExportIgnore(Reason = "This C# convenience overload uses default options. Polyglot AppHosts use the DelveServerOptions overload.")]
+    public static IResourceBuilder<T> WithDelveServer<T>(this IResourceBuilder<T> builder)
+        where T : GoAppResource
+        => builder.WithDelveServer(new DelveServerOptions());
+
+    /// <summary>
+    /// Starts a headless Delve debug server on the specified port.
+    /// </summary>
+    /// <typeparam name="T">The type of the Go application resource.</typeparam>
+    /// <param name="builder">The resource builder for the Go application.</param>
+    /// <param name="port">The TCP port Delve listens on. Defaults to <c>2345</c>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// This overload is retained for binary compatibility. Use <see cref="WithDelveServer{T}(IResourceBuilder{T})"/>
+    /// for the default port or <see cref="WithDelveServer{T}(IResourceBuilder{T}, DelveServerOptions)"/>
+    /// to configure the port and other Delve server options.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// builder.AddGoApp("api", "../go-api")
+    ///        .WithDelveServer(new DelveServerOptions { Port = 3456 });
+    /// </code>
+    /// </example>
+    [Obsolete("Use WithDelveServer() or WithDelveServer(DelveServerOptions) instead.")]
+    [AspireExportIgnore(Reason = "This obsolete compatibility overload is C#-only. Polyglot AppHosts use the DelveServerOptions overload.")]
     public static IResourceBuilder<T> WithDelveServer<T>(this IResourceBuilder<T> builder, int port = 2345)
+        where T : GoAppResource
+        => builder.WithDelveServer(new DelveServerOptions { Port = port });
+
+    /// <summary>
+    /// Starts a configurable headless Delve debug server so that DAP-compatible clients can attach remotely.
+    /// The application is launched with <c>dlv debug</c> instead of <c>go run</c>.
+    /// Delve must be available on the PATH.
+    /// </summary>
+    /// <typeparam name="T">The type of the Go application resource.</typeparam>
+    /// <param name="builder">The resource builder for the Go application.</param>
+    /// <param name="options">The options that configure the Delve server. When <see langword="null"/>, the default options are used.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// The server listens on <c>127.0.0.1</c> and accepts a single debugger client by default.
+    /// Set <see cref="DelveServerOptions.AcceptMultiClient"/> to <see langword="true"/> only when
+    /// multiple clients or reconnections are required.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// builder.AddGoApp("api", "../go-api")
+    ///        .WithDelveServer(new DelveServerOptions
+    ///        {
+    ///            Port = 2345,
+    ///            ContinueOnStart = true,
+    ///            Log = true,
+    ///            LogOutput = "rpc,dap,debugger"
+    ///        });
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<T> WithDelveServer<T>(
+        this IResourceBuilder<T> builder,
+        DelveServerOptions? options = null)
         where T : GoAppResource
     {
         ArgumentNullException.ThrowIfNull(builder);
+        options ??= new DelveServerOptions();
+
+        // WithDelveServer changes the resource into a headless Delve process that IDEs attach to
+        // manually. Leaving the VS Code launch annotation in place would make DCP hand execution to
+        // the IDE instead of starting that Delve server.
+        var debuggingAnnotation = builder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (debuggingAnnotation is not null)
+        {
+            builder.Resource.Annotations.Remove(debuggingAnnotation);
+        }
 
         // Switch the underlying executable from "go" to "dlv" using Replace so that
         // calling WithDelveServer more than once is idempotent.
@@ -641,7 +714,15 @@ public static class GoHostingExtensions
             .WithAnnotation(
                 new ExecutableAnnotation { Command = "dlv", WorkingDirectory = builder.Resource.WorkingDirectory },
                 ResourceAnnotationMutationBehavior.Replace)
-            .WithAnnotation(new GoDelveServerAnnotation(port), ResourceAnnotationMutationBehavior.Replace)
+            .WithAnnotation(
+                new GoDelveServerAnnotation(
+                    options.Port,
+                    options.AcceptMultiClient,
+                    options.OnlySameUser,
+                    options.ContinueOnStart,
+                    options.Log,
+                    options.LogOutput),
+                ResourceAnnotationMutationBehavior.Replace)
             .WithRequiredCommand("dlv", "https://github.com/go-delve/delve");
     }
 
@@ -651,16 +732,68 @@ public static class GoHostingExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        var workingDirectory = Path.GetFullPath(builder.Resource.WorkingDirectory);
+        var resource = builder.Resource;
 
         return builder.WithDebugSupport(
-            mode => new GoLaunchConfiguration
+            mode =>
             {
-                Program = workingDirectory,
-                Mode = mode,
-                WorkingDirectory = workingDirectory
+                // Resolve annotations when DCP creates the launch configuration so later
+                // resource mutations such as WithWorkingDirectory(...) are reflected.
+                var workingDirectory = Path.GetFullPath(resource.WorkingDirectory);
+                var packagePath = resource.TryGetLastAnnotation<GoPackagePathAnnotation>(out var packagePathAnnotation)
+                    ? packagePathAnnotation.PackagePath
+                    : ".";
+                var buildFlags = BuildFlagsString(resource);
+
+                return new GoLaunchConfiguration
+                {
+                    Program = Path.GetFullPath(packagePath, workingDirectory),
+                    Mode = mode,
+                    WorkingDirectory = workingDirectory,
+                    BuildFlags = buildFlags.Length > 0 ? buildFlags : null
+                };
             },
-            "go");
+            "go")
+            .WithLaunchToolArgs(static ctx =>
+            {
+                // The executable resource normally starts as:
+                //   go run [-race] [-tags=...] [-ldflags=...] [-gcflags=...] <pkg> [app args]
+                // Everything up to and including <pkg> is the tool invocation: in IDE mode VS Code's Go debugger
+                // performs it via program/buildFlags, so it is not passed to the launched program.
+                if (ctx.Resource.HasAnnotationOfType<GoDelveServerAnnotation>())
+                {
+                    // WithDelveServer replaces the whole command line with a headless `dlv debug ...` invocation and
+                    // removes the debug launch annotation, so there is no `go run` prefix to contribute.
+                    return;
+                }
+
+                ctx.Args.Add("run");
+
+                if (ctx.Resource.TryGetLastAnnotation<GoRaceDetectorAnnotation>(out _))
+                {
+                    ctx.Args.Add("-race");
+                }
+
+                if (ctx.Resource.TryGetLastAnnotation<GoBuildTagsAnnotation>(out var tagsAnnotation))
+                {
+                    ctx.Args.Add($"-tags={string.Join(",", tagsAnnotation.Tags)}");
+                }
+
+                if (ctx.Resource.TryGetLastAnnotation<GoLdFlagsAnnotation>(out var ldFlagsAnnotation))
+                {
+                    ctx.Args.Add($"-ldflags={ldFlagsAnnotation.Flags}");
+                }
+
+                if (ctx.Resource.TryGetLastAnnotation<GoGcFlagsAnnotation>(out var gcFlagsAnnotation))
+                {
+                    ctx.Args.Add($"-gcflags={gcFlagsAnnotation.Flags}");
+                }
+
+                ctx.Args.Add(ctx.Resource.TryGetLastAnnotation<GoPackagePathAnnotation>(out var pkgAnnotation)
+                    ? pkgAnnotation.PackagePath
+                    : ".");
+            },
+            ownedByLaunchConfigurationType: "go");
     }
 
     /// <summary>

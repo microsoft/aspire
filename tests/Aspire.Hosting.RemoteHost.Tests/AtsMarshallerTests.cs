@@ -4,8 +4,9 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.TypeSystem;
+using Aspire.Hosting.Ats;
 using Aspire.Hosting.RemoteHost.Ats;
+using Aspire.TypeSystem;
 using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
@@ -28,6 +29,8 @@ public class AtsMarshallerTests
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithJsonPropertyName", Name = "DtoWithJsonPropertyName", ClrType = typeof(DtoWithJsonPropertyName), Properties = [] },
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithJsonIgnore", Name = "DtoWithJsonIgnore", ClrType = typeof(DtoWithJsonIgnore), Properties = [] },
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithReadOnlyProperty", Name = "DtoWithReadOnlyProperty", ClrType = typeof(DtoWithReadOnlyProperty), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/DtoWithInitListProperties", Name = "DtoWithInitListProperties", ClrType = typeof(DtoWithInitListProperties), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/DtoWithTimeSpans", Name = "DtoWithTimeSpans", ClrType = typeof(DtoWithTimeSpans), Properties = [] },
             ],
             EnumTypes = []
         };
@@ -154,6 +157,74 @@ public class AtsMarshallerTests
 
         Assert.NotNull(result);
         Assert.True(result.GetValue<bool>());
+    }
+
+    [Theory]
+    [InlineData("hello", "\"hello\"")]
+    [InlineData(42, "42")]
+    [InlineData(true, "true")]
+    public void MarshalToJson_UnionSerializesMatchingPrimitive(object value, string expectedJson)
+    {
+        var marshaller = CreateMarshaller();
+        var typeRef = new AtsTypeRef
+        {
+            TypeId = "string|number|boolean",
+            Category = AtsTypeCategory.Union,
+            UnionTypes =
+            [
+                new AtsTypeRef { TypeId = AtsConstants.String, ClrType = typeof(string), Category = AtsTypeCategory.Primitive },
+                new AtsTypeRef { TypeId = AtsConstants.Number, ClrType = typeof(int), Category = AtsTypeCategory.Primitive },
+                new AtsTypeRef { TypeId = AtsConstants.Boolean, ClrType = typeof(bool), Category = AtsTypeCategory.Primitive }
+            ]
+        };
+
+        var result = marshaller.MarshalToJson(value, typeRef);
+
+        Assert.Equal(expectedJson, result!.ToJsonString());
+    }
+
+    [Fact]
+    public void MarshalToJson_UnionPreservesDeclaredHandleTypeAndIdentity()
+    {
+        var registry = new HandleRegistry();
+        var marshaller = CreateMarshaller(registry);
+        var value = new ContainerResource("container");
+        var typeRef = new AtsTypeRef
+        {
+            TypeId = "string|resource",
+            Category = AtsTypeCategory.Union,
+            UnionTypes =
+            [
+                new AtsTypeRef { TypeId = AtsConstants.String, ClrType = typeof(string), Category = AtsTypeCategory.Primitive },
+                new AtsTypeRef { TypeId = "test/IResource", ClrType = typeof(IResource), Category = AtsTypeCategory.Handle }
+            ]
+        };
+
+        var result = Assert.IsType<JsonObject>(marshaller.MarshalToJson(value, typeRef));
+
+        Assert.Equal("test/IResource", result["$type"]!.GetValue<string>());
+        Assert.True(registry.TryGet(result["$handle"]!.GetValue<string>(), out var retrieved, out _));
+        Assert.Same(value, retrieved);
+    }
+
+    [Fact]
+    public void MarshalToJson_UnionRejectsValueOutsideDeclaredMembers()
+    {
+        var marshaller = CreateMarshaller();
+        var typeRef = new AtsTypeRef
+        {
+            TypeId = "string|boolean",
+            Category = AtsTypeCategory.Union,
+            UnionTypes =
+            [
+                new AtsTypeRef { TypeId = AtsConstants.String, ClrType = typeof(string), Category = AtsTypeCategory.Primitive },
+                new AtsTypeRef { TypeId = AtsConstants.Boolean, ClrType = typeof(bool), Category = AtsTypeCategory.Primitive }
+            ]
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(() => marshaller.MarshalToJson(42, typeRef));
+
+        Assert.Equal("Value of type 'System.Int32' does not match any member of union 'string|boolean'.", exception.Message);
     }
 
     [Fact]
@@ -321,6 +392,24 @@ public class AtsMarshallerTests
         var result = AtsMarshaller.ConvertPrimitive(value!, typeof(int?));
 
         Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public void UnmarshalFromJson_DeserializesContainerFilesOptionsFromDecimalFormNumbers()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var json = new JsonObject
+        {
+            ["DefaultOwner"] = 1000.0,
+            ["DefaultGroup"] = 18.0,
+            ["Umask"] = 18.0
+        };
+
+        var result = Assert.IsType<ContainerFilesOptions>(marshaller.UnmarshalFromJson(json, typeof(ContainerFilesOptions), context));
+
+        Assert.Equal(1000.0, result.DefaultOwner);
+        Assert.Equal(18.0, result.DefaultGroup);
+        Assert.Equal(18.0, result.Umask);
     }
 
     [Fact]
@@ -713,6 +802,35 @@ public class AtsMarshallerTests
     }
 
     [Fact]
+    public async Task UnmarshalFromJson_UnmarshalsDtoInitListProperties()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var json = new JsonObject
+        {
+            ["name"] = "test",
+            ["addressPrefixes"] = new JsonArray("203.0.113.0/24", "198.51.100.0/24"),
+            ["addressPrefixReferences"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["$expr"] = new JsonObject
+                    {
+                        ["format"] = "10.0.0.0/24"
+                    }
+                }
+            }
+        };
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(DtoWithInitListProperties), context);
+
+        var dto = Assert.IsType<DtoWithInitListProperties>(result);
+        Assert.Equal("test", dto.Name);
+        Assert.Equal(["203.0.113.0/24", "198.51.100.0/24"], dto.AddressPrefixes);
+        var reference = Assert.Single(dto.AddressPrefixReferences);
+        Assert.Equal("10.0.0.0/24", await reference.GetValueAsync(default));
+    }
+
+    [Fact]
     public void MarshalToJson_MarshalsDto()
     {
         var marshaller = CreateMarshaller();
@@ -725,6 +843,72 @@ public class AtsMarshallerTests
         var jsonObj = (JsonObject)result;
         Assert.Equal("test", jsonObj["name"]?.GetValue<string>());
         Assert.Equal(10, jsonObj["count"]?.GetValue<int>());
+    }
+
+    [Fact]
+    public void UnmarshalFromJson_UnmarshalsTimeSpanPropertiesFromMilliseconds()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var json = new JsonObject
+        {
+            ["required"] = 1500,
+            ["optional"] = 90_000,
+            ["empty"] = null
+        };
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(DtoWithTimeSpans), context);
+
+        var dto = Assert.IsType<DtoWithTimeSpans>(result);
+        Assert.Equal(TimeSpan.FromMilliseconds(1500), dto.Required);
+        Assert.Equal(TimeSpan.FromSeconds(90), dto.Optional);
+        Assert.Null(dto.Empty);
+    }
+
+    [Fact]
+    public void UnmarshalFromJson_UnmarshalsTimeSpanPropertiesFromLegacyStrings()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var json = new JsonObject
+        {
+            ["required"] = "00:00:01.5000000",
+            ["optional"] = "00:01:30"
+        };
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(DtoWithTimeSpans), context);
+
+        var dto = Assert.IsType<DtoWithTimeSpans>(result);
+        Assert.Equal(TimeSpan.FromMilliseconds(1500), dto.Required);
+        Assert.Equal(TimeSpan.FromSeconds(90), dto.Optional);
+    }
+
+    [Fact]
+    public void MarshalToJson_MarshalsTimeSpanPropertiesAsMilliseconds()
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new DtoWithTimeSpans
+        {
+            Required = TimeSpan.FromMilliseconds(1500),
+            Optional = TimeSpan.FromSeconds(90)
+        };
+
+        var result = marshaller.MarshalToJson(dto);
+
+        var json = Assert.IsType<JsonObject>(result);
+        Assert.Equal(1500, json["required"]?.GetValue<double>());
+        Assert.Equal(90_000, json["optional"]?.GetValue<double>());
+        Assert.Null(json["empty"]);
+    }
+
+    [Fact]
+    public void UnmarshalFromJson_RejectsOutOfRangeTimeSpanProperty()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var json = new JsonObject { ["required"] = double.MaxValue };
+
+        var exception = Assert.Throws<CapabilityException>(
+            () => marshaller.UnmarshalFromJson(json, typeof(DtoWithTimeSpans), context));
+
+        Assert.Contains("outside the supported range", exception.Message);
     }
 
     [Fact]
@@ -972,6 +1156,23 @@ public class AtsMarshallerTests
     }
 
     [Fact]
+    public void ApplyDtoProperties_UpdatesTimeSpanPropertiesFromMilliseconds()
+    {
+        var marshaller = CreateMarshaller();
+        var dto = new DtoWithTimeSpans();
+        var source = new JsonObject
+        {
+            ["required"] = 2500,
+            ["optional"] = 120_000
+        };
+
+        marshaller.ApplyDtoProperties(source, dto, typeof(DtoWithTimeSpans));
+
+        Assert.Equal(TimeSpan.FromMilliseconds(2500), dto.Required);
+        Assert.Equal(TimeSpan.FromMinutes(2), dto.Optional);
+    }
+
+    [Fact]
     public void IsDtoType_ReturnsTrueForRegisteredDtoType()
     {
         var marshaller = CreateMarshaller();
@@ -1011,6 +1212,14 @@ public class AtsMarshallerTests
     {
         public string? Label { get; set; }
         public TestEnum Status { get; set; }
+    }
+
+    [AspireDto]
+    private sealed class DtoWithTimeSpans
+    {
+        public TimeSpan Required { get; set; }
+        public TimeSpan? Optional { get; set; }
+        public TimeSpan? Empty { get; set; }
     }
 
     [AspireDto]
@@ -1076,6 +1285,16 @@ public class AtsMarshallerTests
     {
         public string? Name { get; set; }
         public string Computed { get; } = "read-only";
+    }
+
+    [AspireDto]
+    private sealed class DtoWithInitListProperties
+    {
+        public string? Name { get; set; }
+
+        public List<string> AddressPrefixes { get; init; } = ["default"];
+
+        public List<ReferenceExpression> AddressPrefixReferences { get; init; } = [];
     }
 
     [Fact]

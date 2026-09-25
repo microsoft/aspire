@@ -3,14 +3,15 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.DevTunnels\Aspire.Hosting.DevTunnels.csproj" />
-    <ProjectReference Include="..\Aspire.Hosting.Tests\Aspire.Hosting.Tests.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
+    <Compile Include="$(TestsSharedDir)TestInteractionService.cs" Link="shared/TestInteractionService.cs" />
+    <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" Link="shared/TestModuleInitializer.cs" />
   </ItemGroup>
 
 </Project>

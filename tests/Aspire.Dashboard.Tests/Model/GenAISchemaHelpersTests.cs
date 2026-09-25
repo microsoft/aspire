@@ -3,7 +3,6 @@
 
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Model.GenAI;
-using Microsoft.OpenApi;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
@@ -14,39 +13,39 @@ public sealed class GenAISchemaHelpersTests
     public void ConvertTypeToNames_HandlesVariousTypeCombinations()
     {
         // Test single types
-        var stringSchema = new OpenApiSchema { Type = JsonSchemaType.String };
+        var stringSchema = new ToolDefinitionSchema { Type = JsonSchemaType.String };
         var typeNames = GenAISchemaHelpers.ConvertTypeToNames(stringSchema);
         Assert.Single(typeNames);
         Assert.Equal("string", typeNames[0]);
 
         // Test multiple types (nullable string) - null should be excluded from display
-        var nullableStringSchema = new OpenApiSchema { Type = JsonSchemaType.String | JsonSchemaType.Null };
+        var nullableStringSchema = new ToolDefinitionSchema { Type = JsonSchemaType.String | JsonSchemaType.Null };
         typeNames = GenAISchemaHelpers.ConvertTypeToNames(nullableStringSchema);
         Assert.Single(typeNames);
         Assert.Equal("string", typeNames[0]);
 
         // Test array with items
-        var arraySchema = new OpenApiSchema 
+        var arraySchema = new ToolDefinitionSchema
         { 
             Type = JsonSchemaType.Array,
-            Items = new OpenApiSchema { Type = JsonSchemaType.String }
+            Items = new ToolDefinitionSchema { Type = JsonSchemaType.String }
         };
         typeNames = GenAISchemaHelpers.ConvertTypeToNames(arraySchema);
         Assert.Single(typeNames);
         Assert.Equal("array<string>", typeNames[0]);
 
         // Test nullable array with items - null should be excluded
-        var nullableArraySchema = new OpenApiSchema 
+        var nullableArraySchema = new ToolDefinitionSchema
         { 
             Type = JsonSchemaType.Array | JsonSchemaType.Null,
-            Items = new OpenApiSchema { Type = JsonSchemaType.Number }
+            Items = new ToolDefinitionSchema { Type = JsonSchemaType.Number }
         };
         typeNames = GenAISchemaHelpers.ConvertTypeToNames(nullableArraySchema);
         Assert.Single(typeNames);
         Assert.Equal("array<number>", typeNames[0]);
 
         // Test array without items
-        var arrayNoItemsSchema = new OpenApiSchema { Type = JsonSchemaType.Array };
+        var arrayNoItemsSchema = new ToolDefinitionSchema { Type = JsonSchemaType.Array };
         typeNames = GenAISchemaHelpers.ConvertTypeToNames(arrayNoItemsSchema);
         Assert.Single(typeNames);
         Assert.Equal("array", typeNames[0]);
@@ -56,18 +55,18 @@ public sealed class GenAISchemaHelpersTests
         Assert.Empty(typeNames);
 
         // Test schema with no type - should return empty list
-        var noTypeSchema = new OpenApiSchema();
+        var noTypeSchema = new ToolDefinitionSchema();
         typeNames = GenAISchemaHelpers.ConvertTypeToNames(noTypeSchema);
         Assert.Empty(typeNames);
 
         // Test schema with only null type - should return "null" since type is only null
-        var onlyNullSchema = new OpenApiSchema { Type = JsonSchemaType.Null };
+        var onlyNullSchema = new ToolDefinitionSchema { Type = JsonSchemaType.Null };
         typeNames = GenAISchemaHelpers.ConvertTypeToNames(onlyNullSchema);
         Assert.Single(typeNames);
         Assert.Equal("null", typeNames[0]);
 
         // Test multiple types without null
-        var multiTypeSchema = new OpenApiSchema { Type = JsonSchemaType.String | JsonSchemaType.Number };
+        var multiTypeSchema = new ToolDefinitionSchema { Type = JsonSchemaType.String | JsonSchemaType.Number };
         typeNames = GenAISchemaHelpers.ConvertTypeToNames(multiTypeSchema);
         Assert.Equal(2, typeNames.Count);
         Assert.Contains("number", typeNames);
@@ -165,9 +164,9 @@ public sealed class GenAISchemaHelpersTests
     }
 
     [Fact]
-    public void ParseOpenApiSchema_HandlesUnexpectedTypeObject_ReturnsSchemaWithNullType()
+    public void ParseToolDefinitionSchema_HandlesUnexpectedTypeObject_ReturnsSchemaWithNullType()
     {
-        // Test the full ParseOpenApiSchema method with an unexpected "type" field
+        // Test the full schema parser with an unexpected "type" field.
         var schemaJson = """
         {
             "properties": {
@@ -184,22 +183,19 @@ public sealed class GenAISchemaHelpersTests
         """;
         
         var schemaObj = JsonNode.Parse(schemaJson) as JsonObject;
-        var schema = GenAISchemaHelpers.ParseOpenApiSchema(schemaObj!);
+        var schema = GenAISchemaHelpers.ParseToolDefinitionSchema(schemaObj!);
         
-        Assert.NotNull(schema);
-        Assert.NotNull(schema!.Properties);
+        Assert.NotNull(schema.Properties);
         Assert.Equal(2, schema.Properties.Count);
         
         // param1 should be parsed correctly
         Assert.True(schema.Properties.ContainsKey("param1"));
-        var param1 = schema.Properties["param1"] as OpenApiSchema;
-        Assert.NotNull(param1);
-        Assert.Equal(JsonSchemaType.String, param1!.Type);
+        var param1 = schema.Properties["param1"];
+        Assert.Equal(JsonSchemaType.String, param1.Type);
         
         // param2 should be parsed but with null type (since type is an object)
         Assert.True(schema.Properties.ContainsKey("param2"));
-        var param2 = schema.Properties["param2"] as OpenApiSchema;
-        Assert.NotNull(param2);
-        Assert.Null(param2!.Type);
+        var param2 = schema.Properties["param2"];
+        Assert.Null(param2.Type);
     }
 }

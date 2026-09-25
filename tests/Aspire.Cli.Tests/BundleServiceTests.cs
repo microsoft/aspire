@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Bundles;
-using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.Shared;
 
 namespace Aspire.Cli.Tests;
@@ -27,7 +27,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void VersionMarker_WriteAndRead_Roundtrips()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.WorkspaceRoot.FullName;
 
         BundleService.WriteVersionMarker(dir, "13.2.0-dev");
@@ -38,22 +38,27 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void VersionMarker_ReturnsNull_WhenMissing()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         Assert.Null(BundleService.ReadVersionMarker(workspace.WorkspaceRoot.FullName));
     }
 
     [Fact]
-    public void GetDefaultExtractDir_ReturnsParentOfParent()
+    public void ComputeDefaultExtractDir_NoSidecar_ReturnsDefaultAspireHomeDirectory()
     {
+        // Sidecar-less installs do not prove the binary's directory is user-writable.
+        // Use Aspire home so arbitrary install locations such as read-only package
+        // stores can still extract the embedded bundle.
+        var expected = CliPathHelper.GetDefaultAspireHomeDirectory();
+
         if (OperatingSystem.IsWindows())
         {
-            var result = BundleService.GetDefaultExtractDir(@"C:\Users\test\.aspire\bin\aspire.exe");
-            Assert.Equal(@"C:\Users\test\.aspire", result);
+            var result = BundleService.ComputeDefaultExtractDir(@"C:\Users\test\.aspire\bin\aspire.exe");
+            Assert.Equal(expected, result);
         }
         else
         {
-            var result = BundleService.GetDefaultExtractDir("/home/test/.aspire/bin/aspire");
-            Assert.Equal("/home/test/.aspire", result);
+            var result = BundleService.ComputeDefaultExtractDir("/home/test/.aspire/bin/aspire");
+            Assert.Equal(expected, result);
         }
     }
 
@@ -68,7 +73,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetCurrentVersion_ChangesWhenCliBinaryChanges()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var processPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire");
         File.WriteAllText(processPath, "old");
         File.SetLastWriteTimeUtc(processPath, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
@@ -112,9 +117,9 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void IsVersionedLayoutValid_RequiresManagedExecutableAndDcpDirectory()
+    public void IsVersionedLayoutValid_RequiresManagedDashboardAndDcpExecutables()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.WorkspaceRoot.FullName;
 
         Assert.False(BundleService.IsVersionedLayoutValid(dir));
@@ -134,9 +139,96 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void IsVersionedLayoutValid_RequiresNonemptyDashboardExecutable()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dir = workspace.WorkspaceRoot.FullName;
+        CreateFakeBundleLayout(dir);
+        var dashboardDir = Path.Combine(dir, BundleDiscovery.DashboardDirectoryName);
+        var dashboardExe = Path.Combine(dashboardDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+
+        Directory.Delete(dashboardDir, recursive: true);
+        Assert.False(BundleService.IsVersionedLayoutValid(dir));
+
+        Directory.CreateDirectory(dashboardDir);
+        Assert.False(BundleService.IsVersionedLayoutValid(dir));
+
+        File.WriteAllBytes(dashboardExe, []);
+        Assert.False(BundleService.IsVersionedLayoutValid(dir));
+
+        File.WriteAllText(dashboardExe, "dashboard");
+        var frameworkDir = Path.Combine(dashboardDir, "wwwroot", "_framework");
+        Directory.CreateDirectory(frameworkDir);
+        File.WriteAllText(Path.Combine(frameworkDir, "blazor.web.js"), "blazor");
+        var sqliteLibraryName = OperatingSystem.IsWindows() ? "e_sqlite3.dll" : OperatingSystem.IsMacOS() ? "libe_sqlite3.dylib" : "libe_sqlite3.so";
+        File.WriteAllText(Path.Combine(dashboardDir, sqliteLibraryName), "sqlite");
+        Assert.True(BundleService.IsVersionedLayoutValid(dir));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void IsVersionedLayoutValid_RequiresNonemptySqliteLibrary(bool empty)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dir = workspace.WorkspaceRoot.FullName;
+        CreateFakeBundleLayout(dir);
+        Assert.True(BundleService.IsVersionedLayoutValid(dir));
+
+        var sqliteLibraryName = OperatingSystem.IsWindows() ? "e_sqlite3.dll" : OperatingSystem.IsMacOS() ? "libe_sqlite3.dylib" : "libe_sqlite3.so";
+        var sqliteLibrary = Path.Combine(dir, BundleDiscovery.DashboardDirectoryName, sqliteLibraryName);
+        if (empty)
+        {
+            File.WriteAllBytes(sqliteLibrary, []);
+        }
+        else
+        {
+            File.Delete(sqliteLibrary);
+        }
+
+        Assert.False(BundleService.IsVersionedLayoutValid(dir));
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("empty")]
+    [InlineData("missing-framework")]
+    [InlineData("missing-wwwroot")]
+    public void IsVersionedLayoutValid_RequiresNonemptyBlazorScript(string damage)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dir = workspace.WorkspaceRoot.FullName;
+        CreateFakeBundleLayout(dir);
+        Assert.True(BundleService.IsVersionedLayoutValid(dir));
+
+        var wwwrootDir = Path.Combine(dir, BundleDiscovery.DashboardDirectoryName, "wwwroot");
+        var frameworkDir = Path.Combine(wwwrootDir, "_framework");
+        var blazorScript = Path.Combine(frameworkDir, "blazor.web.js");
+        switch (damage)
+        {
+            case "missing":
+                File.Delete(blazorScript);
+                break;
+            case "empty":
+                File.WriteAllBytes(blazorScript, []);
+                break;
+            case "missing-framework":
+                Directory.Delete(frameworkDir, recursive: true);
+                break;
+            case "missing-wwwroot":
+                Directory.Delete(wwwrootDir, recursive: true);
+                break;
+            default:
+                throw new InvalidOperationException($"Unexpected damage: {damage}");
+        }
+
+        Assert.False(BundleService.IsVersionedLayoutValid(dir));
+    }
+
+    [Fact]
     public void IsVersionedLayoutValid_RequiresDcpDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.WorkspaceRoot.FullName;
         CreateFakeBundleLayout(dir);
 
@@ -145,9 +237,49 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void IsVersionedLayoutValid_RequiresDcpExecutable()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dir = workspace.WorkspaceRoot.FullName;
+        CreateFakeBundleLayout(dir);
+
+        File.Delete(BundleDiscovery.GetDcpExecutablePath(Path.Combine(dir, BundleDiscovery.DcpDirectoryName)));
+
+        Assert.False(BundleService.IsVersionedLayoutValid(dir));
+    }
+
+    [Theory]
+    [InlineData(unchecked((int)0x80070005), true)] // ERROR_ACCESS_DENIED
+    [InlineData(unchecked((int)0x80070020), true)] // ERROR_SHARING_VIOLATION
+    [InlineData(unchecked((int)0x80070021), true)] // ERROR_LOCK_VIOLATION
+    [InlineData(unchecked((int)0x80070027), false)] // ERROR_HANDLE_DISK_FULL
+    [InlineData(unchecked((int)0x80070070), false)] // ERROR_DISK_FULL
+    [InlineData(unchecked((int)0x800700B7), false)] // ERROR_ALREADY_EXISTS
+    public void IsRetryableDirectoryMoveException_OnlyRetriesTransientWindowsLockErrors(int hresult, bool expected)
+    {
+        var exception = new IOException("Directory move failed.", hresult);
+
+        Assert.Equal(expected, BundleService.IsRetryableDirectoryMoveException(exception, isWindows: true));
+    }
+
+    [Fact]
+    public void IsRetryableDirectoryMoveException_RetriesUnauthorizedAccess()
+    {
+        Assert.True(BundleService.IsRetryableDirectoryMoveException(new UnauthorizedAccessException(), isWindows: true));
+    }
+
+    [Fact]
+    public void IsRetryableDirectoryMoveException_DoesNotRetryOnNonWindows()
+    {
+        var exception = new IOException("Directory move failed.", unchecked((int)0x80070020));
+
+        Assert.False(BundleService.IsRetryableDirectoryMoveException(exception, isWindows: false));
+    }
+
+    [Fact]
     public void TryCleanupStaleVersions_RemovesNonActiveVersionsAndStaleTempDirs()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var versionsRoot = Path.Combine(workspace.WorkspaceRoot.FullName, BundleService.VersionsDirectoryName);
         Directory.CreateDirectory(versionsRoot);
 
@@ -168,7 +300,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CaptureLinkTargets_ReturnsNullForMissingAndRealDirectories()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.WorkspaceRoot.FullName;
 
         // bundle/ does not exist → null entry.
@@ -189,8 +321,20 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
             Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
             "#!/bin/sh\necho aspire-managed\n");
 
+        var dashboardDir = Path.Combine(root, BundleDiscovery.DashboardDirectoryName);
+        Directory.CreateDirectory(dashboardDir);
+        File.WriteAllText(
+            Path.Combine(dashboardDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)),
+            "dashboard");
+        var frameworkDir = Path.Combine(dashboardDir, "wwwroot", "_framework");
+        Directory.CreateDirectory(frameworkDir);
+        File.WriteAllText(Path.Combine(frameworkDir, "blazor.web.js"), "blazor");
+
+        var sqliteLibraryName = OperatingSystem.IsWindows() ? "e_sqlite3.dll" : OperatingSystem.IsMacOS() ? "libe_sqlite3.dylib" : "libe_sqlite3.so";
+        File.WriteAllText(Path.Combine(dashboardDir, sqliteLibraryName), "sqlite");
+
         var dcpDir = Path.Combine(root, BundleDiscovery.DcpDirectoryName);
         Directory.CreateDirectory(dcpDir);
-        File.WriteAllText(Path.Combine(dcpDir, "placeholder"), "dcp");
+        File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDir), "dcp");
     }
 }

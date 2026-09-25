@@ -6,7 +6,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
+using Aspire.Hosting.Backchannel;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Protocol;
@@ -20,6 +20,15 @@ namespace Aspire.Cli.Backchannel;
 /// </summary>
 internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 {
+    private static readonly string[] s_clientCapabilities =
+    [
+        AuxiliaryBackchannelCapabilities.V1,
+        AuxiliaryBackchannelCapabilities.V2,
+        AuxiliaryBackchannelCapabilities.V3,
+        AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
+    ];
+    private static readonly TimeSpan s_handshakeTimeout = TimeSpan.FromSeconds(10);
+
     private readonly ILogger _logger;
     private JsonRpc? _rpc;
     private bool _disposed;
@@ -30,8 +39,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// Private constructor - use factory methods to create instances.
     /// </summary>
     private AppHostAuxiliaryBackchannel(
-        string hash,
-        string socketPath,
+        IAppHostSocket appHostSocket,
         JsonRpc rpc,
         AppHostInformation? appHostInfo,
         bool isInScope,
@@ -39,8 +47,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         ILogger logger,
         ProfilingTelemetry? profilingTelemetry)
     {
-        Hash = hash;
-        SocketPath = socketPath;
+        Socket = appHostSocket;
         _rpc = rpc;
         AppHostInfo = appHostInfo;
         IsInScope = isInScope;
@@ -54,20 +61,19 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// Internal constructor for testing purposes.
     /// </summary>
     internal AppHostAuxiliaryBackchannel(
-        string hash,
-        string socketPath,
+        IAppHostSocket appHostSocket,
         JsonRpc rpc,
         AppHostInformation? appHostInfo,
         bool isInScope)
-        : this(hash, socketPath, rpc, appHostInfo, isInScope, ImmutableHashSet<string>.Empty, NullLogger.Instance, null)
+        : this(appHostSocket, rpc, appHostInfo, isInScope, ImmutableHashSet<string>.Empty, NullLogger.Instance, null)
     {
     }
 
     /// <inheritdoc />
-    public string Hash { get; private set; }
+    public IAppHostSocket Socket { get; }
 
     /// <inheritdoc />
-    public string SocketPath { get; }
+    public string SocketPath => Socket.SocketPath;
 
     /// <inheritdoc />
     public AppHostInformation? AppHostInfo { get; private set; }
@@ -82,7 +88,18 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     public bool SupportsV2 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V2);
 
     /// <inheritdoc />
+    // Per-feature capability strings (e.g. Terminals_V1) are deliberately preferred over a
+    // monolithic "rev the whole aux backchannel version" approach. See
+    // docs/specs/cli-backchannel.md §3 ("Capability Negotiation Over Version Numbers"). When
+    // the CLI starts using a new RPC, add a new capability constant in
+    // src/Aspire.Hosting/Backchannel/BackchannelDataTypes.cs (advertised by the AppHost RPC
+    // target) and surface a SupportsXxx property here for the call site to gate on. This way
+    // a single new method never requires every consumer to upgrade an opaque version field.
+    public bool SupportsTerminalsV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.Terminals_V1);
     public bool SupportsV3 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V3);
+
+    /// <inheritdoc />
+    public bool SupportsResourceSnapshotVersionsV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1);
 
     /// <summary>
     /// Gets the JSON-RPC proxy for communicating with the AppHost.
@@ -105,57 +122,64 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     }
 
     /// <summary>
-    /// Creates and connects a new auxiliary backchannel to the specified socket path.
+    /// Creates and connects a new auxiliary backchannel to the specified socket.
     /// </summary>
-    /// <param name="socketPath">The path to the Unix domain socket.</param>
-    /// <param name="logger">Optional logger for diagnostic messages.</param>
+    /// <param name="appHostSocket">The AppHost socket to connect to.</param>
+    /// <param name="logger">Logger for diagnostic messages.</param>
+    /// <param name="profilingTelemetry">Profiling service.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <param name="profilingTelemetry">Optional profiling service.</param>
     /// <returns>A connected AppHostAuxiliaryBackchannel instance.</returns>
     public static Task<AppHostAuxiliaryBackchannel> ConnectAsync(
-        string socketPath,
+        IAppHostSocket appHostSocket,
         ILogger logger,
-        CancellationToken cancellationToken = default,
-        ProfilingTelemetry? profilingTelemetry = null)
+        ProfilingTelemetry profilingTelemetry,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(appHostSocket);
 
-        var hash = AppHostHelper.ExtractHashFromSocketPath(socketPath) ?? string.Empty;
-        return CreateFromSocketAsync(hash, socketPath, isInScope: true, logger, socket: null, cancellationToken, profilingTelemetry);
+        return CreateFromSocketAsync(appHostSocket, isInScope: true, logger, profilingTelemetry, socket: null, cancellationToken);
     }
 
     /// <summary>
-    /// Creates an AppHostAuxiliaryBackchannel by connecting to the specified socket path,
+    /// Creates an AppHostAuxiliaryBackchannel by connecting to the specified AppHost socket,
     /// or using an already-connected socket if provided.
     /// This is the single path for all connection creation, ensuring capabilities are always fetched.
     /// </summary>
-    /// <param name="hash">The AppHost hash identifier.</param>
-    /// <param name="socketPath">The socket path.</param>
+    /// <param name="appHostSocket">The AppHost socket.</param>
     /// <param name="isInScope">Whether this AppHost is within the scope of the working directory.</param>
+    /// <param name="logger">Logger.</param>
+    /// <param name="profilingTelemetry">Profiling service.</param>
     /// <param name="socket">Optional already-connected socket. If null, a new connection will be established.</param>
-    /// <param name="logger">Optional logger.</param>
-    /// <param name="cancellationToken">Cancellation token (only used when socket is null).</param>
-    /// <param name="profilingTelemetry">Optional profiling service.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A connected AppHostAuxiliaryBackchannel instance.</returns>
-    internal static async Task<AppHostAuxiliaryBackchannel> CreateFromSocketAsync(
-        string hash,
-        string socketPath,
+    internal static Task<AppHostAuxiliaryBackchannel> CreateFromSocketAsync(
+        IAppHostSocket appHostSocket,
         bool isInScope,
         ILogger logger,
-        Socket? socket = null,
-        CancellationToken cancellationToken = default,
-        ProfilingTelemetry? profilingTelemetry = null)
+        ProfilingTelemetry profilingTelemetry,
+        Socket? socket,
+        CancellationToken cancellationToken) =>
+        CreateFromSocketAsync(appHostSocket, isInScope, logger, profilingTelemetry, socket, s_handshakeTimeout, cancellationToken);
+
+    internal static async Task<AppHostAuxiliaryBackchannel> CreateFromSocketAsync(
+        IAppHostSocket appHostSocket,
+        bool isInScope,
+        ILogger logger,
+        ProfilingTelemetry profilingTelemetry,
+        Socket? socket,
+        TimeSpan handshakeTimeout,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(appHostSocket);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(handshakeTimeout, TimeSpan.Zero);
 
         // Connect if no socket provided
         if (socket is null)
         {
-            logger.LogDebug("Connecting to auxiliary backchannel at {SocketPath}", socketPath);
-
-            socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            var endpoint = new UnixDomainSocketEndPoint(socketPath);
-            await socket.ConnectAsync(endpoint, cancellationToken).ConfigureAwait(false);
+            logger.LogDebug("Connecting to auxiliary backchannel at {SocketPath}", appHostSocket.SocketPath);
+            socket = await appHostSocket.ConnectAsync(cancellationToken).ConfigureAwait(false);
         }
 
         // Create JSON-RPC connection with proper formatter
@@ -164,22 +188,58 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         {
             ActivityTracingStrategy = new ActivityTracingStrategy()
         };
-        rpc.StartListening();
+        Task? pendingHandshakeRpcTask = null;
 
-        logger.LogDebug("Connected to auxiliary backchannel at {SocketPath}", socketPath);
+        try
+        {
+            rpc.StartListening();
 
-        // Fetch all connection info
-        var appHostInfo = await rpc.InvokeWithProfilingAsync<AppHostInformation?>(
-            profilingTelemetry,
-            "auxiliary",
-            "GetAppHostInformationAsync",
-            [],
-            cancellationToken).ConfigureAwait(false);
-        var capabilities = await FetchCapabilitiesAsync(rpc, logger, profilingTelemetry, cancellationToken).ConfigureAwait(false);
+            logger.LogDebug("Connected to auxiliary backchannel at {SocketPath}", appHostSocket.SocketPath);
 
-        var capabilitiesSet = capabilities?.ToImmutableHashSet() ?? ImmutableHashSet.Create(AuxiliaryBackchannelCapabilities.V1);
+            using var handshakeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            handshakeCancellation.CancelAfter(handshakeTimeout);
 
-        return new AppHostAuxiliaryBackchannel(hash, socketPath, rpc, appHostInfo, isInScope, capabilitiesSet, logger, profilingTelemetry);
+            // Fetch all connection info
+            var appHostInfoTask = rpc.InvokeWithProfilingAsync<AppHostInformation?>(
+                profilingTelemetry,
+                "auxiliary",
+                "GetAppHostInformationAsync",
+                [],
+                handshakeCancellation.Token);
+            pendingHandshakeRpcTask = appHostInfoTask;
+            var appHostInfo = await appHostInfoTask.WaitAsync(handshakeCancellation.Token).ConfigureAwait(false);
+
+            var capabilitiesTask = FetchCapabilitiesAsync(rpc, logger, profilingTelemetry, handshakeCancellation.Token);
+            pendingHandshakeRpcTask = capabilitiesTask;
+            var capabilities = await capabilitiesTask.WaitAsync(handshakeCancellation.Token).ConfigureAwait(false);
+
+            var capabilitiesSet = capabilities?.ToImmutableHashSet() ?? ImmutableHashSet.Create(AuxiliaryBackchannelCapabilities.V1);
+
+            return new AppHostAuxiliaryBackchannel(appHostSocket, rpc, appHostInfo, isInScope, capabilitiesSet, logger, profilingTelemetry);
+        }
+        catch
+        {
+            // JsonRpc owns the message handler, stream, and socket, so failed initialization must release
+            // that chain before propagating.
+            rpc.Dispose();
+            if (pendingHandshakeRpcTask is not null)
+            {
+                // WaitAsync can abandon the invocation when the local deadline wins. JsonRpc disposal
+                // completes it independently, so observe any later fault without extending cleanup.
+                ObserveFaults(pendingHandshakeRpcTask);
+            }
+
+            throw;
+        }
+    }
+
+    private static void ObserveFaults(Task task)
+    {
+        _ = task.ContinueWith(
+            static completedTask => _ = completedTask.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     /// <summary>
@@ -205,6 +265,10 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             var capabilities = response?.Capabilities;
             logger.LogDebug("AppHost capabilities: {Capabilities}", capabilities is not null ? string.Join(", ", capabilities) : "null");
             return capabilities;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (RemoteMethodNotFoundException)
         {
@@ -302,8 +366,52 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     }
 
     /// <inheritdoc />
+    public async Task<WaitForAppHostReadyResponse?> WaitForAppHostReadyAsync(CancellationToken cancellationToken = default)
+    {
+        if (!SupportsV3)
+        {
+            return null;
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Waiting for AppHost startup readiness");
+
+        try
+        {
+            return await rpc.InvokeWithProfilingAsync<WaitForAppHostReadyResponse>(
+                _profilingTelemetry,
+                "auxiliary",
+                "WaitForAppHostReadyAsync",
+                [new WaitForAppHostReadyRequest()],
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (RemoteMethodNotFoundException ex)
+        {
+            _logger.LogDebug(ex, "WaitForAppHostReadyAsync RPC method not available on the remote AppHost. The AppHost may be running an older version.");
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
     {
+        if (SupportsV2)
+        {
+            var response = await GetResourcesV2Async(new GetResourcesRequest
+            {
+                ClientCapabilities = s_clientCapabilities
+            }, cancellationToken).ConfigureAwait(false);
+            var snapshots = response.Resources.ToList();
+
+            if (!includeHidden)
+            {
+                snapshots = snapshots.Where(s => !ResourceSnapshotMapper.IsHiddenResource(s)).ToList();
+            }
+
+            return snapshots.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
         var rpc = EnsureConnected();
 
         _logger.LogDebug("Getting resource snapshots");
@@ -335,6 +443,24 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <inheritdoc />
     public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHidden, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        if (SupportsV2)
+        {
+            await foreach (var snapshot in WatchResourcesV2Async(new WatchResourcesRequest
+            {
+                ClientCapabilities = s_clientCapabilities
+            }, cancellationToken).ConfigureAwait(false))
+            {
+                if (!includeHidden && ResourceSnapshotMapper.IsHiddenResource(snapshot))
+                {
+                    continue;
+                }
+
+                yield return snapshot;
+            }
+
+            yield break;
+        }
+
         var rpc = EnsureConnected();
 
         _logger.LogDebug("Starting resource snapshots watch");
@@ -457,7 +583,8 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
                 AspireHostVersion = "unknown",
                 AppHostPath = legacyInfo.AppHostPath,
                 CliProcessId = legacyInfo.CliProcessId,
-                StartedAt = legacyInfo.StartedAt
+                StartedAt = legacyInfo.StartedAt,
+                CliLogFilePath = legacyInfo.CliLogFilePath
             };
         }
 
@@ -526,6 +653,8 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <returns>The resources response.</returns>
     public async Task<GetResourcesResponse> GetResourcesV2Async(GetResourcesRequest? request = null, CancellationToken cancellationToken = default)
     {
+        request = AddClientCapabilities(request);
+
         if (!SupportsV2)
         {
             // Fall back to v1
@@ -567,6 +696,8 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         WatchResourcesRequest? request = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        request = AddClientCapabilities(request);
+
         if (!SupportsV2)
         {
             // Fall back to v1
@@ -610,6 +741,30 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         {
             yield return snapshot;
         }
+    }
+
+    private static GetResourcesRequest AddClientCapabilities(GetResourcesRequest? request)
+    {
+        return request is null
+            ? new GetResourcesRequest { ClientCapabilities = s_clientCapabilities }
+            : new GetResourcesRequest
+            {
+                TraceContext = request.TraceContext,
+                Filter = request.Filter,
+                ClientCapabilities = s_clientCapabilities
+            };
+    }
+
+    private static WatchResourcesRequest AddClientCapabilities(WatchResourcesRequest? request)
+    {
+        return request is null
+            ? new WatchResourcesRequest { ClientCapabilities = s_clientCapabilities }
+            : new WatchResourcesRequest
+            {
+                TraceContext = request.TraceContext,
+                Filter = request.Filter,
+                ClientCapabilities = s_clientCapabilities
+            };
     }
 
     /// <summary>
@@ -853,7 +1008,8 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             CommandName = commandName,
             Arguments = options.Arguments,
             ValidateOnly = options.ValidateOnly,
-            NonInteractive = options.NonInteractive
+            NonInteractive = options.NonInteractive,
+            ReturnArgumentInputs = options.ReturnArgumentInputs
         };
 
         var response = await rpc.InvokeWithProfilingAsync<ExecuteResourceCommandResponse>(
@@ -903,6 +1059,66 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             cancellationToken).ConfigureAwait(false);
 
         _logger.LogDebug("Wait for resource '{ResourceName}' completed: success={Success}, state={State}", resourceName, response.Success, response.State);
+
+        return response;
+    }
+
+    /// <summary>
+    /// Gets terminal information for a resource.
+    /// </summary>
+    public async Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
+    {
+        // Gate on the per-feature Terminals_V1 capability rather than the v2 envelope:
+        // an AppHost can speak aux.v2 without having terminal support compiled in. We
+        // must not call GetTerminalInfoAsync against such an AppHost or the RPC will
+        // surface as an unknown-method error to the caller.
+        if (!SupportsTerminalsV1)
+        {
+            return new GetTerminalInfoResponse { IsAvailable = false };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger?.LogDebug("Getting terminal info for resource '{ResourceName}'", resourceName);
+
+        var request = new GetTerminalInfoRequest { ResourceName = resourceName };
+
+        var response = await rpc.InvokeWithCancellationAsync<GetTerminalInfoResponse>(
+            "GetTerminalInfoAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+
+        _logger?.LogDebug("Terminal info for '{ResourceName}': available={Available}, replicas={ReplicaCount}",
+            resourceName, response.IsAvailable, response.Replicas?.Length ?? 0);
+
+        return response;
+    }
+
+    /// <summary>
+    /// Lists every <c>WithTerminal</c>-enabled resource in the AppHost. Older AppHosts without
+    /// the <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability are
+    /// short-circuited to an empty response so the CLI can render a clean "nothing to show"
+    /// message rather than a mysterious RPC error.
+    /// </summary>
+    public async Task<ListTerminalsResponse> ListTerminalsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!SupportsTerminalsV1)
+        {
+            return new ListTerminalsResponse { ResourceTerminals = [], AppHostTerminals = [] };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger?.LogDebug("Listing all terminal-enabled resources.");
+
+        var request = new ListTerminalsRequest();
+
+        var response = await rpc.InvokeWithCancellationAsync<ListTerminalsResponse>(
+            "ListTerminalsAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+
+        _logger?.LogDebug("ListTerminals returned {Count} terminal-enabled resource(s).", response.ResourceTerminals.Length);
 
         return response;
     }

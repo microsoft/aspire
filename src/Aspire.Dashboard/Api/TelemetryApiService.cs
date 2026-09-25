@@ -3,8 +3,8 @@
 
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Threading.Channels;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -15,21 +15,17 @@ namespace Aspire.Dashboard.Api;
 /// <summary>
 /// Handles telemetry API requests, returning data in OTLP JSON format.
 /// </summary>
-internal sealed class TelemetryApiService(
-    TelemetryRepository telemetryRepository,
-    IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+internal sealed class TelemetryApiService(ITelemetryRepository telemetryRepository)
 {
     private const int DefaultLimit = 200;
     private const int DefaultTraceLimit = 100;
-
-    private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers = outgoingPeerResolvers.ToArray();
 
     /// <summary>
     /// Gets spans in OTLP JSON format.
     /// Returns null if resource filter is specified but not found.
     /// Supports multiple resource names.
     /// </summary>
-    public TelemetryApiResponse? GetSpans(string[]? resourceNames, string? traceId, bool? hasError, int? limit, string? search = null)
+    public async Task<TelemetryApiResponse?> GetSpansAsync(string[]? resourceNames, string? traceId, bool? hasError, int? limit, CancellationToken cancellationToken, string? search = null)
     {
         // Resolve resource keys for all specified resources
         var resources = telemetryRepository.GetResources();
@@ -41,57 +37,33 @@ internal sealed class TelemetryApiService(
 
         var effectiveLimit = limit ?? DefaultLimit;
 
-        // Get spans for all resource keys
-        var allSpans = new List<OtlpSpan>();
-        foreach (var resourceKey in resourceKeys)
+        // Convert structured search qualifiers into TelemetryFilter objects for repository-level filtering
+        var spanFilters = new List<TelemetryFilter>();
+        var searchTextFragments = ParseAndApplySearchFilters(search, spanFilters, AddSpanFiltersFromQualifiers, key => ResolveSpanFieldKey(key) is not null);
+
+        // Get spans for all resource keys (empty list means no filter / all resources)
+        var result = await telemetryRepository.GetSpansAsync(new GetSpansRequest
         {
-            var result = telemetryRepository.GetTraces(new GetTracesRequest
-            {
-                ResourceKey = resourceKey,
-                StartIndex = 0,
-                Count = int.MaxValue,
-                Filters = [],
-                FilterText = string.Empty
-            });
-            allSpans.AddRange(result.PagedResult.Items.SelectMany(t => t.Spans));
-        }
+            ResourceKeys = resourceKeys,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = spanFilters,
+            TraceId = traceId,
+            HasError = hasError,
+            TextFragments = searchTextFragments
+        }, cancellationToken).ConfigureAwait(false);
+        var allSpans = result.PagedResult.Items;
 
-        var spans = allSpans;
-
-        // TODO: Consider adding an ExcludeFromApi property on resources in the future.
-        // Currently the API returns all telemetry data for all resources.
-
-        // Filter by traceId
-        if (!string.IsNullOrEmpty(traceId))
-        {
-            spans = spans.Where(s => OtlpHelpers.MatchTelemetryId(s.TraceId, traceId)).ToList();
-        }
-
-        // Filter by hasError
-        if (hasError == true)
-        {
-            spans = spans.Where(s => s.Status == OtlpSpanStatusCode.Error).ToList();
-        }
-        else if (hasError == false)
-        {
-            spans = spans.Where(s => s.Status != OtlpSpanStatusCode.Error).ToList();
-        }
-
-        // Apply full-text search across all span fields
-        if (!string.IsNullOrEmpty(search))
-        {
-            spans = spans.Where(s => MatchesSearch(s, search)).ToList();
-        }
-
-        var totalCount = spans.Count;
+        var totalCount = allSpans.Count;
 
         // Apply limit (take from end for most recent)
+        var spans = allSpans;
         if (spans.Count > effectiveLimit)
         {
             spans = spans.Skip(spans.Count - effectiveLimit).ToList();
         }
 
-        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans, _outgoingPeerResolvers);
+        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans);
 
         return new TelemetryApiResponse
         {
@@ -106,7 +78,7 @@ internal sealed class TelemetryApiService(
     /// Returns null if resource filter is specified but not found.
     /// Supports multiple resource names.
     /// </summary>
-    public TelemetryApiResponse? GetTraces(string[]? resourceNames, bool? hasError, int? limit, string? search = null)
+    public async Task<TelemetryApiResponse?> GetTracesAsync(string[]? resourceNames, bool? hasError, int? limit, CancellationToken cancellationToken, string? search = null)
     {
         // Resolve resource keys for all specified resources
         var resources = telemetryRepository.GetResources();
@@ -118,42 +90,30 @@ internal sealed class TelemetryApiService(
 
         var effectiveLimit = limit ?? DefaultTraceLimit;
 
-        // Get traces for all resource keys
-        var allTraces = new List<OtlpTrace>();
-        foreach (var resourceKey in resourceKeys)
+        // Convert structured search qualifiers into TelemetryFilter objects for repository-level filtering
+        var traceFilters = new List<TelemetryFilter>();
+        if (hasError is not null)
         {
-            var result = telemetryRepository.GetTraces(new GetTracesRequest
+            traceFilters.Add(new FieldTelemetryFilter
             {
-                ResourceKey = resourceKey,
-                StartIndex = 0,
-                Count = int.MaxValue,
-                Filters = [],
-                FilterText = string.Empty
+                Field = KnownTraceFields.StatusField,
+                Value = nameof(OtlpSpanStatusCode.Error),
+                Condition = hasError.Value ? FilterCondition.Equals : FilterCondition.NotEqual
             });
-            allTraces.AddRange(result.PagedResult.Items);
         }
+        var searchTextFragments = ParseAndApplySearchFilters(search, traceFilters, AddSpanFiltersFromQualifiers, key => ResolveSpanFieldKey(key) is not null);
 
-        var traces = allTraces;
-
-        // Filter traces by hasError
-        if (hasError == true)
+        // Get traces for all resource keys (empty list means no filter / all resources)
+        var result = await telemetryRepository.GetTracesAsync(new GetTracesRequest
         {
-            traces = traces.Where(t => t.Spans.Any(s => s.Status == OtlpSpanStatusCode.Error)).ToList();
-        }
-        else if (hasError == false)
-        {
-            traces = traces.Where(t => !t.Spans.Any(s => s.Status == OtlpSpanStatusCode.Error)).ToList();
-        }
-
-        // Apply full-text search: a trace matches if its name matches or any span within it matches
-        if (!string.IsNullOrEmpty(search))
-        {
-            traces = traces.Where(t =>
-                t.FullName.Contains(search, StringComparisons.FullTextSearch) ||
-                t.Spans.Any(s => MatchesSearch(s, search))).ToList();
-        }
-
-        var totalCount = traces.Count;
+            ResourceKeys = resourceKeys,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = traceFilters,
+            TextFragments = searchTextFragments
+        }, cancellationToken).ConfigureAwait(false);
+        var traces = result.PagedResult.Items;
+        var totalCount = result.PagedResult.TotalItemCount;
 
         // Apply limit (take from end for most recent)
         if (traces.Count > effectiveLimit)
@@ -161,16 +121,16 @@ internal sealed class TelemetryApiService(
             traces = traces.Skip(traces.Count - effectiveLimit).ToList();
         }
 
-        // Get all spans from filtered traces
         var spans = traces.SelectMany(t => t.Spans).ToList();
+        var returnedCount = traces.Count;
 
-        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans, _outgoingPeerResolvers);
+        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans);
 
         return new TelemetryApiResponse
         {
             Data = otlpData,
             TotalCount = totalCount,
-            ReturnedCount = traces.Count
+            ReturnedCount = returnedCount
         };
     }
 
@@ -188,7 +148,7 @@ internal sealed class TelemetryApiService(
 
         var spans = trace.Spans.ToList();
 
-        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans, _outgoingPeerResolvers);
+        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans);
 
         return new TelemetryApiResponse
         {
@@ -203,7 +163,7 @@ internal sealed class TelemetryApiService(
     /// Returns null if resource filter is specified but not found.
     /// Supports multiple resource names.
     /// </summary>
-    public TelemetryApiResponse? GetLogs(string[]? resourceNames, string? traceId, string? severity, int? limit, string? search = null)
+    public async Task<TelemetryApiResponse?> GetLogsAsync(string[]? resourceNames, string? traceId, string? severity, int? limit, CancellationToken cancellationToken, string? search = null)
     {
         // Resolve resource keys for all specified resources
         var resources = telemetryRepository.GetResources();
@@ -242,27 +202,19 @@ internal sealed class TelemetryApiService(
             }
         }
 
-        // Get logs for all resource keys
-        var allLogs = new List<OtlpLogEntry>();
-        foreach (var resourceKey in resourceKeys)
-        {
-            var result = telemetryRepository.GetLogs(new GetLogsContext
-            {
-                ResourceKey = resourceKey,
-                StartIndex = 0,
-                Count = int.MaxValue,
-                Filters = filters
-            });
-            allLogs.AddRange(result.Items);
-        }
+        var searchTextFragments = ParseAndApplySearchFilters(search, filters, AddLogFiltersFromQualifiers, key => ResolveLogFieldKey(key) is not null);
 
-        var logs = allLogs;
-
-        // Apply full-text search across all log fields
-        if (!string.IsNullOrEmpty(search))
+        // Get logs for all resource keys (empty list means no filter / all resources)
+        var result = await telemetryRepository.GetLogsAsync(new GetLogsContext
         {
-            logs = logs.Where(l => MatchesSearch(l, search)).ToList();
-        }
+            ResourceKeys = resourceKeys,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = filters,
+            TextFragments = searchTextFragments
+        }, cancellationToken).ConfigureAwait(false);
+
+        var logs = result.Items;
 
         var totalCount = logs.Count;
 
@@ -291,52 +243,31 @@ internal sealed class TelemetryApiService(
         string? traceId,
         bool? hasError,
         string? search,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        // Resolve resource keys
-        var resources = telemetryRepository.GetResources();
-        var resourceKeys = ResolveResourceKeys(resources, resourceNames);
+        // Resolve resource keys, waiting for the resource to appear if it doesn't exist yet.
+        // Throws OperationCanceledException if the client disconnects before the resource appears.
+        var resourceKeys = await WaitForResourceKeysAsync(resourceNames, cancellationToken).ConfigureAwait(false);
 
-        // For streaming, if resources were specified but can't be resolved, filter everything out
-        var hasResourceFilter = resourceNames is { Length: > 0 };
-        var invalidResourceFilter = hasResourceFilter && resourceKeys is null;
+        // Convert structured search qualifiers into TelemetryFilter objects for per-span filtering
+        List<TelemetryFilter> spanFilters = [];
+        var searchTextFragments = ParseAndApplySearchFilters(search, spanFilters, AddSpanFiltersFromQualifiers, key => ResolveSpanFieldKey(key) is not null);
 
-        // Watch all spans and filter
-        await foreach (var span in telemetryRepository.WatchSpansAsync(null, cancellationToken).ConfigureAwait(false))
+        // Build the watch request with all filters pushed into the repository
+        var watchRequest = new WatchSpansRequest
         {
-            // If resource filter is invalid (resources specified but not found), skip all
-            if (invalidResourceFilter)
-            {
-                continue;
-            }
+            ResourceKeys = resourceKeys,
+            Filters = spanFilters,
+            TraceId = traceId,
+            HasError = hasError,
+            TextFragments = searchTextFragments
+        };
 
-            // Filter by resource if specified
-            if (resourceKeys is { Count: > 0 } && !resourceKeys.Any(k => k is null) &&
-                !resourceKeys.Any(k => k?.EqualsCompositeName(span.Source.ResourceKey.GetCompositeName()) == true))
-            {
-                continue;
-            }
-
-            // Apply traceId filter
-            if (!string.IsNullOrEmpty(traceId) && !OtlpHelpers.MatchTelemetryId(span.TraceId, traceId))
-            {
-                continue;
-            }
-
-            // Apply hasError filter
-            if (hasError.HasValue && (span.Status == OtlpSpanStatusCode.Error) != hasError.Value)
-            {
-                continue;
-            }
-
-            // Apply full-text search filter
-            if (!string.IsNullOrEmpty(search) && !MatchesSearch(span, search))
-            {
-                continue;
-            }
-
+        // Watch spans with filtering done inside the repository
+        await foreach (var span in telemetryRepository.WatchSpansAsync(watchRequest, cancellationToken).ConfigureAwait(false))
+        {
             // Use compact JSON for NDJSON streaming (no indentation)
-            yield return TelemetryExportService.ConvertSpanToJson(span, _outgoingPeerResolvers, logs: null, indent: false);
+            yield return TelemetryExportService.ConvertSpanToJson(span, logs: null, indent: false);
         }
     }
 
@@ -351,13 +282,9 @@ internal sealed class TelemetryApiService(
         string? search,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        // Resolve resource keys
-        var resources = telemetryRepository.GetResources();
-        var resourceKeys = ResolveResourceKeys(resources, resourceNames);
-
-        // For streaming, if resources were specified but can't be resolved, filter everything out
-        var hasResourceFilter = resourceNames is { Length: > 0 };
-        var invalidResourceFilter = hasResourceFilter && resourceKeys is null;
+        // Resolve resource keys, waiting for the resource to appear if it doesn't exist yet.
+        // Throws OperationCanceledException if the client disconnects before the resource appears.
+        var resourceKeys = await WaitForResourceKeysAsync(resourceNames, cancellationToken).ConfigureAwait(false);
 
         // Build filters
         var filters = new List<TelemetryFilter>();
@@ -386,30 +313,21 @@ internal sealed class TelemetryApiService(
             }
         }
 
-        // Watch all logs and filter by resource
-        await foreach (var log in telemetryRepository.WatchLogsAsync(null, filters, cancellationToken).ConfigureAwait(false))
+        var searchTextFragments = ParseAndApplySearchFilters(search, filters, AddLogFiltersFromQualifiers, key => ResolveLogFieldKey(key) is not null);
+
+        // Build the watch request with all filters pushed into the repository
+        var watchRequest = new WatchLogsRequest
         {
-            // If resource filter is invalid (resources specified but not found), skip all
-            if (invalidResourceFilter)
-            {
-                continue;
-            }
+            ResourceKeys = resourceKeys,
+            Filters = filters,
+            TextFragments = searchTextFragments
+        };
 
-            // Filter by resource if specified
-            if (resourceKeys is { Count: > 0 } && !resourceKeys.Any(k => k is null) &&
-                !resourceKeys.Any(k => k?.EqualsCompositeName(log.ResourceView.ResourceKey.GetCompositeName()) == true))
-            {
-                continue;
-            }
-
-            // Apply full-text search filter
-            if (!string.IsNullOrEmpty(search) && !MatchesSearch(log, search))
-            {
-                continue;
-            }
-
+        // Watch logs with filtering done inside the repository
+        await foreach (var log in telemetryRepository.WatchLogsAsync(watchRequest, cancellationToken).ConfigureAwait(false))
+        {
             var otlpData = TelemetryExportService.ConvertLogsToOtlpJson([log]);
-            yield return JsonSerializer.Serialize(otlpData, OtlpJsonSerializerContext.DefaultOptions);
+            yield return JsonSerializer.Serialize(otlpData, OtlpJsonSerializerContext.DefaultContext.OtlpTelemetryDataJson);
         }
     }
 
@@ -434,148 +352,248 @@ internal sealed class TelemetryApiService(
     }
 
     /// <summary>
-    /// Checks whether a log entry matches a full-text search string.
-    /// Searches across message, attribute values, scope name, event name, trace ID, span ID,
-    /// severity, and resource name using case-insensitive contains matching.
+    /// Parses the search string and appends the resulting qualifier-based filters to <paramref name="filters"/>.
+    /// Returns the extracted free-text fragments, or null if no search text was provided.
     /// </summary>
-    private static bool MatchesSearch(OtlpLogEntry log, string search)
+    private static string[]? ParseAndApplySearchFilters(
+        string? search,
+        List<TelemetryFilter> filters,
+        Action<SearchFilter, List<TelemetryFilter>> addFilters,
+        Func<string, bool> isKnownKey)
     {
-        if (log.Message.Contains(search, StringComparisons.FullTextSearch))
+        if (!string.IsNullOrEmpty(search))
         {
-            return true;
-        }
-
-        if (log.Scope.Name.Contains(search, StringComparisons.FullTextSearch))
-        {
-            return true;
-        }
-
-        if (log.EventName is not null && log.EventName.Contains(search, StringComparisons.FullTextSearch))
-        {
-            return true;
-        }
-
-        if (log.TraceId.Contains(search, StringComparisons.FullTextSearch))
-        {
-            return true;
-        }
-
-        if (log.SpanId.Contains(search, StringComparisons.FullTextSearch))
-        {
-            return true;
-        }
-
-        if (log.Severity.ToString().Contains(search, StringComparisons.FullTextSearch))
-        {
-            return true;
-        }
-
-        if (log.ResourceView.Resource.ResourceName.Contains(search, StringComparisons.FullTextSearch))
-        {
-            return true;
-        }
-
-        foreach (var attribute in log.Attributes)
-        {
-            if (attribute.Key.Contains(search, StringComparisons.FullTextSearch) ||
-                attribute.Value.Contains(search, StringComparisons.FullTextSearch))
+            var parsedSearch = SearchTextParser.ParseSearch(search, isKnownKey);
+            if (!parsedSearch.IsEmpty)
             {
-                return true;
+                addFilters(parsedSearch, filters);
+                return parsedSearch.TextFragments;
             }
         }
 
-        return false;
+        return null;
     }
 
     /// <summary>
-    /// Checks whether a span matches a full-text search string.
-    /// Searches across name, attribute values, span ID, trace ID, status message,
-    /// scope name, event names, and resource name using case-insensitive contains matching.
+    /// Converts search qualifiers into <see cref="FieldTelemetryFilter"/> objects for log filtering.
+    /// Maps user-facing qualifier keys (e.g., "severity", "message") to internal field constants.
+    /// Attribute qualifiers (@-prefixed) pass the key directly for attribute fallback lookup.
     /// </summary>
-    private static bool MatchesSearch(OtlpSpan span, string search)
+    private static void AddLogFiltersFromQualifiers(SearchFilter parsedSearch, List<TelemetryFilter> filters)
     {
-        if (span.Name.Contains(search, StringComparisons.FullTextSearch))
+        foreach (var qualifier in parsedSearch.Qualifiers)
         {
-            return true;
-        }
-
-        if (span.SpanId.Contains(search, StringComparisons.FullTextSearch))
-        {
-            return true;
-        }
-
-        if (span.TraceId.Contains(search, StringComparisons.FullTextSearch))
-        {
-            return true;
-        }
-
-        if (span.StatusMessage is not null && span.StatusMessage.Contains(search, StringComparisons.FullTextSearch))
-        {
-            return true;
-        }
-
-        if (span.Scope.Name.Contains(search, StringComparisons.FullTextSearch))
-        {
-            return true;
-        }
-
-        if (span.Source.Resource.ResourceName.Contains(search, StringComparisons.FullTextSearch))
-        {
-            return true;
-        }
-
-        if (span.Status.ToString().Contains(search, StringComparisons.FullTextSearch))
-        {
-            return true;
-        }
-
-        if (span.Kind.ToString().Contains(search, StringComparisons.FullTextSearch))
-        {
-            return true;
-        }
-
-        foreach (var attribute in span.Attributes)
-        {
-            if (attribute.Key.Contains(search, StringComparisons.FullTextSearch) ||
-                attribute.Value.Contains(search, StringComparisons.FullTextSearch))
+            var field = qualifier.IsAttribute ? qualifier.Key : ResolveLogFieldKey(qualifier.Key);
+            if (field is null)
             {
-                return true;
+                // Unknown bare qualifier key — skip (treated as text at a higher level if needed)
+                continue;
             }
-        }
 
-        foreach (var evt in span.Events)
-        {
-            if (evt.Name.Contains(search, StringComparisons.FullTextSearch))
+            filters.Add(new FieldTelemetryFilter
             {
-                return true;
-            }
+                Field = field,
+                Value = qualifier.Value,
+                Condition = ToFilterCondition(qualifier.Operator, negated: false)
+            });
         }
 
-        return false;
+        foreach (var qualifier in parsedSearch.NegatedQualifiers)
+        {
+            var field = qualifier.IsAttribute ? qualifier.Key : ResolveLogFieldKey(qualifier.Key);
+            if (field is null)
+            {
+                continue;
+            }
+
+            filters.Add(new FieldTelemetryFilter
+            {
+                Field = field,
+                Value = qualifier.Value,
+                Condition = ToFilterCondition(qualifier.Operator, negated: true)
+            });
+        }
+    }
+
+    /// <summary>
+    /// Converts search qualifiers into <see cref="FieldTelemetryFilter"/> objects for span/trace filtering.
+    /// Maps user-facing qualifier keys (e.g., "status", "duration") to internal field constants.
+    /// Attribute qualifiers (@-prefixed) pass the key directly for attribute fallback lookup.
+    /// </summary>
+    private static void AddSpanFiltersFromQualifiers(SearchFilter parsedSearch, List<TelemetryFilter> filters)
+    {
+        foreach (var qualifier in parsedSearch.Qualifiers)
+        {
+            var field = qualifier.IsAttribute ? qualifier.Key : ResolveSpanFieldKey(qualifier.Key);
+            if (field is null)
+            {
+                continue;
+            }
+
+            filters.Add(new FieldTelemetryFilter
+            {
+                Field = field,
+                Value = qualifier.Value,
+                Condition = ToFilterCondition(qualifier.Operator, negated: false)
+            });
+        }
+
+        foreach (var qualifier in parsedSearch.NegatedQualifiers)
+        {
+            var field = qualifier.IsAttribute ? qualifier.Key : ResolveSpanFieldKey(qualifier.Key);
+            if (field is null)
+            {
+                continue;
+            }
+
+            filters.Add(new FieldTelemetryFilter
+            {
+                Field = field,
+                Value = qualifier.Value,
+                Condition = ToFilterCondition(qualifier.Operator, negated: true)
+            });
+        }
+    }
+
+    /// <summary>
+    /// Maps user-facing log qualifier key names to internal field constants used by
+    /// <see cref="OtlpLogEntry.GetFieldValue"/>. Returns null for unrecognized keys.
+    /// </summary>
+    private static string? ResolveLogFieldKey(string key) => key switch
+    {
+        "severity" or "level" => KnownStructuredLogFields.LevelField,
+        "resource" => KnownResourceFields.ServiceNameField,
+        "scope" or "category" => KnownStructuredLogFields.CategoryField,
+        "message" or "msg" => KnownStructuredLogFields.MessageField,
+        "trace-id" or "traceid" => KnownStructuredLogFields.TraceIdField,
+        "span-id" or "spanid" => KnownStructuredLogFields.SpanIdField,
+        "event" => KnownStructuredLogFields.EventNameField,
+        "timestamp" => KnownStructuredLogFields.TimestampField,
+        _ => null
+    };
+
+    /// <summary>
+    /// Maps user-facing span qualifier key names to internal field constants used by
+    /// <see cref="OtlpSpan.GetFieldValue"/>. Returns null for unrecognized keys.
+    /// </summary>
+    private static string? ResolveSpanFieldKey(string key) => key switch
+    {
+        "name" => KnownTraceFields.NameField,
+        "resource" => KnownResourceFields.ServiceNameField,
+        "scope" or "source" => KnownSourceFields.NameField,
+        "status" => KnownTraceFields.StatusField,
+        "kind" => KnownTraceFields.KindField,
+        "trace-id" or "traceid" => KnownTraceFields.TraceIdField,
+        "span-id" or "spanid" => KnownTraceFields.SpanIdField,
+        "duration" => KnownTraceFields.DurationField,
+        "timestamp" => KnownTraceFields.TimestampField,
+        _ => null
+    };
+
+    /// <summary>
+    /// Maps a <see cref="ComparisonOperator"/> to the corresponding <see cref="FilterCondition"/>,
+    /// inverting the logic when the qualifier is negated.
+    /// </summary>
+    private static FilterCondition ToFilterCondition(ComparisonOperator op, bool negated) => (op, negated) switch
+    {
+        (ComparisonOperator.Contains, false) => FilterCondition.Contains,
+        (ComparisonOperator.Contains, true) => FilterCondition.NotContains,
+        (ComparisonOperator.GreaterThan, false) => FilterCondition.GreaterThan,
+        (ComparisonOperator.GreaterThan, true) => FilterCondition.LessThanOrEqual,
+        (ComparisonOperator.GreaterThanOrEqual, false) => FilterCondition.GreaterThanOrEqual,
+        (ComparisonOperator.GreaterThanOrEqual, true) => FilterCondition.LessThan,
+        (ComparisonOperator.LessThan, false) => FilterCondition.LessThan,
+        (ComparisonOperator.LessThan, true) => FilterCondition.GreaterThanOrEqual,
+        (ComparisonOperator.LessThanOrEqual, false) => FilterCondition.LessThanOrEqual,
+        (ComparisonOperator.LessThanOrEqual, true) => FilterCondition.GreaterThan,
+        _ => FilterCondition.Contains
+    };
+
+    /// <summary>
+    /// Resolves resource names to ResourceKeys, waiting for the resources to appear if they
+    /// don't exist yet. This enables streaming subscriptions started before telemetry arrives
+    /// to pick up data once the resource is first seen.
+    /// Throws OperationCanceledException if cancellation is triggered before the resources appear.
+    /// </summary>
+    private async Task<List<ResourceKey>> WaitForResourceKeysAsync(string[]? resourceNames, CancellationToken cancellationToken)
+    {
+        if (resourceNames is null || resourceNames.Length == 0)
+        {
+            // No filter - return immediately without allocating a channel or subscription.
+            return [];
+        }
+
+        // Subscribe before the first check so no notification can be missed between
+        // GetResources() and the subscription registration.
+        var signal = Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest });
+        using var subscription = telemetryRepository.OnNewResources(() =>
+        {
+            signal.Writer.TryWrite(true);
+            return Task.CompletedTask;
+        });
+
+        while (true)
+        {
+            var resources = telemetryRepository.GetResources();
+            if (ResolveResourceKeys(resources, resourceNames) is { } result)
+            {
+                return result;
+            }
+
+            await signal.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary>
     /// Resolves resource names to ResourceKeys.
     /// Returns null if any specified resource is not found.
-    /// If no resources are specified, returns a list with a single null key (no filter).
+    /// Returns an empty list when no resource filter is specified (meaning all resources).
     /// </summary>
-    private static List<ResourceKey?>? ResolveResourceKeys(IReadOnlyList<OtlpResource> resources, string[]? resourceNames)
+    private static List<ResourceKey>? ResolveResourceKeys(IReadOnlyList<OtlpResource> resources, string[]? resourceNames)
     {
         if (resourceNames is null || resourceNames.Length == 0)
         {
-            // No filter - return a list with null to indicate "all resources"
-            return [null];
+            return [];
         }
 
-        var keys = new List<ResourceKey?>();
+        var keys = new List<ResourceKey>();
         foreach (var resourceName in resourceNames)
         {
-            if (!AIHelpers.TryResolveResourceForTelemetry(resources, resourceName, out _, out var resourceKey))
+            if (!TryResolveResourceForTelemetry(resources, resourceName, out var resourceKey))
             {
                 return null;
             }
-            keys.Add(resourceKey);
+            if (resourceKey is { } key)
+            {
+                keys.Add(key);
+            }
         }
         return keys;
+    }
+
+    /// <summary>
+    /// Tries to resolve a resource name for telemetry queries.
+    /// Returns true if no resource was specified or if the resource was found.
+    /// </summary>
+    private static bool TryResolveResourceForTelemetry(
+        IReadOnlyList<OtlpResource> resources,
+        string? resourceName,
+        out ResourceKey? resourceKey)
+    {
+        if (string.IsNullOrWhiteSpace(resourceName) || string.Equals(resourceName, "null", StringComparison.OrdinalIgnoreCase))
+        {
+            resourceKey = null;
+            return true;
+        }
+
+        var matches = OtlpHelpers.ResolveResourceNameMatches(resourceName, resources);
+        if (matches.Count == 1)
+        {
+            resourceKey = matches[0].ResourceKey;
+            return true;
+        }
+
+        resourceKey = null;
+        return false;
     }
 }

@@ -1,12 +1,33 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Utils.EnvironmentChecker;
+using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Utils;
 
 public class DeprecatedWorkloadCheckTests
 {
+    [Fact]
+    public async Task CheckAsync_UsesResolvedDotNetPath()
+    {
+        ProcessStartInfo? capturedStartInfo = null;
+        var environment = new TestEnvironment();
+        var check = new DeprecatedWorkloadCheck(NullLogger<DeprecatedWorkloadCheck>.Instance, environment, startInfo =>
+        {
+            capturedStartInfo = startInfo;
+            return null;
+        });
+
+        await check.CheckAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.NotNull(capturedStartInfo);
+        Assert.Equal(DotNetSdkInstaller.ResolveDotNetPath(environment), capturedStartInfo.FileName);
+    }
+
     [Fact]
     public void IsAspireWorkloadInstalled_WithAspireWorkload_ReturnsTrue()
     {

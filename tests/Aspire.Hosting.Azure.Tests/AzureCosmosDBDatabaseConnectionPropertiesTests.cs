@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureCosmosDBDatabaseConnectionPropertiesTests
+public class AzureCosmosDBDatabaseConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureCosmosDBDatabaseResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var cosmosdb = builder.AddAzureCosmosDB("cosmosdb");
         var database = cosmosdb.AddCosmosDatabase("database", "mydb");
 
@@ -35,7 +35,7 @@ public class AzureCosmosDBDatabaseConnectionPropertiesTests
     [Fact]
     public void AzureCosmosDBDatabaseResourceWithAccessKeyAuthenticationGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var cosmosdb = builder.AddAzureCosmosDB("cosmosdb").WithAccessKeyAuthentication();
         var database = cosmosdb.AddCosmosDatabase("database", "mydb");
 
@@ -66,15 +66,21 @@ public class AzureCosmosDBDatabaseConnectionPropertiesTests
             });
     }
 
-    [Fact]
-    public void AzureCosmosDBDatabaseResourceEmulatorGetConnectionPropertiesReturnsExpectedValues()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AzureCosmosDBDatabaseResourceEmulatorGetConnectionPropertiesReturnsExpectedValues(bool useClassic)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var cosmosdb = builder.AddAzureCosmosDB("cosmosdb").RunAsEmulator();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var cosmosdb = builder.AddAzureCosmosDB("cosmosdb");
+        cosmosdb = useClassic ? cosmosdb.RunAsClassicEmulator() : cosmosdb.RunAsEmulator();
         var database = cosmosdb.AddCosmosDatabase("database", "mydb");
 
         var resource = Assert.Single(builder.Resources.OfType<AzureCosmosDBDatabaseResource>());
         var properties = ((IResourceWithConnectionString)resource).GetConnectionProperties().ToArray();
+        var expectedConnectionString = useClassic
+            ? "AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==;AccountEndpoint=https://{cosmosdb.bindings.emulator.host}:{cosmosdb.bindings.emulator.port};DisableServerCertificateValidation=True;"
+            : "AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==;AccountEndpoint={cosmosdb.bindings.emulator.url}";
 
         Assert.Collection(
             properties,
@@ -91,7 +97,7 @@ public class AzureCosmosDBDatabaseConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("ConnectionString", property.Key);
-                Assert.Equal("AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==;AccountEndpoint=https://{cosmosdb.bindings.emulator.host}:{cosmosdb.bindings.emulator.port};DisableServerCertificateValidation=True;", property.Value.ValueExpression);
+                Assert.Equal(expectedConnectionString, property.Value.ValueExpression);
             },
             property =>
             {

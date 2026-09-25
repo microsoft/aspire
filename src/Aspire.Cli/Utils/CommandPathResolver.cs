@@ -14,7 +14,8 @@ internal static class CommandPathResolver
         ["npx"] = new("Node.js", "https://nodejs.org/en/download"),
         ["bun"] = new("Bun", "https://bun.sh/docs/installation"),
         ["yarn"] = new("Yarn", "https://yarnpkg.com/getting-started/install"),
-        ["pnpm"] = new("pnpm", "https://pnpm.io/installation")
+        ["pnpm"] = new("pnpm", "https://pnpm.io/installation"),
+        ["deno"] = new("Deno", "https://docs.deno.com/runtime/getting_started/installation/")
     };
 
     /// <summary>
@@ -77,6 +78,13 @@ internal static class CommandPathResolver
             ? metadata.InstallationLink
             : null;
     }
+
+    // RunCommand comes from MSBuild as a command string, not a ProcessStartInfo executable path.
+    // For the default SDK targets it is either the literal "dotnet" or a generated apphost path,
+    // but custom targets can quote the path. Normalize only enough to decide whether to replace a
+    // dotnet muxer command with the CLI's resolved SDK muxer.
+    internal static string NormalizeRunCommand(string command)
+        => command.Trim().Trim('"');
 
     private static string NormalizeCommand(string command)
     {

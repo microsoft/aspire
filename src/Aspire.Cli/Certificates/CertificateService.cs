@@ -7,7 +7,9 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Microsoft.AspNetCore.Certificates.Generation;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Certificates;
 
@@ -41,33 +43,68 @@ internal sealed class EnsureCertificatesTrustedResult
 internal interface ICertificateService
 {
     Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken);
+
+    string? ExportDevCertificatePem(CancellationToken cancellationToken);
 }
 
 internal sealed class CertificateService(
     ICertificateToolRunner certificateToolRunner,
     IInteractionService interactionService,
     AspireCliTelemetry telemetry,
-    ICliHostEnvironment hostEnvironment) : ICertificateService
+    ICliHostEnvironment hostEnvironment,
+    IEnvironment environment,
+    CliExecutionContext executionContext,
+    ILogger<CertificateService> logger) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
+    internal string DevCertDirectory => Path.Combine(
+        executionContext.AspireHomeDirectory.FullName, "dev-certs");
 
     public async Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity(kind: ActivityKind.Client);
 
         var environmentVariables = new Dictionary<string, string>();
+        var isLinux = environment.IsLinux();
 
         // In non-interactive environments on macOS and Windows we can't successfully
-        // prompt for trust (macOS Keychain password, Windows trust dialog) and we also
-        // don't want to silently generate a new certificate that won't be trusted.
+        // prompt for trust (macOS Keychain password, Windows trust dialog).
         // Skip the trust attempt but still check the current state so we can warn when
         // the environment does not already have a trusted certificate. Linux trust is
         // non-interactive so it's safe to run the full flow there.
-        var canPerformTrust = hostEnvironment.SupportsInteractiveInput || OperatingSystem.IsLinux();
+        var canPerformTrust = hostEnvironment.SupportsInteractiveInput || isLinux;
 
         if (!canPerformTrust)
         {
-            var preCheck = certificateToolRunner.CheckHttpCertificate();
+            var preCheck = certificateToolRunner.CheckHttpCertificate(cancellationToken);
+
+            if (!preCheck.HasCertificates && ShouldGenerateHttpsCertificate())
+            {
+                // No certificate exists yet. Generate one without trusting it so that
+                // Kestrel's UseHttps() can load the cert from the personal store.
+                // Trust requires user interaction (Windows dialog / macOS Keychain) which
+                // is not possible here, but generation is non-interactive and safe.
+                //
+                // The .NET SDK's first-run experience normally handles this: the first
+                // invocation of any `dotnet` command calls EnsureAspNetCoreHttpsDevelopmentCertificate
+                // (trust: false) and writes a sentinel to ~/.dotnet/ so it only runs once per
+                // SDK version. For C# AppHosts this happens implicitly via `dotnet run`, but
+                // non-.NET AppHost languages (TypeScript, Python, etc.) launch a prebuilt
+                // native binary and never invoke `dotnet`, so the first-run cert generation
+                // never triggers. This call ensures consistent behavior across all languages.
+                var generateResult = certificateToolRunner.EnsureHttpCertificateExists();
+
+                if (generateResult is EnsureCertificateResult.Succeeded or EnsureCertificateResult.ValidCertificatePresent)
+                {
+                    // Refresh the check so subsequent trust-level logic reflects the newly created cert.
+                    preCheck = certificateToolRunner.CheckHttpCertificate(cancellationToken);
+                }
+                else
+                {
+                    interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.CertificateGenerationFailed, generateResult));
+                }
+            }
+
             if (preCheck.IsPartiallyTrusted)
             {
                 interactionService.DisplayMessage(KnownEmojis.Warning, ErrorStrings.CertificatesPartiallyTrustedNonInteractive);
@@ -77,7 +114,7 @@ internal sealed class CertificateService(
                 interactionService.DisplayMessage(KnownEmojis.Warning, ErrorStrings.CertificatesNotTrustedNonInteractive);
             }
 
-            if (preCheck.IsPartiallyTrusted && OperatingSystem.IsLinux())
+            if (preCheck.IsPartiallyTrusted && isLinux)
             {
                 ConfigureSslCertDir(environmentVariables);
             }
@@ -106,28 +143,44 @@ internal sealed class CertificateService(
             interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.CertificatesMayNotBeFullyTrusted, trustResultCode));
         }
 
-        var postTrustCheck = certificateToolRunner.CheckHttpCertificate();
-        if (postTrustCheck.IsPartiallyTrusted && OperatingSystem.IsLinux())
+        var postTrustCheck = certificateToolRunner.CheckHttpCertificate(cancellationToken);
+        if (postTrustCheck.IsPartiallyTrusted && isLinux)
         {
             ConfigureSslCertDir(environmentVariables);
         }
 
+        var partialTrustAccepted = !hostEnvironment.SupportsInteractiveInput
+            && isLinux
+            && trustResultCode == EnsureCertificateResult.PartiallyFailedToTrustTheCertificate
+            && postTrustCheck.IsPartiallyTrusted;
+
         return new EnsureCertificatesTrustedResult
         {
             EnvironmentVariables = environmentVariables,
-            Success = CertificateHelpers.IsSuccessfulTrustResult(trustResultCode),
+            Success = CertificateHelpers.IsSuccessfulTrustResult(trustResultCode) || partialTrustAccepted,
             WasCancelled = trustResultCode == EnsureCertificateResult.UserCancelledTrustStep,
             ResultCode = trustResultCode
         };
     }
 
-    private static void ConfigureSslCertDir(Dictionary<string, string> environmentVariables)
+    /// <summary>
+    /// Checks whether automatic HTTPS certificate generation is enabled.
+    /// Set ASPIRE_CLI_GENERATE_HTTPS_CERTIFICATE=false to suppress generation,
+    /// mirroring the .NET SDK's DOTNET_GENERATE_ASPNET_CERTIFICATE opt-out.
+    /// </summary>
+    private bool ShouldGenerateHttpsCertificate()
+    {
+        var value = environment.GetEnvironmentVariable(KnownConfigNames.CliGenerateHttpsCertificate);
+        return !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void ConfigureSslCertDir(Dictionary<string, string> environmentVariables)
     {
         // Get the dev-certs trust path (respects DOTNET_DEV_CERTS_OPENSSL_CERTIFICATE_DIRECTORY override)
-        var devCertsTrustPath = CertificateHelpers.GetDevCertsTrustPath();
+        var devCertsTrustPath = CertificateHelpers.GetDevCertsTrustPath(environment);
 
         // Get the current SSL_CERT_DIR value (if any)
-        var currentSslCertDir = Environment.GetEnvironmentVariable(SslCertDirEnvVar);
+        var currentSslCertDir = environment.GetEnvironmentVariable(SslCertDirEnvVar);
 
         // Check if the dev-certs trust path is already included
         if (!string.IsNullOrEmpty(currentSslCertDir))
@@ -151,8 +204,31 @@ internal sealed class CertificateService(
             environmentVariables[SslCertDirEnvVar] = string.Join(Path.PathSeparator, systemCertDirs);
         }
     }
-}
 
-internal sealed class CertificateServiceException(string message) : Exception(message)
-{
+    public string? ExportDevCertificatePem(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = certificateToolRunner.ExportDevCertificatePublicPem(DevCertDirectory, cancellationToken);
+            if (result is not null)
+            {
+                logger.LogDebug("Exported dev certificate public PEM to {Path}", result);
+            }
+            else
+            {
+                logger.LogDebug("No valid dev certificate found to export as PEM");
+            }
+
+            return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to export dev certificate as PEM");
+            return null;
+        }
+    }
 }

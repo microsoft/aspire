@@ -12,7 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.PostgreSQL.Tests;
 
-public class AddPostgresTests
+public class AddPostgresTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void AddPostgresAddsHealthCheckAnnotationToResource()
@@ -195,7 +195,7 @@ public class AddPostgresTests
             .WithEndpoint("tcp", e =>
             {
                 e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 2000);
-                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "postgres.dev.internal", 2000, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "postgres.dev.internal", 2000, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
             });
         var database = postgres.AddDatabase("db");
         var consumer = appBuilder.AddContainer("consumer", "fake");
@@ -409,6 +409,17 @@ public class AddPostgresTests
     }
 
     [Fact]
+    public void WithPgAdminHidesThePgAdminResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddPostgres("mypostgres").WithPgAdmin();
+
+        var pgAdmin = Assert.Single(builder.Resources.OfType<PgAdminContainerResource>());
+        var hidden = Assert.Single(pgAdmin.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+    }
+
+    [Fact]
     public void WithPgWebAddsWithPgWebResource()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -416,6 +427,17 @@ public class AddPostgresTests
         builder.AddPostgres("mypostgres2").WithPgWeb();
 
         Assert.Single(builder.Resources.OfType<PgWebContainerResource>());
+    }
+
+    [Fact]
+    public void WithPgWebHidesThePgWebResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddPostgres("mypostgres").WithPgWeb();
+
+        var pgWeb = Assert.Single(builder.Resources.OfType<PgWebContainerResource>());
+        var hidden = Assert.Single(pgWeb.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
     }
 
     [Fact]
@@ -477,8 +499,8 @@ public class AddPostgresTests
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        using var tempStore = new TestTempDirectory();
-        builder.Configuration["Aspire:Store:Path"] = tempStore.Path;
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        builder.Configuration["Aspire:Store:Path"] = workspace.Path;
 
         var username = builder.AddParameter("pg-user", "myuser");
         var pg1 = builder.AddPostgres("mypostgres1").WithPgAdmin(pga => pga.WithHostPort(8081));
@@ -499,7 +521,7 @@ public class AddPostgresTests
         Assert.Null(createServers.DefaultOwner);
         Assert.Null(createServers.DefaultGroup);
 
-        var entries = await createServers.Callback(new() { Model = pgadmin, ServiceProvider = app.Services }, CancellationToken.None);
+        var entries = await createServers.Callback(new() { Model = pgadmin, Services = app.Services }, CancellationToken.None);
 
         var serversFile = Assert.IsType<ContainerFile>(entries.First());
         Assert.NotNull(serversFile.Contents);
@@ -539,8 +561,8 @@ public class AddPostgresTests
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        using var tempStore = new TestTempDirectory();
-        builder.Configuration["Aspire:Store:Path"] = tempStore.Path;
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        builder.Configuration["Aspire:Store:Path"] = workspace.Path;
 
         var pg1 = builder.AddPostgres("mypostgres1").WithPgWeb(pga => pga.WithHostPort(8081));
         var pg2 = builder.AddPostgres("mypostgres2").WithPgWeb(pga => pga.WithHostPort(8081));
@@ -563,7 +585,7 @@ public class AddPostgresTests
         Assert.Null(createBookmarks.DefaultOwner);
         Assert.Null(createBookmarks.DefaultGroup);
 
-        var entries = await createBookmarks.Callback(new() { Model = pgweb, ServiceProvider = app.Services }, CancellationToken.None);
+        var entries = await createBookmarks.Callback(new() { Model = pgweb, Services = app.Services }, CancellationToken.None);
 
         var pgWebDirectory = Assert.IsType<ContainerDirectory>(entries.First());
         Assert.Equal(".pgweb", pgWebDirectory.Name);
@@ -788,9 +810,9 @@ public class AddPostgresTests
     public void WithDataVolumeUsesLegacyPathForPostgres17(bool? isReadOnly)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var postgres = builder.AddPostgres("myPostgres");
+        var postgres = builder.AddPostgres("myPostgres")
+            .WithImage("postgres", "17.6");
 
-        // Default image is v17.x, so should use legacy path
         if (isReadOnly.HasValue)
         {
             postgres.WithDataVolume(isReadOnly: isReadOnly.Value);
@@ -869,9 +891,9 @@ public class AddPostgresTests
     public void WithDataBindMountUsesLegacyPathForPostgres17(bool? isReadOnly)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var postgres = builder.AddPostgres("myPostgres");
+        var postgres = builder.AddPostgres("myPostgres")
+            .WithImage("postgres", "17.6");
 
-        // Default image is v17.x, so should use legacy path
         if (isReadOnly.HasValue)
         {
             postgres.WithDataBindMount("mydata", isReadOnly: isReadOnly.Value);

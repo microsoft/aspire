@@ -92,7 +92,7 @@ public sealed class ExecutionConfigurationBuilder : IExecutionConfigurationBuild
     /// <inheritdoc />
     public async Task<IExecutionConfigurationResult> BuildAsync(DistributedApplicationExecutionContext executionContext, ILogger? resourceLogger = null, CancellationToken cancellationToken = default)
     {
-        resourceLogger ??= _resource.GetLogger(executionContext.ServiceProvider);
+        resourceLogger ??= _resource.GetLogger(executionContext.Services);
 
         var context = new ExecutionConfigurationGathererContext();
 

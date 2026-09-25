@@ -1,0 +1,9 @@
+﻿parameters: {}
+secrets: {}
+config:
+  first:
+    URL: ""
+    shared_host: "shared.internal"
+  second:
+    URL: ""
+    shared_host: "shared.internal"

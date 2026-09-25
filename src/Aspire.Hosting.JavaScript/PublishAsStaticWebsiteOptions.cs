@@ -22,7 +22,7 @@ public class PublishAsStaticWebsiteOptions
     /// Gets or sets whether to remove the API path prefix before forwarding to the backend.
     /// For example, with <c>apiPath="/api"</c> and <c>StripPrefix=true</c>, a request to
     /// <c>/api/weatherforecast</c> is forwarded as <c>/weatherforecast</c>.
-    /// Defaults to <see langword="true"/>.
+    /// Defaults to <see langword="false"/>.
     /// </summary>
     public bool StripPrefix { get; set; }
 

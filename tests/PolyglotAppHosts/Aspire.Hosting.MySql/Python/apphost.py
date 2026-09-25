@@ -9,7 +9,7 @@ with create_builder() as builder:
     mysql = builder.add_my_sql("resource")
     mysql.with_php_my_admin()
     db = mysql.add_database("resource")
-    db.with_creation_script()
+    db.with_creation_script("CREATE TABLE validation (id INT);")
     # ---- Property access on MySqlServerResource ----
     _endpoint = mysql.primary_endpoint
     _host = mysql.host

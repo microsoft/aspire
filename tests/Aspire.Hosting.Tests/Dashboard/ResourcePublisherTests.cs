@@ -11,6 +11,25 @@ namespace Aspire.Hosting.Tests.Dashboard;
 public class ResourcePublisherTests
 {
     [Fact]
+    public void ConnectionPropertiesAreConvertedToStructuredValue()
+    {
+        var snapshot = CreateResourceSnapshot(
+            "A",
+            new ResourcePropertySnapshot(
+                KnownProperties.Resource.ConnectionProperties,
+                new KeyValuePair<string, string>[]
+                {
+                    new("Host", "localhost"),
+                    new("DatabaseName", "catalogdb")
+                }));
+
+        var property = Assert.Single(snapshot.Properties, p => p.Name == KnownProperties.Resource.ConnectionProperties);
+        var connectionProperties = Assert.IsType<Google.Protobuf.WellKnownTypes.Struct>(property.Value.StructValue);
+        Assert.Equal("localhost", connectionProperties.Fields["Host"].StringValue);
+        Assert.Equal("catalogdb", connectionProperties.Fields["DatabaseName"].StringValue);
+    }
+
+    [Fact]
     public async Task ProducesExpectedSnapshotAndUpdates()
     {
         CancellationTokenSource cts = new();
@@ -180,11 +199,11 @@ public class ResourcePublisherTests
         await task.DefaultTimeout();
     }
 
-    private static GenericResourceSnapshot CreateResourceSnapshot(string name)
+    private static GenericResourceSnapshot CreateResourceSnapshot(string name, params ResourcePropertySnapshot[] properties)
     {
         return new GenericResourceSnapshot(new()
         {
-            Properties = [],
+            Properties = [.. properties],
             ResourceType = KnownResourceTypes.Container
         })
         {

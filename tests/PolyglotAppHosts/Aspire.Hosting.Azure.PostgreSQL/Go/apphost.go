@@ -14,6 +14,16 @@ func main() {
 
 	// 1) AddAzurePostgresFlexibleServer — main factory method
 	pg := builder.AddAzurePostgresFlexibleServer("pg")
+	pg.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		server := infrastructure.GetPostgreSqlFlexibleServer()
+		backup := server.Backup()
+		if err := backup.SetBackupRetentionDays(float64(14)).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if _, err := backup.BackupRetentionDays(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
 	if pg.Err() != nil {
 		log.Fatalf(aspire.FormatError(pg.Err()))
 	}
@@ -40,7 +50,7 @@ func main() {
 	}
 	pgContainer.RunAsContainer(&aspire.RunAsContainerOptions{
 		ConfigureContainer: func(container aspire.PostgresServerResource) {
-			container.WithLifetime(aspire.ContainerLifetimePersistent)
+			container.WithPersistentLifetime()
 		},
 	})
 	if pgContainer.Err() != nil {

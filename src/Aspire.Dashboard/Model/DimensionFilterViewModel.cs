@@ -1,7 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using System.Diagnostics;
+using System.IO.Hashing;
+using System.Text;
 using Aspire.Dashboard.Extensions;
 
 namespace Aspire.Dashboard.Model;
@@ -9,20 +12,28 @@ namespace Aspire.Dashboard.Model;
 [DebuggerDisplay("{DebuggerToString(),nq}")]
 public class DimensionFilterViewModel
 {
+    private string? _nameHash;
     private string? _sanitizedHtmlId;
+    private ImmutableHashSet<DimensionValueViewModel> _selectedValues = [];
 
     public required string Name { get; init; }
-    public List<DimensionValueViewModel> Values { get; } = new();
-    public HashSet<DimensionValueViewModel> SelectedValues { get; } = new();
-    public bool PopupVisible { get; set; }
+    public List<DimensionValueViewModel> Values { get; } = [];
+    public IReadOnlySet<DimensionValueViewModel> SelectedValues => Volatile.Read(ref _selectedValues);
+
+    /// <summary>
+    /// Invoked when the filter state is modified externally (e.g., from the popover)
+    /// so that subscribed components can re-render.
+    /// </summary>
+    public Action? NotifyStateChanged { get; set; }
 
     public bool? AreAllValuesSelected
     {
         get
         {
-            return SelectedValues.SetEquals(Values)
+            var selectedValues = SelectedValues;
+            return selectedValues.SetEquals(Values)
                 ? true
-                : SelectedValues.Count == 0
+                : selectedValues.Count == 0
                     ? false
                     : null;
         }
@@ -30,7 +41,7 @@ public class DimensionFilterViewModel
         {
             if (value is true)
             {
-                SelectedValues.UnionWith(Values);
+                Interlocked.Exchange(ref _selectedValues, Values.ToImmutableHashSet());
             }
             else if (value is false)
             {
@@ -39,10 +50,11 @@ public class DimensionFilterViewModel
                 // when the state transitions from true to null (intermediate) due to individual
                 // checkbox changes. In that case, AreAllValuesSelected is already null/false,
                 // and we should not clear the remaining selections.
-                if (AreAllValuesSelected is true)
-                {
-                    SelectedValues.Clear();
-                }
+                var allValues = Values.ToImmutableHashSet();
+                ImmutableInterlocked.Update(
+                    ref _selectedValues,
+                    static (selectedValues, allValues) => selectedValues.SetEquals(allValues) ? [] : selectedValues,
+                    allValues);
             }
             // When value is null (intermediate state), do nothing.
         }
@@ -50,16 +62,22 @@ public class DimensionFilterViewModel
 
     public string SanitizedHtmlId => _sanitizedHtmlId ??= StringExtensions.SanitizeHtmlId(Name);
 
+    // Hash the original name so distinct names that sanitize identically still have distinct anchors.
+    public string NameHash => _nameHash ??= Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(Name)));
+
+    public void SetSelectedValues(IEnumerable<DimensionValueViewModel> dimensionValues)
+    {
+        Interlocked.Exchange(ref _selectedValues, dimensionValues.ToImmutableHashSet());
+    }
+
     public void OnTagSelectionChanged(DimensionValueViewModel dimensionValue, bool isChecked)
     {
-        if (isChecked)
-        {
-            SelectedValues.Add(dimensionValue);
-        }
-        else
-        {
-            SelectedValues.Remove(dimensionValue);
-        }
+        ImmutableInterlocked.Update(
+            ref _selectedValues,
+            static (selectedValues, state) => state.IsChecked
+                ? selectedValues.Add(state.DimensionValue)
+                : selectedValues.Remove(state.DimensionValue),
+            (DimensionValue: dimensionValue, IsChecked: isChecked));
     }
 
     private string DebuggerToString() => $"Name = {Name}, SelectedValues = {SelectedValues.Count}";
@@ -71,4 +89,3 @@ public class DimensionValueViewModel
     public required string Text { get; init; }
     public required string? Value { get; init; }
 }
-

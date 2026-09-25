@@ -1,0 +1,8 @@
+﻿#:sdk Aspire.AppHost.Sdk@<sdk-version>
+#:property AspireUseCliBundle=true
+
+var builder = DistributedApplication.CreateBuilder(args);
+
+// The aspireify skill will wire up your projects here.
+
+builder.Build().Run();

@@ -42,6 +42,11 @@
         <target state="translated">中央套件管理目前不受 'aspire update' 支援。</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChannelNonePlaceholder">
+        <source>(none)</source>
+        <target state="new">(none)</target>
+        <note>Displayed in place of the current channel value when aspire.config.json has no channel pinned.</note>
+      </trans-unit>
       <trans-unit id="ChannelOptionDescription">
         <source>Channel to update to (stable, daily)</source>
         <target state="translated">要更新的通道 (穩定、每日)</target>
@@ -73,7 +78,7 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Update integrations in the Aspire project (Preview)</source>
+        <source>Update integrations and repository Aspire CLI references</source>
         <target state="needs-review-translation">更新 Aspire 專案中的整合。(預覽)</target>
         <note />
       </trans-unit>
@@ -107,6 +112,21 @@
         <target state="translated">無法為專案擷取項目與屬性: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="FailedReadToolManifestFormat">
+        <source>Failed to read tool manifest '{0}': {1}</source>
+        <target state="new">Failed to read tool manifest '{0}': {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailedResolveNpmToolFormat">
+        <source>Could not resolve @microsoft/aspire-cli@{0} from npm. Check that npm is available and this version is published. Repository tool manifests were not changed.</source>
+        <target state="new">Could not resolve @microsoft/aspire-cli@{0} from npm. Check that npm is available and this version is published. Repository tool manifests were not changed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailedToRestoreAfterUpdateFormat">
+        <source>Failed to restore packages for project {0} after update.</source>
+        <target state="new">Failed to restore packages for project {0} after update.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">
         <source>Failed to update package reference for {0} in project {1}.</source>
         <target state="translated">無法更新專案 {1} 中 {0} 的套件參考。</target>
@@ -132,9 +152,24 @@
         <target state="translated">   對應: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="MigrateOptionDescription">
+        <source>Apply any pending migrations to the project after updating its packages.</source>
+        <target state="new">Apply any pending migrations to the project after updating its packages.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MigratedToNewSdkFormat">
         <source>Migrated to new project format: &lt;Project Sdk="Aspire.AppHost.Sdk/{0}"&gt;</source>
         <target state="translated">已移轉至新專案格式: &lt;Project Sdk="Aspire.AppHost.Sdk/{0}"&gt;</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MigrationApplyFailedWarning">
+        <source>The project packages were updated, but applying migrations failed. Run 'aspire update --migrate' again to retry.</source>
+        <target state="new">The project packages were updated, but applying migrations failed. Run 'aspire update --migrate' again to retry.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NixSelfUpdateMessage">
+        <source>To update the Aspire CLI when installed from Nix, update the profile package or flake input:</source>
+        <target state="new">To update the Aspire CLI when installed from Nix, update the profile package or flake input:</target>
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
@@ -147,6 +182,11 @@
         <target state="translated">未偵測到 NuGet.config 中的變更</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoChannelFoundMatching">
+        <source>No channel found matching '{0}'. Valid options are: {1}.</source>
+        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoPackageFoundFormat">
         <source>No package found with ID '{0}' in channel '{1}'.</source>
         <target state="translated">在通道 '{1}' 中找不到識別碼為 '{0}' 的套件。</target>
@@ -155,6 +195,11 @@
       <trans-unit id="NoWritePermissionToInstallDirectory">
         <source>Cannot write to installation directory '{0}'. Please run the update with elevated permissions (e.g., using sudo on Linux/macOS).</source>
         <target state="translated">無法寫入安裝目錄 '{0}'。請使用提高的權限來執行更新 (例如，在Linux/macOS上使用 sudo)。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NpmSelfUpdateMessage">
+        <source>To update the Aspire CLI when installed from npm, run:</source>
+        <target state="new">To update the Aspire CLI when installed from npm, run:</target>
         <note />
       </trans-unit>
       <trans-unit id="NuGetConfigDirOptionDescription">
@@ -177,6 +222,16 @@
         <target state="translated">套件參考沒有 Version。</target>
         <note />
       </trans-unit>
+      <trans-unit id="PendingMigrationsHeader">
+        <source>This project has pending migrations:</source>
+        <target state="new">This project has pending migrations:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PendingMigrationsHint">
+        <source>Run 'aspire update --migrate' to apply them.</source>
+        <target state="new">Run 'aspire update --migrate' to apply them.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PerformUpdatesPrompt">
         <source>Perform updates?</source>
         <target state="translated">執行更新?</target>
@@ -195,6 +250,11 @@
       <trans-unit id="ProjectUpToDateMessage">
         <source>Project is up to date! (no updates necessary)</source>
         <target state="translated">專案為最新!(不需要更新)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectUpdateSkippedAfterCliUpdateMessage">
+        <source>Project update skipped. Update the Aspire CLI, then re-run `aspire update`.</source>
+        <target state="new">Project update skipped. Update the Aspire CLI, then re-run `aspire update`.</target>
         <note />
       </trans-unit>
       <trans-unit id="QualityOptionDescription">
@@ -227,10 +287,45 @@
         <target state="translated">已移除過時的 Aspire.Hosting.AppHost 套件參考</target>
         <note />
       </trans-unit>
+      <trans-unit id="RepositoryToolUpdateFormat">
+        <source>{0}: [bold yellow]{1}[/] [bold green]{2}[/] to [bold green]{3}[/]</source>
+        <target state="new">{0}: [bold yellow]{1}[/] [bold green]{2}[/] to [bold green]{3}[/]</target>
+        <note>{0} = manifest path, {1} = package ID, {2} = current version, {3} = new version. Values are markup-escaped.</note>
+      </trans-unit>
+      <trans-unit id="RepositoryToolsUpToDate">
+        <source>Repository Aspire CLI references are up to date.</source>
+        <target state="new">Repository Aspire CLI references are up to date.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RepositoryToolsUpdated">
+        <source>Repository Aspire CLI references updated. The running CLI was not replaced.</source>
+        <target state="new">Repository Aspire CLI references updated. The running CLI was not replaced.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RestoreRepositoryDotNetTool">
+        <source>Run 'dotnet tool restore' in the repository to use the updated .NET tool. Ensure its NuGet configuration includes the selected channel's feed.</source>
+        <target state="new">Run 'dotnet tool restore' in the repository to use the updated .NET tool. Ensure its NuGet configuration includes the selected channel's feed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RestoreRepositoryNpmTool">
+        <source>Lockfiles were not changed. Run your package manager's install command (for example, 'npm install') to refresh the lockfile and use the updated npm tool.</source>
+        <target state="new">Lockfiles were not changed. Run your package manager's install command (for example, 'npm install') to refresh the lockfile and use the updated npm tool.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RestoringPackagesAfterUpdate">
+        <source>Restoring packages...</source>
+        <target state="new">Restoring packages...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RetainedFeedFormat">
         <source>Retained: {0}</source>
         <target state="translated">已保留: {0}</target>
         <note />
+      </trans-unit>
+      <trans-unit id="SdkVersionUnknownPlaceholder">
+        <source>(unknown)</source>
+        <target state="new">(unknown)</target>
+        <note>Displayed in place of the current SDK version when aspire.config.json has no SDK version pinned.</note>
       </trans-unit>
       <trans-unit id="SelectChannelPrompt">
         <source>Select a channel:</source>
@@ -242,19 +337,44 @@
         <target state="new">Update the Aspire CLI itself to the latest version</target>
         <note />
       </trans-unit>
+      <trans-unit id="ToolManifestChangedFormat">
+        <source>The tool manifest '{0}' changed during update. Run 'aspire update' again.</source>
+        <target state="new">The tool manifest '{0}' changed during update. Run 'aspire update' again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UnsupportedToolVersionFormat">
+        <source>Skipping the Aspire CLI reference in '{0}': '{1}' is not an exact version or a simple ^/~ version range.</source>
+        <target state="new">Skipping the Aspire CLI reference in '{0}': '{1}' is not an exact version or a simple ^/~ version range.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnxpectedCodePath">
         <source>Unexpected code path.</source>
         <target state="translated">未預期的程式碼路徑。</target>
         <note />
+      </trans-unit>
+      <trans-unit id="UpdateChannelStepDescriptionFormat">
+        <source>Update aspire.config.json channel from '{0}' to '{1}'</source>
+        <target state="new">Update aspire.config.json channel from '{0}' to '{1}'</target>
+        <note>{0} = current channel name (or '(none)' if absent). {1} = new channel name.</note>
       </trans-unit>
       <trans-unit id="UpdateCliAfterProjectUpdatePrompt">
         <source>An update is available for the Aspire CLI. Would you like to update it now?</source>
         <target state="translated">更新可用於 Aspire CLI。您現在要更新嗎？</target>
         <note />
       </trans-unit>
+      <trans-unit id="UpdateCliBeforeGuestProjectUpdatePrompt">
+        <source>The selected Aspire SDK is newer than this Aspire CLI. Update the Aspire CLI now and re-run `aspire update` to update this project?</source>
+        <target state="new">The selected Aspire SDK is newer than this Aspire CLI. Update the Aspire CLI now and re-run `aspire update` to update this project?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UpdatePackageFormat">
         <source>Update package {0} from {1} to {2}</source>
         <target state="translated">將套件 {0} 從 {1} 更新到 {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UpdateRepositoryTools">
+        <source>Update repository Aspire CLI references</source>
+        <target state="new">Update repository Aspire CLI references</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdateSuccessfulMessage">

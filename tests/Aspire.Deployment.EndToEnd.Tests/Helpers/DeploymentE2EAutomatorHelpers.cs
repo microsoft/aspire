@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -54,14 +53,14 @@ internal static class DeploymentE2EAutomatorHelpers
 
                 if (includeBundlePath)
                 {
-                    await auto.RunCommandFailFastAsync(
+                    await auto.RunCommandAsync(
                         AspireCliShellCommandHelpers.GetBundlePullRequestInstallCommand(prNumber),
                         counter,
                         TimeSpan.FromSeconds(300));
                 }
                 else
                 {
-                    await auto.RunCommandFailFastAsync(
+                    await auto.RunCommandAsync(
                         AspireCliShellCommandHelpers.GetPullRequestInstallCommand(prNumber, AspireCliShellCommandHelpers.MainPullRequestInstallCommandPrefix),
                         counter,
                         TimeSpan.FromSeconds(300));
@@ -72,7 +71,7 @@ internal static class DeploymentE2EAutomatorHelpers
 
             case CliInstallMode.LocalArchive:
                 var archiveDir = strategy.ArchiveDir ?? throw new InvalidOperationException("LocalArchive strategy is missing the archive directory.");
-                await auto.RunCommandFailFastAsync(
+                await auto.RunCommandAsync(
                     AspireCliShellCommandHelpers.GetLocalArchiveInstallCommandFromCurrentRef(archiveDir),
                     counter,
                     TimeSpan.FromSeconds(120));
@@ -80,7 +79,7 @@ internal static class DeploymentE2EAutomatorHelpers
                 break;
 
             case CliInstallMode.InstallScript:
-                await auto.RunCommandFailFastAsync(
+                await auto.RunCommandAsync(
                     AspireCliShellCommandHelpers.GetInstallScriptCommand(strategy, AspireCliShellCommandHelpers.AkaMsInstallScriptCommandPrefix),
                     counter,
                     TimeSpan.FromSeconds(300));

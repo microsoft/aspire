@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Semver;
@@ -129,7 +130,7 @@ internal static class PackageUpdateHelpers
     {
         var foundPackages = new List<NuGetPackage>();
 
-        using var document = JsonDocument.Parse(stdout);
+        using var document = JsonDocument.Parse(ExtractJsonPayload(stdout, IsPackageSearchPayload));
         if (!document.RootElement.TryGetProperty("searchResult", out var searchResultsArray))
         {
             return [];
@@ -161,5 +162,93 @@ internal static class PackageUpdateHelpers
         }
 
         return foundPackages;
+    }
+
+    // `dotnet package search <id> --format json` is expected to write a single JSON object to stdout, but NuGet
+    // credential providers use an inherited stdout handle. Their diagnostics can therefore appear before or after
+    // the payload while the command still exits 0, and can themselves contain braces or complete JSON objects:
+    //
+    //     [CredentialProvider]Acquiring token for request {42}
+    //     {"error":{"packages":[]}}
+    //     {"version":2,"problems":[],"searchResult":[{"sourceName":"azure-default","packages":[ ... ]}]}
+    //     [CredentialProvider]VstsCredentialProvider - Acquired bearer token using 'MSAL Silent'
+    //
+    // Parse each complete object candidate and validate the expected payload shape so a diagnostic object cannot be
+    // mistaken for the payload. Return only the consumed object so trailing provider output is excluded.
+    // See https://github.com/microsoft/aspire/issues/19339.
+    internal static string ExtractJsonPayload(string stdout, Func<JsonElement, bool> isExpectedPayload)
+    {
+        var utf8 = Encoding.UTF8.GetBytes(stdout);
+        var searchOffset = 0;
+
+        while (searchOffset < utf8.Length)
+        {
+            var relativeCandidateOffset = utf8.AsSpan(searchOffset).IndexOf((byte)'{');
+            if (relativeCandidateOffset < 0)
+            {
+                break;
+            }
+
+            var candidateOffset = searchOffset + relativeCandidateOffset;
+            var candidate = utf8.AsSpan(candidateOffset);
+            var reader = new Utf8JsonReader(candidate);
+
+            try
+            {
+                if (JsonDocument.TryParseValue(ref reader, out var document) && document is not null)
+                {
+                    var consumed = checked((int)reader.BytesConsumed);
+                    using (document)
+                    {
+                        if (isExpectedPayload(document.RootElement))
+                        {
+                            return Encoding.UTF8.GetString(candidate[..consumed]);
+                        }
+                    }
+
+                    // Do not inspect nested objects inside a complete diagnostic object. A nested object could
+                    // coincidentally have the expected shape even though its containing diagnostic is not the payload.
+                    searchOffset = candidateOffset + consumed;
+                    continue;
+                }
+            }
+            catch (JsonException)
+            {
+                // A diagnostic can contain an unmatched brace or other non-JSON fragment. Advance past this brace
+                // and keep looking for the package-search payload.
+            }
+
+            searchOffset = candidateOffset + 1;
+        }
+
+        // Preserve the existing behavior when no expected payload is present: callers parse the original output
+        // and surface the same JsonException (or handle a valid object with no results) as before.
+        return stdout;
+    }
+
+    private static bool IsPackageSearchPayload(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty("version", out var version) ||
+            version.ValueKind != JsonValueKind.Number ||
+            !root.TryGetProperty("searchResult", out var searchResults) ||
+            searchResults.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        foreach (var sourceResult in searchResults.EnumerateArray())
+        {
+            if (sourceResult.ValueKind != JsonValueKind.Object ||
+                !sourceResult.TryGetProperty("sourceName", out var sourceName) ||
+                sourceName.ValueKind != JsonValueKind.String ||
+                !sourceResult.TryGetProperty("packages", out var packages) ||
+                packages.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

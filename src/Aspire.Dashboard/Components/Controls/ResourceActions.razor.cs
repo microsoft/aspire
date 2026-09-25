@@ -32,6 +32,9 @@ public partial class ResourceActions : ComponentBase
     [Inject]
     public required IconResolver IconResolver { get; init; }
 
+    [Inject]
+    public required IDashboardClient DashboardClient { get; init; }
+
     [Parameter]
     public required EventCallback<CommandViewModel> CommandSelected { get; set; }
 
@@ -54,15 +57,23 @@ public partial class ResourceActions : ComponentBase
     public required ViewportInformation ViewportInformation { get; set; }
 
     private readonly List<CommandViewModel> _highlightedCommands = new();
-    private readonly List<MenuButtonItem> _menuItems = new();
 
     protected override void OnParametersSet()
     {
-        _menuItems.Clear();
         _highlightedCommands.Clear();
 
+        // If display is desktop then we display highlighted commands next to the ... button.
+        if (ViewportInformation.IsDesktop)
+        {
+            _highlightedCommands.AddRange(Resource.Commands.Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden).Take(MaxHighlightedCount));
+        }
+    }
+
+    private IList<MenuButtonItem> GetMenuItems()
+    {
+        var menuItems = new List<MenuButtonItem>();
         ResourceMenuBuilder.AddMenuItems(
-            _menuItems,
+            menuItems,
             Resource,
             ResourceByName,
             EventCallback.Factory.Create(this, () => OnViewDetails.InvokeAsync(_menuButton?.MenuButtonId)),
@@ -72,10 +83,6 @@ public partial class ResourceActions : ComponentBase
             showConsoleLogsItem: true,
             showUrls: false);
 
-        // If display is desktop then we display highlighted commands next to the ... button.
-        if (ViewportInformation.IsDesktop)
-        {
-            _highlightedCommands.AddRange(Resource.Commands.Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden).Take(MaxHighlightedCount));
-        }
+        return menuItems;
     }
 }

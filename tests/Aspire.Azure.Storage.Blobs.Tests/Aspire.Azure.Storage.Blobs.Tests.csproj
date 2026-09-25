@@ -7,7 +7,6 @@
   <ItemGroup>
     <None Include="$(RepoRoot)src\Components\Aspire.Azure.Storage.Blobs\ConfigurationSchema.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\Components\Aspire.Azure.Storage.Blobs\Aspire.Azure.Storage.Blobs.csproj" />
     <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />

@@ -2,11 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREMCP001
+#pragma warning disable ASPIRETERMINAL001
 
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Postgres;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,6 +36,7 @@ public static class PostgresBuilderExtensions
     /// <param name="password">The parameter used to provide the administrator password for the PostgreSQL resource. If <see langword="null"/> a random password will be generated.</param>
     /// <param name="port">The host port used when launching the container. If null a random port will be assigned.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This resource includes built-in health checks. When this resource is referenced as a dependency
@@ -42,7 +46,8 @@ public static class PostgresBuilderExtensions
     /// </para>
     /// This version of the package defaults to the <inheritdoc cref="PostgresContainerImageTags.Tag"/> tag of the <inheritdoc cref="PostgresContainerImageTags.Image"/> container image.
     /// </remarks>
-    [AspireExport(Description = "Adds a PostgreSQL server resource")]
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<PostgresServerResource> AddPostgres(this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
         IResourceBuilder<ParameterResource>? userName = null,
@@ -122,12 +127,56 @@ public static class PostgresBuilderExtensions
     }
 
     /// <summary>
+    /// Adds a REPL command that opens an authenticated PostgreSQL shell in the dashboard terminal dock.
+    /// </summary>
+    /// <param name="builder">The PostgreSQL server resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// This command is opt-in and available only in run mode. Dashboard users who can execute resource commands
+    /// can run commands with the resource's configured credentials. Enable it only for trusted dashboard users,
+    /// especially when sharing the dashboard through a tunnel or remote development environment.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddPostgres("postgres").WithRepl();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<PostgresServerResource> WithRepl(this IResourceBuilder<PostgresServerResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
+    }
+
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(PostgresServerResource resource, CancellationToken cancellationToken)
+    {
+        var port = resource.PrimaryEndpoint.TargetPort ?? throw new DistributedApplicationException("The PostgreSQL REPL port is not available.");
+        var username = await resource.UserNameReference.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        var password = await resource.PasswordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+        {
+            throw new DistributedApplicationException("The PostgreSQL REPL credentials are not available.");
+        }
+
+        return new TerminalLaunchOptions
+        {
+            Title = $"psql ({resource.Name})",
+            Executable = "psql",
+            Arguments = ["--username", username, "--dbname", "postgres", "--no-password", "--port", port.ToString(CultureInfo.InvariantCulture)],
+            EnvironmentVariables = { ["PGPASSWORD"] = password }
+        };
+    }
+
+    /// <summary>
     /// Adds a PostgreSQL database to the application model.
     /// </summary>
     /// <param name="builder">The PostgreSQL server resource builder.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This resource includes built-in health checks. When this resource is referenced as a dependency
@@ -140,7 +189,8 @@ public static class PostgresBuilderExtensions
     /// The database creation happens automatically as part of the resource lifecycle.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Adds a PostgreSQL database")]
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<PostgresDatabaseResource> AddDatabase(this IResourceBuilder<PostgresServerResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -170,6 +220,7 @@ public static class PostgresBuilderExtensions
 
         return builder.ApplicationBuilder
             .AddResource(postgresDatabase)
+            .WithIconName("Database")
             .WithHealthCheck(healthCheckKey);
     }
 
@@ -183,7 +234,8 @@ public static class PostgresBuilderExtensions
     /// <param name="configureContainer">Callback to configure PgAdmin container resource.</param>
     /// <param name="containerName">The name of the container (Optional).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds pgAdmin 4 management UI", RunSyncOnBackgroundThread = true)]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> WithPgAdmin<T>(this IResourceBuilder<T> builder, Action<IResourceBuilder<PgAdminContainerResource>>? configureContainer = null, string? containerName = null)
         where T : PostgresServerResource
     {
@@ -203,7 +255,8 @@ public static class PostgresBuilderExtensions
             var pgAdminContainerBuilder = builder.ApplicationBuilder.AddResource(pgAdminContainer)
                                                  .WithImage(PostgresContainerImageTags.PgAdminImage, PostgresContainerImageTags.PgAdminTag)
                                                  .WithImageRegistry(PostgresContainerImageTags.PgAdminRegistry)
-                                                 .WithHttpEndpoint(targetPort: 80, name: "http")
+                                                 .WithIconName("WindowDatabase")
+                                                 .WithHttpEndpoint(targetPort: 80, name: PgAdminContainerResource.PrimaryEndpointName)
                                                  .WithEnvironment(SetPgAdminEnvironmentVariables)
                                                  .WithHttpHealthCheck("/browser")
                                                  .ExcludeFromManifest();
@@ -212,7 +265,7 @@ public static class PostgresBuilderExtensions
                 destinationPath: "/pgadmin4",
                 callback: async (context, cancellationToken) =>
                 {
-                    var appModel = context.ServiceProvider.GetRequiredService<DistributedApplicationModel>();
+                    var appModel = context.Services.GetRequiredService<DistributedApplicationModel>();
                     var postgresInstances = builder.ApplicationBuilder.Resources.OfType<PostgresServerResource>();
 
                     return [
@@ -224,9 +277,11 @@ public static class PostgresBuilderExtensions
                     ];
                 });
 
+            AddManagementLinks(pgAdminContainerBuilder, pgAdminContainer.PrimaryEndpoint, "Manage (pgAdmin)");
+
             configureContainer?.Invoke(pgAdminContainerBuilder);
 
-            pgAdminContainerBuilder.WithRelationship(builder.Resource, "PgAdmin");
+            pgAdminContainerBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
 
             return builder;
         }
@@ -238,7 +293,7 @@ public static class PostgresBuilderExtensions
     /// <param name="builder">The resource builder for PGAdmin.</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
     /// <returns>The resource builder for PGAdmin.</returns>
-    [AspireExport("withPgAdminHostPort", MethodName = "withHostPort", Description = "Sets the host port for pgAdmin")]
+    [AspireExport("withPgAdminHostPort", MethodName = "withHostPort")]
     public static IResourceBuilder<PgAdminContainerResource> WithHostPort(this IResourceBuilder<PgAdminContainerResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -255,7 +310,7 @@ public static class PostgresBuilderExtensions
     /// <param name="builder">The resource builder for pgweb.</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
     /// <returns>The resource builder for pgweb.</returns>
-    [AspireExport("withPgWebHostPort", MethodName = "withHostPort", Description = "Sets the host port for pgweb")]
+    [AspireExport("withPgWebHostPort", MethodName = "withHostPort")]
     public static IResourceBuilder<PgWebContainerResource> WithHostPort(this IResourceBuilder<PgWebContainerResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -293,7 +348,8 @@ public static class PostgresBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds pgweb management UI", RunSyncOnBackgroundThread = true)]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<PostgresServerResource> WithPgWeb(this IResourceBuilder<PostgresServerResource> builder, Action<IResourceBuilder<PgWebContainerResource>>? configureContainer = null, string? containerName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -312,14 +368,17 @@ public static class PostgresBuilderExtensions
             var pgwebContainerBuilder = builder.ApplicationBuilder.AddResource(pgwebContainer)
                                                .WithImage(PostgresContainerImageTags.PgWebImage, PostgresContainerImageTags.PgWebTag)
                                                .WithImageRegistry(PostgresContainerImageTags.PgWebRegistry)
-                                               .WithHttpEndpoint(targetPort: 8081, name: "http")
+                                               .WithIconName("WindowDatabase")
+                                               .WithHttpEndpoint(targetPort: 8081, name: PgWebContainerResource.PrimaryEndpointName)
                                                .WithArgs("--bookmarks-dir=/.pgweb/bookmarks")
                                                .WithArgs("--sessions")
                                                .ExcludeFromManifest();
 
+            AddManagementLinks(pgwebContainerBuilder, pgwebContainer.PrimaryEndpoint, "Manage (pgweb)");
+
             configureContainer?.Invoke(pgwebContainerBuilder);
 
-            pgwebContainerBuilder.WithRelationship(builder.Resource, "PgWeb");
+            pgwebContainerBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
 
             pgwebContainerBuilder.WithHttpHealthCheck();
 
@@ -327,7 +386,7 @@ public static class PostgresBuilderExtensions
                 destinationPath: "/",
                 callback: async (context, ct) =>
                 {
-                    var appModel = context.ServiceProvider.GetRequiredService<DistributedApplicationModel>();
+                    var appModel = context.Services.GetRequiredService<DistributedApplicationModel>();
                     var postgresInstances = builder.ApplicationBuilder.Resources.OfType<PostgresDatabaseResource>();
 
                     // Add the bookmarks to the pgweb container
@@ -361,7 +420,8 @@ public static class PostgresBuilderExtensions
     /// This version of the package defaults to the <inheritdoc cref="PostgresContainerImageTags.PostgresMcpTag"/> tag of the <inheritdoc cref="PostgresContainerImageTags.PostgresMcpImage"/> container image.
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds Postgres MCP server", RunSyncOnBackgroundThread = true)]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     [Experimental("ASPIREPOSTGRES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<PostgresDatabaseResource> WithPostgresMcp(
         this IResourceBuilder<PostgresDatabaseResource> builder,
@@ -401,6 +461,34 @@ public static class PostgresBuilderExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Hides <paramref name="resourceBuilder"/> and adds a "Manage" URL pointing at its <paramref name="endpoint"/>
+    /// endpoint to every <see cref="PostgresServerResource"/> in the app.
+    /// </summary>
+    private static void AddManagementLinks<T>(IResourceBuilder<T> resourceBuilder, EndpointReference endpoint, string displayText)
+        where T : IResourceWithEndpoints
+    {
+        resourceBuilder.WithHidden();
+
+        resourceBuilder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
+        {
+            foreach (var postgresResource in @event.Model.Resources.OfType<PostgresServerResource>())
+            {
+                resourceBuilder.WithRelationship(postgresResource, KnownRelationshipTypes.Manages);
+
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
+                resourceBuilder.ApplicationBuilder.CreateResourceBuilder(postgresResource).WithUrlForEndpoint(endpoint, url =>
+                {
+                    url.DisplayText = displayText;
+                    url.DisplayOrder = 1;
+                });
+#pragma warning restore CS0618
+            }
+
+            return Task.CompletedTask;
+        });
+    }
+
     private static void SetPgAdminEnvironmentVariables(EnvironmentCallbackContext context)
     {
         // Disables pgAdmin authentication.
@@ -414,7 +502,7 @@ public static class PostgresBuilderExtensions
         // When running in the context of Codespaces we need to set some additional environment
         // variables so that PGAdmin will trust the forwarded headers that Codespaces port
         // forwarding will send.
-        var config = context.ExecutionContext.ServiceProvider.GetRequiredService<IConfiguration>();
+        var config = context.ExecutionContext.Services.GetRequiredService<IConfiguration>();
         if (context.ExecutionContext.IsRunMode && config.GetValue<bool>("CODESPACES", false))
         {
             context.EnvironmentVariables["PGADMIN_CONFIG_PROXY_X_HOST_COUNT"] = "1";
@@ -429,6 +517,7 @@ public static class PostgresBuilderExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// The data directory location varies by PostgreSQL version:
@@ -441,7 +530,7 @@ public static class PostgresBuilderExtensions
     /// This method automatically selects the correct path based on the configured container image tag.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Adds a data volume for PostgreSQL")]
+    [AspireExport]
     public static IResourceBuilder<PostgresServerResource> WithDataVolume(this IResourceBuilder<PostgresServerResource> builder, string? name = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -459,6 +548,7 @@ public static class PostgresBuilderExtensions
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// The data directory location varies by PostgreSQL version:
@@ -471,7 +561,7 @@ public static class PostgresBuilderExtensions
     /// This method automatically selects the correct path based on the configured container image tag.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Adds a data bind mount for PostgreSQL")]
+    [AspireExport]
     public static IResourceBuilder<PostgresServerResource> WithDataBindMount(this IResourceBuilder<PostgresServerResource> builder, string source, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -506,7 +596,8 @@ public static class PostgresBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="source">The source directory or files on the host to copy into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Copies init files to PostgreSQL")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<PostgresServerResource> WithInitFiles(this IResourceBuilder<PostgresServerResource> builder, string source)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -525,12 +616,13 @@ public static class PostgresBuilderExtensions
     /// <param name="builder">The builder for the <see cref="PostgresDatabaseResource"/>.</param>
     /// <param name="script">The SQL script used to create the database.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// The script can only contain SQL statements applying to the default database like CREATE DATABASE. Custom statements like table creation
     /// and data insertion are not supported since they require a distinct connection to the newly created database.
     /// <value>Default script is <code>CREATE DATABASE "&lt;QUOTED_DATABASE_NAME&gt;"</code></value>
     /// </remarks>
-    [AspireExport(Description = "Defines the SQL script for database creation")]
+    [AspireExport]
     public static IResourceBuilder<PostgresDatabaseResource> WithCreationScript(this IResourceBuilder<PostgresDatabaseResource> builder, string script)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -547,7 +639,8 @@ public static class PostgresBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="password">The parameter used to provide the password for the PostgreSQL resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures the PostgreSQL password")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<PostgresServerResource> WithPassword(this IResourceBuilder<PostgresServerResource> builder, IResourceBuilder<ParameterResource> password)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -563,7 +656,8 @@ public static class PostgresBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="userName">The parameter used to provide the user name for the PostgreSQL resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures the PostgreSQL user name")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<PostgresServerResource> WithUserName(this IResourceBuilder<PostgresServerResource> builder, IResourceBuilder<ParameterResource> userName)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -579,7 +673,8 @@ public static class PostgresBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withPostgresHostPort", MethodName = "withHostPort", Description = "Sets the host port for PostgreSQL")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withPostgresHostPort", MethodName = "withHostPort")]
     public static IResourceBuilder<PostgresServerResource> WithHostPort(this IResourceBuilder<PostgresServerResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -720,8 +815,30 @@ public static class PostgresBuilderExtensions
         {
             var quotedDatabaseIdentifier = new NpgsqlCommandBuilder().QuoteIdentifier(npgsqlDatabase.DatabaseName);
             using var command = npgsqlConnection.CreateCommand();
-            command.CommandText = scriptAnnotation?.Script ?? $"CREATE DATABASE {quotedDatabaseIdentifier}";
-            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            var commandText = scriptAnnotation?.Script ?? $"CREATE DATABASE {quotedDatabaseIdentifier}";
+            command.CommandText = commandText;
+
+            if (scriptAnnotation?.Script is not null)
+            {
+                logger.LogInformation("Executing custom creation script for database '{DatabaseName}'", npgsqlDatabase.DatabaseName);
+            }
+
+            var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+            if (scriptAnnotation?.Script is not null)
+            {
+                // ADO.NET returns -1 for DDL statements (CREATE DATABASE, etc.) because they don't affect data rows.
+                // Only include the rows-affected count when it carries meaningful information.
+                if (rowsAffected >= 0)
+                {
+                    logger.LogInformation("Completed custom creation script for database '{DatabaseName}' ({RowsAffected} rows affected)", npgsqlDatabase.DatabaseName, rowsAffected);
+                }
+                else
+                {
+                    logger.LogInformation("Completed custom creation script for database '{DatabaseName}'", npgsqlDatabase.DatabaseName);
+                }
+            }
+
             logger.LogDebug("Database '{DatabaseName}' created successfully", npgsqlDatabase.DatabaseName);
         }
         catch (PostgresException p) when (p.SqlState == "42P04")

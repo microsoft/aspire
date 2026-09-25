@@ -31,7 +31,6 @@ internal sealed partial class DcpDependencyCheck : IDcpDependencyCheckService
 
     public async Task<DcpInfo?> GetDcpInfoAsync(bool force = false, CancellationToken cancellationToken = default)
     {
-        AspireEventSource.Instance.DcpInfoFetchStart(force);
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
@@ -135,48 +134,38 @@ internal sealed partial class DcpDependencyCheck : IDcpDependencyCheckService
         finally
         {
             _lock.Release();
-            AspireEventSource.Instance.DcpInfoFetchStop(force);
         }
     }
 
     private static void EnsureDcpVersion(DcpInfo dcpInfo)
     {
-        AspireEventSource.Instance.DcpVersionCheckStart();
+        var dcpVersionString = dcpInfo.VersionString;
 
-        try
+        if (dcpVersionString == null
+            || dcpVersionString == string.Empty
+            || dcpVersionString == "dev")
         {
-            var dcpVersionString = dcpInfo.VersionString;
-
-            if (dcpVersionString == null
-                || dcpVersionString == string.Empty
-                || dcpVersionString == "dev")
-            {
-                // If empty, null, or a dev version, pass
-                dcpInfo.Version = DcpVersion.Dev;
-                return;
-            }
-
-            // Early DCP versions (e.g. preview 1) have a +x at the end of their version string, e.g. 0.1.42+5,
-            // which does not parse. Strip off anything like that.
-            dcpVersionString = VersionRegex().Replace(dcpVersionString, string.Empty);
-
-            if (Version.TryParse(dcpVersionString, out var dcpVersion))
-            {
-                if (dcpVersion < DcpVersion.MinimumVersionInclusive)
-                {
-                    throw new DistributedApplicationException(string.Format(
-                        CultureInfo.InvariantCulture,
-                        MessageStrings.DcpVersionCheckTooLowMessage,
-                        GetCurrentPackageVersion(typeof(DcpDependencyCheck).Assembly)
-                    ));
-                }
-
-                dcpInfo.Version = dcpVersion;
-            }
+            // If empty, null, or a dev version, pass
+            dcpInfo.Version = DcpVersion.Dev;
+            return;
         }
-        finally
+
+        // Early DCP versions (e.g. preview 1) have a +x at the end of their version string, e.g. 0.1.42+5,
+        // which does not parse. Strip off anything like that.
+        dcpVersionString = VersionRegex().Replace(dcpVersionString, string.Empty);
+
+        if (Version.TryParse(dcpVersionString, out var dcpVersion))
         {
-            AspireEventSource.Instance.DcpVersionCheckStop();
+            if (dcpVersion < DcpVersion.MinimumVersionInclusive)
+            {
+                throw new DistributedApplicationException(string.Format(
+                    CultureInfo.InvariantCulture,
+                    MessageStrings.DcpVersionCheckTooLowMessage,
+                    GetCurrentPackageVersion(typeof(DcpDependencyCheck).Assembly)
+                ));
+            }
+
+            dcpInfo.Version = dcpVersion;
         }
     }
 
@@ -242,36 +231,43 @@ internal sealed partial class DcpDependencyCheck : IDcpDependencyCheckService
         }
         var installed = dcpInfo.Containers?.Installed ?? false;
         var running = dcpInfo.Containers?.Running ?? false;
-        var error = dcpInfo.Containers?.Error;
+        var rawError = dcpInfo.Containers?.Error;
+        var error = string.IsNullOrWhiteSpace(rawError) ? null : rawError.Trim();
 
         if (!installed)
         {
-            logger.LogWarning("Container runtime '{Runtime}' could not be found. See https://aka.ms/aspire/containers for more details on supported container runtimes.", containerRuntime);
+            const string messageFormat = "Container runtime '{0}' could not be found. See https://aka.ms/aspire/containers for more details on supported container runtimes.";
+            var message = string.Format(CultureInfo.InvariantCulture, messageFormat, containerRuntime);
+            var detailedMessage = AppendContainerRuntimeCheckError(message, error);
 
-            logger.LogDebug("The error from the container runtime check was: {Error}", error);
+            logger.LogWarning("{Message}", detailedMessage);
             if (throwIfUnhealthy)
             {
-                throw new DistributedApplicationException($"Container runtime '{containerRuntime}' could not be found. See https://aka.ms/aspire/containers for more details on supported container runtimes.");
+                throw new DistributedApplicationException(detailedMessage);
             }
         }
         else if (!running)
         {
             var (message, linkUrl) = BuildContainerRuntimeUnhealthyMessage(containerRuntime);
 
-            // For logging, we want the template format with {Runtime} placeholder
-            var logMessage = message.Replace($"'{containerRuntime}'", "'{Runtime}'");
+            var logMessage = message;
             if (linkUrl is not null)
             {
                 logMessage += " For more information, visit: " + linkUrl;
             }
 
-            logger.LogWarning(logMessage, containerRuntime);
-
-            logger.LogDebug("The error from the container runtime check was: {Error}", error);
+            logger.LogWarning("{Message}", AppendContainerRuntimeCheckError(logMessage, error));
             if (throwIfUnhealthy)
             {
-                throw new DistributedApplicationException(message);
+                throw new DistributedApplicationException(AppendContainerRuntimeCheckError(message, error));
             }
         }
+    }
+
+    private static string AppendContainerRuntimeCheckError(string message, string? error)
+    {
+        return error is null
+            ? message
+            : $"{message}{Environment.NewLine}The error from the container runtime check was: {error}";
     }
 }

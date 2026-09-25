@@ -14,7 +14,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.DotNet.RemoteExecutor" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\Components\Aspire.Microsoft.EntityFrameworkCore.Cosmos\Aspire.Microsoft.EntityFrameworkCore.Cosmos.csproj" />
     <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -149,6 +148,9 @@ var letsEncrypt = certManager.AddIssuer("letsencrypt-staging")
 // its FQDN, the tls-fqdn-discovery pipeline step patches it onto the listener and the
 // cm-issuer-apply step ensures the ClusterIssuer is present so cert-manager can complete
 // the HTTP-01 challenge against the AGC FQDN.
+// The Gateway route validation requires the routed endpoint to be marked external.
+apiService.WithExternalHttpEndpoints();
+
 aks.AddGateway("api-gw")
     .WithLoadBalancer(publicLb)
     .WithRoute("/", apiService.GetEndpoint("http"))
@@ -178,8 +180,10 @@ builder.Build().Run();
             await auto.WaitForSuccessPromptAsync(counter);
 
             output.WriteLine("Step 8: Setting deployment environment variables...");
+            // Unset the job-level Azure__Location=westus3 the CI workflow injects: on Linux it coexists
+            // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
             await auto.TypeAsync(
-                $"unset ASPIRE_PLAYGROUND && " +
+                $"unset ASPIRE_PLAYGROUND && unset Azure__Location && " +
                 $"export AZURE__LOCATION=westus3 && " +
                 $"export AZURE__RESOURCEGROUP={resourceGroupName} && " +
                 $"export Parameters__acmeemail={acmeEmail}");

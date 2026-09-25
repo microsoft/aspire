@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES001
 
@@ -24,7 +23,7 @@ internal sealed class PublishModeProvisioningContextProvider(
     IHostEnvironment environment,
     ILogger<PublishModeProvisioningContextProvider> logger,
     IArmClientProvider armClientProvider,
-    IUserPrincipalProvider userPrincipalProvider,
+    IAzurePrincipalProvider azurePrincipalProvider,
     ITokenCredentialProvider tokenCredentialProvider,
     IDeploymentStateManager deploymentStateManager,
     DistributedApplicationExecutionContext distributedApplicationExecutionContext,
@@ -34,7 +33,7 @@ internal sealed class PublishModeProvisioningContextProvider(
         environment,
         logger,
         armClientProvider,
-        userPrincipalProvider,
+        azurePrincipalProvider,
         tokenCredentialProvider,
         deploymentStateManager,
         distributedApplicationExecutionContext)

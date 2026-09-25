@@ -7,7 +7,6 @@
 #pragma warning disable ASPIREAZURE001
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.DependencyInjection;
 

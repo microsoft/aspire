@@ -1,17 +1,23 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Hosting.Dcp.Process;
-using Aspire.Hosting.Tests.Utils;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Testing;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using AuxiliaryBackchannelRpcTarget = Aspire.Hosting.Backchannel.AuxiliaryBackchannelRpcTarget;
+using ExecuteResourceCommandRequest = Aspire.Hosting.Backchannel.ExecuteResourceCommandRequest;
 
 namespace Aspire.Hosting.Tests;
 
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe resource command arguments.
 #pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
+#pragma warning disable CS0618 // Tests intentionally cover the deprecated TypeScript withProcessCommandFactory export.
 
 [Trait("Partition", "6")]
 public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
@@ -128,6 +134,69 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(5, processSpec.RetainedOutputLineCount);
         Assert.True(processSpec.ResolveExecutablePath);
         Assert.False(processSpec.ThrowOnNonZeroReturnCode);
+    }
+
+    [Fact]
+    public async Task WithProcessCommandExport_CreateProcessSpecReceivesExecutionContextAndArguments()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: ["options-callback-line"]);
+        using var builder = CreateTestDistributedApplicationBuilder(processRunner);
+
+        ExecuteCommandContext? capturedContext = null;
+        var resource = builder.AddResource(new CustomResource("resource"))
+            .WithProcessCommandExport(
+                "options-callback-command",
+                "Run options callback command",
+                new ProcessCommandExportOptions
+                {
+                    CreateProcessSpec = context =>
+                    {
+                        capturedContext = context;
+                        var message = context.Arguments.GetString("message") ?? string.Empty;
+
+                        return Task.FromResult(new ProcessCommandSpecExportData
+                        {
+                            ExecutablePath = "options-callback-executable",
+                            Arguments = ["--message", message]
+                        });
+                    },
+                    CommandOptions = new CommandOptions
+                    {
+                        Arguments =
+                        [
+                            new InteractionInput
+                            {
+                                Name = "message",
+                                InputType = InputType.Text
+                            }
+                        ]
+                    }
+                });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "message",
+                InputType = InputType.Text,
+                Value = "hello-from-options-callback"
+            }
+        ]);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(resource.Resource, "options-callback-command", arguments).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Contains("options-callback-line", result.Data?.Value);
+        Assert.NotNull(capturedContext);
+        Assert.Equal("hello-from-options-callback", capturedContext.Arguments.GetString("message"));
+
+        var processSpec = Assert.Single(processRunner.ProcessSpecs);
+        Assert.Equal("options-callback-executable", processSpec.ExecutablePath);
+        Assert.Equal(["--message", "hello-from-options-callback"], processSpec.ArgumentList);
     }
 
     [Fact]
@@ -319,12 +388,76 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
         Assert.Contains("hello-from-argument", result.Data?.Value);
         Assert.NotNull(capturedContext);
         Assert.Equal(resource.Resource.Name, capturedContext.ResourceName);
-        Assert.NotNull(capturedContext.ServiceProvider);
+        Assert.NotNull(capturedContext.Services);
         Assert.Equal("hello-from-argument", capturedContext.Arguments.GetString("message"));
         Assert.NotNull(capturedContext.Logger);
 
         var processSpec = Assert.Single(processRunner.ProcessSpecs);
         Assert.Equal(["hello-from-argument"], processSpec.ArgumentList);
+    }
+
+    [Fact]
+    public async Task WithProcessCommand_BackchannelNamedArgumentsFlowToProcessFactoryAndResultContext()
+    {
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: ["hello-from-backchannel"]);
+        using var builder = CreateTestDistributedApplicationBuilder(processRunner);
+
+        ProcessCommandResultContext? capturedResultContext = null;
+        var resource = builder.AddResource(new CustomResource("resource"))
+            .WithProcessCommand(
+                "echo-argument",
+                "Echo argument",
+                context =>
+                {
+                    var message = context.Arguments.GetString("message");
+                    return CreateProcessCommandSpec(arguments: ["--message", message ?? string.Empty]);
+                },
+                new ProcessCommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "message",
+                            InputType = InputType.Text
+                        }
+                    ],
+                    GetCommandResult = resultContext =>
+                    {
+                        capturedResultContext = resultContext;
+                        return Task.FromResult(CommandResults.Success("received argument", resultContext.Arguments.GetString("message")!));
+                    }
+                });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = resource.Resource.Name,
+            CommandName = "echo-argument",
+            Arguments = JsonSerializer.SerializeToNode(new
+            {
+                message = "hello-from-backchannel"
+            })
+        }).DefaultTimeout();
+
+        Assert.True(response.Success, response.Message);
+        Assert.Equal("received argument", response.Message);
+        Assert.Equal("hello-from-backchannel", response.Value?.Value);
+
+        var processSpec = Assert.Single(processRunner.ProcessSpecs);
+        Assert.Equal(["--message", "hello-from-backchannel"], processSpec.ArgumentList);
+
+        Assert.NotNull(capturedResultContext);
+        Assert.Equal("hello-from-backchannel", capturedResultContext.Arguments.GetString("message"));
     }
 
     [Fact]
@@ -665,7 +798,7 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
         Assert.NotNull(capturedContext);
         Assert.Equal(42, capturedContext.ExitCode);
         Assert.Equal(resource.Resource.Name, capturedContext.ResourceName);
-        Assert.NotNull(capturedContext.ServiceProvider);
+        Assert.NotNull(capturedContext.Services);
         Assert.NotNull(capturedContext.Logger);
         Assert.Equal(["custom-argument"], capturedContext.ProcessCommandSpec.Arguments);
         Assert.Equal(["{\"status\":\"custom\"}", "diagnostic-line"], capturedContext.Output);
@@ -1377,126 +1510,9 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
         };
     }
 
-    private sealed class TestProcessRunner : IProcessRunner
-    {
-        private readonly Queue<TestProcessRun> _runs = [];
-        private readonly List<TestProcessDisposable> _disposables = [];
-
-        public List<ProcessSpec> ProcessSpecs { get; } = [];
-
-        public IReadOnlyList<TestProcessDisposable> Disposables => _disposables;
-
-        public TaskCompletionSource<ProcessSpec> RunStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public void EnqueueResult(
-            int exitCode = 0,
-            IReadOnlyList<string>? output = null,
-            IReadOnlyList<string>? error = null,
-            int? totalOutputLineCount = null,
-            IReadOnlyList<TestProcessOutput>? outputEvents = null)
-        {
-            _runs.Enqueue(TestProcessRun.Result(exitCode, output, error, totalOutputLineCount, outputEvents));
-        }
-
-        public void EnqueueException(Exception exception)
-        {
-            _runs.Enqueue(TestProcessRun.Failed(exception));
-        }
-
-        public void EnqueuePending(Task<ProcessResult> processResult)
-        {
-            _runs.Enqueue(TestProcessRun.Pending(processResult));
-        }
-
-        public (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
-        {
-            ProcessSpecs.Add(processSpec);
-            RunStarted.TrySetResult(processSpec);
-
-            var disposable = new TestProcessDisposable();
-            _disposables.Add(disposable);
-
-            var run = _runs.Count > 0 ? _runs.Dequeue() : TestProcessRun.Result();
-            if (run.FailureException is { } exception)
-            {
-                throw exception;
-            }
-
-            if (run.PendingResult is { } pendingResult)
-            {
-                return (pendingResult, disposable);
-            }
-
-            foreach (var output in run.OutputEvents)
-            {
-                if (output.IsError)
-                {
-                    processSpec.OnErrorData?.Invoke(output.Value);
-                }
-                else
-                {
-                    processSpec.OnOutputData?.Invoke(output.Value);
-                }
-            }
-
-            var processOutput = run.OutputEvents.Select(static output => output.Value).ToArray();
-            var processResult = new ProcessResult(run.ExitCode, processOutput, run.TotalOutputLineCount);
-
-            return (Task.FromResult(processResult), disposable);
-        }
-    }
-
-    private sealed record TestProcessRun(
-        int ExitCode,
-        IReadOnlyList<TestProcessOutput> OutputEvents,
-        int? TotalOutputLineCount,
-        Exception? FailureException,
-        Task<ProcessResult>? PendingResult)
-    {
-        public static TestProcessRun Result(
-            int exitCode = 0,
-            IReadOnlyList<string>? output = null,
-            IReadOnlyList<string>? error = null,
-            int? totalOutputLineCount = null,
-            IReadOnlyList<TestProcessOutput>? outputEvents = null)
-        {
-            outputEvents ??=
-            [
-                .. (output ?? Array.Empty<string>()).Select(Output),
-                .. (error ?? Array.Empty<string>()).Select(Error)
-            ];
-
-            return new TestProcessRun(exitCode, outputEvents, totalOutputLineCount, null, null);
-        }
-
-        public static TestProcessRun Failed(Exception exception)
-        {
-            return new TestProcessRun(0, [], null, exception, null);
-        }
-
-        public static TestProcessRun Pending(Task<ProcessResult> pendingResult)
-        {
-            return new TestProcessRun(0, [], null, null, pendingResult);
-        }
-    }
-
     private static TestProcessOutput Output(string value) => new(false, value);
 
     private static TestProcessOutput Error(string value) => new(true, value);
-
-    private sealed record TestProcessOutput(bool IsError, string Value);
-
-    private sealed class TestProcessDisposable : IAsyncDisposable
-    {
-        public int DisposeCallCount { get; private set; }
-
-        public ValueTask DisposeAsync()
-        {
-            DisposeCallCount++;
-
-            return ValueTask.CompletedTask;
-        }
-    }
 
     private sealed class CustomResource(string name) : Resource(name)
     {
@@ -1504,4 +1520,3 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
 }
 
 #pragma warning restore ASPIREPROCESSCOMMAND001
-#pragma warning restore ASPIREINTERACTION001

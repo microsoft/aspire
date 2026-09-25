@@ -3,8 +3,8 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SamplesIntegrationTests.Infrastructure;
 using Xunit;
@@ -23,7 +23,7 @@ internal static class DistributedApplicationTestFactory
         // Custom hook needed because we want to only override the registry when
         // the original is from `docker.io`, but the options.ContainerRegistryOverride will
         // always override.
-        builder.Services.AddHostedService<ContainerRegistryHook>();
+        builder.Services.AddEventingSubscriber<ContainerRegistryHook>();
 
         builder.WithRandomParameterValues();
         builder.WithRandomVolumeNames();
@@ -48,9 +48,10 @@ internal static class DistributedApplicationTestFactory
         return builder;
     }
 
-    internal sealed class ContainerRegistryHook(DistributedApplicationEventing eventing) : IHostedService
+    internal sealed class ContainerRegistryHook : IDistributedApplicationEventingSubscriber
     {
         public const string AspireTestContainerRegistry = "netaspireci.azurecr.io";
+
         public Task OnBeforeStartAsync(BeforeStartEvent @event, CancellationToken cancellationToken = default)
         {
             var resourcesWithContainerImages = @event.Model.Resources
@@ -69,14 +70,9 @@ internal static class DistributedApplicationTestFactory
             return Task.CompletedTask;
         }
 
-        public Task StartAsync(CancellationToken cancellationToken)
+        public Task SubscribeAsync(IDistributedApplicationEventing eventing, Aspire.Hosting.DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
         {
             eventing.Subscribe<BeforeStartEvent>(OnBeforeStartAsync);
-            return Task.CompletedTask;
-        }
-
-        public Task StopAsync(CancellationToken cancellationToken)
-        {
             return Task.CompletedTask;
         }
     }

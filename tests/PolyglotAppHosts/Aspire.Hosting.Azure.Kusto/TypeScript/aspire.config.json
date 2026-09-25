@@ -1,9 +1,10 @@
 {
   "appHost": {
-    "path": "apphost.ts",
+    "path": "apphost.mts",
     "language": "typescript/nodejs"
   },
   "packages": {
+    "Aspire.Hosting.Azure.Provisioning.Kusto": "",
     "Aspire.Hosting.Azure.Kusto": ""
   }
 }

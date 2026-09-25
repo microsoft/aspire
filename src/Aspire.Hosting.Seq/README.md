@@ -1,26 +1,37 @@
-# Aspire.Hosting.Seq library
+# Seq hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a Seq resource.
+Use this integration to model, configure, and orchestrate a Seq resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Seq Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Seq` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Seq
+```bash
+aspire add Aspire.Hosting.Seq
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a Seq resource and consume the connection using the following methods:
+In the AppHost, add a Seq resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var seq = builder.AddSeq("seq");
 
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(seq);
+```
+
+**TypeScript**
+
+```typescript
+const seq = await builder.addSeq("seq");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(seq);
 ```
 
 ## Connection Properties
@@ -41,7 +52,8 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
-* https://aspire.dev/integrations/observability/seq/
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/observability/seq/seq-host/
 
 ## Feedback & contributing
 

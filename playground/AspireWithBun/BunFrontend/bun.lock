@@ -1,0 +1,19 @@
+{
+  "lockfileVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "bunfrontend",
+      "dependencies": {
+        "ms": "^2.1.3",
+      },
+      "devDependencies": {
+        "chalk": "^6.0.0",
+      },
+    },
+  },
+  "packages": {
+    "chalk": ["chalk@6.0.0", "https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/chalk/-/chalk-6.0.0.tgz", {}, "sha1-o7roQ7yEVPQe9m7z/VhNzzTdgF0="],
+
+    "ms": ["ms@2.1.3", "", {}, "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="],
+  }
+}

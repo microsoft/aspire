@@ -8,18 +8,217 @@
 //------------------------------------------------------------------------------
 namespace Aspire.Hosting
 {
+    public static partial class CertManagerExtensions
+    {
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerResource> AddCertManager(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, string name, string? chartVersion = null) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> AddIssuer(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerResource> builder, string name) { throw null; }
+
+        [AspireExport("withAcmeServerParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithAcmeServer(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, string serverUrl, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> email) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithAcmeServer(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, string serverUrl, string email) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithHttp01Solver(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder) { throw null; }
+
+        [AspireExport("withLetsEncryptProductionParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithLetsEncryptProduction(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> email) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithLetsEncryptProduction(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, string email) { throw null; }
+
+        [AspireExport("withLetsEncryptStagingParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithLetsEncryptStaging(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> email) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> WithLetsEncryptStaging(this ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> builder, string email) { throw null; }
+
+        [AspireExport("withGatewayTlsIssuer")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, ApplicationModel.IResourceBuilder<Kubernetes.CertManagerIssuerResource> issuer) { throw null; }
+    }
+
+    public static partial class KubernetesAspireDashboardResourceBuilderExtensions
+    {
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesAspireDashboardResource> WithForwardedHeaders(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesAspireDashboardResource> builder, bool enabled = true) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesAspireDashboardResource> WithOtlpServicePort(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesAspireDashboardResource> builder, int? grpcPort = null, int? httpPort = null) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesAspireDashboardResource> WithServicePort(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesAspireDashboardResource> builder, int? port = null) { throw null; }
+    }
+
     public static partial class KubernetesEnvironmentExtensions
     {
-        [AspireExport("addKubernetesEnvironment", Description = "Adds a Kubernetes publishing environment")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> AddKubernetesEnvironment(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport("withProperties", Description = "Configures properties of a Kubernetes environment", RunSyncOnBackgroundThread = true)]
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesNodePoolResource> AddNodePool(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, string name) { throw null; }
+
+        [AspireExport("configureDashboard", MethodName = "configureDashboard", RunSyncOnBackgroundThread = true)]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> WithDashboard(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, System.Action<ApplicationModel.IResourceBuilder<Kubernetes.KubernetesAspireDashboardResource>> configure) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> WithDashboard(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, bool enabled = true) { throw null; }
+
+        [AspireExport(RunSyncOnBackgroundThread = true)]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> WithHelm(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, System.Action<Kubernetes.HelmChartOptions>? configure = null) { throw null; }
+
+        [AspireExport("withKubernetesNodePool", MethodName = "withNodePool")]
+        public static ApplicationModel.IResourceBuilder<T> WithNodePool<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Kubernetes.KubernetesNodePoolResource> nodePool)
+            where T : ApplicationModel.IResource { throw null; }
+
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> WithProperties(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, System.Action<Kubernetes.KubernetesEnvironmentResource> configure) { throw null; }
+    }
+
+    public static partial class KubernetesGatewayExtensions
+    {
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> AddGateway(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, string name) { throw null; }
+
+        [AspireExport("withGatewayAnnotationParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithGatewayAnnotation(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string key, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> value) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithGatewayAnnotation(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string key, string value) { throw null; }
+
+        [AspireExport("withGatewayClassParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithGatewayClass(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> className) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithGatewayClass(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string className) { throw null; }
+
+        [AspireExport("withGatewayHostnameParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithHostname(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> hostname) { throw null; }
+
+        [AspireExport("withGatewayHostname", MethodName = "withHostname")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithHostname(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string hostname) { throw null; }
+
+        [AspireExport("withGatewayPathRoute")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithRoute(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string path, ApplicationModel.EndpointReference endpoint, Kubernetes.GatewayPathMatchType pathType = Kubernetes.GatewayPathMatchType.PathPrefix) { throw null; }
+
+        [AspireExport("withGatewayHostRoute")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithRoute(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string host, string path, ApplicationModel.EndpointReference endpoint, Kubernetes.GatewayPathMatchType pathType = Kubernetes.GatewayPathMatchType.PathPrefix) { throw null; }
+
+        [AspireExport("withGatewayTlsParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> secretName) { throw null; }
+
+        [AspireExport("withGatewayTls", MethodName = "withTls")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder, string secretName) { throw null; }
+
+        [AspireExport("withGatewayTlsAuto")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesGatewayResource> builder) { throw null; }
+    }
+
+    public static partial class KubernetesHelmChartExtensions
+    {
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> AddHelmChart(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, string name, string chartReference, string chartVersion) { throw null; }
+
+        [AspireExport("withHelmChartDestroy")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> WithDestroy(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> builder) { throw null; }
+
+        [AspireExport("withHelmChartForceConflicts")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> WithForceConflicts(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> builder) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> WithHelmValue(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> builder, string key, string value) { throw null; }
+
+        [AspireExport("withHelmChartNamespace")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> WithNamespace(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> builder, string @namespace) { throw null; }
+
+        [AspireExport("withHelmChartReleaseName")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> WithReleaseName(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesHelmChartResource> builder, string releaseName) { throw null; }
+    }
+
+    public static partial class KubernetesIngressExtensions
+    {
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> AddIngress(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, string name) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithDefaultBackend(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, ApplicationModel.EndpointReference endpoint) { throw null; }
+
+        [AspireExport("withIngressHostnameParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithHostname(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> hostname) { throw null; }
+
+        [AspireExport("withIngressHostname", MethodName = "withHostname")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithHostname(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string hostname) { throw null; }
+
+        [AspireExport("withIngressAnnotationParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithIngressAnnotation(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string key, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> value) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithIngressAnnotation(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string key, string value) { throw null; }
+
+        [AspireExport("withIngressClassParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithIngressClass(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> className) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithIngressClass(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string className) { throw null; }
+
+        [AspireExport("withIngressPath")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithPath(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string path, ApplicationModel.EndpointReference endpoint, Kubernetes.IngressPathType pathType = Kubernetes.IngressPathType.Prefix) { throw null; }
+
+        [AspireExport("withIngressHostAndPath")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithPath(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string host, string path, ApplicationModel.EndpointReference endpoint, Kubernetes.IngressPathType pathType = Kubernetes.IngressPathType.Prefix) { throw null; }
+
+        [AspireExport("withIngressTlsParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> secretName) { throw null; }
+
+        [AspireExport("withIngressTls", MethodName = "withTls")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder, string secretName) { throw null; }
+
+        [AspireExport("withIngressTlsAuto")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> WithTls(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesIngressResource> builder) { throw null; }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static partial class KubernetesPersistentVolumeExtensions
+    {
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> AddPersistentVolume(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, string name) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithAccessMode(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, Kubernetes.PersistentVolumeAccessMode accessMode) { throw null; }
+
+        [AspireExport("withCapacityParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithCapacity(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> capacity) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithCapacity(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, string capacity) { throw null; }
+
+        [AspireExport("withKubernetesPersistentVolumeMount")]
+        public static ApplicationModel.IResourceBuilder<T> WithPersistentVolume<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> volume, string mountPath, bool isReadOnly = false)
+            where T : ApplicationModel.IComputeResource { throw null; }
+
+        [AspireExport("withKubernetesPersistentVolume")]
+        public static ApplicationModel.IResourceBuilder<T> WithPersistentVolume<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> volume)
+            where T : ApplicationModel.IComputeResource { throw null; }
+
+        [AspireExport("withStorageClassParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithStorageClass(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> storageClassName) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithStorageClass(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, string storageClassName) { throw null; }
+
+        [AspireExport("withVolumeAnnotationParam")]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithVolumeAnnotation(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, string key, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> value) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> WithVolumeAnnotation(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesPersistentVolumeResource> builder, string key, string value) { throw null; }
     }
 
     public static partial class KubernetesServiceExtensions
     {
-        [AspireExport("publishAsKubernetesService", Description = "Publishes the resource as a Kubernetes service")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> PublishAsKubernetesService<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Kubernetes.KubernetesResource> configure)
             where T : ApplicationModel.IComputeResource { throw null; }
     }
@@ -27,10 +226,122 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.Kubernetes
 {
+    [AspireExport]
+    public sealed partial class CertManagerIssuerResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<CertManagerResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
+    {
+        public CertManagerIssuerResource(string name, CertManagerResource parent) : base(default!) { }
+
+        public CertManagerResource Parent { get { throw null; } }
+    }
+
+    [AspireExport]
+    public sealed partial class CertManagerResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<KubernetesEnvironmentResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
+    {
+        public CertManagerResource(string name, KubernetesEnvironmentResource environment, KubernetesHelmChartResource helmChart) : base(default!) { }
+
+        public KubernetesHelmChartResource HelmChart { get { throw null; } }
+
+        public KubernetesEnvironmentResource Parent { get { throw null; } }
+    }
+
+    public enum GatewayPathMatchType
+    {
+        PathPrefix = 0,
+        Exact = 1,
+        RegularExpression = 2
+    }
+
+    public sealed partial class HelmChartDescriptionAnnotation : ApplicationModel.IResourceAnnotation
+    {
+        public HelmChartDescriptionAnnotation(ApplicationModel.ReferenceExpression description) { }
+
+        public ApplicationModel.ReferenceExpression Description { get { throw null; } }
+    }
+
+    public sealed partial class HelmChartNameAnnotation : ApplicationModel.IResourceAnnotation
+    {
+        public HelmChartNameAnnotation(ApplicationModel.ReferenceExpression name) { }
+
+        public ApplicationModel.ReferenceExpression Name { get { throw null; } }
+    }
+
+    [AspireExport(ExposeMethods = true)]
+    public sealed partial class HelmChartOptions
+    {
+        internal HelmChartOptions() { }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartDescription dispatcher export.")]
+        public HelmChartOptions WithChartDescription(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> description) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartDescription dispatcher export.")]
+        public HelmChartOptions WithChartDescription(string description) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartName dispatcher export.")]
+        public HelmChartOptions WithChartName(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> name) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartName dispatcher export.")]
+        public HelmChartOptions WithChartName(string name) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartVersion dispatcher export.")]
+        public HelmChartOptions WithChartVersion(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> version) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withChartVersion dispatcher export.")]
+        public HelmChartOptions WithChartVersion(string version) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withNamespace dispatcher export.")]
+        public HelmChartOptions WithNamespace(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> @namespace) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withNamespace dispatcher export.")]
+        public HelmChartOptions WithNamespace(string @namespace) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withReleaseName dispatcher export.")]
+        public HelmChartOptions WithReleaseName(ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> releaseName) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withReleaseName dispatcher export.")]
+        public HelmChartOptions WithReleaseName(string releaseName) { throw null; }
+    }
+
+    public sealed partial class HelmChartVersionAnnotation : ApplicationModel.IResourceAnnotation
+    {
+        public HelmChartVersionAnnotation(ApplicationModel.ReferenceExpression version) { }
+
+        public ApplicationModel.ReferenceExpression Version { get { throw null; } }
+    }
+
+    public sealed partial class HelmReleaseNameAnnotation : ApplicationModel.IResourceAnnotation
+    {
+        public HelmReleaseNameAnnotation(ApplicationModel.ReferenceExpression releaseName) { }
+
+        public ApplicationModel.ReferenceExpression ReleaseName { get { throw null; } }
+    }
+
+    public enum IngressPathType
+    {
+        Prefix = 0,
+        Exact = 1,
+        ImplementationSpecific = 2
+    }
+
+    [AspireExport(ExposeProperties = true)]
+    public partial class KubernetesAspireDashboardResource : ApplicationModel.ContainerResource
+    {
+        public KubernetesAspireDashboardResource(string name) : base(default!, default) { }
+
+        public ApplicationModel.EndpointReference OtlpGrpcEndpoint { get { throw null; } }
+
+        public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+    }
+
+    public sealed partial class KubernetesEnvironmentAnnotation : ApplicationModel.IResourceAnnotation
+    {
+    }
+
     [AspireExport(ExposeProperties = true)]
     public sealed partial class KubernetesEnvironmentResource : ApplicationModel.Resource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource
     {
         public KubernetesEnvironmentResource(string name) : base(default!) { }
+
+        public bool DashboardEnabled { get { throw null; } set { } }
 
         public string DefaultImagePullPolicy { get { throw null; } set { } }
 
@@ -44,14 +355,74 @@ namespace Aspire.Hosting.Kubernetes
 
         public string DefaultStorageType { get { throw null; } set { } }
 
-        public string HelmChartDescription { get { throw null; } set { } }
+        public string? KubeConfigPath { get { throw null; } set { } }
 
-        public string HelmChartName { get { throw null; } set { } }
-
-        public string HelmChartVersion { get { throw null; } set { } }
+        public ApplicationModel.IComputeEnvironmentResource? OwningComputeEnvironment { get { throw null; } set { } }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public ApplicationModel.ReferenceExpression GetHostAddressExpression(ApplicationModel.EndpointReference endpointReference) { throw null; }
+    }
+
+    [AspireExport]
+    public partial class KubernetesGatewayResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<KubernetesEnvironmentResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
+    {
+        public KubernetesGatewayResource(string name, KubernetesEnvironmentResource environment) : base(default!) { }
+
+        public ApplicationModel.ReferenceExpression? GatewayClassName { get { throw null; } set { } }
+
+        public KubernetesEnvironmentResource Parent { get { throw null; } }
+    }
+
+    [AspireExport]
+    public sealed partial class KubernetesHelmChartResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<KubernetesEnvironmentResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
+    {
+        public KubernetesHelmChartResource(string name, KubernetesEnvironmentResource environment, string chartReference, string chartVersion) : base(default!) { }
+
+        public string ChartReference { get { throw null; } }
+
+        public string ChartVersion { get { throw null; } }
+
+        public string? Namespace { get { throw null; } set { } }
+
+        public KubernetesEnvironmentResource Parent { get { throw null; } }
+
+        public string? ReleaseName { get { throw null; } set { } }
+    }
+
+    [AspireExport]
+    public partial class KubernetesIngressResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<KubernetesEnvironmentResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
+    {
+        public KubernetesIngressResource(string name, KubernetesEnvironmentResource environment) : base(default!) { }
+
+        public ApplicationModel.ReferenceExpression? IngressClassName { get { throw null; } set { } }
+
+        public KubernetesEnvironmentResource Parent { get { throw null; } }
+    }
+
+    public sealed partial class KubernetesNamespaceAnnotation : ApplicationModel.IResourceAnnotation
+    {
+        public KubernetesNamespaceAnnotation(ApplicationModel.ReferenceExpression @namespace) { }
+
+        public ApplicationModel.ReferenceExpression Namespace { get { throw null; } }
+    }
+
+    [AspireExport]
+    public partial class KubernetesNodePoolResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<KubernetesEnvironmentResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
+    {
+        public KubernetesNodePoolResource(string name, KubernetesEnvironmentResource environment) : base(default!) { }
+
+        public string NodeSelectorLabelKey { get { throw null; } init { } }
+
+        public KubernetesEnvironmentResource Parent { get { throw null; } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport]
+    public sealed partial class KubernetesPersistentVolumeResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<KubernetesEnvironmentResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
+    {
+        public KubernetesPersistentVolumeResource(string name, KubernetesEnvironmentResource environment) : base(default!) { }
+
+        public KubernetesEnvironmentResource Parent { get { throw null; } }
     }
 
     [AspireExport(ExposeProperties = true)]
@@ -59,6 +430,7 @@ namespace Aspire.Hosting.Kubernetes
     {
         public KubernetesResource(string name, ApplicationModel.IResource resource, KubernetesEnvironmentResource kubernetesEnvironmentResource) : base(default!) { }
 
+        [AspireExportIgnore(Reason = "Kubernetes manifest resource types are C#-only customization objects and are not part of the polyglot SDK surface.")]
         public System.Collections.Generic.List<Resources.BaseKubernetesResource> AdditionalResources { get { throw null; } }
 
         public Resources.ConfigMap? ConfigMap { get { throw null; } set { } }
@@ -77,6 +449,15 @@ namespace Aspire.Hosting.Kubernetes
         public KubernetesServiceCustomizationAnnotation(System.Action<KubernetesResource> configure) { }
 
         public System.Action<KubernetesResource> Configure { get { throw null; } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum PersistentVolumeAccessMode
+    {
+        ReadWriteOnce = 0,
+        ReadOnlyMany = 1,
+        ReadWriteMany = 2,
+        ReadWriteOncePod = 3
     }
 }
 
@@ -214,6 +595,19 @@ namespace Aspire.Hosting.Kubernetes.Resources
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "key")]
         public string Key { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "name")]
+        public string Name { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "optional")]
+        public bool? Optional { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class ConfigMapProjectionV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "items")]
+        public System.Collections.Generic.List<KeyToPathV1> Items { get { throw null; } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "name")]
         public string Name { get { throw null; } set { } }
@@ -424,6 +818,29 @@ namespace Aspire.Hosting.Kubernetes.Resources
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class DownwardApiProjectionV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "items")]
+        public System.Collections.Generic.List<DownwardApiVolumeFileV1> Items { get { throw null; } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class DownwardApiVolumeFileV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "fieldRef")]
+        public ObjectFieldSelectorV1? FieldRef { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "mode")]
+        public int? Mode { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "path")]
+        public string Path { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "resourceFieldRef")]
+        public ResourceFieldSelectorV1? ResourceFieldRef { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
     public sealed partial class EmptyDirVolumeSourceV1
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "medium")]
@@ -614,6 +1031,78 @@ namespace Aspire.Hosting.Kubernetes.Resources
 
         [YamlDotNet.Serialization.YamlMember(Alias = "rule")]
         public string Rule { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class GatewayAllowedRoutesV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "namespaces")]
+        public GatewayRouteNamespacesV1? Namespaces { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class GatewayCertificateRefV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "name")]
+        public string Name { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class GatewayListenerV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "allowedRoutes")]
+        public GatewayAllowedRoutesV1? AllowedRoutes { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "hostname")]
+        public string? Hostname { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "name")]
+        public string Name { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "port")]
+        public int Port { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "protocol")]
+        public string Protocol { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "tls")]
+        public GatewayTlsConfigV1? Tls { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class GatewayRouteNamespacesV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "from")]
+        public string From { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class GatewaySpecV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "gatewayClassName")]
+        public string GatewayClassName { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "listeners")]
+        public System.Collections.Generic.List<GatewayListenerV1> Listeners { get { throw null; } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class GatewayTlsConfigV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "certificateRefs")]
+        public System.Collections.Generic.List<GatewayCertificateRefV1> CertificateRefs { get { throw null; } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "mode")]
+        public string Mode { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class GatewayV1 : BaseKubernetesResource
+    {
+        public GatewayV1() : base(default!, default!) { }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "spec")]
+        public GatewaySpecV1 Spec { get { throw null; } set { } }
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
@@ -879,6 +1368,88 @@ namespace Aspire.Hosting.Kubernetes.Resources
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "paths")]
         public System.Collections.Generic.List<HttpIngressPathV1> Paths { get { throw null; } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class HttpRouteBackendRefV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "name")]
+        public string Name { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "port")]
+        public int Port { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class HttpRouteHeaderMatchV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "name")]
+        public string Name { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "type")]
+        public string Type { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "value")]
+        public string Value { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class HttpRouteMatchV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "headers")]
+        public System.Collections.Generic.List<HttpRouteHeaderMatchV1> Headers { get { throw null; } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "path")]
+        public HttpRoutePathMatchV1? Path { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class HttpRouteParentRefV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "name")]
+        public string Name { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class HttpRoutePathMatchV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "type")]
+        public string Type { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "value")]
+        public string Value { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class HttpRouteRuleV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "backendRefs")]
+        public System.Collections.Generic.List<HttpRouteBackendRefV1> BackendRefs { get { throw null; } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "matches")]
+        public System.Collections.Generic.List<HttpRouteMatchV1> Matches { get { throw null; } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class HttpRouteSpecV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "hostnames")]
+        public System.Collections.Generic.List<string> Hostnames { get { throw null; } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "parentRefs")]
+        public System.Collections.Generic.List<HttpRouteParentRefV1> ParentRefs { get { throw null; } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "rules")]
+        public System.Collections.Generic.List<HttpRouteRuleV1> Rules { get { throw null; } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class HttpRouteV1 : BaseKubernetesResource
+    {
+        public HttpRouteV1() : base(default!, default!) { }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "spec")]
+        public HttpRouteSpecV1 Spec { get { throw null; } set { } }
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
@@ -1355,16 +1926,16 @@ namespace Aspire.Hosting.Kubernetes.Resources
         public System.Collections.Generic.List<string> AccessModes { get { throw null; } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "dataSource")]
-        public TypedLocalObjectReferenceV1 DataSource { get { throw null; } set { } }
+        public TypedLocalObjectReferenceV1? DataSource { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "dataSourceRef")]
-        public TypedObjectReferenceV1 DataSourceRef { get { throw null; } set { } }
+        public TypedObjectReferenceV1? DataSourceRef { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "resources")]
         public VolumeResourceRequirementsV1 Resources { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "selector")]
-        public LabelSelectorV1 Selector { get { throw null; } set { } }
+        public LabelSelectorV1? Selector { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "storageClassName")]
         public string StorageClassName { get { throw null; } set { } }
@@ -1409,19 +1980,19 @@ namespace Aspire.Hosting.Kubernetes.Resources
         public System.Collections.Generic.Dictionary<string, string> Capacity { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "claimRef")]
-        public ObjectReferenceV1 ClaimRef { get { throw null; } set { } }
+        public ObjectReferenceV1? ClaimRef { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "hostPath")]
-        public HostPathVolumeSourceV1 HostPath { get { throw null; } set { } }
+        public HostPathVolumeSourceV1? HostPath { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "local")]
-        public LocalVolumeSourceV1 Local { get { throw null; } set { } }
+        public LocalVolumeSourceV1? Local { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "mountOptions")]
         public System.Collections.Generic.List<string> MountOptions { get { throw null; } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "nodeAffinity")]
-        public VolumeNodeAffinityV1 NodeAffinity { get { throw null; } set { } }
+        public VolumeNodeAffinityV1? NodeAffinity { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "persistentVolumeReclaimPolicy")]
         public string PersistentVolumeReclaimPolicy { get { throw null; } set { } }
@@ -1798,6 +2369,16 @@ namespace Aspire.Hosting.Kubernetes.Resources
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class ProjectedVolumeSourceV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "defaultMode")]
+        public int? DefaultMode { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "sources")]
+        public System.Collections.Generic.List<VolumeProjectionV1> Sources { get { throw null; } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
     public sealed partial class ReplicaSet : BaseKubernetesResource
     {
         public ReplicaSet() : base(default!, default!) { }
@@ -1947,7 +2528,7 @@ namespace Aspire.Hosting.Kubernetes.Resources
     public sealed partial class RollingUpdateStatefulSetStrategyV1
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "maxUnavailable")]
-        public int MaxUnavailable { get { throw null; } set { } }
+        public int? MaxUnavailable { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "partition")]
         public int? Partition { get { throw null; } set { } }
@@ -1996,6 +2577,19 @@ namespace Aspire.Hosting.Kubernetes.Resources
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "key")]
         public string Key { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "name")]
+        public string Name { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "optional")]
+        public bool? Optional { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class SecretProjectionV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "items")]
+        public System.Collections.Generic.List<KeyToPathV1> Items { get { throw null; } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "name")]
         public string Name { get { throw null; } set { } }
@@ -2083,6 +2677,25 @@ namespace Aspire.Hosting.Kubernetes.Resources
 
         [YamlDotNet.Serialization.YamlMember(Alias = "spec")]
         public ServiceSpecV1 Spec { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class ServiceAccountTokenProjectionV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "audience")]
+        public string? Audience { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "expirationSeconds")]
+        public long? ExpirationSeconds { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "path")]
+        public string Path { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class ServiceAccountV1 : BaseKubernetesResource
+    {
+        public ServiceAccountV1() : base(default!, default!) { }
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
@@ -2233,7 +2846,7 @@ namespace Aspire.Hosting.Kubernetes.Resources
         public StatefulSetOrdinalsV1? Ordinals { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "persistentVolumeClaimRetentionPolicy")]
-        public StatefulSetPersistentVolumeClaimRetentionPolicyV1 PersistentVolumeClaimRetentionPolicy { get { throw null; } set { } }
+        public StatefulSetPersistentVolumeClaimRetentionPolicyV1? PersistentVolumeClaimRetentionPolicy { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "podManagementPolicy")]
         public string? PodManagementPolicy { get { throw null; } set { } }
@@ -2254,7 +2867,7 @@ namespace Aspire.Hosting.Kubernetes.Resources
         public PodTemplateSpecV1 Template { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "updateStrategy")]
-        public StatefulSetUpdateStrategyV1 UpdateStrategy { get { throw null; } set { } }
+        public StatefulSetUpdateStrategyV1? UpdateStrategy { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "volumeClaimTemplates")]
         public System.Collections.Generic.List<PersistentVolumeClaim> VolumeClaimTemplates { get { throw null; } }
@@ -2264,7 +2877,7 @@ namespace Aspire.Hosting.Kubernetes.Resources
     public sealed partial class StatefulSetUpdateStrategyV1
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "rollingUpdate")]
-        public RollingUpdateStatefulSetStrategyV1 RollingUpdate { get { throw null; } set { } }
+        public RollingUpdateStatefulSetStrategyV1? RollingUpdate { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "type")]
         public string Type { get { throw null; } set { } }
@@ -2421,7 +3034,23 @@ namespace Aspire.Hosting.Kubernetes.Resources
     public sealed partial class VolumeNodeAffinityV1
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "required")]
-        public NodeSelectorV1 Required { get { throw null; } set { } }
+        public NodeSelectorV1? Required { get { throw null; } set { } }
+    }
+
+    [YamlDotNet.Serialization.YamlSerializable]
+    public sealed partial class VolumeProjectionV1
+    {
+        [YamlDotNet.Serialization.YamlMember(Alias = "configMap")]
+        public ConfigMapProjectionV1? ConfigMap { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "downwardAPI")]
+        public DownwardApiProjectionV1? DownwardApi { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "secret")]
+        public SecretProjectionV1? Secret { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "serviceAccountToken")]
+        public ServiceAccountTokenProjectionV1? ServiceAccountToken { get { throw null; } set { } }
     }
 
     [YamlDotNet.Serialization.YamlSerializable]
@@ -2457,6 +3086,9 @@ namespace Aspire.Hosting.Kubernetes.Resources
 
         [YamlDotNet.Serialization.YamlMember(Alias = "persistentVolumeClaim")]
         public PersistentVolumeClaimVolumeSourceV1? PersistentVolumeClaim { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "projected")]
+        public ProjectedVolumeSourceV1? Projected { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "secret")]
         public SecretVolumeSourceV1? Secret { get { throw null; } set { } }

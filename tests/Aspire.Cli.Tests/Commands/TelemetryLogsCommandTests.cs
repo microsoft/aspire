@@ -22,7 +22,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WhenNoAppHostRunning_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -31,7 +31,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -40,7 +40,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [InlineData(-100)]
     public async Task TelemetryLogsCommand_WithInvalidLimitValue_ReturnsInvalidCommand(int limitValue)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -49,13 +49,13 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
     public async Task TelemetryLogsCommand_TableOutput_ResolvesUniqueResourceNames()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
             resources:
@@ -75,7 +75,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // With ANSI disabled, output is plain text: "timestamp severity resourceName body"
         var logLines = outputWriter.Logs.Where(l => l.Contains("redis") || l.Contains("apiservice")).ToList();
@@ -90,7 +90,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
         var guid1 = Guid.Parse("11111111-2222-3333-4444-555555555555");
         var guid2 = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
             resources:
@@ -110,19 +110,19 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
-        // Replicas get shortened GUID appended: apiservice-11111111 and apiservice-aaaaaaaa
+        // Replicas get shortened GUID appended: apiservice-55555555 and apiservice-eeeeeeee
         var logLines = outputWriter.Logs.Where(l => l.Contains("apiservice")).ToList();
         Assert.Equal(2, logLines.Count);
-        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} INFO apiservice-11111111 Hello from replica 1", logLines[0]);
-        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddSeconds(1))} WARN apiservice-aaaaaaaa Slow response from replica 2", logLines[1]);
+        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} INFO apiservice-55555555 Hello from replica 1", logLines[0]);
+        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddSeconds(1))} WARN apiservice-eeeeeeee Slow response from replica 2", logLines[1]);
     }
 
     [Fact]
     public async Task TelemetryLogsCommand_TableOutput_StripsAnsiControlSequencesFromBody()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
             resources:
@@ -140,7 +140,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var logLine = Assert.Single(outputWriter.Logs, l => l.Contains("apiservice", StringComparison.Ordinal));
         Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} INFO apiservice Request received", logLine);
@@ -182,7 +182,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithDashboardUrl_FetchesLogsDirectly()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
 
         var handler = new MockHttpMessageHandler(request =>
@@ -220,7 +220,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         var logLines = outputWriter.Logs.Where(l => l.Contains("redis")).ToList();
         Assert.Single(logLines);
         Assert.Contains("Ready to accept connections", logLines[0]);
@@ -229,7 +229,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithDashboardUrlAndApiKey_SendsApiKeyHeader()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         string? capturedApiKey = null;
 
@@ -272,14 +272,14 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("my-secret-key", capturedApiKey);
     }
 
     [Fact]
     public async Task TelemetryLogsCommand_WithDashboardUrlAndAppHost_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -294,7 +294,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(TelemetryCommandStrings.DashboardUrlAndAppHostExclusive, errorMessage);
     }
@@ -302,7 +302,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithInvalidDashboardUrl_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -317,7 +317,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, "not-a-url"), errorMessage);
     }
@@ -325,7 +325,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithDashboardUrl_401_DisplaysAuthFailedMessage()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -355,7 +355,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(TelemetryCommandStrings.DashboardAuthFailed, errorMessage);
     }
@@ -363,7 +363,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithDashboardUrl_404WithReachableBase_DisplaysApiNotEnabledMessage()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -398,7 +398,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, "http://localhost:18888"), errorMessage);
     }
@@ -406,7 +406,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithDashboardUrl_ConnectionRefused_DisplaysConnectionFailedMessage()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -437,7 +437,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, "http://localhost:18888"), errorMessage);
     }
@@ -445,7 +445,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithLoginUrl_ConnectionRefused_DisplaysConnectionFailedMessage()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -467,7 +467,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, "http://localhost:18888"), errorMessage);
     }
@@ -475,7 +475,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithDashboardUrl_ResourcesEndpoint404_DisplaysApiNotEnabledMessage()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -507,7 +507,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, "http://localhost:18888"), errorMessage);
     }
@@ -515,7 +515,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithLoginUrl_NormalizesToBaseUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         string? capturedBaseUrl = null;
 
@@ -563,7 +563,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         // Verify the request went to the base URL (without /login path)
         Assert.NotNull(capturedBaseUrl);
         Assert.DoesNotContain("/login", capturedBaseUrl);
@@ -572,7 +572,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_JsonOutput_ProducesExpectedJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
 
         var resourceLogs = new OtlpResourceLogsJson[]
@@ -645,7 +645,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonLine = outputWriter.Logs.Single(l => l.TrimStart().StartsWith('['));
         var formattedJson = TelemetryTestHelper.FormatJson(jsonLine);
@@ -671,7 +671,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryLogsCommand_WithSearchOption_PassesSearchToUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         string? capturedUrl = null;
 
@@ -711,7 +711,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedUrl);
         Assert.Contains("search=timeout", capturedUrl);
     }

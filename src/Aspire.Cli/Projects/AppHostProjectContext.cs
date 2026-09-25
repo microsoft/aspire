@@ -54,6 +54,11 @@ internal sealed class AppHostProjectContext
     public bool StartDebugSession { get; init; }
 
     /// <summary>
+    /// Gets the explicitly selected launch profile, or <see langword="null"/> to use the default profile.
+    /// </summary>
+    public string? LaunchProfile { get; init; }
+
+    /// <summary>
     /// Gets additional environment variables to pass to the AppHost.
     /// </summary>
     public IDictionary<string, string> EnvironmentVariables { get; init; } = new Dictionary<string, string>();

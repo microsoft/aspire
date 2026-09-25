@@ -101,4 +101,7 @@
     <value>Certificate trust operation returned: {0}</value>
     <comment>{0} is the EnsureCertificateResult value</comment>
   </data>
+  <data name="TrustPartialSuccess" xml:space="preserve">
+    <value>HTTPS development certificate was partially trusted. Continuing because partial trust is usable for CLI HTTPS diagnostics on Linux; browser trust may still be incomplete.</value>
+  </data>
 </root>

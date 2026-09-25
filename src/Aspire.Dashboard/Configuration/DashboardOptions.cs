@@ -11,6 +11,8 @@ namespace Aspire.Dashboard.Configuration;
 
 public sealed class DashboardOptions
 {
+    internal const string DefaultApplicationName = "Aspire";
+
     public string? ApplicationName { get; set; }
     public OtlpOptions Otlp { get; set; } = new();
     public ApiOptions Api { get; set; } = new();
@@ -19,7 +21,28 @@ public sealed class DashboardOptions
     public TelemetryLimitOptions TelemetryLimits { get; set; } = new();
     public DebugSessionOptions DebugSession { get; set; } = new();
     public UIOptions UI { get; set; } = new();
-    public AIOptions AI { get; set; } = new();
+    public DashboardDataOptions Data { get; set; } = new();
+
+    internal string GetApplicationNameOrDefault() => GetApplicationNameOrDefault(ApplicationName);
+
+    internal static string GetApplicationNameOrDefault(string? applicationName) =>
+        string.IsNullOrWhiteSpace(applicationName) ? DefaultApplicationName : applicationName;
+}
+
+public sealed class DashboardDataOptions
+{
+    // Configure this to a location whose permissions protect persisted Dashboard data from undesirable accounts.
+    public string? Directory { get; set; }
+    public DashboardPersistenceMode PersistenceMode { get; set; }
+
+    internal string? PersistenceModeParseError { get; set; }
+}
+
+public enum DashboardPersistenceMode
+{
+    None,
+    Run,
+    Resume
 }
 
 // Don't set values after validating/parsing options.
@@ -227,13 +250,14 @@ public sealed class FrontendOptions
     public string? PublicUrl { get; set; }
 
     /// <summary>
-    /// Gets and sets an optional limit on the number of console log messages to be retained in the viewer.
+    /// Gets and sets the limit on the number of console log messages retained in the viewer and database.
     /// </summary>
     /// <remarks>
-    /// The viewer will retain at most this number of log messages. When the limit is reached, the oldest messages will be removed.
-    /// Defaults to 10,000, which matches the default used in the app host's circular buffer, on the publish side.
+    /// The viewer retains at most this many messages. The database limit is shared across resources.
+    /// When either limit is exceeded, the oldest messages are removed.
+    /// Defaults to 100,000.
     /// </remarks>
-    public int MaxConsoleLogCount { get; set; } = 10_000;
+    public int MaxConsoleLogCount { get; set; } = 100_000;
 
     public OpenIdConnectOptions OpenIdConnect { get; set; } = new();
 
@@ -297,12 +321,13 @@ public static class OptionsHelpers
 
 public sealed class TelemetryLimitOptions
 {
-    public int MaxLogCount { get; set; } = 10_000;
-    public int MaxTraceCount { get; set; } = 10_000;
+    public int MaxLogCount { get; set; } = 100_000;
+    public int MaxTraceCount { get; set; } = 100_000;
     public int MaxMetricsCount { get; set; } = 50_000; // Allows for 1 metric point per second for over 12 hours.
     public int MaxAttributeCount { get; set; } = 128;
     public int MaxAttributeLength { get; set; } = int.MaxValue;
     public int MaxSpanEventCount { get; set; } = int.MaxValue;
+    public int MaxResourceCount { get; set; } = 10_000;
 }
 
 public sealed class UIOptions
@@ -376,6 +401,22 @@ public sealed class OpenIdConnectOptions
             _usernameClaimTypes = UsernameClaimType.Split(",", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
+        for (var i = 0; i < ClaimActions.Count; i++)
+        {
+            var claimAction = ClaimActions[i];
+            if (string.IsNullOrWhiteSpace(claimAction.ClaimType))
+            {
+                messages ??= [];
+                messages.Add($"OpenID Connect claim action type not configured. Specify a Dashboard:Frontend:OpenIdConnect:ClaimActions:{i}:ClaimType value.");
+            }
+
+            if (string.IsNullOrWhiteSpace(claimAction.JsonKey))
+            {
+                messages ??= [];
+                messages.Add($"OpenID Connect claim action JSON key not configured. Specify a Dashboard:Frontend:OpenIdConnect:ClaimActions:{i}:JsonKey value.");
+            }
+        }
+
         errorMessages = messages;
 
         return messages is null;
@@ -384,16 +425,11 @@ public sealed class OpenIdConnectOptions
 
 public sealed class ClaimAction
 {
-    public required string ClaimType { get; set; }
-    public required string JsonKey { get; set; }
+    public string ClaimType { get; set; } = "";
+    public string JsonKey { get; set; } = "";
     public string? SubKey { get; set; }
     public bool? IsUnique { get; set; }
     public string? ValueType { get; set; }
-}
-
-public sealed class AIOptions
-{
-    public bool? Disabled { get; set; }
 }
 
 public sealed class DebugSessionOptions
@@ -402,6 +438,7 @@ public sealed class DebugSessionOptions
 
     public int? Port { get; set; }
     public string? Token { get; set; }
+    public string? DcpInstanceId { get; set; }
     public string? ServerCertificate { get; set; }
     public bool? TelemetryOptOut { get; set; }
 
@@ -424,7 +461,9 @@ public sealed class DebugSessionOptions
 
             try
             {
-                _serverCertificate = new X509Certificate2(data);
+                // Server identity validation needs a single DER/PEM public certificate, not a
+                // PKCS#12/PFX or PKCS#7 container. Do not restore the constructor's format sniffing.
+                _serverCertificate = X509CertificateLoader.LoadCertificate(data);
             }
             catch (Exception ex)
             {

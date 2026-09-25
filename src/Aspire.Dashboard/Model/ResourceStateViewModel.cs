@@ -78,7 +78,7 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
                 "error" => (new Icons.Filled.Size16.ErrorCircle(), Color.Error),
                 "success" => (new Icons.Filled.Size16.CheckmarkCircle(), Color.Success),
                 "info" => (new Icons.Filled.Size16.Info(), Color.Info),
-                _ => (new Icons.Filled.Size16.Circle(), Color.Neutral)
+                _ => (new Icons.Filled.Size16.Circle(), Color.Default)
             };
         }
         else if (resource.HealthStatus is HealthStatus.Unhealthy or HealthStatus.Degraded)
@@ -101,7 +101,7 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
     /// <remarks>
     /// This is a static method so it can be called at the level of the parent column.
     /// </remarks>
-    internal static string GetResourceStateTooltip(ResourceViewModel resource, IStringLocalizer<Columns> loc)
+    internal static string GetResourceStateTooltip(ResourceViewModel resource, IStringLocalizer<Columns> loc, IEnumerable<ResourceViewModel>? allResources = null)
     {
         if (resource.IsFailedToStart())
         {
@@ -132,6 +132,13 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
         }
         else if (resource.IsWaiting())
         {
+            if (allResources is not null
+                ? resource.TryGetResolvedWaitingForDependencies(allResources, out var dependencies)
+                : resource.TryGetWaitingForDependencies(out dependencies))
+            {
+                return loc.GetString(nameof(Columns.StateColumnResourceWaitingFor), string.Join(", ", dependencies));
+            }
+
             return loc[nameof(Columns.StateColumnResourceWaiting)];
         }
         else if (resource.IsNotStarted())

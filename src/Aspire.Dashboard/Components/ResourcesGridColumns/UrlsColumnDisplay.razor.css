@@ -1,3 +1,55 @@
+.url-container {
+    padding: 4px 0;
+}
+
+.single-url {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.single-url > a,
+.single-url > span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Fluent v5 hides vertical overflow, which makes visible horizontal overflow compute to auto. */
+::deep .url-overflow {
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+}
+
+::deep .url-overflow > [behavior="ellipsis"] {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: fit-content;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+::deep .url-overflow .fluent-overflow-more {
+    min-width: max-content;
+    max-width: none;
+}
+
+::deep .url-overflow .fluent-overflow-more fluent-button {
+    vertical-align: middle;
+}
+
+::deep .url-button {
+    height: auto;
+    min-width: 28px;
+    min-height: 0;
+    padding: 1px 14px;
+    border-radius: var(--borderRadiusLarge);
+    font-size: var(--fontSizeBase200);
+    line-height: var(--lineHeightBase200);
+    font-weight: var(--fontWeightRegular);
+}
+
 ::deep.url-list {
     margin: 0;
     padding: 0;
@@ -9,16 +61,17 @@
     text-overflow: ellipsis;
 }
 
-::deep.url-popup {
-    max-width: 500px;
-    max-height: 400px;
-    overflow-x: hidden;
-    overflow-y: auto;
-    padding: 5px 10px;
-}
-
 ::deep.url-link {
-    margin-bottom: 4px;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* Fluent sets the dialog insets inline; override them using the generated anchor to keep any +N button aligned. */
+::deep .url-overflow-popover::part(dialog) {
+    position-anchor: var(--url-overflow-anchor);
+    top: anchor(bottom) !important;
+    right: anchor(right) !important;
+    bottom: auto !important;
+    left: auto !important;
+    position-try-fallbacks: flip-block;
 }

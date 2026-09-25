@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Milvus;
+using Aspire.Dashboard.Model;
 
 namespace Aspire.Hosting;
 
@@ -33,12 +34,14 @@ public static class MilvusBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency</param>
     /// <param name="apiKey">The parameter used to provide the auth key/token user for the Milvus resource.</param>
     /// <param name="grpcPort">The host port of gRPC endpoint of Milvus database.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{MilvusServerResource}"/>.</returns>
-    [AspireExport(Description = "Adds a Milvus server resource to the distributed application model.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<MilvusServerResource> AddMilvus(this IDistributedApplicationBuilder builder,
         string name,
         IResourceBuilder<ParameterResource>? apiKey = null,
@@ -54,6 +57,7 @@ public static class MilvusBuilderExtensions
         return builder.AddResource(milvus)
             .WithImage(MilvusContainerImageTags.Image, MilvusContainerImageTags.Tag)
             .WithImageRegistry(MilvusContainerImageTags.Registry)
+            .WithIconName("DatabaseMultiple")
             .WithHttpEndpoint(port: grpcPort, targetPort: MilvusPortGrpc, name: MilvusServerResource.PrimaryEndpointName)
             .WithEndpoint(MilvusServerResource.PrimaryEndpointName, endpoint =>
             {
@@ -89,11 +93,13 @@ public static class MilvusBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     /// <param name="builder">The Milvus server resource builder.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a Milvus database resource to a Milvus server resource.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<MilvusDatabaseResource> AddDatabase(this IResourceBuilder<MilvusServerResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -104,7 +110,8 @@ public static class MilvusBuilderExtensions
 
         builder.Resource.AddDatabase(name, databaseName);
         var milvusDatabaseResource = new MilvusDatabaseResource(name, databaseName, builder.Resource);
-        return builder.ApplicationBuilder.AddResource(milvusDatabaseResource);
+        return builder.ApplicationBuilder.AddResource(milvusDatabaseResource)
+            .WithIconName("Database");
     }
 
     /// <summary>
@@ -126,11 +133,13 @@ public static class MilvusBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     /// <param name="builder">The Milvus server resource builder.</param>
     /// <param name="configureContainer">Configuration callback for Attu container resource.</param>
     /// <param name="containerName">The name of the container (Optional).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds the Attu administration tool for Milvus.", RunSyncOnBackgroundThread = true)]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> WithAttu<T>(this IResourceBuilder<T> builder, Action<IResourceBuilder<AttuResource>>? configureContainer = null, string? containerName = null) where T : MilvusServerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -141,9 +150,21 @@ public static class MilvusBuilderExtensions
         var resourceBuilder = builder.ApplicationBuilder.AddResource(attuContainer)
                                                         .WithImage(MilvusContainerImageTags.AttuImage, MilvusContainerImageTags.AttuTag)
                                                         .WithImageRegistry(MilvusContainerImageTags.Registry)
-                                                        .WithHttpEndpoint(targetPort: 3000, name: "http")
+                                                        .WithIconName("WindowDatabase")
+                                                        .WithHttpEndpoint(targetPort: 3000, name: AttuResource.PrimaryEndpointName)
                                                         .WithEnvironment(context => ConfigureAttuContainer(context, builder.Resource))
+                                                        .WithParentRelationship(builder)
+                                                        .WithRelationship(builder.Resource, KnownRelationshipTypes.Manages)
                                                         .ExcludeFromManifest();
+
+        resourceBuilder.WithHidden();
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
+        builder.WithUrlForEndpoint(attuContainer.PrimaryEndpoint, url =>
+        {
+            url.DisplayText = "Manage";
+            url.DisplayOrder = 1;
+        });
+#pragma warning restore CS0618
 
         configureContainer?.Invoke(resourceBuilder);
 
@@ -157,7 +178,8 @@ public static class MilvusBuilderExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the resource name.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a persistent data volume to the Milvus server resource.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<MilvusServerResource> WithDataVolume(this IResourceBuilder<MilvusServerResource> builder, string? name = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -172,7 +194,8 @@ public static class MilvusBuilderExtensions
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Mounts a host directory as the Milvus data directory.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<MilvusServerResource> WithDataBindMount(this IResourceBuilder<MilvusServerResource> builder, string source, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -202,7 +225,8 @@ public static class MilvusBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="configurationFilePath">The configuration file on the host to copy into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Copies a Milvus configuration file into the container.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<MilvusServerResource> WithConfigurationFile(this IResourceBuilder<MilvusServerResource> builder, string configurationFilePath)
     {
         ArgumentNullException.ThrowIfNull(builder);

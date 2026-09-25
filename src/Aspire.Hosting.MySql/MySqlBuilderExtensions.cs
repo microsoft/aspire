@@ -2,10 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+#pragma warning disable ASPIRETERMINAL001
 
+using System.Globalization;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.MySql;
+using Aspire.Dashboard.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MySqlConnector;
@@ -31,7 +34,8 @@ public static class MySqlBuilderExtensions
     /// <param name="password">The parameter used to provide the root password for the MySQL resource. If <see langword="null"/> a random password will be generated.</param>
     /// <param name="port">The host port for MySQL.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a MySQL server resource")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<MySqlServerResource> AddMySql(this IDistributedApplicationBuilder builder, [ResourceName] string name, IResourceBuilder<ParameterResource>? password = null, int? port = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -90,12 +94,60 @@ public static class MySqlBuilderExtensions
     }
 
     /// <summary>
+    /// Adds a REPL command that opens an authenticated MySQL shell in the dashboard terminal dock.
+    /// </summary>
+    /// <param name="builder">The MySQL server resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// This command is opt-in and available only in run mode. Dashboard users who can execute resource commands
+    /// can run commands with the resource's configured credentials. Enable it only for trusted dashboard users,
+    /// especially when sharing the dashboard through a tunnel or remote development environment.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddMySql("mysql").WithRepl();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<MySqlServerResource> WithRepl(this IResourceBuilder<MySqlServerResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
+    }
+
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(MySqlServerResource resource, CancellationToken cancellationToken)
+    {
+        var port = resource.PrimaryEndpoint.TargetPort ?? throw new DistributedApplicationException("The MySQL REPL port is not available.");
+        var password = await resource.PasswordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(password))
+        {
+            throw new DistributedApplicationException("The MySQL REPL password is not available.");
+        }
+
+        return new TerminalLaunchOptions
+        {
+            Title = $"mysql ({resource.Name})",
+            Executable = "mysql",
+            Arguments = ["--no-defaults", "--no-login-paths", "--user=root", "--host=127.0.0.1", $"--port={port.ToString(CultureInfo.InvariantCulture)}"],
+            EnvironmentVariables =
+            {
+                // The bundled MySQL 9.7 client still supports MYSQL_PWD. Forward it by name
+                // through the container runtime so the password never appears in argv or SQL history.
+                ["MYSQL_PWD"] = password
+            }
+        };
+    }
+
+    /// <summary>
     /// Adds a MySQL database to the application model.
     /// </summary>
     /// <param name="builder">The MySQL server resource builder.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// When adding a <see cref="MySqlDatabaseResource"/> to your application model the resource can then
@@ -109,7 +161,8 @@ public static class MySqlBuilderExtensions
     /// The database creation happens automatically as part of the resource lifecycle.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Adds a MySQL database")]
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<MySqlDatabaseResource> AddDatabase(this IResourceBuilder<MySqlServerResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -139,6 +192,7 @@ public static class MySqlBuilderExtensions
 
         return builder.ApplicationBuilder
             .AddResource(mySqlDatabase)
+            .WithIconName("Database")
             .WithHealthCheck(healthCheckKey);
     }
 
@@ -161,9 +215,20 @@ public static class MySqlBuilderExtensions
             }
             else
             {
+                logger.LogInformation("Executing custom creation script for database '{DatabaseName}'", sqlDatabase.DatabaseName);
                 using var command = sqlConnection.CreateCommand();
                 command.CommandText = scriptAnnotation.Script;
-                await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                var rowsAffected = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                // ADO.NET returns -1 for DDL statements (CREATE DATABASE, etc.) because they don't affect data rows.
+                // Only include the rows-affected count when it carries meaningful information.
+                if (rowsAffected >= 0)
+                {
+                    logger.LogInformation("Completed custom creation script for database '{DatabaseName}' ({RowsAffected} rows affected)", sqlDatabase.DatabaseName, rowsAffected);
+                }
+                else
+                {
+                    logger.LogInformation("Completed custom creation script for database '{DatabaseName}'", sqlDatabase.DatabaseName);
+                }
             }
 
             logger.LogDebug("Database '{DatabaseName}' created successfully", sqlDatabase.DatabaseName);
@@ -180,10 +245,11 @@ public static class MySqlBuilderExtensions
     /// <param name="builder">The builder for the <see cref="MySqlDatabaseResource"/>.</param>
     /// <param name="script">The SQL script used to create the database.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <value>Default script is <code>CREATE DATABASE IF NOT EXISTS `QUOTED_DATABASE_NAME`;</code></value>
     /// </remarks>
-    [AspireExport(Description = "Defines the SQL script for database creation")]
+    [AspireExport]
     public static IResourceBuilder<MySqlDatabaseResource> WithCreationScript(this IResourceBuilder<MySqlDatabaseResource> builder, string script)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -200,7 +266,8 @@ public static class MySqlBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="password">The parameter used to provide the password for the MySQL resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures the MySQL password")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<MySqlServerResource> WithPassword(this IResourceBuilder<MySqlServerResource> builder, IResourceBuilder<ParameterResource> password)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -220,7 +287,8 @@ public static class MySqlBuilderExtensions
     /// <param name="configureContainer">Callback to configure PhpMyAdmin container resource.</param>
     /// <param name="containerName">The name of the container (Optional).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds phpMyAdmin management UI", RunSyncOnBackgroundThread = true)]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> WithPhpMyAdmin<T>(this IResourceBuilder<T> builder, Action<IResourceBuilder<PhpMyAdminContainerResource>>? configureContainer = null, string? containerName = null) where T : MySqlServerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -229,6 +297,7 @@ public static class MySqlBuilderExtensions
         {
             var builderForExistingResource = builder.ApplicationBuilder.CreateResourceBuilder(existinghpMyAdminResource);
             configureContainer?.Invoke(builderForExistingResource);
+            builderForExistingResource.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
             return builder;
         }
 
@@ -238,9 +307,27 @@ public static class MySqlBuilderExtensions
         var phpMyAdminContainerBuilder = builder.ApplicationBuilder.AddResource(phpMyAdminContainer)
                                                 .WithImage(MySqlContainerImageTags.PhpMyAdminImage, MySqlContainerImageTags.PhpMyAdminTag)
                                                 .WithImageRegistry(MySqlContainerImageTags.Registry)
-                                                .WithHttpEndpoint(targetPort: 80, name: "http")
+                                                .WithHttpEndpoint(targetPort: 80, name: PhpMyAdminContainerResource.PrimaryEndpointName)
                                                 .WithIconName("WindowDatabase")
                                                 .ExcludeFromManifest();
+
+        phpMyAdminContainerBuilder.WithHidden();
+        builder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
+        {
+            foreach (var mySqlResource in @event.Model.Resources.OfType<MySqlServerResource>())
+            {
+                phpMyAdminContainerBuilder.WithRelationship(mySqlResource, KnownRelationshipTypes.Manages);
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
+                builder.ApplicationBuilder.CreateResourceBuilder(mySqlResource).WithUrlForEndpoint(phpMyAdminContainer.PrimaryEndpoint, url =>
+                {
+                    url.DisplayText = "Manage";
+                    url.DisplayOrder = 1;
+                });
+#pragma warning restore CS0618
+            }
+
+            return Task.CompletedTask;
+        });
 
         builder.ApplicationBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>(phpMyAdminContainer, async (e, ct) =>
         {
@@ -300,6 +387,8 @@ public static class MySqlBuilderExtensions
 
         configureContainer?.Invoke(phpMyAdminContainerBuilder);
 
+        phpMyAdminContainerBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
+
         return builder;
     }
 
@@ -309,7 +398,7 @@ public static class MySqlBuilderExtensions
     /// <param name="builder">The resource builder for PGAdmin.</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used, a random port will be assigned.</param>
     /// <returns>The resource builder for PGAdmin.</returns>
-    [AspireExport(Description = "Sets the host port for phpMyAdmin")]
+    [AspireExport]
     public static IResourceBuilder<PhpMyAdminContainerResource> WithHostPort(this IResourceBuilder<PhpMyAdminContainerResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -327,7 +416,8 @@ public static class MySqlBuilderExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a data volume for MySQL")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<MySqlServerResource> WithDataVolume(this IResourceBuilder<MySqlServerResource> builder, string? name = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -342,7 +432,8 @@ public static class MySqlBuilderExtensions
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a data bind mount for MySQL")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<MySqlServerResource> WithDataBindMount(this IResourceBuilder<MySqlServerResource> builder, string source, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -373,7 +464,8 @@ public static class MySqlBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="source">The source file or directory on the host to copy into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Copies init files to MySQL")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<MySqlServerResource> WithInitFiles(this IResourceBuilder<MySqlServerResource> builder, string source)
     {
         ArgumentNullException.ThrowIfNull(builder);

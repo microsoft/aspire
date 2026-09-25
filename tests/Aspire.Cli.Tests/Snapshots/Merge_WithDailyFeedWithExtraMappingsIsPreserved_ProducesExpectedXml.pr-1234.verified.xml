@@ -1,4 +1,4 @@
-<configuration>
+﻿<configuration>
   <packageSources>
     <clear />
     <add key="NuGet" value="https://api.nuget.org/v3/index.json" />
@@ -12,7 +12,6 @@
     </packageSource>
     <packageSource key="{PR_HIVE}/packages">
       <package pattern="Aspire*" />
-      <package pattern="*" />
     </packageSource>
     <packageSource key="NuGet">
       <package pattern="*" />

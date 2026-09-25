@@ -21,7 +21,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <code lang="C#">
 /// var builder = DistributedApplication.CreateBuilder(args);
 /// builder.Eventing.Subscribe&lt;AfterResourcesCreatedEvent&gt;(async (@event, cancellationToken) =&gt; {
-///   var appModel = @event.ServiceProvider.GetRequiredService&lt;DistributedApplicationModel&gt;();
+///   var appModel = @event.Services.GetRequiredService&lt;DistributedApplicationModel&gt;();
 ///   // Run post startup logic.
 /// });
 /// </code>

@@ -10,7 +10,7 @@ with create_builder() as builder:
     qdrant = builder.add_qdrant("resource")
     qdrant.with_data_volume()
     consumer = builder.add_container("resource", "image")
-    consumer.with_reference()
+    consumer.with_reference(qdrant)
     # ---- Property access on QdrantServerResource ----
     _endpoint = qdrant.primary_endpoint
     _grpc_host = qdrant.grpc_host

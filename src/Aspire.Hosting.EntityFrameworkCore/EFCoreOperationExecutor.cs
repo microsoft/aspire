@@ -2,12 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable ASPIREPROJECTS001, ASPIREEXTENSION001
 
 using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -22,7 +24,8 @@ namespace Aspire.Hosting;
 /// </remarks>
 internal sealed class EFCoreOperationExecutor : IDisposable
 {
-    private readonly ProjectResource _startupProjectResource;
+    private readonly IDotnetProgramResource _startupProjectResource;
+    private readonly EFMigrationResource _migrationResource;
     private readonly string? _targetProjectPath;
     private readonly string? _contextTypeName;
     private readonly ILogger _logger;
@@ -34,8 +37,9 @@ internal sealed class EFCoreOperationExecutor : IDisposable
     private string? _resolvedTargetProjectPath;
     private string? _configuration;
     private bool _initialized;
+    private bool _buildCustomizationWarningLogged;
     internal const string ToolStartCommandName = "ef-tool-start";
-    internal string? ResolvedFramework { get; private set;}
+    internal string? ResolvedFramework { get; private set; }
 
     // EF Core CLI output prefixes (used with --prefix-output). All are exactly 9 characters.
     private const int PrefixLength = 9;
@@ -45,18 +49,31 @@ internal sealed class EFCoreOperationExecutor : IDisposable
     private const string DataPrefix = "data:    ";
     private const string VerbosePrefix = "verbose: ";
 
+    // Process-wide fallback that serializes every `dotnet-ef` invocation driven by this AppHost.
+    // The pipeline-step factory already chains migration generate steps via DependsOnSteps so two
+    // dotnet-ef processes won't run concurrently during `aspire publish`. This semaphore is a
+    // defense-in-depth backstop for:
+    //   - run-mode resource commands (Update Database / Reset Database / ...) that the user can
+    //     trigger from the dashboard on different migration resources at the same time, each on
+    //     its own DotnetToolResource,
+    //   - shared per-user state every dotnet-ef invocation touches: the `dotnet tool exec` cache,
+    //     NuGet restore caches, and MSBuild node-reuse state under %USERPROFILE%, which are not
+    //     safe under concurrent `dotnet ef` runs even when the projects don't overlap.
+    // Held only for the duration of a single dotnet-ef execution; never awaits any other pipeline
+    // step or command, so it cannot deadlock with the pipeline scheduler.
+    private static readonly SemaphoreSlim s_globalDotnetEfLock = new(1, 1);
+
     public EFCoreOperationExecutor(
-        ProjectResource startupProjectResource,
-        string? targetProjectPath,
-        string? contextTypeName,
+        EFMigrationResource migrationResource,
         ILogger logger,
         CancellationToken cancellationToken,
         IServiceProvider serviceProvider,
         DotnetToolResource toolResource)
     {
-        _startupProjectResource = startupProjectResource;
-        _targetProjectPath = targetProjectPath;
-        _contextTypeName = contextTypeName;
+        _migrationResource = migrationResource;
+        _startupProjectResource = migrationResource.StartupProjectResource;
+        _targetProjectPath = migrationResource.MigrationsProjectPath;
+        _contextTypeName = migrationResource.DbContextTypeName;
         _logger = logger;
         _cancellationToken = cancellationToken;
         _serviceProvider = serviceProvider;
@@ -171,7 +188,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         }
     }
 
-    private static string? GetProjectPath(ProjectResource projectResource)
+    private static string? GetProjectPath(IDotnetProgramResource projectResource)
     {
         if (projectResource.TryGetLastAnnotation<IProjectMetadata>(out var metadata))
         {
@@ -180,16 +197,39 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         return null;
     }
 
-    private async Task<EFOperationResult> ExecuteEfCommandAsync(string command, string subCommand, Dictionary<string, string?>? additionalArgs = null)
+    private async Task<EFOperationResult> ExecuteEfCommandAsync(string command, string subCommand, Dictionary<string, string?>? additionalArgs = null, bool noBuild = true)
     {
+        var projects = GetParticipatingProjects();
+        // This is independent of database/runtime dependency waits (which some commands deliberately skip).
+        // Waiting for the startup app itself would deadlock the supported app.WaitFor(migrations) pattern.
+        foreach (var project in projects)
+        {
+            if (project.TryGetLastAnnotation<DotnetProgramBuildCompletionAnnotation>(out var buildCompletion))
+            {
+                await buildCompletion.Callback(_serviceProvider, _cancellationToken).ConfigureAwait(false);
+            }
+        }
+
         var initResult = EnsurePathsInitialized();
         if (!initResult.Success)
         {
             return initResult;
         }
 
-        // Build the EF command arguments (these go after the -- in dotnet tool exec)
-        var efArgs = new List<string> { command, subCommand, "--no-build", "--no-color", "--prefix-output" };
+        WarnAboutBuildCustomizations(projects, command, subCommand);
+
+        // Build the EF command arguments (these go after the -- in dotnet tool exec).
+        // `--no-build` is normally added because all interactive run-mode commands assume the
+        // project was already built by the AppHost. Publish-time script and bundle generation
+        // intentionally omit it: the publish pipeline doesn't pre-build path-based projects, and
+        // dotnet-ef must compile the participating projects before reading or packaging migrations.
+        var efArgs = new List<string> { command, subCommand };
+        if (noBuild)
+        {
+            efArgs.Add("--no-build");
+        }
+        efArgs.Add("--no-color");
+        efArgs.Add("--prefix-output");
 
         if (_logger.IsEnabled(LogLevel.Debug))
         {
@@ -242,6 +282,13 @@ internal sealed class EFCoreOperationExecutor : IDisposable
 
         _logger.LogDebug("Executing dotnet tool exec dotnet-ef --yes -- {Args}", string.Join(" ", efArgs));
 
+        // Acquire the global dotnet-ef lock outside the try/catch that maps exceptions to a failed
+        // EFOperationResult: an OperationCanceledException from WaitAsync must propagate so the
+        // caller observes cancellation rather than a generic failure result. Released in `finally`
+        // only when we actually acquired it (lockAcquired is set true after WaitAsync returns).
+        var lockAcquired = false;
+        await s_globalDotnetEfLock.WaitAsync(_cancellationToken).ConfigureAwait(false);
+        lockAcquired = true;
         try
         {
             // Get required services
@@ -317,8 +364,8 @@ internal sealed class EFCoreOperationExecutor : IDisposable
 
                 // Check if the command succeeded
                 var snapshot = resourceEvent.Snapshot;
-                var exitCode = snapshot.Properties.FirstOrDefault(p => p.Name == "ExitCode")?.Value?.ToString();
-                if ((exitCode != null && exitCode != "0") || snapshot.State?.Text == KnownResourceStates.FailedToStart)
+                var exitCode = snapshot.ExitCode;
+                if ((exitCode != null && exitCode.Value != 0) || snapshot.State?.Text == KnownResourceStates.FailedToStart)
                 {
                     return new EFOperationResult
                     {
@@ -339,6 +386,78 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         {
             return new EFOperationResult { Success = false, ErrorMessage = $"dotnet-ef command failed: {ex.Message}" };
         }
+        finally
+        {
+            if (lockAcquired)
+            {
+                s_globalDotnetEfLock.Release();
+            }
+        }
+    }
+
+    private List<IDotnetProgramResource> GetParticipatingProjects()
+    {
+        var projects = new List<IDotnetProgramResource> { _startupProjectResource };
+        if (_migrationResource.MigrationsProjectResource is { } targetResource)
+        {
+            if (!ReferenceEquals(targetResource, _startupProjectResource))
+            {
+                projects.Add(targetResource);
+            }
+        }
+        else if (_targetProjectPath is not null &&
+                 _serviceProvider.GetService<DistributedApplicationModel>() is { } model)
+        {
+            // Paths still select the EF target exactly as before. Matching model resources only supplies
+            // optional readiness/diagnostics; do not reject or change EF's selection for ambiguous paths.
+            var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+            foreach (var project in model.Resources.OfType<IDotnetProgramResource>())
+            {
+                if (!ReferenceEquals(project, _startupProjectResource) &&
+                    comparer.Equals(GetProjectPath(project), _targetProjectPath))
+                {
+                    projects.Add(project);
+                }
+            }
+        }
+
+        return projects;
+    }
+
+    private void WarnAboutBuildCustomizations(IReadOnlyList<IDotnetProgramResource> projects, string command, string subCommand)
+    {
+        if (_buildCustomizationWarningLogged)
+        {
+            return;
+        }
+
+        var affectedProjects = projects
+            .Where(project => project.Annotations.OfType<DotnetProgramBuildEnvironmentCallbackAnnotation>().Any() ||
+                (project.TryGetLastAnnotation<IProjectMetadata>(out var metadata) && metadata.BuildEnvironment.Count > 0))
+            .Select(project => $"'{project.Name}'")
+            .ToList();
+        if (_migrationResource.MigrationsProjectResource is null &&
+            _migrationResource.MigrationsProjectMetadata?.BuildEnvironment.Count > 0)
+        {
+            affectedProjects.Add("the migrations project metadata");
+        }
+
+        if (affectedProjects.Count == 0)
+        {
+            return;
+        }
+
+        // Callback presence deliberately includes no-op callbacks. Never evaluate a callback just for logging,
+        // and never disclose values. One executor represents one requested operation, including nested EF calls.
+        _buildCustomizationWarningLogged = true;
+        _logger.LogWarning(
+            "EF command '{Command} {SubCommand}' is continuing with Aspire-specific build customizations configured on {Projects} " +
+            "(WithBuildEnvironment, WithDotnetProgramBuildEnvironment, or custom build-property metadata). " +
+            "These customizations are not forwarded as MSBuild global properties to dotnet-ef. " +
+            "EF may use suitable output, select different or stale output, or fail if the expected output is missing. " +
+            "Where equivalent, define the required settings in shared .csproj or Directory.Build.props configuration " +
+            "so the coordinated build and EF evaluate the same values.",
+            command, subCommand, string.Join(", ", affectedProjects));
     }
 
     private static string GetToolStartCommandName(DotnetToolResource toolResource)
@@ -457,7 +576,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         // The K specifier produces:
         // - 'Z' for UTC (total 28 characters)
         // - '+HH:mm' or '-HH:mm' for non-UTC (total 33 characters)
-        
+
         // First verify common separators for ISO 8601 format
         if (content.Length < 29 ||
             content[4] != '-' ||   // yyyy-
@@ -469,23 +588,23 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         {
             return content;
         }
-        
+
         // Check for UTC format: ends with 'Z' at position 27
         if (content.Length > 28 && content[27] == 'Z' && content[28] == ' ')
         {
             return content[29..];
         }
-        
+
         // Check for non-UTC format: ends with offset like '-07:00' or '+05:30'
         // Position 26 is '+' or '-', position 29 is ':', position 32 is last digit, position 33 is space
-        if (content.Length > 33 && 
-            (content[26] == '+' || content[26] == '-') && 
-            content[29] == ':' && 
+        if (content.Length > 33 &&
+            (content[26] == '+' || content[26] == '-') &&
+            content[29] == ':' &&
             content[33] == ' ')
         {
             return content[34..];
         }
-        
+
         return content;
     }
 
@@ -676,7 +795,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
             args["--output"] = outputPath;
         }
 
-        return await ExecuteEfCommandAsync("migrations", "script", args).ConfigureAwait(false);
+        return await ExecuteEfCommandAsync("migrations", "script", args, noBuild: false).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -699,7 +818,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
 
         if (!string.IsNullOrEmpty(targetRuntime))
         {
-            args["--runtime"] = targetRuntime;
+            args["--target-runtime"] = targetRuntime;
         }
 
         if (selfContained)
@@ -710,7 +829,9 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         // Overwrite existing bundle
         args["--force"] = null;
 
-        return await ExecuteEfCommandAsync("migrations", "bundle", args).ConfigureAwait(false);
+        // The bundle command compiles the migrations + startup project for the target runtime,
+        // so `--no-build` would defeat the purpose; let dotnet-ef drive the build itself.
+        return await ExecuteEfCommandAsync("migrations", "bundle", args, noBuild: false).ConfigureAwait(false);
     }
 
     public void Dispose()

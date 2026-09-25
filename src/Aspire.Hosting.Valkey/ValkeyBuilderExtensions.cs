@@ -6,6 +6,8 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Valkey;
 using Microsoft.Extensions.DependencyInjection;
 
+#pragma warning disable ASPIRETERMINAL001
+
 namespace Aspire.Hosting;
 
 /// <summary>
@@ -107,7 +109,8 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a Valkey container resource")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ValkeyResource> AddValkey(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -144,6 +147,7 @@ public static class ValkeyBuilderExtensions
             .WithEndpoint(port: port, targetPort: 6379, name: ValkeyResource.PrimaryEndpointName)
             .WithImage(ValkeyContainerImageTags.Image, ValkeyContainerImageTags.Tag)
             .WithImageRegistry(ValkeyContainerImageTags.Registry)
+            .WithIconName("Database")
             .WithHealthCheck(healthCheckKey)
             // see https://github.com/microsoft/aspire/issues/3838 for why the password is passed this way
             .WithEntrypoint("/bin/sh")
@@ -184,6 +188,54 @@ public static class ValkeyBuilderExtensions
     }
 
     /// <summary>
+    /// Adds a REPL command that opens an authenticated Valkey shell in the dashboard terminal dock.
+    /// </summary>
+    /// <param name="builder">The Valkey resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// This command is opt-in and available only in run mode. Dashboard users who can execute resource commands
+    /// can run commands with the resource's configured credentials. Enable it only for trusted dashboard users,
+    /// especially when sharing the dashboard through a tunnel or remote development environment.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddValkey("valkey").WithRepl();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<ValkeyResource> WithRepl(this IResourceBuilder<ValkeyResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
+    }
+
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(ValkeyResource resource, CancellationToken cancellationToken)
+    {
+        var port = resource.PrimaryEndpoint.TargetPort ?? throw new DistributedApplicationException("The Valkey REPL port is not available.");
+        var options = new TerminalLaunchOptions
+        {
+            Title = $"valkey-cli ({resource.Name})",
+            Executable = "valkey-cli",
+            Arguments = ["-h", "127.0.0.1", "-p", port.ToString(CultureInfo.InvariantCulture)]
+        };
+
+        if (resource.PasswordParameter is { } passwordParameter)
+        {
+            var password = await passwordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrEmpty(password))
+            {
+                throw new DistributedApplicationException("The Valkey REPL password is not available.");
+            }
+
+            options.EnvironmentVariables["VALKEYCLI_AUTH"] = password;
+        }
+
+        return options;
+    }
+
+    /// <summary>
     /// Adds a named volume for the data folder to a Valkey container resource and enables Valkey persistence.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
@@ -202,8 +254,10 @@ public static class ValkeyBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a data volume for Valkey and enables persistence")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ValkeyResource> WithDataVolume(
         this IResourceBuilder<ValkeyResource> builder,
         string? name = null,
@@ -240,8 +294,10 @@ public static class ValkeyBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a data bind mount for Valkey and enables persistence")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ValkeyResource> WithDataBindMount(
         this IResourceBuilder<ValkeyResource> builder,
         string source,
@@ -276,8 +332,10 @@ public static class ValkeyBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures Valkey persistence")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ValkeyResource> WithPersistence(
         this IResourceBuilder<ValkeyResource> builder,
         TimeSpan? interval = null,

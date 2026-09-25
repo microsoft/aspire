@@ -105,9 +105,24 @@ output inlineUrl string = 'https://inline.example.com'
 		log.Fatalf(aspire.FormatError(inlineBicep.Err()))
 	}
 
+	frontDoor := builder.AddAzureFrontDoor("frontdoor")
+	frontDoor.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		profile := infrastructure.GetCdnProfile()
+		if err := profile.SetOriginResponseTimeoutSeconds(float64(60)).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if _, err := profile.OriginResponseTimeoutSeconds(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
+	if frontDoor.Err() != nil {
+		log.Fatalf(aspire.FormatError(frontDoor.Err()))
+	}
+
 	infra := builder.AddAzureInfrastructure("infra", func(ctx aspire.AzureResourceInfrastructure) {
 		_, _ = ctx.BicepName()
-		_ = ctx.SetTargetScope(aspire.DeploymentScopeSubscription)
+		targetScope := aspire.DeploymentScopeSubscription
+		_ = ctx.SetTargetScope(&targetScope)
 	})
 	if infra.Err() != nil {
 		log.Fatalf(aspire.FormatError(infra.Err()))
@@ -143,9 +158,18 @@ output inlineUrl string = 'https://inline.example.com'
 	if identity.Err() != nil {
 		log.Fatalf(aspire.FormatError(identity.Err()))
 	}
+	identityBicepIdentifier, err := identity.GetBicepIdentifier()
+	if err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 	_ = identity.ConfigureInfrastructure(func(ctx aspire.AzureResourceInfrastructure) {
 		_, _ = ctx.BicepName()
-		_ = ctx.SetTargetScope(aspire.DeploymentScopeSubscription)
+		targetScope := aspire.DeploymentScopeSubscription
+		_ = ctx.SetTargetScope(&targetScope)
+		provisionedIdentity := ctx.GetSqlUserAssignedIdentityByIdentifier(identityBicepIdentifier)
+		deploymentLocation := ctx.Bicep().Location("westus2")
+		_ = provisionedIdentity.SetName("polyglot-identity")
+		_ = provisionedIdentity.SetLocation(deploymentLocation)
 	})
 
 	identity.WithParameter("identityEmpty")
@@ -158,7 +182,6 @@ output inlineUrl string = 'https://inline.example.com'
 	identity.WithParameter("identityFromEndpoint", &aspire.WithParameterOptions{Value: endpoint})
 	_ = identity.PublishAsConnectionString()
 	_ = identity.ClearDefaultRoleAssignments()
-	_, _ = identity.GetBicepIdentifier()
 	_, _ = identity.IsExisting()
 	_ = identity.RunAsExisting("identity-existing", &aspire.RunAsExistingOptions{ResourceGroup: "rg-identity"})
 	_ = identity.RunAsExisting(existingName, &aspire.RunAsExistingOptions{ResourceGroup: existingResourceGroup})

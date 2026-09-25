@@ -1,12 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Resources;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
@@ -19,7 +25,6 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Hosting.Tests.Dcp;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 [Trait("Partition", "4")]
@@ -474,19 +479,20 @@ public sealed class DcpHostNotificationTests
 
         // Assert
         Assert.DoesNotContain("--tls-cert-thumbprint", processSpec.Arguments);
+        Assert.DoesNotContain("--tls-cert-file", processSpec.Arguments);
+        Assert.DoesNotContain("--tls-key-file", processSpec.Arguments);
     }
 
     [Fact]
-    public async Task CreateDcpProcessSpec_WithTlsCertThumbprint_IncludesThumbprintArgument()
+    public async Task CreateDcpProcessSpec_WithDcpDeveloperCertificateDefault_IncludesDeveloperCertificateArguments()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "Developer certificate thumbprint is only supported on Windows.");
-
-        // Arrange
-        using var certificate = CreateUntrustedCertificate();
+        var activities = new ConcurrentBag<Activity>();
+        using var listener = ActivityListenerHelper.Create(ProfilingTelemetry.ActivitySource, onActivityStopped: activities.Add);
+        using var certificate = CreateExportableCertificate();
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [KnownConfigNames.DcpDeveloperCertificate] = "true"
+                [KnownConfigNames.ProfilingEnabled] = "true"
             })
             .Build();
         var dcpHost = CreateDcpHostForProcessSpecTests(
@@ -501,15 +507,41 @@ public sealed class DcpHostNotificationTests
 
         // Assert
         Assert.Contains($"--tls-cert-thumbprint \"{certificate.Thumbprint}\"", processSpec.Arguments);
+        var certificateActivity = Assert.Single(activities, activity => activity.OperationName == ProfilingTelemetry.Activities.DcpPrepareTlsCertificate);
+        Assert.Equal(true, certificateActivity.GetTagItem(ProfilingTelemetry.Tags.DcpTlsDeveloperCertificateEnabled));
+        Assert.Equal(ProfilingTelemetry.Values.DcpTlsCertificateResultPrepared, certificateActivity.GetTagItem(ProfilingTelemetry.Tags.DcpTlsCertificateResult));
+        Assert.Equal(true, certificateActivity.GetTagItem(ProfilingTelemetry.Tags.DcpTlsCertificatePrepared));
+
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.DoesNotContain("--tls-cert-file", processSpec.Arguments);
+            Assert.DoesNotContain("--tls-key-file", processSpec.Arguments);
+            Assert.Equal(ProfilingTelemetry.Values.DcpTlsCertificateModeThumbprint, certificateActivity.GetTagItem(ProfilingTelemetry.Tags.DcpTlsCertificateMode));
+        }
+        else
+        {
+            var certificatePath = GetQuotedArgumentValue(processSpec.Arguments, "--tls-cert-file");
+            var keyPath = GetQuotedArgumentValue(processSpec.Arguments, "--tls-key-file");
+
+            Assert.Equal(certificate.ExportCertificatePem(), File.ReadAllText(certificatePath));
+            Assert.Contains("PRIVATE KEY", File.ReadAllText(keyPath));
+            Assert.Equal(ProfilingTelemetry.Values.DcpTlsCertificateModeFiles, certificateActivity.GetTagItem(ProfilingTelemetry.Tags.DcpTlsCertificateMode));
+        }
     }
 
     [Fact]
     public async Task CreateDcpProcessSpec_WithDcpDeveloperCertificateDisabled_DoesNotIncludeThumbprintArgument()
     {
-        // Arrange - config not set, so PrepareDcpTlsCertificateAsync should not set the thumbprint
         using var certificate = CreateUntrustedCertificate();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.DcpDeveloperCertificate] = "false"
+            })
+            .Build();
         var dcpHost = CreateDcpHostForProcessSpecTests(
-            developerCertificateService: new TestDeveloperCertificateService([certificate], false, false, false));
+            developerCertificateService: new TestDeveloperCertificateService([certificate], false, false, false),
+            configuration: configuration);
         var locations = CreateTestLocations();
 
         await dcpHost.PrepareDcpTlsCertificateAsync(CancellationToken.None);
@@ -517,8 +549,10 @@ public sealed class DcpHostNotificationTests
         // Act
         var processSpec = dcpHost.CreateDcpProcessSpec(locations);
 
-        // Assert - thumbprint should not appear because config is not enabled
+        // Assert - thumbprint should not appear because config is explicitly disabled
         Assert.DoesNotContain("--tls-cert-thumbprint", processSpec.Arguments);
+        Assert.DoesNotContain("--tls-cert-file", processSpec.Arguments);
+        Assert.DoesNotContain("--tls-key-file", processSpec.Arguments);
     }
 
     [Fact]
@@ -537,6 +571,103 @@ public sealed class DcpHostNotificationTests
         Assert.Contains("--container-runtime \"podman\"", processSpec.Arguments);
     }
 
+    [Theory]
+    [InlineData(Architecture.X64, "x64")]
+    [InlineData(Architecture.Arm64, "arm64")]
+    public void TryGetBundledConPtyPath_WithCompleteBundlePayload_ReturnsTerminalHostDirectory(Architecture architecture, string architectureDirectory)
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var terminalHostPath = Path.Combine(directory.FullName, "aspire-managed.exe");
+            File.WriteAllText(terminalHostPath, "");
+            File.WriteAllText(Path.Combine(directory.FullName, "conpty.dll"), "");
+            Directory.CreateDirectory(Path.Combine(directory.FullName, architectureDirectory));
+            File.WriteAllText(Path.Combine(directory.FullName, architectureDirectory, "OpenConsole.exe"), "");
+
+            var found = DcpHost.TryGetBundledConPtyPath(terminalHostPath, architecture, architecture, out var conPtyPath);
+
+            Assert.True(found);
+            Assert.Equal(directory.FullName, conPtyPath);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(Architecture.X64, Architecture.X64, "win-x64", "x64")]
+    [InlineData(Architecture.X64, Architecture.Arm64, "win-x64", "arm64")]
+    [InlineData(Architecture.Arm64, Architecture.Arm64, "win-arm64", "arm64")]
+    public void TryGetBundledConPtyPath_WithCompleteRepoPayload_ReturnsRuntimeNativeDirectory(
+        Architecture processArchitecture,
+        Architecture osArchitecture,
+        string runtimeIdentifier,
+        string nativeHostDirectory)
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var terminalHostPath = Path.Combine(directory.FullName, "aspire-managed.exe");
+            File.WriteAllText(terminalHostPath, "");
+            var nativeDirectory = Path.Combine(directory.FullName, "runtimes", runtimeIdentifier, "native");
+            Directory.CreateDirectory(Path.Combine(nativeDirectory, nativeHostDirectory));
+            File.WriteAllText(Path.Combine(nativeDirectory, "conpty.dll"), "");
+            File.WriteAllText(Path.Combine(nativeDirectory, nativeHostDirectory, "OpenConsole.exe"), "");
+
+            var found = DcpHost.TryGetBundledConPtyPath(
+                terminalHostPath,
+                processArchitecture,
+                osArchitecture,
+                out var conPtyPath);
+
+            Assert.True(found);
+            Assert.Equal(nativeDirectory, conPtyPath);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void TryGetBundledConPtyPath_WithIncompletePayload_ReturnsFalse(bool includeConPty, bool includeOpenConsole)
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var terminalHostPath = Path.Combine(directory.FullName, "aspire-managed.exe");
+            File.WriteAllText(terminalHostPath, "");
+            if (includeConPty)
+            {
+                File.WriteAllText(Path.Combine(directory.FullName, "conpty.dll"), "");
+            }
+
+            if (includeOpenConsole)
+            {
+                var architectureDirectory = RuntimeInformation.OSArchitecture == Architecture.Arm64 ? "arm64" : "x64";
+                Directory.CreateDirectory(Path.Combine(directory.FullName, architectureDirectory));
+                File.WriteAllText(Path.Combine(directory.FullName, architectureDirectory, "OpenConsole.exe"), "");
+            }
+
+            var found = DcpHost.TryGetBundledConPtyPath(
+                terminalHostPath,
+                RuntimeInformation.ProcessArchitecture,
+                RuntimeInformation.OSArchitecture,
+                out var conPtyPath);
+
+            Assert.False(found);
+            Assert.Null(conPtyPath);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void CreateDcpProcessSpec_DoesNotInheritExcludedEnvironmentVariables()
     {
@@ -544,8 +675,8 @@ public sealed class DcpHostNotificationTests
         {
             ["aspnetcore_urls"] = "http://localhost:5000",
             ["DOTNET_LAUNCH_PROFILE"] = "MyProfile",
-            ["ASPNETCORE_ENVIRONMENT"] = "Development",
-            ["DOTNET_ENVIRONMENT"] = "Development",
+            [KnownAspNetCoreConfigNames.Environment] = "Development",
+            [KnownAspNetCoreConfigNames.DotNetEnvironment] = "Development",
             ["aspire_loglevel"] = "Debug",
         };
 
@@ -574,8 +705,8 @@ public sealed class DcpHostNotificationTests
             [
                 "aspnetcore_urls",
                 "DOTNET_LAUNCH_PROFILE",
-                "ASPNETCORE_ENVIRONMENT",
-                "DOTNET_ENVIRONMENT",
+                KnownAspNetCoreConfigNames.Environment,
+                KnownAspNetCoreConfigNames.DotNetEnvironment,
                 "aspire_loglevel",
             ];
 
@@ -591,6 +722,30 @@ public sealed class DcpHostNotificationTests
             Assert.Equal("keep-me-too", processSpec.EnvironmentVariables["ASPNETCORE_URLS_FOO"]);
             Assert.Equal("keep-me-three", processSpec.EnvironmentVariables["ASPIRE_LOGLEVEL_EXTRA"]);
         }, options).Dispose();
+    }
+
+    [Fact]
+    public void CreateDcpProcessSpec_MapsAspireProfilingConfigurationToDcpOtelEnvironmentVariables()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.ProfilingEnabled] = "true",
+                [KnownConfigNames.ProfilingSessionId] = "profile-session",
+                [KnownConfigNames.Legacy.StartupTraceParent] = "00-11111111111111111111111111111111-2222222222222222-01",
+                [KnownConfigNames.Legacy.StartupTraceState] = "vendor=value"
+            })
+            .Build();
+
+        var dcpHost = CreateDcpHostForProcessSpecTests(configuration: configuration);
+        var locations = CreateTestLocations();
+
+        var processSpec = dcpHost.CreateDcpProcessSpec(locations);
+
+        Assert.Equal("true", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupProfilingEnabled]);
+        Assert.Equal("profile-session", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelProfilingSessionId]);
+        Assert.Equal("00-11111111111111111111111111111111-2222222222222222-01", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupTraceParent]);
+        Assert.Equal("vendor=value", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupTraceState]);
     }
 
     private static DcpHost CreateDcpHostForProcessSpecTests(
@@ -659,6 +814,36 @@ public sealed class DcpHostNotificationTests
         }
 
         throw new FileNotFoundException("Could not locate test certificate file 'testCert.pfx' in expected locations.");
+    }
+
+    private static X509Certificate2 CreateExportableCertificate()
+    {
+        var subject = new X500DistinguishedName($"CN=aspire-test-{Guid.NewGuid():N}");
+
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(subject, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509Extension("1.3.6.1.4.1.311.84.1.1", [0], critical: false));
+        using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+        return X509CertificateLoader.LoadPkcs12(certificate.Export(X509ContentType.Pfx), password: null, X509KeyStorageFlags.Exportable);
+    }
+
+    private static string GetQuotedArgumentValue(string? arguments, string option)
+    {
+        if (arguments is null)
+        {
+            throw new InvalidOperationException("Expected process arguments to be set.");
+        }
+
+        var prefix = $"{option} \"";
+        var start = arguments.IndexOf(prefix, StringComparison.Ordinal);
+        Assert.NotEqual(-1, start);
+        start += prefix.Length;
+
+        var end = arguments.IndexOf('"', start);
+        Assert.NotEqual(-1, end);
+
+        return arguments[start..end];
     }
 
     [Fact]
@@ -1007,5 +1192,4 @@ public sealed class DcpHostNotificationTests
     }
 }
 
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning restore ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

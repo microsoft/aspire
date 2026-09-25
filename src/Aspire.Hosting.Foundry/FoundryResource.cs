@@ -19,7 +19,11 @@ namespace Aspire.Hosting.Foundry;
 public class FoundryResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure) :
     AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
+    internal const string FoundryUserRoleDefinitionId = "53ca6127-db72-4b80-b1b0-d745d6d5456d";
+
     internal Uri? EmulatorServiceUri { get; set; }
+
+    internal bool ManageLocalService { get; set; }
 
     private readonly List<FoundryDeploymentResource> _deployments = [];
 
@@ -126,6 +130,8 @@ public class FoundryResource(string name, Action<AzureResourceInfrastructure> co
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
         yield return new("Uri", UriExpression);
+
+        yield return new("AIInferenceUri", IsEmulator ? UriExpression : ReferenceExpression.Create($"{AIFoundryApiEndpoint}models"));
 
         if (IsEmulator)
         {

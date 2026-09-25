@@ -1,0 +1,109 @@
+name: Aspire CLI Starter Validation
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        required: true
+        type: string
+      artifactSuffix:
+        required: true
+        type: string
+      maxStartupSeconds:
+        required: true
+        type: number
+      resourceReadyTimeoutSeconds:
+        required: true
+        type: number
+      prNumber:
+        required: true
+        type: number
+      workflowRunId:
+        required: true
+        type: string
+      checkoutRef:
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ${{ inputs.runner }}
+    # Shared budget for every caller of this reusable workflow. The validation script can spend
+    # up to four startup waits (run + start for two templates) and three resource waits, which is
+    # 27 minutes on the current Windows ARM64 input set before template creation, package add, log
+    # collection, and artifact upload. Keep the job timeout above that aggregate budget.
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.checkoutRef }}
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '22'
+
+      - name: Install Aspire CLI from PR dogfood script
+        shell: pwsh
+        env:
+          PR_NUMBER: ${{ inputs.prNumber }}
+          WORKFLOW_RUN_ID: ${{ inputs.workflowRunId }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $scriptPath = Join-Path $env:GITHUB_WORKSPACE "eng/scripts/get-aspire-cli-pr.ps1"
+          & $scriptPath ([int]$env:PR_NUMBER) -WorkflowRunId ([long]$env:WORKFLOW_RUN_ID) -SkipExtension
+
+          aspire --version
+
+      - name: Create starter app and validate startup
+        # Leave headroom above the script's aggregate wait budget so slower runs can still finish
+        # template creation, aspire add, and cleanup instead of being cancelled mid-validation.
+        timeout-minutes: 40
+        shell: pwsh
+        env:
+          PR_NUMBER: ${{ inputs.prNumber }}
+          MAX_STARTUP_SECONDS: ${{ inputs.maxStartupSeconds }}
+          RESOURCE_READY_TIMEOUT_SECONDS: ${{ inputs.resourceReadyTimeoutSeconds }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          & "$env:GITHUB_WORKSPACE/eng/scripts/cli-starter-validation.ps1" `
+            -PRNumber ([int]$env:PR_NUMBER) `
+            -MaxStartupSeconds ([int]$env:MAX_STARTUP_SECONDS) `
+            -ResourceReadyTimeoutSeconds ([int]$env:RESOURCE_READY_TIMEOUT_SECONDS)
+
+      - name: Collect CLI logs
+        if: always()
+        shell: pwsh
+        run: |
+          $validationRoot = Join-Path $env:RUNNER_TEMP 'aspire-cli-starter-validation'
+          $cliLogsDir = Join-Path $HOME '.aspire/logs'
+          $sharedLogsDir = Join-Path $validationRoot 'cli-logs'
+
+          if (Test-Path $cliLogsDir) {
+            New-Item -ItemType Directory -Path $validationRoot -Force | Out-Null
+            Copy-Item -Path $cliLogsDir -Destination $sharedLogsDir -Recurse -Force
+          }
+
+      - name: Upload starter validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: cli-starter-validation-${{ inputs.artifactSuffix }}
+          path: ${{ runner.temp }}/aspire-cli-starter-validation
+          if-no-files-found: ignore

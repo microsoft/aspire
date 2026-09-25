@@ -21,11 +21,24 @@ var isFoundryLocal = args.Contains("--local");
 
 using var mc = new ModelClient(isFoundryLocal);
 var allModelsResponse = await mc.GetAllModelsAsync().ConfigureAwait(false);
+var models = allModelsResponse.Entities ?? [];
+if (models.Count == 0)
+{
+    throw new InvalidOperationException("The Microsoft Foundry model catalog returned no models. Refusing to overwrite the generated model descriptors with an empty catalog.");
+}
+
+var descriptorModels = isFoundryLocal
+    ? GetLocalDescriptorModels(models)
+    : GetDistinctHostedModels(models).ToList();
+if (descriptorModels.Count == 0)
+{
+    throw new InvalidOperationException("The Microsoft Foundry model catalog produced no model descriptors after filtering. Refusing to overwrite the generated model descriptors with an empty catalog.");
+}
 
 // Generate C# extension methods for the models
 var generatedCode = isFoundryLocal
-    ? GenerateLocalCode("Aspire.Hosting.Foundry", allModelsResponse.Entities ?? [])
-    : GenerateHostedCode("Aspire.Hosting.Foundry", allModelsResponse.Entities ?? []);
+    ? GenerateLocalCode("Aspire.Hosting.Foundry", descriptorModels)
+    : GenerateHostedCode("Aspire.Hosting.Foundry", descriptorModels);
 
 // Write the generated code to a file
 var filename = isFoundryLocal
@@ -59,8 +72,7 @@ string GenerateHostedCode(string csNamespace, List<ModelEntity> models)
     sb.AppendLine("public partial class FoundryModel");
     sb.AppendLine("{");
 
-    // Group models by publisher (only include models that are visible and have names & publishers)
-    var modelsByPublisher = GetDistinctHostedModels(models)
+    var modelsByPublisher = models
         .GroupBy(m => m.Annotations!.SystemCatalogData!.Publisher!)
         .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
 
@@ -135,6 +147,22 @@ static bool IsAllUppercaseAscii(string value)
     return value.Any(char.IsAsciiLetter) && !value.Any(char.IsAsciiLetterLower);
 }
 
+static List<ModelEntity> GetLocalDescriptorModels(IEnumerable<ModelEntity> models)
+{
+    return models
+        .Where(m => m.Annotations?.SystemCatalogData?.Publisher != null &&
+                    m.Annotations?.Name != null &&
+                    m.Annotations?.Tags?.ContainsKey("alias") is true &&
+                    IsVisible(m.Annotations?.InvisibleUntil))
+        .GroupBy(m => m.Annotations!.SystemCatalogData!.Publisher!)
+        .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+        .SelectMany(publisherGroup => publisherGroup
+            .GroupBy(m => m.Annotations!.Tags!["alias"])
+            .Select(g => g.First())
+            .OrderBy(m => m.Annotations!.Name, StringComparer.OrdinalIgnoreCase))
+        .ToList();
+}
+
 string GenerateLocalCode(string csNamespace, List<ModelEntity> models)
 {
     var sb = new StringBuilder();
@@ -149,11 +177,7 @@ string GenerateLocalCode(string csNamespace, List<ModelEntity> models)
     sb.AppendLine("public partial class FoundryModel");
     sb.AppendLine("{");
 
-    // Group models by publisher (only include models that are visible and have names & publishers)
     var modelsByPublisher = models
-        .Where(m => m.Annotations?.SystemCatalogData?.Publisher != null &&
-                    m.Annotations?.Name != null &&
-                    IsVisible(m.Annotations?.InvisibleUntil))
         .GroupBy(m => m.Annotations!.SystemCatalogData!.Publisher!)
         .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
 
@@ -166,9 +190,7 @@ string GenerateLocalCode(string csNamespace, List<ModelEntity> models)
     foreach (var publisherGroup in modelsByPublisher)
     {
         var firstMethod = true;
-        foreach (var model in publisherGroup
-            .GroupBy(m => m.Annotations!.Tags!["alias"])
-            .Select(x => x.First()).OrderBy(m => m.Annotations!.Name, StringComparer.OrdinalIgnoreCase))
+        foreach (var model in publisherGroup.OrderBy(m => m.Annotations!.Name, StringComparer.OrdinalIgnoreCase))
         {
             var modelName = model.Annotations!.Tags!["alias"];
             var descriptorName = ToPascalCase(modelName); // Reuse method name logic for descriptor property name
@@ -695,6 +717,11 @@ public partial class ModelClassGenerator
 
 public class ModelClient : IDisposable
 {
+    private const int MaxRequestAttempts = 6;
+    private const int PageSize = 200;
+    private const int ResponseSnippetLength = 2000;
+    private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(30);
+
     private readonly HttpClient _httpClient;
     private readonly HttpClientHandler _handler;
     private readonly bool _isFoundryLocal;
@@ -726,22 +753,21 @@ public class ModelClient : IDisposable
 
             var pageResponse = await GetModelsAsync(continuationToken).ConfigureAwait(false);
 
-            // Deserialize the response using our models
             var apiResponse = JsonSerializer.Deserialize<ApiResponse>(pageResponse);
 
-            if (apiResponse?.IndexEntitiesResponse?.Value != null)
+            if (apiResponse?.IndexEntitiesResponse?.Value is not { } pageModels)
             {
-                foreach (var model in apiResponse.IndexEntitiesResponse.Value)
-                {
-                    allModels.Add(model);
-                }
+                throw new InvalidOperationException($"The Microsoft Foundry model catalog response did not contain an indexEntitiesResponse.value array. Response: {GetResponseSnippet(pageResponse)}");
+            }
 
-                Console.WriteLine($"Fetched page with {apiResponse.IndexEntitiesResponse.Value.Count} models. Total so far: {allModels.Count}");
-            }
-            else
+            ValidateSuccessfulCatalogResponse(apiResponse, pageResponse);
+
+            foreach (var model in pageModels)
             {
-                Console.WriteLine("No models found in this page response.");
+                allModels.Add(model);
             }
+
+            Console.WriteLine($"Fetched page with {pageModels.Count} models. Total so far: {allModels.Count}");
 
             // Check if there's a continuation token for the next page
             previousToken = continuationToken;
@@ -754,8 +780,7 @@ public class ModelClient : IDisposable
                 // Check for infinite loop (same token repeated)
                 if (continuationToken == previousToken)
                 {
-                    Console.WriteLine("WARNING: Same continuation token received twice. Breaking to prevent infinite loop.");
-                    continuationToken = null;
+                    throw new InvalidOperationException($"The Microsoft Foundry model catalog returned the same continuation token twice. Refusing to overwrite the generated model descriptors with a partial catalog. Response: {GetResponseSnippet(pageResponse)}");
                 }
             }
 
@@ -780,12 +805,7 @@ public class ModelClient : IDisposable
     {
         var url = "https://ai.azure.com/api/eastus/ux/v1.0/entities/crossRegion";
 
-        var request = new HttpRequestMessage(HttpMethod.Post, url);
-
-        request.Headers.Add("User-Agent", "AzureAiStudio");
-
-        // Build the JSON payload with optional continuation token
-        var basePayload = """
+        var basePayload = $$"""
         {
             "resourceIds": [
                 {"resourceId": "azure-openai", "entityContainerType": "Registry"},
@@ -835,7 +855,7 @@ public class ModelClient : IDisposable
                 ],
                 "freeTextSearch": "",
                 "order": [{"field": "properties/name", "direction": "Asc"}],
-                "pageSize": 30,
+                "pageSize": {{PageSize}},
                 "facets": [ ],
                 "includeTotalResultCount": true,
                 "searchBuilder": "AppendPrefix"
@@ -861,7 +881,7 @@ public class ModelClient : IDisposable
                         ],
                         "freeTextSearch": "",
                         "order": [{"field": "properties/name", "direction": "Asc"}],
-                        "pageSize": 30,
+                        "pageSize": {{PageSize}},
                         "facets": [ ],
                         "includeTotalResultCount": true,
                         "searchBuilder": "AppendPrefix"
@@ -885,13 +905,54 @@ public class ModelClient : IDisposable
             jsonContent = basePayload;
         }
 
-        request.Content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+        for (var attempt = 1; attempt <= MaxRequestAttempts; attempt++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Headers.Add("User-Agent", "AzureAiStudio");
+            request.Content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
+            using var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
+            var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+            {
+                // A 200 can still carry partial-failure data (regionalErrors / resourceSkipReasons /
+                // shardErrors / numberOfResourcesNotIncludedInSearch). In practice this shows up right
+                // after the catalog API throttles us: the observed sequence is HTTP 429 -> 200 with
+                // populated error/skip fields, i.e. a transient symptom of load/rate-limiting rather
+                // than a stable catalog state. Retry it within the same budget as 429/5xx instead of
+                // hard-aborting, so a single throttled page doesn't fail the whole run. Only once the
+                // retry budget is exhausted do we refuse, preserving the "never overwrite the generated
+                // descriptors with a partial catalog" guarantee. See
+                // https://github.com/microsoft/aspire/issues/18285.
+                var partialFailureFields = TryGetPartialFailureFields(content);
+                if (partialFailureFields is { Count: > 0 })
+                {
+                    if (attempt < MaxRequestAttempts)
+                    {
+                        var partialDelay = GetRetryDelay(response, content, attempt);
+                        Console.WriteLine($"Microsoft Foundry model catalog request returned a partial catalog (populated {string.Join(", ", partialFailureFields)}). Retrying in {partialDelay.TotalSeconds:N0}s (attempt {attempt + 1}/{MaxRequestAttempts}).");
+                        await Task.Delay(partialDelay).ConfigureAwait(false);
+                        continue;
+                    }
 
-        // Handle decompression automatically
-        var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-        return content;
+                    throw new InvalidOperationException($"The Microsoft Foundry model catalog response included partial failure data in {string.Join(", ", partialFailureFields)}. Refusing to overwrite the generated model descriptors with a partial catalog. Response: {GetResponseSnippet(content)}");
+                }
+
+                return content;
+            }
+
+            if (IsTransientStatusCode(response.StatusCode) && attempt < MaxRequestAttempts)
+            {
+                var delay = GetRetryDelay(response, content, attempt);
+                Console.WriteLine($"Microsoft Foundry model catalog request failed with HTTP {(int)response.StatusCode} ({response.StatusCode}). Retrying in {delay.TotalSeconds:N0}s (attempt {attempt + 1}/{MaxRequestAttempts}).");
+                await Task.Delay(delay).ConfigureAwait(false);
+                continue;
+            }
+
+            throw new HttpRequestException($"Microsoft Foundry model catalog request failed with HTTP {(int)response.StatusCode} ({response.StatusCode}). Response: {GetResponseSnippet(content)}", inner: null, response.StatusCode);
+        }
+
+        throw new InvalidOperationException("The Microsoft Foundry model catalog request loop completed without returning or throwing.");
     }
 
     public void Dispose()
@@ -924,6 +985,158 @@ public class ModelClient : IDisposable
                 }
             }
         }
+    }
+
+    private static bool IsTransientStatusCode(HttpStatusCode statusCode)
+    {
+        return statusCode == HttpStatusCode.TooManyRequests || (int)statusCode >= 500;
+    }
+
+    private static TimeSpan GetRetryDelay(HttpResponseMessage response, string content, int attempt)
+    {
+        if (response.Headers.RetryAfter?.Delta is { } delta && delta > TimeSpan.Zero)
+        {
+            return AddRetryBuffer(delta, attempt);
+        }
+
+        if (response.Headers.RetryAfter?.Date is { } date)
+        {
+            var dateDelta = date - DateTimeOffset.UtcNow;
+            if (dateDelta > TimeSpan.Zero)
+            {
+                return AddRetryBuffer(dateDelta, attempt);
+            }
+        }
+
+        if (TryGetRetryAfterFromBody(content) is { } bodyDelay)
+        {
+            return AddRetryBuffer(bodyDelay, attempt);
+        }
+
+        return ClampRetryDelay(TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+    }
+
+    private static TimeSpan AddRetryBuffer(TimeSpan delay, int attempt)
+    {
+        if (delay >= MaxRetryDelay)
+        {
+            return MaxRetryDelay;
+        }
+
+        return ClampRetryDelay(delay + TimeSpan.FromSeconds(Math.Min(attempt, 5)));
+    }
+
+    private static TimeSpan ClampRetryDelay(TimeSpan delay)
+    {
+        return delay <= MaxRetryDelay ? delay : MaxRetryDelay;
+    }
+
+    private static TimeSpan? TryGetRetryAfterFromBody(string content)
+    {
+        try
+        {
+            var retryAfterValue = JsonNode.Parse(content)?["error"]?["messageParameters"]?["retryAfter"]?.ToString();
+            if (int.TryParse(retryAfterValue, CultureInfo.InvariantCulture, out var retryAfterSeconds) && retryAfterSeconds > 0)
+            {
+                return TimeSpan.FromSeconds(retryAfterSeconds);
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return null;
+    }
+
+    private static string GetResponseSnippet(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return "<empty>";
+        }
+
+        var sanitized = content.ReplaceLineEndings(" ").Trim();
+        return sanitized.Length <= ResponseSnippetLength
+            ? sanitized
+            : sanitized[..ResponseSnippetLength] + "...";
+    }
+
+    private static void ValidateSuccessfulCatalogResponse(ApiResponse apiResponse, string pageResponse)
+    {
+        var partialFailureFields = GetPartialFailureFields(apiResponse);
+
+        if (partialFailureFields.Count > 0)
+        {
+            throw new InvalidOperationException($"The Microsoft Foundry model catalog response included partial failure data in {string.Join(", ", partialFailureFields)}. Refusing to overwrite the generated model descriptors with a partial catalog. Response: {GetResponseSnippet(pageResponse)}");
+        }
+    }
+
+    private static List<string> GetPartialFailureFields(ApiResponse apiResponse)
+    {
+        var partialFailureFields = new List<string>();
+
+        AddPopulatedJsonField(partialFailureFields, "regionalErrors", apiResponse.RegionalErrors);
+        AddPopulatedJsonField(partialFailureFields, "resourceSkipReasons", apiResponse.ResourceSkipReasons);
+        AddPopulatedJsonField(partialFailureFields, "shardErrors", apiResponse.ShardErrors);
+
+        if (apiResponse.NumberOfResourcesNotIncludedInSearch > 0)
+        {
+            partialFailureFields.Add("numberOfResourcesNotIncludedInSearch");
+        }
+
+        return partialFailureFields;
+    }
+
+    // Inspect a 200 response body for partial-failure markers so the retry loop can treat a transient
+    // partial catalog as retryable. Returns null when the body can't be parsed as the catalog shape, so
+    // the caller falls back to its existing deserialize/validate path (which surfaces a clearer error)
+    // instead of silently retrying unparseable content.
+    private static List<string>? TryGetPartialFailureFields(string content)
+    {
+        try
+        {
+            var apiResponse = JsonSerializer.Deserialize<ApiResponse>(content);
+            return apiResponse is null ? null : GetPartialFailureFields(apiResponse);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static void AddPopulatedJsonField(List<string> partialFailureFields, string fieldName, object? value)
+    {
+        // System.Text.Json materializes any non-null JSON value for an `object?` property into a boxed
+        // JsonElement, so an empty "regionalErrors": [] / {} arrives here as a non-null JsonElement.
+        // Only flag the field as a partial-failure marker when the element actually has content; an
+        // empty collection means "no errors" and must NOT be flagged. Otherwise a clean 200 would be
+        // misread as partial and, now that partial responses are retried, would burn the entire retry
+        // budget before aborting.
+        if (value is JsonElement element)
+        {
+            if (IsPopulatedJsonElement(element))
+            {
+                partialFailureFields.Add(fieldName);
+            }
+        }
+        else if (value is not null)
+        {
+            partialFailureFields.Add(fieldName);
+        }
+    }
+
+    private static bool IsPopulatedJsonElement(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.Object => element.EnumerateObject().Any(),
+            JsonValueKind.Array => element.EnumerateArray().Any(),
+            JsonValueKind.String => !string.IsNullOrEmpty(element.GetString()),
+            JsonValueKind.Number => true,
+            JsonValueKind.True => true,
+            JsonValueKind.False => true,
+            _ => false
+        };
     }
 }
 

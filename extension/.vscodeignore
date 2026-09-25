@@ -1,5 +1,16 @@
 .vscode/**
 .vscode-test/**
+.test-*
+.test-*/**
+.test-artifacts/**
+.test-extensions/**
+.test-results/**
+.test-storage/**
+.test-workspaces/**
+.mocharc.e2e.js
+tsconfig.e2e.json
+scripts/run-e2e.js
+test-e2e/**
 out/**
 node_modules/**
 src/**

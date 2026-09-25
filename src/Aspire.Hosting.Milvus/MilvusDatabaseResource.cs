@@ -14,6 +14,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="name">The name of the resource.</param>
 /// <param name="databaseName">The database name.</param>
 /// <param name="parent">The Milvus parent resource associated with this database.</param>
+/// <ats-summary>A resource that represents a Milvus database. This is a child resource of a <ats-see cref="!:type:MilvusServerResource" />.</ats-summary>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
 [AspireExport(ExposeProperties = true)]
 public class MilvusDatabaseResource(string name, string databaseName, MilvusServerResource parent) : Resource(name), IResourceWithParent<MilvusServerResource>, IResourceWithConnectionString

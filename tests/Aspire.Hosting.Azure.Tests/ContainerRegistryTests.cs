@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREACADOMAINS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable CS0618 // Type or member is obsolete
 
 using Aspire.Hosting.ApplicationModel;
@@ -13,13 +12,13 @@ using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class ContainerRegistryTests
+public class ContainerRegistryTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task AzureContainerAppEnvironmentResourceImplementsContainerRegistry()
     {
         // Arrange
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         _ = builder.AddAzureContainerAppEnvironment("env");
 
         using var app = builder.Build();
@@ -44,7 +43,7 @@ public class ContainerRegistryTests
     public async Task ContainerRegistryInfoFlowsToDeploymentTargetForProjects()
     {
         // Arrange
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         builder.AddProject<TestProject>("api", launchProfileName: null)
@@ -80,7 +79,7 @@ public class ContainerRegistryTests
     public async Task ContainerRegistryInfoIsAccessibleFromPublisher()
     {
         // Arrange
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env");
         builder.AddContainer("api", "myimage");
 

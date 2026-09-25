@@ -3,13 +3,18 @@
   <file datatype="xml" source-language="en" target-language="es" original="../DoCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Execute a specific pipeline step and its dependencies (Preview)</source>
+        <source>Execute a specific pipeline step and its dependencies</source>
         <target state="needs-review-translation">Ejecute un paso de canalización específico y sus dependencias. (Versión preliminar)</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
         <source>Executing pipeline...</source>
         <target state="translated">Ejecutando canalización...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ListStepsRequiresStep">
+        <source>The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</source>
+        <target state="new">The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCanceled">
@@ -35,6 +40,11 @@
       <trans-unit id="StepArgumentDescription">
         <source>The name of the step to execute</source>
         <target state="needs-review-translation">Nombre del paso que se va a ejecutar.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StepArgumentRequired">
+        <source>The 'step' argument is required.</source>
+        <target state="new">The 'step' argument is required.</target>
         <note />
       </trans-unit>
     </body>

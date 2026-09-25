@@ -96,7 +96,7 @@ internal static class BuiltInDistributedApplicationEventSubscriptionHandlers
 
         foreach (var resource in beforeStartEvent.Model.Resources)
         {
-            if (resource.GetContainerLifetimeType() == ContainerLifetime.Persistent)
+            if (resource is ContainerResource && resource.GetLifetimeType() == Lifetime.Persistent)
             {
                 if (logger.IsEnabled(LogLevel.Warning))
                 {

@@ -42,7 +42,7 @@ public class AspireRedisDistributedCacheExtensionsTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public async Task AddsRedisBuilderDistributedCacheCanConfigure()
     {
         await using var container = await RedisContainerFixture.CreateContainerAsync();
@@ -69,7 +69,7 @@ public class AspireRedisDistributedCacheExtensionsTests
     /// Tests that you can use keyed services for distributed caches.
     /// </summary>
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public async Task CanAddMultipleKeyedCachingServicesBuilder()
     {
         await using var container1 = await RedisContainerFixture.CreateContainerAsync();

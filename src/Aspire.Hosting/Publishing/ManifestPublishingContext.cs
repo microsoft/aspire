@@ -1,13 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTS001
+
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Publishing;
@@ -124,9 +125,15 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         {
             await WriteResourceObjectAsync(container, () => WriteContainerAsync(container)).ConfigureAwait(false);
         }
-        else if (resource is ProjectResource project)
+        else if (resource.SupportsDotnetProgramPublishing())
         {
-            await WriteResourceObjectAsync(project, () => WriteProjectAsync(project)).ConfigureAwait(false);
+            await WriteResourceObjectAsync(resource, () => WriteProjectAsync(resource)).ConfigureAwait(false);
+        }
+        else if (resource is IDotnetProgramResource)
+        {
+            await WriteResourceObjectAsync(resource, () => throw new DistributedApplicationException(
+                $"The .NET program resource '{resource.Name}' is not configured for publishing. " +
+                $"Create it with a supported builder API or call WithDotnetProgramPublishing() after attaching project metadata.")).ConfigureAwait(false);
         }
         else if (resource is ExecutableResource executable)
         {
@@ -173,9 +180,9 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         return Task.CompletedTask;
     }
 
-    private async Task WriteProjectAsync(ProjectResource project)
+    private async Task WriteProjectAsync(IResource project)
     {
-        if (!project.TryGetLastAnnotation<IProjectMetadata>(out var metadata))
+        if (!project.TryGetProjectMetadata(out var metadata))
         {
             throw new DistributedApplicationException($"Project metadata was not found for resource '{project.Name}'.");
         }
@@ -372,16 +379,18 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         {
             var dockerfilePath = annotation.DockerfilePath;
 
-            // If there's a factory, generate the Dockerfile content and write it to both the original path and a resource-specific path
-            await DockerfileHelper.ExecuteDockerfileFactoryAsync(annotation, container, ExecutionContext.ServiceProvider, CancellationToken).ConfigureAwait(false);
-
             if (annotation.DockerfileFactory is not null)
             {
                 // Copy to a resource-specific path in the manifest output directory for publishing
                 var manifestDirectory = Path.GetDirectoryName(Path.GetFullPath(ManifestPath))!;
                 var resourceDockerfilePath = Path.Combine(manifestDirectory, $"{container.Name}.Dockerfile");
-                Directory.CreateDirectory(manifestDirectory);
-                File.Copy(annotation.DockerfilePath, resourceDockerfilePath, overwrite: true);
+                var dockerfileContext = new DockerfileFactoryContext
+                {
+                    Services = ExecutionContext.Services,
+                    Resource = container,
+                    CancellationToken = CancellationToken
+                };
+                await annotation.EmitDockerfileArtifactsAsync(dockerfileContext, resourceDockerfilePath).ConfigureAwait(false);
 
                 // Update the dockerfile path to use the generated file for the manifest
                 dockerfilePath = resourceDockerfilePath;

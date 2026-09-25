@@ -9,6 +9,7 @@ using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Toolchains.InProcess.NoEmit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Perfolizer.Horology;
 
 namespace Aspire.Cli.Benchmarks;
 
@@ -146,7 +147,7 @@ public class QueryBenchmarks
                 .WithToolchain(InProcessNoEmitToolchain.Instance)
                 .WithWarmupCount(2)
                 .WithIterationCount(5)
-                .WithInvocationCount(16)
+                .WithMinIterationTime(TimeInterval.FromMilliseconds(150))
                 .WithUnrollFactor(1));
 
             AddDiagnoser(MemoryDiagnoser.Default);

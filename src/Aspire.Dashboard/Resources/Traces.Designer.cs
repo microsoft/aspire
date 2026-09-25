@@ -122,6 +122,15 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TotalItemsFooterSingularText", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} of {1} traces&lt;/strong&gt;. Use filters to narrow the results.
+        /// </summary>
+        public static string VirtualizedLimitText {
+            get {
+                return ResourceManager.GetString("VirtualizedLimitText", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Name: {0}.

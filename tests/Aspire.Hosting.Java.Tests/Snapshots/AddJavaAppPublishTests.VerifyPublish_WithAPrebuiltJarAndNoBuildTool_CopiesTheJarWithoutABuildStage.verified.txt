@@ -1,0 +1,5 @@
+﻿FROM docker.io/library/eclipse-temurin:21-jre
+WORKDIR /app
+COPY --chown=999:999 target/worker.jar /app/app.jar
+USER 999:999
+ENTRYPOINT ["java","-jar","/app/app.jar"]

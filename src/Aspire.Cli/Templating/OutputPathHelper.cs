@@ -85,6 +85,40 @@ internal static class OutputPathHelper
         };
     }
 
+    internal static async Task<bool> PromptExtensionCreateProjectNameSubdirectoryAsync(
+        IInteractionService interactionService,
+        bool isExtensionHost,
+        bool isExplicitOutput,
+        string projectName,
+        CancellationToken cancellationToken)
+    {
+        if (!isExtensionHost
+            || isExplicitOutput
+            || !CanCreateProjectNameSubdirectory(projectName))
+        {
+            return false;
+        }
+
+        var subdirectoryChoice = string.Format(CultureInfo.CurrentCulture, NewCommandStrings.CreateProjectNameSubdirectoryChoice, projectName);
+        var selectedChoice = await interactionService.PromptForSelectionAsync(
+            NewCommandStrings.SelectProjectCreationLocation,
+            [subdirectoryChoice, NewCommandStrings.CreateProjectDirectlyInSelectedFolderChoice],
+            static choice => choice,
+            cancellationToken: cancellationToken);
+
+        return string.Equals(selectedChoice, subdirectoryChoice, StringComparison.Ordinal);
+    }
+
+    internal static Func<string, string>? CreateProjectNameSubdirectoryOutputPathResolver(bool createProjectNameSubdirectory, string projectName)
+    {
+        if (!createProjectNameSubdirectory || !CanCreateProjectNameSubdirectory(projectName))
+        {
+            return null;
+        }
+
+        return outputPath => AppendProjectNameSubdirectory(outputPath, projectName);
+    }
+
     /// <summary>
     /// Validates a (possibly relative) output path before resolution. Returns an error message if the path
     /// contains invalid characters or targets a non-empty existing directory, or <see langword="null"/> if valid.
@@ -106,6 +140,18 @@ internal static class OutputPathHelper
 
         return null;
     }
+
+    private static string AppendProjectNameSubdirectory(string outputPath, string projectName)
+    {
+        var normalizedOutputPath = Path.TrimEndingDirectorySeparator(outputPath);
+        return string.Equals(Path.GetFileName(normalizedOutputPath), projectName, StringComparison.OrdinalIgnoreCase)
+            ? normalizedOutputPath
+            : Path.Combine(normalizedOutputPath, projectName);
+    }
+
+    private static bool CanCreateProjectNameSubdirectory(string projectName) =>
+        !projectName.Equals(".", StringComparison.Ordinal)
+        && !projectName.Equals("..", StringComparison.Ordinal);
 
     private static string SanitizeBaseName(string baseName)
     {

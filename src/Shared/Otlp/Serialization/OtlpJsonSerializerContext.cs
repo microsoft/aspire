@@ -3,6 +3,7 @@
 
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Shared.Model.Serialization;
 #if !CLI
@@ -30,6 +31,8 @@ namespace Aspire.Otlp.Serialization;
 [JsonSerializable(typeof(OtlpInstrumentationScopeJson))]
 [JsonSerializable(typeof(OtlpEntityRefJson))]
 [JsonSerializable(typeof(OtlpResourceJson))]
+[JsonSerializable(typeof(JsonNode))]
+[JsonSerializable(typeof(Dictionary<string, JsonNode?>))]
 [JsonSerializable(typeof(OtlpTelemetryDataJson))]
 // Trace types
 [JsonSerializable(typeof(OtlpResourceSpansJson))]
@@ -103,4 +106,14 @@ internal sealed partial class OtlpJsonSerializerContext : JsonSerializerContext
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         TypeInfoResolver = Default
     };
+
+    /// <summary>
+    /// Gets source-generated metadata bound to <see cref="DefaultOptions"/>.
+    /// </summary>
+    public static OtlpJsonSerializerContext DefaultContext { get; } = new(DefaultOptions);
+
+    /// <summary>
+    /// Gets source-generated metadata bound to <see cref="IndentedOptions"/>.
+    /// </summary>
+    public static OtlpJsonSerializerContext IndentedContext { get; } = new(IndentedOptions);
 }

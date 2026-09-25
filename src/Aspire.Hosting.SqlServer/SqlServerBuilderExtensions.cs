@@ -10,6 +10,8 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
+#pragma warning disable ASPIRETERMINAL001
+
 namespace Aspire.Hosting;
 
 /// <summary>
@@ -33,7 +35,8 @@ public static partial class SqlServerBuilderExtensions
     /// <param name="password">The parameter used to provide the administrator password for the SQL Server resource. If <see langword="null"/> a random password will be generated.</param>
     /// <param name="port">The host port for the SQL Server.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a SQL Server container resource")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<SqlServerServerResource> AddSqlServer(this IDistributedApplicationBuilder builder, [ResourceName] string name, IResourceBuilder<ParameterResource>? password = null, int? port = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -92,12 +95,78 @@ public static partial class SqlServerBuilderExtensions
     }
 
     /// <summary>
+    /// Adds a REPL command that opens an authenticated SQL Server shell in the dashboard terminal dock.
+    /// </summary>
+    /// <param name="builder">The SQL Server resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// This command is opt-in and available only in run mode. Dashboard users who can execute resource commands
+    /// can run commands as <c>sa</c>, including server-side operating system commands when enabled.
+    /// Enable it only for trusted dashboard users, especially when sharing the dashboard through a tunnel
+    /// or remote development environment.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddSqlServer("sqlserver").WithRepl();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<SqlServerServerResource> WithRepl(this IResourceBuilder<SqlServerServerResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
+    }
+
+    /// <summary>
+    /// Creates authenticated sqlcmd launch options for the running container.
+    /// </summary>
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(SqlServerServerResource resource, CancellationToken cancellationToken)
+    {
+        var password = await resource.PasswordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(password))
+        {
+            throw new DistributedApplicationException("The SQL Server REPL password is not available.");
+        }
+
+        var port = resource.PrimaryEndpoint.TargetPort ?? throw new DistributedApplicationException("The SQL Server REPL port is not available.");
+
+        // SQL Server 2022 CU14 / 2019 CU28 moved sqlcmd to mssql-tools18. Inspect the
+        // installed binary rather than guessing from tags, which may be overridden or pinned.
+        // https://learn.microsoft.com/sql/linux/quickstart-install-connect-docker
+        // Only the fixed script is interpreted by the shell; "$@" preserves argument boundaries.
+        const string selectSqlCmd = """
+            if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then
+                exec /opt/mssql-tools18/bin/sqlcmd "$@"
+            elif [ -x /opt/mssql-tools/bin/sqlcmd ]; then
+                exec /opt/mssql-tools/bin/sqlcmd "$@"
+            else
+                echo 'The SQL Server REPL requires sqlcmd in /opt/mssql-tools18/bin or /opt/mssql-tools/bin.' >&2
+                exit 127
+            fi
+            """;
+
+        return new TerminalLaunchOptions
+        {
+            Title = $"sqlcmd ({resource.Name})",
+            Executable = "/bin/sh",
+            // The client connects over container loopback and trusts the local server's
+            // self-signed certificate, matching the integration's connection string.
+            Arguments = ["-c", selectSqlCmd, "sqlcmd", "-S", $"127.0.0.1,{port.ToString(CultureInfo.InvariantCulture)}", "-U", "sa", "-d", "master", "-C"],
+            EnvironmentVariables = { ["SQLCMDPASSWORD"] = password }
+        };
+    }
+
+    /// <summary>
     /// Adds a SQL Server database to the application model. This is a child resource of a <see cref="SqlServerServerResource"/>.
     /// </summary>
+    /// <ats-summary>Adds a SQL Server database resource</ats-summary>
     /// <param name="builder">The SQL Server resource builders.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// When adding a <see cref="SqlServerDatabaseResource"/> to your application model the resource can then
@@ -111,7 +180,8 @@ public static partial class SqlServerBuilderExtensions
     /// The database creation happens automatically as part of the resource lifecycle.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Adds a SQL Server database resource")]
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<SqlServerDatabaseResource> AddDatabase(this IResourceBuilder<SqlServerServerResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -131,6 +201,7 @@ public static partial class SqlServerBuilderExtensions
 
         return builder.ApplicationBuilder
             .AddResource(sqlServerDatabase)
+            .WithIconName("Database")
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (sqlServerDatabase, @event, ct) =>
             {
@@ -150,7 +221,8 @@ public static partial class SqlServerBuilderExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a named volume for the SQL Server data folder")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<SqlServerServerResource> WithDataVolume(this IResourceBuilder<SqlServerServerResource> builder, string? name = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -165,11 +237,12 @@ public static partial class SqlServerBuilderExtensions
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// The container starts up as non-root and the <paramref name="source"/> directory must be readable by the user that the container runs as.
     /// https://learn.microsoft.com/sql/linux/sql-server-linux-docker-container-configure?view=sql-server-ver16&amp;pivots=cs1-bash#mount-a-host-directory-as-data-volume
     /// </remarks>
-    [AspireExport(Description = "Adds a bind mount for the SQL Server data folder")]
+    [AspireExport]
     public static IResourceBuilder<SqlServerServerResource> WithDataBindMount(this IResourceBuilder<SqlServerServerResource> builder, string source, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -202,10 +275,11 @@ public static partial class SqlServerBuilderExtensions
     /// <param name="builder">The builder for the <see cref="SqlServerDatabaseResource"/>.</param>
     /// <param name="script">The SQL script used to create the database.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <value>Default script is <code>IF ( NOT EXISTS ( SELECT 1 FROM sys.databases WHERE name = @DatabaseName ) ) CREATE DATABASE [&lt;QUOTED_DATABASE_NAME%gt;];</code></value>
     /// </remarks>
-    [AspireExport(Description = "Defines the SQL script used to create the database")]
+    [AspireExport]
     public static IResourceBuilder<SqlServerDatabaseResource> WithCreationScript(this IResourceBuilder<SqlServerDatabaseResource> builder, string script)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -222,7 +296,8 @@ public static partial class SqlServerBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="password">The parameter used to provide the password for the SqlServer resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures the password for the SQL Server resource")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<SqlServerServerResource> WithPassword(this IResourceBuilder<SqlServerServerResource> builder, IResourceBuilder<ParameterResource> password)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -238,7 +313,8 @@ public static partial class SqlServerBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Sets the host port for the SQL Server resource")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<SqlServerServerResource> WithHostPort(this IResourceBuilder<SqlServerServerResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -268,8 +344,10 @@ public static partial class SqlServerBuilderExtensions
             }
             else
             {
+                logger.LogInformation("Executing custom creation script for database '{DatabaseName}'", sqlDatabase.DatabaseName);
                 using var reader = new StringReader(scriptAnnotation.Script);
                 var batchBuilder = new StringBuilder();
+                var batchNumber = 0;
 
                 while (reader.ReadLine() is { } line)
                 {
@@ -277,15 +355,13 @@ public static partial class SqlServerBuilderExtensions
 
                     if (matchGo.Success)
                     {
-                        // Execute the current batch
                         var count = matchGo.Groups["repeat"].Success ? int.Parse(matchGo.Groups["repeat"].Value, CultureInfo.InvariantCulture) : 1;
                         var batch = batchBuilder.ToString();
 
-                        for (var i = 0; i < count; i++)
+                        if (!string.IsNullOrWhiteSpace(batch))
                         {
-                            using var command = sqlConnection.CreateCommand();
-                            command.CommandText = batch;
-                            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                            batchNumber++;
+                            await ExecuteBatchAsync(batch, batchNumber, count, ct).ConfigureAwait(false);
                         }
 
                         batchBuilder.Clear();
@@ -303,9 +379,17 @@ public static partial class SqlServerBuilderExtensions
                 // Process the remaining batch lines
                 if (batchBuilder.Length > 0)
                 {
-                    using var command = sqlConnection.CreateCommand();
-                    command.CommandText = batchBuilder.ToString();
-                    await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                    var batch = batchBuilder.ToString();
+                    if (!string.IsNullOrWhiteSpace(batch))
+                    {
+                        batchNumber++;
+                        await ExecuteBatchAsync(batch, batchNumber, 1, ct).ConfigureAwait(false);
+                    }
+                }
+
+                if (batchNumber > 0)
+                {
+                    logger.LogInformation("Completed custom creation script for database '{DatabaseName}'", sqlDatabase.DatabaseName);
                 }
             }
 
@@ -314,6 +398,29 @@ public static partial class SqlServerBuilderExtensions
         catch (Exception e)
         {
             logger.LogError(e, "Failed to create database '{DatabaseName}'", sqlDatabase.DatabaseName);
+        }
+
+        async Task ExecuteBatchAsync(string batch, int batchNumber, int executionCount, CancellationToken cancellationToken)
+        {
+            logger.LogInformation("Executing custom creation script batch {BatchNumber} for database '{DatabaseName}'", batchNumber, sqlDatabase.DatabaseName);
+
+            for (var i = 0; i < executionCount; i++)
+            {
+                using var command = sqlConnection.CreateCommand();
+                command.CommandText = batch;
+                var rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+                // ADO.NET returns -1 for DDL statements (CREATE DATABASE, USE, etc.) because they don't affect data rows.
+                // Only include the rows-affected count when it carries meaningful information.
+                if (rowsAffected >= 0)
+                {
+                    logger.LogInformation("Completed custom creation script batch {BatchNumber} execution {ExecutionNumber}/{ExecutionCount} for database '{DatabaseName}' ({RowsAffected} rows affected)", batchNumber, i + 1, executionCount, sqlDatabase.DatabaseName, rowsAffected);
+                }
+                else
+                {
+                    logger.LogInformation("Completed custom creation script batch {BatchNumber} execution {ExecutionNumber}/{ExecutionCount} for database '{DatabaseName}'", batchNumber, i + 1, executionCount, sqlDatabase.DatabaseName);
+                }
+            }
         }
     }
 }

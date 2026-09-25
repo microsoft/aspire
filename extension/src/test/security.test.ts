@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import { X509Certificate } from 'crypto';
-import { createSelfSignedCertAsync, generateToken } from '../utils/security';
+import forge from 'node-forge';
+import { createSelfSignedCertAsync, generateCertificateSerialNumber, generateToken } from '../utils/security';
 
 suite('Security utilities', () => {
     test('createSelfSignedCertAsync generates a valid certificate', async () => {
@@ -35,6 +36,32 @@ suite('Security utilities', () => {
         }
     });
 
+    test('generateCertificateSerialNumber emits a serial that OpenSSL can parse', () => {
+        const serial = generateCertificateSerialNumber(Buffer.from([
+            0x80, 0x00, 0x01, 0x45,
+            0x67, 0x89, 0xab, 0xcd,
+            0xef, 0x01, 0x23, 0x45,
+            0x67, 0x89, 0xab, 0xcd,
+        ]));
+
+        const certPem = createCertificatePemWithSerialNumber(serial);
+
+        assert.doesNotThrow(() => new X509Certificate(certPem));
+    });
+
+    test('generateCertificateSerialNumber normalizes the first byte to a non-zero positive value', () => {
+        const serial = generateCertificateSerialNumber(Buffer.from([
+            0x80, 0x01, 0x23, 0x45,
+            0x67, 0x89, 0xab, 0xcd,
+            0xef, 0x01, 0x23, 0x45,
+            0x67, 0x89, 0xab, 0xcd,
+        ]));
+
+        assert.ok(!serial.startsWith('00'));
+        assert.ok(Number.parseInt(serial.slice(0, 2), 16) < 0x80);
+        assert.strictEqual(serial.length, 32);
+    });
+
     test('generateToken returns a base64 string', () => {
         const token = generateToken();
         assert.ok(token, 'Token should not be empty');
@@ -51,3 +78,21 @@ suite('Security utilities', () => {
         assert.strictEqual(tokens.size, 100, 'All tokens should be unique');
     });
 });
+
+function createCertificatePemWithSerialNumber(serialNumber: string): string {
+    const pki = forge.pki;
+    // The key strength is irrelevant to this test; keep it small so the DER serial regression stays fast.
+    const keys = pki.rsa.generateKeyPair(512);
+    const cert = pki.createCertificate();
+    cert.publicKey = keys.publicKey;
+    cert.serialNumber = serialNumber;
+    cert.validity.notBefore = new Date();
+    cert.validity.notAfter = new Date(Date.now() + 60_000);
+
+    const attrs = [{ name: 'commonName', value: 'localhost' }];
+    cert.setSubject(attrs);
+    cert.setIssuer(attrs);
+    cert.sign(keys.privateKey);
+
+    return pki.certificateToPem(cert);
+}

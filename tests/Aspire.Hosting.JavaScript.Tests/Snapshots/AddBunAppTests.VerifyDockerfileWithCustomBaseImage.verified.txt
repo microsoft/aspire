@@ -1,0 +1,24 @@
+﻿FROM oven/bun:1.1-debian AS build
+
+WORKDIR /app
+COPY package.json ./
+RUN --mount=type=cache,target=/root/.bun/install/cache bun install
+COPY . .
+
+FROM oven/bun:1.1-debian AS prod-deps
+
+WORKDIR /app
+COPY package.json ./
+RUN --mount=type=cache,target=/root/.bun/install/cache bun install --production
+
+FROM oven/bun:1.1-distroless AS runtime
+
+WORKDIR /app
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY . .
+
+ENV NODE_ENV=production
+
+USER bun
+
+ENTRYPOINT ["bun","server.ts"]

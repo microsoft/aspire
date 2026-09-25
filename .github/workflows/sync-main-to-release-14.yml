@@ -1,0 +1,193 @@
+# Temporary integration branch while main builds 13.6. Disable before merging
+# release/14.0 back into main. See the lifecycle instructions in README.md.
+name: Sync Main to Release 14.0
+
+on:
+  schedule:
+    - cron: '23 8 * * *' # Daily at 08:23 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: sync-main-to-release-14
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # Never mint the bot token for a fork or a manual run of unreviewed branch code.
+    if: github.repository == 'microsoft/aspire' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Create Aspire App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          owner: microsoft
+          repositories: aspire
+          permission-contents: write
+          permission-pull-requests: write
+          skip-token-revoke: false
+
+      # Metadata-only: no checkout, local merge, or execution of either branch's code.
+      - name: Create or reconcile synchronization PR
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          SYNC_BOT_LOGIN: ${{ steps.app-token.outputs.app-slug }}[bot]
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          retries: 0
+          script: |
+            const owner = 'microsoft';
+            const repo = 'aspire';
+            const base = 'release/14.0';
+            const prefix = 'sync/main-to-release-14.0/';
+            const marker = '<!-- sync-main-to-release-14 -->';
+            if (context.repo.owner !== owner || context.repo.repo !== repo ||
+                context.ref !== 'refs/heads/main' ||
+                !['schedule', 'workflow_dispatch'].includes(context.eventName)) {
+              throw new Error('This workflow only runs from main in microsoft/aspire.');
+            }
+            const bot = process.env.SYNC_BOT_LOGIN;
+            if (!bot || bot === '[bot]') {
+              throw new Error('Missing Aspire App bot identity.');
+            }
+            async function report(message, warning = false) {
+              if (warning) {
+                core.warning(message);
+              } else {
+                core.info(message);
+              }
+              await core.summary.addRaw(`${message}\n`).write();
+            }
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner, repo, base, state: 'open', per_page: 100
+            });
+            const pending = pulls.filter(pull =>
+              pull.head.repo?.full_name === `${owner}/${repo}` &&
+              pull.head.ref.startsWith(prefix));
+            if (pending.length > 1) {
+              throw new Error('Multiple synchronization PRs are open; reconcile them manually.');
+            }
+            let pull = pending[0];
+            if (!pull) {
+              const { data: source } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' });
+              const { data: target } = await github.rest.repos.getBranch({ owner, repo, branch: base });
+              const sha = source.commit.sha;
+              const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+                owner, repo, basehead: `${target.commit.sha}...${sha}`
+              });
+              if (comparison.ahead_by === 0) {
+                await report('release/14.0 already contains all commits from main.');
+                return;
+              }
+              // Snapshot main, never use main itself as the PR head: resolving a
+              // conflict must not accidentally bring 14.0-only changes into 13.6.
+              const head = `${prefix}${sha}`;
+              let ref;
+              try {
+                ({ data: ref } = await github.rest.git.getRef({ owner, repo, ref: `heads/${head}` }));
+              } catch (error) {
+                if (error.status !== 404) {
+                  throw error;
+                }
+                ({ data: ref } = await github.rest.git.createRef({
+                  owner, repo, ref: `refs/heads/${head}`, sha
+                }));
+              }
+              // Reuse an orphaned ref after a failed PR request, but never reset
+              // someone's conflict resolution or force-push an existing branch.
+              if (ref.object.sha !== sha) {
+                throw new Error(`Existing ${head} no longer matches main's snapshot; inspect it manually.`);
+              }
+              ({ data: pull } = await github.rest.pulls.create({
+                owner, repo, head, base,
+                title: '[Automated] Sync main to release/14.0',
+                body: [
+                  marker,
+                  '## Automated integration branch sync',
+                  '',
+                  `Merge main at ${sha} into \`release/14.0\` while main builds 13.6.`,
+                  '',
+                  'Auto-merge uses a **merge commit**, preserving ancestry and all 14.0-only changes.',
+                  'Required approvals and status checks still apply; this workflow does not bypass them.',
+                  '',
+                  'If there are conflicts, merge `origin/release/14.0` into this PR branch and resolve',
+                  'them there. Keep the 14.0 version in `eng/Versions.props`. Never resolve by merging',
+                  '`release/14.0` into `main`, and never squash or rebase this PR.',
+                  '',
+                  'This branch is not overwritten while the PR is open. Newer main commits are picked',
+                  'up by the next run after this PR merges. Disable this workflow before reintegrating',
+                  '`release/14.0` into `main` after cutting `release/13.6`.'
+                ].join('\n')
+              }));
+            }
+            // Re-read before enabling auto-merge: a maintainer may have closed,
+            // retargeted, or resolved the PR since it was listed.
+            // A newly created PR commonly returns mergeable: null until GitHub
+            // finishes its background merge check. Give it a bounded retry window.
+            for (let attempt = 0; attempt < 5; attempt++) {
+              ({ data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: pull.number }));
+              if (pull.mergeable !== null || pull.state !== 'open' || attempt === 4) {
+                break;
+              }
+              await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+            if (pull.state !== 'open' || pull.draft || pull.base.ref !== base ||
+                pull.base.repo?.full_name !== `${owner}/${repo}` ||
+                pull.head.repo?.full_name !== `${owner}/${repo}` ||
+                !pull.head.ref.startsWith(prefix) ||
+                pull.user?.type !== 'Bot' || pull.user.login !== bot ||
+                !pull.body?.includes(marker)) {
+              throw new Error('Synchronization PR identity or state changed; inspect it manually.');
+            }
+            await report(`Synchronization PR: ${pull.html_url}. Pending branches are never overwritten.`);
+            if (pull.auto_merge) {
+              if (pull.auto_merge.merge_method !== 'merge') {
+                throw new Error('Synchronization PR must use a merge commit, not squash or rebase.');
+              }
+              await report('Merge-commit auto-merge is already enabled; waiting for conflicts, approvals, and checks.');
+              return;
+            }
+            if (pull.mergeable === false) {
+              await report('Merge conflicts need manual resolution on the synchronization PR branch. Auto-merge will be retried on the next run.', true);
+              return;
+            }
+            if (pull.mergeable !== true) {
+              await report('GitHub is still computing mergeability. Re-run from main or wait for the next daily run.', true);
+              return;
+            }
+            const { data: settings } = await github.rest.repos.get({ owner, repo });
+            if (!settings.allow_merge_commit || !settings.allow_auto_merge) {
+              await report('Enable repository merge commits and auto-merge, and allow merge commits for release/14.0. The PR remains open; the next run will retry.', true);
+              return;
+            }
+            // Match gh's isImmediatelyMergeable: auto-merge cannot be enabled
+            // for an already-mergeable PR, including has_hooks and unstable.
+            // https://github.com/cli/cli/blob/trunk/pkg/cmd/pr/merge/merge.go
+            // Pin the head; required CI must remain non-bypassable in branch policy.
+            if (['clean', 'has_hooks', 'unstable'].includes(pull.mergeable_state)) {
+              const { data: result } = await github.rest.pulls.merge({
+                owner, repo, pull_number: pull.number,
+                sha: pull.head.sha, merge_method: 'merge'
+              });
+              if (!result.merged) {
+                throw new Error(`GitHub did not merge the synchronization PR: ${result.message}`);
+              }
+              await report('Merged the ready synchronization PR with a merge commit.');
+              return;
+            }
+            await github.graphql(`
+              mutation($pullRequestId: ID!) {
+                enablePullRequestAutoMerge(input: {
+                  pullRequestId: $pullRequestId,
+                  mergeMethod: MERGE
+                }) {
+                  pullRequest { number }
+                }
+              }
+            `, { pullRequestId: pull.node_id });
+            await report('Enabled merge-commit auto-merge. Required approvals, checks, and branch restrictions still apply.');

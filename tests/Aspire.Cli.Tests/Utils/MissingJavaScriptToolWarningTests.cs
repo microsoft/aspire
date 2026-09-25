@@ -22,6 +22,7 @@ public class MissingJavaScriptToolWarningTests(ITestOutputHelper outputHelper)
     [InlineData("bun is not installed or not found in PATH. Please install Bun and try again.")]
     [InlineData("yarn is not installed or not found in PATH. Please install Yarn and try again.")]
     [InlineData("pnpm is not installed or not found in PATH. Please install pnpm and try again.")]
+    [InlineData("deno is not installed or not found in PATH. Please install Deno and try again.")]
     public void IsMatch_WhenJavaScriptToolIsMissing_ReturnsTrue(string message)
     {
         var lines = new[]
@@ -47,10 +48,10 @@ public class MissingJavaScriptToolWarningTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetMessage_WhenTypeScriptProjectUsesBun_ReturnsToolchainSpecificInstallGuidance()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"bun@1.2.0\" }");
 
-        var message = MissingJavaScriptToolWarning.GetMessage(workspace.WorkspaceRoot, s_typeScriptLanguage);
+        var message = MissingJavaScriptToolWarning.GetMessage(workspace.WorkspaceRoot, s_typeScriptLanguage, new TestEnvironment());
 
         Assert.Contains("'bun install'", message, StringComparison.Ordinal);
         Assert.Contains("install Bun", message, StringComparison.Ordinal);

@@ -37,6 +37,13 @@ public static class Program
             Description = "Runtime identifier",
             Required = true
         };
+        ridOption.AcceptOnlyFromAmong("win-x64", "win-arm64", "linux-x64", "linux-arm64", "linux-musl-x64", "osx-x64", "osx-arm64");
+
+        var configurationOption = new Option<string>("--configuration", "-c")
+        {
+            Description = "Build configuration of the published components",
+            Required = true
+        };
 
         var bundleVersionOption = new Option<string>("--bundle-version")
         {
@@ -46,7 +53,7 @@ public static class Program
 
         var archiveOption = new Option<bool>("--archive")
         {
-            Description = "Create archive (zip/tar.gz) after building"
+            Description = "Create a .tar.gz archive after building on all platforms"
         };
 
         var verboseOption = new Option<bool>("--verbose")
@@ -58,6 +65,7 @@ public static class Program
         rootCommand.Options.Add(outputOption);
         rootCommand.Options.Add(artifactsOption);
         rootCommand.Options.Add(ridOption);
+        rootCommand.Options.Add(configurationOption);
         rootCommand.Options.Add(bundleVersionOption);
         rootCommand.Options.Add(archiveOption);
         rootCommand.Options.Add(verboseOption);
@@ -67,13 +75,14 @@ public static class Program
             var outputPath = parseResult.GetValue(outputOption)!;
             var artifactsPath = parseResult.GetValue(artifactsOption)!;
             var rid = parseResult.GetValue(ridOption)!;
+            var configuration = parseResult.GetValue(configurationOption)!;
             var version = parseResult.GetValue(bundleVersionOption)!;
             var createArchive = parseResult.GetValue(archiveOption);
             var verbose = parseResult.GetValue(verboseOption);
 
             try
             {
-                using var builder = new LayoutBuilder(outputPath, artifactsPath, rid, version, verbose);
+                using var builder = new LayoutBuilder(outputPath, artifactsPath, rid, configuration, version, verbose);
                 await builder.BuildAsync().ConfigureAwait(false);
 
                 if (createArchive)
@@ -107,14 +116,16 @@ internal sealed class LayoutBuilder : IDisposable
     private readonly string _outputPath;
     private readonly string _artifactsPath;
     private readonly string _rid;
+    private readonly string _configuration;
     private readonly string _version;
     private readonly bool _verbose;
 
-    public LayoutBuilder(string outputPath, string artifactsPath, string rid, string version, bool verbose)
+    public LayoutBuilder(string outputPath, string artifactsPath, string rid, string configuration, string version, bool verbose)
     {
         _outputPath = Path.GetFullPath(outputPath);
         _artifactsPath = Path.GetFullPath(artifactsPath);
         _rid = rid;
+        _configuration = configuration;
         _version = version;
         _verbose = verbose;
     }
@@ -127,6 +138,7 @@ internal sealed class LayoutBuilder : IDisposable
     public async Task BuildAsync()
     {
         Log($"Building layout for {_rid} version {_version}");
+        Log($"Configuration: {_configuration}");
         Log($"Output: {_outputPath}");
         Log($"Artifacts: {_artifactsPath}");
 
@@ -139,6 +151,7 @@ internal sealed class LayoutBuilder : IDisposable
 
         // Copy components
         CopyManaged();
+        CopyDashboard();
         await CopyDcpAsync().ConfigureAwait(false);
 
         Log("Layout build complete!");
@@ -148,7 +161,7 @@ internal sealed class LayoutBuilder : IDisposable
     {
         Log("Copying aspire-managed...");
 
-        var managedPublishPath = FindPublishPath("Aspire.Managed");
+        var managedPublishPath = FindPublishPath("Aspire.Managed", "net10.0");
         if (managedPublishPath is null)
         {
             throw new InvalidOperationException("Aspire.Managed publish output not found.");
@@ -157,9 +170,8 @@ internal sealed class LayoutBuilder : IDisposable
         var managedDir = Path.Combine(_outputPath, "managed");
         Directory.CreateDirectory(managedDir);
 
-        // Copy only the aspire-managed executable and required assets (wwwroot for Dashboard).
-        // Skip other .exe files — they are native host stubs from referenced Exe projects
-        // that leak into the publish output but are not needed (everything is in aspire-managed.exe).
+        // Copy the managed executable and known sidecars, not the apphost stubs from referenced
+        // Exe projects that also appear in publish output.
         var isWindows = _rid.StartsWith("win", StringComparison.OrdinalIgnoreCase);
         var managedExeName = isWindows ? "aspire-managed.exe" : "aspire-managed";
 
@@ -171,14 +183,74 @@ internal sealed class LayoutBuilder : IDisposable
 
         File.Copy(managedExePath, Path.Combine(managedDir, managedExeName), overwrite: true);
 
-        // Copy wwwroot (required for Dashboard static web assets)
-        var wwwrootPath = Path.Combine(managedPublishPath, "wwwroot");
-        if (Directory.Exists(wwwrootPath))
+        if (isWindows)
         {
-            CopyDirectory(wwwrootPath, Path.Combine(managedDir, "wwwroot"));
+            // Hex1b launches hex1bpty.exe beside the app; conpty.dll must stay beside that helper.
+            // ConPTY selects OpenConsole by OS architecture, so win-x64 also needs the ARM64 host
+            // when running under emulation. These files cannot live inside the managed single-file.
+            // https://github.com/microsoft/terminal/blob/main/src/winconpty/winconpty.cpp
+            string[] ptyFiles = _rid == "win-x64"
+                ? ["hex1bpty.exe", "conpty.dll", "x64/OpenConsole.exe", "arm64/OpenConsole.exe"]
+                : ["hex1bpty.exe", "conpty.dll", "arm64/OpenConsole.exe"];
+
+            foreach (var relativePath in ptyFiles)
+            {
+                var destination = Path.Combine(managedDir, relativePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                File.Copy(Path.Combine(managedPublishPath, relativePath), destination, overwrite: true);
+            }
         }
 
         Log($"  Copied aspire-managed to managed/");
+    }
+
+    internal void CopyDashboard()
+    {
+        Log("Copying Native AOT Dashboard...");
+
+        // A non-RID publish contains a framework-dependent apphost instead of the native Dashboard.
+        // Only RID-specific output can be used here.
+        var dashboardPublishPath = FindPublishPath("Aspire.Dashboard", "net11.0", requireRidSpecific: true);
+        if (dashboardPublishPath is null)
+        {
+            throw new InvalidOperationException("Aspire.Dashboard publish output not found.");
+        }
+
+        var isWindows = _rid.StartsWith("win", StringComparison.OrdinalIgnoreCase);
+        var dashboardExeName = isWindows ? "Aspire.Dashboard.exe" : "Aspire.Dashboard";
+        var dashboardExePath = Path.Combine(dashboardPublishPath, dashboardExeName);
+        if (!File.Exists(dashboardExePath))
+        {
+            throw new InvalidOperationException($"Native AOT Dashboard executable not found at {dashboardExePath}");
+        }
+
+        var wwwrootPath = Path.Combine(dashboardPublishPath, "wwwroot");
+        if (!Directory.Exists(wwwrootPath))
+        {
+            throw new InvalidOperationException($"Native AOT Dashboard static assets not found at {wwwrootPath}");
+        }
+
+        var blazorScriptPath = Path.Combine(wwwrootPath, "_framework", "blazor.web.js");
+        if (!File.Exists(blazorScriptPath) || new FileInfo(blazorScriptPath).Length == 0)
+        {
+            throw new InvalidOperationException($"Native AOT Dashboard Blazor script missing or empty at {blazorScriptPath}");
+        }
+
+        var sqliteLibraryName = isWindows
+            ? "e_sqlite3.dll"
+            : _rid.StartsWith("osx-", StringComparison.OrdinalIgnoreCase) ? "libe_sqlite3.dylib" : "libe_sqlite3.so";
+        var sqliteLibraryPath = Path.Combine(dashboardPublishPath, sqliteLibraryName);
+        if (!File.Exists(sqliteLibraryPath) || new FileInfo(sqliteLibraryPath).Length == 0)
+        {
+            throw new InvalidOperationException($"Native AOT Dashboard SQLite library missing or empty at {sqliteLibraryPath}");
+        }
+
+        // Match eng/dashboardpack/Common.projitems: native dependencies and other publish assets
+        // are required at runtime, but debug symbols are not part of the bundle payload.
+        var dashboardDir = Path.Combine(_outputPath, "dashboard");
+        CopyDirectory(dashboardPublishPath, dashboardDir, excludeSymbols: true);
+
+        Log("  Copied Native AOT Dashboard to dashboard/");
     }
 
     private Task CopyDcpAsync()
@@ -198,7 +270,7 @@ internal sealed class LayoutBuilder : IDisposable
         var dcpDir = Path.Combine(_outputPath, "dcp");
         Directory.CreateDirectory(dcpDir);
 
-        CopyDirectory(dcpPath, dcpDir);
+        CopyDirectory(dcpPath, dcpDir, excludeSymbols: false);
         Log($"  Copied DCP to dcp");
 
         return Task.CompletedTask;
@@ -271,22 +343,28 @@ internal sealed class LayoutBuilder : IDisposable
         return archivePath;
     }
 
-    private string? FindPublishPath(string projectName)
+    internal string? FindPublishPath(string projectName, string targetFramework, bool requireRidSpecific = false)
     {
-        // Look for publish output in standard locations
-        // Order: RID-specific publish paths first (Release then Debug)
-        var searchPaths = new[]
+        // Only use the requested configuration so stale output from another build cannot be bundled.
+        // Prefer RID-specific publish paths over non-RID output.
+        var ridSpecificSearchPaths = new[]
         {
+            // PlatformName-scoped output used by RID packaging and signing.
+            Path.Combine(_artifactsPath, "bin", projectName, _rid, _configuration, targetFramework, _rid, "publish"),
             // RID-specific self-contained publish output (preferred for Aspire.Managed)
-            Path.Combine(_artifactsPath, "bin", projectName, "Release", "net10.0", _rid, "publish"),
-            Path.Combine(_artifactsPath, "bin", projectName, "Debug", "net10.0", _rid, "publish"),
+            Path.Combine(_artifactsPath, "bin", projectName, _configuration, targetFramework, _rid, "publish"),
             // Native AOT output
-            Path.Combine(_artifactsPath, "bin", projectName, "Release", "net10.0", _rid, "native"),
-            Path.Combine(_artifactsPath, "bin", projectName, "Debug", "net10.0", _rid, "native"),
-            // Non-RID publish output
-            Path.Combine(_artifactsPath, "bin", projectName, "Release", "net10.0", "publish"),
-            Path.Combine(_artifactsPath, "bin", projectName, "Debug", "net10.0", "publish"),
+            Path.Combine(_artifactsPath, "bin", projectName, _configuration, targetFramework, _rid, "native"),
         };
+
+        var searchPaths = requireRidSpecific
+            ? ridSpecificSearchPaths
+            :
+            [
+                .. ridSpecificSearchPaths,
+                // Non-RID publish output
+                Path.Combine(_artifactsPath, "bin", projectName, _configuration, targetFramework, "publish"),
+            ];
 
         foreach (var path in searchPaths)
         {
@@ -367,26 +445,38 @@ internal sealed class LayoutBuilder : IDisposable
         return null;
     }
 
-    private static void CopyDirectory(string source, string destination)
+    private static void CopyDirectory(string source, string destination, bool excludeSymbols)
     {
         Directory.CreateDirectory(destination);
 
         foreach (var file in Directory.GetFiles(source))
         {
+            if (excludeSymbols && (file.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase) || file.EndsWith(".dbg", StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
             var destFile = Path.Combine(destination, Path.GetFileName(file));
             File.Copy(file, destFile, overwrite: true);
         }
 
         foreach (var dir in Directory.GetDirectories(source))
         {
+            // macOS stores debug symbols in .dSYM directory bundles, not single files.
+            // Exclude the whole bundle because it is only needed for debugging, not running the Dashboard.
+            if (excludeSymbols && dir.EndsWith(".dSYM", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             var destDir = Path.Combine(destination, Path.GetFileName(dir));
-            CopyDirectory(dir, destDir);
+            CopyDirectory(dir, destDir, excludeSymbols);
         }
     }
 
     private void Log(string message)
     {
-        if (_verbose || !message.StartsWith("  "))
+        if (_verbose || !message.StartsWith("  ", StringComparison.Ordinal))
         {
             Console.WriteLine(message);
         }

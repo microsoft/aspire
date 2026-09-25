@@ -26,52 +26,50 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     private const string CodeGenTarget = "TypeScript";
 
     private const string LanguageDisplayName = "TypeScript (Node.js)";
-    private const string AppHostFileName = "apphost.ts";
+    private const string AppHostFileName = "apphost.mts";
     private const string PackageJsonFileName = "package.json";
     private const string AppHostTsConfigFileName = "tsconfig.apphost.json";
+    private const string AppHostPackageName = "aspire-apphost";
+    private const string EslintConfigFileName = "eslint.config.mjs";
 
     /// <summary>
-    /// The default content for tsconfig.apphost.json, shared between scaffolding and migration.
+    /// Cached content of <c>tsconfig.apphost.json</c>, sourced from the embedded resource
+    /// of the same name so the scaffold and the lint regression tests share a single
+    /// source of truth.
     /// </summary>
-    private const string AppHostTsConfigContent = """
-        {
-          "compilerOptions": {
-            "target": "ES2022",
-            "module": "NodeNext",
-            "moduleResolution": "NodeNext",
-            "esModuleInterop": true,
-            "forceConsistentCasingInFileNames": true,
-            "strict": true,
-            "skipLibCheck": true,
-            "outDir": "./dist/apphost",
-            "rootDir": "."
-          },
-          "include": ["apphost.ts", ".modules/**/*.ts"],
-          "exclude": ["node_modules"]
-        }
-        """;
+    private static readonly string s_appHostTsConfigContent = EmbeddedResources.Read(AppHostTsConfigFileName);
+
+    /// <summary>
+    /// Cached content of <c>eslint.config.mjs</c>, sourced from the embedded resource of
+    /// the same name. The scaffolded file enables <c>@typescript-eslint/no-floating-promises</c>
+    /// against <c>apphost.mts</c> so unawaited AppHost promises surface as lint errors.
+    /// </summary>
+    private static readonly string s_eslintConfigContent = EmbeddedResources.Read(EslintConfigFileName);
 
     private static readonly JsonSerializerOptions s_jsonSerializerOptions = new()
     {
         WriteIndented = true,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
-    private static readonly string[] s_detectionPatterns = ["apphost.ts"];
+    private static readonly string[] s_detectionPatterns = ["apphost.mts", "apphost.ts"];
 
     /// <inheritdoc />
     public string Language => LanguageId;
+
+    /// <inheritdoc />
+    public string CertificateBundleEnvironmentVariable => "NODE_EXTRA_CA_CERTS";
 
     /// <inheritdoc />
     public Dictionary<string, string> Scaffold(ScaffoldRequest request)
     {
         var files = new Dictionary<string, string>();
 
-        // Create apphost.ts
+        // Create apphost.mts
         files[AppHostFileName] = """
             // Aspire TypeScript AppHost
             // For more information, see: https://aspire.dev
 
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
 
             const builder = await createBuilder();
 
@@ -84,36 +82,16 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
 
         files[".gitignore"] = """
             node_modules/
-            .modules/
             dist/
             .aspire/
             """;
         files[PackageJsonFileName] = CreatePackageJson(request);
 
-        // Create eslint.config.mjs for catching unawaited promises in apphost.ts
-        files["eslint.config.mjs"] = """
-            // @ts-check
-
-            import { defineConfig } from 'eslint/config';
-            import tseslint from 'typescript-eslint';
-
-            export default defineConfig({
-              files: ['apphost.ts'],
-              extends: [tseslint.configs.base],
-              languageOptions: {
-                parserOptions: {
-                  project: './tsconfig.apphost.json',
-                  tsconfigRootDir: import.meta.dirname,
-                },
-              },
-              rules: {
-                '@typescript-eslint/no-floating-promises': ['error', { checkThenables: true }],
-              },
-            });
-            """;
+        // Create eslint.config.mjs for catching unawaited promises in apphost.mts
+        files[EslintConfigFileName] = s_eslintConfigContent;
 
         // Create an apphost-specific tsconfig so existing brownfield TypeScript settings are preserved.
-        files[AppHostTsConfigFileName] = AppHostTsConfigContent;
+        files[AppHostTsConfigFileName] = s_appHostTsConfigContent;
 
         // Create apphost.run.json with random ports
         // Use PortSeed if provided (for testing), otherwise use random
@@ -147,13 +125,13 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         // combining with on-disk content. Including existing entries in the scaffold output
         // would cause a double-merge where correctness depends on JsonObject iteration order.
         var packageJson = new JsonObject();
-        var packageJsonPath = Path.Combine(request.TargetPath, PackageJsonFileName);
-
-        var isGreenfield = !File.Exists(packageJsonPath);
-        if (isGreenfield)
+        var hasExistingPackageJson = HasExistingPackageJson(request);
+        if (!hasExistingPackageJson)
         {
-            // Greenfield: include root metadata so the scaffold output is a complete package.json.
-            var packageName = request.ProjectName?.ToLowerInvariant() ?? "aspire-apphost";
+            // Fresh package: include metadata so the scaffold output is a complete package.json.
+            var packageName = IsNestedBrownfieldPackage(request.TargetPath)
+                ? AppHostPackageName
+                : request.ProjectName?.ToLowerInvariant() ?? AppHostPackageName;
             packageJson["name"] = packageName;
             packageJson["version"] = "1.0.0";
             packageJson["private"] = true;
@@ -168,19 +146,19 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         engines["node"] = "^20.19.0 || ^22.13.0 || >=24";
 
         var scripts = EnsureObject(packageJson, "scripts");
-        scripts["aspire:lint"] = "eslint apphost.ts";
+        scripts["aspire:lint"] = "eslint apphost.mts";
         scripts["aspire:start"] = "aspire run";
         scripts["aspire:build"] = $"tsc -p {AppHostTsConfigFileName}";
         scripts["aspire:dev"] = $"tsc --watch -p {AppHostTsConfigFileName}";
 
-        if (isGreenfield)
+        if (!hasExistingPackageJson)
         {
-            scripts["lint"] = "npm run aspire:lint";
-            scripts["predev"] = "npm run aspire:lint";
-            scripts["dev"] = "npm run aspire:start";
-            scripts["prebuild"] = "npm run aspire:lint";
-            scripts["build"] = "npm run aspire:build";
-            scripts["watch"] = "npm run aspire:dev";
+            // These aliases are emitted before the CLI resolves the package manager, so invoke the
+            // underlying commands directly instead of assuming npm lifecycle hooks are available.
+            scripts["lint"] = "eslint apphost.mts";
+            scripts["dev"] = "eslint apphost.mts && aspire run";
+            scripts["build"] = $"eslint apphost.mts && tsc -p {AppHostTsConfigFileName}";
+            scripts["watch"] = $"tsc --watch -p {AppHostTsConfigFileName}";
         }
 
         EnsureDependency(packageJson, "dependencies", "vscode-jsonrpc", "^8.2.0");
@@ -192,6 +170,20 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         EnsureDependency(packageJson, "devDependencies", "typescript-eslint", "^8.57.1");
 
         return packageJson.ToJsonString(s_jsonSerializerOptions);
+    }
+
+    private static bool IsNestedBrownfieldPackage(string targetPath)
+    {
+        var targetDirectory = new DirectoryInfo(targetPath);
+        return string.Equals(targetDirectory.Name, AppHostPackageName, StringComparison.OrdinalIgnoreCase) &&
+            targetDirectory.Parent is { } parent &&
+            File.Exists(Path.Combine(parent.FullName, PackageJsonFileName));
+    }
+
+    private static bool HasExistingPackageJson(ScaffoldRequest request)
+    {
+        var packageJsonPath = Path.Combine(request.TargetPath, PackageJsonFileName);
+        return File.Exists(packageJsonPath);
     }
 
     private static void EnsureDependency(JsonObject packageJson, string sectionName, string packageName, string version)
@@ -231,8 +223,10 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     /// <inheritdoc />
     public DetectionResult Detect(string directoryPath)
     {
-        // Check for apphost.ts
-        var appHostPath = Path.Combine(directoryPath, AppHostFileName);
+        var appHostFileName = File.Exists(Path.Combine(directoryPath, AppHostFileName))
+            ? AppHostFileName
+            : "apphost.ts";
+        var appHostPath = Path.Combine(directoryPath, appHostFileName);
         if (!File.Exists(appHostPath))
         {
             return DetectionResult.NotFound;
@@ -248,13 +242,13 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         // Note: .csproj precedence is handled by the CLI, not here.
         // Language support should only check for its own language markers.
 
-        return DetectionResult.Found(LanguageId, AppHostFileName);
+        return DetectionResult.Found(LanguageId, appHostFileName);
     }
 
     /// <inheritdoc />
     public RuntimeSpec GetRuntimeSpec()
     {
-        return new RuntimeSpec
+        var runtimeSpec = new RuntimeSpec
         {
             Language = LanguageId,
             DisplayName = LanguageDisplayName,
@@ -287,16 +281,36 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                     "nodemon",
                     "--signal", "SIGTERM",
                     "--watch", ".",
-                    "--ext", "ts",
+                    "--ext", "ts,mts",
                     "--ignore", "node_modules/",
-                    "--ignore", ".modules/",
+                    "--ignore", ".aspire/modules/",
                     "--exec", $"npx --no-install tsc --noEmit -p {AppHostTsConfigFileName} && npx --no-install tsx --tsconfig {AppHostTsConfigFileName} \"{{appHostFile}}\""
                 ]
             },
             MigrationFiles = new Dictionary<string, string>
             {
-                [AppHostTsConfigFileName] = AppHostTsConfigContent
+                [AppHostTsConfigFileName] = s_appHostTsConfigContent
             }
         };
+
+        SetCertificateBundleEnvironmentVariableIfSupported(runtimeSpec, CertificateBundleEnvironmentVariable);
+
+        return runtimeSpec;
+    }
+
+    /// <summary>
+    /// Sets the certificate bundle environment variable when the runtime contract supports it.
+    /// </summary>
+    internal static void SetCertificateBundleEnvironmentVariableIfSupported(
+        object runtimeSpec,
+        string environmentVariableName)
+    {
+        // Aspire.TypeSystem is force-shared from the installed CLI. A newer codegen assembly can
+        // therefore run against an older RuntimeSpec that has the same assembly identity but does not
+        // expose this additive property. Probe by name so the new certificate feature is skipped while
+        // the rest of code generation remains compatible.
+        runtimeSpec.GetType()
+            .GetProperty(nameof(RuntimeSpec.CertificateBundleEnvironmentVariable))
+            ?.SetValue(runtimeSpec, environmentVariableName);
     }
 }

@@ -1,78 +1,95 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Utils;
-
-using Aspire.Cli.Configuration;
 
 namespace Aspire.Cli.Projects;
 
 /// <summary>
-/// Represents a running AppHost server session.
-/// Manages server lifecycle and provides RPC client access.
+/// Abstraction over an AppHost server child-process session. Two shapes are served through this
+/// seam: the short-lived codegen/scaffolding session (start, grab an RPC client, dispose) and the
+/// longer-lived <c>aspire run</c> session that additionally exposes the process lifetime
+/// (<see cref="WaitForExitAsync"/>), captured output, and the connection details the guest AppHost
+/// needs. Tests substitute a fake implementation that returns canned RPC results without launching
+/// a real process or opening a socket.
 /// </summary>
 internal interface IAppHostServerSession : IAsyncDisposable
 {
     /// <summary>
-    /// Gets the socket path for RPC communication.
-    /// </summary>
-    string SocketPath { get; }
-
-    /// <summary>
-    /// Gets the server process.
-    /// </summary>
-    Process ServerProcess { get; }
-
-    /// <summary>
-    /// Gets the output collector for server stdout/stderr.
-    /// </summary>
-    OutputCollector Output { get; }
-
-    /// <summary>
-    /// Gets the authentication token for the server session.
+    /// Gets the authentication token injected into the server environment. Available before
+    /// <see cref="StartAsync"/> so callers can plumb it into the guest AppHost environment.
     /// </summary>
     string AuthenticationToken { get; }
 
     /// <summary>
-    /// Gets an RPC client connected to this session.
+    /// Gets the RPC socket path, or <see langword="null"/> if <see cref="StartAsync"/> has not
+    /// been called (or threw before the process was published).
+    /// </summary>
+    string? SocketPath { get; }
+
+    /// <summary>
+    /// Gets the output collector for the server's stdout/stderr, or <see langword="null"/> if
+    /// <see cref="StartAsync"/> has not been called (or threw before the process was published).
+    /// </summary>
+    OutputCollector? Output { get; }
+
+    /// <summary>
+    /// Gets whether the underlying AppHost server process has exited, or <see langword="null"/>
+    /// if <see cref="StartAsync"/> has not been called (or threw before the process was published).
+    /// </summary>
+    bool? HasServerExited { get; }
+
+    /// <summary>
+    /// Reads the AppHost server process's exit code if it has exited, or <see langword="null"/>
+    /// if the server is still running, has not been started, or the exit code cannot be read.
+    /// </summary>
+    int? TryGetServerExitCode();
+
+    /// <summary>
+    /// Launches the AppHost server process and wires lifecycle observation. The returned task
+    /// completes once the process has been spawned.
+    /// </summary>
+    Task StartAsync();
+
+    /// <summary>
+    /// Returns the task that completes with the server process exit code. Used by the run path to
+    /// observe the server lifetime alongside the guest AppHost.
+    /// </summary>
+    Task<int> WaitForExitAsync();
+
+    /// <summary>
+    /// Connects to the running AppHost server and returns an RPC client for code generation.
     /// </summary>
     Task<IAppHostRpcClient> GetRpcClientAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>
-/// Factory for building and starting AppHost server sessions.
+/// Creates <see cref="IAppHostServerSession"/> instances. Production wires this to construct real
+/// <see cref="AppHostServerSession"/> instances; tests inject a factory that returns a fake session.
 /// </summary>
 internal interface IAppHostServerSessionFactory
 {
     /// <summary>
-    /// Builds and starts an AppHost server session.
+    /// Creates an unstarted session for the already-prepared <paramref name="appHostServerProject"/>.
+    /// The caller drives it via <see cref="IAppHostServerSession.StartAsync"/>,
+    /// <see cref="IAppHostServerSession.GetRpcClientAsync"/>, then disposal. Cancelling
+    /// <paramref name="stopRequested"/> (or disposing the session) terminates the server process.
     /// </summary>
-    /// <param name="appHostPath">The path to the AppHost project directory.</param>
-    /// <param name="sdkVersion">The Aspire SDK version to use.</param>
-    /// <param name="integrations">The integration references to include.</param>
-    /// <param name="launchSettingsEnvVars">Optional environment variables from launch settings.</param>
-    /// <param name="debug">Whether to enable debug logging.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The result containing the session if successful.</returns>
-    Task<AppHostServerSessionResult> CreateAsync(
-        string appHostPath,
-        string sdkVersion,
-        IEnumerable<IntegrationReference> integrations,
-        Dictionary<string, string>? launchSettingsEnvVars,
+    /// <remarks>
+    /// The short-lived codegen/scaffolding path passes no graceful-shutdown wiring
+    /// (<paramref name="gracefulShutdownSignaler"/> and <paramref name="shutdownService"/> are
+    /// <see langword="null"/>, <paramref name="isolateConsole"/> is <see langword="false"/>) because
+    /// that session is started, queried over RPC, and disposed within a single operation. The
+    /// <c>aspire run</c> path supplies the real signaler/window and isolates the console so a user
+    /// Ctrl+C reaches the CLI and drives the shared shutdown ladder rather than the child directly.
+    /// </remarks>
+    IAppHostServerSession Create(
+        IAppHostServerProject appHostServerProject,
+        Dictionary<string, string>? environmentVariables,
         bool debug,
-        CancellationToken cancellationToken);
+        IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler,
+        IGracefulShutdownWindow? shutdownService,
+        bool isolateConsole,
+        CancellationToken stopRequested);
 }
-
-/// <summary>
-/// Result of creating an AppHost server session.
-/// </summary>
-/// <param name="Success">Whether the build was successful.</param>
-/// <param name="Session">The session if successful, null otherwise.</param>
-/// <param name="BuildOutput">The build output for error diagnostics, may be null.</param>
-/// <param name="ChannelName">The NuGet channel name used, if any.</param>
-internal record AppHostServerSessionResult(
-    bool Success,
-    IAppHostServerSession? Session,
-    OutputCollector? BuildOutput,
-    string? ChannelName);

@@ -15,7 +15,8 @@
 
 .PARAMETER TemplateDir
     The directory containing the manifest templates to use.
-    Use "microsoft.aspire" for release builds or "microsoft.aspire.prerelease" for prerelease builds.
+    The Aspire CLI is published only on the stable channel, so the conventional value is
+    "./eng/winget/microsoft.aspire".
 
 .PARAMETER Rids
     Comma-separated list of Runtime Identifiers for the installer architectures.
@@ -24,8 +25,7 @@
 .PARAMETER OutputPath
     The directory where the manifest files will be written.
     Defaults to a path derived from the PackageIdentifier in the templates,
-    e.g., "./manifests/m/Microsoft/Aspire/{Version}" for Microsoft.Aspire
-    or "./manifests/m/Microsoft/Aspire/Prerelease/{Version}" for Microsoft.Aspire.Prerelease.
+    e.g., "./manifests/m/Microsoft/Aspire/{Version}" for Microsoft.Aspire.
 
 .PARAMETER ArchiveRoot
     Root directory containing locally built CLI archives. When specified, SHA256 hashes
@@ -40,9 +40,11 @@
     installer files to compute SHA256 hashes. Placeholder hashes are used instead.
     This is useful for PR validation where the installer URLs have not been published yet.
 
-.EXAMPLE
-    ./generate-manifests.ps1 -Version "13.3.0-preview.1.26111.5" `
-        -TemplateDir "./eng/winget/microsoft.aspire.prerelease"
+.PARAMETER IsPrereleaseInStablePackage
+    When specified, prepends a "For testing builds only. Prerelease package in stable manifest."
+    notice to the package Description in the locale manifest. Used for rolling-build
+    manifests that are produced as CI artifacts for dogfooding via
+    'winget install --manifest <path>' and are never published to the public catalog.
 
 .EXAMPLE
     ./generate-manifests.ps1 -Version "13.2.0" `
@@ -75,7 +77,10 @@ param(
     [string]$ReleaseNotesUrl,
 
     [Parameter(Mandatory = $false)]
-    [switch]$SkipUrlValidation
+    [switch]$SkipUrlValidation,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$IsPrereleaseInStablePackage
 )
 
 $ErrorActionPreference = 'Stop'
@@ -123,7 +128,6 @@ Write-Host "Package identifier: $PackageIdentifier"
 # Derive the output directory from the PackageIdentifier
 # Convention: manifests/{first-letter-lowercase}/{Segment1}/{Segment2}/.../{Version}
 # e.g. Microsoft.Aspire -> manifests/m/Microsoft/Aspire/{Version}
-# e.g. Microsoft.Aspire.Prerelease -> manifests/m/Microsoft/Aspire/Prerelease/{Version}
 if (-not $OutputPath) {
     $idSegments = $PackageIdentifier.Split('.')
     $firstLetter = $idSegments[0].Substring(0, 1).ToLowerInvariant()
@@ -345,6 +349,7 @@ $substitutions = @{
     "RELEASE_DATE"      = $today
     "YEAR"              = $year
     "RELEASE_NOTES_URL" = $ReleaseNotesUrl
+    "PRERELEASE_NOTICE" = if ($IsPrereleaseInStablePackage) { "For testing builds only. Prerelease package in stable manifest. " } else { "" }
 }
 
 Write-Host ""

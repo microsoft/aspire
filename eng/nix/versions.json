@@ -1,0 +1,30 @@
+{
+  "version": "13.5.4",
+  "releaseTag": "v13.5.4",
+  "systems": {
+    "aarch64-darwin": {
+      "rid": "osx-arm64",
+      "archiveName": "aspire-cli-osx-arm64-13.5.4.tar.gz",
+      "url": "https://github.com/microsoft/aspire/releases/download/v13.5.4/aspire-cli-osx-arm64-13.5.4.tar.gz",
+      "hash": "sha512-ecWQ5KvmUPuJCQzAugbwPON70Q0ed2Jb7tMB9Ldgec+XzucCNKDjeSNo6P0XlfHFiz4nit7jYOza/9+W2MOZjA=="
+    },
+    "aarch64-linux": {
+      "rid": "linux-arm64",
+      "archiveName": "aspire-cli-linux-arm64-13.5.4.tar.gz",
+      "url": "https://github.com/microsoft/aspire/releases/download/v13.5.4/aspire-cli-linux-arm64-13.5.4.tar.gz",
+      "hash": "sha512-OhUd5GVuxxLlDHioo5glq5gm16L7Iy7qdq7WdQ/CiEMNypOW2WuO5YYRVvtvexVM7yDpKKBLQ3t/ebuch35xCQ=="
+    },
+    "x86_64-darwin": {
+      "rid": "osx-x64",
+      "archiveName": "aspire-cli-osx-x64-13.5.4.tar.gz",
+      "url": "https://github.com/microsoft/aspire/releases/download/v13.5.4/aspire-cli-osx-x64-13.5.4.tar.gz",
+      "hash": "sha512-Lk0s5D5rCzxv9mdGl+1ClpEH5rQOG0aQm1eV+2D3YDKeTooWBVJIU3nkUyMGQUHfRxBPMKUp5r+jVxKEBflFlQ=="
+    },
+    "x86_64-linux": {
+      "rid": "linux-x64",
+      "archiveName": "aspire-cli-linux-x64-13.5.4.tar.gz",
+      "url": "https://github.com/microsoft/aspire/releases/download/v13.5.4/aspire-cli-linux-x64-13.5.4.tar.gz",
+      "hash": "sha512-z5URYSCaUplQcEvOcWpeLPP3wnVBHKESsRWHIDNfKCARqL/vxJsjP9ReY05c0SHMtUj5qwt4WSsRJ5dE1spibw=="
+    }
+  }
+}

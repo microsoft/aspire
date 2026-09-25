@@ -21,4 +21,15 @@ public class BeforeResourceStartedEvent(IResource resource, IServiceProvider ser
 
     /// <inheritdoc />
     public IServiceProvider Services { get; } = services;
+
+    /// <summary>
+    /// The id of the specific resource instance that is being started, which is the same value as
+    /// <see cref="ResourceEvent.ResourceId"/> for that instance.
+    /// </summary>
+    /// <remarks>
+    /// <see langword="null" /> when the event covers the resource as a whole rather than one instance of it: either
+    /// because the resource has no DCP instances (it drives its own startup), or because a replicated resource is
+    /// being started as a group, in which case every replica shares this one event.
+    /// </remarks>
+    internal string? ResourceInstanceId { get; init; }
 }

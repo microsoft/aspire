@@ -21,31 +21,71 @@ internal sealed class TelemetryFixture : IDisposable
     /// </summary>
     /// <param name="machineInfoProvider">Optional machine information provider. Uses a default test provider if not specified.</param>
     /// <param name="ciEnvironmentDetector">Optional CI environment detector. Uses a default test detector if not specified.</param>
+    /// <param name="codingAgentDetector">Optional coding agent detector. Uses a default test detector if not specified.</param>
+    /// <param name="internalMicrosoftDetector">Optional internal Microsoft detector. Uses a default test detector if not specified.</param>
     /// <param name="logger">Optional logger. Uses <see cref="NullLogger"/> if not specified.</param>
     /// <param name="sampleResult">The sampling result for the activity listener. Defaults to <see cref="ActivitySamplingResult.AllDataAndRecorded"/>.</param>
+    /// <param name="executionContext">Optional CLI execution context. Defaults to a local-identity context so the telemetry's required context is always satisfied.</param>
+    /// <param name="telemetryConfiguration">Optional telemetry configuration. Uses reported telemetry defaults if not specified.</param>
+    /// <param name="initialize">Whether to initialize telemetry and wait for completion before returning.</param>
     public TelemetryFixture(
         IMachineInformationProvider? machineInfoProvider = null,
         ICIEnvironmentDetector? ciEnvironmentDetector = null,
+        ICodingAgentDetector? codingAgentDetector = null,
+        IInternalMicrosoftDetector? internalMicrosoftDetector = null,
         ILogger<AspireCliTelemetry>? logger = null,
-        ActivitySamplingResult sampleResult = ActivitySamplingResult.AllDataAndRecorded)
+        ActivitySamplingResult sampleResult = ActivitySamplingResult.AllDataAndRecorded,
+        CliExecutionContext? executionContext = null,
+        TelemetryConfiguration? telemetryConfiguration = null,
+        bool initialize = true)
     {
         ReportedSourceName = $"Test.{Path.GetRandomFileName()}";
         DiagnosticsSourceName = $"Test.{Path.GetRandomFileName()}";
 
+        machineInfoProvider ??= new TestMachineInformationProvider();
+        ciEnvironmentDetector ??= new TestCIEnvironmentDetector();
+        codingAgentDetector ??= new TestCodingAgentDetector();
+        internalMicrosoftDetector ??= new TestInternalMicrosoftDetector();
+        logger ??= NullLogger<AspireCliTelemetry>.Instance;
+        executionContext ??= Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory));
+        TagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+
+        // Simulate CliTagEnrichmentProcessor behavior: in production, tags are added
+        // in OnEnd before export. Tests assert on live activities before they
+        // stop, so we add tags in ActivityStarted instead to make them visible immediately.
         _listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == ReportedSourceName || source.Name == DiagnosticsSourceName,
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => sampleResult,
+            ActivityStarted = activity =>
+            {
+                if (TagsSource.TagsTask is { IsCompletedSuccessfully: true } tagsTask)
+                {
+                    foreach (var tag in tagsTask.Result)
+                    {
+                        if (activity.OperationName == TelemetryConstants.Activities.InternalMicrosoftDetector &&
+                            tag.Key is TelemetryConstants.Tags.InternalMicrosoftAlias or TelemetryConstants.Tags.InternalMicrosoftDomain)
+                        {
+                            continue;
+                        }
+
+                        activity.SetTag(tag.Key, tag.Value);
+                    }
+                }
+            },
             ActivityStopped = activity => CapturedActivity = activity
         };
         ActivitySource.AddActivityListener(_listener);
 
-        machineInfoProvider ??= new TestMachineInformationProvider();
-        ciEnvironmentDetector ??= new TestCIEnvironmentDetector();
-        logger ??= NullLogger<AspireCliTelemetry>.Instance;
-
-        Telemetry = new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, ReportedSourceName, DiagnosticsSourceName);
-        Telemetry.InitializeAsync().GetAwaiter().GetResult();
+        Telemetry = telemetryConfiguration is null
+            ? new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource)
+            : new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, telemetryConfiguration, ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource);
+        if (initialize)
+        {
+            Telemetry.Initialize();
+            // Wait for background tag calculation to complete so tests can assert on tags.
+            Telemetry.GetDefaultTagsAsync().GetAwaiter().GetResult();
+        }
     }
 
     /// <summary>
@@ -57,6 +97,11 @@ internal sealed class TelemetryFixture : IDisposable
     /// Gets the name of the diagnostics activity source.
     /// </summary>
     public string DiagnosticsSourceName { get; }
+
+    /// <summary>
+    /// Gets the tags source used by this fixture.
+    /// </summary>
+    public TelemetryTagsSource TagsSource { get; }
 
     /// <summary>
     /// Gets the initialized telemetry instance.
@@ -80,9 +125,11 @@ internal sealed class TelemetryFixture : IDisposable
         public string MacAddressHash { get; set; } = "test-mac-hash";
         public string UserName { get; set; } = string.Empty;
         public string UserDomainName { get; set; } = string.Empty;
+        public Func<Task<string?>>? GetDeviceIdCallback { get; set; }
+        public Func<Task<string>>? GetMacAddressHashCallback { get; set; }
 
-        public Task<string?> GetOrCreateDeviceId() => Task.FromResult(DeviceId);
-        public Task<string> GetMacAddressHash() => Task.FromResult(MacAddressHash);
+        public Task<string?> GetOrCreateDeviceId() => GetDeviceIdCallback?.Invoke() ?? Task.FromResult(DeviceId);
+        public Task<string> GetMacAddressHash() => GetMacAddressHashCallback?.Invoke() ?? Task.FromResult(MacAddressHash);
     }
 
     /// <summary>
@@ -93,5 +140,53 @@ internal sealed class TelemetryFixture : IDisposable
         public bool IsCIEnvironmentResult { get; set; }
 
         public bool IsCIEnvironment() => IsCIEnvironmentResult;
+    }
+
+    /// <summary>
+    /// A test implementation of <see cref="ICodingAgentDetector"/> with configurable result.
+    /// </summary>
+    internal sealed class TestCodingAgentDetector : ICodingAgentDetector
+    {
+        public string? CodingAgent { get; set; }
+
+        public string? GetCodingAgent() => CodingAgent;
+    }
+
+    /// <summary>
+    /// A test implementation of <see cref="IInternalMicrosoftDetector"/> with configurable result.
+    /// </summary>
+    internal sealed class TestInternalMicrosoftDetector : IInternalMicrosoftDetector
+    {
+        public bool IsInternalMicrosoft { get; set; }
+        public string? Source { get; set; }
+        public string? Alias { get; set; }
+        public string? Domain { get; set; }
+        public IReadOnlyList<InternalMicrosoftProbeDiagnostic> ProbeDiagnostics { get; set; } = [];
+        public Exception? ExceptionToThrow { get; set; }
+        public Func<CancellationToken, Task<InternalMicrosoftDetectionResult>>? DetectionCallback { get; set; }
+        public int InvocationCount { get; private set; }
+
+        public Task<InternalMicrosoftDetectionResult> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default)
+        {
+            InvocationCount++;
+            if (ExceptionToThrow is not null)
+            {
+                return Task.FromException<InternalMicrosoftDetectionResult>(ExceptionToThrow);
+            }
+            if (DetectionCallback is not null)
+            {
+                return DetectionCallback(cancellationToken);
+            }
+
+            return Task.FromResult(new InternalMicrosoftDetectionResult(
+                IsInternalMicrosoft,
+                Source,
+                Alias,
+                Domain,
+                IsInternalMicrosoft ? InternalMicrosoftDetectorOutcome.Detected : InternalMicrosoftDetectorOutcome.NotDetected,
+                InternalMicrosoftDetectorCacheStatus.Miss,
+                TimeSpan.FromMilliseconds(1),
+                ProbeDiagnostics));
+        }
     }
 }

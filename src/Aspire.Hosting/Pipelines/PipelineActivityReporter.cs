@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREINTERACTION001
 
 using System.Collections.Concurrent;
 using System.Globalization;
@@ -19,13 +18,15 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
     private readonly ConcurrentDictionary<string, ReportingStep> _steps = new();
     private readonly ConcurrentDictionary<string, string> _stepIdsByTitle = new(StringComparer.Ordinal);
     private readonly InteractionService _interactionService;
+    private readonly IInteractionFileUploadStore _fileUploadStore;
     private readonly ILogger<PipelineActivityReporter> _logger;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _interactionServiceSubscriber;
 
-    public PipelineActivityReporter(InteractionService interactionService, ILogger<PipelineActivityReporter> logger)
+    public PipelineActivityReporter(InteractionService interactionService, IInteractionFileUploadStore fileUploadStore, ILogger<PipelineActivityReporter> logger)
     {
         _interactionService = interactionService;
+        _fileUploadStore = fileUploadStore;
         _logger = logger;
         _interactionServiceSubscriber = Task.Run(() => SubscribeToInteractionsAsync(_cancellationTokenSource.Token));
     }
@@ -347,7 +348,10 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                     AllowCustomChoice = input.AllowCustomChoice,
                     UpdateStateOnChange = updateStateOnChangeInputs.Any(i => string.Equals(i, input.Name, StringComparisons.InteractionInputName)),
                     Loading = input.DynamicLoadingState?.Loading ?? false,
-                    Disabled = input.Disabled
+                    Disabled = input.Disabled,
+                    AllowMultipleFiles = input.AllowMultipleFiles,
+                    FileFilter = input.FileFilter,
+                    MaxFileSize = input.MaxFileSize
                 }).ToList();
 
                 var activity = new PublishingActivity
@@ -409,10 +413,11 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                     {
                         var options = (InputsDialogInteractionOptions)interaction.Options;
 
+                        var dtos = new List<InputDto>();
+
                         // Set values for all inputs if we have responses
                         if (responses is not null)
                         {
-                            var dtos = new List<InputDto>();
                             for (var i = 0; i < responses.Length; i++)
                             {
                                 var responseAnswer = responses[i];
@@ -431,17 +436,18 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                                     matchingInput = inputsInfo.Inputs[i];
                                 }
 
-                                dtos.Add(new InputDto(matchingInput.Name, responseAnswer.Value ?? "", matchingInput.InputType));
+                                dtos.Add(CreateInputDto(interactionId, matchingInput, responseAnswer));
                             }
-
-                            DashboardServiceData.ProcessInputs(
-                                serviceProvider,
-                                logger,
-                                inputsInfo,
-                                dtos,
-                                dependencyChange: updateResponse,
-                                interaction.CancellationToken);
                         }
+
+                        dtos = DashboardServiceData.CreateInputDtos(_fileUploadStore, interactionId, inputsInfo, dtos);
+                        DashboardServiceData.ProcessInputs(
+                            serviceProvider,
+                            logger,
+                            inputsInfo,
+                            dtos,
+                            dependencyChange: updateResponse,
+                            interaction.CancellationToken);
 
                         return new InteractionCompletionState
                         {
@@ -474,6 +480,25 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                 },
                 cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Creates an InputDto, resolving completed uploads from the InteractionFileUploadStore for File inputs.
+    /// </summary>
+    private InputDto CreateInputDto(int interactionId, InteractionInput matchingInput, PublishingPromptInputAnswer responseAnswer)
+    {
+        var value = responseAnswer.Value ?? "";
+
+        if (matchingInput.InputType == InputType.File)
+        {
+            var files = DashboardServiceData.GetAcceptedFiles(_fileUploadStore, value, interactionId, matchingInput.Name);
+            if (files is not null)
+            {
+                return new InputDto(matchingInput.Name, value, matchingInput.InputType, files);
+            }
+        }
+
+        return new InputDto(matchingInput.Name, value, matchingInput.InputType);
     }
 
     public async ValueTask DisposeAsync()

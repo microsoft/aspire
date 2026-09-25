@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Ats;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
@@ -51,11 +52,20 @@ namespace Aspire.Hosting;
 /// </code>
 /// </example>
 /// </remarks>
+/// <ats-remarks />
+/// <ats-summary>Represents a distributed application that implements the <ats-see cref="!:type:IHost" /> and <ats-see cref="!:type:IAsyncDisposable" /> interfaces.</ats-summary>
 [DebuggerDisplay("{_host}")]
 [DebuggerTypeProxy(typeof(DistributedApplicationDebuggerProxy))]
 [AspireExport]
 public class DistributedApplication : IHost, IAsyncDisposable
 {
+    private static readonly IReadOnlyDictionary<string, string?> s_polyglotConfigurationDefaults = new Dictionary<string, string?>
+    {
+        ["Logging:LogLevel:Default"] = nameof(LogLevel.Information),
+        ["Logging:LogLevel:Microsoft.AspNetCore"] = nameof(LogLevel.Warning),
+        ["Logging:LogLevel:Aspire.Hosting.Dcp"] = nameof(LogLevel.Warning)
+    };
+
     private readonly IHost _host;
     private ResourceCommandService? _resourceCommands;
     private LocaleOverrideContext? _localeOverrideContext;
@@ -152,9 +162,10 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal createBuilder dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal createBuilder dispatcher export.")]
     public static IDistributedApplicationBuilder CreateBuilder(string[] args)
     {
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostCreateBuilderEntered);
         WaitForDebugger();
 
         ArgumentNullException.ThrowIfNull(args);
@@ -202,6 +213,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// </remarks>
     public static IDistributedApplicationBuilder CreateBuilder(DistributedApplicationOptions options)
     {
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostCreateBuilderEntered);
         WaitForDebugger();
 
         ArgumentNullException.ThrowIfNull(options);
@@ -216,9 +228,10 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// </summary>
     /// <param name="options">The <see cref="CreateBuilderOptions"/> to use for configuring the builder.</param>
     /// <returns>A new instance of the <see cref="IDistributedApplicationBuilder"/> interface.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal createBuilder dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal createBuilder dispatcher export.")]
     internal static IDistributedApplicationBuilder CreateBuilder(CreateBuilderOptions options)
     {
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostCreateBuilderEntered);
         WaitForDebugger();
 
         ArgumentNullException.ThrowIfNull(options);
@@ -230,12 +243,19 @@ public class DistributedApplication : IHost, IAsyncDisposable
             AllowUnsecuredTransport = options.AllowUnsecuredTransport,
             EnableResourceLogging = options.EnableResourceLogging,
             ContainerRegistryOverride = options.ContainerRegistryOverride,
-            DashboardApplicationName = options.DashboardApplicationName
+            DashboardApplicationName = options.DashboardApplicationName,
+            // These values came from the managed server's appsettings.json before polyglot AppHosts
+            // used their own content root. Keep them as fallbacks so every user configuration source
+            // can override them while existing AppHosts retain the same logging behavior.
+            DefaultConfiguration = s_polyglotConfigurationDefaults
         };
 
         if (!string.IsNullOrEmpty(options.ProjectDirectory))
         {
             realOptions.ProjectDirectory = options.ProjectDirectory;
+            // The polyglot AppHost runs in a separate guest process, so the managed server's
+            // working directory does not point at the user's appsettings files.
+            realOptions.ContentRootPath = options.ProjectDirectory;
         }
 
         if (!string.IsNullOrEmpty(options.AppHostFilePath))
@@ -246,7 +266,10 @@ public class DistributedApplication : IHost, IAsyncDisposable
         return new DistributedApplicationBuilder(realOptions);
     }
 
-    [AspireExport("createBuilder", Description = "Creates a new distributed application builder")]
+    /// <summary>
+    /// Creates a new distributed application builder
+    /// </summary>
+    [AspireExport("createBuilder")]
     internal static IDistributedApplicationBuilder CreateBuilderForPolyglot(
         [AspireUnion(typeof(string[]), typeof(CreateBuilderOptions))] object? argsOrOptions = null)
     {
@@ -440,19 +463,32 @@ public class DistributedApplication : IHost, IAsyncDisposable
         // Apply locale override before starting the host.
         _localeOverrideContext = _host.Services.GetRequiredService<LocaleOverrideContext>();
         var configuration = _host.Services.GetRequiredService<IConfiguration>();
-        ApplyLocaleOverride(configuration, _localeOverrideContext);
+        ProfilingTelemetry.EnsureInitialized(_host.Services);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostStartAsyncEntered, configuration);
+        ProfilingTelemetry.RecordAppHostProcessStartup(configuration);
 
-        // We only run the start lifecycle hook if we are in run mode or
-        // publish mode. In inspect mode we try to avoid lifecycle hooks
-        // kickings. Eventing will still work generally since they are more
-        // targetted.
-        var executionContext = _host.Services.GetRequiredService<DistributedApplicationExecutionContext>();
-        if (executionContext.IsPublishMode || executionContext.IsRunMode)
+        using var appHostStartActivity = ProfilingTelemetry.StartAppHostStart(configuration, nameof(StartAsync));
+
+        try
         {
-            await ExecuteBeforeStartHooksAsync(cancellationToken).ConfigureAwait(false);
-        }
+            ApplyLocaleOverride(configuration, _localeOverrideContext);
 
-        await _host.StartAsync(cancellationToken).ConfigureAwait(false);
+            // We only run the start lifecycle hook if we are in run mode or
+            // publish mode. In inspect mode we try to avoid lifecycle hooks
+            // kickings. Eventing will still work generally since they are more
+            // targetted.
+            if (!IsInspectMode(configuration))
+            {
+                await ExecuteBeforeStartHooksAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await _host.StartAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            appHostStartActivity.SetError(ex);
+            throw;
+        }
     }
 
     /// <inheritdoc cref="IHost.StopAsync" />
@@ -471,6 +507,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// Runs an application and returns a Task that only completes when the token is triggered or shutdown is
     /// triggered and all <see cref="IHostedService" /> instances are stopped.
     /// </summary>
+    /// <ats-summary>Runs the distributed application</ats-summary>
     /// <param name="cancellationToken">The token to trigger shutdown.</param>
     /// <returns>The <see cref="Task"/> that represents the asynchronous operation.</returns>
     /// <remarks>
@@ -492,29 +529,51 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// in refer to <see cref="DistributedApplicationExecutionContext" />.
     /// </para>
     /// </remarks>
-    [AspireExport("run", Description = "Runs the distributed application")]
+    [AspireExport("run", RunSyncOnBackgroundThread = true)]
     public virtual async Task RunAsync(CancellationToken cancellationToken = default)
     {
-        // We only run the start lifecycle hook if we are in run mode or
-        // publish mode. In inspect mode we try to avoid lifecycle hooks
-        // kickings. Eventing will still work generally since they are more
-        // targetted.
-        var executionContext = _host.Services.GetRequiredService<DistributedApplicationExecutionContext>();
-        if (executionContext.IsPublishMode || executionContext.IsRunMode)
-        {
-            await ExecuteBeforeStartHooksAsync(cancellationToken).ConfigureAwait(false);
-        }
-
+        ProfilingTelemetry.EnsureInitialized(_host.Services);
+        var configuration = _host.Services.GetRequiredService<IConfiguration>();
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostRunAsyncEntered, configuration);
+        ProfilingTelemetry.RecordAppHostProcessStartup(configuration);
         var lifetime = _host.Services.GetRequiredService<IHostApplicationLifetime>();
+
         try
         {
-            await _host.RunAsync(cancellationToken).ConfigureAwait(false);
+            using (var appHostStartActivity = ProfilingTelemetry.StartAppHostStart(configuration, nameof(RunAsync)))
+            {
+                try
+                {
+                    // We only run the start lifecycle hook if we are in run mode or
+                    // publish mode. In inspect mode we try to avoid lifecycle hooks
+                    // kickings. Eventing will still work generally since they are more
+                    // targetted.
+                    if (!IsInspectMode(configuration))
+                    {
+                        await ExecuteBeforeStartHooksAsync(cancellationToken).ConfigureAwait(false);
+                    }
+
+                    // Call StartAsync directly so the startup span closes when startup completes,
+                    // not when the application eventually shuts down.
+                    await _host.StartAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException || !lifetime.ApplicationStopping.IsCancellationRequested)
+                {
+                    appHostStartActivity.SetError(ex);
+                    throw;
+                }
+            }
+
+            await _host.WaitForShutdownAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (lifetime.ApplicationStopping.IsCancellationRequested)
         {
             // Do nothing
         }
     }
+
+    private static bool IsInspectMode(IConfiguration configuration)
+        => string.Equals(configuration["AppHost:Operation"], "inspect", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Runs an application and blocks the calling thread until host shutdown is triggered and all
@@ -547,29 +606,75 @@ public class DistributedApplication : IHost, IAsyncDisposable
     // Internal for testing
     internal async Task ExecuteBeforeStartHooksAsync(CancellationToken cancellationToken)
     {
-        AspireEventSource.Instance.AppBeforeStartHooksStart();
+        var configuration = _host.Services.GetRequiredService<IConfiguration>();
+        using var beforeStartActivity = ProfilingTelemetry.StartAppHostBeforeStart(configuration);
 
         try
         {
-            var eventSubscribers = _host.Services.GetServices<IDistributedApplicationEventingSubscriber>();
+            var eventSubscribers = _host.Services.GetServices<IDistributedApplicationEventingSubscriber>().ToArray();
             var eventing = _host.Services.GetRequiredService<IDistributedApplicationEventing>();
             var execContext = _host.Services.GetRequiredService<DistributedApplicationExecutionContext>();
-            foreach (var subscriber in eventSubscribers)
+            using (var eventSubscribersActivity = ProfilingTelemetry.StartAppHostEventingSubscribers(configuration, eventSubscribers.Length))
             {
-                await subscriber.SubscribeAsync(eventing, execContext, cancellationToken).ConfigureAwait(false);
+                foreach (var subscriber in eventSubscribers)
+                {
+                    using var eventSubscriberActivity = ProfilingTelemetry.StartAppHostEventingSubscriber(configuration, subscriber.GetType());
+                    try
+                    {
+                        await subscriber.SubscribeAsync(eventing, execContext, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        eventSubscriberActivity.SetError(ex);
+                        eventSubscribersActivity.SetError(ex);
+                        throw;
+                    }
+                }
             }
 
+            var logger = _host.Services.GetRequiredService<ILogger<DistributedApplication>>();
+#pragma warning disable CS0618 // Type or member is obsolete
+            if (eventing is DistributedApplicationEventing { } eventingImpl && eventingImpl.HasSubscriptions<AfterEndpointsAllocatedEvent>())
+            {
+                logger.LogWarning("{EventName} is obsolete and is no longer raised by the DCP executor. Use {ResourceEventName} to observe per-resource endpoint allocation.", nameof(AfterEndpointsAllocatedEvent), nameof(ResourceEndpointsAllocatedEvent));
+            }
+#pragma warning restore CS0618 // Type or member is obsolete
+
             var beforeStartEvent = new BeforeStartEvent(_host.Services, _host.Services.GetRequiredService<DistributedApplicationModel>());
-            await eventing.PublishAsync(beforeStartEvent, cancellationToken).ConfigureAwait(false);
+            using (var publishEventActivity = ProfilingTelemetry.StartAppHostPublishEvent(configuration, typeof(BeforeStartEvent)))
+            {
+                try
+                {
+                    await eventing.PublishAsync(beforeStartEvent, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    publishEventActivity.SetError(ex);
+                    throw;
+                }
+            }
 
 #pragma warning disable CS0618 // Hooks are obsolete, but still need to be supported until fully removed.
-            var lifecycleHooks = _host.Services.GetServices<IDistributedApplicationLifecycleHook>();
+            var lifecycleHooks = _host.Services.GetServices<IDistributedApplicationLifecycleHook>().ToArray();
 #pragma warning restore CS0618 // Hooks are obsolete, but still need to be supported until fully removed.
             var appModel = _host.Services.GetRequiredService<DistributedApplicationModel>();
 
-            foreach (var lifecycleHook in lifecycleHooks)
+            using (var lifecycleHooksActivity = ProfilingTelemetry.StartAppHostLifecycleHooks(configuration, lifecycleHooks.Length))
             {
-                await lifecycleHook.BeforeStartAsync(appModel, cancellationToken).ConfigureAwait(false);
+                foreach (var lifecycleHook in lifecycleHooks)
+                {
+                    using var lifecycleHookActivity = ProfilingTelemetry.StartAppHostLifecycleHook(configuration, lifecycleHook.GetType());
+                    try
+                    {
+                        await lifecycleHook.BeforeStartAsync(appModel, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        lifecycleHookActivity.SetError(ex);
+                        lifecycleHooksActivity.SetError(ex);
+                        throw;
+                    }
+                }
             }
 
             EnsureComputeEnvironmentAnnotationsApplied(appModel);
@@ -577,8 +682,6 @@ public class DistributedApplication : IHost, IAsyncDisposable
 #pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
             // Execute the before-start pipeline step
             var pipeline = _host.Services.GetRequiredService<IDistributedApplicationPipeline>();
-            var logger = _host.Services.GetRequiredService<ILogger<DistributedApplication>>();
-
             // Cast to internal implementation to access ExecuteStepSequentiallyAsync
             if (pipeline is not DistributedApplicationPipeline pipelineImpl)
             {
@@ -606,13 +709,25 @@ public class DistributedApplication : IHost, IAsyncDisposable
             // steps (such as removing an unused default container registry) leave behind
             // stale dependency edges on the singleton, causing a later publish-time
             // ResolveStepsAsync to fail with "depends on unknown step" errors.
-            var beforeStartPipeline = pipelineImpl.Clone();
-            await beforeStartPipeline.ExecuteStepSequentiallyAsync(WellKnownPipelineSteps.BeforeStart, pipelineContext).ConfigureAwait(false);
+            using (var pipelineActivity = ProfilingTelemetry.StartAppHostBeforeStartPipeline(configuration, WellKnownPipelineSteps.BeforeStart))
+            {
+                try
+                {
+                    var beforeStartPipeline = pipelineImpl.Clone();
+                    await beforeStartPipeline.ExecuteStepSequentiallyAsync(WellKnownPipelineSteps.BeforeStart, pipelineContext).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    pipelineActivity.SetError(ex);
+                    throw;
+                }
+            }
 #pragma warning restore ASPIREPIPELINES001
         }
-        finally
+        catch (Exception ex)
         {
-            AspireEventSource.Instance.AppBeforeStartHooksStop();
+            beforeStartActivity.SetError(ex);
+            throw;
         }
     }
 

@@ -8,6 +8,8 @@ namespace Aspire.Hosting.DevTunnels;
 /// </summary>
 public sealed class DevTunnelOptions
 {
+    private int? _expirationHours;
+
     /// <summary>
     /// Optional description for the tunnel.
     /// </summary>
@@ -23,7 +25,61 @@ public sealed class DevTunnelOptions
     /// </summary>
     public List<string>? Labels { get; set; }
 
-    internal string ToLoggerString() => $"{{ Description={Description}, AllowAnonymous={AllowAnonymous}, Labels=[{string.Join(", ", Labels ?? [])}] }}";
+    /// <summary>
+    /// Optional region to create the dev tunnel in.
+    /// If not specified, the region will be selected automatically based on the ping.
+    /// </summary>
+    /// <remarks>
+    /// Set this value, for example to <code>DevTunnelRegion.NorthEurope</code>, when an existing tunnel must be reused in a specific service region.
+    /// </remarks>
+    public DevTunnelRegion? Region { get; set; }
+
+    /// <summary>
+    /// Gets or sets how many hours the tunnel can remain unused or unmodified before it expires.
+    /// </summary>
+    /// <remarks>
+    /// Specify a whole number of hours from one hour through 30 days, inclusive.
+    /// The value applies when creating a tunnel and when updating an existing tunnel.
+    /// When <see langword="null"/>, no expiration override is sent: new tunnels use the service default
+    /// and existing tunnels retain their configured expiration period.
+    /// This is an idle expiration period, not a maximum hosting duration or an access-token lifetime.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">The value is outside the supported range.</exception>
+    public int? ExpirationHours
+    {
+        get => _expirationHours;
+        set
+        {
+            if (value is < 1 or > 30 * 24)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value, "Tunnel expiration must be from 1 hour through 30 days.");
+            }
+
+            _expirationHours = value;
+        }
+    }
+
+    internal string RegionCode =>
+        Region switch
+        {
+            DevTunnelRegion.WestEurope => "euw",
+            DevTunnelRegion.UKSouth => "uks1",
+            DevTunnelRegion.NorthEurope => "eun1",
+            DevTunnelRegion.EastUs => "use",
+            DevTunnelRegion.EastUs2 => "use2",
+            DevTunnelRegion.WestUs2 => "usw2",
+            DevTunnelRegion.WestUs3 => "usw3",
+            DevTunnelRegion.CentralIndia => "inc1",
+            DevTunnelRegion.SoutheastAsia => "asse",
+            DevTunnelRegion.BrazilSouth => "brs",
+            DevTunnelRegion.AustraliaCentral => "auc1",
+            DevTunnelRegion.AustraliaEast => "aue",
+            DevTunnelRegion.JapanEast => "jpe1",
+            null => string.Empty,
+            _ => throw new ArgumentException("Invalid region specified", nameof(Region)),
+        };
+
+    internal string ToLoggerString() => $"{{ Description={Description}, AllowAnonymous={AllowAnonymous}, Labels=[{string.Join(", ", Labels ?? [])}], Region={Region}, ExpirationHours={ExpirationHours} }}";
 }
 
 /// <summary>
@@ -52,4 +108,75 @@ public sealed class DevTunnelPortOptions
     public List<string>? Labels { get; set; }
 
     internal string ToLoggerString() => $"{{ Description={Description}, AllowAnonymous={AllowAnonymous}, Protocol={Protocol}, Labels=[{string.Join(", ", Labels ?? [])}] }}";
+}
+
+/// <summary>
+/// Region options for dev tunnel creation.
+/// </summary>
+public enum DevTunnelRegion
+{
+    /// <summary>
+    /// West Europe region.
+    /// </summary>
+    WestEurope,
+
+    /// <summary>
+    /// UK South region.
+    /// </summary>
+    UKSouth,
+
+    /// <summary>
+    /// North Europe region.
+    /// </summary>
+    NorthEurope,
+
+    /// <summary>
+    /// East US region.
+    /// </summary>
+    EastUs,
+
+    /// <summary>
+    /// East US 2 region.
+    /// </summary>
+    EastUs2,
+
+    /// <summary>
+    /// Central India region.
+    /// </summary>
+    CentralIndia,
+
+    /// <summary>
+    /// West US 3 region.
+    /// </summary>
+    WestUs3,
+
+    /// <summary>
+    /// West US 2 region.
+    /// </summary>
+    WestUs2,
+
+    /// <summary>
+    /// Southeast Asia region.
+    /// </summary>
+    SoutheastAsia,
+
+    /// <summary>
+    /// Brazil South region.
+    /// </summary>
+    BrazilSouth,
+
+    /// <summary>
+    /// Australia Central region.
+    /// </summary>
+    AustraliaCentral,
+
+    /// <summary>
+    /// Australia East region.
+    /// </summary>
+    AustraliaEast,
+
+    /// <summary>
+    /// Japan East region.
+    /// </summary>
+    JapanEast
 }

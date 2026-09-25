@@ -4,6 +4,7 @@
     "language": "java"
   },
   "packages": {
+    "Aspire.Hosting.Java": "{{aspireVersion}}",
     "Aspire.Hosting.JavaScript": "{{aspireVersion}}"
   },
   "profiles": {

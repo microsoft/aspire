@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -21,6 +22,11 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
             settingsFilePath = EnsureAspireConfigFileForAppHostPathSettings(settingsFilePath);
         }
 
+        await SetConfigurationInFileAsync(settingsFilePath, key, value, cancellationToken);
+    }
+
+    internal static async Task SetConfigurationInFileAsync(string settingsFilePath, string key, string value, CancellationToken cancellationToken = default)
+    {
         JsonObject settings;
 
         // Read existing settings or create new
@@ -357,25 +363,40 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         return Task.FromResult(configuration[configKey]);
     }
 
-    public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, CancellationToken cancellationToken = default)
+    public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, bool continueSearchWhenKeyMissing = false, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(startDirectory);
 
         var configKey = key.Replace('.', ':');
 
-        // 1. Project-relative local settings: walk up from startDirectory.
+        // 1. Project-relative local settings: walk up from startDirectory to find the nearest
+        //    config file. Most command lookups stop at that file, even when it omits the key,
+        //    so a parent directory's unrelated app config doesn't override global settings.
+        //    Targeted inheritance paths can explicitly continue past a key-missing file.
         //    Intentionally bypasses the process-wide IConfiguration (which is rooted at the
         //    CLI's launch cwd via ConfigurationHelper.RegisterSettingsFiles) so that commands
         //    that operate on a path other than cwd (e.g. `aspire update --apphost <elsewhere>`)
         //    consult the project's own aspire.config.json instead of the caller's cwd.
-        var localConfigPath = ConfigurationHelper.FindNearestConfigFilePath(startDirectory);
-        if (localConfigPath is not null)
+        for (var searchDirectory = startDirectory; searchDirectory is not null; searchDirectory = searchDirectory.Parent)
         {
-            var localConfig = LoadSettingsFileForReading(localConfigPath);
-            var localValue = localConfig[configKey];
-            if (!string.IsNullOrWhiteSpace(localValue))
+            var configFilePath = Path.Combine(searchDirectory.FullName, AspireConfigFile.FileName);
+            if (TryReadConfigurationValue(configFilePath, configKey, out var configFileValue))
             {
-                return Task.FromResult<string?>(localValue);
+                return Task.FromResult<string?>(configFileValue);
+            }
+            else if (File.Exists(configFilePath) && !continueSearchWhenKeyMissing)
+            {
+                break;
+            }
+
+            var legacySettingsPath = ConfigurationHelper.BuildPathToSettingsJsonFile(searchDirectory.FullName);
+            if (TryReadConfigurationValue(legacySettingsPath, configKey, out var legacySettingsValue))
+            {
+                return Task.FromResult<string?>(legacySettingsValue);
+            }
+            else if (File.Exists(legacySettingsPath) && !continueSearchWhenKeyMissing)
+            {
+                break;
             }
         }
 
@@ -398,6 +419,26 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         }
 
         return Task.FromResult<string?>(null);
+    }
+
+    private static bool TryReadConfigurationValue(string settingsFilePath, string configKey, [NotNullWhen(true)] out string? value)
+    {
+        value = null;
+
+        if (!File.Exists(settingsFilePath))
+        {
+            return false;
+        }
+
+        var config = LoadSettingsFileForReading(settingsFilePath);
+        var candidateValue = config[configKey];
+        if (string.IsNullOrWhiteSpace(candidateValue))
+        {
+            return false;
+        }
+
+        value = candidateValue;
+        return true;
     }
 
     /// <summary>

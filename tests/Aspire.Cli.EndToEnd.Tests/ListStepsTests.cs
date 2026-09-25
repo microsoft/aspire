@@ -2,20 +2,19 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// End-to-end tests for the aspire do --list-steps feature.
+/// End-to-end tests for the --list-steps feature on the aspire do, publish, and deploy commands.
 /// Verifies that the CLI can list pipeline steps without executing them.
 /// </summary>
 public sealed class ListStepsTests(ITestOutputHelper output)
 {
     [Fact]
-    public async Task DoListStepsShowsPipelineSteps()
+    public async Task DoPublishAndDeployListStepsWork()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -23,11 +22,9 @@ public sealed class ListStepsTests(ITestOutputHelper output)
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -40,22 +37,42 @@ public sealed class ListStepsTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Run aspire do deploy --list-steps
-        await auto.TypeAsync("aspire do deploy --list-steps");
+        // 1. `aspire do --list-steps` lists every available step without requiring a target.
+        await auto.TypeAsync("aspire do --list-steps");
         await auto.EnterAsync();
-
-        // Wait for the output to contain step information
-        // The output should contain numbered steps with dependencies
         await auto.WaitUntilAsync(s =>
             s.ContainsText("Depends on:") || s.ContainsText("No dependencies"),
             timeout: TimeSpan.FromMinutes(3),
-            description: "waiting for --list-steps output with step dependency information");
+            description: "waiting for aspire do --list-steps output");
+        await auto.WaitForSuccessPromptAsync(counter);
 
+        // 2. `aspire do <step> --list-steps` lists pipeline steps for that step.
+        await auto.TypeAsync("aspire do deploy --list-steps");
+        await auto.EnterAsync();
+        await auto.WaitUntilAsync(s =>
+            s.ContainsText("Depends on:") || s.ContainsText("No dependencies"),
+            timeout: TimeSpan.FromMinutes(3),
+            description: "waiting for aspire do deploy --list-steps output");
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // 3. `aspire publish --list-steps` lists steps for the publish target.
+        await auto.TypeAsync("aspire publish --list-steps");
+        await auto.EnterAsync();
+        await auto.WaitUntilAsync(s =>
+            s.ContainsText("Depends on:") || s.ContainsText("No dependencies"),
+            timeout: TimeSpan.FromMinutes(3),
+            description: "waiting for aspire publish --list-steps output");
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // 4. `aspire deploy --list-steps` lists steps for the deploy target.
+        await auto.TypeAsync("aspire deploy --list-steps");
+        await auto.EnterAsync();
+        await auto.WaitUntilAsync(s =>
+            s.ContainsText("Depends on:") || s.ContainsText("No dependencies"),
+            timeout: TimeSpan.FromMinutes(3),
+            description: "waiting for aspire deploy --list-steps output");
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Exit the terminal
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-        await pendingRun;
     }
 }

@@ -55,7 +55,7 @@ public static partial class KubernetesHelmChartExtensions
     ///     .WithHelmValue("crds.enabled", "true");
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds an external Helm chart to a Kubernetes environment")]
+    [AspireExport]
     public static IResourceBuilder<KubernetesHelmChartResource> AddHelmChart(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
         [ResourceName] string name,
@@ -83,7 +83,8 @@ public static partial class KubernetesHelmChartExtensions
             return builder.ApplicationBuilder.CreateResourceBuilder(resource);
         }
 
-        var chartBuilder = builder.ApplicationBuilder.AddResource(resource);
+        var chartBuilder = builder.ApplicationBuilder.AddResource(resource)
+            .WithIconName("Archive");
 
         chartBuilder.WithAnnotation(new PipelineStepAnnotation(_ =>
         {
@@ -111,7 +112,8 @@ public static partial class KubernetesHelmChartExtensions
                     Name = $"helm-uninstall-{name}",
                     Description = $"Uninstalls Helm chart '{name}' from namespace '{@namespace}'",
                     Action = ctx => UninstallHelmChartAsync(ctx, environment, resource, releaseName, @namespace),
-                    DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
+                    DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq],
+                    Tags = [HelmDeploymentEngine.GetKubernetesDestroyTag(environment.Name)]
                 };
                 uninstallStep.RequiredBy(WellKnownPipelineSteps.Destroy);
                 steps.Add(uninstallStep);
@@ -131,7 +133,7 @@ public static partial class KubernetesHelmChartExtensions
     /// <param name="key">The value key using dot notation (e.g., <c>config.enableGatewayAPI</c>).</param>
     /// <param name="value">The value to set.</param>
     /// <returns>The resource builder for chaining.</returns>
-    [AspireExport(Description = "Sets a Helm value for chart installation")]
+    [AspireExport]
     public static IResourceBuilder<KubernetesHelmChartResource> WithHelmValue(
         this IResourceBuilder<KubernetesHelmChartResource> builder,
         string key,
@@ -155,7 +157,7 @@ public static partial class KubernetesHelmChartExtensions
     /// <param name="builder">The Helm chart resource builder.</param>
     /// <param name="namespace">The namespace to install the chart into.</param>
     /// <returns>The resource builder for chaining.</returns>
-    [AspireExport("withHelmChartNamespace", Description = "Sets the namespace for Helm chart installation")]
+    [AspireExport("withHelmChartNamespace")]
     public static IResourceBuilder<KubernetesHelmChartResource> WithNamespace(
         this IResourceBuilder<KubernetesHelmChartResource> builder,
         string @namespace)
@@ -176,7 +178,7 @@ public static partial class KubernetesHelmChartExtensions
     /// <param name="builder">The Helm chart resource builder.</param>
     /// <param name="releaseName">The Helm release name.</param>
     /// <returns>The resource builder for chaining.</returns>
-    [AspireExport("withHelmChartReleaseName", Description = "Sets the release name for Helm chart installation")]
+    [AspireExport("withHelmChartReleaseName")]
     public static IResourceBuilder<KubernetesHelmChartResource> WithReleaseName(
         this IResourceBuilder<KubernetesHelmChartResource> builder,
         string releaseName)
@@ -210,7 +212,7 @@ public static partial class KubernetesHelmChartExtensions
     ///     .WithDestroy();
     /// </code>
     /// </example>
-    [AspireExport("withHelmChartDestroy", Description = "Uninstalls the Helm chart on aspire destroy")]
+    [AspireExport("withHelmChartDestroy")]
     public static IResourceBuilder<KubernetesHelmChartResource> WithDestroy(
         this IResourceBuilder<KubernetesHelmChartResource> builder)
     {
@@ -266,7 +268,7 @@ public static partial class KubernetesHelmChartExtensions
     ///     .WithForceConflicts();
     /// </code>
     /// </example>
-    [AspireExport("withHelmChartForceConflicts", Description = "Passes --force-conflicts to helm upgrade --install for this chart")]
+    [AspireExport("withHelmChartForceConflicts")]
     public static IResourceBuilder<KubernetesHelmChartResource> WithForceConflicts(
         this IResourceBuilder<KubernetesHelmChartResource> builder)
     {
@@ -385,6 +387,14 @@ public static partial class KubernetesHelmChartExtensions
         string defaultReleaseName,
         string defaultNamespace)
     {
+        if (environment.SkipDestroyCleanup)
+        {
+            context.Logger.LogInformation(
+                "Skipping Helm chart cleanup for Kubernetes environment '{EnvironmentName}' because the cluster no longer exists.",
+                environment.Name);
+            return;
+        }
+
         var logger = context.Services.GetRequiredService<ILogger<KubernetesHelmChartResource>>();
         var helmRunner = context.Services.GetRequiredService<IHelmRunner>();
         var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
@@ -400,12 +410,24 @@ public static partial class KubernetesHelmChartExtensions
         var releaseName = !string.IsNullOrEmpty(savedReleaseName) ? savedReleaseName : defaultReleaseName;
         var @namespace = !string.IsNullOrEmpty(savedNamespace) ? savedNamespace : defaultNamespace;
 
+        // Keep the preflight inside the action so AKS destroy can skip cleanup for a cluster
+        // that no longer exists without requiring Helm on the machine.
+        await HelmVersionValidator.EnsureMinimumVersionAsync(
+            helmRunner,
+            context.CancellationToken).ConfigureAwait(false);
+
         logger.LogInformation(
             "Uninstalling Helm release '{ReleaseName}' for chart '{ChartName}' from namespace '{Namespace}'.",
             releaseName, chart.Name, @namespace);
 
         var arguments = new StringBuilder();
         arguments.Append(CultureInfo.InvariantCulture, $"uninstall {releaseName} --namespace {@namespace}");
+        // The chart state is deleted before later destroy steps run, so a retry can reach this
+        // command after Helm already removed the release. Helm's --ignore-not-found only converts
+        // that missing-release case to success; authentication, connectivity, and other failures
+        // still return a nonzero exit code.
+        // See https://helm.sh/docs/helm/helm_uninstall/.
+        arguments.Append(" --ignore-not-found");
 
         if (environment.KubeConfigPath is not null)
         {

@@ -107,7 +107,7 @@ public static class AspireRedisExtensions
         configSection.Bind(settings);
         namedConfigSection.Bind(settings);
 
-        if (builder.Configuration.GetConnectionString(connectionName) is string connectionString)
+        if (builder.Configuration.TryGetConnectionString(connectionName, out var connectionString))
         {
             settings.ConnectionString = connectionString;
         }
@@ -159,7 +159,7 @@ public static class AspireRedisExtensions
             builder.Services.AddOpenTelemetry()
                 .WithTracing(t =>
                 {
-                    t.AddSource(StackExchangeRedisConnectionInstrumentation.ActivitySourceName);
+                    t.AddSource(StackExchangeRedisConnectionInstrumentation.ActivitySource.Name);
                     // This ensures the core Redis instrumentation services from OpenTelemetry.Instrumentation.StackExchangeRedis are added
                     t.ConfigureRedisInstrumentation(_ => { });
                     // This ensures that any logic performed by the AddInstrumentation method is executed (this is usually called by AddRedisInstrumentation())

@@ -1,0 +1,4 @@
+# The Maven wrapper is a shell script. Committing it with CRLF makes it unrunnable on Linux and macOS,
+# which is where CI builds this sample.
+/forecast/mvnw text eol=lf
+*.cmd text eol=crlf

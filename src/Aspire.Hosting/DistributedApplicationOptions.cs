@@ -66,6 +66,10 @@ public sealed class DistributedApplicationOptions
 
     internal string? Configuration => _configurationLazy.Value;
 
+    internal string? ContentRootPath { get; set; }
+
+    internal IEnumerable<KeyValuePair<string, string?>>? DefaultConfiguration { get; set; }
+
     /// <summary>
     /// The directory containing the AppHost project file. If not set, defaults to the directory resolved from assembly metadata.
     /// </summary>

@@ -1,0 +1,58 @@
+parameters: []
+
+# Steps to pull the native AOT symbols produced by the per-RID clipack build
+# (eng/clipack/Common.projitems' _PackNativeAotSymbols target +
+# eng/clipack/Aspire.Cli.NativeSymbols.proj helper) and published as
+# native_symbols_<rid> artifacts by build_sign_native.yml, then route them on
+# to arcade's -publish step (uploaded to MSDL/SymWeb downstream). Two payloads
+# share the native_symbols_<rid> artifacts:
+#   * Windows: loose aspire.pdb → kept under artifacts/native-symbols/ for
+#     FilesToPublishToSymbolServer (eng/Publishing.props loose-pdb glob).
+#   * Linux + macOS: Aspire.Cli.<rid>.<version>.symbols.nupkg containing
+#     aspire.dbg (Linux) or aspire.dwarf (macOS) → moved into
+#     packages/<config>/Shipping by the staging step below so arcade's
+#     _ExistingSymbolPackage filter classifies it as a Symbols asset and
+#     routes it to SymbolUploadHelper, which indexes the symbol payload via
+#     symbol.exe adddirectory.
+# The artifact-name prefix preserves distinct relative paths per RID, which
+# keeps the loose-pdb path's RelativePDBPath keys unique on the symbol server.
+#
+# Per-RID coverage (a pdb for every win-* RID, a .symbols.nupkg for every
+# linux-*/osx-* RID) is enforced in eng/Publishing.props alongside the
+# existing archive/tool/npm package coverage checks, deriving the expected
+# RID set from eng/clipack/Aspire.Cli.*.csproj filenames so there is one
+# source of truth.
+#
+# See docs/ci/cli-native-symbols.md for the full operating doctrine, including
+# the local validation script and the failure modes this pipeline protects
+# against.
+steps:
+  - task: DownloadPipelineArtifact@2
+    displayName: 🟣Download Native Symbols
+    inputs:
+      itemPattern: |
+        native_symbols_*/aspire.pdb
+      targetPath: '$(Build.SourcesDirectory)/artifacts/native-symbols/$(_BuildConfig)'
+
+  - task: DownloadPipelineArtifact@2
+    displayName: 🟣Download Native Symbol Packages
+    inputs:
+      itemPattern: |
+        native_symbols_*/Aspire.Cli.*.symbols.nupkg
+      targetPath: '$(Build.SourcesDirectory)/artifacts/native-symbol-pkgs/$(_BuildConfig)'
+
+  # Flatten downloaded *.symbols.nupkg files into Shipping. Arcade's
+  # GeneratePackageVersionsFromManifest target globs $(ArtifactsShippingPackagesDir)/**
+  # for .nupkg / .symbols.nupkg files, so they only need to live somewhere under
+  # Shipping for the manifest to pick them up.
+  - pwsh: |
+      $ErrorActionPreference = 'Stop'
+      $shipDir = '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping'
+      New-Item -ItemType Directory -Force -Path $shipDir | Out-Null
+      $pkgs = @(Get-ChildItem -Path '$(Build.SourcesDirectory)/artifacts/native-symbol-pkgs/$(_BuildConfig)' -Filter '*.symbols.nupkg' -File -Recurse -ErrorAction SilentlyContinue)
+      foreach ($p in $pkgs) {
+        Copy-Item -LiteralPath $p.FullName -Destination (Join-Path $shipDir $p.Name) -Force
+        Write-Host "Staged $($p.Name) -> $shipDir"
+      }
+      Write-Host "Total native symbol packages staged: $($pkgs.Count)"
+    displayName: 🟣Stage native symbol packages

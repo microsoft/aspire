@@ -1,5 +1,7 @@
 # Notes on how the Azure integration works
 
+See [Azure run-mode provisioning reconciliation](specs/azure-provisioning-reconciliation.md) for the run-mode operation loop, cancellation, drift detection, and ARM deployment reconciliation design.
+
 ## Provisioning
 
 Many of the resources in the Azure integrations use the `Azure.Provisioning` SDKs. For many of them, this is how it works:

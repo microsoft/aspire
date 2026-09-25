@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -19,6 +20,7 @@ internal sealed class AtsMarshaller
     private readonly AtsContext _context;
     private readonly CancellationTokenRegistry _cancellationTokenRegistry;
     private readonly Lazy<AtsCallbackProxyFactory> _callbackProxyFactory;
+    private readonly ConditionalWeakTable<UnmarshalContext, JsonSerializerOptions> _dtoJsonOptionsByContext = new();
 
     /// <summary>
     /// Creates a new marshaller instance.
@@ -58,7 +60,11 @@ internal sealed class AtsMarshaller
     {
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() },
+        Converters =
+        {
+            new JsonStringEnumConverter(),
+            new TimeSpanMillisecondsJsonConverter()
+        },
         ReferenceHandler = ReferenceHandler.IgnoreCycles,
         TypeInfoResolver = new DefaultJsonTypeInfoResolver()
     };
@@ -155,8 +161,28 @@ internal sealed class AtsMarshaller
             AtsTypeCategory.Array => SerializeArray(value, typeRef.ElementType),
             AtsTypeCategory.List => _handles.Marshal(value, typeRef.TypeId),
             AtsTypeCategory.Dict => _handles.Marshal(value, typeRef.TypeId),
+            AtsTypeCategory.Union => MarshalUnion(value, typeRef),
             _ => throw new InvalidOperationException($"Unknown type category: {typeRef.Category}")
         };
+    }
+
+    private JsonNode? MarshalUnion(object value, AtsTypeRef typeRef)
+    {
+        // Union properties can return either a literal or a handle (for example a Bicep
+        // expression). Marshal the matching declared member so handles retain their type IDs.
+        if (typeRef.UnionTypes is { } members)
+        {
+            foreach (var member in members)
+            {
+                if (member.ClrType?.IsInstanceOfType(value) == true)
+                {
+                    return MarshalToJson(value, member);
+                }
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Value of type '{value.GetType()}' does not match any member of union '{typeRef.TypeId}'.");
     }
 
     /// <summary>
@@ -229,77 +255,167 @@ internal sealed class AtsMarshaller
         return JsonNode.Parse(json);
     }
 
+    private sealed class TimeSpanMillisecondsJsonConverter : JsonConverter<TimeSpan>
+    {
+        public override TimeSpan Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Number)
+            {
+                var milliseconds = reader.GetDouble();
+                if (!double.IsFinite(milliseconds))
+                {
+                    throw new JsonException("TimeSpan milliseconds must be a finite number.");
+                }
+
+                try
+                {
+                    return TimeSpan.FromMilliseconds(milliseconds);
+                }
+                catch (OverflowException ex)
+                {
+                    throw new JsonException("TimeSpan milliseconds are outside the supported range.", ex);
+                }
+            }
+
+            if (reader.TokenType == JsonTokenType.String &&
+                TimeSpan.TryParse(reader.GetString(), System.Globalization.CultureInfo.InvariantCulture, out var value))
+            {
+                return value;
+            }
+
+            throw new JsonException("TimeSpan values must be milliseconds or a standard TimeSpan string.");
+        }
+
+        public override void Write(Utf8JsonWriter writer, TimeSpan value, JsonSerializerOptions options)
+        {
+            writer.WriteNumberValue(value.TotalMilliseconds);
+        }
+    }
+
     private object? DeserializeDto(JsonObject jsonObj, Type targetType, UnmarshalContext context)
     {
-        if (!HasPopulatedDelegateProperty(jsonObj, targetType))
+        try
         {
-            return JsonSerializer.Deserialize(jsonObj.ToJsonString(), targetType, s_jsonOptions);
+            return jsonObj.Deserialize(targetType, GetDtoJsonOptions(context));
         }
-
-        var instance = Activator.CreateInstance(targetType)
-            ?? throw CapabilityException.InvalidArgument(
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            throw CapabilityException.InvalidArgument(
                 context.CapabilityId ?? "unknown",
                 context.ParameterName ?? "unknown",
-                $"Failed to create DTO instance of type '{targetType.Name}'");
-
-        var typeInfo = s_jsonOptions.GetTypeInfo(targetType);
-        foreach (var prop in typeInfo.Properties)
-        {
-            if (prop.Set is null)
-            {
-                continue;
-            }
-
-            if (!TryGetJsonProperty(jsonObj, prop.Name, out var jsonValue))
-            {
-                continue;
-            }
-
-            var propContext = new UnmarshalContext
-            {
-                CapabilityId = context.CapabilityId,
-                ParameterName = $"{context.ParameterName ?? targetType.Name}.{prop.Name}"
-            };
-            prop.Set(instance, UnmarshalFromJson(jsonValue, prop.PropertyType, propContext));
+                $"Failed to deserialize DTO '{targetType.Name}': {ex.Message}");
         }
-
-        return instance;
     }
 
-    private static bool HasPopulatedDelegateProperty(JsonObject jsonObj, Type targetType)
+    private JsonSerializerOptions GetDtoJsonOptions(UnmarshalContext context)
     {
-        var typeInfo = s_jsonOptions.GetTypeInfo(targetType);
-        foreach (var prop in typeInfo.Properties)
-        {
-            if (typeof(Delegate).IsAssignableFrom(prop.PropertyType) &&
-                TryGetJsonProperty(jsonObj, prop.Name, out var jsonValue) &&
-                jsonValue is not null)
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return _dtoJsonOptionsByContext.GetValue(context, CreateDtoJsonOptions);
     }
 
-    private static bool TryGetJsonProperty(JsonObject jsonObj, string propertyName, out JsonNode? value)
+    private JsonSerializerOptions CreateDtoJsonOptions(UnmarshalContext context)
     {
-        if (jsonObj.TryGetPropertyValue(propertyName, out value))
+        var options = new JsonSerializerOptions(s_jsonOptions);
+        options.PreferredObjectCreationHandling = JsonObjectCreationHandling.Replace;
+        options.Converters.Add(new CallbackJsonConverterFactory(this, context));
+        options.Converters.Add(new ReferenceExpressionJsonConverterFactory(this, context));
+
+        return options;
+    }
+
+    private sealed class CallbackJsonConverterFactory(AtsMarshaller marshaller, UnmarshalContext context) : JsonConverterFactory
+    {
+        public override bool CanConvert(Type typeToConvert)
         {
-            return true;
+            return typeof(Delegate).IsAssignableFrom(typeToConvert);
         }
 
-        foreach (var property in jsonObj)
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
         {
-            if (string.Equals(property.Key, propertyName, StringComparison.OrdinalIgnoreCase))
+            return (JsonConverter)Activator.CreateInstance(typeof(CallbackJsonConverter<>).MakeGenericType(typeToConvert), marshaller, context)!;
+        }
+    }
+
+    private sealed class CallbackJsonConverter<TDelegate>(AtsMarshaller marshaller, UnmarshalContext context) : JsonConverter<TDelegate>
+        where TDelegate : Delegate
+    {
+        public override TDelegate? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null)
             {
-                value = property.Value;
-                return true;
+                return null;
             }
+
+            if (reader.TokenType != JsonTokenType.String)
+            {
+                throw CapabilityException.InvalidArgument(
+                    context.CapabilityId ?? "unknown",
+                    context.ParameterName ?? "unknown",
+                    "Callback parameter must be a string callback ID");
+            }
+
+            var callbackId = reader.GetString();
+            var proxy = marshaller.CreateCallbackProxy(callbackId, typeToConvert, context);
+            return (TDelegate?)proxy;
         }
 
-        value = null;
-        return false;
+        public override void Write(Utf8JsonWriter writer, TDelegate value, JsonSerializerOptions options)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    private object? CreateCallbackProxy(string? callbackId, Type callbackType, UnmarshalContext context)
+    {
+        if (string.IsNullOrEmpty(callbackId))
+        {
+            throw CapabilityException.InvalidArgument(
+                context.CapabilityId ?? "unknown",
+                context.ParameterName ?? "unknown",
+                "Callback parameter must be a string callback ID");
+        }
+
+        try
+        {
+            var proxy = _callbackProxyFactory.Value.CreateProxy(callbackId, callbackType);
+            return proxy ?? throw CapabilityException.InvalidArgument(
+                context.CapabilityId ?? "unknown",
+                context.ParameterName ?? "unknown",
+                $"Failed to create callback proxy for type '{callbackType.Name}'");
+        }
+        catch (Exception ex) when (ex is not CapabilityException)
+        {
+            throw CapabilityException.InvalidArgument(
+                context.CapabilityId ?? "unknown",
+                context.ParameterName ?? "unknown",
+                $"Callback proxy factory not available: {ex.Message}");
+        }
+    }
+
+    private sealed class ReferenceExpressionJsonConverterFactory(AtsMarshaller marshaller, UnmarshalContext context) : JsonConverterFactory
+    {
+        public override bool CanConvert(Type typeToConvert)
+        {
+            return typeToConvert.FullName == "Aspire.Hosting.ApplicationModel.ReferenceExpression";
+        }
+
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
+        {
+            return (JsonConverter)Activator.CreateInstance(typeof(ReferenceExpressionJsonConverter<>).MakeGenericType(typeToConvert), marshaller, context)!;
+        }
+    }
+
+    private sealed class ReferenceExpressionJsonConverter<TReferenceExpression>(AtsMarshaller marshaller, UnmarshalContext context) : JsonConverter<TReferenceExpression>
+    {
+        public override TReferenceExpression? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var node = JsonNode.Parse(ref reader);
+            return (TReferenceExpression?)marshaller.UnmarshalFromJson(node, typeToConvert, context);
+        }
+
+        public override void Write(Utf8JsonWriter writer, TReferenceExpression value, JsonSerializerOptions options)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private JsonNode? SerializeArray(object value, AtsTypeRef? elementType)
@@ -489,24 +605,7 @@ internal sealed class AtsMarshaller
             // Callback ID is passed as a string
             if (node is JsonValue callbackValue && callbackValue.TryGetValue<string>(out var callbackId))
             {
-                Delegate? proxy;
-                try
-                {
-                    proxy = _callbackProxyFactory.Value.CreateProxy(callbackId, targetType);
-                }
-                catch (Exception ex) when (ex is not CapabilityException)
-                {
-                    throw CapabilityException.InvalidArgument(
-                        capabilityId, paramName,
-                        $"Callback proxy factory not available: {ex.Message}");
-                }
-                if (proxy == null)
-                {
-                    throw CapabilityException.InvalidArgument(
-                        capabilityId, paramName,
-                        $"Failed to create callback proxy for type '{targetType.Name}'");
-                }
-                return proxy;
+                return CreateCallbackProxy(callbackId, targetType, context);
             }
             else
             {

@@ -1,0 +1,52 @@
+# Unconditionally reruns failed "Outerloop Tests" runs (up to 3 reruns / 4 total
+# attempts), mirroring the PR force-rerun cadence. The scheduled outerloop runs this
+# targets have no associated PR, so there is no failure analysis, pattern matching, or
+# PR comment — a failed run is simply rerun until the attempt cap is reached.
+# See docs/ci/auto-rerun-outerloop-failures.md.
+name: Auto rerun outerloop failures
+
+on:
+  workflow_run:
+    workflows: ["Outerloop Tests"]
+    types:
+      - completed
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  rerun-outerloop-failures:
+    name: Rerun outerloop failures
+    # The `if` carries every safety rail: only failed runs, only within the attempt cap
+    # (attempts 1–3 → up to 3 reruns / 4 total attempts), and only on microsoft/aspire.
+    # A cancelled run (conclusion 'cancelled') never matches, so cancellations are
+    # excluded for free.
+    #
+    # `event != 'pull_request'` restricts auto-rerun to the unattended scheduled (and
+    # manual workflow_dispatch) outerloop runs. tests-outerloop.yml also triggers on a
+    # narrow pull_request paths filter (CI-orchestration files); those PR runs have a
+    # human watching, who can use GitHub's "Re-run failed jobs" button. Auto-rerunning
+    # them would mask genuine breakage in exactly the PRs that change outerloop CI.
+    if: >-
+      ${{
+          github.repository_owner == 'microsoft' &&
+          github.event.workflow_run.event != 'pull_request' &&
+          github.event.workflow_run.conclusion == 'failure' &&
+          github.event.workflow_run.run_attempt <= 3
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Rerun failed outerloop jobs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            // Unconditional: GitHub's rerun-failed-jobs API reruns every failed job for
+            // the attempt. No analysis or PR association — outerloop has no PR.
+            await github.request('POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs', {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.payload.workflow_run.id,
+            });

@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageTags>aspire integration hosting java jvm framework runtime</PackageTags>
+    <Description>Java support for Aspire.</Description>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
+    <!-- System.Security.Cryptography.Pkcs ships a real lib/net10.0 assembly that binds to
+         Microsoft.Bcl.Cryptography, but its net10.0 dependency group is empty, so NuGet never learns
+         about the requirement. Without this reference any consumer that also pulls an older
+         Microsoft.Bcl.Cryptography transitively - Microsoft.IdentityModel.Tokens does, so anything
+         with auth or Azure integrations - resolves that older assembly and Pkcs12Builder throws
+         FileNotFoundException at run time. Referencing it directly pins the matching version. -->
+    <PackageReference Include="Microsoft.Bcl.Cryptography" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Java.Tests" />
+  </ItemGroup>
+
+  <!-- Source-share the path helpers instead of reaching into Aspire.Hosting's internals (via
+       InternalsVisibleTo) so this package builds against the public Aspire.Hosting surface only. -->
+  <ItemGroup>
+    <Compile Include="$(SharedDir)PathNormalizer.cs" Link="Utils\PathNormalizer.cs" />
+    <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
+    <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
+  </ItemGroup>
+
+</Project>
