@@ -14,7 +14,7 @@ on:
         required: false
         type: string
       # MTP diagnostic arguments (hangdump, crashdump, timeouts).
-      # Single source of truth is eng/Testing.props; the runsheet pipeline forwards per-project values.
+      # Single source of truth is eng/Testing.targets; the runsheet pipeline forwards per-project values.
       mtpBaseArgs:
         required: false
         type: string

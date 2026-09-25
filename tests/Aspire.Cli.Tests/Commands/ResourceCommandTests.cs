@@ -64,7 +64,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        await Verify(helpWriter.ToString(), extension: "txt");
+        await Verify(helpWriter.ToString(), extension: "txt").ScrubRootCommandName();
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        await Verify(helpWriter.ToString(), extension: "txt");
+        await Verify(helpWriter.ToString(), extension: "txt").ScrubRootCommandName();
     }
 
     [Fact]
@@ -261,7 +261,7 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        await Verify(helpWriter.ToString(), extension: "txt");
+        await Verify(helpWriter.ToString(), extension: "txt").ScrubRootCommandName();
     }
 
     [Fact]

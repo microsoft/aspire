@@ -22,7 +22,7 @@ jobs:
         run: |
           ./dotnet.sh build src/Aspire.Cli/Aspire.Cli.csproj --configuration Release
           ./dotnet.sh build tools/TypeScriptApiCompat/TypeScriptApiCompat.csproj --configuration Release
-          test -f artifacts/bin/Aspire.Cli/Release/net10.0/aspire.dll
+          test -f artifacts/bin/Aspire.Cli/Release/net11.0/aspire.dll
           test -f artifacts/bin/TypeScriptApiCompat/Release/net8.0/TypeScriptApiCompat.dll
 
       - name: Prepare checked-in ATS surface
@@ -78,7 +78,7 @@ jobs:
           EXCLUDED_PACKAGES_FILE="$TYPESCRIPT_API_COMPAT_EXCLUDED_PACKAGES_FILE"
           PROJECTS_FILE="${RUNNER_TEMP}/ats-projects.txt"
           SORTED_PROJECTS_FILE="${RUNNER_TEMP}/ats-projects-sorted.txt"
-          ASPIRE_CLI=("${GITHUB_WORKSPACE}/dotnet.sh" exec "${GITHUB_WORKSPACE}/artifacts/bin/Aspire.Cli/Release/net10.0/aspire.dll" --nologo)
+          ASPIRE_CLI=("${GITHUB_WORKSPACE}/dotnet.sh" exec "${GITHUB_WORKSPACE}/artifacts/bin/Aspire.Cli/Release/net11.0/aspire.dll" --nologo)
 
           mkdir -p "$CURRENT_DIR/src/Aspire.Hosting/api"
           : > "$PROJECTS_FILE"

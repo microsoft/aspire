@@ -86,7 +86,7 @@
     .\get-aspire-cli-pr.ps1 -LocalDir "C:\path\to\artifacts" -HiveLabel my-build
 
 .EXAMPLE
-    .\get-aspire-cli-pr.ps1 -LocalDir "artifacts\bin\Aspire.Cli\Debug\net10.0"
+    .\get-aspire-cli-pr.ps1 -LocalDir "artifacts\bin\Aspire.Cli\Debug\net11.0"
 
 .EXAMPLE
     .\get-aspire-cli-pr.ps1 1234 -InstallPath "C:\my-aspire"

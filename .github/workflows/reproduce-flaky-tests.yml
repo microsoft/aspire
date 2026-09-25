@@ -281,7 +281,7 @@ jobs:
             RESULT=${PIPESTATUS[0]}
             set -e
 
-            # Detect zero-test runs (--ignore-exit-code 8 in Testing.props masks exit code 8)
+            # Detect zero-test runs (--ignore-exit-code 8 in Testing.targets masks exit code 8)
             if [ "$RESULT" -eq 0 ]; then
               if ! grep -qiE "total:\s*[1-9]" "$ITER_OUTPUT" 2>/dev/null; then
                 echo "::error::Iteration $i: Zero tests executed. Verify TEST_FILTER and quarantine settings."
@@ -346,7 +346,7 @@ jobs:
             $result = $LASTEXITCODE
             Get-Content $iterOutput
 
-            # Detect zero-test runs (--ignore-exit-code 8 in Testing.props masks exit code 8)
+            # Detect zero-test runs (--ignore-exit-code 8 in Testing.targets masks exit code 8)
             if ($result -eq 0) {
               $content = Get-Content $iterOutput -Raw -ErrorAction SilentlyContinue
               if (-not ($content -match '(?i)total:\s*[1-9]')) {

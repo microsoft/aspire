@@ -19,7 +19,7 @@
 
   Produces, into PackageOutputPath:
     Aspire.Cli.<rid>.<version>.symbols.nupkg
-      tools/<tfm>/<rid>/aspire.<dbg|dwarf>
+      tools/any/<rid>/aspire.<dbg|dwarf>
     Aspire.Cli.<rid>.<version>.nupkg  (empty companion; the caller
                                        discards it — it would otherwise
                                        collide with the per-RID tool
@@ -42,7 +42,7 @@
 <Project Sdk="Microsoft.Build.NoTargets">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
 
     <IsPackable>true</IsPackable>
     <PackageId>Aspire.Cli.$(RuntimeIdentifier)</PackageId>
@@ -87,16 +87,17 @@
     Path.Combine("lib/$(TargetFramework)", TargetPath) collapses to the
     rooted value (Path.Combine treats a rooted second segment as
     absolute). NuGet strips the leading slash when emitting the zip
-    entry, producing 'tools/<tfm>/<rid>/aspire.<dbg|dwarf>' inside
+    entry, producing 'tools/any/<rid>/aspire.<dbg|dwarf>' inside
     the package — matching the layout of the per-RID Aspire.Cli.<rid>
-    tool nupkg counterpart, so triage tooling can reason about either
-    container interchangeably. See https://github.com/NuGet/Home/issues/10860
+    tool nupkg counterpart (packed self-contained, so its TFM folder is
+    'any'; see _PackRidSpecificDotnetTool in Common.projitems), so triage
+    tooling can reason about either container interchangeably. See https://github.com/NuGet/Home/issues/10860
     for the leading-slash idiom.
   -->
   <Target Name="_AddAspireCliNativeSymbol">
     <ItemGroup>
       <TfmSpecificDebugSymbolsFile Include="$(SymbolFilePath)"
-                                   TargetPath="/tools/$(TargetFramework)/$(RuntimeIdentifier)"
+                                   TargetPath="/tools/any/$(RuntimeIdentifier)"
                                    TargetFramework="$(TargetFramework)" />
     </ItemGroup>
   </Target>
@@ -125,7 +126,7 @@
            Text="Pack produced @(_PackedSymbolsForValidation->Count()) Aspire.Cli.$(RuntimeIdentifier).*.symbols.nupkg files in '$(PackageOutputPath)'; expected exactly one. Files: @(_PackedSymbolsForValidation, ', ')" />
 
     <PropertyGroup>
-      <_ExpectedZipEntry>tools/$(TargetFramework)/$(RuntimeIdentifier)/aspire$(SymbolsSuffix)</_ExpectedZipEntry>
+      <_ExpectedZipEntry>tools/any/$(RuntimeIdentifier)/aspire$(SymbolsSuffix)</_ExpectedZipEntry>
     </PropertyGroup>
 
     <Exec Command="unzip -l &quot;@(_PackedSymbolsForValidation)&quot;" ConsoleToMSBuild="true">
