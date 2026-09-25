@@ -18,9 +18,14 @@ on:
       - .github/aw/actions-lock.json
       - .github/actionlint.yaml
       - .github/workflows/validate-agentic-workflows.yml
+      - .github/workflows/report-agentic-validation.yml
+      - .github/workflows/agentic-validation-report.js
 
 permissions:
   contents: read
+
+env:
+  GH_AW_VERSION: v0.89.17
 
 jobs:
   validate:
@@ -28,19 +33,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout validation sources
+        id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       # Keep this pinned to the same gh-aw release as copilot-setup-steps.yml so the recompiled
       # workflows are byte-for-byte comparable with what a contributor generates locally; see
       # .github/workflows/README.md.
-      - name: Install gh-aw extension
+      - name: Install gh-aw extension (${{ env.GH_AW_VERSION }})
+        id: compiler
         uses: github/gh-aw-actions/setup-cli@f3b81cdb3070066a47faa9bdf440f4f1dc78b1f0 # v0.89.17
         with:
-          version: v0.89.17
+          version: ${{ env.GH_AW_VERSION }}
 
       - name: Compile agentic workflows (schema and action-pin validation)
+        id: compile
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -50,9 +59,10 @@ jobs:
             --validate --no-check-update
 
       - name: Verify generated files are up to date
+        id: drift
         run: |
           set -euo pipefail
-          changes=$(git status --porcelain --untracked-files=all -- \
+          changes=$(git --no-pager status --porcelain --untracked-files=all -- \
             '.github/aw/actions-lock.json' \
             '.github/workflows/*.lock.yml' \
             '.github/workflows/agentics-maintenance*.yml')
@@ -63,16 +73,21 @@ jobs:
           fi
 
       - name: Lint generated agentic workflows
+        id: lint
         run: gh aw lint --shellcheck
 
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - name: Set up .NET SDK
+        id: sdk
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
 
       - name: Restore
+        id: restore
         run: ./restore.sh
 
       - name: Run Infrastructure.Tests agentic workflow contracts
+        id: contracts
         # Class-level traits include generated-workflow, trigger/drift, and process-runner contracts.
         # Main CI covers selector routing when the trigger map or lint policy changes.
         run: |
@@ -81,3 +96,14 @@ jobs:
             --filter-trait "Category=AgenticWorkflow" \
             --filter-not-trait "quarantined=true" \
             --filter-not-trait "outerloop=true"
+
+      - name: Summarize validation failure
+        if: ${{ failure() && steps.checkout.outcome == 'success' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          VALIDATION_STEPS: ${{ toJSON(steps) }}
+        with:
+          script: |
+            const report = require('./.github/workflows/agentic-validation-report.js');
+            await report.summarize({ core, context, steps: JSON.parse(process.env.VALIDATION_STEPS),
+              configuredVersion: process.env.GH_AW_VERSION });

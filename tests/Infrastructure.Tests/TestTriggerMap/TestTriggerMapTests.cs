@@ -72,6 +72,20 @@ public sealed class TestTriggerMapTests
         Assert.Equal(["ALL"], targets);
     }
 
+    [Theory]
+    [InlineData(".github/workflows/report-agentic-validation.yml")]
+    [InlineData(".github/workflows/agentic-validation-report.js")]
+    public void AgenticReportingInputsSelectInfrastructureTests(string path)
+    {
+        var targets = s_map.PathRules
+            .Where(rule => rule.Paths.Any(glob => TestTriggerMap.GlobMatches(glob, path)))
+            .SelectMany(rule => rule.Targets)
+            .Distinct()
+            .ToArray();
+
+        Assert.Equal(["test:Infrastructure.Tests"], targets);
+    }
+
     [Fact]
     public void ExtensionUnitWorkflowChangesSelectUnitAndE2eJobs()
     {

@@ -23,6 +23,8 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
     [InlineData(true, ActionsLockPath)]
     [InlineData(true, ".github/actionlint.yaml")]
     [InlineData(true, WorkflowRelativePath)]
+    [InlineData(true, ".github/workflows/report-agentic-validation.yml")]
+    [InlineData(true, ".github/workflows/agentic-validation-report.js")]
     [InlineData(true, ".github/workflows/new-agent.md")]
     [InlineData(true, ".github/workflows/nested/new-agent.md")]
     [InlineData(false, ".github/workflows/README.md")]
@@ -80,6 +82,73 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
         Assert.Contains(expectedStatus, result.Output, StringComparison.Ordinal);
     }
 
+    [Fact]
+    [RequiresTools(["node", "git"])]
+    public async Task FailureReportingBehaviors()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var script = Path.Combine(RepoRoot.Path, "tests", "Infrastructure.Tests", "WorkflowScripts", "agentic-validation-report.test.js");
+        var result = await ProcessRunner.RunAsync(output, "node", ["--test", script], workspace.Path);
+        Assert.Equal(0, result.ExitCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [RequiresTools(["git", "bash"])]
+    public async Task GeneratedFileVerificationPreservesCleanAndDeletedFileResults(bool deleteGeneratedFile)
+    {
+        using var workspace = CreateRepository();
+        if (deleteGeneratedFile)
+        {
+            File.Delete(GetFullPath(workspace, LockPath));
+        }
+        var result = await ProcessRunner.RunAsync(
+            output, "bash",
+            ["-c", Scalar(Step(Steps(LoadWorkflow()), "Verify generated files are up to date"), "run")],
+            workspace.Path);
+
+        Assert.Equal(deleteGeneratedFile ? 1 : 0, result.ExitCode);
+    }
+
+    [Fact]
+    public void ReportingPreservesTrustBoundariesAndCompilerIdentity()
+    {
+        var validator = LoadWorkflow();
+        Assert.Equal(["contents"], Mapping(validator, "permissions").Children.Keys.Select(key => key.ToString()));
+        Assert.Equal("read", Scalar(Mapping(validator, "permissions"), "contents"));
+        var steps = Steps(validator);
+        Assert.Equal(["checkout", "compiler", "compile", "drift", "lint", "sdk", "restore", "contracts"],
+            steps.Select(step => Scalar(step, "id")).Where(id => id.Length > 0));
+        Assert.All(steps, step => Assert.Equal("", Scalar(step, "continue-on-error")));
+        var compiler = Assert.Single(steps, step => Scalar(step, "id") == "compiler");
+        Assert.Equal("${{ env.GH_AW_VERSION }}", Scalar(Mapping(compiler, "with"), "version"));
+        Assert.Equal("Install gh-aw extension (${{ env.GH_AW_VERSION }})", Scalar(compiler, "name"));
+
+        var bootstrap = LoadWorkflow(".github/workflows/copilot-setup-steps.yml");
+        var bootstrapSteps = Sequence(Mapping(Mapping(bootstrap, "jobs"), "copilot-setup-steps"), "steps");
+        var bootstrapCompiler = Assert.Single(bootstrapSteps.Children.Cast<YamlMappingNode>(),
+            step => Scalar(step, "uses").StartsWith("github/gh-aw-actions/setup-cli@", StringComparison.Ordinal));
+        Assert.Equal(Scalar(Mapping(bootstrapCompiler, "with"), "version"), Scalar(Mapping(validator, "env"), "GH_AW_VERSION"));
+
+        var summary = Step(steps, "Summarize validation failure");
+        Assert.Equal("${{ failure() && steps.checkout.outcome == 'success' }}", Scalar(summary, "if"));
+        Assert.Equal("${{ toJSON(steps) }}", Scalar(Mapping(summary, "env"), "VALIDATION_STEPS"));
+
+        var reporter = LoadWorkflow(".github/workflows/report-agentic-validation.yml");
+        Assert.Equal(["workflow_run"], Mapping(reporter, "on").Children.Keys.Select(key => key.ToString()));
+        var trigger = Mapping(Mapping(reporter, "on"), "workflow_run");
+        Assert.Equal(["Validate Agentic Workflows"], Sequence(trigger, "workflows").Children.Select(node => node.ToString()));
+        Assert.Equal(["completed"], Sequence(trigger, "types").Children.Select(node => node.ToString()));
+        var permissions = Mapping(reporter, "permissions").Children.ToDictionary(pair => pair.Key.ToString(), pair => pair.Value.ToString());
+        Assert.Equal(new Dictionary<string, string> { ["contents"] = "read", ["actions"] = "read", ["pull-requests"] = "write" }, permissions);
+
+        var reportSteps = Sequence(Mapping(Mapping(reporter, "jobs"), "report"), "steps").Children.Cast<YamlMappingNode>().ToArray();
+        Assert.Equal(["actions/checkout", "actions/github-script"], reportSteps.Select(step => Scalar(step, "uses").Split('@')[0]));
+        Assert.Equal("${{ github.sha }}", Scalar(Mapping(reportSteps[0], "with"), "ref"));
+        Assert.Equal("false", Scalar(Mapping(reportSteps[0], "with"), "persist-credentials"));
+    }
+
     private TemporaryWorkspace CreateRepository()
     {
         var workspace = TemporaryWorkspace.Create(output);
@@ -111,9 +180,9 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
         GitCli.Run(workspace.Path, "commit", "-q", "-m", message);
     }
 
-    private static YamlMappingNode LoadWorkflow()
+    private static YamlMappingNode LoadWorkflow(string relativePath = WorkflowRelativePath)
     {
-        using var reader = File.OpenText(Path.Combine(RepoRoot.Path, WorkflowRelativePath));
+        using var reader = File.OpenText(Path.Combine(RepoRoot.Path, relativePath));
         var yaml = new YamlStream();
         yaml.Load(reader);
         return Assert.IsType<YamlMappingNode>(Assert.Single(yaml.Documents).RootNode);
