@@ -6,13 +6,9 @@
 // PR, it reruns the failed jobs — full stop. No job is fetched or classified, the
 // patterns config is not consulted, and there is no job-count cap.
 //
-// The two hard gates are already enforced by the YAML trigger `if`, so force mode does
-// not re-implement them:
-//   * "CI failed"      -> trigger only fires on `workflow_run.conclusion == 'failure'`,
-//                         which also means a run that was merely *cancelled* never
-//                         triggers a rerun (its conclusion is 'cancelled', not 'failure').
-//   * "max 3 reruns"   -> trigger gates on `run_attempt <= 3`; computeRerunEligibility
-//                         re-checks the same attempt cap for the manual-dispatch path.
+// The workflow trigger requires a failed CI run. The automatic-attempt cap is
+// enforced by computeRerunEligibility using defaultMaxRunAttempt so the retry
+// and final-analysis paths share one policy value.
 //
 // Force mode still KEEPS the open-PR requirement (no point spending CI on a run whose
 // PRs are all closed/merged). `forceRerunAll` defaults to false everywhere, so the
@@ -544,8 +540,8 @@ function computeRerunEligibility({
     maxRunAttempt = defaultMaxRunAttempt,
     forceRerunAll = false
 }) {
-    // The attempt cap applies in every mode: never rerun past maxRunAttempt source
-    // attempts (up to 3 auto-reruns / 4 total attempts).
+    // The attempt cap applies in every mode: never rerun past maxRunAttempt
+    // failed source attempts.
     if (runAttempt > maxRunAttempt) {
         return false;
     }
@@ -725,8 +721,7 @@ async function writeForceRerunSummary({
     // In force mode the only way to be ineligible is the attempt cap: this summary runs
     // after the open-PR gate (the zero-PR case returns earlier), and force-mode
     // computeRerunEligibility returns false solely when runAttempt > maxRunAttempt. The
-    // skipped case is reachable only via a manual workflow_dispatch on a run past the cap
-    // (the workflow_run trigger gates run_attempt <= 3, so the auto path is always eligible).
+    // The skipped case is reachable whenever an automatic or manual run is past the cap.
     const outcomeDetails = rerunEligible
         ? dryRun
             ? 'Force-rerun mode: the failed jobs would be rerun if dry run were disabled (transient-failure analysis bypassed).'
@@ -893,6 +888,22 @@ async function addPullRequestComments({ github, owner, repo, pullRequestNumbers,
     return postedComments;
 }
 
+async function writeRerunOutcomeSummary({
+    summary,
+    sourceRunUrl,
+    sourceRunAttempt,
+    heading = 'Rerun skipped',
+    message,
+}) {
+    const failedAttemptReference = buildWorkflowRunReference(sourceRunUrl, sourceRunAttempt);
+    await summary.addHeading(heading);
+    addSummaryReference(summary, 'Analyzed run', failedAttemptReference)
+        .addRaw(message)
+        .addBreak()
+        .addBreak();
+    await summary.write();
+}
+
 async function rerunMatchedJobs({
     github,
     owner,
@@ -903,6 +914,9 @@ async function rerunMatchedJobs({
     sourceRunId,
     sourceRunUrl,
     sourceRunAttempt,
+    sourceRunScope,
+    sourceHeadSha,
+    maxRunAttempt,
     testPatternMatchedTests = [],
     forceRerunAll = false,
 }) {
@@ -943,22 +957,168 @@ async function rerunMatchedJobs({
         return;
     }
 
-    await github.request('POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs', {
-        owner,
-        repo,
-        run_id: sourceRunId,
-    });
+    let mainRerunState;
+    if (sourceRunScope === 'main') {
+        const state = {
+            policy: 'current-main-failed-jobs-v1',
+            source_run_id: sourceRunId,
+            source_run_attempt: sourceRunAttempt,
+            observed_run_attempt: null,
+            max_run_attempt: maxRunAttempt,
+            source_head_sha: sourceHeadSha,
+            current_main_sha: null,
+            superseding_run_id: null,
+        };
+        const skipMainRerun = async (reason, message) => {
+            await writeRerunOutcomeSummary({
+                summary,
+                sourceRunUrl,
+                sourceRunAttempt,
+                message,
+            });
+            return {
+                ...state,
+                decision: 'skip',
+                outcome: 'not-requested',
+                reason,
+            };
+        };
+
+        const { data: currentRun } = await github.request('GET /repos/{owner}/{repo}/actions/runs/{run_id}', {
+            owner,
+            repo,
+            run_id: sourceRunId,
+        });
+        state.observed_run_attempt = currentRun?.run_attempt ?? null;
+
+        const currentRunIsValid = currentRun &&
+            currentRun.id === sourceRunId &&
+            Number.isInteger(currentRun.run_attempt) &&
+            Number.isInteger(currentRun.run_number) &&
+            Number.isInteger(currentRun.workflow_id) &&
+            currentRun.event === 'push' &&
+            currentRun.head_branch === 'main' &&
+            currentRun.head_sha === sourceHeadSha &&
+            currentRun.path === '.github/workflows/ci.yml';
+        if (!currentRunIsValid) {
+            return await skipMainRerun(
+                'invalid-live-run',
+                'The live workflow run no longer matches the trusted main CI run. No jobs were rerun.');
+        }
+
+        if (currentRun.run_attempt !== sourceRunAttempt) {
+            return await skipMainRerun(
+                'attempt-changed',
+                'The workflow run attempt changed before the rerun request. No jobs were rerun.');
+        }
+
+        if (!Number.isInteger(maxRunAttempt) || currentRun.run_attempt > maxRunAttempt) {
+            return await skipMainRerun(
+                'attempt-cap-reached',
+                'The workflow run reached the automatic rerun attempt cap. No jobs were rerun.');
+        }
+
+        const { data: mainRef } = await github.request('GET /repos/{owner}/{repo}/git/ref/{ref}', {
+            owner,
+            repo,
+            ref: 'heads/main',
+        });
+        const currentMainSha = mainRef?.object?.sha;
+        state.current_main_sha = currentMainSha ?? null;
+
+        if (typeof sourceHeadSha !== 'string' ||
+            sourceHeadSha.length === 0 ||
+            typeof currentMainSha !== 'string' ||
+            currentMainSha !== sourceHeadSha) {
+            return await skipMainRerun(
+                'main-sha-changed',
+                'The failed run SHA is no longer the current main SHA. No jobs were rerun.');
+        }
+
+        const { data: mainRuns } = await github.request(
+            'GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs',
+            {
+                owner,
+                repo,
+                workflow_id: currentRun.workflow_id,
+                branch: 'main',
+                event: 'push',
+                per_page: 100,
+            });
+        const workflowRuns = mainRuns?.workflow_runs;
+        if (!Array.isArray(workflowRuns) ||
+            !workflowRuns.every(run => run &&
+                Number.isInteger(run.id) &&
+                Number.isInteger(run.run_number))) {
+            return await skipMainRerun(
+                'invalid-main-run-list',
+                'The live main CI run list was incomplete or invalid. No jobs were rerun.');
+        }
+
+        const supersedingRun = workflowRuns
+            .find(run => run.id !== sourceRunId && run.run_number > currentRun.run_number);
+
+        if (supersedingRun) {
+            state.superseding_run_id = supersedingRun.id;
+            return await skipMainRerun(
+                'superseded',
+                `Newer main CI run ${supersedingRun.id} superseded this run. No jobs were rerun.`);
+        }
+
+        const sourceRunIsPresent = workflowRuns
+            .some(run => run.id === sourceRunId && run.run_number === currentRun.run_number);
+        if (!sourceRunIsPresent) {
+            return await skipMainRerun(
+                'invalid-main-run-list',
+                'The live main CI run list did not contain the trusted source run. No jobs were rerun.');
+        }
+
+        mainRerunState = {
+            ...state,
+            decision: 'rerun',
+            outcome: 'requested',
+            reason: 'eligible',
+        };
+    }
+
+    try {
+        await github.request('POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs', {
+            owner,
+            repo,
+            run_id: sourceRunId,
+        });
+    }
+    catch (error) {
+        if (!mainRerunState) {
+            throw error;
+        }
+
+        await writeRerunOutcomeSummary({
+            summary,
+            sourceRunUrl,
+            sourceRunAttempt,
+            heading: 'Rerun request failed',
+            message: 'The failed-job rerun request did not complete successfully. GitHub may still have started a rerun.',
+        });
+        return {
+            ...mainRerunState,
+            outcome: 'failed',
+            reason: 'request-failed',
+        };
+    }
 
     const normalizedSourceRunAttempt = Number.isInteger(sourceRunAttempt) && sourceRunAttempt > 0
         ? sourceRunAttempt
         : null;
     const failedAttemptUrl = buildWorkflowRunAttemptUrl(sourceRunUrl, normalizedSourceRunAttempt);
-    const latestRunAttempt = await getLatestRunAttempt({
-        github,
-        owner,
-        repo,
-        runId: sourceRunId,
-    });
+    const latestRunAttempt = sourceRunScope === 'main'
+        ? null
+        : await getLatestRunAttempt({
+            github,
+            owner,
+            repo,
+            runId: sourceRunId,
+        });
     const rerunAttemptNumber = latestRunAttempt && normalizedSourceRunAttempt && latestRunAttempt > normalizedSourceRunAttempt
         ? latestRunAttempt
         : normalizedSourceRunAttempt ? normalizedSourceRunAttempt + 1 : null;
@@ -998,7 +1158,7 @@ async function rerunMatchedJobs({
             .addBreak();
 
         await summaryBuilder.write();
-        return;
+        return mainRerunState;
     }
 
     summaryBuilder
@@ -1015,6 +1175,46 @@ async function rerunMatchedJobs({
         ]);
 
     await summaryBuilder.write();
+    return mainRerunState;
+}
+
+async function requestMainFailureAnalysis({
+    github,
+    owner,
+    repo,
+    sourceRunId,
+    sourceRunAttempt,
+    sourceHeadSha,
+}) {
+    if (!Number.isInteger(sourceRunId) || sourceRunId <= 0) {
+        throw new Error('A positive source run ID is required to request fallback analysis.');
+    }
+    if (!Number.isInteger(sourceRunAttempt) || sourceRunAttempt <= 0) {
+        throw new Error('A positive source run attempt is required to request fallback analysis.');
+    }
+    if (typeof sourceHeadSha !== 'string' || sourceHeadSha.length === 0) {
+        throw new Error('A source head SHA is required to request fallback analysis.');
+    }
+
+    const { data } = await github.request(
+        'POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches',
+        {
+            owner,
+            repo,
+            workflow_id: 'analyze-ci-failure.lock.yml',
+            ref: 'main',
+            inputs: {
+                run_id: String(sourceRunId),
+                run_attempt: String(sourceRunAttempt),
+                head_sha: sourceHeadSha,
+                retry_request_failed: 'true',
+            },
+        });
+
+    return {
+        workflowRunId: data?.workflow_run_id ?? null,
+        workflowRunUrl: data?.html_url ?? null,
+    };
 }
 
 // --- Test failure retry pattern matching ---
@@ -1456,6 +1656,7 @@ module.exports = {
     computeRerunEligibility,
     computeRerunExecutionEligibility,
     decodeXmlEntities,
+    defaultMaxRunAttempt,
     defaultMaxRetryableJobs,
     extractFailedTestsFromTrx,
     extractMatchedSnippet,
@@ -1473,6 +1674,7 @@ module.exports = {
     matchTestFailurePatterns,
     promoteTestExecutionFailureJobs,
     rerunMatchedJobs,
+    requestMainFailureAnalysis,
     selectTestResultsArtifact,
     testExecutionFailureStepPatterns,
     validateRetryPatternsConfig,

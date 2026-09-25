@@ -1,5 +1,5 @@
-# Analyzes failed CI PR runs for retry-safe transient failures and requests reruns for
-# the matched jobs through GitHub's job-rerun API, which also reruns dependent jobs.
+# Analyzes failed CI PR runs for retry-safe transient failures and reruns failed
+# current-main CI jobs unconditionally while the run is still current.
 # For the supported behaviors and safety rails, see
 # docs/ci/auto-rerun-transient-ci-failures.md.
 name: Auto rerun transient CI failures
@@ -33,8 +33,7 @@ jobs:
           github.repository_owner == 'microsoft' &&
           (github.event_name == 'workflow_dispatch' ||
            (github.event.workflow_run.event == 'pull_request' &&
-            github.event.workflow_run.conclusion == 'failure' &&
-            github.event.workflow_run.run_attempt <= 3))
+            github.event.workflow_run.conclusion == 'failure'))
       }}
     runs-on: ubuntu-latest
     permissions:
@@ -68,11 +67,11 @@ jobs:
           # TEMPORARY — FORCE_RERUN_ALL (revert when no longer needed):
           # Short-circuit the analysis: if a CI run failed and has a currently-open
           # associated PR, rerun its failed jobs — no job is fetched or classified, and
-          # there is no job-count cap. The "CI failed" and "max 3 reruns" gates come from
-          # the job-level `if` above; the open-PR requirement and the manual-dispatch
-          # attempt cap are preserved. This is a for-now measure until CI auto-rerun
-          # patterns are improved; disable by setting this to 'false' (or removing it) on
-          # both jobs. See docs/ci/auto-rerun-transient-ci-failures.md.
+          # there is no job-count cap. The "CI failed" gate comes from the job-level `if`
+          # above; the shared defaultMaxRunAttempt policy, open-PR requirement, and
+          # manual-dispatch attempt cap are preserved. This is a for-now measure until CI
+          # auto-rerun patterns are improved; disable by setting this to 'false' (or
+          # removing it) on both jobs. See docs/ci/auto-rerun-transient-ci-failures.md.
           FORCE_RERUN_ALL: 'true'
         with:
           script: |
@@ -84,6 +83,7 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const isWorkflowDispatch = context.eventName === 'workflow_dispatch';
+            const maxRunAttempt = rerunWorkflow.defaultMaxRunAttempt;
             const maxRetryableJobs = rerunWorkflow.defaultMaxRetryableJobs;
             const maxJobLogInspectionBytes = 256 * 1024;
             // FORCE_RERUN_ALL: see env comment above.
@@ -226,6 +226,17 @@ jobs:
               return;
             }
 
+            if (!isWorkflowDispatch && !rerunWorkflow.computeRerunEligibility({
+              runAttempt: workflowRun.run_attempt,
+              maxRunAttempt,
+              forceRerunAll: true,
+            })) {
+              console.log(
+                `Automatic rerun attempt cap reached at source attempt ${workflowRun.run_attempt}; ` +
+                `the configured cap is ${maxRunAttempt}. Skipping.`);
+              return;
+            }
+
             const pullRequestNumbers = await rerunWorkflow.getAssociatedPullRequestNumbers({
               github,
               owner,
@@ -246,8 +257,7 @@ jobs:
             // TEMPORARY — FORCE_RERUN_ALL short-circuit (revert when no longer needed):
             // The run failed (job-level `if`) and has an associated PR (checked above),
             // so request a rerun without fetching or classifying any jobs. Only the
-            // attempt cap is re-checked here (it matters for the manual-dispatch path,
-            // which bypasses the trigger's run_attempt gate). The retryable_jobs output
+            // attempt cap is re-checked here. The retryable_jobs output
             // stays '[]' on purpose: the rerun job uses GitHub's rerun-failed-jobs API,
             // which reruns every failed job regardless of this list, and the final
             // open-PR state is re-checked there. See the JS file-level comment.
@@ -491,3 +501,61 @@ jobs:
               testPatternMatchedTests,
               forceRerunAll,
             });
+
+  rerun-main-failures:
+    name: Rerun current main CI failures
+    if: >-
+      ${{
+          github.repository == 'microsoft/aspire' &&
+          github.event_name == 'workflow_run' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          github.event.workflow_run.conclusion == 'failure'
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Checkout rerun helper
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Rerun failed jobs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const rerunWorkflow = require('./.github/workflows/auto-rerun-transient-ci-failures.js');
+            const run = context.payload.workflow_run;
+            const details = {
+              github,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sourceRunId: run.id,
+              sourceRunAttempt: run.run_attempt,
+              sourceHeadSha: run.head_sha,
+            };
+            const state = await rerunWorkflow.rerunMatchedJobs({
+              ...details,
+              sourceRunScope: 'main',
+              sourceRunUrl: run.html_url,
+              summary: core.summary,
+              retryableJobs: [],
+              maxRunAttempt: rerunWorkflow.defaultMaxRunAttempt,
+              forceRerunAll: true,
+            });
+            core.info(`Current-main rerun: ${state.outcome} (${state.reason}).`);
+            if (state.outcome === 'failed') {
+              try {
+                const fallback = await rerunWorkflow.requestMainFailureAnalysis(details);
+                const fallbackReference = fallback.workflowRunUrl
+                  ? ` Fallback analysis: ${fallback.workflowRunUrl}.`
+                  : '';
+                core.setFailed(
+                  `Current-main rerun failed: ${state.reason}. ` +
+                  `Fallback Copilot analysis was requested for CI run ${run.id}.${fallbackReference}`);
+              } catch (error) {
+                core.setFailed(
+                  `Current-main rerun failed: ${state.reason}. ` +
+                  `Fallback Copilot analysis could not be requested: ${error.message}`);
+              }
+            }

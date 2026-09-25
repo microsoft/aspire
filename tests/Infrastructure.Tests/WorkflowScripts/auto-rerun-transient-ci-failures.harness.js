@@ -102,6 +102,9 @@ async function dispatch(operation, payload) {
         case 'computeRerunExecutionEligibility':
             return rerunWorkflow.computeRerunExecutionEligibility(payload);
 
+        case 'getDefaultMaxRunAttempt':
+            return rerunWorkflow.defaultMaxRunAttempt;
+
         case 'validateRetryPatternsConfig':
             return rerunWorkflow.validateRetryPatternsConfig(payload.config);
 
@@ -158,13 +161,24 @@ async function dispatch(operation, payload) {
             const summary = new SummaryRecorder();
             const github = createGitHubRecorder(payload, requests);
 
-            await rerunWorkflow.rerunMatchedJobs({
+            const returnValue = await rerunWorkflow.rerunMatchedJobs({
                 ...payload,
                 github,
                 summary,
             });
 
-            return { requests, events: summary.events };
+            return { requests, events: summary.events, returnValue };
+        }
+
+        case 'requestMainFailureAnalysis': {
+            const requests = [];
+            const github = createGitHubRecorder(payload, requests);
+            const returnValue = await rerunWorkflow.requestMainFailureAnalysis({
+                ...payload,
+                github,
+            });
+
+            return { requests, returnValue };
         }
 
         default:
@@ -176,6 +190,10 @@ function createGitHubRecorder(payload, requests) {
     return {
         request: async (route, requestPayload) => {
             requests.push({ route, payload: requestPayload });
+
+            if (payload.failedRequestRoutes?.includes(route)) {
+                throw new Error(`Simulated request failure for ${route}`);
+            }
 
             if (route === 'GET /repos/{owner}/{repo}/issues/{issue_number}') {
                 const issueNumber = String(requestPayload.issue_number);
@@ -192,8 +210,26 @@ function createGitHubRecorder(payload, requests) {
 
             if (route === 'GET /repos/{owner}/{repo}/actions/runs/{run_id}') {
                 return {
-                    data: {
+                    data: payload.currentRun ?? {
                         run_attempt: payload.latestRunAttempt ?? null,
+                    },
+                };
+            }
+
+            if (route === 'GET /repos/{owner}/{repo}/git/ref/{ref}') {
+                return {
+                    data: {
+                        object: {
+                            sha: payload.currentMainSha ?? null,
+                        },
+                    },
+                };
+            }
+
+            if (route === 'GET /repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs') {
+                return {
+                    data: {
+                        workflow_runs: payload.mainWorkflowRuns ?? [],
                     },
                 };
             }
@@ -215,6 +251,11 @@ function createGitHubRecorder(payload, requests) {
                     headers: {
                         link: hasNextPage ? '<https://api.github.com/next>; rel="next"' : '',
                     },
+                };
+            }
+            if (route === 'POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches') {
+                return {
+                    data: payload.workflowDispatchResponse ?? {},
                 };
             }
             if (route === 'POST /repos/{owner}/{repo}/issues/{issue_number}/comments') {

@@ -11,15 +11,32 @@ GitHub.
 
 ## Supported runs
 
-Automatic analysis currently runs for failed `CI` workflow pushes to `main`.
-Manual dispatch can analyze a specific run. The collector accepts `main` push
-runs and pull-request runs; other workflow paths, events, and branches are
-rejected or skipped.
+Automatic analysis runs only when a `CI` push to `main` fails on the attempt
+immediately after the configured automatic-rerun source-attempt cap. If GitHub
+rejects an otherwise eligible rerun request, the rerun workflow dispatches
+fallback analysis for that early attempt instead of leaving the failure
+unanalyzed. Manual dispatch can analyze a specific run, but an early attempt
+can publish only when the dispatch identifies the failed rerun request. The
+collector accepts `main` push runs and pull-request runs; other workflow
+paths, events, and branches are rejected or skipped.
 
 The collector pins the run attempt from the `workflow_run` event so a later
 rerun cannot change the evidence being analyzed. Run ID, attempt, workflow
 path, event, branch, SHA, and failed jobs come from GitHub rather than from
 agent output.
+
+The [CI auto-rerun workflow](auto-rerun-transient-ci-failures.md) handles
+current-main reruns independently of this analysis queue. The shared
+`defaultMaxRunAttempt` value in
+[`auto-rerun-transient-ci-failures.js`](../../.github/workflows/auto-rerun-transient-ci-failures.js)
+controls the last source attempt that may request a rerun; the analyzer derives
+its final attempt as the next attempt. A successful retry needs no failure
+analysis. If the retry request fails before that final attempt, the auto-rerun
+workflow remains failed for visibility and dispatches the analyzer with the
+failed CI run ID. The analyzer accepts that early attempt only while its failed
+SHA is still current `main`, its attempt is unchanged, and no newer main CI run
+supersedes it. The separate `ci_failure_tracker` in `ci.yml` can still report
+the first failed push.
 
 ## Attribution
 
@@ -36,10 +53,11 @@ or incomplete comparisons are non-attributable. A candidate commit must also
 map to exactly one PR merged into `main`.
 
 PR comments and pull-request reruns require an unambiguous subject PR that is
-still open and unlocked immediately before the mutation. Validated transient
-`main` failures can be rerun without a subject PR. Run-scoped recurring-cause
-persistence can continue without an actionable PR, but its PR occurrence
-context is recorded as unavailable when the subject cannot be identified.
+still open and unlocked immediately before the mutation. Automatic `main`
+reruns do not require a subject PR or agent classification. Run-scoped
+recurring-cause persistence can continue without an actionable PR, but its PR
+occurrence context is recorded as unavailable when the subject cannot be
+identified.
 
 ## Agent trust boundary
 
@@ -58,6 +76,27 @@ boundary rebuilds trusted run, attempt, SHA, PR, failed-job, test, and cause
 identity from collected artifacts. It rejects output that adds, omits, or
 rebinds trusted records. Published diagnostics are reconstructed from trusted
 evidence rather than copied from agent output.
+
+The automatic `main` rerun is deterministic and does not consume agent output.
+Immediately before the failed-job rerun request, it re-fetches the workflow
+run, `refs/heads/main`, and the workflow's main run list. It fails closed unless
+the trusted run is still the current `main` SHA, no newer main CI run has a
+greater run number, the attempt is unchanged, and the source attempt does not
+exceed the shared `defaultMaxRunAttempt` policy. Rerun decisions and skip
+reasons appear in that workflow's logs and job summary; they are not stored on
+the analysis memory branch. The analyzer calls
+[`analyze-ci-failure-terminal.sh`](../../.github/workflows/analyze-ci-failure-terminal.sh)
+before collecting evidence, before publication, and before updating each cause
+issue. The helper derives the final attempt from `defaultMaxRunAttempt` and
+checks that attempt is completed and failed for the current `main` SHA, or that
+an earlier failed attempt was dispatched after its rerun request failed. The
+fallback dispatch includes the trusted attempt and SHA, and collection fetches
+that immutable attempt rather than the run's latest attempt. Both paths require
+the live attempt to remain unchanged and not be superseded by a newer main CI
+run. The helper returns 2 to skip stale or ineligible analysis; failed
+verification stops the workflow. Stale runs are skipped rather than canceled
+through the shared CI concurrency key, which would also cancel unrelated main
+builds.
 
 External and agent-supplied text is bounded and rendered inert before it is
 used in workflow diagnostics, Markdown comments, or issue bodies.
@@ -104,9 +143,12 @@ Malformed or ambiguous extension results still fail closed.
 
 ## Side-effect gates
 
-- Only validated transient failures from the same run attempt and with available
-  test evidence can request a rerun. Pull-request reruns additionally require
+- Agent-requested reruns require validated transient failures from the same run
+  attempt and available test evidence. Pull-request reruns additionally require
   the subject PR to remain open and unlocked.
+- Automatic `main` reruns are independent of the verdict and require all
+  current-SHA, supersession, attempt, and cap checks to pass immediately before
+  the write.
 - Failures attributed to one PR are reported on that PR only while it remains
   open and unlocked.
 - Deterministic `main` failures are reported through `[Main CI Failure]`
@@ -123,7 +165,10 @@ generated executable workflow is
 [`analyze-ci-failure.lock.yml`](../../.github/workflows/analyze-ci-failure.lock.yml).
 Collection and persistence helpers live beside the workflow as
 `analyze-ci-failure-*.sh`; final output validation is in
-`analyze-ci-failure-validation.sh`.
+`analyze-ci-failure-validation.sh`. The
+[`analyze-ci-failure-terminal.sh`](../../.github/workflows/analyze-ci-failure-terminal.sh)
+helper guards final-attempt and failed-rerun fallback `main` analysis before
+collection and publication.
 
 Focused coverage lives in
 [`AnalyzeCiFailureWorkflowTests`](../../tests/Infrastructure.Tests/WorkflowScripts/AnalyzeCiFailureWorkflowTests.cs).
