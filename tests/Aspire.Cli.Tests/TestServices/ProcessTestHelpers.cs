@@ -7,26 +7,6 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal static class ProcessTestHelpers
 {
-    public static string GetDotNetExecutablePath()
-    {
-        // Use the same muxer as the test runner. Falling back to PATH can combine a system dotnet
-        // with repo-local MSBuild environment variables and fail before the process behavior under
-        // test is reached.
-        var dotnetHostPath = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
-        if (!string.IsNullOrWhiteSpace(dotnetHostPath) && File.Exists(dotnetHostPath))
-        {
-            return dotnetHostPath;
-        }
-
-        var dotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT");
-        if (!string.IsNullOrWhiteSpace(dotnetRoot))
-        {
-            return Path.Combine(dotnetRoot, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
-        }
-
-        return "dotnet";
-    }
-
     public static async Task<int> WaitForProcessIdAsync(string pidFile, CancellationToken cancellationToken)
     {
         while (true)
@@ -49,14 +29,6 @@ internal static class ProcessTestHelpers
                 }
             }
 
-            await Task.Delay(20, cancellationToken);
-        }
-    }
-
-    public static async Task WaitForFileAsync(string path, CancellationToken cancellationToken)
-    {
-        while (!File.Exists(path))
-        {
             await Task.Delay(20, cancellationToken);
         }
     }
