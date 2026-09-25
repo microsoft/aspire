@@ -163,6 +163,18 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             });
         }
 
+        try
+        {
+            await InitializeBrowserStateAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit disposal can interrupt browser state restoration.
+        }
+    }
+
+    private async Task InitializeBrowserStateAsync()
+    {
         var result = await JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo");
         TimeProvider.SetBrowserTimeZone(result.TimeZone);
         TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);

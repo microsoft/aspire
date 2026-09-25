@@ -197,6 +197,41 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData(BrowserStorageKeys.NavMenuExpanded)]
+    [InlineData(BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey)]
+    public void OnInitialize_DisconnectedWhileReadingBrowserStorage_StopsInitialization(string disconnectedKey)
+    {
+        var readKeys = new List<string>();
+        var localStorage = new TestLocalStorage
+        {
+            OnBeforeGetUnprotectedAsync = key =>
+            {
+                readKeys.Add(key);
+                if (key == disconnectedKey)
+                {
+                    throw new JSDisconnectedException("The circuit disconnected.");
+                }
+
+                return Task.CompletedTask;
+            }
+        };
+        SetupMainLayoutServices(localStorage: localStorage);
+
+        var cut = Render<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        Assert.Equal(
+            disconnectedKey == BrowserStorageKeys.NavMenuExpanded
+                ? [BrowserStorageKeys.NavMenuExpanded]
+                : [BrowserStorageKeys.NavMenuExpanded, BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey],
+            readKeys);
+        Assert.Empty(_messageBarProvider!.FindComponents<DashboardMessageBar>());
+        Assert.Contains("nav-collapsed", cut.Find(".layout").ClassList);
+    }
+
+    [Theory]
     [InlineData(true, "dashboard-help-button", "HelpDialog", "dashboard-help-button")]
     [InlineData(true, "dashboard-settings-button", "SettingsDialog", "dashboard-settings-button")]
     [InlineData(false, "dashboard-navigation-button", "HelpDialog", "dashboard-navigation-button")]

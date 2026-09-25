@@ -130,6 +130,18 @@ public class LocalBrowserStorageTests
     }
 
     [Fact]
+    public async Task GetUnprotectedAsync_DisconnectedCircuit_Throws()
+    {
+        var testJsonRuntime = new TestJSRuntime
+        {
+            OnInvoke = _ => throw new JSDisconnectedException("The circuit disconnected.")
+        };
+        var localStorage = CreateBrowserLocalStorage(testJsonRuntime);
+
+        await Assert.ThrowsAsync<JSDisconnectedException>(() => localStorage.GetUnprotectedAsync<int>("MyKey").DefaultTimeout());
+    }
+
+    [Fact]
     public async Task SetUnprotectedAsync_UsesCircuitOptionsJsonTypeInfoResolvers()
     {
         var resolver = new TrackingJsonTypeInfoResolver();
