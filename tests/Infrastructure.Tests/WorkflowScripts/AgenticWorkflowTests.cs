@@ -9,7 +9,7 @@ using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests;
 
-public sealed class AgenticWorkflowTests
+public sealed class AgenticWorkflowTests(ITestOutputHelper output)
 {
     private const string ActionlintImage = "rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667";
     private static readonly string s_workflowsPath = Path.Combine(RepoRoot.Path, ".github", "workflows");
@@ -24,19 +24,58 @@ public sealed class AgenticWorkflowTests
             .ToArray();
         Assert.NotEmpty(lockFiles);
 
+        var result = await RunActionlintAsync(RepoRoot.Path, lockFiles);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public async Task ActionlintRejectsShellcheckViolations()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var configPath = Path.Combine(workspace.Path, ".github", "actionlint.yaml");
+        var workflowPath = Path.Combine(workspace.Path, ".github", "workflows", "shellcheck.lock.yml");
+        Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(workflowPath)!);
+        File.Copy(Path.Combine(RepoRoot.Path, ".github", "actionlint.yaml"), configPath);
+        await File.WriteAllTextAsync(
+            workflowPath,
+            """
+            name: Shellcheck violation
+            on: push
+            jobs:
+              validate:
+                runs-on: ubuntu-latest
+                steps:
+                  - run: |
+                      value="hello world"
+                      echo $value
+            """);
+
+        var result = await RunActionlintAsync(workspace.Path, [".github/workflows/shellcheck.lock.yml"]);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("SC2086", result.Output, StringComparison.Ordinal);
+    }
+
+    private static async Task<(int ExitCode, string Output)> RunActionlintAsync(
+        string workingDirectory,
+        IReadOnlyCollection<string> workflowPaths)
+    {
         using var process = new Process();
         process.StartInfo.FileName = "docker";
         process.StartInfo.ArgumentList.Add("run");
         process.StartInfo.ArgumentList.Add("--rm");
         process.StartInfo.ArgumentList.Add("-v");
-        process.StartInfo.ArgumentList.Add($"{RepoRoot.Path}:/workdir");
+        process.StartInfo.ArgumentList.Add($"{workingDirectory}:/workdir");
         process.StartInfo.ArgumentList.Add("-w");
         process.StartInfo.ArgumentList.Add("/workdir");
         process.StartInfo.ArgumentList.Add(ActionlintImage);
         process.StartInfo.ArgumentList.Add("-pyflakes=");
-        foreach (var lockFile in lockFiles)
+        foreach (var workflowPath in workflowPaths)
         {
-            process.StartInfo.ArgumentList.Add(lockFile);
+            process.StartInfo.ArgumentList.Add(workflowPath);
         }
         process.StartInfo.RedirectStandardOutput = true;
         process.StartInfo.RedirectStandardError = true;
@@ -48,7 +87,7 @@ public sealed class AgenticWorkflowTests
         await process.WaitForExitAsync();
         var output = await stdoutTask + await stderrTask;
 
-        Assert.True(process.ExitCode == 0, output);
+        return (process.ExitCode, output);
     }
 
     [Fact]
