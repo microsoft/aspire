@@ -120,9 +120,30 @@ public static class AtsCapabilityScanner
         public List<AtsEnumTypeInfo> GetEnumTypes() => [.. _enums.Values];
     }
 
-    private sealed class AssemblyExportedTypeCache(HashSet<Type> exportedTypes)
+    private sealed class AssemblyExportedTypeCache(
+        HashSet<Type> exportedTypes,
+        HashSet<Assembly> assemblies,
+        Dictionary<Type, List<(AspireExportData Export, string AssemblyName)>> contextTypeExports)
     {
         public bool Contains(Type type) => exportedTypes.Contains(type);
+
+        public IEnumerable<(AspireExportData Export, string AssemblyName)> GetContextTypeExports(Type type)
+        {
+            if ((assemblies.Contains(type.Assembly) ||
+                assemblies.Any(assembly => assembly.IsDynamic && assembly.GetType(type.FullName ?? type.Name) == type)) &&
+                GetAspireExportAttribute(type) is { } export)
+            {
+                yield return (export, type.Assembly.GetName().Name!);
+            }
+
+            if (contextTypeExports.TryGetValue(type, out var exports))
+            {
+                foreach (var assemblyExport in exports)
+                {
+                    yield return assemblyExport;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -1003,7 +1024,7 @@ public static class AtsCapabilityScanner
     /// <summary>
     /// Detects method name collisions after capability expansion. Since ATS doesn't support method
     /// overloading, each (TargetTypeId, MethodName) pair must be unique. When a concrete target has
-    /// a target-specific export, it shadows matching generic exports only for that target. Ambiguous
+    /// a target-specific export, it shadows matching generic exports for that target and its derived types. Ambiguous
     /// collisions still remove later capabilities and emit warnings.
     /// </summary>
     private static void FilterMethodNameCollisions(List<AtsCapabilityInfo> capabilities, List<AtsDiagnostic> diagnostics)
@@ -1038,6 +1059,21 @@ public static class AtsCapabilityScanner
             var exactTargetCapabilities = collidingCapabilities
                 .Where(c => string.Equals(c.TargetTypeId, targetTypeId, StringComparison.Ordinal))
                 .ToList();
+
+            // An inherited concrete-target overload is still more specific than an
+            // interface overload. Without this, a subclass collision can remove the
+            // generic capability even from unrelated implementations of that interface.
+            if (exactTargetCapabilities.Count == 0)
+            {
+                exactTargetCapabilities = collidingCapabilities
+                    .Where(candidate => candidate.TargetType?.ClrType is { } candidateType &&
+                        collidingCapabilities.All(other =>
+                            other.CapabilityId == candidate.CapabilityId ||
+                            (other.TargetType?.ClrType is { } otherType &&
+                             otherType != candidateType &&
+                             otherType.IsAssignableFrom(candidateType))))
+                    .ToList();
+            }
 
             if (exactTargetCapabilities.Count == 1)
             {
@@ -1924,6 +1960,11 @@ public static class AtsCapabilityScanner
                     methodCapabilityId = $"{package}/{camelCaseMethodName}";
                 }
 
+                if (IsInheritedMethodExportedByBaseType(contextType, method, methodCapabilityId, memberExportAttr, assemblyExportedTypeCache))
+                {
+                    continue;
+                }
+
                 // Build parameters (first parameter is the context/instance)
                 var paramInfos = new List<AtsParameterInfo>
                 {
@@ -2015,6 +2056,52 @@ public static class AtsCapabilityScanner
             Methods = methods,
             Properties = properties
         };
+    }
+
+    private static bool IsInheritedMethodExportedByBaseType(
+        Type contextType,
+        MethodInfo method,
+        string capabilityId,
+        AspireExportData? memberExport,
+        AssemblyExportedTypeCache assemblyExportedTypeCache)
+    {
+        var declaringType = method.DeclaringType;
+        if (declaringType is null || declaringType == contextType)
+        {
+            return false;
+        }
+
+        // Reflection also returns hidden base methods. Reuse a base export only when
+        // this scan includes it with the same ID; distinct namespace/ExposeMethods
+        // aliases and methods from an unscanned or unexported base must remain available.
+        for (var baseType = contextType.BaseType; baseType is not null; baseType = baseType.BaseType)
+        {
+            if (!declaringType.IsAssignableFrom(baseType))
+            {
+                continue;
+            }
+
+            foreach (var (export, assemblyName) in assemblyExportedTypeCache.GetContextTypeExports(baseType))
+            {
+                if (!ShouldExportMember(method.IsPublic, export.ExposeMethods, memberExport))
+                {
+                    continue;
+                }
+
+                var fullName = baseType.FullName ?? baseType.Name;
+                var lastDot = fullName.LastIndexOf('.');
+                var package = lastDot >= 0 ? fullName[..lastDot] : assemblyName;
+                var methodName = memberExport?.Id ?? (export.ExposeMethods
+                    ? $"{baseType.Name}.{ToCamelCase(method.Name)}"
+                    : ToCamelCase(method.Name));
+                if (capabilityId == $"{package}/{methodName}")
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static bool IsInheritedPropertyExportedByBaseType(Type contextType, PropertyInfo property)
@@ -3447,20 +3534,32 @@ public static class AtsCapabilityScanner
     private static AssemblyExportedTypeCache CreateAssemblyExportedTypeCache(IEnumerable<Assembly> assemblies)
     {
         var currentExportedTypes = new HashSet<Type>();
+        var scannedAssemblies = new HashSet<Assembly>();
+        var contextTypeExports = new Dictionary<Type, List<(AspireExportData Export, string AssemblyName)>>();
 
         foreach (var assembly in assemblies)
         {
+            scannedAssemblies.Add(assembly);
             foreach (var export in AttributeDataReader.GetAspireExportDataAll(assembly))
             {
                 if (export.Type is { } exportedType)
                 {
                     currentExportedTypes.Add(exportedType);
                     s_assemblyExportedTypeCache.TryAdd(exportedType, 0);
+                    if (export.ExposeProperties || export.ExposeMethods)
+                    {
+                        if (!contextTypeExports.TryGetValue(exportedType, out var exports))
+                        {
+                            exports = [];
+                            contextTypeExports.Add(exportedType, exports);
+                        }
+                        exports.Add((export, assembly.GetName().Name!));
+                    }
                 }
             }
         }
 
-        return new AssemblyExportedTypeCache(currentExportedTypes);
+        return new AssemblyExportedTypeCache(currentExportedTypes, scannedAssemblies, contextTypeExports);
     }
 
     /// <summary>
