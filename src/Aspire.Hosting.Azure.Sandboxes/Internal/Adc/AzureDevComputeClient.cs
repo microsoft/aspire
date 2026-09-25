@@ -465,11 +465,7 @@ internal sealed class AzureDevComputeClient(HttpClient httpClient, TokenCredenti
             ? " Verify that the calling principal has the Container Apps SandboxGroup Data Owner role on the sandbox group; newly-created role assignments can take a short time to propagate."
             : string.Empty;
         var details = string.IsNullOrEmpty(message) ? "." : $": {message}";
-        // Don't use response.ReasonPhrase: it is free-form text controlled by the service (or any
-        // intermediary) and would bypass the formatter's redaction. The HttpStatusCode enum name is
-        // trusted local text; unknown status codes are reported by number only.
-        var statusName = Enum.IsDefined(response.StatusCode) ? $" ({response.StatusCode})" : string.Empty;
-        throw new InvalidOperationException($"Azure Container Apps Sandboxes request '{method} {path}' failed with HTTP {(int)response.StatusCode}{statusName}{details}{permissionHint}");
+        throw new InvalidOperationException($"Azure Container Apps Sandboxes request '{method} {path}' failed with HTTP {(int)response.StatusCode} ({response.ReasonPhrase}){details}{permissionHint}");
     }
 
     private static string GetSandboxGroupPath(AzureDevComputeResourceScope scope)
