@@ -29,6 +29,7 @@
     <Compile Include="$(TestsSharedDir)ConsoleLogging\*.cs" LinkBase="shared" />
     <Compile Include="$(TestsSharedDir)DistributedApplicationTestingBuilderExtensions.cs" Link="shared/DistributedApplicationTestingBuilderExtensions.cs" />
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
+    <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
   </ItemGroup>
 
   <ItemGroup>

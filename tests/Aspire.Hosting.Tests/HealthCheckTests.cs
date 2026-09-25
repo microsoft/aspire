@@ -146,7 +146,7 @@ public class HealthCheckTests(ITestOutputHelper testOutputHelper)
 
         await pendingStart.DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
 
-        await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
     [Fact]

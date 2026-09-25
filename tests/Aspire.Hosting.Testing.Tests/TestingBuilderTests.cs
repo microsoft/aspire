@@ -8,6 +8,7 @@ using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.TestProject;
+using Aspire.Tests.Utils;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
@@ -23,6 +24,32 @@ namespace Aspire.Hosting.Testing.Tests;
 public class TestingBuilderTests(ITestOutputHelper output)
 {
     private static readonly TimeSpan s_appAliveCheckTimeout = TimeSpan.FromMinutes(1);
+
+    [Fact]
+    public async Task DcpLogForwarderReadsLogsAfterHostedServicesStop()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var logPath = Path.Combine(workspace.Path, "dcp.log");
+        await File.WriteAllTextAsync(logPath, "DCP log content");
+
+        var forwarder = new DcpLogForwarder(output, workspace.Path);
+        var outputBeforeStop = output.Output;
+
+        await using (File.Open(logPath, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            await forwarder.StopAsync(CancellationToken.None);
+        }
+
+        Assert.Equal(outputBeforeStop, output.Output);
+
+        await forwarder.StoppedAsync(CancellationToken.None);
+
+        Assert.Collection(
+            output.Output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries),
+            line => Assert.Equal($"Temporary workspace created at: {workspace.Path}", line),
+            line => Assert.Equal("=== DCP Log: dcp.log ===", line),
+            line => Assert.Equal("DCP log content", line));
+    }
 
     [Fact]
     [ActiveIssue("https://github.com/dotnet/dnceng/issues/6232", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningOnAzdoBuildMachine))]

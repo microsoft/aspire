@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Testing;
+using Aspire.TestUtilities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -16,9 +17,18 @@ namespace Aspire.Hosting.Utils;
 /// </summary>
 public static class DistributedApplicationTestingBuilderExtensions
 {
+    private static readonly TimeSpan s_defaultHostShutdownTimeout =
+        TimeSpan.FromSeconds(PlatformDetection.IsRunningOnCI ? 45 : 30); // 30 sec, 45 sec in CI
+
     // Returns the unique prefix used for volumes from unnamed volumes this builder
     public static string GetVolumePrefix(this IDistributedApplicationTestingBuilder builder) =>
         $"{VolumeNameGenerator.Sanitize(builder.Environment.ApplicationName).ToLowerInvariant()}-{builder.Configuration["AppHost:Sha256"]!.ToLowerInvariant()[..10]}";
+
+    public static T WithTestHostShutdownTimeout<T>(this T builder) where T : IDistributedApplicationBuilder
+    {
+        builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = s_defaultHostShutdownTimeout);
+        return builder;
+    }
 
     public static T WithTestAndResourceLogging<T>(this T builder, ITestOutputHelper testOutputHelper) where T : IDistributedApplicationBuilder
     {
@@ -74,7 +84,7 @@ public static class DistributedApplicationTestingBuilderExtensions
             configuration["DcpPublisher:DiagnosticsLogLevel"] = "debug";
             configuration["DcpPublisher:PreserveExecutableLogs"] = "true";
 
-            // Register as hosted service to forward DCP logs to test output when app stops
+            // Register as a hosted lifecycle service so DCP logs are forwarded after all hosted services stop.
             services.AddSingleton<IHostedService>(sp => new DcpLogForwarder(testOutputHelper, uniqueFolder));
         }
 
@@ -94,13 +104,12 @@ public static class DistributedApplicationTestingBuilderExtensions
 }
 
 /// <summary>
-/// Forwards DCP log files to xUnit test output when stopped.
-/// Implements IHostedService so it gets automatically resolved and stopped when the app shuts down.
+/// Forwards DCP log files to xUnit test output after all hosted services have stopped.
 /// </summary>
 /// <remarks>
 /// DCP is not started in publish mode, so no logs will be available.
 /// </remarks>
-internal sealed class DcpLogForwarder : IHostedService
+internal sealed class DcpLogForwarder : IHostedLifecycleService
 {
     private readonly ITestOutputHelper _testOutputHelper;
     private readonly string _logFolder;
@@ -113,8 +122,16 @@ internal sealed class DcpLogForwarder : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public async Task StopAsync(CancellationToken cancellationToken)
+    public Task StartedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StartingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public async Task StoppedAsync(CancellationToken cancellationToken)
     {
+        // DCP owns these files until the orchestrator stops. StoppedAsync runs after every hosted
+        // service's StopAsync, which avoids Windows sharing violations while preserving the logs.
         if (!Directory.Exists(_logFolder))
         {
             _testOutputHelper.WriteLine($"DCP log folder not found: {_logFolder}");
@@ -135,4 +152,6 @@ internal sealed class DcpLogForwarder : IHostedService
             }
         }
     }
+
+    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

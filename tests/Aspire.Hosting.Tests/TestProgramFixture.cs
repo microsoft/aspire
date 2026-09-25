@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.Testing.Tests;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests;
@@ -26,6 +27,7 @@ public abstract class TestProgramFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         _testProgram = CreateTestProgram();
+        _testProgram.AppBuilder.WithTestHostShutdownTimeout();
 
         _app = _testProgram.Build();
 
