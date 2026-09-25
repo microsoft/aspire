@@ -13,7 +13,10 @@ namespace Aspire.Dashboard.Components.Controls;
 
 public partial class DashboardRunSelect : ComponentBase
 {
+    private const string DashboardRunsHelpUrl = "https://aka.ms/aspire/run-persistence";
+
     private static readonly Icon s_checkmarkIcon = new Icons.Regular.Size16.Checkmark();
+    private static readonly Icon s_helpIcon = new Icons.Regular.Size16.QuestionCircle();
     private static readonly Icon s_pinIcon = new Icons.Regular.Size16.Pin();
     private static readonly Icon s_pinnedIcon = new Icons.Filled.Size16.Pin();
 
@@ -82,6 +85,13 @@ public partial class DashboardRunSelect : ComponentBase
                 menuItems.Add(new MenuButtonItem { IsDivider = true });
             }
         }
+
+        menuItems.Add(new MenuButtonItem { IsDivider = true });
+        menuItems.Add(MenuButtonItem.CreateExternalLink(
+            Loc[nameof(LayoutResources.DashboardRunSelectHelp)],
+            DashboardRunsHelpUrl,
+            s_helpIcon,
+            tooltip: Loc[nameof(LayoutResources.DashboardRunSelectHelpTooltip)]));
 
         return menuItems;
     }
