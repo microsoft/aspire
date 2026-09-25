@@ -15,7 +15,10 @@ namespace Aspire.Cli.Telemetry;
 /// </summary>
 internal static class AgentTelemetryUploader
 {
-    internal static string LockPath => Path.Combine(Path.GetDirectoryName(TelemetryManager.GetTelemetryStoragePath())!, "agent-telemetry.lock");
+    private const string UploaderName = "agent-telemetry";
+    private const string LockFileName = UploaderName + ".lock";
+
+    internal static string LockPath => Path.Combine(Path.GetDirectoryName(TelemetryManager.GetTelemetryStoragePath())!, LockFileName);
 
     internal static bool HasPendingTelemetry(string storagePath)
         => Directory.Exists(storagePath) && Directory.EnumerateFiles(storagePath, "*", SearchOption.AllDirectories).Any();
@@ -36,7 +39,7 @@ internal static class AgentTelemetryUploader
             }
         }
 
-        var (command, args) = AgentTelemetryHook.GetCommand("--drain");
+        var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.DrainOptionName);
         var startInfo = new IsolatedProcessStartInfo
         {
             FileName = command,
@@ -60,7 +63,7 @@ internal static class AgentTelemetryUploader
         // the existing DCP detach helper; retain its layout while handing the lease to the child.
         using var dcp = OperatingSystem.IsWindows() ? null : await DcpExecutableResolver.TryGetDcpExecutableAsync(
             services.GetRequiredService<ILayoutDiscovery>(), services.GetRequiredService<IBundleService>(),
-            services.GetRequiredService<CliExecutionContext>(), "agent-telemetry", CancellationToken.None).ConfigureAwait(false);
+            services.GetRequiredService<CliExecutionContext>(), UploaderName, CancellationToken.None).ConfigureAwait(false);
         if (!OperatingSystem.IsWindows())
         {
             startInfo.DetachedUnixLauncherPath = dcp?.ExecutablePath

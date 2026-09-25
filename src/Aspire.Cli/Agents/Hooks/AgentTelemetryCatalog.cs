@@ -93,10 +93,10 @@ internal sealed partial class AgentTelemetryCatalog
     {
         // Read only compiled resources, never user-installed skills or scripts. No extraction,
         // network lookup, or skill-content reads are needed on the hook path.
-        using var archive = typeof(AgentTelemetryCatalog).Assembly.GetManifestResourceStream("aspire-skills.bundle.tgz")
+        using var archive = typeof(AgentTelemetryCatalog).Assembly.GetManifestResourceStream(EmbeddedAspireSkillsBundleProvider.ArchiveResourceName)
             ?? throw new InvalidDataException("The bundled skills archive is missing.");
         var manifest = ReadManifest(archive);
-        using var stream = typeof(AgentTelemetryCatalog).Assembly.GetManifestResourceStream("track-telemetry.sh")
+        using var stream = typeof(AgentTelemetryCatalog).Assembly.GetManifestResourceStream(TelemetryHookInstaller.ShellResourceName)
             ?? throw new InvalidDataException("The bundled telemetry hook is missing.");
         using var reader = new StreamReader(stream);
         return Parse(manifest, reader.ReadToEnd());

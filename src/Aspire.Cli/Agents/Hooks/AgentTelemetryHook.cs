@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text.Json;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Telemetry;
 
 namespace Aspire.Cli.Agents.Hooks;
@@ -22,7 +23,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
     internal static (string Command, string[] Args) GetCommand(string mode)
     {
         var command = Environment.ProcessPath ?? throw new InvalidOperationException("Could not resolve the CLI executable.");
-        string[] args = ["agent", "telemetry", mode];
+        string[] args = [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, mode];
         if (Path.GetFileNameWithoutExtension(command).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
         {
             args = [Path.Combine(AppContext.BaseDirectory, "aspire.dll"), .. args];
@@ -129,7 +130,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
                 }
                 if (AgentTelemetryCatalog.Bundled.Skills.Contains(skill))
                 {
-                    trackedEvent = ("skill_invocation", "--skill-name", skill);
+                    trackedEvent = (AgentTelemetryProtocol.SkillInvocationEventType, AgentTelemetryProtocol.SkillNameOptionName, skill);
                 }
             }
             else if (tool.Equals("view", StringComparison.OrdinalIgnoreCase)
@@ -140,7 +141,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
                 var segments = path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
                 for (var i = segments.Length - 3; i >= 0; i--)
                 {
-                    if (!segments[i].Equals("skills", StringComparison.OrdinalIgnoreCase))
+                    if (!segments[i].Equals(AspireSkillsBundleLayout.SkillsDirectoryName, StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
                     }
@@ -148,13 +149,13 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
                     var relativePath = string.Join('/', segments[(i + 1)..]);
                     if (AgentTelemetryCatalog.Bundled.Skills.Contains(skill))
                     {
-                        if (segments[^1].Equals("SKILL.md", StringComparison.OrdinalIgnoreCase))
+                        if (segments[^1].Equals(AspireSkillsBundleLayout.SkillFileName, StringComparison.OrdinalIgnoreCase))
                         {
-                            trackedEvent = ("skill_invocation", "--skill-name", skill);
+                            trackedEvent = (AgentTelemetryProtocol.SkillInvocationEventType, AgentTelemetryProtocol.SkillNameOptionName, skill);
                         }
                         else if (AgentTelemetryCatalog.Bundled.References.Contains(relativePath))
                         {
-                            trackedEvent = ("reference_file_read", "--file-reference", relativePath);
+                            trackedEvent = (AgentTelemetryProtocol.ReferenceFileReadEventType, AgentTelemetryProtocol.FileReferenceOptionName, relativePath);
                         }
                     }
                     break;
@@ -166,7 +167,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
                 {
                     if (tool.StartsWith(prefix, StringComparison.Ordinal) && AgentTelemetryCatalog.Bundled.Tools.Contains(tool[prefix.Length..]))
                     {
-                        trackedEvent = ("tool_invocation", "--tool-name", tool);
+                        trackedEvent = (AgentTelemetryProtocol.ToolInvocationEventType, AgentTelemetryProtocol.ToolNameOptionName, tool);
                         break;
                     }
                 }
@@ -183,14 +184,16 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
                     : Property(data, "toolArgs") is not null ? "copilot-cli" : "unknown";
             var args = new List<string>
             {
-                "agent", "telemetry", "--event-type", telemetryEvent.EventType, "--client-name", client,
-                "--timestamp", DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
+                AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName,
+                AgentTelemetryProtocol.EventTypeOptionName, telemetryEvent.EventType,
+                AgentTelemetryProtocol.ClientNameOptionName, client,
+                AgentTelemetryProtocol.TimestampOptionName, DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
                 telemetryEvent.Dimension, telemetryEvent.Value
             };
             var session = Text(data, "sessionId") ?? Text(data, "session_id");
             if (Guid.TryParseExact(session, "D", out _))
             {
-                args.AddRange(["--session-id", session]);
+                args.AddRange([AgentTelemetryProtocol.SessionIdOptionName, session]);
             }
             return [.. args];
         }

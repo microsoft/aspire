@@ -37,8 +37,8 @@ internal sealed class AgentTelemetryCommand : BaseCommand
     private readonly ConsoleEnvironment _console;
     private readonly IServiceProvider _services;
     private readonly ILogger _logger;
-    private readonly Option<bool> _hookOption = new("--hook") { Hidden = true };
-    private readonly Option<bool> _drainOption = new("--drain") { Hidden = true };
+    private readonly Option<bool> _hookOption = new(AgentTelemetryProtocol.HookOptionName) { Hidden = true };
+    private readonly Option<bool> _drainOption = new(AgentTelemetryProtocol.DrainOptionName) { Hidden = true };
 
     // Defensive cap so a malformed or hostile hook payload cannot push oversized or
     // high-cardinality values into the telemetry backend. Real values (skill names, tool names,
@@ -47,46 +47,51 @@ internal sealed class AgentTelemetryCommand : BaseCommand
 
     // The only event types the hook scripts emit. Anything else is dropped so a script bug or a
     // crafted argument cannot introduce arbitrary, high-cardinality event categories.
-    private static readonly string[] s_knownEventTypes = ["skill_invocation", "tool_invocation", "reference_file_read"];
+    private static readonly string[] s_knownEventTypes =
+    [
+        AgentTelemetryProtocol.SkillInvocationEventType,
+        AgentTelemetryProtocol.ToolInvocationEventType,
+        AgentTelemetryProtocol.ReferenceFileReadEventType
+    ];
 
-    private readonly Option<string?> _eventTypeOption = new("--event-type")
+    private readonly Option<string?> _eventTypeOption = new(AgentTelemetryProtocol.EventTypeOptionName)
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_EventTypeDescription
     };
 
-    private readonly Option<string?> _clientNameOption = new("--client-name")
+    private readonly Option<string?> _clientNameOption = new(AgentTelemetryProtocol.ClientNameOptionName)
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_ClientNameDescription
     };
 
-    private readonly Option<string?> _sessionIdOption = new("--session-id")
+    private readonly Option<string?> _sessionIdOption = new(AgentTelemetryProtocol.SessionIdOptionName)
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_SessionIdDescription
     };
 
-    private readonly Option<string?> _skillNameOption = new("--skill-name")
+    private readonly Option<string?> _skillNameOption = new(AgentTelemetryProtocol.SkillNameOptionName)
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_SkillNameDescription
     };
 
-    private readonly Option<string?> _toolNameOption = new("--tool-name")
+    private readonly Option<string?> _toolNameOption = new(AgentTelemetryProtocol.ToolNameOptionName)
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_ToolNameDescription
     };
 
-    private readonly Option<string?> _fileReferenceOption = new("--file-reference")
+    private readonly Option<string?> _fileReferenceOption = new(AgentTelemetryProtocol.FileReferenceOptionName)
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_FileReferenceDescription
     };
 
-    private readonly Option<string?> _timestampOption = new("--timestamp")
+    private readonly Option<string?> _timestampOption = new(AgentTelemetryProtocol.TimestampOptionName)
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_TimestampDescription
     };
 
     public AgentTelemetryCommand(CommonCommandServices services, Lazy<TelemetryManager> telemetryManager,
         AgentTelemetryHook hook, IEnvironment environment, TextReader input, ConsoleEnvironment console, IServiceProvider serviceProvider)
-        : base("telemetry", AgentCommandStrings.AgentTelemetryCommand_Description, services)
+        : base(AgentTelemetryProtocol.TelemetryCommandName, AgentCommandStrings.AgentTelemetryCommand_Description, services)
     {
         _telemetryManager = telemetryManager;
         _hook = hook;

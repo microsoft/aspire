@@ -27,7 +27,7 @@ internal interface IEmbeddedAspireSkillsBundleProvider
 
 internal sealed class EmbeddedAspireSkillsBundleProvider : IEmbeddedAspireSkillsBundleProvider
 {
-    private const string ArchiveResourceName = "aspire-skills.bundle.tgz";
+    internal const string ArchiveResourceName = "aspire-skills.bundle.tgz";
     private const string MetadataResourceName = "aspire-skills.metadata.json";
 
     private readonly IAspireSkillsBundleProvider _bundleProvider;

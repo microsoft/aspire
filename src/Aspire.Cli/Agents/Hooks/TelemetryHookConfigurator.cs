@@ -134,7 +134,7 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 
             // Direct exec avoids shell cold starts on every tool call while keeping all-event coverage.
             // https://docs.github.com/en/copilot/reference/hooks-reference#command-hooks
-            var (command, args) = AgentTelemetryHook.GetCommand("--hook");
+            var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
             var config = new JsonObject
             {
                 ["version"] = 1,
@@ -252,7 +252,7 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 
         // Keep exec form and wildcard coverage, but run the CLI directly instead of a shell.
         // https://docs.claude.com/en/docs/claude-code/hooks.
-        var (command, args) = AgentTelemetryHook.GetCommand("--hook");
+        var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
 
         postToolUse.Add((JsonNode?)new JsonObject
         {
@@ -338,12 +338,12 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
             var values = args.Select(arg => arg is JsonValue value && value.TryGetValue<string>(out var text) ? text : null).ToArray();
             var executable = hook["command"] is JsonValue executableValue && executableValue.TryGetValue<string>(out var executableText)
                 ? executableText : null;
-            var (currentCommand, _) = AgentTelemetryHook.GetCommand("--hook");
+            var (currentCommand, _) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
             var executableName = Path.GetFileNameWithoutExtension(executable);
             var isDotnet = string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase);
-            if ((values is ["agent", "telemetry", "--hook"] && !isDotnet
+            if ((values is [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName] && !isDotnet
                     && (executable == currentCommand || string.Equals(executableName, "aspire", StringComparison.OrdinalIgnoreCase)))
-                || (values is [var assemblyPath, "agent", "telemetry", "--hook"] && isDotnet
+                || (values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName] && isDotnet
                     && string.Equals(Path.GetFileName(assemblyPath), "aspire.dll", StringComparison.OrdinalIgnoreCase)))
             {
                 return true;
@@ -364,8 +364,8 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 
     private static bool ReferencesTelemetryScript(string? value)
         => value is not null
-            && (value.Contains("track-telemetry.sh", StringComparison.OrdinalIgnoreCase)
-                || value.Contains("track-telemetry.ps1", StringComparison.OrdinalIgnoreCase));
+            && (value.Contains(TelemetryHookInstaller.ShellResourceName, StringComparison.OrdinalIgnoreCase)
+                || value.Contains(TelemetryHookInstaller.PowerShellResourceName, StringComparison.OrdinalIgnoreCase));
 
     private static async Task WriteJsonAtomicAsync(string path, JsonObject config, CancellationToken cancellationToken)
     {
