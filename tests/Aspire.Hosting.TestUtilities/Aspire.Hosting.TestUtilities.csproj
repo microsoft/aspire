@@ -43,6 +43,7 @@
       only by that project's own tests. Grant it access so we keep the public surface minimal.
     -->
     <InternalsVisibleTo Include="Aspire.Hosting.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Dotnet.Tests" />
   </ItemGroup>
 
   <ItemGroup>

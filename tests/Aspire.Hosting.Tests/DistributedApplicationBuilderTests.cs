@@ -63,6 +63,7 @@ public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
             s => Assert.IsType<DashboardEventHandlers>(s),
             s => Assert.IsType<DevcontainerPortForwardingEventingSubscriber>(s),
             s => Assert.IsType<RequiredCommandValidationEventingSubscriber>(s),
+            s => Assert.IsType<DotnetBuildCommandEventingSubscriber>(s),
             s => Assert.IsType<TerminalHostEventingSubscriber>(s)
         );
 

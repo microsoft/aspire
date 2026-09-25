@@ -540,7 +540,9 @@ public static class ProjectResourceBuilderExtensions
             }
 
             var projectDirectory = Path.GetDirectoryName(currentProjectMetadata.ProjectPath);
-            if (await DotnetSdkUtils.TryGetVersionAsync(projectDirectory).ConfigureAwait(false) is { Major: < 10 } version)
+            var versionProvider = e.Services.GetRequiredService<IDotnetSdkVersionProvider>();
+            if (await versionProvider.TryGetVersionAsync(projectDirectory, ct).ConfigureAwait(false) is { } version &&
+                version.Major < 10)
             {
                 throw new DistributedApplicationException($"File-based apps are only supported on .NET 10 or later. The version active in '{projectDirectory}' is {version}.");
             }
