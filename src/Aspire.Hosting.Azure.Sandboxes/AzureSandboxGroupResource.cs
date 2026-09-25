@@ -20,7 +20,6 @@ namespace Aspire.Hosting.Azure;
 /// Represents an Azure Container Apps sandbox group.
 /// </summary>
 [AspireExport]
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzureComputeEnvironmentResource
 {
     internal const string ImagePullIdentityClientIdOutputName = "imagePullIdentityClientId";

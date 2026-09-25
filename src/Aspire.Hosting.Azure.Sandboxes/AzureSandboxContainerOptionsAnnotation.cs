@@ -1,9 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREAZURE001
-
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Azure;
@@ -12,7 +9,6 @@ namespace Aspire.Hosting.Azure;
 /// Configures Azure sandbox runtime options for a compute resource.
 /// </summary>
 [AspireDto]
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzureSandboxOptions
 {
     /// <summary>
@@ -59,7 +55,6 @@ public sealed class AzureSandboxOptions
 /// <summary>
 /// Azure Container Apps sandbox resource tiers.
 /// </summary>
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum AzureSandboxTier
 {
     /// <summary>0.25 vCPU, 0.5 GiB memory, and 20 GiB disk.</summary>
@@ -81,7 +76,6 @@ public enum AzureSandboxTier
 /// <summary>
 /// Azure Container Apps sandbox auto-suspend modes.
 /// </summary>
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum AzureSandboxAutoSuspendMode
 {
     /// <summary>Disables snapshot preservation.</summary>
@@ -97,7 +91,6 @@ public enum AzureSandboxAutoSuspendMode
 /// <summary>
 /// Events that can start the Azure Container Apps sandbox auto-delete interval.
 /// </summary>
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum AzureSandboxAutoDeleteTrigger
 {
     /// <summary>Starts the interval after the sandbox is suspended.</summary>
@@ -111,7 +104,6 @@ public enum AzureSandboxAutoDeleteTrigger
 /// Overrides Azure sandbox options for a compute resource endpoint.
 /// </summary>
 [AspireDto]
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzureSandboxEndpointOptions
 {
     /// <summary>
