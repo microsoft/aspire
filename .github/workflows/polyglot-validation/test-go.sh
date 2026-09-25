@@ -26,7 +26,7 @@ cat << 'EOF' > aspire.config.json
 {
   "appHost": {},
   "features": {
-    "experimentalPolyglot:go": true
+    "experimentalPolyglotGo": true
   },
   "packages": {}
 }
