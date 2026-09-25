@@ -49,6 +49,7 @@ export class UsefulnessSurveyService implements vscode.Disposable {
     private _generation = 0;
     private _timer: vscode.Disposable | undefined;
     private _open = false;
+    private _awaitingResponse = false;
 
     constructor(
         private readonly _state: vscode.Memento,
@@ -63,7 +64,10 @@ export class UsefulnessSurveyService implements vscode.Disposable {
         }
         const commandName = command.slice('aspire-vscode.'.length);
         if (terminalWorkflowCommands.has(commandName)) {
-            this._cancelTimer();
+            // Cancel pre-display work, including persistence, but preserve an already-requested answer.
+            if (!this._awaitingResponse) {
+                this._cancelTimer();
+            }
             return;
         }
         if (!activityCommands.has(commandName) ||
@@ -127,6 +131,7 @@ export class UsefulnessSurveyService implements vscode.Disposable {
             if (generation !== this._generation || !this._canCollect() || !this._environment.canShow()) {
                 return;
             }
+            this._awaitingResponse = true;
             const response = this._environment.show();
             this._environment.send('invitation');
             const outcome = await response;
@@ -138,6 +143,7 @@ export class UsefulnessSurveyService implements vscode.Disposable {
             this._fail();
         }
         finally {
+            this._awaitingResponse = false;
             this._open = false;
         }
     }

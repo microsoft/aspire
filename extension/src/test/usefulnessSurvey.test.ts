@@ -29,6 +29,31 @@ suite('Usefulness survey', () => {
     });
 
     for (const command of ['new', 'init', 'add', 'update', 'updateSelf']) {
+        for (const outcome of ['yes', 'no', 'dismissed', 'never_again'] as const) {
+            test(`${command} terminal dispatch preserves an open ${outcome} response`, async () => {
+                h.holdResponse = true;
+                h.service.recordCommand('aspire-vscode.runAppHost');
+                await h.show();
+                assert.strictEqual(h.shown, 1);
+                h.service.recordCommand(`aspire-vscode.${command}`);
+                h.answer!(outcome);
+                await h.clock.tickAsync(0);
+                assert.deepStrictEqual(h.events, [
+                    { kind: 'invitation', outcome: undefined }, { kind: 'result', outcome },
+                ]);
+                assert.deepStrictEqual([...h.persistence.values], [[shownKey, true]]);
+            });
+        }
+
+        test(`${command} terminal dispatch during persistence prevents display`, async () => {
+            h.persistence.beforeWrite = () => h.service.recordCommand(`aspire-vscode.${command}`);
+            h.service.recordCommand('aspire-vscode.runAppHost');
+            await h.show();
+            assert.strictEqual(h.shown, 0);
+            assert.deepStrictEqual(h.events, []);
+            assert.deepStrictEqual([...h.persistence.values], [[shownKey, true]]);
+        });
+
         test(`${command} terminal dispatch does not qualify and cancels a pending invitation`, async () => {
             h.service.recordCommand(`aspire-vscode.${command}`);
             await h.show();
