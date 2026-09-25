@@ -603,6 +603,11 @@ fluent-dialog-body .fluent-message-box {
     flex: 0 0 auto;
 }
 
+/* A percentage-height menu stretches wrapped rows beyond the toolbar's grid track. */
+.main-toolbar.filter-toolbar > .aspire-menu-button {
+    height: auto;
+}
+
 .toolbar-end {
     display: contents;
 }
