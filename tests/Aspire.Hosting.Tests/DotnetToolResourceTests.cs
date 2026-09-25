@@ -2,9 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREDOTNETTOOL // Type is for evaluation purposes only and is subject to change or removal in future updates.
+#pragma warning disable ASPIRECOMMAND001
 
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Resources;
+using Aspire.Hosting.Tests.Utils;
+using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
@@ -26,6 +30,27 @@ public class DotnetToolResourceTests
         Assert.Null(sourceProperty.DisplayName);
         Assert.False(sourceProperty.IsHighlighted);
         Assert.Null(sourceProperty.SortOrder);
+    }
+
+    [Theory]
+    [InlineData("9.0.100", false)]
+    [InlineData("10.0.100-preview.1", true)]
+    [InlineData(null, true)]
+    public async Task ValidateDotnetSdkVersionUsesSharedVersionProvider(string? version, bool expectedValid)
+    {
+        using var services = new ServiceCollection()
+            .AddSingleton<IDotnetSdkVersionProvider>(new TestDotnetSdkVersionProvider(version))
+            .BuildServiceProvider();
+        var context = new RequiredCommandValidationContext(
+            "dotnet",
+            services,
+            TestContext.Current.CancellationToken);
+
+        var result = await DotnetToolResourceExtensions.ValidateDotnetSdkVersionAsync(
+            context,
+            Environment.CurrentDirectory);
+
+        Assert.Equal(expectedValid, result.IsValid);
     }
 
     private static void AssertToolProperty(ResourcePropertySnapshot property, string expectedValue, string expectedDisplayName, int expectedSortOrder)

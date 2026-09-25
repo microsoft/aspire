@@ -9,6 +9,7 @@ using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Helpers;
@@ -37,6 +38,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
+        var versionProvider = UseDotnetSdkVersion(builder, "11.0.100-rc.1.26425.128");
         var apiPath = Path.Combine(builder.AppHostDirectory, "Api", "Api.csproj");
         var workerPath = Path.Combine(builder.AppHostDirectory, "Worker", "Worker.csproj");
 
@@ -66,6 +68,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             Assert.Single(buildResource.Annotations.OfType<ManifestPublishingCallbackAnnotation>()));
 
         using var app = builder.Build();
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
         var args = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
         var buildProjectPath = Assert.IsType<string>(args[1]);
         Assert.Equal(
@@ -74,9 +82,175 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.StartsWith(buildResource.BuildDirectory, buildProjectPath, StringComparison.Ordinal);
         Assert.True(File.Exists(buildProjectPath));
 
-        var expected = new List<string> { "build", buildProjectPath };
+        var expected = new List<string> { "build", buildProjectPath, "-mt" };
         AddExpectedConfiguration(builder, expected);
         Assert.Equal(expected, args);
+        Assert.Equal(1, versionProvider.CallCount);
+        Assert.Equal(buildResource.WorkingDirectory, Assert.Single(versionProvider.WorkingDirectories));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("10.0.999")]
+    [InlineData("11.0.100-preview.7.25380.108")]
+    [InlineData("11.0.100-rc.0.1")]
+    public async Task CoordinatedBuildOmitsMultiThreadedSwitchWhenUnsupported(string? version)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        UseDotnetSdkVersion(builder, version);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
+
+        var expected = new List<string> { "build", Assert.IsType<string>(args[1]) };
+        AddExpectedConfiguration(builder, expected);
+        Assert.Equal(expected, args);
+    }
+
+    [Theory]
+    [InlineData("11.0.100-rc.1", "10.0.999", true, false)]
+    [InlineData("10.0.999", "11.0.100-rc.1", false, true)]
+    public async Task CoordinatedBuildReevaluatesMultiThreadedSwitchWhenGlobalJsonChanges(
+        string firstVersion,
+        string secondVersion,
+        bool firstSupportsMultiThreadedBuild,
+        bool secondSupportsMultiThreadedBuild)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var globalJsonPath = Path.Combine(workspace.Path, "global.json");
+        File.WriteAllText(
+            globalJsonPath,
+            JsonSerializer.Serialize(new { sdk = new { version = firstVersion } }));
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: [firstVersion]);
+        processRunner.EnqueueResult(output: [secondVersion]);
+        var versionProvider = new DotnetSdkVersionProvider(
+            processRunner,
+            NullLogger<DotnetSdkVersionProvider>.Instance,
+            CancellationToken.None);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var eventing = new DistributedApplicationEventing();
+        await new DotnetBuildCommandEventingSubscriber(versionProvider).SubscribeAsync(
+            eventing,
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            TestContext.Current.CancellationToken);
+        await eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var firstArgs = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
+        var firstExpected = new List<string> { "build", Assert.IsType<string>(firstArgs[1]) };
+        if (firstSupportsMultiThreadedBuild)
+        {
+            firstExpected.Add("-mt");
+        }
+
+        AddExpectedConfiguration(builder, firstExpected);
+        Assert.Equal(firstExpected, firstArgs);
+
+        File.WriteAllText(
+            globalJsonPath,
+            JsonSerializer.Serialize(new { sdk = new { version = secondVersion } }));
+        ForgetCachedCallbackResults(buildResource);
+        await eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var secondArgs = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
+        var secondExpected = new List<string> { "build", Assert.IsType<string>(secondArgs[1]) };
+        if (secondSupportsMultiThreadedBuild)
+        {
+            secondExpected.Add("-mt");
+        }
+
+        AddExpectedConfiguration(builder, secondExpected);
+        Assert.Equal(secondExpected, secondArgs);
+        Assert.Equal(2, processRunner.ProcessSpecs.Count);
+    }
+
+    [Fact]
+    public async Task DirectBuildAndRebuilderProbeSdkUsingCurrentBuildEnvironment()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: ["11.0.100-rc.1"]);
+        processRunner.EnqueueResult(output: ["10.0.999"]);
+        builder.Services.AddSingleton<IDotnetSdkVersionProvider>(
+            new DotnetSdkVersionProvider(
+                processRunner,
+                NullLogger<DotnetSdkVersionProvider>.Instance,
+                CancellationToken.None));
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var firstDotnetPath = Path.Combine(workspace.Path, "first-sdk");
+        var secondDotnetPath = Path.Combine(workspace.Path, "second-sdk");
+        var dotnetPath = firstDotnetPath;
+        builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithBuildEnvironment(context => context.EnvironmentVariables["PATH"] = dotnetPath);
+        await using var app = builder.Build();
+
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var buildArguments = await ArgumentEvaluator.GetArgumentListAsync(
+            buildResource,
+            app.Services);
+        Assert.Equal(1, buildArguments.Count(argument => argument == "-mt"));
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0,
+            });
+
+        dotnetPath = secondDotnetPath;
+        ForgetCachedCallbackResults(rebuilder);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(rebuilder, app.Services),
+            TestContext.Current.CancellationToken);
+        var rebuildArguments = await ArgumentEvaluator.GetArgumentListAsync(
+            rebuilder,
+            app.Services);
+        Assert.Equal(0, rebuildArguments.Count(argument => argument == "-mt"));
+        await app.ResourceNotifications.PublishUpdateAsync(
+            rebuilder,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0,
+            });
+
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            processSpec => Assert.Equal(firstDotnetPath, processSpec.EnvironmentVariables["PATH"]),
+            processSpec => Assert.Equal(secondDotnetPath, processSpec.EnvironmentVariables["PATH"]));
     }
 
     [Theory]
@@ -220,18 +394,24 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         AssertBuildDependency(project.Resource, buildResource);
     }
 
-    [Fact]
-    public async Task FileOnlyModelCreatesDirectCoordinatedBuild()
+    [Theory]
+    [InlineData("11.0.100-rc.1.26425.128", false)]
+    [InlineData("11.0.100-rtm.26473.104", true)]
+    public async Task FileOnlyModelCreatesDirectCoordinatedBuild(
+        string sdkVersion,
+        bool supportsFileBasedMultiThreadedBuild)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
+        UseDotnetSdkVersion(builder, sdkVersion);
         var filePath = Path.Combine(workspace.Path, "worker.cs");
         File.WriteAllText(filePath, "System.Console.WriteLine(\"Hello\");");
 
         var file = builder.AddDotnetProject("worker", filePath, options => options.ExcludeLaunchProfile = true);
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
         AssertBuildDependency(file.Resource, buildResource);
         await using var app = builder.Build();
 
@@ -243,10 +423,41 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             await buildResource.GetBuildTargetPathAsync(
                 NullLogger.Instance,
                 TestContext.Current.CancellationToken));
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
         var buildArgs = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
         var expectedBuildArgs = new List<string> { "build", filePath };
+        if (supportsFileBasedMultiThreadedBuild)
+        {
+            expectedBuildArgs.Add("-mt");
+        }
+
         AddExpectedConfiguration(builder, expectedBuildArgs);
         Assert.Equal(expectedBuildArgs, buildArgs);
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0,
+            });
+
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(rebuilder, app.Services),
+            TestContext.Current.CancellationToken);
+        var rebuildArgs = await ArgumentEvaluator.GetArgumentListAsync(rebuilder, app.Services);
+        var expectedRebuildArgs = new List<string> { "build", filePath };
+        if (supportsFileBasedMultiThreadedBuild)
+        {
+            expectedRebuildArgs.Add("-mt");
+        }
+
+        AddExpectedConfiguration(builder, expectedRebuildArgs);
+        Assert.Equal(expectedRebuildArgs, rebuildArgs);
 
         var fileArgs = await ArgumentEvaluator.GetArgumentListAsync(file.Resource, app.Services);
         var expectedFileArgs = new List<string> { "run", "--file", filePath, "--no-build" };
@@ -264,6 +475,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
+        var versionProvider = UseDotnetSdkVersion(builder, "11.0.100-rtm.26473.104");
         var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
         var fileDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "worker"));
         var filePath = Path.Combine(fileDirectory.FullName, "worker.cs");
@@ -293,23 +505,49 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var fileBuild = Assert.Single(
             buildResources,
             build => build.ProjectPaths.SequenceEqual([NormalizeProjectPath(filePath)]));
+        Assert.Equal(
+            fileFirst ? "__dotnet-project-build-2" : "__dotnet-project-build",
+            projectBuild.Name);
+        Assert.Equal(
+            fileFirst ? "__dotnet-project-build" : "__dotnet-project-build-2",
+            fileBuild.Name);
+        var projectBuildTarget = await projectBuild.GetBuildTargetPathAsync(
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        var fileBuildTarget = await fileBuild.GetBuildTargetPathAsync(
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
         Assert.EndsWith(
             ".proj",
-            await projectBuild.GetBuildTargetPathAsync(
-                NullLogger.Instance,
-                TestContext.Current.CancellationToken),
+            projectBuildTarget,
             StringComparison.Ordinal);
-        Assert.Equal(
-            filePath,
-            await fileBuild.GetBuildTargetPathAsync(
-                NullLogger.Instance,
-                TestContext.Current.CancellationToken));
+        Assert.Equal(filePath, fileBuildTarget);
         AssertBuildDependency(
             fileFirst ? projectBuild : fileBuild,
             fileFirst ? fileBuild : projectBuild);
         var finalBuild = buildResources[^1];
         AssertBuildDependency(project.Resource, finalBuild);
         AssertBuildDependency(file.Resource, finalBuild);
+
+        var eventing = new DistributedApplicationEventing();
+        await new DotnetBuildCommandEventingSubscriber(versionProvider).SubscribeAsync(
+            eventing,
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            TestContext.Current.CancellationToken);
+        await eventing.PublishAsync(
+            new BeforeResourceStartedEvent(projectBuild, app.Services),
+            TestContext.Current.CancellationToken);
+        await eventing.PublishAsync(
+            new BeforeResourceStartedEvent(fileBuild, app.Services),
+            TestContext.Current.CancellationToken);
+        var projectBuildArgs = await ArgumentEvaluator.GetArgumentListAsync(projectBuild, app.Services);
+        var expectedProjectBuildArgs = new List<string> { "build", projectBuildTarget, "-mt" };
+        AddExpectedConfiguration(builder, expectedProjectBuildArgs);
+        Assert.Equal(expectedProjectBuildArgs, projectBuildArgs);
+        var fileBuildArgs = await ArgumentEvaluator.GetArgumentListAsync(fileBuild, app.Services);
+        var expectedFileBuildArgs = new List<string> { "build", fileBuildTarget, "-mt" };
+        AddExpectedConfiguration(builder, expectedFileBuildArgs);
+        Assert.Equal(expectedFileBuildArgs, fileBuildArgs);
 
         var fileArgs = await ArgumentEvaluator.GetArgumentListAsync(file.Resource, app.Services);
         var expectedFileArgs = new List<string> { "run", "--file", filePath, "--no-build" };
@@ -3718,6 +3956,15 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
     private static string NormalizeProjectPath(string path) =>
         Path.GetFullPath(path);
+
+    private static TestDotnetSdkVersionProvider UseDotnetSdkVersion(
+        IDistributedApplicationBuilder builder,
+        string? version)
+    {
+        var provider = new TestDotnetSdkVersionProvider(version);
+        builder.Services.AddSingleton<IDotnetSdkVersionProvider>(provider);
+        return provider;
+    }
 
     /// <summary>
     /// Emulates what DCP does to a resource when it restarts it.

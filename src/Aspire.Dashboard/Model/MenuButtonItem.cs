@@ -7,6 +7,24 @@ namespace Aspire.Dashboard.Model;
 
 public class MenuButtonItem
 {
+    internal static MenuButtonItem CreateExternalLink(string text, string url, Icon icon, string? tooltip = null)
+    {
+        // app.js handles these attributes from the click event so browser popup blocking
+        // doesn't prevent the link from opening in a new window.
+        return new MenuButtonItem
+        {
+            Text = text,
+            Tooltip = tooltip,
+            Icon = icon,
+            AdditionalAttributes = new Dictionary<string, object>
+            {
+                ["data-openbutton"] = "true",
+                ["data-url"] = url,
+                ["data-target"] = "_blank"
+            }
+        };
+    }
+
     public bool IsDivider { get; set; }
     /// <summary>
     /// Whether the item is a non-interactive header used to label the menu (e.g. the resource

@@ -54,6 +54,12 @@ Aspire-Core.slnf
 # manifests, imports, and tests without running the main build/test matrix.
 .github/extensions/**
 
+# Dev/AzDO/scheduled-only infrastructure with no regular GitHub PR CI consumer.
+.config/dotnet-tools.json
+eng/Version.Details.xml
+.github/actions/create-pull-request/**
+.github/actions/preload-azure-cli-requests/**
+
 # GitHub workflow files that do not affect the CI build or test process
 .github/workflows/apply-test-attributes.yml
 .github/workflows/backmerge-release.yml
@@ -97,7 +103,8 @@ pyrightconfig.json
 #
 # Deliberately NOT listed (each can change build/test outcomes, so they must still run CI):
 #   .editorconfig    -- analyzer severities feed TreatWarningsAsErrors
-#   .gitattributes   -- checkout normalization (line endings) can affect fixture-sensitive tests
+#   .gitattributes   -- checkout normalization (line endings) can affect fixture-sensitive tests;
+#                       the trigger map routes this file to ALL
 #   .gitignore       -- controls discovery of the extension's Java E2E workspace
 .github/CODEOWNERS
 .github/dependabot.yml
