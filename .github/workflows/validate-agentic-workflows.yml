@@ -43,6 +43,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Purging catches source deletions that leave orphaned generated workflows. Refreshing
+          # action pins ensures a committed edit to actions-lock.json cannot survive validation.
           gh aw compile --purge --force-refresh-action-pins \
             --validate --actionlint --shellcheck --no-check-update
 
@@ -67,6 +69,8 @@ jobs:
         run: ./restore.sh
 
       - name: Run Infrastructure.Tests agentic workflow contracts
+        # Agentic workflow contracts span multiple test classes. Keep the complete project here:
+        # a class filter previously reduced this validation to six tests and skipped real consumers.
         run: |
           dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj \
             --no-launch-profile -- \

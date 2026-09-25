@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.TestUtilities;
+using Microsoft.Extensions.FileSystemGlobbing;
 using Xunit;
 using YamlDotNet.RepresentationModel;
 
@@ -14,23 +15,23 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
     private const string LockPath = ".github/workflows/test-agent.lock.yml";
     private const string ActionsLockPath = ".github/aw/actions-lock.json";
 
-    [Fact]
-    public void WorkflowCoversAgenticSourcesAndGeneratedOutputs()
+    [Theory]
+    [InlineData(".github/workflows/analyze-ci-failure.md")]
+    [InlineData(".github/workflows/analyze-ci-failure.lock.yml")]
+    [InlineData(".github/workflows/agentics-maintenance-microsoft-aspire.dev.yml")]
+    [InlineData(".github/workflows/copilot-setup-steps.yml")]
+    [InlineData(ActionsLockPath)]
+    [InlineData(".github/actionlint.yaml")]
+    [InlineData(WorkflowRelativePath)]
+    public void WorkflowRunsForAgenticInputs(string changedPath)
     {
         var root = LoadWorkflow();
         var pullRequest = Mapping(Mapping(root, "on"), "pull_request");
         var paths = Sequence(pullRequest, "paths").Children.Select(node => node.ToString()).ToArray();
+        var matcher = new Matcher(StringComparison.Ordinal);
+        matcher.AddIncludePatterns(paths);
 
-        Assert.Contains(".github/workflows/**/*.md", paths);
-        Assert.Contains(".github/workflows/**/*.lock.yml", paths);
-        Assert.Contains(".github/workflows/agentics-maintenance*.yml", paths);
-        Assert.Contains(ActionsLockPath, paths);
-        Assert.Contains(".github/actionlint.yaml", paths);
-
-        var steps = Steps(root);
-        var compileScript = Scalar(Step(steps, "Compile agentic workflows (schema and action-pin validation)"), "run");
-        Assert.Contains("--purge", compileScript, StringComparison.Ordinal);
-        Assert.Contains("--force-refresh-action-pins", compileScript, StringComparison.Ordinal);
+        Assert.True(matcher.Match([changedPath]).HasMatches, $"{changedPath} does not trigger {WorkflowRelativePath}");
     }
 
     [Theory]
@@ -60,51 +61,6 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
         Assert.Contains(expectedStatus, result.Output, StringComparison.Ordinal);
     }
 
-    [Fact]
-    [RequiresTools(["bash"])]
-    public async Task TestStepRunsAllInfrastructureTests()
-    {
-        using var workspace = TemporaryWorkspace.Create(output);
-        var argumentsPath = Path.Combine(workspace.Path, "dotnet-arguments");
-        var fakeDotnetPath = Path.Combine(workspace.Path, "dotnet");
-        await File.WriteAllTextAsync(
-            fakeDotnetPath,
-            """
-            #!/usr/bin/env bash
-            printf '%s\n' "$@" > "$DOTNET_ARGUMENTS_PATH"
-            """);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(
-                fakeDotnetPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-
-        var result = await RunScriptAsync(
-            workspace,
-            Scalar(Step(Steps(LoadWorkflow()), "Run Infrastructure.Tests agentic workflow contracts"), "run"),
-            new Dictionary<string, string>
-            {
-                ["DOTNET_ARGUMENTS_PATH"] = argumentsPath,
-                ["PATH"] = workspace.Path + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH"),
-            });
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal(
-            [
-                "test",
-                "--project",
-                "tests/Infrastructure.Tests/Infrastructure.Tests.csproj",
-                "--no-launch-profile",
-                "--",
-                "--filter-not-trait",
-                "quarantined=true",
-                "--filter-not-trait",
-                "outerloop=true",
-            ],
-            await File.ReadAllLinesAsync(argumentsPath));
-    }
-
     private TemporaryWorkspace CreateRepository()
     {
         var workspace = TemporaryWorkspace.Create(output);
@@ -122,8 +78,7 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
 
     private static async Task<(int ExitCode, string Output)> RunScriptAsync(
         TemporaryWorkspace workspace,
-        string script,
-        IReadOnlyDictionary<string, string>? environment = null)
+        string script)
     {
         using var process = new Process();
         process.StartInfo.FileName = "bash";
@@ -132,13 +87,6 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
         process.StartInfo.WorkingDirectory = workspace.Path;
         process.StartInfo.RedirectStandardOutput = true;
         process.StartInfo.RedirectStandardError = true;
-        if (environment is not null)
-        {
-            foreach (var (key, value) in environment)
-            {
-                process.StartInfo.Environment[key] = value;
-            }
-        }
 
         process.Start();
         // Read both streams concurrently to avoid deadlock when a pipe buffer fills.

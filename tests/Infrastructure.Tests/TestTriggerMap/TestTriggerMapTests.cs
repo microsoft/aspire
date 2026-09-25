@@ -454,6 +454,10 @@ public sealed class TestTriggerMapTests
             ["test:Infrastructure.Tests", "job:winget-installer", "job:homebrew-installer"]
         },
         {
+            ".github/actionlint.yaml",
+            ["test:Infrastructure.Tests"]
+        },
+        {
             ".github/scripts/assert-extension-e2e-bridge-vsix.ps1",
             ["job:extension-unit"]
         },
