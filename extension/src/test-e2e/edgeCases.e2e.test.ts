@@ -31,15 +31,24 @@ suite('Aspire extension edge case E2E', function () {
                 removeExternalSingleFileAppHost();
                 externalAppHostPath = undefined;
             },
-            () => {
+            async () => {
                 if (!debuggerInstallHintProjectName) {
-                    return undefined;
+                    return;
                 }
 
                 const projectName = debuggerInstallHintProjectName;
-                return removeGeneratedProject(projectName).then(() => {
-                    debuggerInstallHintProjectName = undefined;
-                });
+                await removeGeneratedProject(projectName);
+                debuggerInstallHintProjectName = undefined;
+
+                const refreshBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+                await executeE2eControlCommand({ name: 'refreshAppHosts' });
+                await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshBefore);
+                await waitForExtensionState(file =>
+                    file.state.isWorkspaceAppHostDiscoveryComplete
+                    && isSamePath(file.state.workspaceAppHostPath ?? '', getPrimaryAppHostProjectPath())
+                    && !file.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, getGeneratedAppHostPath(projectName))),
+                'primary workspace AppHost selected without the removed debugger hint AppHost',
+                60000);
             },
             () => stopPrimaryAppHostIfRunning(),
         ], 'Edge case E2E teardown failed.');
@@ -217,8 +226,8 @@ builder.Build().Run();`));
     test('process-owner cleanup stops the owned CLI and AppHost process tree', async () => {
         await openAspireView();
         await waitForRepositoryIdle();
-        const discovered = await waitForWorkspaceAppHost();
-        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+        const appHostPath = getPrimaryAppHostProjectPath();
+        await waitForSelectedWorkspaceAppHost(appHostPath);
 
         const beforeInvocation = getCommandInvocationCount('aspire-vscode.debugAppHost');
         await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
