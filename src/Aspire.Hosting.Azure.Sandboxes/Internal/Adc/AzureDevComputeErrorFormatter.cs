@@ -142,15 +142,26 @@ internal static partial class AzureDevComputeErrorFormatter
 
             foreach (var property in document.RootElement.EnumerateObject())
             {
-                var surfaced = property.Name switch
+                bool surfaced;
+                try
                 {
-                    var name when IsProperty(name, TitlePropertyName) && title is null => TrySetIdentifier(property.Value, requestStringValues, ref title),
-                    var name when IsProperty(name, ErrorCodePropertyName) && errorCode is null => TrySetErrorCode(property.Value, requestStringValues, ref errorCode),
-                    var name when IsProperty(name, StatusPropertyName) && status is null => TrySetStatus(property.Value, requestStringValues, ref status),
-                    var name when IsProperty(name, TraceIdPropertyName) && traceId is null => TrySetCorrelationId(property.Value, requestStringValues, ref traceId),
-                    var name when IsProperty(name, RequestIdPropertyName) && requestId is null => TrySetCorrelationId(property.Value, requestStringValues, ref requestId),
-                    _ => false
-                };
+                    surfaced = property.Name switch
+                    {
+                        var name when IsProperty(name, TitlePropertyName) && title is null => TrySetIdentifier(property.Value, requestStringValues, ref title),
+                        var name when IsProperty(name, ErrorCodePropertyName) && errorCode is null => TrySetErrorCode(property.Value, requestStringValues, ref errorCode),
+                        var name when IsProperty(name, StatusPropertyName) && status is null => TrySetStatus(property.Value, requestStringValues, ref status),
+                        var name when IsProperty(name, TraceIdPropertyName) && traceId is null => TrySetCorrelationId(property.Value, requestStringValues, ref traceId),
+                        var name when IsProperty(name, RequestIdPropertyName) && requestId is null => TrySetCorrelationId(property.Value, requestStringValues, ref requestId),
+                        _ => false
+                    };
+                }
+                catch (InvalidOperationException)
+                {
+                    // JsonDocument.Parse accepts escaped lone surrogates such as {"title":"\uD800"},
+                    // but decoding that name or value to a .NET string throws. Treat the member as
+                    // redacted content rather than letting the exception replace the HTTP failure.
+                    surfaced = false;
+                }
 
                 hasRedactedContent |= !surfaced;
             }
