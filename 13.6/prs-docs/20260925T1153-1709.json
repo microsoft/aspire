@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "No matching changelog entry found - PR modifies the aspire.dev hub website's resource discovery/browse UX (sample language filters, provider dropdown removal) rather than documenting a specific merged product feature",
+  "mergedAt": "2026-09-25T11:53:39Z",
+  "number": 1709,
+  "runDate": "2026-09-25T12:05:00Z",
+  "status": "excluded",
+  "title": "Clarify Aspire resource discovery and add sample language filtering"
+}
