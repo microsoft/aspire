@@ -263,6 +263,12 @@ export class AppHostLaunchService implements vscode.Disposable {
         return this._lifecycleLocks.size;
     }
 
+    get hasPendingOrActiveNonRunOperation(): boolean {
+        return this._pendingOperationByToken.size > 0 ||
+            this._pendingExternalOperationByReservationId.size > 0 ||
+            this._activeOperationBySessionId.size > 0;
+    }
+
     setEditorSessionProvider(provider: () => readonly AppHostLaunchSession[]): void {
         this._getEditorSessions = provider;
     }

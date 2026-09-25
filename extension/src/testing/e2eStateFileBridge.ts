@@ -26,6 +26,7 @@ import { ResourceCommandJson, ResourceJson } from '../data/appHostCliContracts';
 import { AppHostDataRepository } from '../data/AppHostDataRepository';
 import { csharpExtensionId, getSupportedCapabilities, javaLanguageExtensionId, useCsharpExtensionVersionProviderForTests } from '../capabilities';
 import { getCliPathTargetKey, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { probeUsefulnessSurvey } from './usefulnessSurveyProbe';
 import { isEnabledCommand } from '../views/treePresentation';
 import { blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofCleanupTimeoutMs } from './blazorWasmDebugProofTimeouts';
 import type { BlazorWasmDebuggerStatus } from './blazorWasmDebuggerSetup';
@@ -642,6 +643,10 @@ export async function executeE2eControlCommand(
       markStarted();
       const commands = await vscode.commands.getCommands(true);
       return commands.filter(commandId => commandId.startsWith('aspire-vscode.')).sort();
+    }
+    case 'probeUsefulnessSurvey': {
+      markStarted();
+      return await probeUsefulnessSurvey(context.globalState, command.reset);
     }
     case 'getRegisteredLanguageModelTools': {
       markStarted();

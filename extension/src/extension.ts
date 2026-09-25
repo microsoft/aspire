@@ -42,6 +42,7 @@ import { InternalMicrosoftTelemetryProvider } from './utils/internalMicrosoftTel
 import { OutdatedCliNotifier } from './utils/outdatedCliNotifier';
 import { onDidResolveCliForOperation } from './utils/cliOperationResolution';
 import { FileSystemOutdatedCliSuppressionStore } from './utils/outdatedCliSuppressionStore';
+import { initializeUsefulnessSurvey } from './services/initializeUsefulnessSurvey';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -141,6 +142,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const appHostLaunchService = new AppHostLaunchService(configInfoProvider);
   context.subscriptions.push(appHostLaunchService);
+  initializeUsefulnessSurvey(context, appHostLaunchService);
 
   const editorCommandProvider = new AspireEditorCommandProvider(appHostDiscoveryService, appHostLaunchService);
 
