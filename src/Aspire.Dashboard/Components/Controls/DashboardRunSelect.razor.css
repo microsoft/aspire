@@ -1,7 +1,7 @@
 .application-run-select ::deep .application-run-select-button {
     --colorNeutralBackground1: var(--aspire-page-background);
-    --colorNeutralBackground1Hover: color-mix(in srgb, var(--colorNeutralBackground3) 65%, var(--aspire-page-background));
-    --colorNeutralBackground1Pressed: color-mix(in srgb, var(--colorNeutralBackground3) 80%, var(--aspire-page-background));
+    --colorNeutralBackground1Hover: var(--dashboard-run-select-hover-background);
+    --colorNeutralBackground1Pressed: var(--dashboard-run-select-pressed-background);
     margin-right: 8px;
     height: 28px;
     min-height: 28px;
@@ -9,11 +9,6 @@
     font-weight: var(--fontWeightRegular);
     border: 1px solid transparent;
     border-radius: 6px;
-}
-
-[data-theme="dark"] .application-run-select ::deep .application-run-select-button {
-    --colorNeutralBackground1Hover: var(--colorNeutralBackground3);
-    --colorNeutralBackground1Pressed: var(--colorNeutralBackground3);
 }
 
 .application-run-select ::deep .application-run-status {
