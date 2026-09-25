@@ -10,18 +10,31 @@
 #
 # Note: Expects self-extracting binary and NuGet artifacts to be pre-downloaded to /workspace/artifacts/
 #
-FROM golang:1.26-trixie
+FROM mcr.microsoft.com/oss/go/microsoft/golang:1.26-bookworm AS go
 
-# Install system dependencies (wget, Docker CLI, jq for JSON manipulation, ICU for the Aspire CLI)
+# The native Aspire CLI requires glibc 2.38+, but the Microsoft Go Bookworm image
+# has glibc 2.36. Keep Microsoft's toolchain on an approved base with newer glibc.
+FROM mcr.microsoft.com/mirror/docker/library/ubuntu:24.04
+
+COPY --from=go /usr/local/go /usr/local/go
+
+# Keep the C toolchain and OpenSSL dependencies needed by Microsoft Go's system crypto.
 RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    git \
+    build-essential \
+    pkg-config \
+    libssl-dev \
     wget \
     docker.io \
     jq \
-    libicu76 \
+    libicu74 \
     && rm -rf /var/lib/apt/lists/*
 
+ENV GOPATH=/go
+
 # Pre-configure Aspire CLI path
-ENV PATH="/root/.aspire/bin:${PATH}"
+ENV PATH="/root/.aspire/bin:/usr/local/go/bin:/go/bin:${PATH}"
 ENV ASPIRE_CLI_TELEMETRY_OPTOUT=1
 
 WORKDIR /workspace

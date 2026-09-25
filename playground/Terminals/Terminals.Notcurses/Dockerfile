@@ -1,6 +1,8 @@
 # Licensed to the .NET Foundation under one or more agreements.
 # The .NET Foundation licenses this file to you under the MIT license.
 
+# DisableDockerDetector "Terminal playground container for contributor testing; this container is not built, run, or published by the official microsoft-aspire pipeline."
+
 FROM ubuntu:24.04
 
 RUN apt-get update \

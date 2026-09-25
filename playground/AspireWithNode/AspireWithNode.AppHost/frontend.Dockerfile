@@ -1,3 +1,5 @@
+# DisableDockerDetector "Playground sample for contributor development and sample deployment; this container is not built, run, or published by the official microsoft-aspire pipeline."
+
 FROM node:22-slim AS build
 WORKDIR /app
 RUN corepack enable pnpm
