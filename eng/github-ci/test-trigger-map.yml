@@ -89,9 +89,6 @@ ignore:
   - eng/generate-catalog.ps1                            # Windows/AzDO template catalog generation; no GH-CI consumer
   - eng/scripts/update-aspire-skills-bundle.ps1         # schedule/dispatch-only bundle updater
   - eng/scripts/verify-aspire-skills-bundle.ps1         # exercised by its dedicated PR workflow
-  # Schedule/dispatch-only workflows that regenerate API/ATS surface baselines; no PR-CI path.
-  - .github/workflows/generate-api-diffs.yml
-  - .github/workflows/generate-ats-diffs.yml
   # NOTE: src/Shared/**/*.cs and tests/Shared/**/*.cs are deliberately NOT ignored -- Layer 1 attributes
   # them to their consuming projects and the run-all fallback treats any attributed file as owned, so
   # they are selected precisely without an entry. **/*.md and other no-CI files are dropped by

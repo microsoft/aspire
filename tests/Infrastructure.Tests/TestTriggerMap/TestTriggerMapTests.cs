@@ -83,6 +83,22 @@ public sealed class TestTriggerMapTests
         Assert.Contains("job:extension-e2e", targets);
     }
 
+    [Theory]
+    [InlineData(".github/workflows/generate-api-diffs.yml")]
+    [InlineData(".github/workflows/generate-ats-diffs.yml")]
+    public void ApiDiffWorkflowChangesSelectInfrastructureTests(string path)
+    {
+        Assert.DoesNotContain(s_map.Ignore, pattern => TestTriggerMap.GlobMatches(pattern, path));
+
+        var targets = s_map.PathRules
+            .Where(rule => rule.Paths.Any(pattern => TestTriggerMap.GlobMatches(pattern, path)))
+            .SelectMany(rule => rule.Targets)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(["test:Infrastructure.Tests"], targets);
+    }
+
     [Fact]
     public void ExtensionE2eProjectAndPathRulesCoverTheSameConsumers()
     {

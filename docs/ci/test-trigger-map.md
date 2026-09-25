@@ -409,8 +409,10 @@ carry it forward. Never silently regenerate it.
   today; their rules give the *would-be* trigger paths. Their own schedules,
   dispatches, or narrow PR workflow triggers decide whether they run. Comments
   and job summaries list them separately from work the PR selector can actually
-  run. The API/ATS baseline regeneration workflows are independently scheduled
-  or dispatched and ignored as selector targets, as described in `ignore` above.
+  run. The API/ATS baseline regeneration workflows run dedicated PR dry runs when
+  their workflow files change. The top-level CI skip gate keeps those workflow-only
+  PRs out of the main test pipeline, while mixed PRs route the workflow changes to
+  `Infrastructure.Tests` through the broad workflow path rule.
 - **Integration dirs with no test.** `src/Aspire.Hosting.Orleans`,
   `Aspire.Hosting.AppHost`, and `Aspire.Hosting.Tasks` have no dedicated test
   project. Their MSBuild files are owned by Layer 1, and their non-MSBuild files

@@ -9,9 +9,15 @@ The checked-in `src/Aspire.Hosting*/api/*.ats.txt` files are the release compati
 The daily `generate-ats-diffs.yml` and `generate-api-diffs.yml` workflows
 generate review PRs for `main` and the active release branches listed in each
 workflow's scheduled matrix (currently `release/13.6`). Manual runs accept
-`main` or any `release/*` target branch. Each job checks out its selected
+`main` or an active release target listed by the workflow. Each job checks out its selected
 target and opens a PR from a distinct generated branch back into that target.
 Only the `main` PRs receive the `NO-MERGE` label.
+
+Pull requests that modify either workflow automatically run its generation
+steps against the pull request's target branch with read-only permissions.
+Manual runs default to the same dry-run behavior for the selected target.
+These validation runs summarize the generated changes but do not create an App
+token, push a branch, or open a pull request.
 
 In pull request CI, `.github/workflows/typescript-api-compat.yml` compares the checked-in ATS release baseline from the pull request target branch with fresh `aspire sdk dump --format ci` output generated from the pull request. The checked-in baseline is copied directly from the target branch, so the workflow does not regenerate the base ATS surface for every pull request.
 
