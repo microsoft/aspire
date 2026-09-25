@@ -5,6 +5,10 @@
 
 set -euo pipefail
 
+# Starting with .NET 11, `dotnet test` decides the zero-tests result for the whole run from
+# aggregated results. `--ignore-exit-code 8` still makes direct test-module execution return 0,
+# but an all-empty or all-skipped `dotnet test` run returns 8 from the orchestrator.
+# https://learn.microsoft.com/dotnet/core/tools/dotnet-test-mtp#whole-run-and-per-module-minimums
 if [ "$#" -ne 1 ] || [[ ! "$1" =~ ^[0-9]+$ ]]; then
   echo "Usage: $0 <MTP exit code>" >&2
   exit 5
