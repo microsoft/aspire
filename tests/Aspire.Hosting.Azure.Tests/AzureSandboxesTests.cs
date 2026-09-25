@@ -1201,7 +1201,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             AzureSandboxContainerDeployment.DestroyAsync(stepContext, sandboxResource));
 
-        Assert.Contains("ADC request", exception.Message);
+        Assert.Contains("Azure Container Apps Sandboxes request", exception.Message);
         Assert.Contains("HTTP 400", exception.Message);
         Assert.NotNull(requestUri);
         Assert.Contains("/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/existing-rg/", requestUri?.AbsolutePath);
@@ -1721,7 +1721,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             CancellationToken.None));
 
         Assert.Equal(
-            "ADC request 'PUT subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/sandboxes' failed with HTTP 400 (Bad Request): " +
+            "Azure Container Apps Sandboxes request 'PUT subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/sandboxes' failed with HTTP 400 (Bad Request): " +
             "InvalidResourceTier (errorCode 18). " +
             "traceId=00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01, requestId=8c1f3f0e-2a8b-4f5e-9c43-2b7d1f6c1a90. " +
             "Additional service details were redacted.",
@@ -1743,7 +1743,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             CancellationToken.None));
 
         Assert.Equal(
-            "ADC request 'GET subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/disk-1' failed with HTTP 409 (Conflict): " +
+            "Azure Container Apps Sandboxes request 'GET subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/disk-1' failed with HTTP 409 (Conflict): " +
             "QuotaExceeded (errorCode Sandbox.Quota, status 429).",
             exception.Message);
     }
@@ -1774,7 +1774,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             CancellationToken.None));
 
         Assert.Equal(
-            "ADC request 'PUT subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/sandboxes' failed with HTTP 400 (Bad Request): " +
+            "Azure Container Apps Sandboxes request 'PUT subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/sandboxes' failed with HTTP 400 (Bad Request): " +
             "traceId=00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01. " +
             "Additional service details were redacted.",
             exception.Message);
@@ -1806,6 +1806,72 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.Contains("details were redacted", exception.Message);
     }
 
+    [Theory]
+    [InlineData("""{ "title": "InvalidEnvironment", "errorCode": 1234567890 }""", "1234567890")]
+    [InlineData("""{ "title": "InvalidEnvironment", "errorCode": 34567890 }""", "34567890")]
+    [InlineData("""{ "title": "InvalidEnvironment", "status": 418 }""", "418")]
+    public async Task AzureDevComputeClientRedactsNumericFieldsThatEchoRequestSecrets(string content, string echoedValue)
+    {
+        var handler = new RecordingHandler(_ => Task.FromResult(JsonResponse(content, HttpStatusCode.BadRequest)));
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateSandboxAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            CreateSandboxRequest(new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["API_KEY"] = "1234567890",
+                ["PIN"] = "418"
+            }),
+            CancellationToken.None));
+
+        Assert.Equal(
+            "Azure Container Apps Sandboxes request 'PUT subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/sandboxes' failed with HTTP 400 (Bad Request): " +
+            "InvalidEnvironment. Additional service details were redacted.",
+            exception.Message);
+        Assert.DoesNotContain(echoedValue, exception.Message);
+    }
+
+    [Fact]
+    public async Task AzureDevComputeClientSurfacesShortNumericErrorCodesContainedInUnrelatedRequestValues()
+    {
+        // "20" appears inside the request's memory ("2048Mi") and disk ("20480Mi") values, but it is
+        // too short to be a distinctive echo, so it should still be surfaced.
+        var handler = new RecordingHandler(_ => Task.FromResult(JsonResponse(
+            """{ "title": "InvalidResourceTier", "status": 400, "errorCode": 20 }""",
+            HttpStatusCode.BadRequest)));
+        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
+
+        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateSandboxAsync(
+            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
+            CreateSandboxRequest(new Dictionary<string, string>(StringComparer.Ordinal)),
+            CancellationToken.None));
+
+        Assert.Equal(
+            "Azure Container Apps Sandboxes request 'PUT subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/sandboxes' failed with HTTP 400 (Bad Request): " +
+            "InvalidResourceTier (errorCode 20).",
+            exception.Message);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(null)]
+    public async Task AzureDevComputeErrorFormatterObservesCancellationBeforeReadingTheBody(int? contentLength)
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StreamContent(new MemoryStream())
+        };
+        response.Content.Headers.ContentLength = contentLength;
+        using var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AzureDevComputeErrorFormatter.GetErrorMessageAsync(
+            response,
+            requestContent: null,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web),
+            cancellationTokenSource.Token));
+    }
+
     [Fact]
     public async Task AzureDevComputeClientRedactsIdentifierTitlesThatEmbedRequestSecrets()
     {
@@ -1821,7 +1887,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             CancellationToken.None));
 
         Assert.Equal(
-            "ADC request 'PUT subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/sandboxes' failed with HTTP 400 (Bad Request): " +
+            "Azure Container Apps Sandboxes request 'PUT subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/sandboxes' failed with HTTP 400 (Bad Request): " +
             "The service returned an error response whose details were redacted.",
             exception.Message);
     }
@@ -1845,7 +1911,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             CancellationToken.None));
 
         Assert.Equal(
-            "ADC request 'GET subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/disk-1' failed with HTTP 400 (Bad Request): " +
+            "Azure Container Apps Sandboxes request 'GET subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/disk-1' failed with HTTP 400 (Bad Request): " +
             "The service returned an error response whose details were redacted.",
             exception.Message);
     }
@@ -1876,7 +1942,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             CancellationToken.None));
 
         Assert.Equal(
-            "ADC request 'GET subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/disk-1' failed with HTTP 400 (Bad Request): " +
+            "Azure Container Apps Sandboxes request 'GET subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/disk-1' failed with HTTP 400 (Bad Request): " +
             "The service returned an error response whose details were redacted.",
             exception.Message);
     }
@@ -1896,7 +1962,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             CancellationToken.None));
 
         Assert.Equal(
-            "ADC request 'GET subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/disk-1' failed with HTTP 400 (Bad Request).",
+            "Azure Container Apps Sandboxes request 'GET subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/disk-1' failed with HTTP 400 (Bad Request).",
             exception.Message);
     }
 

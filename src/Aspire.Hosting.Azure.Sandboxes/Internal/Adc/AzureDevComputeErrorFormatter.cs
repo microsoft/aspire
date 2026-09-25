@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -33,12 +34,13 @@ namespace Aspire.Hosting.Azure;
 // to messages that may quote the rejected value.
 //
 // Only fields that are both structurally constrained and useful for support are surfaced:
-//   - "status" and a numeric "errorCode" are integers and cannot carry text.
+//   - "status" and a numeric "errorCode" are integers and cannot carry free-form text.
 //   - "title" and a string "errorCode" are surfaced only when they are short identifier-like tokens
 //     (e.g. "InvalidResourceTier"); sentences, punctuation, and whitespace are rejected.
 //   - "traceId" and "requestId" are surfaced only when they match a correlation-ID character set.
-// Every surfaced string is additionally dropped when it overlaps any string value Aspire sent in the
-// request body, so an identifier-shaped secret echoed back by the service is still redacted.
+// Every surfaced value, numeric or string, is additionally dropped when it overlaps any string value
+// Aspire sent in the request body, so an identifier-shaped or digit-only secret echoed back by the
+// service is still redacted.
 // "detail", "errors", "type", "instance", and any other members stay redacted: scrubbing every
 // sensitive value out of arbitrary prose cannot be done reliably (the service may re-encode,
 // truncate, or quote values), so we do not attempt it.
@@ -54,41 +56,66 @@ internal static partial class AzureDevComputeErrorFormatter
     // always dropped regardless of length.
     private const int MinRequestValueLengthForContainmentCheck = 8;
 
+    private const string TitlePropertyName = "title";
+    private const string ErrorCodePropertyName = "errorCode";
+    private const string StatusPropertyName = "status";
+    private const string TraceIdPropertyName = "traceId";
+    private const string RequestIdPropertyName = "requestId";
+
     public static async Task<string> GetErrorMessageAsync(HttpResponseMessage response, object? requestContent, JsonSerializerOptions serializerOptions, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(response);
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (response.Content.Headers.ContentLength == 0)
         {
             return string.Empty;
         }
 
-        byte[]? body;
+        if (response.Content.Headers.ContentLength > MaxErrorBodyBytes)
+        {
+            return RedactedMessage;
+        }
+
+        // Read one byte past the limit so an oversized body can be detected without reading the
+        // rest of it. Don't try to parse a truncated document.
+        var buffer = ArrayPool<byte>.Shared.Rent(MaxErrorBodyBytes + 1);
         try
         {
-            body = await ReadBoundedAsync(response.Content, MaxErrorBodyBytes, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is HttpRequestException or IOException)
-        {
-            return RedactedMessage;
-        }
+            int bytesRead;
+            try
+            {
+                using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+                bytesRead = await stream.ReadAtLeastAsync(buffer.AsMemory(0, MaxErrorBodyBytes + 1), MaxErrorBodyBytes + 1, throwOnEndOfStream: false, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or IOException)
+            {
+                return RedactedMessage;
+            }
 
-        if (body is null)
-        {
-            // The body exceeded the read limit. Don't try to parse a truncated document.
-            return RedactedMessage;
-        }
+            if (bytesRead > MaxErrorBodyBytes)
+            {
+                return RedactedMessage;
+            }
 
-        if (body.Length == 0)
+            return Format(buffer.AsMemory(0, bytesRead), (int)response.StatusCode, GetRequestStringValues(requestContent, serializerOptions));
+        }
+        finally
+        {
+            // The body may echo request secrets, so clear it before handing the buffer to other pool users.
+            ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+        }
+    }
+
+    internal static string Format(ReadOnlyMemory<byte> body, int httpStatusCode, IReadOnlyCollection<string> requestStringValues)
+    {
+        // JSON insignificant whitespace is limited to ASCII space, tab, CR, and LF:
+        // https://www.rfc-editor.org/rfc/rfc8259#section-2
+        if (body.Span[Ascii.Trim(body.Span)].IsEmpty)
         {
             return string.Empty;
         }
 
-        return Format(body, (int)response.StatusCode, GetRequestStringValues(requestContent, serializerOptions));
-    }
-
-    internal static string Format(byte[] body, int httpStatusCode, IReadOnlyCollection<string> requestStringValues)
-    {
         JsonDocument document;
         try
         {
@@ -96,7 +123,7 @@ internal static partial class AzureDevComputeErrorFormatter
         }
         catch (JsonException)
         {
-            return IsWhiteSpace(body) ? string.Empty : RedactedMessage;
+            return RedactedMessage;
         }
 
         using (document)
@@ -115,13 +142,13 @@ internal static partial class AzureDevComputeErrorFormatter
 
             foreach (var property in document.RootElement.EnumerateObject())
             {
-                var surfaced = property.Name.ToLowerInvariant() switch
+                var surfaced = property.Name switch
                 {
-                    "title" when title is null => TrySetIdentifier(property.Value, requestStringValues, ref title),
-                    "errorcode" when errorCode is null => TrySetErrorCode(property.Value, requestStringValues, ref errorCode),
-                    "status" when status is null => TrySetStatus(property.Value, ref status),
-                    "traceid" when traceId is null => TrySetCorrelationId(property.Value, requestStringValues, ref traceId),
-                    "requestid" when requestId is null => TrySetCorrelationId(property.Value, requestStringValues, ref requestId),
+                    var name when IsProperty(name, TitlePropertyName) && title is null => TrySetIdentifier(property.Value, requestStringValues, ref title),
+                    var name when IsProperty(name, ErrorCodePropertyName) && errorCode is null => TrySetErrorCode(property.Value, requestStringValues, ref errorCode),
+                    var name when IsProperty(name, StatusPropertyName) && status is null => TrySetStatus(property.Value, requestStringValues, ref status),
+                    var name when IsProperty(name, TraceIdPropertyName) && traceId is null => TrySetCorrelationId(property.Value, requestStringValues, ref traceId),
+                    var name when IsProperty(name, RequestIdPropertyName) && requestId is null => TrySetCorrelationId(property.Value, requestStringValues, ref requestId),
                     _ => false
                 };
 
@@ -133,14 +160,14 @@ internal static partial class AzureDevComputeErrorFormatter
             var codes = new List<string>();
             if (errorCode is not null)
             {
-                codes.Add($"errorCode {errorCode}");
+                codes.Add($"{ErrorCodePropertyName} {errorCode}");
             }
 
             // The HTTP status is already part of the exception message, so only repeat the
             // problem-details status when it disagrees with the transport status.
             if (status is not null && status != httpStatusCode)
             {
-                codes.Add(string.Create(CultureInfo.InvariantCulture, $"status {status}"));
+                codes.Add(string.Create(CultureInfo.InvariantCulture, $"{StatusPropertyName} {status}"));
             }
 
             if (title is not null)
@@ -155,12 +182,12 @@ internal static partial class AzureDevComputeErrorFormatter
             var ids = new List<string>();
             if (traceId is not null)
             {
-                ids.Add($"traceId={traceId}");
+                ids.Add($"{TraceIdPropertyName}={traceId}");
             }
 
             if (requestId is not null)
             {
-                ids.Add($"requestId={requestId}");
+                ids.Add($"{RequestIdPropertyName}={requestId}");
             }
 
             if (ids.Count > 0)
@@ -237,18 +264,28 @@ internal static partial class AzureDevComputeErrorFormatter
 
     private static bool TrySetErrorCode(JsonElement value, IReadOnlyCollection<string> requestStringValues, ref string? target)
     {
-        if (value.ValueKind is JsonValueKind.Number && value.TryGetInt64(out var code))
+        if (value.ValueKind is JsonValueKind.Number)
         {
-            target = code.ToString(CultureInfo.InvariantCulture);
-            return true;
+            if (value.TryGetInt64(out var code) &&
+                code.ToString(CultureInfo.InvariantCulture) is var text &&
+                !OverlapsRequestValueAsNumber(text, requestStringValues))
+            {
+                target = text;
+                return true;
+            }
+
+            return false;
         }
 
         return TrySetIdentifier(value, requestStringValues, ref target);
     }
 
-    private static bool TrySetStatus(JsonElement value, ref int? target)
+    private static bool TrySetStatus(JsonElement value, IReadOnlyCollection<string> requestStringValues, ref int? target)
     {
-        if (value.ValueKind is JsonValueKind.Number && value.TryGetInt32(out var status) && status is >= 100 and <= 599)
+        if (value.ValueKind is JsonValueKind.Number &&
+            value.TryGetInt32(out var status) &&
+            status is >= 100 and <= 599 &&
+            !OverlapsRequestValueAsNumber(status.ToString(CultureInfo.InvariantCulture), requestStringValues))
         {
             target = status;
             return true;
@@ -286,34 +323,28 @@ internal static partial class AzureDevComputeErrorFormatter
         return false;
     }
 
-    private static async Task<byte[]?> ReadBoundedAsync(HttpContent content, int maxBytes, CancellationToken cancellationToken)
+    // Request secrets are always sent as JSON strings, but they can be digit-only (for example a PIN
+    // or numeric API key), and the service may echo one back as a JSON number such as
+    // { "errorCode": 1234567890 }. Short numbers such as errorCode 18 or status 400 routinely appear
+    // inside unrelated request values ("20480Mi", image digests, GUIDs), so containment is only
+    // checked once the number is long enough to be distinctive; an exact match is always rejected.
+    private static bool OverlapsRequestValueAsNumber(string candidate, IReadOnlyCollection<string> requestStringValues)
     {
-        if (content.Headers.ContentLength > maxBytes)
+        foreach (var requestValue in requestStringValues)
         {
-            return null;
-        }
-
-        using var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var buffer = new MemoryStream();
-        var chunk = new byte[8192];
-        int read;
-        while ((read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false)) > 0)
-        {
-            if (buffer.Length + read > maxBytes)
+            if (string.Equals(requestValue, candidate, StringComparison.Ordinal) ||
+                (candidate.Length >= MinRequestValueLengthForContainmentCheck && requestValue.Contains(candidate, StringComparison.Ordinal)) ||
+                (requestValue.Length >= MinRequestValueLengthForContainmentCheck && candidate.Contains(requestValue, StringComparison.Ordinal)))
             {
-                return null;
+                return true;
             }
-
-            buffer.Write(chunk, 0, read);
         }
 
-        return buffer.ToArray();
+        return false;
     }
 
-    private static bool IsWhiteSpace(byte[] body)
-    {
-        return string.IsNullOrWhiteSpace(Encoding.UTF8.GetString(body));
-    }
+    private static bool IsProperty(string name, string propertyName) =>
+        string.Equals(name, propertyName, StringComparison.OrdinalIgnoreCase);
 
     // A short identifier token such as "InvalidResourceTier" or "Sandbox.QuotaExceeded".
     [GeneratedRegex("^[A-Za-z][A-Za-z0-9.]{0,63}$", RegexOptions.CultureInvariant)]

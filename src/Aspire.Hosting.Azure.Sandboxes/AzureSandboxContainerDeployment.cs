@@ -619,7 +619,7 @@ internal static class AzureSandboxContainerDeployment
         var seconds = value.Value.Ticks / TimeSpan.TicksPerSecond;
         return seconds <= int.MaxValue
             ? (int)seconds
-            : throw new InvalidOperationException($"{propertyName} exceeds the maximum supported ADC interval.");
+            : throw new InvalidOperationException($"{propertyName} exceeds the maximum supported Azure Container Apps Sandboxes interval.");
     }
 
     private static long? ToInt64Seconds(TimeSpan? value, string propertyName)
@@ -949,7 +949,7 @@ internal static class AzureSandboxContainerDeployment
             context.CancellationToken).ConfigureAwait(false);
 
         return ports.FirstOrDefault(port => port.Port == endpoint.TargetPort)
-            ?? throw new InvalidOperationException($"The ADC port add response did not contain port '{endpoint.TargetPort}' for sandbox '{sandboxId}'.");
+            ?? throw new InvalidOperationException($"The Azure Container Apps Sandboxes port add response did not contain port '{endpoint.TargetPort}' for sandbox '{sandboxId}'.");
     }
 
     internal static AzureDevComputePortAuthConfig CreatePortAuthConfig(bool anonymous)
