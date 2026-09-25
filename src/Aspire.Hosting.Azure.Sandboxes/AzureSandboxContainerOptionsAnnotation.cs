@@ -62,10 +62,10 @@ public sealed class AzureSandboxOptions
 [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum AzureSandboxTier
 {
-    /// <summary>0.25 vCPU, 0.5 GiB memory, and 20 GiB disk.</summary>
+    /// <summary>0.25 vCPU, 0.5 GiB memory, and 5 GiB disk.</summary>
     ExtraSmall,
 
-    /// <summary>0.5 vCPU, 1 GiB memory, and 20 GiB disk.</summary>
+    /// <summary>0.5 vCPU, 1 GiB memory, and 10 GiB disk.</summary>
     Small,
 
     /// <summary>1 vCPU, 2 GiB memory, and 20 GiB disk.</summary>
