@@ -1,0 +1,16 @@
+{
+  "id": "vscode-e2e-java-apphost-catalog-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension Java AppHost E2E breakpoint test times out waiting for 'catalog' resource endpoint",
+  "test_name": "Aspire Java AppHost E2E stops on breakpoints in both the Java AppHost and a Java resource",
+  "error_pattern": "Error: Failed to apply E2E control revision: Timed out after 900000ms waiting for an HTTP endpoint for resource 'catalog'. Last error: <none>. State: resource 'catalog' is not in the tree for '.../JavaSpringBoot.AppHost.Java/AppHost.java'.",
+  "occurrences": [
+    {
+      "run_id": 36170370960,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/36170370960",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost)",
+      "pr_number": 0,
+      "observed_at": "2026-09-25T19:01:53Z"
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "run_id": 36170370960,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/36170370960",
+  "run_scope": "main",
+  "analyzed_at": "2026-09-25T19:01:53Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20436,
+    "title": "Update Aspire.Cli to target net11.0",
+    "author": "eerhardt",
+    "state": "closed",
+    "head_branch": "eerhardt-cli-target-net11",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20436",
+    "merged_at": "2026-09-25T17:57:29Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "1c37c50d93f938bc85f7031c4d08fb577b40e655",
+    "failed_sha": "38247de8eee27525ca0cc892112aa1160a547408",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "38247de8eee27525ca0cc892112aa1160a547408",
+        "message": "Update Aspire.Cli to target net11.0 (#20436) ## Description This retargets the Aspire CLI from `net10.0` to `net11.0`, with only the changes needed to build, publish Native AOT, package, and pass tests. Follow-up PRs will start using new .NET 11 features. ### User-facing impact - **Nothing changes in behavior for users of the native `aspire` binary.** - **The `Aspire.Cli` dotnet tool package layout changes.** The platform-specific packages (`Aspire.Cli.<rid>`) now put the binary under `tools/any",
+        "html_url": "https://github.com/microsoft/aspire/commit/38247de8eee27525ca0cc892112aa1160a547408",
+        "pull_request": {
+          "number": 20436,
+          "title": "Update Aspire.Cli to target net11.0",
+          "url": "https://github.com/microsoft/aspire/pull/20436",
+          "merged_at": "2026-09-25T17:57:29Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost)",
+      "id": 108197810350,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/36170370960/job/108197810350",
+      "classification": "flaky-test",
+      "reason": "Test 'Aspire Java AppHost E2E stops on breakpoints...' timed out after 900s waiting for HTTP endpoint for resource 'catalog'; unrelated to the net11.0 CLI retarget PR and matches a timing-based service-availability failure pattern.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 108197810538,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/36170370960/job/108197810538",
+      "classification": "flaky-test",
+      "reason": "Test 'Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone' timed out waiting for pwa-msedge child session; matches an existing recurring flaky-test cause on Windows browser-debugger shard.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire Java AppHost E2E stops on breakpoints in both the Java AppHost and a Java resource",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost)",
+      "error": "Failed to apply E2E control revision 1790360932536: Error: Timed out after 900000ms waiting for an HTTP endpoint for resource 'catalog'. Last error: <none>. State: resource 'catalog' is not in the tree for '/home/runner/work/aspire/aspire/extension/java-e2e-workspace/JavaSpringBoot.AppHost.Java/AppHost.java'.\nDiagnostics:\n{\n  \"supportedCapabilities\": [\n    \"prompting\",\n    \"baseline.v1\",\n    \"secret-prompts.v1\",\n    \"file-pickers.v1\",\n    \"message-actions.v1\",\n    \"build-dotnet-using-cli\",\n    \"apphost-log-output.v1\",\n    \"node\",\n    \"deno.v1\",\n    \"browser\",\n    \"deno\",\n    \"java\",\n    \"vscjava.vscode-java-debug\"\n  ],\n  \"debugSessions\": [\n    {\n      \"id\": \"f7f33ba8-2553-4dc8-933f-26ad7b781a36\",\n      \"type\": \"aspire\",\n      \"name\": \"Aspire run: JavaSpringBoot.AppHost.Java/AppHost.java\",\n      \"configuration\": {\n        \"type\": \"aspire\",\n        \"name\": \"Aspire run: JavaSpringBoot.AppHost.Java/AppHost.java\",\n        \"request\": \"launch\",\n        \"program\": \"/home/runner/work/aspire/asp",
+      "stack_trace": "Error: Failed to apply E2E control revision 1790360932536: Error: Timed out after 900000ms waiting for an HTTP endpoint for resource 'catalog'. Last error: <none>. State: resource 'catalog' is not in the tree for '/home/runner/work/aspire/aspire/extension/java-e2e-workspace/JavaSpringBoot.AppHost.Java/AppHost.java'.\nDiagnostics:\n{\n  \"supportedCapabilities\": [\n    \"prompting\",\n    \"baseline.v1\",\n    \"secret-prompts.v1\",\n    \"file-pickers.v1\",\n    \"message-actions.v1\",\n    \"build-dotnet-using-cli\",\n    \"apphost-log-output.v1\",\n    \"node\",\n    \"deno.v1\",\n    \"browser\",\n    \"deno\",\n    \"java\",\n    \"vscjava.vscode-java-debug\"\n  ],\n  \"debugSessions\": [\n    {\n      \"id\": \"f7f33ba8-2553-4dc8-933f-26ad7b781a36\",\n      \"type\": \"aspire\",\n      \"name\": \"Aspire run: JavaSpringBoot.AppHost.Java/AppHost.java\",\n      \"configuration\": {\n        \"type\": \"aspire\",\n        \"name\": \"Aspire run: JavaSpringBoot.AppHost.Java/AppHost.java\",\n        \"request\": \"launch\",\n        \"program\": \"/home/runner/work/aspire/aspire/extension/java-e2e-workspace/JavaSpringBoot.AppHost.Java/AppHost.java\",\n        \"command\": \"run\",\n        \"noDebug\": false,\n        \"__aspireAppHostSelectionOrigin\": \"user-selection\",\n        \"__aspireAppHostLaunchToken\": 1,\n        \"__aspireAppHostLaunchReservationId\": \"1\",\n        \"resolvedCliPath\": \"/home/runner/work/aspire/aspire/artifacts/bundle/linux-x64/aspire\"\n      }\n    },\n    {\n      \"id\": \"e00b98c6-24dd-40cc-8f8a-a22d442470e0\",\n      \"type\": \"java\",\n      \"name\": \"Debug Java: JavaSpringBoot.AppHost.Java\",\n      \"parentSessionId\": \"f7f33ba8-2553-4dc8-933f-26ad7b781a36\",\n      \"parentSessionType\": \"aspire\",\n      \"configuration\": {\n        \"type\": \"java\",\n        \"request\": \"launch\",\n        \"name\": \"Debug Java: JavaSpringBoot.AppHost.Java\",\n        \"program\": \"/home/runner/work/aspire/aspire/extension/java-e2e-workspace/JavaSpringBoot.AppHost.Java\",\n        \"args\": \"<redacted>\",\n        \"cwd\": \"/home/runner/work/aspire/aspire/extension/java-e2e-workspace/JavaSprin",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "A 15-minute timeout waiting for a resource endpoint to appear is a timing/environmental failure, not caused by the net11.0 CLI retarget PR which does not touch the Java AppHost E2E flow."
+    },
+    {
+      "name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "error": "Failed to apply E2E control revision 1790360991879: Error: Timed out after 283604ms waiting for pwa-msedge child session for Blazor WASM root '8b62a855-9eb0-4540-a953-86f2bb23521a'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"e1e4a3c3-c1ff-40e6-bdec-2d9a7ca5a1b7\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-5zsSeN\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":55448,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-5zsSeN\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-5zsSeN\\\\workspace\\\\HostedGlobal\\\\HostedGlobal.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\",
+      "stack_trace": "Error: Failed to apply E2E control revision 1790360991879: Error: Timed out after 283604ms waiting for pwa-msedge child session for Blazor WASM root '8b62a855-9eb0-4540-a953-86f2bb23521a'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"e1e4a3c3-c1ff-40e6-bdec-2d9a7ca5a1b7\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-5zsSeN\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":55448,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-5zsSeN\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-5zsSeN\\\\workspace\\\\HostedGlobal\\\\HostedGlobal.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-5zsSeN\\\\workspace\\\\StandaloneClient\\\\bin\\\\Debug\\\\net11.0\\\\\"},\"stopAtEntry\":false,\"justMyCode\":true,\"requireExactSource\":true,\"enableStepFiltering\":true,\"logging\":{\"exceptions\":true,\"moduleLoad\":true,\"programOutput\":true,\"browserStdOut\":true,\"elapsedTiming\":false,\"threadExit\":false,\"processExit\":true,\"engineLogging\":false,\"diagnosticsLog\":{\"protocolMessages\":false,\"dispatcherMessages\":\"none\",\"debugEngineAPITracing\":\"none\",\"debugRuntimeEventTracing\":false,\"expressionEvaluationTracing\":false,\"startDebuggingTracing\":false},\"consoleUsageMessage\":true},\"suppressJITOptimizations\":false,\"symbolOptions\":{\"searchPaths\":[],\"searchMicrosoftSymbolServer\":false,\"searchNuGetOrgSymbolServer\":false,\"cachePath\":\"\",\"moduleFilter\":{\"mode\":\"loadAllButExcluded\",\"excludedModules\":[],\"includedModules\":[],\"includeSymbolsNextToModules\":true,\"includeSymbolsOnDemand\":true}},\"expressionEvaluationOptions\":{\"allowImplicitFuncEval\":true,\"allowToString\":true,\"allowF",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Timeout waiting for a debugger child session to attach matches a previously recorded recurring flaky failure on this exact Windows browser-debugger shard, unrelated to the merged PR."
+    }
+  ],
+  "causes": [
+    "vscode-e2e-java-apphost-catalog-timeout",
+    "vscode-extension-e2e-blazordebugger-standalone-timeout-windows"
+  ]
+}
