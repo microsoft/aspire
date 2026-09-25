@@ -16,22 +16,39 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
     private const string ActionsLockPath = ".github/aw/actions-lock.json";
 
     [Theory]
-    [InlineData(".github/workflows/analyze-ci-failure.md")]
-    [InlineData(".github/workflows/analyze-ci-failure.lock.yml")]
-    [InlineData(".github/workflows/agentics-maintenance-microsoft-aspire.dev.yml")]
-    [InlineData(".github/workflows/copilot-setup-steps.yml")]
-    [InlineData(ActionsLockPath)]
-    [InlineData(".github/actionlint.yaml")]
-    [InlineData(WorkflowRelativePath)]
-    public void WorkflowRunsForAgenticInputs(string changedPath)
+    [InlineData(true, ".github/workflows/analyze-ci-failure.md")]
+    [InlineData(true, ".github/workflows/analyze-ci-failure.lock.yml")]
+    [InlineData(true, ".github/workflows/agentics-maintenance-microsoft-aspire.dev.yml")]
+    [InlineData(true, ".github/workflows/copilot-setup-steps.yml")]
+    [InlineData(true, ActionsLockPath)]
+    [InlineData(true, ".github/actionlint.yaml")]
+    [InlineData(true, WorkflowRelativePath)]
+    [InlineData(true, ".github/workflows/new-agent.md")]
+    [InlineData(true, ".github/workflows/nested/new-agent.md")]
+    [InlineData(false, ".github/workflows/README.md")]
+    [InlineData(false, ".github/workflows/nested/README.md")]
+    [InlineData(true, ".github/workflows/README.md", ".github/workflows/new-agent.md")]
+    public void WorkflowRunsForAgenticInputs(bool expected, params string[] changedPaths)
     {
         var root = LoadWorkflow();
         var pullRequest = Mapping(Mapping(root, "on"), "pull_request");
         var paths = Sequence(pullRequest, "paths").Children.Select(node => node.ToString()).ToArray();
-        var matcher = new Matcher(StringComparison.Ordinal);
-        matcher.AddIncludePatterns(paths);
+        // GitHub applies paths in order: a later "!.../README.md" excludes an earlier Markdown match.
+        // https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore
+        var matcher = new Matcher(StringComparison.Ordinal, preserveFilterOrder: true);
+        foreach (var path in paths)
+        {
+            if (path.StartsWith('!'))
+            {
+                matcher.AddExclude(path[1..]);
+            }
+            else
+            {
+                matcher.AddInclude(path);
+            }
+        }
 
-        Assert.True(matcher.Match([changedPath]).HasMatches, $"{changedPath} does not trigger {WorkflowRelativePath}");
+        Assert.Equal(expected, matcher.Match(changedPaths).HasMatches);
     }
 
     [Theory]

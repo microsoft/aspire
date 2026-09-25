@@ -11,6 +11,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/**/*.md
+      - '!.github/workflows/**/README.md'
       - .github/workflows/**/*.lock.yml
       - .github/workflows/agentics-maintenance*.yml
       - .github/workflows/copilot-setup-steps.yml

@@ -34,6 +34,8 @@ Class-level traits group generated-workflow, validation trigger/drift, and share
 process-runner tests without including unrelated negative-test diagnostics.
 Apply this trait to new agentic contract classes so dedicated validation includes them.
 Main CI covers selector routing when the trigger map or lint policy changes.
+README-only changes do not trigger dedicated agentic validation; new Markdown
+workflow sources still trigger it even before their generated locks exist.
 
 Compile-time lint diagnostics alone are not a blocking gate. The lint command
 owns the actionlint image and compatibility exceptions; `.github/actionlint.yaml`
