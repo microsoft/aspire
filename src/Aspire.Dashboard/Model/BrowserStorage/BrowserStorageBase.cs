@@ -20,22 +20,23 @@ public abstract class BrowserStorageBase : IBrowserStorage
 
     public Task<StorageResult<TValue>> GetAsync<TValue>(string key)
     {
+        return ReadAsync(key, async () =>
+        {
+            var result = await _protectedBrowserStorage.GetAsync<TValue>(key).ConfigureAwait(false);
+            return new StorageResult<TValue>(result.Success, result.Value);
+        });
+    }
+
+    protected async Task<StorageResult<TValue>> ReadAsync<TValue>(string key, Func<Task<StorageResult<TValue>>> getValue)
+    {
         // Possible errors here:
+        // - Client is disconnected from the server.
         // - Saved value in storage can't be deserialized to TValue.
         // - Saved value has a different data protection key than the current one.
         //   This could happen with values saved to persistent browser and the user upgrades Aspire version, which has a different
         //   install location and so a different data protection key.
         //   It could also be caused by standalone dashboard, which creates a new key each run. Leaving the dashboard browser open
         //   while restarting the container will cause a new data protection key, even with session storage.
-        return ReadAsync(key, async () =>
-        {
-            var result = await _protectedBrowserStorage.GetAsync<TValue>(key).ConfigureAwait(false);
-            return new StorageResult<TValue>(result.Success, result.Value);
-        }, LogLevel.Information);
-    }
-
-    protected async Task<StorageResult<TValue>> ReadAsync<TValue>(string key, Func<Task<StorageResult<TValue>>> getValue, LogLevel errorLogLevel)
-    {
         try
         {
             return await getValue().ConfigureAwait(false);
@@ -47,7 +48,7 @@ public abstract class BrowserStorageBase : IBrowserStorage
         }
         catch (Exception ex)
         {
-            Logger.Log(errorLogLevel, ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
+            Logger.LogInformation(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
 
             return new StorageResult<TValue>(false, default);
         }

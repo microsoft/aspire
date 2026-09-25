@@ -184,7 +184,7 @@ public class LocalBrowserStorageTests
     }
 
     [Fact]
-    public async Task GetUnprotectedAsync_JSFailure_LogsWarning()
+    public async Task GetUnprotectedAsync_JSFailure_LogsInformation()
     {
         var exception = new JSException("Browser storage unavailable.");
         var testJsonRuntime = new TestJSRuntime { OnInvoke = _ => throw exception };
@@ -196,7 +196,7 @@ public class LocalBrowserStorageTests
 
         Assert.False(result.Success);
         var log = Assert.Single(sink.Writes);
-        Assert.Equal(LogLevel.Warning, log.LogLevel);
+        Assert.Equal(LogLevel.Information, log.LogLevel);
         Assert.Same(exception, log.Exception);
     }
 

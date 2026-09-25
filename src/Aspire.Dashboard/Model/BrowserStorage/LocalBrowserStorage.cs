@@ -50,7 +50,7 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
 
             var typeInfo = (JsonTypeInfo<TValue>)_serializerOptions.GetTypeInfo(typeof(TValue));
             return new StorageResult<TValue>(true, JsonSerializer.Deserialize(json, typeInfo));
-        }, LogLevel.Warning);
+        });
 
     public async Task SetUnprotectedAsync<TValue>(string key, TValue value)
     {
