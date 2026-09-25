@@ -34,6 +34,21 @@ public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public void PromptFailsFastAtInvocationCheckpointAndEmptyStagedDiff()
+    {
+        var workflow = ReadWorkflow("pr-docs-check.md");
+        var completionSection = GetSection(workflow, "^## Execution budget and completion", "^## Step 1:");
+        var finalStep = GetSection(workflow, "^## Step 11: [^\r\n]*", "\\z");
+
+        Assert.Contains("Treat invocation 20 as a hard checkpoint", completionSection, StringComparison.Ordinal);
+        Assert.Contains("Never continue iterating toward the 50-invocation cap after this checkpoint.", completionSection, StringComparison.Ordinal);
+        Assert.Contains("verify that the index contains at least one non-empty change", finalStep, StringComparison.Ordinal);
+        Assert.Contains("documentation changes are staged, do not call `create_pull_request`", finalStep, StringComparison.Ordinal);
+        Assert.Contains("A `create_pull_request` failure such as \"No", finalStep, StringComparison.Ordinal);
+        Assert.Contains("changes to commit\" is deterministic: never retry it.", finalStep, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SourceWorkflowResolvesCanonicalTargetIntoSafeOutputs()
     {
         var workflow = ReadWorkflow("pr-docs-check.md");

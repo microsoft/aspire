@@ -1066,6 +1066,11 @@ needed, create a draft PR with the actual documentation changes.
 Keep research bounded within the 50-invocation limit. Read the prepared
 `.pr-docs-check/` inputs together, batch related searches and file reads, and
 start finalizing by invocation 35 so editing and both safe outputs have room.
+Treat invocation 20 as a hard checkpoint: if you have not emitted
+`notify_source_pr` by then, stop research and editing immediately. Either
+finalize the smallest safe documentation patch and prepare both payloads, or
+emit `notify_source_pr` with `result: "draft_failed"` and the concrete blocker.
+Never continue iterating toward the 50-invocation cap after this checkpoint.
 Do not repeat searches once you have enough evidence for the smallest accurate
 documentation change. If you cannot safely finish a required draft, emit
 `notify_source_pr` with `result: "draft_failed"` and the concrete blocker rather
@@ -1478,6 +1483,14 @@ requesting review. A notification without a created PR still fails validation.
 > runtime-only `.agents`, `.github`, `AGENTS.md`, `.mcp.json`,
 > `.pr-docs-check`, or `_repos` changes. The deterministic checkout helper also
 > hides those runtime files from Git as defense in depth.
+>
+> After staging, verify that the index contains at least one non-empty change
+> for an intended documentation path (for example, with
+> `git diff --cached --name-only -- <documentation paths>`). If no
+> documentation changes are staged, do not call `create_pull_request`; emit
+> `notify_source_pr` with `result: "draft_failed"` and state that there are no
+> changes to commit, then stop. A `create_pull_request` failure such as "No
+> changes to commit" is deterministic: never retry it.
 
 Create a draft pull request on `microsoft/aspire.dev` with:
 
