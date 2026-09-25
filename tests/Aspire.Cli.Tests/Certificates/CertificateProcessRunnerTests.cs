@@ -12,6 +12,65 @@ namespace Aspire.Cli.Tests.Certificates;
 public class CertificateProcessRunnerTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Run_WhenCanceled_KillsProcess(bool captureOutput)
+    {
+        var directory = Directory.CreateTempSubdirectory("aspire-certificate-cancel-");
+        var pidFile = Path.Combine(directory.FullName, "process.pid");
+        using var cancellation = new CancellationTokenSource();
+        Task<CertificateProcessResult>? runTask = null;
+        var pid = 0;
+
+        try
+        {
+            var startInfo = OperatingSystem.IsWindows()
+                ? new ProcessStartInfo("powershell.exe",
+                    ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
+                    $"[IO.File]::WriteAllText('{pidFile.Replace("'", "''", StringComparison.Ordinal)}', $PID.ToString()); Start-Sleep -Seconds 60"])
+                : new ProcessStartInfo("/bin/sh",
+                    ["-c", $"echo $$ > '{pidFile.Replace("'", "'\"'\"'", StringComparison.Ordinal)}'; exec sleep 60"]);
+            startInfo.CreateNoWindow = true;
+            startInfo.RedirectStandardOutput = true;
+            startInfo.RedirectStandardError = true;
+
+            runTask = Task.Run(() => captureOutput
+                ? CertificateProcessRunner.RunAndCaptureText(startInfo, cancellation.Token)
+                : CertificateProcessRunner.Run(startInfo, cancellation.Token));
+            pid = await ProcessTestHelpers.WaitForProcessIdAsync(pidFile, TestContext.Current.CancellationToken).DefaultTimeout();
+            cancellation.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runTask).DefaultTimeout();
+            Assert.True(ProcessTestHelpers.WaitForProcessExit(pid, TimeSpan.FromSeconds(10)));
+        }
+        finally
+        {
+            cancellation.Cancel();
+            try
+            {
+                if (runTask is not null)
+                {
+                    try
+                    {
+                        await runTask.DefaultTimeout();
+                    }
+                    catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+                    {
+                    }
+                }
+            }
+            finally
+            {
+                if (pid > 0)
+                {
+                    ProcessTestHelpers.TryKillProcess(pid);
+                }
+                directory.Delete(recursive: true);
+            }
+        }
+    }
+
+    [Theory]
     [InlineData(65001)]
     [InlineData(1200)]
     [InlineData(1201)]

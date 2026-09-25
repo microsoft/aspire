@@ -120,25 +120,16 @@ internal static partial class CertificateHelpers
                 CreateNoWindow = true
             };
 
-            using var process = Process.Start(processInfo);
-            if (process is null)
+            // Bound both output capture and exit, and kill the process tree on timeout.
+            // The shared runner also retains StreamReader's BOM-aware decoding.
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            var result = CertificateProcessRunner.RunAndCaptureText(processInfo, timeoutCts.Token);
+            if (result.ExitCode != 0)
             {
                 return false;
             }
 
-            // Keep StreamReader's BOM detection; the one-shot text APIs decode bytes directly.
-            var stdout = process.StandardOutput.ReadToEnd();
-            if (!process.WaitForExit(TimeSpan.FromSeconds(5)))
-            {
-                return false;
-            }
-
-            if (process.ExitCode != 0)
-            {
-                return false;
-            }
-
-            var match = OpenSslVersionRegex().Match(stdout);
+            var match = OpenSslVersionRegex().Match(result.StandardOutput);
             if (!match.Success)
             {
                 return false;

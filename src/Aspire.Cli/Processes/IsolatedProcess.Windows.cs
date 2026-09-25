@@ -194,19 +194,7 @@ internal sealed partial class IsolatedProcess
     [SupportedOSPlatform("windows")]
     private static StartedProcess StartWindowsSuppressed(IsolatedProcessStartInfo startInfo)
     {
-        using var nulHandle = WindowsProcessInterop.CreateFileW(
-            "NUL",
-            WindowsProcessInterop.GenericWrite,
-            WindowsProcessInterop.FileShareWrite,
-            nint.Zero,
-            WindowsProcessInterop.OpenExisting,
-            0,
-            nint.Zero);
-
-        if (nulHandle.IsInvalid)
-        {
-            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to open NUL device");
-        }
+        using var nulHandle = File.OpenNullHandle();
 
         if (!WindowsProcessInterop.SetHandleInformation(nulHandle, WindowsProcessInterop.HandleFlagInherit, WindowsProcessInterop.HandleFlagInherit))
         {
@@ -214,8 +202,10 @@ internal sealed partial class IsolatedProcess
         }
 
         var nulRawHandle = nulHandle.DangerousGetHandle();
+        // Give stdin a valid EOF-producing handle as well; detached children must not retain
+        // the caller's terminal or receive an invalid standard input handle.
         var stdio = new WindowsProcessInterop.StdioHandles(
-            Stdin: nint.Zero,
+            Stdin: nulRawHandle,
             Stdout: nulRawHandle,
             Stderr: nulRawHandle);
 

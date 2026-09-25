@@ -58,8 +58,8 @@ internal sealed class IsolatedProcessStartInfo
     public bool Detached { get; init; }
 
     /// <summary>
-    /// DCP executable used to create detached Unix process groups until <see cref="ProcessStartInfo"/>
-    /// exposes this directly.
+    /// DCP executable used for monitored detached Unix launches, including child PID handoff
+    /// and exit-status reporting.
     /// </summary>
     public string? DetachedUnixLauncherPath { get; set; }
 

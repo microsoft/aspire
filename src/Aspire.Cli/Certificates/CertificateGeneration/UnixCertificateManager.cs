@@ -672,13 +672,10 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         // Encode the PowerShell script to Base64 (UTF-16LE as required by PowerShell)
         var encodedCommand = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(powershellScript));
 
-        var startInfo = new ProcessStartInfo(PowerShellCommand, $"-NoProfile -NonInteractive -EncodedCommand {encodedCommand}")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-
-        return CertificateProcessRunner.Run(startInfo).ExitCode == 0;
+        return Process.Run(
+            PowerShellCommand,
+            ["-NoProfile", "-NonInteractive", "-EncodedCommand", encodedCommand],
+            silent: true).ExitCode == 0;
     }
 
     /// <remarks>
