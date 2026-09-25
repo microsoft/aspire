@@ -1,0 +1,109 @@
+{
+  "run_id": 36187959616,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/36187959616",
+  "run_scope": "main",
+  "analyzed_at": "2026-09-25T21:47:45Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20489,
+    "title": "Bump the github-actions group across 1 directory with 2 updates",
+    "author": "dependabot[bot]",
+    "state": "closed",
+    "head_branch": "dependabot/github_actions/github-actions-bf88334269",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20489",
+    "merged_at": "2026-09-25T20:48:27Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "1c37c50d93f938bc85f7031c4d08fb577b40e655",
+    "failed_sha": "e9a633024ede5187200bc9d392180a90e2d1fe86",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "38247de8eee27525ca0cc892112aa1160a547408",
+        "message": "Update Aspire.Cli to target net11.0 (#20436) ## Description This retargets the Aspire CLI from `net10.0` to `net11.0`, with only the changes needed to build, publish Native AOT, package, and pass tests. Follow-up PRs will start using new .NET 11 features. ### User-facing impact - **Nothing changes in behavior for users of the native `aspire` binary.** - **The `Aspire.Cli` dotnet tool package layout changes.** The platform-specific packages (`Aspire.Cli.<rid>`) now put the binary under `tools/any",
+        "html_url": "https://github.com/microsoft/aspire/commit/38247de8eee27525ca0cc892112aa1160a547408",
+        "pull_request": {
+          "number": 20436,
+          "title": "Update Aspire.Cli to target net11.0",
+          "url": "https://github.com/microsoft/aspire/pull/20436",
+          "merged_at": "2026-09-25T17:57:29Z"
+        }
+      },
+      {
+        "sha": "f03a257eefa74620fa178cadb0e8cc9a6a9aa7ad",
+        "message": "Remove redundant experimental annotations from Azure Sandboxes (#20482) ## Description Consumers should not need to suppress `ASPIREAZURE001` to use Azure Sandboxes: the entire `Aspire.Hosting.Azure.Sandboxes` package is already prerelease. Remove the `Experimental` attributes for `ASPIREAZURE001` from the sandbox resource, extension methods, options, and enums. Remove obsolete warning suppressions and unused imports, including the suppression in the README and generated deployment-test AppHost.",
+        "html_url": "https://github.com/microsoft/aspire/commit/f03a257eefa74620fa178cadb0e8cc9a6a9aa7ad",
+        "pull_request": {
+          "number": 20482,
+          "title": "Remove redundant experimental annotations from Azure Sandboxes",
+          "url": "https://github.com/microsoft/aspire/pull/20482",
+          "merged_at": "2026-09-25T17:58:02Z"
+        }
+      },
+      {
+        "sha": "ecb0fc13b512451c18c033db2f827cadc7858d53",
+        "message": "[ci] Fix internal builds (#20455) ## Description **Official internal builds are broken because the `Template Tests` stage now needs about 25 minutes, but the test session is terminated after 20 minutes.** The completed tests pass; the pipeline fails because Microsoft.Testing.Platform aborts the still-running session. In [build 3086035](https://dev.azure.com/dnceng/internal/_build/results?buildId=3086035&view=results), 129 tests passed with no failures before the deadline: ```text Test run summar",
+        "html_url": "https://github.com/microsoft/aspire/commit/ecb0fc13b512451c18c033db2f827cadc7858d53",
+        "pull_request": {
+          "number": 20455,
+          "title": "[ci] Fix internal builds",
+          "url": "https://github.com/microsoft/aspire/pull/20455",
+          "merged_at": "2026-09-25T18:12:28Z"
+        }
+      },
+      {
+        "sha": "d32787cddecffe27c071c0742afedceb8ac258c8",
+        "message": "Bump the GitHub Actions group to current major versions (#20382) ## Description Updates the root `.github/workflows/*.yml` GitHub Actions group from the CAO task to the requested target versions and immutable SHAs: - `actions/create-github-app-token` 3.1.1 -> 3.2.0 - `github/gh-aw-actions/setup` and `setup-cli` 0.88.8 -> 0.89.15 - `actions/checkout` 6.x -> 7.0.1 - `actions/upload-artifact` 7.0.0 -> 7.0.1 - `actions/setup-node` 6.3.0 -> 7.0.0 - `actions/setup-dotnet` 5.2.0 -> 6.0.0 - `actions/set",
+        "html_url": "https://github.com/microsoft/aspire/commit/d32787cddecffe27c071c0742afedceb8ac258c8",
+        "pull_request": {
+          "number": 20382,
+          "title": "Bump the GitHub Actions group to current major versions",
+          "url": "https://github.com/microsoft/aspire/pull/20382",
+          "merged_at": "2026-09-25T19:24:01Z"
+        }
+      },
+      {
+        "sha": "e9a633024ede5187200bc9d392180a90e2d1fe86",
+        "message": "Bump the github-actions group across 1 directory with 2 updates (#20489) Bumps the github-actions group with 2 updates in the / directory: [github/gh-aw-actions/setup](https://github.com/github/gh-aw-actions) and [github/gh-aw-actions/setup-cli](https://github.com/github/gh-aw-actions). Updates `github/gh-aw-actions/setup` from 0.89.15 to 0.89.16 <details> <summary>Release notes</summary> <p><em>Sourced from <a href=\"https://github.com/github/gh-aw-actions/releases\">github/gh-aw-actions/setup's ",
+        "html_url": "https://github.com/microsoft/aspire/commit/e9a633024ede5187200bc9d392180a90e2d1fe86",
+        "pull_request": {
+          "number": 20489,
+          "title": "Bump the github-actions group across 1 directory with 2 updates",
+          "url": "https://github.com/microsoft/aspire/pull/20489",
+          "merged_at": "2026-09-25T20:48:27Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 108251912573,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/36187959616/job/108251912573",
+      "classification": "flaky-test",
+      "reason": "The Blazor browser debugger E2E test 'hits a managed breakpoint for standalone' timed out (285382ms) waiting for the pwa-msedge child debug session to attach, preceded by repeated 'Browser connection failed, will retry: Unable to attach to browser' messages. This matches a known recurring flaky pattern with 6 prior occurrences, not a deterministic code regression from any candidate merge.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "error": "Failed to apply E2E control revision 1790370781210: Error: Timed out after 285382ms waiting for pwa-msedge child session for Blazor WASM root 'ef7b7d16-e52d-43ff-8c5f-f3fde9e359f3'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"63f756bb-2e8d-4ebd-bc4a-7f15e56256ff\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-WEh4cJ\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":64677,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-WEh4cJ\\\\workspace\\\\HostedGlobal\\\\HostedGlobal.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-WEh4cJ\\\\workspace\\\\StandaloneClient\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\",
+      "stack_trace": "Error: Failed to apply E2E control revision 1790370781210: Error: Timed out after 285382ms waiting for pwa-msedge child session for Blazor WASM root 'ef7b7d16-e52d-43ff-8c5f-f3fde9e359f3'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"63f756bb-2e8d-4ebd-bc4a-7f15e56256ff\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-WEh4cJ\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":64677,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-WEh4cJ\\\\workspace\\\\HostedGlobal\\\\HostedGlobal.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-WEh4cJ\\\\workspace\\\\StandaloneClient\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-WEh4cJ\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\\"},\"stopAtEntry\":false,\"justMyCode\":true,\"requireExactSource\":true,\"enableStepFiltering\":true,\"logging\":{\"exceptions\":true,\"moduleLoad\":true,\"programOutput\":true,\"browserStdOut\":true,\"elapsedTiming\":false,\"threadExit\":false,\"processExit\":true,\"engineLogging\":false,\"diagnosticsLog\":{\"protocolMessages\":false,\"dispatcherMessages\":\"none\",\"debugEngineAPITracing\":\"none\",\"debugRuntimeEventTracing\":false,\"expressionEvaluationTracing\":false,\"startDebuggingTracing\":false},\"consoleUsageMessage\":true},\"suppressJITOptimizations\":false,\"symbolOptions\":{\"searchPaths\":[],\"searchMicrosoftSymbolServer\":false,\"searchNuGetOrgSymbolServer\":false,\"cachePath\":\"\",\"moduleFilter\":{\"mode\":\"loadAllButExcluded\",\"excludedModules\":[],\"includedModules\":[],\"includeSymbolsNextToModules\":true,\"includeSymbolsOnDemand\":true}},\"expressionEvaluationOptions\":{\"allowImplicitFuncEval\":true,\"allowToString\":true,\"allowF",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches an existing recurring flaky pattern (vscode-extension-e2e-blazordebugger-standalone-timeout-windows, 6 prior occurrences, tracked in issue #20423) where the pwa-msedge browser debug session repeatedly fails to attach on Windows runners with 'Browser connection failed, will retry: Unable to attach to browser' before timing out. Not related to any code change in the candidate merge range."
+    }
+  ],
+  "causes": [
+    "vscode-extension-e2e-blazordebugger-standalone-timeout-windows"
+  ]
+}
