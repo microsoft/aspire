@@ -30,10 +30,9 @@ internal sealed class AgentTelemetryCommand : BaseCommand
 {
     internal override bool InitializeTelemetryOnStartup => false;
 
-    private readonly Lazy<TelemetryManager> _telemetryManager;
+    private readonly TelemetryManager _telemetryManager;
     private readonly AgentTelemetryHook _hook;
     private readonly IEnvironment _environment;
-    private readonly TextReader _input;
     private readonly ConsoleEnvironment _console;
     private readonly IServiceProvider _services;
     private readonly ILogger _logger;
@@ -89,14 +88,13 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         Description = AgentCommandStrings.AgentTelemetryCommand_TimestampDescription
     };
 
-    public AgentTelemetryCommand(CommonCommandServices services, Lazy<TelemetryManager> telemetryManager,
-        AgentTelemetryHook hook, IEnvironment environment, TextReader input, ConsoleEnvironment console, IServiceProvider serviceProvider)
+    public AgentTelemetryCommand(CommonCommandServices services, TelemetryManager telemetryManager,
+        AgentTelemetryHook hook, IEnvironment environment, ConsoleEnvironment console, IServiceProvider serviceProvider)
         : base(AgentTelemetryProtocol.TelemetryCommandName, AgentCommandStrings.AgentTelemetryCommand_Description, services)
     {
         _telemetryManager = telemetryManager;
         _hook = hook;
         _environment = environment;
-        _input = input;
         _console = console;
         _services = serviceProvider;
         _logger = services.LoggerFactory.CreateLogger<AgentTelemetryCommand>();
@@ -125,7 +123,7 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         {
             if (parseResult.GetValue(_hookOption))
             {
-                await _hook.RunAsync(_input, _console.Out.Profile.Out.Writer, _console.Error.Profile.Out.Writer, async args =>
+                await _hook.RunAsync(_console.Input, _console.Out.Profile.Out.Writer, _console.Error.Profile.Out.Writer, async args =>
                 {
                     // Classification produces the same options as legacy script invocations. Parse
                     // those options on this command, without invoking another CLI or handler.
@@ -135,10 +133,14 @@ internal sealed class AgentTelemetryCommand : BaseCommand
             }
             else if (parseResult.GetValue(_drainOption))
             {
-                if (!IsOptedOut() && _telemetryManager.Value.HasAzureMonitor)
+                if (!IsOptedOut())
                 {
-                    await AgentTelemetryUploader.DrainAsync(TelemetryManager.GetTelemetryStoragePath(),
-                        AgentTelemetryUploader.LockPath, cancellationToken).ConfigureAwait(false);
+                    _telemetryManager.Initialize();
+                    if (_telemetryManager.HasAzureMonitor)
+                    {
+                        await AgentTelemetryUploader.DrainAsync(TelemetryManager.GetTelemetryStoragePath(),
+                            AgentTelemetryUploader.LockPath, cancellationToken).ConfigureAwait(false);
+                    }
                 }
             }
             else
@@ -182,7 +184,8 @@ internal sealed class AgentTelemetryCommand : BaseCommand
 
         // Defer providers and enrichment until classification/validation finds an event.
         // Listeners must be attached before enrichment can emit detector activities.
-        var manager = _telemetryManager.Value;
+        var manager = _telemetryManager;
+        manager.Initialize();
         Telemetry.Initialize();
 
         // Activity is null when telemetry is opted out (no reported provider) or no listener is

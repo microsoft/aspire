@@ -8,7 +8,6 @@ using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -23,24 +22,23 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
     {
         using var fixture = new TelemetryFixture(initialize: false);
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var input = new StringReader(payload);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.TelemetryFactory = _ => fixture.Telemetry;
         });
-        using var input = new StringReader(payload);
         using var output = new StringWriter();
         using var error = new StringWriter();
-        services.AddSingleton<TextReader>(input);
-        services.AddSingleton(CreateConsole(output, error));
-        var manager = new Lazy<TelemetryManager>(() => throw new InvalidOperationException("Telemetry must not be initialized."));
-        services.AddSingleton(manager);
+        services.AddSingleton(CreateConsole(input, output, error));
         using var provider = services.BuildServiceProvider();
+        var manager = provider.GetRequiredService<TelemetryManager>();
         var result = provider.GetRequiredService<RootCommand>().Parse(["agent", "telemetry", "--hook"]);
 
         Program.InitializeCommandTelemetry(result.CommandResult.Command, manager, fixture.Telemetry);
         Assert.Equal(0, await result.InvokeAsync().DefaultTimeout());
 
-        Assert.False(manager.IsValueCreated);
+        Assert.False(manager.IsInitialized);
+        Assert.False(await manager.TryShutdownAsync());
         Assert.Empty(await fixture.TagsSource.TagsTask);
         Assert.Null(fixture.CapturedActivity);
         Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
@@ -60,25 +58,24 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
             EmitInternalMicrosoftDiagnostics = false
         });
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var input = new StringReader(payload);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.TelemetryFactory = _ => fixture.Telemetry;
         });
-        using var input = new StringReader(payload);
         using var output = new StringWriter();
         using var error = new StringWriter();
-        services.AddSingleton<TextReader>(input);
-        services.AddSingleton(CreateConsole(output, error));
+        services.AddSingleton(CreateConsole(input, output, error));
         using var provider = services.BuildServiceProvider();
-        var manager = provider.GetRequiredService<Lazy<TelemetryManager>>();
+        var manager = provider.GetRequiredService<TelemetryManager>();
         var result = provider.GetRequiredService<RootCommand>().Parse(["agent", "telemetry", "--hook"]);
         Program.InitializeCommandTelemetry(result.CommandResult.Command, manager, fixture.Telemetry);
-        Assert.False(manager.IsValueCreated);
+        Assert.False(manager.IsInitialized);
         Assert.Empty(await fixture.TagsSource.TagsTask);
 
         Assert.Equal(0, await result.InvokeAsync().DefaultTimeout());
 
-        Assert.True(manager.IsValueCreated);
+        Assert.True(manager.IsInitialized);
         Assert.NotEmpty(await fixture.TagsSource.TagsTask);
         var activity = Assert.IsType<Activity>(fixture.CapturedActivity);
         Assert.Equal(TelemetryConstants.Activities.AgentTelemetry, activity.OperationName);
@@ -96,19 +93,18 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
     {
         using var fixture = new TelemetryFixture(initialize: false);
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var input = new StringReader("""{"toolName":"skill","toolArgs":{"skill":"aspire"}}""");
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.TelemetryFactory = _ => fixture.Telemetry;
         });
+        services.AddSingleton(CreateConsole(input, TextWriter.Null, TextWriter.Null));
         services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>
         {
             [AspireCliTelemetry.TelemetryOptOutConfigKey] = "true"
         }));
-        using var input = new StringReader("""{"toolName":"skill","toolArgs":{"skill":"aspire"}}""");
-        services.AddSingleton<TextReader>(input);
-        var manager = new Lazy<TelemetryManager>(() => throw new InvalidOperationException("Opted-out command created telemetry."));
-        services.AddSingleton(manager);
         using var provider = services.BuildServiceProvider();
+        var manager = provider.GetRequiredService<TelemetryManager>();
         var args = mode == "--event-type"
             ? new[] { "agent", "telemetry", mode, "skill_invocation" }
             : ["agent", "telemetry", mode];
@@ -116,7 +112,8 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
 
         Program.InitializeCommandTelemetry(result.CommandResult.Command, manager, fixture.Telemetry);
         Assert.Equal(0, await result.InvokeAsync().DefaultTimeout());
-        Assert.False(manager.IsValueCreated);
+        Assert.False(manager.IsInitialized);
+        Assert.False(await manager.TryShutdownAsync());
         Assert.Empty(await fixture.TagsSource.TagsTask);
     }
 
@@ -124,11 +121,12 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
     public async Task OrdinaryCommands_StillInitializeProvidersBeforeEnrichment()
     {
         var order = new List<string>();
+        TelemetryManager? manager = null;
         using var fixture = new TelemetryFixture(initialize: false, machineInfoProvider: new TelemetryFixture.TestMachineInformationProvider
         {
             GetDeviceIdCallback = () =>
             {
-                order.Add("enrichment");
+                order.Add(manager?.IsInitialized is true ? "initialized-before-enrichment" : "uninitialized");
                 return Task.FromResult<string?>("test-device");
             }
         });
@@ -137,32 +135,21 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>().Parse(["doctor"]).CommandResult.Command;
         Assert.True(Assert.IsAssignableFrom<BaseCommand>(command).InitializeTelemetryOnStartup);
-        var manager = new Lazy<TelemetryManager>(() =>
-        {
-            order.Add("provider");
-            return new TelemetryManager(new TelemetryConfiguration(), new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance));
-        });
-        try
-        {
-            Program.InitializeCommandTelemetry(command, manager, fixture.Telemetry);
-            await fixture.TagsSource.TagsTask.DefaultTimeout();
+        manager = provider.GetRequiredService<TelemetryManager>();
+        Assert.False(manager.IsInitialized);
+        Program.InitializeCommandTelemetry(command, manager, fixture.Telemetry);
+        await fixture.TagsSource.TagsTask.DefaultTimeout();
 
-            Assert.Equal(["provider", "enrichment"], order);
-            Assert.NotEmpty(await fixture.TagsSource.TagsTask);
-        }
-        finally
-        {
-            if (manager.IsValueCreated)
-            {
-                manager.Value.Dispose();
-            }
-        }
+        Assert.True(manager.IsInitialized);
+        Assert.Equal(["initialized-before-enrichment"], order);
+        Assert.NotEmpty(await fixture.TagsSource.TagsTask);
     }
 
-    private static ConsoleEnvironment CreateConsole(TextWriter output, TextWriter error)
+    private static ConsoleEnvironment CreateConsole(TextReader input, TextWriter output, TextWriter error)
         => new(
             AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(output), Ansi = AnsiSupport.No }),
-            AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(error), Ansi = AnsiSupport.No }));
+            AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(error), Ansi = AnsiSupport.No }),
+            input);
 
     [Fact]
     public async Task AgentTelemetry_EmitsReportedActivityWithProvidedTags()

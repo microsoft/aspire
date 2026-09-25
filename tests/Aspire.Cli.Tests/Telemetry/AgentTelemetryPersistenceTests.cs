@@ -20,14 +20,92 @@ namespace Aspire.Cli.Tests.Telemetry;
 public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task TelemetryManager_RequiresInitializationBeforeUse()
+    {
+        using var manager = CreateDisabledManager();
+
+        Assert.False(manager.IsInitialized);
+        Assert.Throws<InvalidOperationException>(() => manager.HasAzureMonitor);
+        Assert.Throws<InvalidOperationException>(() => manager.HasProfilingProvider);
+        Assert.Throws<InvalidOperationException>(() => manager.HasDiagnosticProvider);
+        await Assert.ThrowsAsync<InvalidOperationException>(manager.ForceFlushProfilingAsync);
+        await Assert.ThrowsAsync<InvalidOperationException>(manager.ForceFlushReportedAsync);
+        Assert.False(await manager.TryShutdownAsync());
+
+        manager.Initialize();
+        Assert.True(manager.IsInitialized);
+        Assert.False(manager.HasAzureMonitor);
+        Assert.True(await manager.TryShutdownAsync());
+        Assert.False(manager.IsInitialized);
+        Assert.Throws<InvalidOperationException>(manager.Initialize);
+        Assert.Throws<InvalidOperationException>(() => manager.HasAzureMonitor);
+    }
+
+    [Fact]
+    public async Task TelemetryManager_ConcurrentInitializationAndRepeatedShutdownAreIdempotent()
+    {
+        using var manager = CreateDisabledManager();
+        await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => Task.Run(manager.Initialize)));
+
+        Assert.True(manager.IsInitialized);
+        var shutdownTasks = Enumerable.Range(0, 16)
+            .Select(_ => Task.Run(manager.TryShutdownAsync))
+            .ToArray();
+        Assert.All(await Task.WhenAll(shutdownTasks), Assert.True);
+        Assert.False(manager.IsInitialized);
+        Assert.Throws<InvalidOperationException>(manager.Initialize);
+    }
+
+    [Fact]
+    public async Task TelemetryManager_ConcurrentInitializeAndTryShutdownLeaveConsistentState()
+    {
+        using var manager = CreateDisabledManager();
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var initialization = Task.Run(async () =>
+        {
+            await start.Task;
+            manager.Initialize();
+        });
+        var shutdown = Task.Run(async () =>
+        {
+            await start.Task;
+            return await manager.TryShutdownAsync();
+        });
+
+        start.SetResult();
+        await Task.WhenAll(initialization, shutdown);
+
+        var wasShutDown = await shutdown;
+        Assert.Equal(!wasShutDown, manager.IsInitialized);
+        if (!wasShutDown)
+        {
+            Assert.True(await manager.TryShutdownAsync());
+        }
+    }
+
+    [Fact]
+    public async Task TelemetryManager_DisposeBeforeInitializationPreventsInitialization()
+    {
+        var manager = CreateDisabledManager();
+        manager.Dispose();
+
+        Assert.Throws<InvalidOperationException>(manager.Initialize);
+        Assert.False(await manager.TryShutdownAsync());
+    }
+
+    [Fact]
     public async Task ForceFlushReportedAsync_WithoutProviderSucceeds()
     {
-        using var manager = new TelemetryManager(
-            new TelemetryConfiguration { ReportedTelemetryEnabled = false },
-            new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance));
+        using var manager = CreateDisabledManager();
 
+        manager.Initialize();
         Assert.True(await manager.ForceFlushReportedAsync().DefaultTimeout());
     }
+
+    private static TelemetryManager CreateDisabledManager()
+        => new(
+            new TelemetryConfiguration { ReportedTelemetryEnabled = false },
+            new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance));
 
     [Fact]
     [OuterloopTest("Exercises the exporter's real three-minute lease expiry across processes.")]

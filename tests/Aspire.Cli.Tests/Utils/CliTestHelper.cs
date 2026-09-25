@@ -137,9 +137,7 @@ internal static class CliTestHelper
         services.AddSingleton(new TelemetryConfiguration { ReportedTelemetryEnabled = false });
         services.AddSingleton<TelemetryTagsSource>();
         services.AddSingleton<TelemetryManager>();
-        services.AddSingleton(sp => new Lazy<TelemetryManager>(sp.GetRequiredService<TelemetryManager>));
         services.AddSingleton<AgentTelemetryHook>();
-        services.AddSingleton<TextReader>(TextReader.Null);
         services.AddSingleton<ProfilingTelemetry>();
         services.AddSingleton(options.ProjectLocatorFactory);
         services.AddSingleton(options.SolutionLocatorFactory);
@@ -400,7 +398,7 @@ internal sealed class CliServiceCollectionTestOptions
         var outConsole = CreateAnsiConsole(outputTextWriter, !DisableAnsi);
         var errorConsole = CreateAnsiConsole(errorTextWriter, !DisableAnsi);
 
-        return new ConsoleEnvironment(outConsole, errorConsole);
+        return new ConsoleEnvironment(outConsole, errorConsole, TextReader.Null);
     };
 
     private static IAnsiConsole CreateAnsiConsole(TextWriter textWriter, bool ansi = true)

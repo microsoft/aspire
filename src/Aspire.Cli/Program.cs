@@ -362,8 +362,8 @@ public class Program
         // the whole signal manager.
         builder.Services.AddSingleton<IGracefulShutdownWindow>(sp => sp.GetRequiredService<ConsoleCancellationManager>());
 
-        // Configure OpenTelemetry tracing. TelemetryManager reads configuration and creates
-        // separate TracerProvider instances:
+        // Configure OpenTelemetry tracing. TelemetryManager creates separate TracerProvider
+        // instances on Initialize(), after command selection:
         // - Azure Monitor provider with filtering (only exports activities with EXTERNAL_TELEMETRY=true)
         // - Profiling provider for explicit startup profiling OTLP export
         // - Diagnostic provider for DEBUG-only diagnostics
@@ -438,7 +438,8 @@ public class Program
         });
         builder.Services.AddSingleton(s => new ConsoleEnvironment(
             BuildAnsiConsole(s, Console.Out),
-            BuildAnsiConsole(s, Console.Error)));
+            BuildAnsiConsole(s, Console.Error),
+            Console.In));
         builder.Services.AddSingleton(s => s.GetRequiredService<ConsoleEnvironment>().Out);
         builder.Services.AddSingleton<ICliHostEnvironment>(provider =>
         {
@@ -686,7 +687,6 @@ public class Program
         builder.Services.AddTransient<AgentInitCommand>();
         builder.Services.AddTransient<AgentTelemetryCommand>();
         builder.Services.AddSingleton<Agents.Hooks.AgentTelemetryHook>();
-        builder.Services.AddSingleton<TextReader>(Console.In);
         builder.Services.AddTransient<TelemetryCommand>();
         builder.Services.AddTransient<TelemetryLogsCommand>();
         builder.Services.AddTransient<TelemetrySpansCommand>();
@@ -1074,9 +1074,9 @@ public class Program
         // AddSingleton(instance) so the container does not take disposal ownership.
         using var cancellationManager = new ConsoleCancellationManager(finalDrainBudget: TimeSpan.FromSeconds(5));
 
-        // Parse this before building the host because TelemetryManager reads OTEL configuration
-        // during DI startup. Waiting for System.CommandLine binding would be too late: the CLI
-        // profiling ActivitySource would already have been configured without the private exporter.
+        // Parse this before building the host so TelemetryManager receives the profiling OTEL
+        // configuration when resolved from DI. Waiting for System.CommandLine binding would be
+        // too late: the CLI profiling ActivitySource would lack its private exporter.
         var profileCaptureOptions = ProfileCaptureOptions.TryCreate(args, TimeProvider.System, new DirectoryInfo(Environment.CurrentDirectory));
         using var profileCaptureEnvironment = profileCaptureOptions is not null
             ? ProfileCaptureEnvironment.Apply(profileCaptureOptions)
@@ -1109,13 +1109,13 @@ public class Program
         logger.LogInformation("CLI process ID: {ProcessId}", Environment.ProcessId);
 
         IHost? app = null;
-        Lazy<TelemetryManager> telemetryManager;
+        TelemetryManager telemetryManager;
         ParseResult parseResult;
         try
         {
             app = await BuildApplicationAsync(args, startupContext);
             parseResult = app.Services.GetRequiredService<RootCommand>().Parse(args);
-            telemetryManager = app.Services.GetRequiredService<Lazy<TelemetryManager>>();
+            telemetryManager = app.Services.GetRequiredService<TelemetryManager>();
             InitializeCommandTelemetry(parseResult.CommandResult.Command, telemetryManager,
                 app.Services.GetRequiredService<AspireCliTelemetry>());
             await app.StartAsync().ConfigureAwait(false);
@@ -1257,7 +1257,8 @@ public class Program
             {
                 try
                 {
-                    await telemetryManager.Value.ForceFlushProfilingAsync().ConfigureAwait(false);
+                    telemetryManager.Initialize();
+                    await telemetryManager.ForceFlushProfilingAsync().ConfigureAwait(false);
                     var exportExitCode = await profileCaptureSession.ExportAsync(cancellationManager.Token).ConfigureAwait(false);
                     if (exitCode == CliExitCodes.Success && exportExitCode != CliExitCodes.Success)
                     {
@@ -1290,23 +1291,21 @@ public class Program
             // Shutting down telemetry manager to flush any remaining telemetry will take time.
             // Run it concurrently with application shutdown after all asynchronously-created telemetry
             // has been submitted to the providers.
-            var shutdownTelemetryTask = telemetryManager.IsValueCreated
-                ? telemetryManager.Value.ShutdownAsync()
-                : Task.CompletedTask;
+            var shutdownTelemetryTask = telemetryManager.TryShutdownAsync();
 
             await app.StopAsync().ConfigureAwait(false);
             await shutdownTelemetryTask;
         }
     }
 
-    internal static void InitializeCommandTelemetry(Command command, Lazy<TelemetryManager> manager, AspireCliTelemetry telemetry)
+    internal static void InitializeCommandTelemetry(Command command, TelemetryManager manager, AspireCliTelemetry telemetry)
     {
         // Like package prefetching, expensive telemetry startup is command-controlled. A hook may
         // have nothing to report; its handler opts in after classification, through normal dispatch.
         if (command is not BaseCommand { InitializeTelemetryOnStartup: false })
         {
             // Attach listeners before enrichment can emit immediately completed activities.
-            _ = manager.Value;
+            manager.Initialize();
             telemetry.Initialize();
         }
     }
