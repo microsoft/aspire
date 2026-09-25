@@ -232,6 +232,60 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OnInitialize_DisconnectedWhileRestoringRunSelection_StopsInitialization(bool disconnectOnSet)
+    {
+        var runStore = new FluentUISetupHelpers.TestDashboardRunStore(
+        [
+            new(
+                RunId: "current",
+                SchemaVersion: DashboardRunStore.SchemaVersion,
+                StartedAtUtc: DateTimeOffset.UnixEpoch,
+                EndedAtUtc: null,
+                CleanShutdown: false,
+                ApplicationName: "TestApp",
+                DatabasePath: string.Empty,
+                IsCurrent: true)
+        ]);
+        var readCount = 0;
+        var writeCount = 0;
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = key =>
+            {
+                Assert.Equal(BrowserStorageKeys.SelectedDashboardRunId, key);
+                readCount++;
+                if (!disconnectOnSet)
+                {
+                    throw new JSDisconnectedException("The circuit disconnected.");
+                }
+
+                return (true, "stale");
+            },
+            OnSetAsync = (key, value) =>
+            {
+                Assert.Equal(BrowserStorageKeys.SelectedDashboardRunId, key);
+                Assert.Equal(string.Empty, Assert.IsType<string>(value));
+                writeCount++;
+                throw new JSDisconnectedException("The circuit disconnected.");
+            }
+        };
+        SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
+
+        var cut = Render<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        Assert.Equal(1, readCount);
+        Assert.Equal(disconnectOnSet ? 1 : 0, writeCount);
+        Assert.Equal(0, JSInterop.Invocations.Count(invocation => invocation.Identifier == "window.getBrowserInfo"));
+        Assert.Empty(_messageBarProvider!.FindComponents<DashboardMessageBar>());
+        Assert.Contains("nav-collapsed", cut.Find(".layout").ClassList);
+    }
+
+    [Theory]
     [InlineData(true, "dashboard-help-button", "HelpDialog", "dashboard-help-button")]
     [InlineData(true, "dashboard-settings-button", "SettingsDialog", "dashboard-settings-button")]
     [InlineData(false, "dashboard-navigation-button", "HelpDialog", "dashboard-navigation-button")]

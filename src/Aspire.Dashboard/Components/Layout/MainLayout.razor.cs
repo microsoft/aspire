@@ -112,6 +112,18 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     protected override async Task OnInitializedAsync()
     {
+        try
+        {
+            await InitializeLayoutAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit disposal can interrupt browser state restoration.
+        }
+    }
+
+    private async Task InitializeLayoutAsync()
+    {
         if (RunStore.SupportsRunSelection)
         {
             var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
@@ -163,14 +175,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             });
         }
 
-        try
-        {
-            await InitializeBrowserStateAsync();
-        }
-        catch (JSDisconnectedException)
-        {
-            // Circuit disposal can interrupt browser state restoration.
-        }
+        await InitializeBrowserStateAsync();
     }
 
     private async Task InitializeBrowserStateAsync()
