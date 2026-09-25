@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Agents.Hooks;
 
@@ -35,8 +36,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
     {
         try
         {
-            var optOut = environment.GetEnvironmentVariable(AspireCliTelemetry.TelemetryOptOutConfigKey);
-            if (optOut is "1" || string.Equals(optOut, "true", StringComparison.OrdinalIgnoreCase))
+            if (environment.IsFlagEnabled(AspireCliTelemetry.TelemetryOptOutConfigKey))
             {
                 return 0;
             }
@@ -63,7 +63,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
                 return 0;
             }
 
-            var args = Classify(new string(buffer, 0, length), environment.GetEnvironmentVariable("COPILOT_CLI"), maxPayloadCharacters);
+            var args = Classify(new string(buffer, 0, length), environment.IsFlagEnabled("COPILOT_CLI"), maxPayloadCharacters);
             if (args is not null)
             {
                 await execute(args).ConfigureAwait(false);
@@ -98,7 +98,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
         throw new ArgumentException($"{PayloadLimitEnvironmentVariable} must be an integer between 1 and {MaximumPayloadCharacters} UTF-16 characters.");
     }
 
-    internal static string[]? Classify(string payload, string? copilotCli, int maxPayloadCharacters)
+    internal static string[]? Classify(string payload, bool isCopilotCli, int maxPayloadCharacters)
     {
         if (payload.Length == 0 || payload.Length > maxPayloadCharacters)
         {
@@ -178,7 +178,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
                 return null;
             }
 
-            var client = copilotCli == "1" ? "copilot-cli"
+            var client = isCopilotCli ? "copilot-cli"
                 : Property(data, "hook_event_name") is not null
                     ? IsVsCode(data) ? "vscode" : "claude-code"
                     : Property(data, "toolArgs") is not null ? "copilot-cli" : "unknown";

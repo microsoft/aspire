@@ -6,6 +6,7 @@ using System.Globalization;
 using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
@@ -158,10 +159,7 @@ internal sealed class AgentTelemetryCommand : BaseCommand
     }
 
     private bool IsOptedOut()
-    {
-        var value = _environment.GetEnvironmentVariable(AspireCliTelemetry.TelemetryOptOutConfigKey);
-        return value is "1" || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
-    }
+        => _environment.IsFlagEnabled(AspireCliTelemetry.TelemetryOptOutConfigKey);
 
     private async Task RecordAsync(ParseResult parseResult)
     {

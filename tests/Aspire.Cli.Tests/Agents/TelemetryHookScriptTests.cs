@@ -3,7 +3,9 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -534,9 +536,9 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
     private static void AssertNativeParity(string payload, Dictionary<string, string?>? environment, string[]? scriptArgs)
     {
-        var optOut = environment?.GetValueOrDefault("ASPIRE_CLI_TELEMETRY_OPTOUT");
-        var nativeArgs = optOut == "1" || string.Equals(optOut, "true", StringComparison.OrdinalIgnoreCase)
-            ? null : AgentTelemetryHook.Classify(payload, environment?.GetValueOrDefault("COPILOT_CLI"), AgentTelemetryHook.DefaultMaxPayloadCharacters);
+        var nativeEnvironment = new TestEnvironment(environment);
+        var nativeArgs = nativeEnvironment.IsFlagEnabled(AspireCliTelemetry.TelemetryOptOutConfigKey)
+            ? null : AgentTelemetryHook.Classify(payload, nativeEnvironment.IsFlagEnabled("COPILOT_CLI"), AgentTelemetryHook.DefaultMaxPayloadCharacters);
         if (scriptArgs is null)
         {
             Assert.Null(nativeArgs);
