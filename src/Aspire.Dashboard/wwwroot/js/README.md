@@ -18,7 +18,7 @@ If we ever want to show more chart types than those, we'll need to change the bu
 
 ## Hex1b web terminal
 
-`hex1b-web-terminal/` vendors the published `@hex1b/web-terminal` **0.172.0-alpha.1654.1.f826137** release,
+`hex1b-web-terminal/` vendors the published `@hex1b/web-terminal` **0.172.0-alpha.1785.1.d253961** release,
 paired with the Hex1b, Hex1b.McpServer, and Hex1b.Tool NuGet packages and the
 repository-local `hex1b` tool at the same version. The client and server use the evolving
 HWT1 presentation transport and must be updated together. Do not substitute a
@@ -193,6 +193,8 @@ The terminal uses Hex1b's default Canvas2D **overlay** scrollbar, not a native
 HTML scrollbar or a reserved gutter. The mount requests 3 CSS pixels of internal
 padding on every side. `createDefaultScrollbarRenderer` keeps the
 upstream capsule thumb, marker drawing, gestures, hit testing and auto-hide.
+Circular markers expand left into capsules as the thumb approaches within 8 CSS
+pixels and paint behind it. Exposed capsules retain upstream marker navigation.
 The painter adapter suppresses its additional canvas focus ring after pointer
 release. A scoped shadow-DOM override also hides the track's DOM focus outline
 after pointer input, restoring the upstream `:focus-visible` outline on keyboard
