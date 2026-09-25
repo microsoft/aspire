@@ -1183,6 +1183,39 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void GetSettings_TreatsCredentialBearingSourceNameAsSensitive()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectDirectory = workspace.CreateDirectory("AppHost");
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        const string sourceName = "https://user:credential-marker@packages.example.com";
+        const string source = "https://packages.example.com/v3/index.json";
+        File.WriteAllText(
+            configPath,
+            $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="{{sourceName}}" value="{{source}}" />
+              </packageSources>
+            </configuration>
+            """);
+        var client = new NuGetClient(
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<NuGetClient>.Instance);
+
+        var settings = client.GetSettings(
+            projectDirectory.FullName,
+            Enumerable.Repeat((byte)0x5A, NuGetSourceIdentity.KeySizeInBytes).ToArray());
+
+        var sourceInfo = Assert.Single(settings.Sources);
+        Assert.Equal(sourceName, sourceInfo.Name);
+        Assert.Contains(sourceName, settings.SensitiveSourceValues);
+        Assert.DoesNotContain(source, settings.SensitiveSourceValues);
+    }
+
+    [Fact]
     public void GetSettings_TrustedSignerChangeInvalidatesCacheIdentity()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

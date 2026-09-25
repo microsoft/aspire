@@ -801,6 +801,9 @@ public class GuestAppHostProjectTests : IDisposable
         var originalConfig = await File.ReadAllBytesAsync(configPath);
         var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
         await File.WriteAllTextAsync(appHostPath, "// test apphost");
+        await File.WriteAllTextAsync(
+            Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.mts"),
+            "// another valid AppHost that must not replace the command target");
         var installScriptPath = Path.Combine(_workspace.WorkspaceRoot.FullName, OperatingSystem.IsWindows() ? "install.cmd" : "install.sh");
         await File.WriteAllTextAsync(installScriptPath, OperatingSystem.IsWindows()
             ? "@echo off\r\ncopy /y package.after-install.json package.json >nul\r\nif errorlevel 1 exit /b 1\r\necho installed> install.marker\r\n"
@@ -811,7 +814,7 @@ public class GuestAppHostProjectTests : IDisposable
             Language = "test/runtime",
             DisplayName = "Test runtime",
             CodeGenLanguage = "TypeScript",
-            DetectionPatterns = ["apphost.ts"],
+            DetectionPatterns = ["apphost.mts", "apphost.ts"],
             Execute = new CommandSpec { Command = "unused", Args = [] },
             InstallDependencies = new CommandSpec
             {
@@ -890,6 +893,7 @@ public class GuestAppHostProjectTests : IDisposable
         var result = await project.UpdatePackagesAsync(context, CancellationToken.None);
 
         Assert.True(result.UpdatesApplied);
+        Assert.Equal(appHostPath, factory.AppHostFile?.FullName);
         Assert.Equal(["confirm", "regenerate", "apply"], events);
         var updatedManifest = JsonNode.Parse(await File.ReadAllTextAsync(manifestPath))!;
         var expectedManifest = JsonNode.Parse(installedManifest)!;

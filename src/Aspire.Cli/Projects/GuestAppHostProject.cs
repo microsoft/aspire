@@ -147,6 +147,26 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         return defaultSdkVersion;
     }
 
+    private FileInfo ResolveAppHostFile(DirectoryInfo directory)
+    {
+        // Restore source aliases use the same file-based workload identity as DCP.
+        foreach (var pattern in _resolvedLanguage.DetectionPatterns)
+        {
+            var appHostPath = Directory.EnumerateFiles(
+                directory.FullName,
+                pattern,
+                SearchOption.TopDirectoryOnly).FirstOrDefault();
+            if (appHostPath is not null)
+            {
+                return new FileInfo(appHostPath);
+            }
+        }
+
+        var appHostFileName = _resolvedLanguage.AppHostFileName
+            ?? throw new InvalidOperationException($"The {_resolvedLanguage.DisplayName} AppHost file name is not configured.");
+        return new FileInfo(Path.Combine(directory.FullName, appHostFileName));
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // DETECTION
     // ═══════════════════════════════════════════════════════════════
@@ -299,11 +319,19 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// Builds the AppHost server project and generates SDK code.
     /// </summary>
     /// <returns><see langword="true"/> if the code was generated successfully; otherwise, <see langword="false"/>.</returns>
-    internal async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
+    internal Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
+        => BuildAndGenerateSdkAsync(ResolveAppHostFile(directory), packageSourceOverride, cancellationToken);
+
+    internal Task<bool> BuildAndGenerateSdkAsync(FileInfo appHostFile, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(appHostFile);
+
+        var directory = appHostFile.Directory
+            ?? throw new InvalidOperationException($"The AppHost file '{appHostFile.FullName}' does not have a parent directory.");
         var config = LoadConfiguration(directory);
-        return await BuildAndGenerateSdkAsync(
+        return BuildAndGenerateSdkAsync(
             directory,
+            appHostFile,
             config,
             config.Channel,
             packageSourceOverride,
@@ -313,13 +341,17 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
     private async Task<bool> BuildAndGenerateSdkAsync(
         DirectoryInfo directory,
+        FileInfo appHostFile,
         AspireConfigFile config,
         string? requestedChannel,
         string? packageSourceOverride = null,
         string? packageSourceOverridePattern = null,
         CancellationToken cancellationToken = default)
     {
-        var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
+        var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(
+            directory.FullName,
+            appHostFile,
+            cancellationToken);
 
         // Step 1: Use the supplied config as the source of truth. Update uses an
         // in-memory config here so a failed generation does not leave
@@ -449,7 +481,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             }
 
             // Step 2: Build/prepare the AppHost server (dependency install happens after server starts)
-            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
+            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(
+                directory.FullName,
+                appHostFile,
+                cancellationToken);
 
             // Load config - source of truth for SDK version and packages
             var config = LoadConfiguration(directory);
@@ -1102,7 +1137,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         try
         {
             // Step 1: Load config - source of truth for SDK version and packages
-            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
+            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(
+                directory.FullName,
+                appHostFile,
+                cancellationToken);
             var config = LoadConfiguration(directory);
             var integrations = await GetIntegrationReferencesAsync(config, directory, cancellationToken);
             var sdkVersion = GetPrepareSdkVersion(config);
@@ -1478,6 +1516,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         var requestedChannel = context.RequestedChannel ?? config.Channel;
         var regenerateSuccess = await BuildAndGenerateSdkAsync(
             directory,
+            context.AppHostFile,
             config,
             requestedChannel,
             context.Source,
@@ -1635,6 +1674,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                         : config.Channel;
                     var regenerateSuccess = await BuildAndGenerateSdkAsync(
                         directory,
+                        context.AppHostFile,
                         config,
                         requestedChannel,
                         packageSourceOverridePattern: null,
@@ -1686,7 +1726,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return RunningInstanceResult.NoRunningInstance; // No directory, nothing to check
         }
 
-        var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
+        var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(
+            directory.FullName,
+            appHostFile,
+            cancellationToken);
         var genericAppHostPath = appHostServerProject.GetInstanceIdentifier();
 
         // Find matching sockets for this AppHost

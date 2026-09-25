@@ -21,6 +21,7 @@ internal sealed class IntegrationRestorePlanResolver(
 {
     public async Task<IntegrationRestorePlan> ResolveAsync(
         string appDirectoryPath,
+        string workloadId,
         string sdkVersion,
         string? requestedChannel,
         string? packageSourceOverride,
@@ -28,6 +29,7 @@ internal sealed class IntegrationRestorePlanResolver(
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appDirectoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workloadId);
         ArgumentException.ThrowIfNullOrWhiteSpace(sdkVersion);
 
         ThrowIfStagingUnavailable(requestedChannel);
@@ -104,6 +106,7 @@ internal sealed class IntegrationRestorePlanResolver(
             cancellationToken).ConfigureAwait(false);
         var configSources = IntegrationRestorePlan.ResolveNuGetConfigSources(
             restoreSources.PackageSourceMappings,
+            workloadId,
             settings.Sources,
             settings.ReservedPackageSourceKeys,
             settings.SourceIdentityKey);
@@ -160,6 +163,13 @@ internal sealed class IntegrationRestorePlanResolver(
         {
             foreach (var mapping in channelMappings)
             {
+                if (mapping.PackageFilter == PackageMapping.AllPackages)
+                {
+                    // Channel catch-all mappings supported the former standalone configuration.
+                    // The integration restore now preserves ambient sources and mappings instead.
+                    continue;
+                }
+
                 if (hasOverride && IsAspireSpecificMapping(mapping))
                 {
                     continue;
@@ -180,7 +190,11 @@ internal sealed class IntegrationRestorePlanResolver(
                 packageSourceOverride!,
                 sourcePolicyChannel,
                 nugetServiceIndexOverride,
-                packageSourceOverridePattern);
+                packageSourceOverridePattern)
+                .Where(mapping =>
+                    mapping.PackageFilter != PackageMapping.AllPackages ||
+                    PackageSourceIdentity.Comparer.Equals(mapping.Source, packageSourceOverride))
+                .ToArray();
             configureGlobalPackagesFolder = sourcePolicyChannel?.ConfigureGlobalPackagesFolder == true;
 
             foreach (var mapping in packageSourceMappings.Where(
@@ -195,8 +209,18 @@ internal sealed class IntegrationRestorePlanResolver(
         else if (sourcePolicyChannel?.Mappings is { Length: > 0 } &&
             !string.Equals(sourcePolicyChannel.Name, PackageChannelNames.Local, StringComparisons.ChannelName))
         {
-            packageSourceMappings = [.. sourcePolicyChannel.Mappings];
+            packageSourceMappings =
+            [
+                .. sourcePolicyChannel.Mappings.Where(
+                    static mapping => mapping.PackageFilter != PackageMapping.AllPackages)
+            ];
             configureGlobalPackagesFolder = sourcePolicyChannel.ConfigureGlobalPackagesFolder;
+        }
+        else if (requestedPolicyChannel is not null && UsesAmbientSourcePolicy(requestedPolicyChannel))
+        {
+            // Keep an explicit stable restore on the same generated-config path as other named
+            // channels, but contribute no source. The overlay reproduces ambient eligibility.
+            packageSourceMappings = [];
         }
 
         return new IntegrationRestoreSources(
@@ -401,21 +425,26 @@ internal sealed class IntegrationRestorePlan
             .Concat(selectedSensitiveSources)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+        var packageSourceHints = GetIntegrationPackageSourceHints();
 
         return new IntegrationProjectRestoreConfiguration(
             restoreOverlayFile?.DirectoryName ?? _appDirectoryPath,
             rootAdditionalSources,
-            GetIntegrationPackageSourceHints(),
+            packageSourceHints,
+            GetIntegrationPackageSourceAlias(packageSourceHints),
             sensitiveSources,
             globalPackagesFolder);
     }
 
     internal static NuGetConfigSource[] ResolveNuGetConfigSources(
         PackageMapping[]? mappings,
+        string workloadId,
         IReadOnlyList<NuGetSourceInfo> ambientSources,
         IReadOnlyList<string> reservedPackageSourceKeys,
         ReadOnlySpan<byte> sourceIdentityKey)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workloadId);
+
         if (mappings is null)
         {
             return [];
@@ -423,13 +452,17 @@ internal sealed class IntegrationRestorePlan
 
         var usedKeys = reservedPackageSourceKeys
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var nextAspireKey = 0;
+        var generatedSourceKeyPrefix = $"aspire-{workloadId}";
+        var sourceIndex = 0;
+        var nextAdditionalSourceKey = 0;
 
         var resolvedSources = new List<NuGetConfigSource>();
         foreach (var source in mappings
             .Select(static mapping => mapping.Source)
             .Distinct(PackageSourceIdentity.Comparer))
         {
+            // Source order still determines the primary source when its ambient alias is reused.
+            var isPrimarySource = sourceIndex++ == 0;
             var sourceIdentity = NuGetSourceIdentity.Compute(source, sourceIdentityKey);
             var ambientMatches = ambientSources
                 .Where(candidate => string.Equals(candidate.Identity, sourceIdentity, StringComparison.Ordinal))
@@ -462,11 +495,23 @@ internal sealed class IntegrationRestorePlan
             }
 
             string key;
-            do
+            if (isPrimarySource)
             {
-                key = $"aspire-{nextAspireKey++}";
+                key = generatedSourceKeyPrefix;
+                if (!usedKeys.Add(key))
+                {
+                    throw new InvalidOperationException(
+                        $"The generated NuGet source key '{key}' conflicts with an existing NuGet configuration key.");
+                }
             }
-            while (!usedKeys.Add(key));
+            else
+            {
+                do
+                {
+                    key = $"{generatedSourceKeyPrefix}-{nextAdditionalSourceKey++}";
+                }
+                while (!usedKeys.Add(key));
+            }
 
             resolvedSources.Add(new NuGetConfigSource(key, source, IsAmbient: false, IsEnabled: true));
         }
@@ -617,6 +662,19 @@ internal sealed class IntegrationRestorePlan
             .ToArray();
     }
 
+    private string? GetIntegrationPackageSourceAlias(IReadOnlyList<string> packageSourceHints)
+    {
+        if (packageSourceHints.Count == 0)
+        {
+            return null;
+        }
+
+        var primarySource = packageSourceHints[0];
+        return _configSources
+            .FirstOrDefault(source => PackageSourceIdentity.Comparer.Equals(source.Source, primarySource))
+            ?.Key ?? primarySource;
+    }
+
     private string? GetGlobalPackagesFolder(TemporaryNuGetConfig? restoreOverlay)
         => _restoreSources.ConfigureGlobalPackagesFolder
             ? CliPathHelper.GetStagingNuGetPackagesIdentityDirectory(
@@ -764,5 +822,6 @@ internal sealed record IntegrationProjectRestoreConfiguration(
     string RestoreRootConfigDirectory,
     string[] RootAdditionalSources,
     string[] PackageSourceHints,
+    string? PackageSourceAlias,
     string[] SensitiveSources,
     string? GlobalPackagesFolder);

@@ -625,7 +625,10 @@ internal sealed class NuGetClient(
             .ToArray();
         var sensitiveSourceValues = packageSources
             .Concat(auditSources)
-            .Select(static source => source.Source)
+            // Source names are user-controlled and can themselves be URL-shaped. Track both
+            // spellings so diagnostics redact credential material without changing NuGet's
+            // alias-bound mapping, credential, or certificate behavior.
+            .SelectMany(static source => new[] { source.Source, source.Name })
             .Where(NuGetSourceIdentity.HasCredentialMaterial)
             .Distinct(StringComparer.Ordinal)
             .ToArray();

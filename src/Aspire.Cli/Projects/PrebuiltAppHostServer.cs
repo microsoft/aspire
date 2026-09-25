@@ -37,6 +37,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 
     internal const string IntegrationHostingVersionPropertyName = "AspireIntegrationHostingVersion";
     internal const string IntegrationPackageSourcesPropertyName = "AspireIntegrationPackageSources";
+    internal const string IntegrationPackageSourceAliasPropertyName = "AspireIntegrationPackageSourceAlias";
     private readonly string _appDirectoryPath;
     private readonly string _socketPath;
     private readonly LayoutConfiguration _layout;
@@ -49,6 +50,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     private readonly IEnvironment _environment;
     private readonly ILogger _logger;
     private readonly BundleLayoutLease? _layoutLease;
+    private readonly string _workloadId;
     private readonly string _workingDirectory;
     private readonly string _projectReferencePrepareLockPath;
     private readonly AppHostServerProjectLayoutStore _projectLayoutStore;
@@ -74,6 +76,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     /// <param name="environment">The environment abstraction for OS detection.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
     /// <param name="layoutLease">The active bundle layout lease, if this server is running from a versioned bundle.</param>
+    /// <param name="workloadId">The AppHost workload identifier used to namespace generated NuGet source keys.</param>
     public PrebuiltAppHostServer(
         string appPath,
         string socketPath,
@@ -86,7 +89,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         IProcessExecutionFactory processExecutionFactory,
         IEnvironment environment,
         ILogger logger,
-        BundleLayoutLease? layoutLease = null)
+        BundleLayoutLease? layoutLease = null,
+        string? workloadId = null)
     {
         _appDirectoryPath = Path.GetFullPath(appPath);
         _socketPath = socketPath;
@@ -100,6 +104,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         _environment = environment;
         _logger = logger;
         _layoutLease = layoutLease;
+        _workloadId = workloadId ?? AppHostWorkloadId.Create(_appDirectoryPath);
 
         _workingDirectory = IntegrationClosureBuilder.GetAppHostIntegrationCacheDirectory(new DirectoryInfo(_appDirectoryPath)).FullName;
         Directory.CreateDirectory(_workingDirectory);
@@ -407,6 +412,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         string? globalPackagesFolder,
         string integrationHostingVersion,
         string? integrationPackageSources,
+        string? integrationPackageSourceAlias,
         CancellationToken cancellationToken)
     {
         var buildOutput = new OutputCollector();
@@ -424,6 +430,10 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         {
             environmentVariables[IntegrationPackageSourcesPropertyName] = integrationPackageSources;
         }
+        if (integrationPackageSourceAlias is not null)
+        {
+            environmentVariables[IntegrationPackageSourceAliasPropertyName] = integrationPackageSourceAlias;
+        }
 
         var exitCode = await _dotNetCliRunner.BuildAsync(
             new FileInfo(projectFilePath),
@@ -435,6 +445,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
                 EnvironmentVariableFilter = name =>
                     string.Equals(name, IntegrationHostingVersionPropertyName, StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(name, IntegrationPackageSourcesPropertyName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(name, IntegrationPackageSourceAliasPropertyName, StringComparison.OrdinalIgnoreCase) ||
                     (globalPackagesFolder is not null &&
                         string.Equals(name, CliPathHelper.NuGetPackagesEnvironmentVariable, StringComparison.OrdinalIgnoreCase)),
                 EnvironmentVariables = environmentVariables,
@@ -629,6 +640,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             restoreConfiguration.GlobalPackagesFolder,
             integrationHostingVersion: sdkVersion,
             integrationPackageSources,
+            restoreConfiguration.PackageSourceAlias,
             cancellationToken).ConfigureAwait(false);
 
         if (exitCode != 0)
@@ -740,6 +752,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             _logger)
             .ResolveAsync(
                 _appDirectoryPath,
+                _workloadId,
                 sdkVersion,
                 requestedChannel,
                 packageSourceOverride,

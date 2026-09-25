@@ -61,7 +61,7 @@ Channel selection never changes the NuGet configuration discovery model. Every r
 
 ### Channel behavior
 
-The absence of a channel and an explicitly selected stable channel normally have the same source-resolution behavior. The exception is the invocation-local source fallback described below, which applies only when no channel is requested and the AppHost inherits the running CLI's SDK version. Stable packages do not require a dedicated Aspire feed and remain compatible with NuGet's default sources, NuGet.org mirrors, and repository-owned source policy. No AppHost-local `NuGet.Config` is required for a stable restore; when no such file exists, normal NuGet defaults and user or machine configuration apply. Daily, staging, and PR channels have channel-specific Aspire feeds, so their Aspire package mappings replace competing ambient Aspire mappings without replacing the rest of the NuGet hierarchy. A hive-backed local channel similarly emits an authoritative `Aspire*` mapping to the local package directory while retaining unrelated ambient mappings.
+The absence of a channel and an explicitly selected stable channel normally have the same source-resolution behavior. The exception is the invocation-local source fallback described below, which applies only when no channel is requested and the AppHost inherits the running CLI's SDK version. Stable packages do not require a dedicated Aspire feed and remain compatible with NuGet's default sources, NuGet.org mirrors, and repository-owned source policy. An explicit stable selection generates a temporary restore overlay that reproduces ambient eligibility but contributes no source of its own. Daily, staging, and PR channels have channel-specific Aspire feeds, so their Aspire package mappings replace competing ambient Aspire mappings without replacing the rest of the NuGet hierarchy. A hive-backed local channel similarly emits an authoritative `Aspire*` mapping to the local package directory while retaining unrelated ambient mappings.
 
 ### Channel transitions
 
@@ -152,6 +152,8 @@ The overlay can contain:
 - A controlled global packages folder.
 - A `disabledPackageSources` override when every ambient alias for an explicitly selected source is disabled. The overlay clears inherited disabled state, enables one selected alias, and re-emits the other disabled ambient aliases. NuGet treats the presence of an `<add>` key in this section as disabled state; the entry remains disabled even when its `value` attribute is `false`.
 
+When a selected source is not already represented by an ambient alias, Aspire namespaces its generated key with the same stable workload identifier derived from the AppHost path for DCP. The primary selected source uses `aspire-<workload-id>`. Additional generated sources use `aspire-<workload-id>-0`, `aspire-<workload-id>-1`, and so on, skipping reserved additional keys. A conflicting reserved primary key fails restore rather than silently selecting another alias or inheriting name-bound settings. Sources already represented by ambient aliases continue to use those aliases so NuGet-owned credentials and client certificates remain associated with the correct keys.
+
 When ambient configuration does not enable package-source mapping, introducing an authoritative Aspire mapping must preserve the prior eligibility of ambient sources for non-Aspire packages. Selecting a channel must not implicitly restrict unrelated dependencies to the channel's fallback source.
 
 Ambient mappings for Aspire package patterns remain effective for stable or default restores. When a source-specific channel or explicit source override is selected, only mappings that compete for those Aspire patterns are replaced.
@@ -193,6 +195,8 @@ The generated root contains every direct integration package and project referen
 
 At the start of each SDK restore, the overlay is deleted and regenerated or left absent so it reflects only the current invocation's policy rather than acting as durable project configuration. When present, normal SDK discovery loads the overlay together with the AppHost hierarchy. Referenced projects continue to discover configuration from their own directories.
 
+The generated root overlay is not a reusable additional configuration file for referenced projects. It contains the complete effective source-key and package-source-mapping policy composed for the generated root, including relevant mappings inherited from the AppHost hierarchy and any `<clear />` needed to make the selected policy authoritative. Directing a referenced project to use this file could replace or reinterpret policy from that project's own hierarchy. Aspire therefore does not expose the overlay as a `RestoreConfigFile` hint for referenced projects.
+
 `IntegrationRestore.csproj`, its intermediate output, and closure artifacts remain in the centralized integration cache. Their storage location does not participate in ambient NuGet configuration discovery.
 
 The generated root receives non-empty `RestoreAdditionalProjectSources` only for a source-only policy. Otherwise, it sets the property to an empty value so an inherited environment or MSBuild property cannot introduce an untracked source. Source-specific channel and explicit override policies define their selected sources and source-key mappings in the overlay.
@@ -203,14 +207,15 @@ The SDK project is always built with implicit restore. The generated root target
 
 ## Referenced-project restore hints
 
-The SDK process exposes two invocation-scoped MSBuild properties:
+The SDK process exposes three invocation-scoped MSBuild properties:
 
 - `AspireIntegrationHostingVersion` contains the `Aspire.Hosting` version selected by the CLI.
 - `AspireIntegrationPackageSources` contains the credential-free source locations selected for integration packages, formatted as an MSBuild source list.
+- `AspireIntegrationPackageSourceAlias` contains the source key used by the generated root for the primary source in `AspireIntegrationPackageSources`. It preserves a selected ambient alias or contains the workload-derived alias when Aspire introduces the source.
 
-The properties are hints for integration authors. They are visible to every project evaluated in the SDK process, including transitive project references, but Aspire does not assign the source list to NuGet restore properties for referenced projects. An integration can explicitly consume the version through central package management and append the source hint to its own `RestoreAdditionalProjectSources`.
+The properties are hints for integration authors. They are visible to every project evaluated in the SDK process, including transitive project references, but Aspire does not assign the source list to NuGet restore properties for referenced projects. An integration can explicitly consume the version through central package management. It can append the source hint to its own `RestoreAdditionalProjectSources` when its effective NuGet policy does not require additional package-source-mapping configuration.
 
-For example, an integration that intentionally aligns its `Aspire.Hosting` dependency with the invoking CLI can use:
+For example, an integration that intentionally aligns its `Aspire.Hosting` dependency with the invoking CLI and can consume the selected sources under its existing mapping policy can use:
 
 ```xml
 <Project>
@@ -226,9 +231,13 @@ For example, an integration that intentionally aligns its `Aspire.Hosting` depen
 </Project>
 ```
 
-These properties are opt-in hints; they do not change a referenced project's restore automatically. A project-referenced hosting integration owns its package dependencies and can consume the version hint when it intentionally aligns with the invoking CLI. It can consume the source hint to make the CLI-selected feed eligible without Aspire overriding its restore policy.
+These properties are opt-in hints; they do not change a referenced project's restore automatically. A project-referenced hosting integration owns its package dependencies and can consume the version hint when it intentionally aligns with the invoking CLI.
 
-A project that explicitly replaces `RestoreSources` must configure every source needed by the version it selects. Credential-bearing sources are omitted from `AspireIntegrationPackageSources` rather than redacted: a redacted URL may not identify a usable source, and copying inline credentials into the MSBuild environment would unnecessarily increase their exposure. Referenced projects execute with the same user's file access and inherit ordinary ambient environment variables, so the hint is not a security boundary for secrets already available through those mechanisms; it nevertheless does not create a new propagation path from CLI configuration into MSBuild properties. A project that needs such a source must configure it and its authentication through NuGet-owned mechanisms.
+`AspireIntegrationPackageSources` contains source locations and does not carry package-source mappings. `AspireIntegrationPackageSourceAlias` identifies only the generated root's key for the primary hinted source; additional hinted sources do not currently expose corresponding aliases. `RestoreAdditionalProjectSources` likewise adds locations without adding mapping configuration. When package-source mapping is enabled for a referenced project, an appended source is eligible only if that project's normally discovered configuration maps the source key NuGet associates with it. A project can use the alias hint when it intentionally constructs its own invocation-scoped mapping configuration, but Aspire does not generate or inject that configuration for referenced projects.
+
+NuGet exposes `RestoreConfigFile` as a replacement for normal configuration discovery, not as an additional file to merge after the project's discovered hierarchy. Using it for an Aspire-generated file could bypass configuration selected by the project or its imported build logic. The generated root overlay is also unsuitable for this purpose because it represents the AppHost root's composed effective policy rather than a source-specific fragment. Aspire therefore cannot currently contribute additional mapping configuration while preserving the referenced project's normal NuGet configuration behavior.
+
+A project that explicitly replaces `RestoreSources` must configure every source needed by the version it selects. Credential-bearing sources are omitted from `AspireIntegrationPackageSources` rather than redacted: a redacted URL may not identify a usable source, and copying inline credentials into the MSBuild environment would unnecessarily increase their exposure. The corresponding alias property is also omitted when no source hint can be exposed. Referenced projects execute with the same user's file access and inherit ordinary ambient environment variables, so the hint is not a security boundary for secrets already available through those mechanisms; it nevertheless does not create a new propagation path from CLI configuration into MSBuild properties. A project that needs such a source must configure it and its authentication through NuGet-owned mechanisms.
 
 When the source policy requires an isolated global packages folder, the SDK process also receives that folder through `NUGET_PACKAGES`. The generated root and referenced projects use that cache unless a referenced project explicitly takes ownership by setting `RestorePackagesPath`.
 
@@ -272,16 +281,16 @@ The SDK project-reference path does not attempt to reproduce MSBuild evaluation 
 | Scenario | Generated root | Referenced projects |
 |---|---|---|
 | Explicit stable channel | Uses ambient source policy and the AppHost hierarchy | Can opt into the selected version; ambient source policy remains authoritative |
-| No channel | Uses ambient source policy, plus an authoritative invocation-local `Aspire*` source when needed to restore the running CLI's own SDK version | Can opt into the selected version and any credential-free invocation-local source |
+| No channel | Uses ambient source policy, plus an authoritative invocation-local `Aspire*` source when needed to restore the running CLI's own SDK version | Can opt into the selected version; the source hint requires a compatible project mapping policy |
 | No AppHost NuGet.Config | Uses normal NuGet default, user, and machine configuration | Uses each project's normal discovery hierarchy |
-| Daily, staging, or PR channel | Replaces competing Aspire mappings while retaining unrelated ambient policy | Can opt into the selected version and credential-free selected feed |
-| Local channel | Maps `Aspire*` to the absolute local hive while retaining unrelated ambient mappings | Can opt into the selected version and local source |
-| NuGet service-index proxy override | Replaces NuGet.org only in source entries generated by the CLI; configured ambient URLs are unchanged | Retains its own restore policy |
-| Explicit `--source` | Pins the invocation-owned package pattern to that source while retaining eligible ambient and channel sources for the remaining dependency closure | Can opt into the credential-free selected source |
+| Daily, staging, or PR channel | Replaces competing Aspire mappings while retaining unrelated ambient policy | Can opt into the selected version; the source hint requires a compatible project mapping policy |
+| Local channel | Maps `Aspire*` to the absolute local hive while retaining unrelated ambient mappings | Can opt into the selected version; the local source hint requires a compatible project mapping policy |
+| NuGet service-index proxy override | Does not add or rewrite restore sources; configured ambient URLs remain authoritative | Retains its own restore policy |
+| Explicit `--source` | Pins the invocation-owned package pattern to that source while retaining eligible ambient and channel sources for the remaining dependency closure | Receives a credential-free source hint that requires a compatible project mapping policy |
 | Credential-bearing explicit `--source` | Rejected before package discovery or restore | Not invoked |
 | Credential-bearing configured channel source | Uses the configured source, suppresses raw process logging, and exact-redacts captured diagnostics | Source hint is omitted; retains its own restore policy |
 | Ambient authenticated source | Uses the ambient source key and NuGet-owned credentials | Retains its own configuration and credentials |
 | Explicitly selected disabled source | Clears inherited disabled-source state under the complete mapping policy | Retains its own restore policy |
-| PR package hive | Uses an absolute local source with an authoritative Aspire mapping and standard NuGet global-packages behavior | Can opt into the selected version and local source |
+| PR package hive | Uses an absolute local source with an authoritative Aspire mapping and standard NuGet global-packages behavior | Can opt into the selected version; the local source hint requires a compatible project mapping policy |
 | Nested AppHost config | Included through AppHost-anchored discovery | Remains available to projects whose own hierarchy includes it |
-| Referenced project outside the AppHost tree | Uses the generated root hierarchy | Retains its own config and can explicitly consume the version and credential-free source hints |
+| Referenced project outside the AppHost tree | Uses the generated root hierarchy | Retains its own config; can consume the version hint and only those source hints permitted by its mapping policy |
