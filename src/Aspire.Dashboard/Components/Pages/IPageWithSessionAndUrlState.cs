@@ -62,9 +62,10 @@ public static class PageExtensions
     /// </summary>
     public static async Task AfterViewModelChangedAsync<TViewModel, TSerializableViewModel>(this IPageWithSessionAndUrlState<TViewModel, TSerializableViewModel> page, AspirePageContentLayout? layout, bool waitToApplyMobileChange) where TSerializableViewModel : class
     {
-        // if the mobile filter dialog is open, we want to wait until the dialog is closed to apply all changes
-        // we should only apply the last invocation, as TViewModel will be up-to-date
-        if (layout is not null && !layout.ViewportInformation.IsDesktop && waitToApplyMobileChange)
+        // Only defer while the mobile filter dialog is open. Other mobile controls (such as the
+        // Resources tabs) must update the URL immediately, not leave a navigation queued until
+        // the dialog closes or the page is disposed.
+        if (layout is { IsToolbarPanelOpen: true } && !layout.ViewportInformation.IsDesktop && waitToApplyMobileChange)
         {
             layout.DialogCloseListeners[nameof(AfterViewModelChangedAsync)] = SetStateAndNavigateAsync;
             return;

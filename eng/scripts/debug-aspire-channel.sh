@@ -88,7 +88,7 @@ Anything after '--' is passed through to the aspire invocation.
 Examples:
   ${invoked_as} --sha 1a2b3c4d5e6f7a8b
   ${invoked_as} --pr 17743 --sha 1a2b3c4d5e6f7a8b
-  ${invoked_as} --cli ./artifacts/bin/Aspire.Cli/Debug/net10.0/aspire --sha 1a2b3c4d
+  ${invoked_as} --cli ./artifacts/bin/Aspire.Cli/Debug/net11.0/aspire --sha 1a2b3c4d
   # Install a PR build and explore it interactively as a staging build:
   ${invoked_as} --pr 17743 --sha 1a2b3c4d5e6f7a8b --shell
 USAGE

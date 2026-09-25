@@ -116,7 +116,7 @@ EXAMPLES:
     ./get-aspire-cli-pr.sh --run-id 12345678
     ./get-aspire-cli-pr.sh --local-dir /path/to/artifacts
     ./get-aspire-cli-pr.sh --local-dir /path/to/artifacts --hive-label my-build
-    ./get-aspire-cli-pr.sh --local-dir artifacts/bin/Aspire.Cli/Debug/net10.0
+    ./get-aspire-cli-pr.sh --local-dir artifacts/bin/Aspire.Cli/Debug/net11.0
     ./get-aspire-cli-pr.sh 1234 --install-path ~/my-aspire
     ./get-aspire-cli-pr.sh 1234 --os linux --arch arm64 --verbose
     ./get-aspire-cli-pr.sh 1234 --hive-only

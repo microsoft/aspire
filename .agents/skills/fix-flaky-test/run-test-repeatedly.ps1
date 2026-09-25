@@ -270,7 +270,7 @@ for ($iter = 1; $iter -le $Iterations; $iter++) {
         Remove-Item $stderrFile -ErrorAction SilentlyContinue
     }
 
-    # Detect zero-test runs (exit code 8 is masked by --ignore-exit-code 8 in Testing.props)
+    # Detect zero-test runs (exit code 8 is masked by --ignore-exit-code 8 in Testing.targets)
     if ($exitCode -eq 0) {
         $iterContent = Get-Content $iterLog -Raw -ErrorAction SilentlyContinue
         if (-not ($iterContent -match 'Total:\s*[1-9]')) {

@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -35,9 +35,9 @@ jobs:
       # workflows are byte-for-byte comparable with what a contributor generates locally; see
       # .github/workflows/README.md.
       - name: Install gh-aw extension
-        uses: github/gh-aw-actions/setup-cli@5e508589e03a7757a7e05b26e834292f5445bfb6 # v0.88.7
+        uses: github/gh-aw-actions/setup-cli@045beb2d14bda8d0c1f2e83b41527f63770d2855 # v0.89.15
         with:
-          version: v0.88.7
+          version: v0.89.15
 
       - name: Compile agentic workflows (schema and action-pin validation)
         env:
@@ -64,7 +64,7 @@ jobs:
       - name: Lint generated agentic workflows
         run: gh aw lint --shellcheck
 
-      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
 

@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { findRunningAppHost, getCommandInvocationCount, getResources, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { assertClipboardMatchesLastExpectationForE2E, captureWorkspaceAppHostPathClipboardExpectationForE2E, executeE2eControlCommand, getCliWrapperInvocationCount, getCliWrapperInvocations, reloadWorkspaceForE2E, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeDelayedPsCliWrapper, writeGatedStreamingDiscoveryCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedDelayedPsCliWrapper, writeTrackedStreamingDiscoveryCliWrapper } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { cancelActiveInput, cancelAppHostsSectionTextTransition, clickTreeItem, executeCommandFromPalette, getNotificationMessages, observeVisibleSideBarSectionTitles, openAspireView, startAppHostsSectionTextTransition, waitForAppHostsSectionTextAfterTransition, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
+import { cancelActiveInput, cancelAppHostsSectionTextTransition, clickTreeItem, executeCommandFromPalette, getNotificationMessages, observeVisibleSideBarSectionTitles, openAspireView, startAppHostsSectionTextTransition, waitForAppHostsSectionTextAfterTransition, waitForAppHostsTreePath, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
 
 const cliStartupTimeoutMs = getCliStartupTimeoutMs();
 
@@ -28,14 +28,12 @@ suite('Aspire AppHost tree E2E', function () {
 
     test('discovers the workspace AppHost and renders it in the Aspire view', async () => {
         await openAspireView();
-        await waitForRepositoryIdle();
-        const stateFile = await waitForWorkspaceAppHost();
+        await waitForWorkspaceAppHost();
+        const stateFile = await waitForRepositoryIdle();
         const label = getTreeAppHostLabel(stateFile.state);
-        const section = await openAspireView();
+        await openAspireView();
 
-        const item = await waitForTreeItem(section, label);
-        assert.strictEqual(await item.getLabel(), label);
-        assert.ok(await waitForChildTreeItem(item, 'Run AppHost'));
+        assert.deepStrictEqual(await waitForAppHostsTreePath([label, 'Run AppHost']), [label, 'Run AppHost']);
         assert.ok(stateFile.state.workspaceAppHostCandidatePaths.length >= 1);
     });
 
@@ -74,9 +72,9 @@ suite('Aspire AppHost tree E2E', function () {
             'streamed AppHost candidate before discovery completes',
             30000);
         assert.strictEqual(partialState.state.isWorkspaceAppHostDiscoveryComplete, false);
-        const partialSection = await openAspireView();
-        const partialItem = await waitForTreeItem(partialSection, getTreeAppHostLabel(partialState.state));
-        assert.strictEqual(await partialItem.getLabel(), getTreeAppHostLabel(partialState.state));
+        await openAspireView();
+        const partialLabel = getTreeAppHostLabel(partialState.state);
+        assert.deepStrictEqual(await waitForAppHostsTreePath([partialLabel]), [partialLabel]);
         await waitForWorkbenchText('Discovering AppHosts...');
         // Discovery progress must render in the status bar. A progress notification stays on screen
         // for as long as discovery runs and cannot be dismissed

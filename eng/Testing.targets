@@ -1,4 +1,24 @@
 <Project>
+  <PropertyGroup>
+    <!--
+      Compose these arguments after project evaluation so test projects can override
+      their timeout properties in the project file.
+    -->
+    <_MtpDiagnosticFlags>--ignore-exit-code 8 --crashdump --hangdump --hangdump-type none</_MtpDiagnosticFlags>
+    <MtpBaseArgs Condition="'$(MtpBaseArgs)' == ''">$(_MtpDiagnosticFlags) --hangdump-timeout $(TestHangTimeout) --timeout $(TestSessionTimeout)</MtpBaseArgs>
+
+    <!-- Variant with uncollected-bucket timeouts, used for split-test entries that don't match a named collection -->
+    <_UncollectedMtpBaseArgs>$(_MtpDiagnosticFlags) --hangdump-timeout $(UncollectedTestsHangTimeout) --timeout $(UncollectedTestsSessionTimeout)</_UncollectedMtpBaseArgs>
+
+    <_BlameArgs>$(MtpBaseArgs)</_BlameArgs>
+
+    <TestRunnerAdditionalArguments>$(TestRunnerAdditionalArguments) --filter-not-trait &quot;category=failing&quot;</TestRunnerAdditionalArguments>
+    <!-- ignore exit code 8 (zero tests ran) is already in MtpBaseArgs / _BlameArgs -->
+
+    <TestRunnerAdditionalArguments Condition="'$(RunQuarantinedTests)' != 'true' and '$(RunOuterloopTests)' != 'true'">$(TestRunnerAdditionalArguments) $(_NonQuarantinedTestRunAdditionalArgs) $(_NonOuterloopTestRunAdditionalArgs) $(_BlameArgs)</TestRunnerAdditionalArguments>
+    <TestRunnerAdditionalArguments Condition="'$(RunQuarantinedTests)' == 'true'">$(TestRunnerAdditionalArguments) $(_QuarantinedTestRunAdditionalArgs) $(_BlameArgs)</TestRunnerAdditionalArguments>
+    <TestRunnerAdditionalArguments Condition="'$(RunOuterloopTests)' == 'true'">$(TestRunnerAdditionalArguments) $(_OuterloopTestRunAdditionalArgs) $(_BlameArgs)</TestRunnerAdditionalArguments>
+  </PropertyGroup>
 
   <!--
       Environment variables:

@@ -18,7 +18,8 @@ gh aw compile
 authoring agents and skills; apply source migrations deliberately rather than
 adding unrelated scaffolding. Keep the pinned `setup-cli` action and its `version`
 input in `copilot-setup-steps.yml` aligned with the compiler used to generate the
-workflows.
+workflows and with `validate-agentic-workflows.yml`. Updating only the setup
+action does not update the installed compiler; its `version` input controls that.
 
 Commit the generated `.lock.yml` files and `.github/aw/actions-lock.json` alongside
 their source changes. `agentics-maintenance-microsoft-aspire.dev.yml` is generated
@@ -43,6 +44,10 @@ Explicit action versions in Markdown survive recompilation, so update deprecated
 inputs and action runtimes in the sources, not just the generated YAML. The
 `client-id` input to `actions/create-github-app-token` replaces `app-id`; the
 existing `ASPIRE_BOT_APP_ID` secret remains the identity source.
+
+Action upgrades must update Markdown references before regenerating locks and
+the action-pin cache. A generated-only pin update is not reproducible and the
+drift check rejects it, even if the changed action versions are otherwise valid.
 
 The compiler's diagnostic `agent` artifact does not include arbitrary files from
 `/tmp/gh-aw/agent/`. Workflows that publish custom agent files must upload a named

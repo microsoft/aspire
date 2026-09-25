@@ -25,8 +25,6 @@ aspire add Aspire.Hosting.Azure.Sandboxes
 Then, in the AppHost, add an Azure sandbox group. When it is the only compute environment, Aspire automatically deploys compute resources to it:
 
 ```csharp
-#pragma warning disable ASPIREAZURE001 // Azure Container Apps Sandboxes APIs are experimental.
-
 builder.AddAzureSandboxGroup("sandboxes");
 var api = builder.AddProject<Projects.ApiService>("api");
 ```

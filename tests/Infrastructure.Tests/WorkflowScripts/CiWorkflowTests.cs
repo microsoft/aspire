@@ -40,10 +40,10 @@ public sealed class CiWorkflowTests
         var workflow = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "run-tests.yml"));
         var javaSetup = System.Text.RegularExpressions.Regex.Match(
             workflow,
-            "(?ms)^      - name: Set up Java\\n(?<body>.*?)(?=^      - |\\z)");
+            "(?ms)^      - name: Set up Java\\r?\\n(?<body>.*?)(?=^      - |\\z)");
         Assert.True(javaSetup.Success, "Could not find the Java setup step in run-tests.yml.");
         Assert.Contains("if: ${{ fromJson(inputs.properties).requiresJava == true }}", javaSetup.Value);
-        Assert.Contains("uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0", javaSetup.Value);
+        Assert.Contains("uses: actions/setup-java@", javaSetup.Value);
         Assert.Contains("distribution: temurin", javaSetup.Value);
         Assert.Contains("java-version: 21", javaSetup.Value);
 

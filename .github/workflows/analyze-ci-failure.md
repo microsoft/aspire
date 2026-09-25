@@ -48,7 +48,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout data collection helpers
-        uses: actions/checkout@v6.0.3
+        uses: actions/checkout@v7.0.1
         with:
           sparse-checkout: |
             eng/test-retry-patterns.json
@@ -728,7 +728,7 @@ safe-outputs:
             name: ci-analysis-output
             path: ${{ runner.temp }}/ci-analysis-output
         - name: Checkout publication helpers
-          uses: actions/checkout@v6.0.3
+          uses: actions/checkout@v7.0.1
           with:
             persist-credentials: false
             sparse-checkout: |

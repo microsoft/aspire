@@ -638,7 +638,7 @@ internal sealed class DotNetCliRunner(
         }
 
         // Users often invoke the dogfood CLI through a symlink such as
-        // ~/bin/aspire -> artifacts/bin/Aspire.Cli/Debug/net10.0/aspire. Resolve the
+        // ~/bin/aspire -> artifacts/bin/Aspire.Cli/Debug/net11.0/aspire. Resolve the
         // link before forwarding so a symlinked raw build cannot stamp stale
         // bundle metadata through ResolveAspireCliBundle's AspireCliPath path.
         var resolvedProcessPath = PathNormalizer.ResolveSymlinks(processPath);

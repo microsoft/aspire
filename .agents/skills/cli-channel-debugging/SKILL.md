@@ -96,7 +96,7 @@ ASPIRE_CLI_COMMIT=95f0d2968... \
 ```
 
 You can also run the already-built binary directly to skip the rebuild:
-`artifacts/bin/Aspire.Cli/Debug/net10.0/aspire.dll` via `dotnet <dll> -- <command>`.
+`artifacts/bin/Aspire.Cli/Debug/net11.0/aspire.dll` via `dotnet <dll> -- <command>`.
 
 Confirm the emulation took effect: `aspire --version` prints the emulated version, and the
 emulation banner appears on stderr. (Note: `aspire doctor` reports some fields from the

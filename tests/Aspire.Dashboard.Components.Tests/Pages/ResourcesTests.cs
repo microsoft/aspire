@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Controls.Grid;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
@@ -555,6 +556,78 @@ public partial class ResourcesTests : DashboardTestContext
         var tabs = cut.FindComponent<FluentTabs>();
         Assert.Equal(expectedOrientation, tabs.Instance.Orientation?.ToString().ToLowerInvariant());
         Assert.All(cut.FindAll("fluent-tab"), tab => Assert.False(tab.HasAttribute("fixed")));
+    }
+
+    [Fact]
+    public async Task MobileParametersTab_UpdatesUrlWithoutOpeningFilterPanel()
+    {
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport);
+
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+        var layout = cut.FindComponent<AspirePageContentLayout>().Instance;
+        var tabs = cut.FindComponent<FluentTabs>().Instance;
+        var parametersTab = cut.FindComponents<FluentTab>().Single(tab => tab.Instance.Id == "tab-Parameters");
+
+        Assert.False(layout.IsToolbarPanelOpen);
+
+        await cut.InvokeAsync(() => tabs.ActiveTabChanged.InvokeAsync(parametersTab.Instance));
+
+        Assert.EndsWith("/?view=Parameters", Services.GetRequiredService<NavigationManager>().Uri, StringComparison.Ordinal);
+        Assert.Empty(layout.DialogCloseListeners);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task MobileToolbar_PendingViewChangeOnlyNavigatesWhenToolbarCloses(bool navigateAway, bool dispose)
+    {
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport);
+        FluentUISetupHelpers.SetupFluentDialogProvider(this);
+        var provider = Render<DashboardDialogProvider>(builder => builder.AddCascadingValue(viewport));
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+        var layout = cut.FindComponent<AspirePageContentLayout>().Instance;
+        var tabs = cut.FindComponent<FluentTabs>().Instance;
+        var parametersTab = cut.FindComponents<FluentTab>().Single(tab => tab.Instance.Id == "tab-Parameters");
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        var initialUri = navigation.Uri;
+
+        var opening = cut.InvokeAsync(layout.OpenMobileToolbarAsync);
+        var dialog = provider.WaitForComponent<FluentDialog>();
+        await provider.InvokeAsync(() => dialog.Find($"#{dialog.Instance.Id}").TriggerEvent("ondialogbeforetoggle", new DialogToggleEventArgs
+        {
+            Id = dialog.Instance.Id,
+            Type = "beforetoggle",
+            OldState = "closed",
+            NewState = "open"
+        }));
+        await opening;
+        Assert.True(layout.IsToolbarPanelOpen);
+
+        await cut.InvokeAsync(() => tabs.ActiveTabChanged.InvokeAsync(parametersTab.Instance));
+        Assert.Equal(initialUri, navigation.Uri);
+        Assert.Single(layout.DialogCloseListeners);
+
+        if (dispose)
+        {
+            await DisposeComponentsAsync();
+            Assert.Equal(initialUri, navigation.Uri);
+        }
+        else if (navigateAway)
+        {
+            await cut.InvokeAsync(() => navigation.NavigateTo("/traces"));
+            provider.WaitForAssertion(() => Assert.False(layout.IsToolbarPanelOpen));
+            Assert.EndsWith("/traces", navigation.Uri, StringComparison.Ordinal);
+        }
+        else
+        {
+            await cut.InvokeAsync(layout.CloseMobileToolbarAsync);
+            Assert.EndsWith("/?view=Parameters", navigation.Uri, StringComparison.Ordinal);
+        }
+
+        Assert.Empty(layout.DialogCloseListeners);
     }
 
     [Fact]

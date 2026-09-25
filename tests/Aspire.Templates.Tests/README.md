@@ -63,6 +63,8 @@ Each class runs 51 cases across the SDK/target-framework matrix. Keeping them se
 lets CI shard all 153 cases without tripling a single job's runtime. The framework
 tests check generated package names, versions, and executable output where required
 before building, so update these expectations when changing starter test dependencies.
+The internal pipeline runs all `basic-build` cases in one process, so that invocation
+uses a 30-minute session timeout while the class-sharded runs retain the 20-minute timeout.
 
 - The sdk+workload is never updated automatically. In other words, once installed the workload packs don't get overwritten even when the source binaries changes in `artifacts`. This may change in future.
 
