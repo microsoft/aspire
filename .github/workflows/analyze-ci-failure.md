@@ -67,6 +67,11 @@ jobs:
         run: |
           set -euo pipefail
 
+          set_output()
+          {
+            printf '%s\n' "$1" >> "$GITHUB_OUTPUT"
+          }
+
           mkdir -p ci-failure-data
 
           # Resolve the run ID
@@ -77,7 +82,7 @@ jobs:
           fi
 
           echo "Analyzing CI run: ${RUN_ID}"
-          echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
+          set_output "run_id=${RUN_ID}"
 
           # A workflow_run can wait behind another analysis, during which the source run may
           # be rerun. Pin that event to its immutable attempt; manual dispatch intentionally
@@ -119,15 +124,15 @@ jobs:
               exit 0
               ;;
           esac
-          echo "run_attempt=${RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
-          echo "head_sha=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
-          echo "run_url=${RUN_URL}" >> "$GITHUB_OUTPUT"
-          echo "run_scope=${RUN_SCOPE}" >> "$GITHUB_OUTPUT"
+          set_output "run_attempt=${RUN_ATTEMPT}"
+          set_output "head_sha=${HEAD_SHA}"
+          set_output "run_url=${RUN_URL}"
+          set_output "run_scope=${RUN_SCOPE}"
 
           # Skip analysis if the run succeeded (e.g. manual dispatch on a passing run)
           if [ "${CONCLUSION}" = "success" ]; then
             echo "Run concluded with success. Nothing to analyze."
-            echo "has_work=false" >> "$GITHUB_OUTPUT"
+            set_output "has_work=false"
             exit 0
           fi
 
@@ -226,7 +231,7 @@ jobs:
               ci-failure-data/candidate-merges.json \
               ci-failure-data/candidate-merge-history-status.json
           fi
-          echo "pr_numbers=${PR_NUMBERS}" >> "$GITHUB_OUTPUT"
+          set_output "pr_numbers=${PR_NUMBERS}"
 
           jq -n \
             --argjson run_id "${RUN_ID}" \
@@ -270,11 +275,11 @@ jobs:
 
           if [ "${FAILED_COUNT}" -eq 0 ]; then
             echo "No failed jobs found. Skipping analysis."
-            echo "has_work=false" >> "$GITHUB_OUTPUT"
+            set_output "has_work=false"
             exit 0
           fi
 
-          echo "has_work=true" >> "$GITHUB_OUTPUT"
+          set_output "has_work=true"
 
           # Fetch logs for each failed job and extract only error-relevant lines.
           # Raw logs are huge (64KB+). Instead of blindly taking the last N lines,

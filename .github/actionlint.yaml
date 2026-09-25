@@ -1,0 +1,11 @@
+paths:
+  .github/workflows/*.lock.yml:
+    ignore:
+      - 'unknown permission scope "(copilot-requests|vulnerability-alerts|code-quality|drives)"'
+      - 'property "workflow_(repository|sha|ref|file_path)" is not defined in object type'
+      - 'unexpected key "queue" for "concurrency" section'
+      - 'property "(activation|activated)" is not defined in object type'
+      - 'property "artifact_prefix" is not defined in object type'
+      # gh-aw omits this activation output when stale-check is disabled but its
+      # generated conclusion job still contains redundant references to it.
+      - 'property "stale_lock_file_failed" is not defined in object type'

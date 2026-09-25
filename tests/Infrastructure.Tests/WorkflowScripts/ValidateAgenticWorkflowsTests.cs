@@ -11,7 +11,6 @@ namespace Infrastructure.Tests;
 public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
 {
     private const string WorkflowRelativePath = ".github/workflows/validate-agentic-workflows.yml";
-    private const string SourcePath = ".github/workflows/test-agent.md";
     private const string LockPath = ".github/workflows/test-agent.lock.yml";
     private const string ActionsLockPath = ".github/aw/actions-lock.json";
 
@@ -26,50 +25,12 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
         Assert.Contains(".github/workflows/**/*.lock.yml", paths);
         Assert.Contains(".github/workflows/agentics-maintenance*.yml", paths);
         Assert.Contains(ActionsLockPath, paths);
+        Assert.Contains(".github/actionlint.yaml", paths);
 
         var steps = Steps(root);
         var compileScript = Scalar(Step(steps, "Compile agentic workflows (schema and action-pin validation)"), "run");
         Assert.Contains("--purge", compileScript, StringComparison.Ordinal);
         Assert.Contains("--force-refresh-action-pins", compileScript, StringComparison.Ordinal);
-        Assert.Equal(
-            "${{ steps.changed-locks.outputs.files }}",
-            Scalar(Mapping(Step(steps, "Lint changed lock files (fails on actionlint/shellcheck errors)"), "env"), "CHANGED_LOCK_FILES"));
-    }
-
-    [Fact]
-    [RequiresTools(["git", "bash"])]
-    public async Task ChangedLockDetectionExcludesDeletedFiles()
-    {
-        using var workspace = CreateRepository();
-        File.Delete(GetFullPath(workspace, SourcePath));
-        File.Delete(GetFullPath(workspace, LockPath));
-        CommitAll(workspace, "Delete agentic workflow");
-        var githubOutput = Path.Combine(workspace.Path, "github-output");
-
-        var result = await RunScriptAsync(
-            workspace,
-            Scalar(Step(Steps(LoadWorkflow()), "Determine changed lock files"), "run"),
-            new Dictionary<string, string> { ["GITHUB_OUTPUT"] = githubOutput });
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal(
-            ["files<<EOF_CHANGED_LOCKS", "EOF_CHANGED_LOCKS"],
-            await File.ReadAllLinesAsync(githubOutput));
-    }
-
-    [Fact]
-    [RequiresTools(["git", "bash"])]
-    public async Task ChangedLockDetectionRejectsMissingBaseCommit()
-    {
-        using var workspace = CreateRepository();
-
-        var result = await RunScriptAsync(
-            workspace,
-            Scalar(Step(Steps(LoadWorkflow()), "Determine changed lock files"), "run"),
-            new Dictionary<string, string> { ["GITHUB_OUTPUT"] = Path.Combine(workspace.Path, "github-output") });
-
-        Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains("HEAD^1", result.Output, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -99,6 +60,51 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
         Assert.Contains(expectedStatus, result.Output, StringComparison.Ordinal);
     }
 
+    [Fact]
+    [RequiresTools(["bash"])]
+    public async Task TestStepRunsAllInfrastructureTests()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var argumentsPath = Path.Combine(workspace.Path, "dotnet-arguments");
+        var fakeDotnetPath = Path.Combine(workspace.Path, "dotnet");
+        await File.WriteAllTextAsync(
+            fakeDotnetPath,
+            """
+            #!/usr/bin/env bash
+            printf '%s\n' "$@" > "$DOTNET_ARGUMENTS_PATH"
+            """);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(
+                fakeDotnetPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        var result = await RunScriptAsync(
+            workspace,
+            Scalar(Step(Steps(LoadWorkflow()), "Run Infrastructure.Tests agentic workflow contracts"), "run"),
+            new Dictionary<string, string>
+            {
+                ["DOTNET_ARGUMENTS_PATH"] = argumentsPath,
+                ["PATH"] = workspace.Path + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH"),
+            });
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(
+            [
+                "test",
+                "--project",
+                "tests/Infrastructure.Tests/Infrastructure.Tests.csproj",
+                "--no-launch-profile",
+                "--",
+                "--filter-not-trait",
+                "quarantined=true",
+                "--filter-not-trait",
+                "outerloop=true",
+            ],
+            await File.ReadAllLinesAsync(argumentsPath));
+    }
+
     private TemporaryWorkspace CreateRepository()
     {
         var workspace = TemporaryWorkspace.Create(output);
@@ -107,7 +113,6 @@ public sealed class ValidateAgenticWorkflowsTests(ITestOutputHelper output)
         GitCli.Run(workspace.Path, "config", "user.name", "Test");
         GitCli.Run(workspace.Path, "config", "commit.gpgsign", "false");
 
-        WriteFile(workspace, SourcePath, "---\ndescription: test\n---\n");
         WriteFile(workspace, LockPath, "generated lock\n");
         WriteFile(workspace, ActionsLockPath, "{}\n");
         CommitAll(workspace, "Create baseline");

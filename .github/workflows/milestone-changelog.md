@@ -109,7 +109,7 @@ jobs:
             # PR number from the filename instead of reading every JSON file (which
             # can fail when the glob expands to hundreds of arguments).
             if [ -d "$PRS_DIR" ]; then
-              PRS_LISTING=$(ls "$PRS_DIR" 2>/dev/null \
+              PRS_LISTING=$(find "$PRS_DIR" -maxdepth 1 -type f -printf '%f\n' \
                 | sed -n 's/.*-\([0-9]*\)\.json$/\1/p' \
                 | jq -Rs '[split("\n") | .[] | select(. != "") | tonumber]')
               if echo "$PRS_LISTING" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then
@@ -120,7 +120,7 @@ jobs:
 
             DOCS_PRS_DIR="$MEMORY_DIR/prs-docs"
             if [ -d "$DOCS_PRS_DIR" ]; then
-              DOCS_PRS_LISTING=$(ls "$DOCS_PRS_DIR" 2>/dev/null \
+              DOCS_PRS_LISTING=$(find "$DOCS_PRS_DIR" -maxdepth 1 -type f -printf '%f\n' \
                 | sed -n 's/.*-\([0-9]*\)\.json$/\1/p' \
                 | jq -Rs '[split("\n") | .[] | select(. != "") | tonumber]')
               if echo "$DOCS_PRS_LISTING" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then

@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Text.Json;
+using Aspire.TestUtilities;
 using Xunit;
 using YamlDotNet.RepresentationModel;
 
@@ -9,7 +11,45 @@ namespace Infrastructure.Tests;
 
 public sealed class AgenticWorkflowTests
 {
+    private const string ActionlintImage = "rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667";
     private static readonly string s_workflowsPath = Path.Combine(RepoRoot.Path, ".github", "workflows");
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public async Task GeneratedWorkflowsPassActionlint()
+    {
+        var lockFiles = Directory.EnumerateFiles(s_workflowsPath, "*.lock.yml")
+            .Select(path => Path.GetRelativePath(RepoRoot.Path, path))
+            .Order()
+            .ToArray();
+        Assert.NotEmpty(lockFiles);
+
+        using var process = new Process();
+        process.StartInfo.FileName = "docker";
+        process.StartInfo.ArgumentList.Add("run");
+        process.StartInfo.ArgumentList.Add("--rm");
+        process.StartInfo.ArgumentList.Add("-v");
+        process.StartInfo.ArgumentList.Add($"{RepoRoot.Path}:/workdir");
+        process.StartInfo.ArgumentList.Add("-w");
+        process.StartInfo.ArgumentList.Add("/workdir");
+        process.StartInfo.ArgumentList.Add(ActionlintImage);
+        process.StartInfo.ArgumentList.Add("-pyflakes=");
+        foreach (var lockFile in lockFiles)
+        {
+            process.StartInfo.ArgumentList.Add(lockFile);
+        }
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+
+        process.Start();
+        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        var output = await stdoutTask + await stderrTask;
+
+        Assert.True(process.ExitCode == 0, output);
+    }
 
     [Fact]
     public void GeneratedWorkflowsMatchBootstrapCompiler()

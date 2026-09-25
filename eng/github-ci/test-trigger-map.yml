@@ -500,6 +500,7 @@ path_rules:
     reason: Infrastructure.Tests validates the selector map, prefilter, and root ignore behavior
   - paths:
       - .github/workflows/**
+      - .github/actionlint.yaml
       - eng/pipelines/**
       - eng/Signing.props
       - eng/Publishing.props
