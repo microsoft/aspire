@@ -203,7 +203,7 @@ public partial class TemplateTestsBase
             await Task.Delay(500);
 
             // _testOutput.WriteLine($"Checking for rows again");
-            var rowsLocator = dashboardPageWrapper.Page.Locator("//tr[@class='fluent-data-grid-row hover resource-row']");
+            var rowsLocator = dashboardPageWrapper.Page.Locator(".main-grid tr.resource-row");
             var allRows = await rowsLocator.AllAsync();
             // _testOutput.WriteLine($"found rows#: {allRows.Count}");
             if (allRows.Count == 0)
@@ -215,7 +215,7 @@ public partial class TemplateTestsBase
             foreach (var rowLoc in allRows)
             {
                 // get the cells
-                var cellLocs = await rowLoc.Locator("//td[@role='gridcell']").AllAsync();
+                var cellLocs = await rowLoc.Locator("[role='gridcell']").AllAsync();
 
                 // is the resource name expected?
                 var resourceNameCell = cellLocs[0];

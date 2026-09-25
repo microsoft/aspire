@@ -1,8 +1,8 @@
 paths:
   .github/workflows/{extension-changelog,pr-docs-check,release-notes-generate,release-update-support-mdx}.lock.yml:
     ignore:
-      # These sources disable stale-check. gh-aw v0.89.15 still emits conclusion references
+      # These sources disable stale-check. gh-aw v0.89.17 still emits conclusion references
       # to the omitted activation output (which evaluates to an empty string in Actions).
       # Remove when the compiler omits these redundant references:
-      # https://github.com/github/gh-aw/blob/v0.89.15/pkg/workflow/notify_comment_conclusion_helpers.go#L320
+      # https://github.com/github/gh-aw/blob/v0.89.17/pkg/workflow/notify_comment_conclusion_helpers.go#L325
       - '^property "stale_lock_file_failed" is not defined in object type'
