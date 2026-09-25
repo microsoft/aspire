@@ -29,6 +29,7 @@ public static class AzureSandboxesExtensions
     // https://learn.microsoft.com/azure/role-based-access-control/built-in-roles#container-apps-sandboxgroup-data-owner
     private const string SandboxGroupDataOwnerRoleId = "c24cf47c-5077-412d-a19c-45202126392c";
     private const string ValidateSandboxPublishersStepName = "validate-azure-sandbox-publishers";
+    private const string SandboxGroupDataOwnerRoleName = "Container Apps SandboxGroup Data Owner";
 
     /// <summary>
     /// Adds an Azure Container Apps sandbox group resource to the application model.
@@ -48,8 +49,11 @@ public static class AzureSandboxesExtensions
         {
             var sandboxResource = (AzureSandboxGroupResource)infrastructure.AspireResource;
             UserAssignedIdentity? newImagePullIdentity = null;
-            BicepValue<string> imagePullIdentityId;
-            BicepValue<string> imagePullIdentityClientId;
+            BicepValue<string>? imagePullIdentityId = null;
+            BicepValue<string>? imagePullIdentityClientId = null;
+            var requiresAcrPullIdentity =
+                !sandboxResource.HasDataPlaneReferences ||
+                sandboxResource.RequiresAcrPullIdentity;
             if (sandboxResource.TryGetLastAnnotation<AzureSandboxGroupAcrPullIdentityAnnotation>(out var imagePullIdentityAnnotation))
             {
                 if (sandboxResource.IsExisting() &&
@@ -61,13 +65,8 @@ public static class AzureSandboxesExtensions
                 imagePullIdentityId = imagePullIdentityAnnotation.Identity.Id.AsProvisioningParameter(infrastructure);
                 imagePullIdentityClientId = imagePullIdentityAnnotation.Identity.ClientId.AsProvisioningParameter(infrastructure);
             }
-            else
+            else if (!sandboxResource.IsExisting() && requiresAcrPullIdentity)
             {
-                if (sandboxResource.IsExisting())
-                {
-                    throw CreateExistingSandboxGroupMissingAcrPullIdentityException(sandboxResource);
-                }
-
                 newImagePullIdentity = new UserAssignedIdentity(
                     Infrastructure.NormalizeBicepIdentifier($"{sandboxResource.Name}_mi"));
                 infrastructure.Add(newImagePullIdentity);
@@ -89,7 +88,11 @@ public static class AzureSandboxesExtensions
                         Properties = [],
                         Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
                     };
-                    ApplyManagedServiceIdentity(resource.Identity, sandboxResource, imagePullIdentityId, infrastructure);
+                    if (imagePullIdentityId is not null ||
+                        sandboxResource.WorkloadManagedIdentityType != ManagedServiceIdentityType.None)
+                    {
+                        ApplyManagedServiceIdentity(resource.Identity, sandboxResource, imagePullIdentityId, infrastructure);
+                    }
                     return resource;
                 });
 
@@ -114,12 +117,31 @@ public static class AzureSandboxesExtensions
             infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = sandboxGroup.Id.ToBicepExpression() });
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = sandboxGroup.Name.ToBicepExpression() });
             infrastructure.Add(new ProvisioningOutput("location", typeof(string)) { Value = sandboxGroup.Location.ToBicepExpression() });
-            infrastructure.Add(new ProvisioningOutput(AzureSandboxGroupResource.ImagePullIdentityClientIdOutputName, typeof(string))
+            var endpoint = BicepFunction.Interpolate($"https://management.{sandboxGroup.Location}.azuredevcompute.io");
+            infrastructure.Add(new ProvisioningOutput("endpoint", typeof(string)) { Value = endpoint });
+            infrastructure.Add(new ProvisioningOutput("subscriptionId", typeof(string))
             {
-                Value = imagePullIdentityClientId
+                Value = BicepFunction.GetSubscription().SubscriptionId
             });
+            infrastructure.Add(new ProvisioningOutput("resourceGroup", typeof(string))
+            {
+                Value = BicepFunction.GetResourceGroup().Name
+            });
+            infrastructure.Add(new ProvisioningOutput("connectionString", typeof(string))
+            {
+                Value = BicepFunction.Interpolate(
+                    $"Endpoint=https://management.{sandboxGroup.Location}.azuredevcompute.io;SubscriptionId={BicepFunction.GetSubscription().SubscriptionId};ResourceGroup={BicepFunction.GetResourceGroup().Name};SandboxGroupName={sandboxGroup.Name}")
+            });
+            if (imagePullIdentityClientId is not null)
+            {
+                infrastructure.Add(new ProvisioningOutput(AzureSandboxGroupResource.ImagePullIdentityClientIdOutputName, typeof(string))
+                {
+                    Value = imagePullIdentityClientId
+                });
+            }
 
-            if (!sandboxResource.IsExisting())
+            if (!sandboxResource.IsExisting() &&
+                (!sandboxResource.HasDataPlaneReferences || sandboxResource.RequiresAcrPullIdentity))
             {
                 AddSandboxGroupDeploymentPrincipalRoleAssignment(infrastructure, sandboxGroup);
             }
@@ -138,7 +160,69 @@ public static class AzureSandboxesExtensions
         var resourceBuilder = builder.AddResource(resource);
         resourceBuilder.WithCrossScopeAcrPullIdentity(
             identity => new AzureSandboxGroupAcrPullIdentityAnnotation(identity, isAspireManaged: true));
+
+        // Capture explicit compute use before the host assigns every unbound workload to the
+        // sole compute environment. A data-plane reference alone must not opt into deployment.
+        // Retain that decision if before-start preparation is invoked again, when those implicit
+        // assignments are already present in the model.
+        var computeInfrastructurePrepared = false;
+        builder.Eventing.Subscribe<BeforeStartEvent>((@event, _) =>
+        {
+            if (!computeInfrastructurePrepared)
+            {
+                PrepareComputeInfrastructure(resourceBuilder, @event.Model);
+                computeInfrastructurePrepared = true;
+            }
+
+            return Task.CompletedTask;
+        });
+
         return resourceBuilder;
+    }
+
+    /// <summary>
+    /// Adds a reference to an Azure Container Apps sandbox group to the resource.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="sandboxGroup">The Azure sandbox group resource.</param>
+    /// <param name="connectionName">An optional connection name override.</param>
+    /// <param name="optional"><see langword="true"/> to allow a missing connection string; otherwise, <see langword="false"/>.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// In run mode, referencing the sandbox group activates Azure provisioning and injects the data-plane connection properties.
+    /// To also deploy a workload to the group, select it with <c>WithComputeEnvironment</c>.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var sandboxes = builder.AddAzureSandboxGroup("sandboxes");
+    /// var aca = builder.AddAzureContainerAppEnvironment("aca");
+    /// builder.AddContainer("frontend", "image")
+    ///     .WithComputeEnvironment(aca)
+    ///     .WithReference(sandboxes);
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the generic withReference export.")]
+    [Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<T> WithReference<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<AzureSandboxGroupResource> sandboxGroup,
+        string? connectionName = null,
+        bool optional = false)
+        where T : IResourceWithEnvironment
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(sandboxGroup);
+
+        sandboxGroup.Resource.HasDataPlaneReferences = true;
+        EnsureRunModeDataPlaneResourceAdded(sandboxGroup);
+        AddDefaultDataPlaneRoleAssignment(sandboxGroup);
+
+        return ResourceBuilderExtensions.WithReference(
+            builder,
+            (IResourceBuilder<IResourceWithConnectionString>)sandboxGroup,
+            connectionName,
+            optional);
     }
 
     /// <summary>
@@ -306,6 +390,28 @@ public static class AzureSandboxesExtensions
             ResourceAnnotationMutationBehavior.Replace);
     }
 
+    private static void PrepareComputeInfrastructure(
+        IResourceBuilder<AzureSandboxGroupResource> builder,
+        DistributedApplicationModel model)
+    {
+        var isOnlyComputeEnvironment = model.Resources.OfType<IComputeEnvironmentResource>().Count() == 1;
+        builder.Resource.ExplicitComputeResources.UnionWith(model.GetComputeResources().Where(resource =>
+            ReferenceEquals(resource.GetComputeEnvironment(), builder.Resource) ||
+            (resource.GetComputeEnvironment() is null &&
+             isOnlyComputeEnvironment &&
+             resource.HasAnnotationOfType<AzureSandboxContainerOptionsAnnotation>())));
+
+        if (!builder.Resource.HasDataPlaneReferences ||
+            builder.Resource.RequiresAcrPullIdentity ||
+            builder.Resource.DefaultContainerRegistry is not { } defaultRegistry)
+        {
+            return;
+        }
+
+        builder.ApplicationBuilder.Resources.Remove(defaultRegistry);
+        builder.Resource.DefaultContainerRegistry = null;
+    }
+
     private static AzureSandboxOptions CopyAzureSandboxOptions(AzureSandboxOptions options)
     {
         return new AzureSandboxOptions
@@ -330,6 +436,32 @@ public static class AzureSandboxesExtensions
         => new(
             $"Existing Azure sandbox group '{sandboxGroup.Name}' requires a user-assigned ACR pull identity. " +
             $"Call '{nameof(WithAcrPullIdentity)}' with an identity that is already attached to the sandbox group and has AcrPull on the configured registry.");
+
+    private static void EnsureRunModeDataPlaneResourceAdded(IResourceBuilder<AzureSandboxGroupResource> builder)
+    {
+        var applicationBuilder = builder.ApplicationBuilder;
+        if (!applicationBuilder.ExecutionContext.IsRunMode ||
+            applicationBuilder.Resources.Contains(builder.Resource))
+        {
+            return;
+        }
+
+        applicationBuilder.AddAzureProvisioning();
+        applicationBuilder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
+        applicationBuilder.AddResource(builder.Resource);
+    }
+
+    private static IResourceBuilder<AzureSandboxGroupResource> AddDefaultDataPlaneRoleAssignment(
+        IResourceBuilder<AzureSandboxGroupResource> builder)
+    {
+        return builder.WithAnnotation(
+            new DefaultRoleAssignmentsAnnotation(
+                new HashSet<RoleDefinition>
+                {
+                    new(SandboxGroupDataOwnerRoleId, SandboxGroupDataOwnerRoleName)
+                }),
+            ResourceAnnotationMutationBehavior.Replace);
+    }
 
     private static void AddSandboxGroupDeploymentPrincipalRoleAssignment(AzureResourceInfrastructure infrastructure, SandboxGroup sandboxGroup)
     {
@@ -503,17 +635,22 @@ public static class AzureSandboxesExtensions
     private static void ApplyManagedServiceIdentity(
         ManagedServiceIdentity identity,
         AzureSandboxGroupResource resource,
-        BicepValue<string> imagePullIdentityId,
+        BicepValue<string>? imagePullIdentityId,
         AzureResourceInfrastructure infrastructure)
     {
-        identity.ManagedServiceIdentityType = resource.WorkloadManagedIdentityType switch
+        identity.ManagedServiceIdentityType = imagePullIdentityId is null
+            ? resource.WorkloadManagedIdentityType
+            : resource.WorkloadManagedIdentityType switch
         {
             ManagedServiceIdentityType.None => ManagedServiceIdentityType.UserAssigned,
             ManagedServiceIdentityType.SystemAssigned => ManagedServiceIdentityType.SystemAssignedUserAssigned,
             _ => resource.WorkloadManagedIdentityType
         };
-        var imagePullIdentityKey = BicepFunction.Interpolate($"{imagePullIdentityId}").Compile().ToString();
-        identity.UserAssignedIdentities[imagePullIdentityKey] = new UserAssignedIdentityDetails();
+        if (imagePullIdentityId is not null)
+        {
+            var imagePullIdentityKey = BicepFunction.Interpolate($"{imagePullIdentityId}").Compile().ToString();
+            identity.UserAssignedIdentities[imagePullIdentityKey] = new UserAssignedIdentityDetails();
+        }
 
         foreach (var userAssignedIdentity in resource.WorkloadUserAssignedIdentities)
         {
@@ -526,11 +663,8 @@ public static class AzureSandboxesExtensions
     private static AzureContainerRegistryResource CreateDefaultAzureContainerRegistry(IDistributedApplicationBuilder builder, string name)
     {
         var resource = new AzureContainerRegistryResource(name, ContainerRegistryInfrastructure.ConfigureContainerRegistry);
-        if (builder.ExecutionContext.IsPublishMode)
-        {
-            builder.AddResource(resource)
-                .WithAnnotation(new DefaultRoleAssignmentsAnnotation(new HashSet<RoleDefinition>()));
-        }
+        builder.AddResource(resource)
+            .WithAnnotation(new DefaultRoleAssignmentsAnnotation(new HashSet<RoleDefinition>()));
 
         return resource;
     }

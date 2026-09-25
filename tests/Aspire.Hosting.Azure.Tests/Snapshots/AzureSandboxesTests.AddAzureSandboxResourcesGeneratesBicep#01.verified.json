@@ -1,5 +1,6 @@
 ﻿{
   "type": "azure.bicep.v0",
+  "connectionString": "{workergroup.outputs.connectionString}",
   "path": "workergroup.module.bicep",
   "params": {
     "workergroup_acr_outputs_name": "{workergroup-acr.outputs.name}",
