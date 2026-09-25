@@ -1,0 +1,120 @@
+{
+  "run_id": 36179440800,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/36179440800",
+  "run_scope": "main",
+  "analyzed_at": "2026-09-25T20:40:42Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20382,
+    "title": "Bump the GitHub Actions group to current major versions",
+    "author": "Evangelink",
+    "state": "closed",
+    "head_branch": "dependabot-update-planner",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20382",
+    "merged_at": "2026-09-25T19:24:01Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "1c37c50d93f938bc85f7031c4d08fb577b40e655",
+    "failed_sha": "d32787cddecffe27c071c0742afedceb8ac258c8",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "38247de8eee27525ca0cc892112aa1160a547408",
+        "message": "Update Aspire.Cli to target net11.0 (#20436) ## Description This retargets the Aspire CLI from `net10.0` to `net11.0`, with only the changes needed to build, publish Native AOT, package, and pass tests. Follow-up PRs will start using new .NET 11 features. ### User-facing impact - **Nothing changes in behavior for users of the native `aspire` binary.** - **The `Aspire.Cli` dotnet tool package layout changes.** The platform-specific packages (`Aspire.Cli.<rid>`) now put the binary under `tools/any",
+        "html_url": "https://github.com/microsoft/aspire/commit/38247de8eee27525ca0cc892112aa1160a547408",
+        "pull_request": {
+          "number": 20436,
+          "title": "Update Aspire.Cli to target net11.0",
+          "url": "https://github.com/microsoft/aspire/pull/20436",
+          "merged_at": "2026-09-25T17:57:29Z"
+        }
+      },
+      {
+        "sha": "f03a257eefa74620fa178cadb0e8cc9a6a9aa7ad",
+        "message": "Remove redundant experimental annotations from Azure Sandboxes (#20482) ## Description Consumers should not need to suppress `ASPIREAZURE001` to use Azure Sandboxes: the entire `Aspire.Hosting.Azure.Sandboxes` package is already prerelease. Remove the `Experimental` attributes for `ASPIREAZURE001` from the sandbox resource, extension methods, options, and enums. Remove obsolete warning suppressions and unused imports, including the suppression in the README and generated deployment-test AppHost.",
+        "html_url": "https://github.com/microsoft/aspire/commit/f03a257eefa74620fa178cadb0e8cc9a6a9aa7ad",
+        "pull_request": {
+          "number": 20482,
+          "title": "Remove redundant experimental annotations from Azure Sandboxes",
+          "url": "https://github.com/microsoft/aspire/pull/20482",
+          "merged_at": "2026-09-25T17:58:02Z"
+        }
+      },
+      {
+        "sha": "ecb0fc13b512451c18c033db2f827cadc7858d53",
+        "message": "[ci] Fix internal builds (#20455) ## Description **Official internal builds are broken because the `Template Tests` stage now needs about 25 minutes, but the test session is terminated after 20 minutes.** The completed tests pass; the pipeline fails because Microsoft.Testing.Platform aborts the still-running session. In [build 3086035](https://dev.azure.com/dnceng/internal/_build/results?buildId=3086035&view=results), 129 tests passed with no failures before the deadline: ```text Test run summar",
+        "html_url": "https://github.com/microsoft/aspire/commit/ecb0fc13b512451c18c033db2f827cadc7858d53",
+        "pull_request": {
+          "number": 20455,
+          "title": "[ci] Fix internal builds",
+          "url": "https://github.com/microsoft/aspire/pull/20455",
+          "merged_at": "2026-09-25T18:12:28Z"
+        }
+      },
+      {
+        "sha": "d32787cddecffe27c071c0742afedceb8ac258c8",
+        "message": "Bump the GitHub Actions group to current major versions (#20382) ## Description Updates the root `.github/workflows/*.yml` GitHub Actions group from the CAO task to the requested target versions and immutable SHAs: - `actions/create-github-app-token` 3.1.1 -> 3.2.0 - `github/gh-aw-actions/setup` and `setup-cli` 0.88.8 -> 0.89.15 - `actions/checkout` 6.x -> 7.0.1 - `actions/upload-artifact` 7.0.0 -> 7.0.1 - `actions/setup-node` 6.3.0 -> 7.0.0 - `actions/setup-dotnet` 5.2.0 -> 6.0.0 - `actions/set",
+        "html_url": "https://github.com/microsoft/aspire/commit/d32787cddecffe27c071c0742afedceb8ac258c8",
+        "pull_request": {
+          "number": 20382,
+          "title": "Bump the GitHub Actions group to current major versions",
+          "url": "https://github.com/microsoft/aspire/pull/20382",
+          "merged_at": "2026-09-25T19:24:01Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "id": 108227809572,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/36179440800/job/108227809572",
+      "classification": "flaky-test",
+      "reason": "ManageDataDialogTests.Render_ClearedSignals_PrunesSelectionsAndSupportsRemovingEmptyResource failed with a bUnit JSInterop hang: IconCheckbox's initializeIconCheckboxKeyboard JS call was invoked but the bUnit JS handler was not configured with a result, a test-setup timing issue unrelated to the merged commits.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 108233361011,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/36179440800/job/108233361011",
+      "classification": "flaky-test",
+      "reason": "Blazor browser debugger E2E (standalone) test timed out after ~295s waiting for the pwa-msedge child debug session to attach to the browser, with repeated 'Browser connection failed, will retry' messages, matching a known recurring flaky pattern (prior cause vscode-extension-e2e-blazordebugger-standalone-timeout-windows).",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Dialogs.ManageDataDialogTests.Render_ClearedSignals_PrunesSelectionsAndSupportsRemovingEmptyResource(dashboardClientIsReadOnly: False)",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "error": "Bunit.JSRuntimeInvocationNotSetException : bUnit's JSInterop invocation handler was setup to handle the call:\n\n    InvokeVoidAsync(\"initializeIconCheckboxKeyboard\", Microsoft.AspNetCore.Components.ElementReference)\n\nHowever, the invocation handler was not configured to return a result,\ncausing the invocation to hang indefinitely.\n\nTo fix this, configure the handler to return a result using one of the following methods:\n\n    handler.SetVoidResult();\n    handler.SetCanceled();\n    handler.SetException(new Exception(\"error message\"));",
+      "stack_trace": "at Microsoft.JSInterop.JSObjectReferenceExtensions.InvokeVoidAsync(IJSObjectReference jsObjectReference, String identifier, Object[] args)\n   at Aspire.Dashboard.Components.IconCheckbox.OnAfterRenderAsync(Boolean firstRender) in /_/src/Aspire.Dashboard/Components/Controls/IconCheckbox.razor.cs:line 105\n   at Microsoft.AspNetCore.Components.RenderTree.Renderer.GetErrorHandledTask(Task taskToHandle, ComponentState owningComponentState)\n   at Bunit.RenderedComponentWaitForHelperExtensions.WaitForAssertion[TComponent](IRenderedComponent`1 renderedComponent, Action assertion, Nullable`1 timeout) in /_/src/bunit/Extensions/WaitForHelpers/RenderedComponentWaitForHelperExtensions.WaitForState.cs:line 102\n   at Aspire.Dashboard.Components.Tests.Dialogs.ManageDataDialogTests.Render_ClearedSignals_PrunesSelectionsAndSupportsRemovingEmptyResource(Boolean dashboardClientIsReadOnly) in /_/tests/Aspire.Dashboard.Components.Tests/Dialogs/ManageDataDialogTests.cs:line 215\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Dashboard.Components.Tests\\Workspace\\ccvvxo5d.pgn\nDisposing temporary workspace at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Dashboard.Components.Tests\\Workspace\\ccvvxo5d.pgn",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "bUnit JSInterop handler race/hang unrelated to candidate merges; none of the merged PRs touch IconCheckbox or ManageDataDialog test setup, and the same underlying handler-not-configured pattern is timing dependent."
+    },
+    {
+      "name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "error": "Failed to apply E2E control revision 1790367277272: Error: Timed out after 294772ms waiting for pwa-msedge child session for Blazor WASM root 'f30912b1-44f6-4cea-9680-e72896fc4607'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"395d8581-cf06-46c8-9029-b397c47e5e57\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-qtgvGW\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":62833,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-qtgvGW\\\\workspace\\\\StandaloneClient\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-qtgvGW\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmi",
+      "stack_trace": "Error: Failed to apply E2E control revision 1790367277272: Error: Timed out after 294772ms waiting for pwa-msedge child session for Blazor WASM root 'f30912b1-44f6-4cea-9680-e72896fc4607'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"395d8581-cf06-46c8-9029-b397c47e5e57\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-qtgvGW\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":62833,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-qtgvGW\\\\workspace\\\\StandaloneClient\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-qtgvGW\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-qtgvGW\\\\workspace\\\\HostedGlobal\\\\HostedGlobal.Client\\\\bin\\\\Debug\\\\net11.0\\\\\"},\"stopAtEntry\":false,\"justMyCode\":true,\"requireExactSource\":true,\"enableStepFiltering\":true,\"logging\":{\"exceptions\":true,\"moduleLoad\":true,\"programOutput\":true,\"browserStdOut\":true,\"elapsedTiming\":false,\"threadExit\":false,\"processExit\":true,\"engineLogging\":false,\"diagnosticsLog\":{\"protocolMessages\":false,\"dispatcherMessages\":\"none\",\"debugEngineAPITracing\":\"none\",\"debugRuntimeEventTracing\":false,\"expressionEvaluationTracing\":false,\"startDebuggingTracing\":false},\"consoleUsageMessage\":true},\"suppressJITOptimizations\":false,\"symbolOptions\":{\"searchPaths\":[],\"searchMicrosoftSymbolServer\":false,\"searchNuGetOrgSymbolServer\":false,\"cachePath\":\"\",\"moduleFilter\":{\"mode\":\"loadAllButExcluded\",\"excludedModules\":[],\"includedModules\":[],\"includeSymbolsNextToModules\":true,\"includeSymbolsOnDemand\":true}},\"expressionEvaluationOptions\":{\"allowImplicitFuncEval\":true,\"allowToString\":true,\"allowF",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches a known recurring flaky pattern (prior cause vscode-extension-e2e-blazordebugger-standalone-timeout-windows, 5 prior occurrences): repeated 'Browser connection failed, will retry: Unable to attach to browser' messages culminating in a timeout, an environmental browser-attach race unrelated to the candidate merges."
+    }
+  ],
+  "causes": [
+    "dashboard-components-managedatadialog-iconcheckbox-jsinterop",
+    "vscode-extension-e2e-blazordebugger-standalone-timeout-windows"
+  ]
+}

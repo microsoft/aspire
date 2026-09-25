@@ -1,0 +1,16 @@
+{
+  "id": "dashboard-components-managedatadialog-iconcheckbox-jsinterop",
+  "type": "flaky-test",
+  "title": "Flaky: ManageDataDialogTests bUnit JSInterop hang on IconCheckbox.initializeIconCheckboxKeyboard call",
+  "test_name": "Aspire.Dashboard.Components.Tests.Dialogs.ManageDataDialogTests.Render_ClearedSignals_PrunesSelectionsAndSupportsRemovingEmptyResource(dashboardClientIsReadOnly: False)",
+  "error_pattern": "Bunit.JSRuntimeInvocationNotSetException : bUnit's JSInterop invocation handler was setup to handle the call: InvokeVoidAsync(\"initializeIconCheckboxKeyboard\", ElementReference) However, the invocation handler was not configured to return a result, causing the invocation to hang indefinitely. at Aspire.Dashboard.Components.IconCheckbox.OnAfterRenderAsync(Boolean firstRender) in IconCheckbox.razor.cs:line 105",
+  "occurrences": [
+    {
+      "run_id": 36179440800,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/36179440800",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-09-25T20:40:42Z"
+    }
+  ]
+}
