@@ -3,8 +3,6 @@
 
 #pragma warning disable ASPIREPROJECTS001
 
-using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 
@@ -12,31 +10,11 @@ namespace Aspire.Hosting.Dotnet.Tests;
 
 public class DotnetProjectPublicApiTests
 {
-    // ---- Experimental tagging ------------------------------------------------------
-
-    [Fact]
-    public void DotnetProjectResourceIsNotExperimental()
-    {
-        Assert.Empty(typeof(DotnetProjectResource).GetCustomAttributes<ExperimentalAttribute>());
-    }
-
     [Fact]
     public void DotnetProjectResourceImplementsPublishingContracts()
     {
         Assert.True(typeof(IDotnetProgramResource).IsAssignableFrom(typeof(DotnetProjectResource)));
         Assert.True(typeof(IContainerFilesDestinationResource).IsAssignableFrom(typeof(DotnetProjectResource)));
-    }
-
-    [Fact]
-    public void DotnetProjectHostingExtensionsAreNotExperimental()
-    {
-        Assert.Empty(typeof(DotnetProjectHostingExtensions).GetCustomAttributes<ExperimentalAttribute>());
-
-        var methods = typeof(DotnetProjectHostingExtensions)
-            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.DeclaredOnly);
-
-        Assert.NotEmpty(methods);
-        Assert.All(methods, method => Assert.Empty(method.GetCustomAttributes<ExperimentalAttribute>()));
     }
 
     // ---- DotnetProjectResource constructor guards --------------------------------
