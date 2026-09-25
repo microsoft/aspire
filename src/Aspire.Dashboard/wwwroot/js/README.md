@@ -18,7 +18,7 @@ If we ever want to show more chart types than those, we'll need to change the bu
 
 ## Hex1b web terminal
 
-`hex1b-web-terminal/` vendors the published `@hex1b/web-terminal` **0.171.0** release,
+`hex1b-web-terminal/` vendors the published `@hex1b/web-terminal` **0.172.0-alpha.1654.1.f826137** release,
 paired with the Hex1b, Hex1b.McpServer, and Hex1b.Tool NuGet packages and the
 repository-local `hex1b` tool at the same version. The client and server use the evolving
 HWT1 presentation transport and must be updated together. Do not substitute a
