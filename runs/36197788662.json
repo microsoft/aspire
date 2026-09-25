@@ -1,0 +1,175 @@
+{
+  "run_id": 36197788662,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/36197788662",
+  "run_scope": "main",
+  "analyzed_at": "2026-09-25T23:54:17Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20395,
+    "title": "Update Arcade to 10.0.0-beta.26472.2",
+    "author": "joperezr",
+    "state": "closed",
+    "head_branch": "joperezr-update-arcade-dependencies",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20395",
+    "merged_at": "2026-09-25T22:39:55Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "1c37c50d93f938bc85f7031c4d08fb577b40e655",
+    "failed_sha": "84af5257c01c79de475ee01c734494b383769099",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "38247de8eee27525ca0cc892112aa1160a547408",
+        "message": "Update Aspire.Cli to target net11.0 (#20436) ## Description This retargets the Aspire CLI from `net10.0` to `net11.0`, with only the changes needed to build, publish Native AOT, package, and pass tests. Follow-up PRs will start using new .NET 11 features. ### User-facing impact - **Nothing changes in behavior for users of the native `aspire` binary.** - **The `Aspire.Cli` dotnet tool package layout changes.** The platform-specific packages (`Aspire.Cli.<rid>`) now put the binary under `tools/any",
+        "html_url": "https://github.com/microsoft/aspire/commit/38247de8eee27525ca0cc892112aa1160a547408",
+        "pull_request": {
+          "number": 20436,
+          "title": "Update Aspire.Cli to target net11.0",
+          "url": "https://github.com/microsoft/aspire/pull/20436",
+          "merged_at": "2026-09-25T17:57:29Z"
+        }
+      },
+      {
+        "sha": "f03a257eefa74620fa178cadb0e8cc9a6a9aa7ad",
+        "message": "Remove redundant experimental annotations from Azure Sandboxes (#20482) ## Description Consumers should not need to suppress `ASPIREAZURE001` to use Azure Sandboxes: the entire `Aspire.Hosting.Azure.Sandboxes` package is already prerelease. Remove the `Experimental` attributes for `ASPIREAZURE001` from the sandbox resource, extension methods, options, and enums. Remove obsolete warning suppressions and unused imports, including the suppression in the README and generated deployment-test AppHost.",
+        "html_url": "https://github.com/microsoft/aspire/commit/f03a257eefa74620fa178cadb0e8cc9a6a9aa7ad",
+        "pull_request": {
+          "number": 20482,
+          "title": "Remove redundant experimental annotations from Azure Sandboxes",
+          "url": "https://github.com/microsoft/aspire/pull/20482",
+          "merged_at": "2026-09-25T17:58:02Z"
+        }
+      },
+      {
+        "sha": "ecb0fc13b512451c18c033db2f827cadc7858d53",
+        "message": "[ci] Fix internal builds (#20455) ## Description **Official internal builds are broken because the `Template Tests` stage now needs about 25 minutes, but the test session is terminated after 20 minutes.** The completed tests pass; the pipeline fails because Microsoft.Testing.Platform aborts the still-running session. In [build 3086035](https://dev.azure.com/dnceng/internal/_build/results?buildId=3086035&view=results), 129 tests passed with no failures before the deadline: ```text Test run summar",
+        "html_url": "https://github.com/microsoft/aspire/commit/ecb0fc13b512451c18c033db2f827cadc7858d53",
+        "pull_request": {
+          "number": 20455,
+          "title": "[ci] Fix internal builds",
+          "url": "https://github.com/microsoft/aspire/pull/20455",
+          "merged_at": "2026-09-25T18:12:28Z"
+        }
+      },
+      {
+        "sha": "d32787cddecffe27c071c0742afedceb8ac258c8",
+        "message": "Bump the GitHub Actions group to current major versions (#20382) ## Description Updates the root `.github/workflows/*.yml` GitHub Actions group from the CAO task to the requested target versions and immutable SHAs: - `actions/create-github-app-token` 3.1.1 -> 3.2.0 - `github/gh-aw-actions/setup` and `setup-cli` 0.88.8 -> 0.89.15 - `actions/checkout` 6.x -> 7.0.1 - `actions/upload-artifact` 7.0.0 -> 7.0.1 - `actions/setup-node` 6.3.0 -> 7.0.0 - `actions/setup-dotnet` 5.2.0 -> 6.0.0 - `actions/set",
+        "html_url": "https://github.com/microsoft/aspire/commit/d32787cddecffe27c071c0742afedceb8ac258c8",
+        "pull_request": {
+          "number": 20382,
+          "title": "Bump the GitHub Actions group to current major versions",
+          "url": "https://github.com/microsoft/aspire/pull/20382",
+          "merged_at": "2026-09-25T19:24:01Z"
+        }
+      },
+      {
+        "sha": "e9a633024ede5187200bc9d392180a90e2d1fe86",
+        "message": "Bump the github-actions group across 1 directory with 2 updates (#20489) Bumps the github-actions group with 2 updates in the / directory: [github/gh-aw-actions/setup](https://github.com/github/gh-aw-actions) and [github/gh-aw-actions/setup-cli](https://github.com/github/gh-aw-actions). Updates `github/gh-aw-actions/setup` from 0.89.15 to 0.89.16 <details> <summary>Release notes</summary> <p><em>Sourced from <a href=\"https://github.com/github/gh-aw-actions/releases\">github/gh-aw-actions/setup's ",
+        "html_url": "https://github.com/microsoft/aspire/commit/e9a633024ede5187200bc9d392180a90e2d1fe86",
+        "pull_request": {
+          "number": 20489,
+          "title": "Bump the github-actions group across 1 directory with 2 updates",
+          "url": "https://github.com/microsoft/aspire/pull/20489",
+          "merged_at": "2026-09-25T20:48:27Z"
+        }
+      },
+      {
+        "sha": "733a9e23fe842e8b921cd9fa606cf7118ac36219",
+        "message": "Remove Experimental attributes from Aspire.Hosting.Dotnet (#20490) ## Description `Aspire.Hosting.Dotnet` is already a prerelease package, so consumers should not also need to suppress `ASPIREDOTNETPROJECT001` to use its APIs. Remove the `Experimental` attributes from `DotnetProjectResource`, the public extension methods, and the internal polyglot exports without changing runtime behavior or the package's prerelease status. Remove obsolete suppressions within the integration and its tests, updat",
+        "html_url": "https://github.com/microsoft/aspire/commit/733a9e23fe842e8b921cd9fa606cf7118ac36219",
+        "pull_request": {
+          "number": 20490,
+          "title": "Remove Experimental attributes from Aspire.Hosting.Dotnet",
+          "url": "https://github.com/microsoft/aspire/pull/20490",
+          "merged_at": "2026-09-25T21:01:08Z"
+        }
+      },
+      {
+        "sha": "f48a7b1251d339b21856497f10b36d227a5e57cc",
+        "message": "Fix remaining Outerloop failures in DCP, CLI, and Dashboard tests (#20466) Four repeat failures remained in the Outerloop workflow: ```text The SDK 'Aspire.AppHost.Sdk/14.0.0-ci' specified could not be found. ``` ```text Watch task over Kubernetes ContainerExec resources terminated unexpectedly. Polly.Timeout.TimeoutRejectedException: The operation didn't complete within the allowed timeout of '00:01:00'. ``` ```text Expected rows not found: apiservice, webfrontend, cache ``` ```text ScrollButto",
+        "html_url": "https://github.com/microsoft/aspire/commit/f48a7b1251d339b21856497f10b36d227a5e57cc",
+        "pull_request": {
+          "number": 20466,
+          "title": "Fix remaining Outerloop failures in DCP, CLI, and Dashboard tests",
+          "url": "https://github.com/microsoft/aspire/pull/20466",
+          "merged_at": "2026-09-25T21:35:11Z"
+        }
+      },
+      {
+        "sha": "9272b28a8a767175dd89f3e7b0e6a8ae8f8978d0",
+        "message": "Add deterministic CI validation for agentic workflows (#20458) ## What was missing **Agentic-only changes could bypass deterministic compilation, generated-file drift checks, lint, and repository contracts.** Stale executable workflows, edited action-pin output, or shell errors could reach main without a blocking validation job. The main CI skip gate intentionally excludes agentic Markdown sources and generated locks, but those files lacked a dedicated validation path. Compile-time lint diagnost",
+        "html_url": "https://github.com/microsoft/aspire/commit/9272b28a8a767175dd89f3e7b0e6a8ae8f8978d0",
+        "pull_request": {
+          "number": 20458,
+          "title": "Add deterministic CI validation for agentic workflows",
+          "url": "https://github.com/microsoft/aspire/pull/20458",
+          "merged_at": "2026-09-25T22:08:33Z"
+        }
+      },
+      {
+        "sha": "84af5257c01c79de475ee01c734494b383769099",
+        "message": "Update Arcade to 10.0.0-beta.26472.2 (#20395) ## Description Keep Aspire's build infrastructure aligned with the latest Arcade build on the `.NET 10 Eng` channel. Ran `darc update-dependencies -c '.NET 10 Eng'` in an isolated worktree. This updates the seven Arcade toolset dependencies from `10.0.0-beta.26423.1` to `10.0.0-beta.26472.2` (build `20260922.2`, dotnet/arcade commit `614293a9b3aa17dda9dc7e69c4dfcd576f59741a`), updates the corresponding SDK/package pins, and synchronizes the generated",
+        "html_url": "https://github.com/microsoft/aspire/commit/84af5257c01c79de475ee01c734494b383769099",
+        "pull_request": {
+          "number": 20395,
+          "title": "Update Arcade to 10.0.0-beta.26472.2",
+          "url": "https://github.com/microsoft/aspire/pull/20395",
+          "merged_at": "2026-09-25T22:39:55Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kusto.Tests, Hosting.Azure.Kusto, Hosting.Azure.K... / Hosting.Azure.Kusto (ubuntu-latest)",
+      "id": 108283697554,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/36197788662/job/108283697554",
+      "classification": "flaky-test",
+      "reason": "Test failed because the Kusto emulator container's health check timed out with a client-side socket error after a failed connection attempt, an environmental/emulator readiness issue unrelated to the Arcade dependency update.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 108283698392,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/36197788662/job/108283698392",
+      "classification": "flaky-test",
+      "reason": "Test failed due to a 30-second async timeout in an unrelated NuGet prefetcher cancellation test, a timing-sensitive test unrelated to the Arcade dependency update.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Azure.Kusto.Tests.KustoFunctionalTests.KustoEmulator_WithDatabaseThatAlreadyExists_ErrorIsIgnored",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kusto.Tests, Hosting.Azure.Kusto, Hosting.Azure.K... / Hosting.Azure.Kusto (ubuntu-latest)",
+      "error": "System.OperationCanceledException : Resource 'kusto' failed to become healthy before the operation was cancelled.\n- Current State: Running\n- Creation Time: 09/25/2026 23:10:39\n- Start Time: 09/25/2026 23:10:41\n- Current Health: Unhealthy\n- Health Reports:\n  - kusto_check: Unhealthy @ 2026-09-25 23:16:37\n    [0]Kusto.Data.Exceptions.KustoClientException: Kusto client failed to send a request to the service: 'Sockets on this platform are invalid for use after a failed connection attempt.'.\n    Error details:\n    DataSource='http://localhost:32793/v1/rest/mgmt',\n    DatabaseName='NetDefaultDB',\n    ClientRequestId='KD2RunCommand;fc000419-cc03-49ce-9197-51c6f2620bb5',\n    Timestamp='2026-09-25T23:16:37.3788842Z'.\n    Timestamp=2026-09-25T23:16:37.3788842Z\n    ClientRequestId=KD2RunCommand;fc000419-cc03-49ce-9197-51c6f2620bb5\n    ActivityId=57127de3-146f-47f4-9119-277782b98963\n    ActivityType=KD.RestClient.ExecuteControlCommand\n    MachineName=runnervmtr4k5\n    ProcessName=Aspire.Hosting.A",
+      "stack_trace": "at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceCoreAsync(String resourceName, Func`2 predicate, String cancellationMessage, CancellationToken cancellationToken, String waitCondition) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 693\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceHealthyAsync(String resourceName, WaitBehavior waitBehavior, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 256\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceHealthyAsync(String resourceName, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 206\n   at Aspire.Hosting.Azure.Kusto.Tests.KustoFunctionalTests.KustoEmulator_WithDatabaseThatAlreadyExists_ErrorIsIgnored() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Azure.Kusto.Tests/KustoFunctionalTests.cs:line 189\n--- End of stack trace from previous location ---\n----- Inner Stack Trace -----\n   at System.Threading.Channels.AsyncOperation`1.GetResult(Int16 token)\n   at System.Threading.Channels.ChannelReader`1.ReadAllAsync(CancellationToken cancellationToken)+MoveNext()\n   at System.Threading.Channels.ChannelReader`1.ReadAllAsync(CancellationToken cancellationToken)+System.Threading.Tasks.Sources.IValueTaskSource<System.Boolean>.GetResult()\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WatchAsync(CancellationToken cancellationToken)+MoveNext() in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 793\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WatchAsync(CancellationToken cancellationToken)+MoveNext() in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 793\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WatchAsync(CancellationToken cancellationToken)+System.Threading.T",
+      "standard_output": "| [2026-09-25T23:10:39] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 14.0.0-ci\n| [2026-09-25T23:10:39] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-09-25T23:10:39] Aspire.Hosting.DistributedApplication Information: Application host directory is: /home/runner/work/aspire/aspire/tests/Aspire.Hosting.TestUtilities\n| [2026-09-25T23:10:39] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-09-25T23:10:39] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-09-25T23:10:39] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-09-25T23:10:39] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: /home/runner/.aspire/cli/bch/KfshLkY6TmIBTWZ6jsI.6002\n| [2026-09-25T23:10:39] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on /home/runner/.aspire/cli/bch/KfshLkY6TmIBTWZ6jsI.6002\n| [2026-09-25T23:10:39] Aspire.Hosting.Dcp.DcpHost Debug: Prepared DCP TLS certificate files for thumbprint F9DB5F8EEBD4202BBD3F8CF750ECAD692C203E6C.\n| [2026-09-25T23:10:39] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: /tmp/aspire-dcpGMBcDD\n| [2026-09-25T23:10:39] Aspire.Hosting.Dcp.DcpHost Information: Starting DCP with arguments: start-apiserver --monitor 6002 --detach --kubeconfig \"/tmp/aspire-dcpGMBcDD/kubeconfig\" --tls-cert-thumbprint \"F9DB5F8EEBD4202BBD3F8CF750ECAD692C203E6C\" --tls-cert-file \"/home/runner/.aspire/dev-certs/https/7E0C2C6F4D50B95986F7986F6C6A52D1988F906D533A2B7A338E60997DA2E725.crt\" --tls-key-file \"/home/runner/.aspire/dev-certs/https/7E0C2C6F4D50B95986F7986F6C6A52D1988F906D533A2B7A338E60997DA2E725.key\"\n| [2026-09-25T23:10:39] Aspire.Hosting.Dcp.DcpExecutor Debug: Preparing services. Ports randomized: True\n| [2026-09-25T23:10:39] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource azure-environment/azure-environment update published: ResourceType = AzureEnvironmentResource, CreationTimeStamp = 2026-09-25T23:10:39, State = { Text = NotStarted, Style = (null) }, IsHidden = True, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = {  }, Commands = { reset-provisioning-state (Reset provisioning state) = Enabled change-azure-context (Change Azure context) = Enabled reprovision-all (Reprovision all) = Enabled delete-azure-resources (Delete Azure resources) = Enabled }\n| [2026-09-25T23:10:39] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource kusto/kusto-qfpejznp update published: ResourceType = AzureKustoClusterResource, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = { kusto_check = (null) }, Commands = { open-kusto-explorer-desktop (Open in Kusto Explorer (Desktop)) = Hidden open-kusto-explorer-web (Open in Kusto Explorer (Web)) = Hidden start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled }\n| [2026-09-25T23:10:39] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 2 Resource azure-environment/azure-environment update published: ResourceType = AzureEnvironmentResource, CreationTimeStamp = 2026-09-25T23:10:39, State = { Text = NotStarted, Style = (null) }, IsHidden = True, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = { azure.operation.name = Provision Azure resources azure.operation.phase = Provision Azure resources azure.operation.status = Running azure.operation.started.at = 2026-09-25T23:10:39.",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Kusto emulator container health check failed with an environmental socket error after a failed connection attempt, a timing/container-readiness issue unrelated to the Arcade dependency update on main."
+    },
+    {
+      "name": "Aspire.Cli.Tests.NuGet.NuGetPackagePrefetcherTests.PrefetchingCancellationDueToShutdownLogsCleanMessage",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "error": "System.TimeoutException : The operation at /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/NuGet/NuGetPackagePrefetcherTests.cs:175 timed out after reaching the limit of 30000ms.",
+      "stack_trace": "at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in /Users/runner/work/aspire/aspire/tests/Shared/AsyncTestHelpers.cs:line 194\n   at Aspire.Cli.Tests.NuGet.NuGetPackagePrefetcherTests.PrefetchingCancellationDueToShutdownLogsCleanMessage() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/NuGet/NuGetPackagePrefetcherTests.cs:line 175\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "A hardcoded 30-second timeout in a cancellation-shutdown test exceeded under CI load on macOS, a timing-sensitive failure unrelated to the Arcade dependency update."
+    }
+  ],
+  "causes": [
+    "kusto-emulator-healthcheck-socket-error",
+    "cli-nuget-prefetcher-shutdown-timeout"
+  ]
+}

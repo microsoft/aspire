@@ -1,0 +1,16 @@
+{
+  "id": "kusto-emulator-healthcheck-socket-error",
+  "type": "flaky-test",
+  "title": "Flaky: Kusto emulator health check fails with socket error after failed connection attempt",
+  "test_name": "Aspire.Hosting.Azure.Kusto.Tests.KustoFunctionalTests.KustoEmulator_WithDatabaseThatAlreadyExists_ErrorIsIgnored",
+  "error_pattern": "System.OperationCanceledException : Resource 'kusto' failed to become healthy before the operation was cancelled. Kusto.Data.Exceptions.KustoClientException: Kusto client failed to send a request to the service: 'Sockets on this platform are invalid for use after a failed connection attempt.'",
+  "occurrences": [
+    {
+      "run_id": 36197788662,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/36197788662",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Kusto.Tests, Hosting.Azure.Kusto, Hosting.Azure.K... / Hosting.Azure.Kusto (ubuntu-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-09-25T23:54:17Z"
+    }
+  ]
+}

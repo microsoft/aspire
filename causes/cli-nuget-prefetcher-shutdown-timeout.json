@@ -1,0 +1,16 @@
+{
+  "id": "cli-nuget-prefetcher-shutdown-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: NuGetPackagePrefetcherTests.PrefetchingCancellationDueToShutdownLogsCleanMessage times out after 30s",
+  "test_name": "Aspire.Cli.Tests.NuGet.NuGetPackagePrefetcherTests.PrefetchingCancellationDueToShutdownLogsCleanMessage",
+  "error_pattern": "System.TimeoutException : The operation at NuGetPackagePrefetcherTests.cs:175 timed out after reaching the limit of 30000ms.",
+  "occurrences": [
+    {
+      "run_id": 36197788662,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/36197788662",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-09-25T23:54:17Z"
+    }
+  ]
+}
