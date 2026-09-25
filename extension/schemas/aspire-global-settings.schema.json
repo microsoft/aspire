@@ -29,7 +29,7 @@
           "description": "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
           "default": false
         },
-        "experimentalPolyglot:go": {
+        "experimentalPolyglotGo": {
           "anyOf": [
             {
               "type": "boolean"
@@ -45,7 +45,7 @@
           "description": "Enable or disable experimental Go language support for polyglot Aspire applications",
           "default": false
         },
-        "experimentalPolyglot:java": {
+        "experimentalPolyglotJava": {
           "anyOf": [
             {
               "type": "boolean"
@@ -61,7 +61,7 @@
           "description": "Enable or disable experimental Java language support for polyglot Aspire applications",
           "default": false
         },
-        "experimentalPolyglot:python": {
+        "experimentalPolyglotPython": {
           "anyOf": [
             {
               "type": "boolean"
@@ -77,7 +77,7 @@
           "description": "Enable or disable experimental Python language support for polyglot Aspire applications",
           "default": false
         },
-        "experimentalPolyglot:rust": {
+        "experimentalPolyglotRust": {
           "anyOf": [
             {
               "type": "boolean"

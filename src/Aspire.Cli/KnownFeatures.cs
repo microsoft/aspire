@@ -29,10 +29,10 @@ internal static class KnownFeatures
     public static string StagingChannelEnabled => "stagingChannelEnabled";
     public static string DefaultWatchEnabled => "defaultWatchEnabled";
     public static string ShowAllTemplates => "showAllTemplates";
-    public static string ExperimentalPolyglotRust => "experimentalPolyglot:rust";
-    public static string ExperimentalPolyglotJava => "experimentalPolyglot:java";
-    public static string ExperimentalPolyglotGo => "experimentalPolyglot:go";
-    public static string ExperimentalPolyglotPython => "experimentalPolyglot:python";
+    public static string ExperimentalPolyglotRust => "experimentalPolyglotRust";
+    public static string ExperimentalPolyglotJava => "experimentalPolyglotJava";
+    public static string ExperimentalPolyglotGo => "experimentalPolyglotGo";
+    public static string ExperimentalPolyglotPython => "experimentalPolyglotPython";
     public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
     public static string AspireSkillsRemoteFetchEnabled => "aspireSkillsRemoteFetchEnabled";
     public static string TerminalCommandsEnabled => "terminalCommandsEnabled";
