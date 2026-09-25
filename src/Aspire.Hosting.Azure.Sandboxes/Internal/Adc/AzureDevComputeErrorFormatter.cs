@@ -324,8 +324,7 @@ internal static partial class AzureDevComputeErrorFormatter
         foreach (var requestValue in requestStringValues)
         {
             if (requestValue.Contains(candidate, StringComparison.OrdinalIgnoreCase) ||
-                (requestValue.Length >= MinRequestValueLengthForContainmentCheck &&
-                 candidate.Contains(requestValue, StringComparison.OrdinalIgnoreCase)))
+                candidate.Contains(requestValue, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
