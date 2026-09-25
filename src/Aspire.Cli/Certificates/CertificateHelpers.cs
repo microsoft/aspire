@@ -112,14 +112,33 @@ internal static partial class CertificateHelpers
 
         try
         {
-            var result = Process.RunAndCaptureText("openssl", ["version", "-d"], TimeSpan.FromSeconds(5));
+            var processInfo = new ProcessStartInfo("openssl", "version -d")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
 
-            if (result.ExitStatus.ExitCode != 0)
+            using var process = Process.Start(processInfo);
+            if (process is null)
             {
                 return false;
             }
 
-            var match = OpenSslVersionRegex().Match(result.StandardOutput);
+            // Keep StreamReader's BOM detection; the one-shot text APIs decode bytes directly.
+            var stdout = process.StandardOutput.ReadToEnd();
+            if (!process.WaitForExit(TimeSpan.FromSeconds(5)))
+            {
+                return false;
+            }
+
+            if (process.ExitCode != 0)
+            {
+                return false;
+            }
+
+            var match = OpenSslVersionRegex().Match(stdout);
             if (!match.Success)
             {
                 return false;

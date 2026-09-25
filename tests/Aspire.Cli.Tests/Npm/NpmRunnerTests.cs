@@ -1,12 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Tests;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -186,6 +190,64 @@ public class NpmRunnerTests
     }
 
     [Fact]
+    public async Task InstallGlobalAsync_RecordsProcessIdBeforeExit()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory("aspire-npm-profile-test-");
+        var pidFile = Path.Combine(tempDirectory.FullName, "npm.pid");
+        var releaseFile = Path.Combine(tempDirectory.FullName, "release");
+        var pid = 0;
+        Task<bool>? installTask = null;
+
+        try
+        {
+            WriteWaitingNpm(tempDirectory);
+            var existingPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            using var pathOverride = new EnvVarOverride("PATH", $"{tempDirectory.FullName}{Path.PathSeparator}{existingPath}");
+            using var pathExtensionsOverride = OperatingSystem.IsWindows() ? new EnvVarOverride("PATHEXT", ".CMD") : null;
+            using var pidOverride = new EnvVarOverride("NPM_PID_FILE", pidFile);
+            using var releaseOverride = new EnvVarOverride("NPM_RELEASE_FILE", releaseFile);
+            var sessionId = Guid.NewGuid().ToString("N");
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [ProfilingTelemetry.EnvironmentVariables.Enabled] = "true",
+                [ProfilingTelemetry.EnvironmentVariables.SessionId] = sessionId
+            }).Build();
+            using var profilingTelemetry = new ProfilingTelemetry(configuration);
+            var activities = new ConcurrentBag<Activity>();
+            using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: activities.Add);
+            var runner = new NpmRunner(new TestEnvironment(), NullLogger<NpmRunner>.Instance, profilingTelemetry);
+
+            installTask = runner.InstallGlobalAsync(Path.Combine(tempDirectory.FullName, "package.tgz"), TestContext.Current.CancellationToken);
+            pid = await ProcessTestHelpers.WaitForProcessIdAsync(pidFile, TestContext.Current.CancellationToken).DefaultTimeout();
+
+            var activity = Assert.Single(activities, activity =>
+                activity.OperationName == ProfilingTelemetry.Activities.Process &&
+                Equals(activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId), sessionId));
+            Assert.False(installTask.IsCompleted);
+            Assert.True(Assert.IsType<int>(activity.GetTagItem(TelemetryConstants.Tags.ProcessPid)) > 0);
+        }
+        finally
+        {
+            try
+            {
+                await File.WriteAllTextAsync(releaseFile, string.Empty, TestContext.Current.CancellationToken);
+                if (installTask is not null)
+                {
+                    await installTask.DefaultTimeout();
+                }
+            }
+            finally
+            {
+                if (pid > 0)
+                {
+                    ProcessTestHelpers.TryKillProcess(pid);
+                }
+                tempDirectory.Delete(recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void TryExtractLastVersion_SingleVersion_ReturnsTrimmedVersion()
     {
         var result = NpmRunner.TryExtractLastVersion("0.1.1\n", out var version);
@@ -242,6 +304,31 @@ public class NpmRunnerTests
         var result = NpmRunner.TryExtractLastVersion(output, out var version);
         Assert.True(result);
         Assert.Equal("1.0.0", version);
+    }
+
+    private static void WriteWaitingNpm(DirectoryInfo directory)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            File.WriteAllText(Path.Combine(directory.FullName, "npm.cmd"), """
+                @echo off
+                powershell.exe -NoLogo -NoProfile -NonInteractive -Command "[Console]::In.ReadToEnd() | Out-Null; [IO.File]::WriteAllText($env:NPM_PID_FILE, $PID.ToString()); for ($i = 0; $i -lt 1000 -and -not [IO.File]::Exists($env:NPM_RELEASE_FILE); $i++) { Start-Sleep -Milliseconds 20 }"
+                """);
+            return;
+        }
+
+        var npmPath = Path.Combine(directory.FullName, "npm");
+        File.WriteAllText(npmPath, """
+            #!/bin/sh
+            cat > /dev/null
+            echo $$ > "$NPM_PID_FILE"
+            i=0
+            while [ "$i" -lt 1000 ] && [ ! -f "$NPM_RELEASE_FILE" ]; do
+                sleep 0.02
+                i=$((i + 1))
+            done
+            """);
+        File.SetUnixFileMode(npmPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
     private static void WriteFakeNpm(DirectoryInfo directory)

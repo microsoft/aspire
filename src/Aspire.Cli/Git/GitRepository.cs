@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Git;
@@ -41,9 +42,9 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
             activity.SetProcessId(process.Id);
             using var cancellationRegistration = RegisterProcessKillOnCancellation(process, cancellationToken);
 
-            var outputTask = process.ReadAllTextAsync(cancellationToken);
+            var outputTask = ProcessOutputReader.ReadAllTextAsync(process, cancellationToken);
 
-            await Task.WhenAll(outputTask, process.WaitForExitAsync(cancellationToken)).ConfigureAwait(false);
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
             activity.SetProcessExitCode(process.ExitCode);
 
             var result = await outputTask.ConfigureAwait(false);
@@ -123,9 +124,9 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
             activity.SetProcessId(process.Id);
             using var cancellationRegistration = RegisterProcessKillOnCancellation(process, cancellationToken);
 
-            var outputTask = process.ReadAllTextAsync(cancellationToken);
+            var outputTask = ProcessOutputReader.ReadAllTextAsync(process, cancellationToken);
 
-            await Task.WhenAll(outputTask, process.WaitForExitAsync(cancellationToken)).ConfigureAwait(false);
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
             activity.SetProcessExitCode(process.ExitCode);
 
             var result = await outputTask.ConfigureAwait(false);

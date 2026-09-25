@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Cli.Utils;
 
 namespace Microsoft.AspNetCore.Certificates.Generation;
 
@@ -52,7 +53,7 @@ internal static class CertificateProcessRunner
     {
         if (startInfo.RedirectStandardOutput && startInfo.RedirectStandardError)
         {
-            return await process.ReadAllTextAsync(cancellationToken).ConfigureAwait(false);
+            return await ProcessOutputReader.ReadAllTextAsync(process, cancellationToken).ConfigureAwait(false);
         }
 
         // ReadAllTextAsync requires both streams to be redirected. Some security commands

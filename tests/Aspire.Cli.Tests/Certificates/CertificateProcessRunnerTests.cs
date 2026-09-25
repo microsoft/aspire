@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Text;
+using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -9,6 +11,30 @@ namespace Aspire.Cli.Tests.Certificates;
 
 public class CertificateProcessRunnerTests
 {
+    [Theory]
+    [InlineData(65001)]
+    [InlineData(1200)]
+    [InlineData(1201)]
+    [InlineData(12000)]
+    [InlineData(12001)]
+    public async Task RunAndCaptureText_DetectsByteOrderMarks(int codePage)
+    {
+        var encoding = Encoding.GetEncoding(codePage);
+        const string output = "certificate-\u00E9";
+        const string error = "diagnostic-\u2603";
+        var startInfo = ProcessTestHelpers.CreateOutputProcessStartInfo(
+            [.. encoding.GetPreamble(), .. encoding.GetBytes(output)],
+            [.. encoding.GetPreamble(), .. encoding.GetBytes(error)]);
+        startInfo.StandardOutputEncoding = Encoding.UTF8;
+        startInfo.StandardErrorEncoding = Encoding.UTF8;
+
+        var result = await Task.Run(() => CertificateProcessRunner.RunAndCaptureText(startInfo, TestContext.Current.CancellationToken))
+            .DefaultTimeout();
+
+        Assert.Equal(output, result.StandardOutput);
+        Assert.Equal(error, result.StandardError);
+    }
+
     [Fact]
     public async Task Run_DiscardsRedirectedOutputBeforeWaitingForExit()
     {

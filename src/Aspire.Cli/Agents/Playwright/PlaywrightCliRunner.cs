@@ -24,15 +24,33 @@ internal sealed class PlaywrightCliRunner(ILogger<PlaywrightCliRunner> logger) :
 
         try
         {
-            var result = await Process.RunAndCaptureTextAsync(executablePath, ["--version"], cancellationToken).ConfigureAwait(false);
-
-            if (result.ExitStatus.ExitCode != 0)
+            var startInfo = new ProcessStartInfo(executablePath, "--version")
             {
-                logger.LogDebug("playwright-cli --version returned non-zero exit code {ExitCode}: {Error}", result.ExitStatus.ExitCode, result.StandardError.Trim());
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = new Process { StartInfo = startInfo };
+            process.Start();
+
+            // The one-shot text APIs do not detect BOMs and always await both pipes. Preserve
+            // StreamReader decoding and the existing stdout-on-success/stderr-on-failure waits.
+            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+            if (process.ExitCode != 0)
+            {
+                var errorOutput = await errorTask.ConfigureAwait(false);
+                logger.LogDebug("playwright-cli --version returned non-zero exit code {ExitCode}: {Error}", process.ExitCode, errorOutput.Trim());
                 return null;
             }
 
-            var versionString = result.StandardOutput.Trim().Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim();
+            var output = await outputTask.ConfigureAwait(false);
+            var versionString = output.Trim().Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim();
 
             if (string.IsNullOrEmpty(versionString))
             {
@@ -85,15 +103,24 @@ internal sealed class PlaywrightCliRunner(ILogger<PlaywrightCliRunner> logger) :
             startInfo.ArgumentList.Add("install");
             startInfo.ArgumentList.Add("--skills");
 
-            var result = await Process.RunAndCaptureTextAsync(startInfo, cancellationToken).ConfigureAwait(false);
+            // Retain the same BOM-aware decoding and conditional pipe waits as GetVersionAsync.
+            using var process = new Process { StartInfo = startInfo };
+            process.Start();
 
-            if (result.ExitStatus.ExitCode != 0)
+            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+            if (process.ExitCode != 0)
             {
-                logger.LogDebug("playwright-cli install --skills returned non-zero exit code {ExitCode}: {Error}", result.ExitStatus.ExitCode, result.StandardError.Trim());
+                var errorOutput = await errorTask.ConfigureAwait(false);
+                logger.LogDebug("playwright-cli install --skills returned non-zero exit code {ExitCode}: {Error}", process.ExitCode, errorOutput.Trim());
                 return false;
             }
 
-            logger.LogDebug("playwright-cli install --skills output: {Output}", result.StandardOutput.Trim());
+            var output = await outputTask.ConfigureAwait(false);
+            logger.LogDebug("playwright-cli install --skills output: {Output}", output.Trim());
             return true;
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)

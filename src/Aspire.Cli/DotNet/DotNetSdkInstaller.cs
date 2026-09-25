@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Semver;
 
@@ -41,7 +42,7 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration, IEnvironm
             using var process = new Process { StartInfo = _createProcessStartInfo(dotnetPath, arguments) };
 
             process.Start();
-            var outputTask = process.ReadAllTextAsync(cancellationToken);
+            var outputTask = ProcessOutputReader.ReadAllTextAsync(process, cancellationToken);
 
             try
             {

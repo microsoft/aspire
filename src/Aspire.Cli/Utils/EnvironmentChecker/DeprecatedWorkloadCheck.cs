@@ -54,12 +54,13 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(s_processTimeout);
 
-            (string StandardOutput, string StandardError) result;
+            string output;
             try
             {
-                var outputTask = process.ReadAllTextAsync(timeoutCts.Token);
-                await Task.WhenAll(outputTask, process.WaitForExitAsync(timeoutCts.Token));
-                result = await outputTask;
+                // The one-shot text APIs would also wait for stderr and do not detect BOMs.
+                // Preserve the workload probe's stdout-only wait and StreamReader decoding.
+                output = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+                await process.WaitForExitAsync(timeoutCts.Token);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -79,7 +80,7 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
             // Installed Workload Id      Manifest Version       Installation Source
             // --------------------------------------------------------------------
             // aspire                     8.0.0/8.0.100          SDK 8.0.100
-            if (IsAspireWorkloadInstalled(result.StandardOutput))
+            if (IsAspireWorkloadInstalled(output))
             {
                 return [new EnvironmentCheckResult
                 {

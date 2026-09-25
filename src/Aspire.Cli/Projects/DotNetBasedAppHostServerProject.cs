@@ -726,7 +726,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     {
         try
         {
-            var result = Process.RunAndCaptureText(new ProcessStartInfo("dotnet")
+            var startInfo = new ProcessStartInfo("dotnet")
             {
                 Arguments = "nuget config paths",
                 WorkingDirectory = workingDirectory,
@@ -734,14 +734,25 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
-            });
+            };
 
-            if (result.ExitStatus.ExitCode != 0)
+            using var process = Process.Start(startInfo);
+            if (process is null)
             {
                 return null;
             }
 
-            var configPaths = result.StandardOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            // Keep StreamReader's BOM detection for paths. The one-shot text APIs decode
+            // bytes directly and would leave a BOM in the first config path.
+            var output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                return null;
+            }
+
+            var configPaths = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
             var workingDirFullPath = Path.GetFullPath(workingDirectory);
             var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             var globalNuGetPath = Path.Combine(userProfile, ".nuget");

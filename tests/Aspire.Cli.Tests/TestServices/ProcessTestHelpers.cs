@@ -7,6 +7,31 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal static class ProcessTestHelpers
 {
+    public static ProcessStartInfo CreateOutputProcessStartInfo(byte[] standardOutput, byte[] standardError)
+    {
+        ProcessStartInfo startInfo;
+        if (OperatingSystem.IsWindows())
+        {
+            startInfo = new ProcessStartInfo("powershell.exe",
+                ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
+                $"$out = [Convert]::FromBase64String('{Convert.ToBase64String(standardOutput)}'); " +
+                $"$err = [Convert]::FromBase64String('{Convert.ToBase64String(standardError)}'); " +
+                "[Console]::OpenStandardOutput().Write($out, 0, $out.Length); " +
+                "[Console]::OpenStandardError().Write($err, 0, $err.Length)"]);
+        }
+        else
+        {
+            // POSIX printf accepts octal escapes, e.g. '\357\273\277' emits the UTF-8 BOM.
+            static string Escape(byte[] bytes) => string.Concat(bytes.Select(value => $"\\{Convert.ToString(value, 8).PadLeft(3, '0')}"));
+            startInfo = new ProcessStartInfo("/bin/sh", ["-c", $"printf '{Escape(standardOutput)}'; printf '{Escape(standardError)}' >&2"]);
+        }
+
+        startInfo.CreateNoWindow = true;
+        startInfo.RedirectStandardOutput = true;
+        startInfo.RedirectStandardError = true;
+        return startInfo;
+    }
+
     public static async Task<int> WaitForProcessIdAsync(string pidFile, CancellationToken cancellationToken)
     {
         while (true)

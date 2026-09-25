@@ -27,21 +27,41 @@ internal sealed class CopilotCliRunner(ILogger<CopilotCliRunner> logger) : ICopi
 
         try
         {
-            var result = await Process.RunAndCaptureTextAsync(executablePath, ["--version"], cancellationToken).ConfigureAwait(false);
-
-            if (result.ExitStatus.ExitCode != 0)
+            var startInfo = new ProcessStartInfo(executablePath, "--version")
             {
-                logger.LogDebug("GitHub Copilot CLI returned non-zero exit code {ExitCode}: {Error}", result.ExitStatus.ExitCode, result.StandardError.Trim());
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = new Process { StartInfo = startInfo };
+
+            process.Start();
+
+            // The one-shot text APIs do not detect BOMs and always await both pipes. Preserve
+            // StreamReader decoding and the existing stdout-on-success/stderr-on-failure waits.
+            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+            if (process.ExitCode != 0)
+            {
+                var errorOutput = await errorTask.ConfigureAwait(false);
+                logger.LogDebug("GitHub Copilot CLI returned non-zero exit code {ExitCode}: {Error}", process.ExitCode, errorOutput.Trim());
                 return null;
             }
 
-            if (TryParseVersionOutput(result.StandardOutput, out var version))
+            var output = await outputTask.ConfigureAwait(false);
+
+            if (TryParseVersionOutput(output, out var version))
             {
                 logger.LogDebug("Found GitHub Copilot CLI version: {Version}", version);
                 return version;
             }
 
-            logger.LogDebug("Could not parse GitHub Copilot CLI version from output: {Output}", result.StandardOutput.Trim());
+            logger.LogDebug("Could not parse GitHub Copilot CLI version from output: {Output}", output.Trim());
             return null;
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)

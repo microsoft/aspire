@@ -970,11 +970,29 @@ internal sealed class UpdateCommand : BaseCommand
     {
         try
         {
-            var result = await Process.RunAndCaptureTextAsync(exePath, ["--version"], cancellationToken);
-
-            if (result.ExitStatus.ExitCode == 0)
+            var psi = new ProcessStartInfo
             {
-                var version = result.StandardOutput.Trim();
+                FileName = exePath,
+                Arguments = "--version",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+
+            using var process = Process.Start(psi);
+            if (process is null)
+            {
+                return null;
+            }
+
+            // RunAndCaptureTextAsync does not detect BOMs and would also wait for stderr,
+            // which this version probe does not consume.
+            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+
+            if (process.ExitCode == 0)
+            {
+                var version = output.Trim();
                 InteractionService.DisplaySuccess($"Updated to version: {version}");
                 return version;
             }
