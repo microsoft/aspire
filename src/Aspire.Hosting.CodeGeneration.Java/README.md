@@ -10,7 +10,7 @@ Java AppHost support is experimental. Install the Aspire CLI and JDK 25 or later
 In a new directory for your AppHost, enable the feature and initialize it:
 
 ```bash
-aspire config set features.experimentalPolyglotJava true
+aspire config set features.experimentalPolyglot:java true
 aspire init --language java
 ```
 

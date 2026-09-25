@@ -4,7 +4,7 @@
     "language": "java"
   },
   "features": {
-    "experimentalPolyglotJava": true
+    "experimentalPolyglot:java": true
   },
   "packages": {
     "Aspire.Hosting.RabbitMQ": ""

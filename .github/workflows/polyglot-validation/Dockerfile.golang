@@ -36,7 +36,7 @@ RUN chmod +x /scripts/setup-local-cli.sh /scripts/test-go.sh /scripts/test-go-pl
 ENTRYPOINT ["/bin/bash", "-c", "\
     set -e && \
     /scripts/setup-local-cli.sh && \
-    aspire --nologo config set features:experimentalPolyglotGo true --global && \
+    aspire --nologo config set features:experimentalPolyglot:go true --global && \
     echo '' && \
     echo '=== Running validation ===' && \
     /scripts/test-go.sh && \

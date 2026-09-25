@@ -10,7 +10,7 @@ Go AppHost support is experimental. Install the Aspire CLI and Go 1.26 or later.
 In a new directory for your AppHost, enable the feature and initialize it:
 
 ```bash
-aspire config set features.experimentalPolyglotGo true
+aspire config set features.experimentalPolyglot:go true
 aspire init --language go
 ```
 

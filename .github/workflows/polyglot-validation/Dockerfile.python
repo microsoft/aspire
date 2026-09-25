@@ -47,7 +47,7 @@ RUN chmod +x /scripts/setup-local-cli.sh /scripts/test-python.sh /scripts/test-p
 ENTRYPOINT ["/bin/bash", "-c", "\
     set -e && \
     /scripts/setup-local-cli.sh && \
-    aspire --nologo config set features:experimentalPolyglotPython true --global && \
+    aspire --nologo config set features:experimentalPolyglot:python true --global && \
     echo '' && \
     echo '=== Running validation ===' && \
     /scripts/test-python.sh && \

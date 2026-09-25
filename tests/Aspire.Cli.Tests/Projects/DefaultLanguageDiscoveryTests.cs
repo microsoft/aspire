@@ -80,10 +80,10 @@ public class DefaultLanguageDiscoveryTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(KnownLanguageId.Python, "experimentalPolyglotPython")]
-    [InlineData(KnownLanguageId.Go, "experimentalPolyglotGo")]
-    [InlineData(KnownLanguageId.Java, "experimentalPolyglotJava")]
-    [InlineData(KnownLanguageId.Rust, "experimentalPolyglotRust")]
+    [InlineData(KnownLanguageId.Python, "experimentalPolyglot:python")]
+    [InlineData(KnownLanguageId.Go, "experimentalPolyglot:go")]
+    [InlineData(KnownLanguageId.Java, "experimentalPolyglot:java")]
+    [InlineData(KnownLanguageId.Rust, "experimentalPolyglot:rust")]
     public async Task GetAvailableLanguagesAsync_IncludesExperimentalLanguageWhenFlagEnabled(string languageId, string featureFlag)
     {
         var features = new TestFeatures();

@@ -4,7 +4,7 @@
     "language": "python"
   },
   "features": {
-    "experimentalPolyglotPython": true
+    "experimentalPolyglot:python": true
   },
   "packages": {
     "Aspire.Hosting.Azure.CognitiveServices": "",

@@ -706,7 +706,7 @@ internal static class CliE2EAutomatorHelpers
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter)
     {
-        await auto.TypeAsync("aspire config set features:experimentalPolyglotJava true --global --non-interactive");
+        await auto.TypeAsync("aspire config set features:experimentalPolyglot:java true --global --non-interactive");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
     }

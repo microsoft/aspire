@@ -1372,29 +1372,27 @@ Configuration for polyglot app hosts:
 
 ### Project-local experimental language flags
 
-The experimental polyglot AppHost flags use the same flat naming pattern:
-`experimentalPolyglotJava`, `experimentalPolyglotGo`, `experimentalPolyglotPython`,
-and `experimentalPolyglotRust`. To enable Java for a single AppHost, run this from
+Feature names can contain colons: `experimentalPolyglot:java`, `experimentalPolyglot:go`,
+`experimentalPolyglot:python`, and `experimentalPolyglot:rust` use the same naming pattern.
+The first `.` or `:` after `features` separates the dictionary from the feature name;
+the rest of the name is kept intact. To enable Java for a single AppHost, run this from
 its project directory:
 
 ```console
-aspire config set features.experimentalPolyglotJava true
+aspire config set features.experimentalPolyglot:java true
 ```
 
-This writes a single key in the `features` dictionary of `aspire.config.json`:
+In `aspire.config.json`, the name stays a single key in the `features` dictionary:
 
 ```json
 {
   "features": {
-    "experimentalPolyglotJava": "true"
+    "experimentalPolyglot:java": "true"
   }
 }
 ```
 
 The configuration reader accepts both `"true"` and `true` for feature values.
-Existing project or global configurations using `experimentalPolyglot:java`,
-`experimentalPolyglot:go`, `experimentalPolyglot:python`, or
-`experimentalPolyglot:rust` must rename those keys to the flat names above.
 
 ### Application settings
 

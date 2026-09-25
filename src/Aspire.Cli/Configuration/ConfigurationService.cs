@@ -208,18 +208,13 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     }
 
     /// <summary>
-    /// Sets a nested value in a JsonObject using dot notation.
+    /// Sets a nested value in a JsonObject using dot or colon notation.
     /// Creates intermediate objects as needed and replaces primitives with objects when necessary.
     /// Also removes any conflicting flattened keys (colon-separated format) to prevent duplicate key errors.
     /// </summary>
     private static void SetNestedValue(JsonObject settings, string key, string value)
     {
-        // Normalize colon-separated keys to dot notation since both represent
-        // the same configuration hierarchy (e.g., "features:polyglotSupportEnabled"
-        // is equivalent to "features.polyglotSupportEnabled")
-        key = key.Replace(':', '.');
-
-        var keyParts = key.Split('.');
+        var keyParts = SplitKey(key);
 
         // Remove any conflicting flattened keys (e.g., "features:showAllTemplates" when setting "features.showAllTemplates")
         // This prevents duplicate key errors when loading the configuration
@@ -277,10 +272,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     /// </summary>
     private static bool DeleteNestedValue(JsonObject settings, string key)
     {
-        // Normalize colon-separated keys to dot notation
-        key = key.Replace(':', '.');
-
-        var keyParts = key.Split('.');
+        var keyParts = SplitKey(key);
 
         // Remove any flat colon-separated key at root level (legacy format)
         var flattenedKey = string.Join(":", keyParts);
@@ -334,6 +326,20 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         return true;
     }
 
+    private static string[] SplitKey(string key)
+    {
+        var firstSeparator = key.IndexOfAny(['.', ':']);
+        if (firstSeparator >= 0 &&
+            string.Equals(key[..firstSeparator], KnownFeatures.FeaturePrefix, StringComparison.Ordinal))
+        {
+            // Feature names are dictionary keys: in "features:experimentalPolyglot:java",
+            // only the first separator belongs to the configuration path.
+            return [key[..firstSeparator], key[(firstSeparator + 1)..]];
+        }
+
+        return key.Replace(':', '.').Split('.');
+    }
+
     /// <summary>
     /// Recursively flattens a JsonObject into a dictionary with dot notation keys.
     /// </summary>
@@ -341,8 +347,8 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     {
         foreach (var kvp in obj)
         {
-            // Normalize colon-separated keys to dot notation for consistent display
-            var normalizedKey = kvp.Key.Replace(':', '.');
+            // Preserve colons in feature names so config list displays a key that config set accepts.
+            var normalizedKey = prefix == KnownFeatures.FeaturePrefix ? kvp.Key : kvp.Key.Replace(':', '.');
             var key = string.IsNullOrEmpty(prefix) ? normalizedKey : $"{prefix}.{normalizedKey}";
 
             if (kvp.Value is JsonObject nestedObj)
@@ -358,8 +364,8 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
 
     public Task<string?> GetConfigurationAsync(string key, CancellationToken cancellationToken = default)
     {
-        // Convert dot notation to colon notation for IConfiguration access
-        var configKey = key.Replace('.', ':');
+        // Keep feature names intact while converting path separators for IConfiguration access.
+        var configKey = string.Join(':', SplitKey(key));
         return Task.FromResult(configuration[configKey]);
     }
 
@@ -367,7 +373,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     {
         ArgumentNullException.ThrowIfNull(startDirectory);
 
-        var configKey = key.Replace('.', ':');
+        var configKey = string.Join(':', SplitKey(key));
 
         // 1. Project-relative local settings: walk up from startDirectory to find the nearest
         //    config file. Most command lookups stop at that file, even when it omits the key,

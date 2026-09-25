@@ -740,11 +740,17 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("experimentalPolyglotJava")]
-    [InlineData("experimentalPolyglotGo")]
-    [InlineData("experimentalPolyglotPython")]
-    [InlineData("experimentalPolyglotRust")]
-    public async Task ConfigSetCommand_ExperimentalPolyglotFeature_CreatesLoadableLocalConfig(string featureName)
+    [InlineData("experimentalPolyglot:java", ':')]
+    [InlineData("experimentalPolyglot:java", '.')]
+    [InlineData("experimentalPolyglot:go", ':')]
+    [InlineData("experimentalPolyglot:go", '.')]
+    [InlineData("experimentalPolyglot:python", ':')]
+    [InlineData("experimentalPolyglot:python", '.')]
+    [InlineData("experimentalPolyglot:rust", ':')]
+    [InlineData("experimentalPolyglot:rust", '.')]
+    [InlineData("custom:part:more", ':')]
+    [InlineData("custom.feature", '.')]
+    public async Task ConfigSetCommand_WithSeparatorInFeatureName_CreatesLoadableLocalConfig(string featureName, char separator)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
@@ -753,7 +759,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
-        var key = $"features.{featureName}";
+        var key = $"features{separator}{featureName}";
 
         var setResult = command.Parse($"config set {key} true");
         Assert.Equal(0, await setResult.InvokeAsync().DefaultTimeout());
@@ -776,14 +782,16 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
         var configurationService = reloadedProvider.GetRequiredService<IConfigurationService>();
         var localConfiguration = await configurationService.GetLocalConfigurationAsync();
-        Assert.Equal("true", localConfiguration[key]);
+        Assert.Equal("true", localConfiguration[$"features.{featureName}"]);
+        Assert.Equal("true", await configurationService.GetConfigurationAsync(key));
+        Assert.Equal("true", await configurationService.GetConfigurationFromDirectoryAsync(key, workspace.WorkspaceRoot));
 
         var getResult = reloadedProvider.GetRequiredService<Aspire.Cli.Commands.RootCommand>()
             .Parse($"config get {key}");
         Assert.Equal(0, await getResult.InvokeAsync().DefaultTimeout());
 
         var deleteResult = reloadedProvider.GetRequiredService<Aspire.Cli.Commands.RootCommand>()
-            .Parse($"config delete features:{featureName}");
+            .Parse($"config delete features{(separator == ':' ? '.' : ':')}{featureName}");
         Assert.Equal(0, await deleteResult.InvokeAsync().DefaultTimeout());
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse("{}"), JsonNode.Parse(await File.ReadAllTextAsync(configPath))));
     }

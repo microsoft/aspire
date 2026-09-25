@@ -7,6 +7,6 @@
     "Aspire.Hosting.Rust": "../../src/Aspire.Hosting.Rust/Aspire.Hosting.Rust.csproj"
   },
   "features": {
-    "experimentalPolyglotRust": true
+    "experimentalPolyglot:rust": true
   }
 }
