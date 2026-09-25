@@ -811,6 +811,8 @@ public class CliInstallStrategyTests
 
     [Theory]
     [InlineData("14.0.0-pr.20466.ga2bed197", "pr-20466")]
+    [InlineData("13.3.0-pr.1234.a1b2c3d4", "pr-1234")]
+    [InlineData("14.0.0-pr.20466.xyz", "local")]
     [InlineData("14.0.0-ci", "local")]
     public void FromLocalArchive_SelectsHiveMatchingPackageVersion(string version, string expectedHiveLabel)
     {

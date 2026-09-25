@@ -106,7 +106,7 @@ internal static partial class CliPackageDiscovery
     [GeneratedRegex(@"^[0-9A-Za-z.\-]+$")]
     private static partial Regex VersionPattern();
 
-    [GeneratedRegex(@"-pr\.([0-9]+)\.g[0-9a-f]+$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"-pr\.([0-9]+)\.[0-9a-g]+$")]
     private static partial Regex PullRequestVersionPattern();
 
     [GeneratedRegex(@"^Aspire\.Cli\.(win|linux|linux-musl|osx)-(x64|arm64)\.", RegexOptions.IgnoreCase)]
