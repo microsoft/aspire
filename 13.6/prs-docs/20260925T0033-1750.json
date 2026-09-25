@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Documents Deploy/Publish/Run pipeline step/Debug pipeline step actions in the VS Code Aspire pane, matching change entry for #19466",
+  "mergedAt": "2026-09-25T00:33:42Z",
+  "number": 1750,
+  "runDate": "2026-09-25T06:06:06Z",
+  "status": "included",
+  "title": "[docs] Document deploy, publish, and pipeline actions in the VS Code Aspire pane"
+}
