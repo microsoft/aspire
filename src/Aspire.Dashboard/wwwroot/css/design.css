@@ -64,8 +64,8 @@
     --colorNeutralStroke3: #e5e5e5;
     --aspire-button-hover-border: #c2c2c2;
     --aspire-link-button-pressed-background: #efefef;
-    --dashboard-run-select-hover-background: color-mix(in srgb, var(--colorNeutralBackground3) 40%, var(--aspire-page-background));
-    --dashboard-run-select-pressed-background: color-mix(in srgb, var(--colorNeutralBackground3) 80%, var(--aspire-page-background));
+    --run-select-hover-background: color-mix(in srgb, var(--colorNeutralBackground3) 40%, var(--aspire-page-background));
+    --run-select-pressed-background: color-mix(in srgb, var(--colorNeutralBackground3) 80%, var(--aspire-page-background));
     --colorBrandBackground: #512bd4;
     --colorBrandBackgroundHover: #7455dd;
     --colorBrandBackgroundPressed: #512bd4;
@@ -263,8 +263,8 @@
     --colorNeutralStroke3: #312e3c;
     --aspire-button-hover-border: #5c5865;
     --aspire-link-button-pressed-background: #2d2937;
-    --dashboard-run-select-hover-background: var(--colorNeutralBackground3);
-    --dashboard-run-select-pressed-background: var(--colorNeutralBackground3);
+    --run-select-hover-background: var(--colorNeutralBackground3);
+    --run-select-pressed-background: var(--colorNeutralBackground3);
     --colorBrandBackground: #b9aaee;
     --colorBrandBackgroundHover: #dcd5f6;
     --colorBrandBackgroundPressed: #b9aaee;
