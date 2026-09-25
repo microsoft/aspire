@@ -207,14 +207,8 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
     {
         var startInfo = new ProcessStartInfo
         {
-            // Redirect stdin so the child npm process (and any lifecycle scripts it invokes)
-            // does not inherit the CLI's TTY. The caller closes stdin or replaces the pipe with
-            // a null handle so reads see EOF instead of waiting on the terminal. NpmRunner
-            // is intended to be fully non-interactive. See https://github.com/microsoft/aspire/issues/16791.
-            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            UseShellExecute = false,
             CreateNoWindow = true,
             WorkingDirectory = workingDirectory
         };
@@ -290,32 +284,25 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
         {
             var startInfo = CreateNpmProcessStartInfo(npmPath, args, workingDirectory, environment);
 
-            // npm lifecycle scripts must see EOF rather than inherit the CLI's terminal.
-            // A null handle avoids creating a stdin pipe just to close it after starting.
+            // Give npm (and any lifecycle scripts it invokes) a null stdin so reads see EOF
+            // instead of blocking on the CLI's terminal. NpmRunner is intended to be fully
+            // non-interactive. See https://github.com/microsoft/aspire/issues/16791.
             using var nullInput = File.OpenNullHandle();
-            startInfo.RedirectStandardInput = false;
             startInfo.StandardInputHandle = nullInput;
-            using var process = new Process { StartInfo = startInfo };
+
             using var activity = profilingTelemetry.StartNpmCommand(npmPath, args, workingDirectory);
-            process.Start();
-            activity.SetProcessId(process.Id);
+            var result = await Process.RunAndCaptureTextAsync(startInfo, cancellationToken).ConfigureAwait(false);
+            activity.SetProcessId(result.ProcessId);
+            activity.SetProcessExitCode(result.ExitStatus.ExitCode);
 
-            // Keep BOM-aware readers and publish the PID before waiting. RunAndCaptureTextAsync
-            // decodes without BOM detection and cannot report the PID when the wait is canceled.
-            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            activity.SetProcessExitCode(process.ExitCode);
-
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
-                activity.SetError($"npm exited with code {process.ExitCode}.");
-                var errorOutput = await errorTask.ConfigureAwait(false);
-                logger.LogDebug("npm {Args} returned non-zero exit code {ExitCode}: {Error}", argsString, process.ExitCode, errorOutput.Trim());
+                activity.SetError($"npm exited with code {result.ExitStatus.ExitCode}.");
+                logger.LogDebug("npm {Args} returned non-zero exit code {ExitCode}: {Error}", argsString, result.ExitStatus.ExitCode, result.StandardError.Trim());
                 return null;
             }
 
-            return await outputTask.ConfigureAwait(false);
+            return result.StandardOutput;
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {

@@ -111,10 +111,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     /// <summary>
     /// Gets whether the underlying AppHost server process has exited, or <see langword="null"/>
     /// if <see cref="StartAsync"/> has not been called (or threw before the process was
-    /// published). Routes through the <see cref="IProcessExecution"/>, which encapsulates the
-    /// isolated Windows spawn quirk (the underlying Process is obtained via
-    /// <see cref="System.Diagnostics.Process.GetProcessById(int)"/>); see
-    /// https://github.com/dotnet/runtime/issues/45003.
+    /// published).
     /// </summary>
     public bool? HasServerExited => _execution?.HasExited;
 
@@ -305,10 +302,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
 
         // ConnectAsync already retries until the RPC socket is available. Race it against the
         // server-exit signal instead of sleeping first, so fast startups connect immediately and
-        // failed server launches surface as soon as the process exits. We race _completion rather
-        // than Process.WaitForExitAsync because on the isolated Windows path the Process is
-        // GetProcessById-derived and its lifetime getters are unreliable — the completion is
-        // tripped from the IsolatedProcess wrapper that holds the original CreateProcess handle.
+        // failed server launches surface as soon as the process exits.
         using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var connectTask = AppHostRpcClient.ConnectAsync(socketPath, _authenticationToken, _environment, _profilingTelemetry, connectCts.Token);
         var completedTask = await Task.WhenAny(connectTask, serverExitTask).ConfigureAwait(false);

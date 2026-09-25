@@ -33,9 +33,7 @@ internal sealed record AppHostServerPrepareResult(
 /// <see cref="IProcessExecution.ProcessId"/>), drive its lifetime via
 /// <see cref="IProcessExecution.WaitForExitAsync(CancellationToken)"/> (which runs the shared
 /// shutdown ladder on cancellation), and dispose it via
-/// <see cref="System.IAsyncDisposable.DisposeAsync"/>. The execution encapsulates the isolated
-/// Windows spawn quirk (the underlying Process is obtained via <see cref="System.Diagnostics.Process.GetProcessById(int)"/>),
-/// so its status getters are reliable on every path — see https://github.com/dotnet/runtime/issues/45003.
+/// <see cref="System.IAsyncDisposable.DisposeAsync"/>.
 /// </param>
 internal sealed record AppHostServerRunResult(
     string SocketPath,
@@ -49,13 +47,13 @@ internal sealed record AppHostServerRunResult(
 /// </summary>
 /// <param name="IsolateConsole">
 /// When <see langword="true"/>, on Windows the server is spawned via <see cref="IsolatedProcess"/>
-/// into its own hidden console (CREATE_NEW_CONSOLE | SW_HIDE) so a graceful shutdown can
+/// into its own hidden console so a graceful shutdown can
 /// <c>AttachConsole</c> + post <c>CTRL_C_EVENT</c> against the server without also signalling the CLI.
 /// On Unix the spawn is effectively the same as today's path.
 /// </param>
 /// <param name="KillOnParentExit">
-/// When <see langword="true"/>, on Windows the server is bound to the process-wide
-/// <see cref="WindowsConsoleProcessJob"/> kill-on-close safety net.
+/// When <see langword="true"/>, on Windows the server is bound to a kill-on-close job via
+/// <see cref="System.Diagnostics.ProcessStartInfo.KillOnParentExit"/>.
 /// </param>
 /// <param name="GracefulShutdownSignaler">
 /// Issues the graceful shutdown signal during the shared ladder, or <see langword="null"/> to fall

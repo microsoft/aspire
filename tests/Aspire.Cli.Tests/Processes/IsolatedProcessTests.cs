@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Runtime.Versioning;
 using Aspire.Cli.Processes;
 
 namespace Aspire.Cli.Tests.Processes;
@@ -69,6 +70,54 @@ public class IsolatedProcessTests
 
         await Task.WhenAll(child.StandardOutputClosed, child.StandardErrorClosed).WaitAsync(TimeSpan.FromSeconds(10));
         await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Theory]
+    [InlineData(false, false, false, true, false)]
+    [InlineData(true, false, false, true, true)]
+    [InlineData(false, true, false, false, true)]
+    [InlineData(false, false, true, false, true)]
+    [InlineData(true, true, false, true, true)]
+    [InlineData(true, false, true, true, true)]
+    [SupportedOSPlatform("windows")]
+    public void CreateProcessStartInfo_OnWindows_MapsLaunchOptions(
+        bool isolateConsole,
+        bool killOnParentExit,
+        bool detached,
+        bool expectedCreateNoWindow,
+        bool expectedOnlyStandardHandlesInherited)
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows-only test.");
+
+        var startInfo = new IsolatedProcessStartInfo
+        {
+            FileName = "child.exe",
+            WorkingDirectory = Environment.CurrentDirectory,
+            IsolateConsole = isolateConsole,
+            KillOnParentExit = killOnParentExit,
+            Detached = detached,
+        };
+        using var nullHandle = File.OpenNullHandle();
+
+        var psi = IsolatedProcess.CreateProcessStartInfo(startInfo, nullHandle);
+
+        Assert.Equal(expectedCreateNoWindow, psi.CreateNoWindow);
+        Assert.Equal(killOnParentExit, psi.KillOnParentExit);
+        if (expectedOnlyStandardHandlesInherited)
+        {
+            Assert.NotNull(psi.InheritedHandles);
+            Assert.Empty(psi.InheritedHandles);
+        }
+        else
+        {
+            Assert.Null(psi.InheritedHandles);
+        }
+
+        Assert.Same(nullHandle, psi.StandardInputHandle);
+        Assert.Equal(!detached, psi.RedirectStandardOutput);
+        Assert.Equal(!detached, psi.RedirectStandardError);
+        Assert.Same(detached ? nullHandle : null, psi.StandardOutputHandle);
+        Assert.Same(detached ? nullHandle : null, psi.StandardErrorHandle);
     }
 
     [Fact]

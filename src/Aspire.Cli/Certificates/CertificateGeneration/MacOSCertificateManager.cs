@@ -113,11 +113,10 @@ internal sealed class MacOSCertificateManager : CertificateManager
             {
                 Log.MacOSTrustCommandStart($"{MacOSTrustCertificateCommandLine} {s_macOSTrustCertificateCommandLineArguments}{tmpFile}");
             }
-            var processResult = CertificateProcessRunner.Run(
-                new ProcessStartInfo(MacOSTrustCertificateCommandLine, s_macOSTrustCertificateCommandLineArguments + tmpFile));
-            if (processResult.ExitCode != 0)
+            var exitStatus = Process.Run(new ProcessStartInfo(MacOSTrustCertificateCommandLine, s_macOSTrustCertificateCommandLineArguments + tmpFile));
+            if (exitStatus.ExitCode != 0)
             {
-                Log.MacOSTrustCommandError(processResult.ExitCode);
+                Log.MacOSTrustCommandError(exitStatus.ExitCode);
                 throw new InvalidOperationException("There was an error trusting the certificate.");
             }
 
@@ -174,16 +173,19 @@ internal sealed class MacOSCertificateManager : CertificateManager
             // We can't guarantee that the temp file is in a directory with sensible permissions, but we're not exporting the private key
             ExportCertificate(certificate, tmpFile, includePrivateKey: false, password: null, CertificateKeyExportFormat.Pem);
 
-            var checkTrustProcessResult = CertificateProcessRunner.Run(new ProcessStartInfo(
+            using var nullHandle = File.OpenNullHandle();
+            var checkTrustProcessStartInfo = new ProcessStartInfo(
                 MacOSVerifyCertificateCommandLine,
                 string.Format(CultureInfo.InvariantCulture, MacOSVerifyCertificateCommandLineArgumentsFormat, tmpFile))
             {
-                RedirectStandardOutput = true,
                 // Do this to avoid showing output to the console when the cert is not trusted. It is trivial to export
                 // the cert and replicate the command to see details.
-                RedirectStandardError = true,
-            });
-            return checkTrustProcessResult.ExitCode == 0 ? TrustLevel.Full : TrustLevel.None;
+                StandardOutputHandle = nullHandle,
+                StandardErrorHandle = nullHandle
+            };
+
+            var checkTrustProcessOutput = Process.Run(checkTrustProcessStartInfo);
+            return checkTrustProcessOutput.ExitCode == 0 ? TrustLevel.Full : TrustLevel.None;
         }
         finally
         {
@@ -228,10 +230,10 @@ internal sealed class MacOSCertificateManager : CertificateManager
                     certificatePath
                 ));
 
-            var processResult = CertificateProcessRunner.Run(processInfo);
-            if (processResult.ExitCode != 0)
+            var processExitStatus = Process.Run(processInfo);
+            if (processExitStatus.ExitCode != 0)
             {
-                Log.MacOSRemoveCertificateTrustRuleError(processResult.ExitCode);
+                Log.MacOSRemoveCertificateTrustRuleError(processExitStatus.ExitCode);
             }
 
             Log.MacOSRemoveCertificateTrustRuleEnd();
@@ -269,13 +271,14 @@ internal sealed class MacOSCertificateManager : CertificateManager
             Log.MacOSRemoveCertificateFromKeyChainStart(keychain, GetDescription(certificate));
         }
 
-        var processResult = CertificateProcessRunner.RunAndCaptureText(processInfo);
-        if (processResult.ExitCode != 0)
+        var processOutput = Process.RunAndCaptureText(processInfo);
+        var exitCode = processOutput.ExitStatus.ExitCode;
+        if (exitCode != 0)
         {
-            Log.MacOSRemoveCertificateFromKeyChainError(processResult.ExitCode);
+            Log.MacOSRemoveCertificateFromKeyChainError(exitCode);
             throw new InvalidOperationException($@"There was an error removing the certificate with thumbprint '{certificate.Thumbprint}'.
 
-{processResult.StandardOutput}{processResult.StandardError}");
+{processOutput.StandardOutput}{processOutput.StandardError}");
         }
 
         Log.MacOSRemoveCertificateFromKeyChainEnd();
@@ -294,7 +297,9 @@ internal sealed class MacOSCertificateManager : CertificateManager
 
         var subject = subjectMatch.Groups[1].Value;
 
-        // Run the find-certificate command, and look for the cert's hash in the output
+        // Run the find-certificate command, and look for the cert's hash in the output.
+        // Process.RunAndCaptureText requires stderr to be redirected too, which would change where
+        // security's diagnostics go, so keep reading only the redirected stdout.
         using var findCertificateProcess = Process.Start(new ProcessStartInfo(
             MacOSFindCertificateOnKeychainCommandLine,
             string.Format(CultureInfo.InvariantCulture, MacOSFindCertificateOnKeychainCommandLineArgumentsFormat, subject, keychain))
@@ -363,11 +368,12 @@ internal sealed class MacOSCertificateManager : CertificateManager
             Log.MacOSAddCertificateToKeyChainStart(s_macOSUserKeychain, GetDescription(certificate));
         }
 
-        var processResult = CertificateProcessRunner.RunAndCaptureText(processInfo);
-        if (processResult.ExitCode != 0)
+        var processOutput = Process.RunAndCaptureText(processInfo);
+        var exitCode = processOutput.ExitStatus.ExitCode;
+
+        if (exitCode != 0)
         {
-            var output = processResult.StandardOutput + processResult.StandardError;
-            Log.MacOSAddCertificateToKeyChainError(processResult.ExitCode, output);
+            Log.MacOSAddCertificateToKeyChainError(exitCode, processOutput.StandardOutput + processOutput.StandardError);
             throw new InvalidOperationException("Failed to add the certificate to the keychain. Are you running in a non-interactive session perhaps?");
         }
 

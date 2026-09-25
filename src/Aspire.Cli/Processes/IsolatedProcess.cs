@@ -4,12 +4,13 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Text;
+using Microsoft.Win32.SafeHandles;
 
 namespace Aspire.Cli.Processes;
 
 /// <summary>
-/// Describes process launch options that are not fully covered by <see cref="ProcessStartInfo"/>
-/// on the target frameworks the CLI currently supports.
+/// Describes process launch options, including the CLI-specific console isolation and detached
+/// launch modes that <see cref="ProcessStartInfo"/> does not model directly.
 /// </summary>
 internal sealed class IsolatedProcessStartInfo
 {
@@ -36,18 +37,15 @@ internal sealed class IsolatedProcessStartInfo
     public IDictionary<string, string?> Environment => _environment ??= LoadParentEnvironment();
 
     /// <summary>
-    /// When <see langword="true"/>, the child should be terminated when the parent exits.
-    /// This mirrors the .NET 11 ProcessStartInfo.KillOnParentExit shape so the custom Windows
-    /// job-object implementation can be replaced by the platform implementation later.
+    /// When <see langword="true"/>, the child is terminated when the parent exits. Applied on
+    /// Windows only through <see cref="ProcessStartInfo.KillOnParentExit"/>; Unix callers rely on
+    /// process-group signalling and the in-child parent-liveness watchdog instead.
     /// </summary>
     public bool KillOnParentExit { get; init; }
 
     /// <summary>
     /// When <see langword="true"/> (the default) the child is spawned in its own hidden console
-    /// group on Windows (CREATE_NEW_CONSOLE | SW_HIDE) so a graceful CTRL+C can target it without
-    /// also signalling the CLI. When <see langword="false"/> the child
-    /// is spawned via an ordinary redirected <see cref="Process.Start(ProcessStartInfo)"/> unless
-    /// <see cref="KillOnParentExit"/> or <see cref="Detached"/> requires the Windows interop launcher.
+    /// on Windows so a graceful CTRL+C can target it without also signalling the CLI.
     /// On Unix this flag does not affect process creation.
     /// </summary>
     public bool IsolateConsole { get; init; } = true;
@@ -71,10 +69,9 @@ internal sealed class IsolatedProcessStartInfo
     internal bool HasCustomEnvironment => _environment is not null;
 
     /// <summary>
-    /// Internal accessor returning the environment dictionary in the read-only shape the
-    /// Windows spawn primitive consumes. Returns <see langword="null"/> when the caller never
-    /// touched <see cref="Environment"/>, signalling the spawn path to inherit the parent env
-    /// verbatim (no allocation of an env block).
+    /// Internal accessor returning the environment dictionary in read-only form. Returns
+    /// <see langword="null"/> when the caller never touched <see cref="Environment"/>, signalling
+    /// the spawn path to inherit the parent env verbatim (no allocation of an env block).
     /// </summary>
     internal IReadOnlyDictionary<string, string?>? GetEnvironmentForSpawn()
         => _environment;
@@ -100,8 +97,8 @@ internal sealed class IsolatedProcessStartInfo
 }
 
 /// <summary>
-/// Mirrors the subset of <see cref="System.Diagnostics.Process"/> the CLI needs while compensating
-/// for process launch features missing from the target framework.
+/// Mirrors the subset of <see cref="System.Diagnostics.Process"/> the CLI needs, adding the
+/// DCP-monitored detached launch on Unix and line-based output events that tolerate throwing callbacks.
 /// </summary>
 internal sealed partial class IsolatedProcess : IAsyncDisposable
 {
@@ -156,19 +153,14 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     public IReadOnlyList<string> Arguments { get; private set; }
 
     /// <summary>
-    /// Mirrors <see cref="Process.HasExited"/>. The Windows spawn path overrides this with a
-    /// <c>WaitForSingleObject(handle, 0)</c> check against the kept <c>SafeProcessHandle</c>
-    /// because <see cref="Process.HasExited"/> on a <see cref="Process.GetProcessById(int)"/>
-    /// instance is unreliable for processes the managed Process didn't itself start.
+    /// Mirrors <see cref="Process.HasExited"/>. The detached Unix path overrides this with the
+    /// DCP monitor's state because the child is not a direct child of the CLI.
     /// </summary>
     public bool HasExited => _hasExitedProvider?.Invoke() ?? Process.HasExited;
 
     /// <summary>
-    /// Mirrors <see cref="Process.ExitCode"/>. The Windows spawn path overrides this with a
-    /// <c>GetExitCodeProcess</c> call against the kept <c>SafeProcessHandle</c>; without the
-    /// override <see cref="Process.ExitCode"/> throws <see cref="InvalidOperationException"/>
-    /// for processes obtained via <see cref="Process.GetProcessById(int)"/> on Windows.
-    /// See https://github.com/dotnet/runtime/issues/45003.
+    /// Mirrors <see cref="Process.ExitCode"/>. The detached Unix path overrides this with the
+    /// DCP monitor's exit code because the CLI cannot reap a process it did not start.
     /// </summary>
     public int ExitCode => _exitCodeProvider?.Invoke() ?? Process.ExitCode;
 
@@ -200,8 +192,10 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         var outputTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         StandardOutputClosed = outputTcs.Task;
 
-        // ReadAllLinesAsync only reads pipes owned by Process. The isolated Windows launcher
-        // supplies external readers, and each stream must drain independently of slow callbacks.
+        // Pump the redirected readers directly instead of using Process.BeginOutputReadLine or
+        // ReadAllLinesAsync: Process.WaitForExitAsync waits for asynchronous-read EOF, which a
+        // grandchild holding the inherited pipe can delay indefinitely, and each stream must drain
+        // independently of slow or throwing callbacks. ProcessExecution applies its own bounded drain.
         var outputPump = ProcessPump.Start(startedProcess.StandardOutput, line => OutputDataReceived?.Invoke(this, line));
         _ = ForwardPumpAsync(outputPump.Completion, outputTcs);
     }
@@ -236,15 +230,10 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         };
     }
 
-    /// <summary>Mirrors <see cref="Process.WaitForExitAsync(CancellationToken)"/>.</summary>
-    /// <remarks>
-    /// The Windows spawn path overrides this to wait on the kept <c>CreateProcess</c> handle rather
-    /// than the <see cref="Process.GetProcessById(int)"/> instance, whose
-    /// <see cref="Process.WaitForExitAsync(CancellationToken)"/> can complete before the kernel marks
-    /// the process exited — which would make an immediately-following <see cref="ExitCode"/> read
-    /// throw. Routing the wait through the same kept handle as <see cref="ExitCode"/> /
-    /// <see cref="HasExited"/> keeps them consistent. See https://github.com/dotnet/runtime/issues/45003.
-    /// </remarks>
+    /// <summary>
+    /// Mirrors <see cref="Process.WaitForExitAsync(CancellationToken)"/>. The detached Unix path
+    /// waits on the DCP monitor so <see cref="ExitCode"/> and <see cref="HasExited"/> stay consistent.
+    /// </summary>
     public Task WaitForExitAsync(CancellationToken cancellationToken = default)
         => _waitForExitProvider?.Invoke(cancellationToken) ?? Process.WaitForExitAsync(cancellationToken);
 
@@ -304,7 +293,7 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     }
 
     /// <summary>
-    /// Mirrors <see cref="Process.Start()"/> plus the launch knobs that require platform shims on the current target framework.
+    /// Mirrors <see cref="Process.Start()"/>, routing detached Unix launches through DCP.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token for asynchronous launch work.</param>
     public async Task<bool> StartAsync(CancellationToken cancellationToken)
@@ -320,22 +309,9 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
 
         try
         {
-            StartedProcess startedProcess;
-            if (_startInfo.Detached && !OperatingSystem.IsWindows())
-            {
-                startedProcess = await StartDetachedUnixAsync(_startInfo, cancellationToken).ConfigureAwait(false);
-            }
-            // Windows parent-exit protection requires the suspended-create / assign / resume ceremony in
-            // StartWindows. Route protected helpers through that path even when they do not need a
-            // graceful CTRL+C console group; otherwise use the ordinary redirected Process.Start shape.
-            else if (OperatingSystem.IsWindows() && (_startInfo.IsolateConsole || _startInfo.KillOnParentExit || _startInfo.Detached))
-            {
-                startedProcess = StartWindows(_startInfo);
-            }
-            else
-            {
-                startedProcess = StartRedirected(_startInfo);
-            }
+            var startedProcess = _startInfo.Detached && !OperatingSystem.IsWindows()
+                ? await StartDetachedUnixAsync(_startInfo, cancellationToken).ConfigureAwait(false)
+                : StartProcess(_startInfo);
 
             InitializeStartedProcess(startedProcess);
             Volatile.Write(ref _lifecycleState, (int)LifecycleState.Started);
@@ -360,29 +336,70 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     }
 
     /// <summary>
-    /// Cross-platform redirected spawn: a thin <see cref="Process.Start(ProcessStartInfo)"/> wrapper.
+    /// Starts the child with <see cref="Process.Start(ProcessStartInfo)"/>.
     /// </summary>
     /// <param name="startInfo">Process launch parameters.</param>
-    private static StartedProcess StartRedirected(IsolatedProcessStartInfo startInfo)
+    private static StartedProcess StartProcess(IsolatedProcessStartInfo startInfo)
     {
-        using var nullInput = File.OpenNullHandle();
+        using var nullHandle = File.OpenNullHandle();
+        var psi = CreateProcessStartInfo(startInfo, nullHandle);
+
+        var process = Process.Start(psi)
+            ?? throw new InvalidOperationException($"Failed to start child process: {startInfo.FileName}");
+
+        return startInfo.Detached
+            ? new StartedProcess(process, TextReader.Null, TextReader.Null, ExtraDispose: null)
+            : new StartedProcess(process, process.StandardOutput, process.StandardError, ExtraDispose: null);
+    }
+
+    /// <summary>
+    /// Maps <paramref name="startInfo"/> onto a <see cref="ProcessStartInfo"/>.
+    /// </summary>
+    /// <param name="startInfo">Process launch parameters.</param>
+    /// <param name="nullHandle">Null-device handle used for stdin, and for stdout/stderr of detached children.</param>
+    internal static ProcessStartInfo CreateProcessStartInfo(IsolatedProcessStartInfo startInfo, SafeFileHandle nullHandle)
+    {
         var psi = new ProcessStartInfo
         {
             FileName = startInfo.FileName,
             WorkingDirectory = startInfo.WorkingDirectory,
             UseShellExecute = false,
             CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
             // Guest processes never consume input from the CLI. Use a null handle so tools
             // such as package-manager lifecycle scripts observe EOF instead of inheriting the TTY
             // and blocking indefinitely. See https://github.com/microsoft/aspire/issues/16791.
-            StandardInputHandle = nullInput,
+            StandardInputHandle = nullHandle,
+        };
+
+        if (startInfo.Detached)
+        {
+            // A detached child outlives the CLI, so nothing would be left to drain redirected pipes.
+            psi.StandardOutputHandle = nullHandle;
+            psi.StandardErrorHandle = nullHandle;
+        }
+        else
+        {
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardError = true;
             // Pin encodings so process output decoding is stable regardless of the ambient
             // Console.OutputEncoding (e.g. on container hosts that leave it set to ASCII).
-            StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false),
-            StandardErrorEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false),
-        };
+            psi.StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false);
+            psi.StandardErrorEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false);
+        }
+
+        if (OperatingSystem.IsWindows() && (startInfo.IsolateConsole || startInfo.KillOnParentExit || startInfo.Detached))
+        {
+            // CreateNoWindow gives the child its own hidden console, so DCP stop-process-tree can
+            // AttachConsole to it and send CTRL_C_EVENT without also signalling the CLI. Children that
+            // only need parent-exit protection or detachment keep sharing the CLI's console.
+            psi.CreateNoWindow = startInfo.IsolateConsole;
+            // KillOnParentExit assigns the child to a kill-on-close job atomically at creation. Unix
+            // children rely on the cooperative parent-liveness watchdog instead (see LayoutProcessRunner).
+            psi.KillOnParentExit = startInfo.KillOnParentExit;
+            // Long-lived children must not keep unrelated inheritable CLI handles (sockets, other
+            // children's pipes) open, so inherit only the standard handles.
+            psi.InheritedHandles = [];
+        }
 
         foreach (var arg in startInfo.ArgumentList)
         {
@@ -395,14 +412,7 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         // case where nothing was customized.
         ProcessEnvironment.ApplyTo(psi, startInfo.GetEnvironmentForSpawn());
 
-        var process = Process.Start(psi)
-            ?? throw new InvalidOperationException($"Failed to start child process: {startInfo.FileName}");
-
-        return new StartedProcess(
-            process,
-            process.StandardOutput,
-            process.StandardError,
-            ExtraDispose: null);
+        return psi;
     }
 
     /// <summary>

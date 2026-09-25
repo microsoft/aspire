@@ -53,11 +53,9 @@ public class ProcessExecutionDetachedTests(ITestOutputHelper outputHelper)
     }
 
     // Regression test for the duplicate-handle bug that broke `aspire start` on Windows:
-    // The Windows detached path points both Stdout and Stderr at the same NUL
-    // handle, and PROC_THREAD_ATTRIBUTE_HANDLE_LIST rejects duplicate handle values —
-    // CreateProcessW returns ERROR_INVALID_PARAMETER (87). The unified
-    // WindowsProcessInterop.SpawnProcess de-duplicates the inheritable
-    // handle list, so this spawn must succeed.
+    // the Windows detached path points both Stdout and Stderr at the same NUL handle, and
+    // PROC_THREAD_ATTRIBUTE_HANDLE_LIST rejects duplicate handle values. Process.Start
+    // duplicates the standard handles before building the list, so this spawn must succeed.
     [Fact]
     [SupportedOSPlatform("windows")]
     public async Task StartAsync_OnWindows_WithSharedStdoutStderrHandle_Succeeds()

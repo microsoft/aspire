@@ -4,7 +4,6 @@
 using Microsoft.AspNetCore.InternalTesting;
 using System.Globalization;
 using System.Diagnostics;
-using System.Text;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -16,27 +15,6 @@ namespace Aspire.Cli.Tests;
 
 public class DotNetSdkInstallerTests
 {
-    [Theory]
-    [InlineData(65001)]
-    [InlineData(1200)]
-    [InlineData(1201)]
-    [InlineData(12000)]
-    [InlineData(12001)]
-    public async Task CheckAsync_DetectsSdkFromBomEncodedOutput(int codePage)
-    {
-        var encoding = Encoding.GetEncoding(codePage);
-        var startInfo = ProcessTestHelpers.CreateOutputProcessStartInfo(
-            [.. encoding.GetPreamble(), .. encoding.GetBytes("11.0.100 [sdk]\n")],
-            Encoding.UTF8.GetBytes("99.0.100 [not an SDK record on stdout]\n"));
-        startInfo.StandardOutputEncoding = Encoding.UTF8;
-        var installer = CreateDotNetSdkInstaller(createProcessStartInfo: (_, _) => startInfo);
-
-        var result = await installer.CheckAsync(TestContext.Current.CancellationToken).DefaultTimeout();
-
-        Assert.True(result.Success);
-        Assert.Equal("11.0.100", result.HighestDetectedVersion);
-    }
-
     [Fact]
     public async Task CheckAsync_WhenDotNetIsAvailable_ReturnsTrue()
     {

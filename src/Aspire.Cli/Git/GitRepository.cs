@@ -3,7 +3,6 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Git;
@@ -24,36 +23,15 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
 
         try
         {
-            var startInfo = new ProcessStartInfo("git")
-            {
-                WorkingDirectory = executionContext.WorkingDirectory.FullName,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            startInfo.ArgumentList.Add("rev-parse");
-            startInfo.ArgumentList.Add("--show-toplevel");
+            var startInfo = CreateGitStartInfo(executionContext.WorkingDirectory, ["rev-parse", "--show-toplevel"]);
 
-            using var process = new Process { StartInfo = startInfo };
             using var activity = profilingTelemetry.StartGitCommand("rev-parse", startInfo.FileName, startInfo.ArgumentList, executionContext.WorkingDirectory);
+            var result = await RunGitAsync(startInfo, activity, cancellationToken).ConfigureAwait(false);
 
-            process.Start();
-            activity.SetProcessId(process.Id);
-            using var cancellationRegistration = RegisterProcessKillOnCancellation(process, cancellationToken);
-
-            var outputTask = ProcessOutputReader.ReadAllTextAsync(process, cancellationToken);
-
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            activity.SetProcessExitCode(process.ExitCode);
-
-            var result = await outputTask.ConfigureAwait(false);
-            activity.SetGitOutputLengths(result.StandardOutput.Length, result.StandardError.Length);
-
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
-                activity.SetError($"git rev-parse exited with code {process.ExitCode}.");
-                logger.LogDebug("Git command returned non-zero exit code {ExitCode}: {Error}", process.ExitCode, result.StandardError.Trim());
+                activity.SetError($"git rev-parse exited with code {result.ExitStatus.ExitCode}.");
+                logger.LogDebug("Git command returned non-zero exit code {ExitCode}: {Error}", result.ExitStatus.ExitCode, result.StandardError.Trim());
                 return null;
             }
 
@@ -99,43 +77,18 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
 
         try
         {
-            var startInfo = new ProcessStartInfo("git")
-            {
-                WorkingDirectory = searchRoot.FullName,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-
             // -z separates entries with NUL so paths containing newlines or spaces are unambiguous.
             // --cached: tracked files. --others: untracked files. --exclude-standard: respect .gitignore,
             // .git/info/exclude, and the user's global excludesfile. Submodule contents are not enumerated.
-            startInfo.ArgumentList.Add("ls-files");
-            startInfo.ArgumentList.Add("--cached");
-            startInfo.ArgumentList.Add("--others");
-            startInfo.ArgumentList.Add("--exclude-standard");
-            startInfo.ArgumentList.Add("-z");
+            var startInfo = CreateGitStartInfo(searchRoot, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]);
 
-            using var process = new Process { StartInfo = startInfo };
             using var activity = profilingTelemetry.StartGitCommand("ls-files", startInfo.FileName, startInfo.ArgumentList, searchRoot);
+            var result = await RunGitAsync(startInfo, activity, cancellationToken).ConfigureAwait(false);
 
-            process.Start();
-            activity.SetProcessId(process.Id);
-            using var cancellationRegistration = RegisterProcessKillOnCancellation(process, cancellationToken);
-
-            var outputTask = ProcessOutputReader.ReadAllTextAsync(process, cancellationToken);
-
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            activity.SetProcessExitCode(process.ExitCode);
-
-            var result = await outputTask.ConfigureAwait(false);
-            activity.SetGitOutputLengths(result.StandardOutput.Length, result.StandardError.Length);
-
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
-                activity.SetError($"git ls-files exited with code {process.ExitCode}.");
-                logger.LogDebug("git ls-files returned non-zero exit code {ExitCode} from {SearchRoot}: {Error}", process.ExitCode, searchRoot.FullName, result.StandardError.Trim());
+                activity.SetError($"git ls-files exited with code {result.ExitStatus.ExitCode}.");
+                logger.LogDebug("git ls-files returned non-zero exit code {ExitCode} from {SearchRoot}: {Error}", result.ExitStatus.ExitCode, searchRoot.FullName, result.StandardError.Trim());
                 return null;
             }
 
@@ -171,35 +124,23 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
         }
     }
 
-    private static CancellationTokenRegistration RegisterProcessKillOnCancellation(Process process, CancellationToken cancellationToken)
-    {
-        // RunAndCaptureTextAsync only kills the root process on cancellation. These commands
-        // must stop the entire git process tree, so retain explicit process ownership.
-        if (!cancellationToken.CanBeCanceled)
+    private static ProcessStartInfo CreateGitStartInfo(DirectoryInfo workingDirectory, string[] arguments) =>
+        new("git", arguments)
         {
-            return default;
-        }
+            WorkingDirectory = workingDirectory.FullName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
 
-        return cancellationToken.Register(static state =>
-        {
-            var process = (Process)state!;
-            try
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-            }
-            catch (InvalidOperationException)
-            {
-                // The process can exit between HasExited and Kill. Cancellation already won, so
-                // cleanup is best effort.
-            }
-            catch (System.ComponentModel.Win32Exception)
-            {
-                // Process termination can race with OS teardown or permission checks. Treat that
-                // the same as an already-exited process rather than surfacing a secondary error.
-            }
-        }, process);
+    private static async Task<ProcessTextOutput> RunGitAsync(ProcessStartInfo startInfo, ProfilingTelemetry.ActivityScope activity, CancellationToken cancellationToken)
+    {
+        // RunAndCaptureTextAsync drains stdout and stderr concurrently, and kills git when
+        // cancellationToken fires so Ctrl+C doesn't leave `git ls-files` walking a large repo.
+        var result = await Process.RunAndCaptureTextAsync(startInfo, cancellationToken).ConfigureAwait(false);
+        activity.SetProcessId(result.ProcessId);
+        activity.SetProcessExitCode(result.ExitStatus.ExitCode);
+        activity.SetGitOutputLengths(result.StandardOutput.Length, result.StandardError.Length);
+        return result;
     }
 }

@@ -143,14 +143,7 @@ internal class CliDownloader(
                 var lddPath = "/usr/bin/ldd";
                 if (File.Exists(lddPath))
                 {
-                    using var process = Process.Start(new ProcessStartInfo(lddPath, "--version")
-                    {
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false
-                    })!;
-                    var result = ProcessOutputReader.ReadAllText(process);
-                    process.WaitForExit();
+                    var result = Process.RunAndCaptureText(lddPath, ["--version"]);
                     // musl's ldd reports its version on stderr and may return a nonzero exit code.
                     if ((result.StandardOutput + result.StandardError).Contains("musl", StringComparison.OrdinalIgnoreCase))
                     {

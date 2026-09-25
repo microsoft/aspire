@@ -28,33 +28,20 @@ internal sealed class VsCodeCliRunner(ILogger<VsCodeCliRunner> logger) : IVsCode
 
         try
         {
-            var startInfo = new ProcessStartInfo(executablePath, "--version")
+            var result = await Process.RunAndCaptureTextAsync(new ProcessStartInfo(executablePath, "--version")
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                UseShellExecute = false,
                 CreateNoWindow = true
-            };
+            }, cancellationToken).ConfigureAwait(false);
 
-            using var process = new Process { StartInfo = startInfo };
-
-            process.Start();
-
-            // The one-shot text APIs do not detect BOMs and always await both pipes. Preserve
-            // StreamReader decoding and the existing stdout-on-success/stderr-on-failure waits.
-            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
-                var errorOutput = await errorTask.ConfigureAwait(false);
-                logger.LogDebug("VS Code CLI ({Command}) returned non-zero exit code {ExitCode}: {Error}", command, process.ExitCode, errorOutput.Trim());
+                logger.LogDebug("VS Code CLI ({Command}) returned non-zero exit code {ExitCode}: {Error}", command, result.ExitStatus.ExitCode, result.StandardError.Trim());
                 return null;
             }
 
-            var output = await outputTask.ConfigureAwait(false);
+            var output = result.StandardOutput;
 
             if (string.IsNullOrEmpty(output))
             {

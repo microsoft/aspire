@@ -116,15 +116,12 @@ internal static partial class CertificateHelpers
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                UseShellExecute = false,
                 CreateNoWindow = true
             };
 
-            // Bound both output capture and exit, and kill the process tree on timeout.
-            // The shared runner also retains StreamReader's BOM-aware decoding.
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var result = CertificateProcessRunner.RunAndCaptureText(processInfo, timeoutCts.Token);
-            if (result.ExitCode != 0)
+            // The timeout bounds both output capture and exit; on timeout the process is killed and TimeoutException is thrown.
+            var result = Process.RunAndCaptureText(processInfo, TimeSpan.FromSeconds(5));
+            if (result.ExitStatus.ExitCode != 0)
             {
                 return false;
             }

@@ -1351,11 +1351,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 _logger.LogDebug("Connected to AppHost server backchannel at {SocketPath}", socketPath);
                 return;
             }
-            // Route HasExited / ExitCode through the session so the isolated Windows spawn path
-            // (which surfaces Process via Process.GetProcessById, whose status getters are
-            // unreliable for processes the BCL did not itself start) goes through the
-            // IsolatedProcess wrapper's GetExitCodeProcess-backed accessors instead.
-            // See https://github.com/dotnet/runtime/issues/45003.
             catch (SocketException ex) when (serverSession.HasServerExited == true && !cancellationToken.IsCancellationRequested)
             {
                 var exitCode = serverSession.TryGetServerExitCode();

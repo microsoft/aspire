@@ -6,6 +6,15 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils;
 
+/// <summary>
+/// Runs a short-lived process and captures its output under a timeout.
+/// </summary>
+/// <remarks>
+/// Process.RunAndCaptureTextAsync can't replace this: callers need byte-capped reads so a
+/// misbehaving process can't make the CLI allocate unbounded memory, the whole process tree is
+/// killed on timeout (the runtime helper only kills the root), and the post-exit drain is bounded
+/// because descendants that inherited stdout/stderr can keep the pipes open indefinitely.
+/// </remarks>
 internal static class ProcessCaptureRunner
 {
     // Maximum time we'll wait for a process to actually exit after TryKillProcessTree

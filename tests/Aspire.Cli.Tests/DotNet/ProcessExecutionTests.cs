@@ -425,8 +425,6 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         IProcessTreeGracefulShutdownSignaler signaler,
         IGracefulShutdownWindow shutdownService)
     {
-        // The Windows kill-on-close job is now resolved on-demand inside the factory via
-        // WindowsConsoleProcessJob.Shared, so the test no longer creates or disposes one.
         return CreateExecution(
             scriptFile,
             new ProcessInvocationOptions
