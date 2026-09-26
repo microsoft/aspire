@@ -627,6 +627,12 @@ fluent-dialog-body .fluent-message-box {
     flex: 0 0 auto;
 }
 
+/* Fluent's inline-block badge container adds baseline space only while a count is visible. */
+.filter-toolbar fluent-counter-badge-container,
+.mobile-filter-toolbar fluent-counter-badge-container {
+    display: block;
+}
+
 .filter-toolbar > fluent-button,
 .filter-toolbar > .toolbar-end > fluent-button {
     width: auto;
