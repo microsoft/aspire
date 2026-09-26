@@ -24,6 +24,9 @@ The exporter appends `/v1/traces`, `/v1/metrics`, and `/v1/logs` to the general
 endpoint; signal-specific endpoint variables must include the complete path.
 Standard OTLP headers and per-signal settings remain supported.
 
+Reqwest and Hyper diagnostics are excluded from exported logs to prevent export
+feedback loops. They remain available in console output through `RUST_LOG`.
+
 Linux builds require OpenSSL development libraries and `pkg-config`; runtime
 environments need compatible OpenSSL libraries and trusted CA certificates.
 OpenSSL honors `SSL_CERT_FILE` and `SSL_CERT_DIR` for custom trust, including the

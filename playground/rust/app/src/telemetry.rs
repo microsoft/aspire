@@ -7,7 +7,12 @@ use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use std::sync::OnceLock;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{
+    filter::{LevelFilter, Targets},
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
+    EnvFilter, Layer,
+};
 
 static REQUEST_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
 
@@ -82,7 +87,7 @@ pub fn init_telemetry() -> Result<OtelTelemetry, Box<dyn std::error::Error + Sen
         .with(env_filter)
         .with(tracing_subscriber::fmt::layer())
         .with(tracing_opentelemetry::layer().with_tracer(tracer))
-        .with(OpenTelemetryTracingBridge::new(&logger_provider))
+        .with(OpenTelemetryTracingBridge::new(&logger_provider).with_filter(otel_log_filter()))
         .try_init()?;
 
     Ok(OtelTelemetry {
@@ -90,6 +95,16 @@ pub fn init_telemetry() -> Result<OtelTelemetry, Box<dyn std::error::Error + Sen
         meter_provider,
         logger_provider,
     })
+}
+
+fn otel_log_filter() -> Targets {
+    // Transport logs can recursively trigger more exports. Filter only the bridge
+    // so RUST_LOG can still enable transport diagnostics in the console.
+    // https://github.com/open-telemetry/opentelemetry-rust/issues/2877
+    Targets::new()
+        .with_default(LevelFilter::TRACE)
+        .with_target("reqwest", LevelFilter::OFF)
+        .with_target("hyper", LevelFilter::OFF)
 }
 
 pub struct OtelTelemetry {
@@ -108,6 +123,81 @@ impl OtelTelemetry {
         }
         if let Err(error) = self.logger_provider.shutdown() {
             eprintln!("failed to shut down logger provider: {error}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use opentelemetry_sdk::error::OTelSdkResult;
+    use opentelemetry_sdk::logs::{LogBatch, LogExporter};
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    };
+    use tracing::{Event, Subscriber};
+    use tracing_subscriber::layer::Context;
+
+    #[test]
+    fn transport_logs_are_not_exported_but_remain_visible_to_other_layers() {
+        let exported = Arc::new(AtomicUsize::new(0));
+        let observed = Arc::new(Mutex::new(Vec::new()));
+        let provider = SdkLoggerProvider::builder()
+            .with_simple_exporter(CountingExporter(exported.clone()))
+            .build();
+        let subscriber = tracing_subscriber::registry()
+            .with(EnvFilter::new(
+                "trace,reqwest::blocking=trace,hyper_util::client=trace",
+            ))
+            .with(RecordingLayer(observed.clone()))
+            .with(OpenTelemetryTracingBridge::new(&provider).with_filter(otel_log_filter()));
+
+        tracing::subscriber::with_default(subscriber, || {
+            tracing::error!(target: "reqwest", "transport error");
+            tracing::trace!(target: "reqwest::blocking::client", "transport trace");
+            tracing::warn!(target: "hyper::client", "transport warning");
+            tracing::debug!(target: "hyper_util::client::legacy", "transport debug");
+            tracing::info!(target: "sample", "application log");
+            tracing::trace!(target: "sample", "application trace log");
+        });
+
+        provider.force_flush().unwrap();
+        assert_eq!(exported.load(Ordering::Relaxed), 2);
+        let observed = observed.lock().unwrap();
+        for target in [
+            "reqwest",
+            "reqwest::blocking::client",
+            "hyper::client",
+            "hyper_util::client::legacy",
+            "sample",
+        ] {
+            assert!(
+                observed.iter().any(|observed| observed == target),
+                "{target}"
+            );
+        }
+        provider.shutdown().unwrap();
+    }
+
+    #[derive(Debug)]
+    struct CountingExporter(Arc<AtomicUsize>);
+
+    impl LogExporter for CountingExporter {
+        async fn export(&self, batch: LogBatch<'_>) -> OTelSdkResult {
+            self.0.fetch_add(batch.iter().count(), Ordering::Relaxed);
+            Ok(())
+        }
+    }
+
+    struct RecordingLayer(Arc<Mutex<Vec<String>>>);
+
+    impl<S: Subscriber> Layer<S> for RecordingLayer {
+        fn on_event(&self, event: &Event<'_>, _context: Context<'_, S>) {
+            self.0
+                .lock()
+                .unwrap()
+                .push(event.metadata().target().to_owned());
         }
     }
 }
