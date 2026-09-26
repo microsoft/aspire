@@ -8,6 +8,7 @@ import {
     appHostOpenSourceActionLabel,
     appHostRunActionLabel,
     appHostDebugActionLabel,
+    appHostRestoreActionLabel,
     appHostDeployActionLabel,
     appHostPublishActionLabel,
     appHostRunPipelineStepActionLabel,
@@ -182,10 +183,11 @@ export class WorkspaceAppHostItem extends vscode.TreeItem {
     }
 }
 
-export type WorkspaceAppHostAction = 'openSource' | 'run' | 'debug' | 'deploy' | 'publish' | 'runPipelineStep' | 'debugPipelineStep';
+export type WorkspaceAppHostAction = 'openSource' | 'restore' | 'run' | 'debug' | 'deploy' | 'publish' | 'runPipelineStep' | 'debugPipelineStep';
 
 const actionLabels: Record<WorkspaceAppHostAction, string> = {
     openSource: appHostOpenSourceActionLabel,
+    restore: appHostRestoreActionLabel,
     run: appHostRunActionLabel,
     debug: appHostDebugActionLabel,
     deploy: appHostDeployActionLabel,
@@ -196,6 +198,7 @@ const actionLabels: Record<WorkspaceAppHostAction, string> = {
 
 const actionIcons: Record<WorkspaceAppHostAction, string> = {
     openSource: 'go-to-file',
+    restore: 'sync',
     run: 'play',
     debug: 'debug-alt',
     deploy: 'cloud-upload',
@@ -206,6 +209,7 @@ const actionIcons: Record<WorkspaceAppHostAction, string> = {
 
 const actionCommands: Record<WorkspaceAppHostAction, string> = {
     openSource: 'aspire-vscode.openAppHostSource',
+    restore: 'aspire-vscode.restoreAppHost',
     run: 'aspire-vscode.runAppHost',
     debug: 'aspire-vscode.debugAppHost',
     deploy: 'aspire-vscode.deployAppHost',

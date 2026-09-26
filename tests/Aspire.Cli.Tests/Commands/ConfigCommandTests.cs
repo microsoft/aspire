@@ -45,6 +45,12 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ConfigInfo_AdvertisesCodeGenerationVersionMarker()
+    {
+        Assert.Contains(KnownCapabilities.CodeGenerationVersionMarker, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
+    [Fact]
     public void ConfigInfoJson_UsesCamelCasePropertyNames()
     {
         var info = new Aspire.Cli.Commands.ConfigInfo(
