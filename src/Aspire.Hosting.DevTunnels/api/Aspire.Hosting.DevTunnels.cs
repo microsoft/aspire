@@ -26,6 +26,9 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<DevTunnels.DevTunnelResource> WithAnonymousAccess(this ApplicationModel.IResourceBuilder<DevTunnels.DevTunnelResource> tunnelBuilder) { throw null; }
 
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<DevTunnels.DevTunnelResource> WithExpiration(this ApplicationModel.IResourceBuilder<DevTunnels.DevTunnelResource> tunnelBuilder, int expirationHours) { throw null; }
+
         [AspireExportIgnore(Reason = "DevTunnelPortOptions is not ATS-compatible. Use the overload with EndpointReference or EndpointReference + bool instead.")]
         public static ApplicationModel.IResourceBuilder<DevTunnels.DevTunnelResource> WithReference(this ApplicationModel.IResourceBuilder<DevTunnels.DevTunnelResource> tunnelBuilder, ApplicationModel.EndpointReference targetEndpoint, DevTunnels.DevTunnelPortOptions? portOptions) { throw null; }
 
@@ -56,6 +59,8 @@ namespace Aspire.Hosting.DevTunnels
         public bool AllowAnonymous { get { throw null; } set { } }
 
         public string? Description { get { throw null; } set { } }
+
+        public int? ExpirationHours { get { throw null; } set { } }
 
         public System.Collections.Generic.List<string>? Labels { get { throw null; } set { } }
 

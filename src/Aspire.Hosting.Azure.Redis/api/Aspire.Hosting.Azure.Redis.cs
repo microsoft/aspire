@@ -16,10 +16,10 @@ namespace Aspire.Hosting
         [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> RunAsContainer(this ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource>>? configureContainer = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAccessKeyAuthentication dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withAccessKeyAuthentication dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> WithAccessKeyAuthentication(this ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> builder, ApplicationModel.IResourceBuilder<Azure.IAzureKeyVaultResource> keyVaultBuilder) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAccessKeyAuthentication dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withAccessKeyAuthentication dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> WithAccessKeyAuthentication(this ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> builder) { throw null; }
     }
 

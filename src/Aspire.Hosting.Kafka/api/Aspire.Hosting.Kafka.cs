@@ -47,5 +47,7 @@ namespace Aspire.Hosting
     public sealed partial class KafkaUIContainerResource : ApplicationModel.ContainerResource
     {
         public KafkaUIContainerResource(string name) : base(default!, default) { }
+
+        public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
     }
 }
