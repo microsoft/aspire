@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Logging;
+using Microsoft.Win32.SafeHandles;
 using Semver;
 
 namespace Aspire.Cli.Npm;
@@ -203,18 +204,23 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
     /// Creates a <see cref="ProcessStartInfo"/> configured to run an npm command.
     /// On Windows, .cmd files are invoked via cmd.exe /c for reliable stdout redirection.
     /// </summary>
-    internal static ProcessStartInfo CreateNpmProcessStartInfo(string npmPath, string[] args, string workingDirectory, IEnvironment environment)
+    /// <param name="npmPath">Path to the npm executable or batch wrapper.</param>
+    /// <param name="args">npm arguments.</param>
+    /// <param name="workingDirectory">Working directory for the npm process.</param>
+    /// <param name="environment">Environment used to detect the host platform.</param>
+    /// <param name="standardInput">
+    /// Handle given to npm as stdin; callers pass a null-device handle and keep it alive until the process starts.
+    /// </param>
+    internal static ProcessStartInfo CreateNpmProcessStartInfo(string npmPath, string[] args, string workingDirectory, IEnvironment environment, SafeFileHandle standardInput)
     {
         var startInfo = new ProcessStartInfo
         {
-            // Redirect stdin so the child npm process (and any lifecycle scripts it invokes)
-            // does not inherit the CLI's TTY. The caller closes stdin immediately after Start()
-            // so any read surfaces as EOF instead of hanging waiting on the terminal. NpmRunner
-            // is intended to be fully non-interactive. See https://github.com/microsoft/aspire/issues/16791.
-            RedirectStandardInput = true,
+            // Give npm (and any lifecycle scripts it invokes) a null stdin so reads see EOF
+            // instead of blocking on the CLI's terminal. NpmRunner is intended to be fully
+            // non-interactive. See https://github.com/microsoft/aspire/issues/16791.
+            StandardInputHandle = standardInput,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            UseShellExecute = false,
             CreateNoWindow = true,
             WorkingDirectory = workingDirectory
         };
@@ -288,39 +294,22 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
 
         try
         {
-            var startInfo = CreateNpmProcessStartInfo(npmPath, args, workingDirectory, environment);
+            using var nullInput = File.OpenNullHandle();
+            var startInfo = CreateNpmProcessStartInfo(npmPath, args, workingDirectory, environment, nullInput);
 
-            using var process = new Process { StartInfo = startInfo };
             using var activity = profilingTelemetry.StartNpmCommand(npmPath, args, workingDirectory);
-            process.Start();
-            // Close stdin so any npm lifecycle script that tries to read terminal input
-            // sees EOF instead of blocking on the inherited TTY. See ProcessGuestLauncher
-            // and https://github.com/microsoft/aspire/issues/16791.
-            try
-            {
-                process.StandardInput.Close();
-            }
-            catch (IOException)
-            {
-                // The child may have already closed its stdin; ignore.
-            }
-            activity.SetProcessId(process.Id);
+            var result = await Process.RunAndCaptureTextAsync(startInfo, cancellationToken).ConfigureAwait(false);
+            activity.SetProcessId(result.ProcessId);
+            activity.SetProcessExitCode(result.ExitStatus.ExitCode);
 
-            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            activity.SetProcessExitCode(process.ExitCode);
-
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
-                activity.SetError($"npm exited with code {process.ExitCode}.");
-                var errorOutput = await errorTask.ConfigureAwait(false);
-                logger.LogDebug("npm {Args} returned non-zero exit code {ExitCode}: {Error}", argsString, process.ExitCode, errorOutput.Trim());
+                activity.SetError($"npm exited with code {result.ExitStatus.ExitCode}.");
+                logger.LogDebug("npm {Args} returned non-zero exit code {ExitCode}: {Error}", argsString, result.ExitStatus.ExitCode, result.StandardError.Trim());
                 return null;
             }
 
-            return await outputTask.ConfigureAwait(false);
+            return result.StandardOutput;
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {

@@ -12,6 +12,8 @@ internal sealed partial class IsolatedProcess
         IsolatedProcessStartInfo startInfo,
         CancellationToken cancellationToken)
     {
+        // StartDetached alone cannot replace DCP's monitored handoff: DCP reports the child's
+        // PID before the CLI returns and remains available to report a short-lived child's exit.
         if (startInfo.DetachedUnixLauncherPath is null)
         {
             throw new InvalidOperationException("Unix detached process launch requires a DCP executable path.");

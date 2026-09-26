@@ -726,31 +726,20 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     {
         try
         {
-            var startInfo = new ProcessStartInfo("dotnet")
+            var result = Process.RunAndCaptureText(new ProcessStartInfo("dotnet", "nuget config paths")
             {
-                Arguments = "nuget config paths",
                 WorkingDirectory = workingDirectory,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                UseShellExecute = false,
                 CreateNoWindow = true
-            };
+            });
 
-            using var process = Process.Start(startInfo);
-            if (process is null)
+            if (result.ExitStatus.ExitCode != 0)
             {
                 return null;
             }
 
-            var output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
-
-            if (process.ExitCode != 0)
-            {
-                return null;
-            }
-
-            var configPaths = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            var configPaths = result.StandardOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
             var workingDirFullPath = Path.GetFullPath(workingDirectory);
             var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             var globalNuGetPath = Path.Combine(userProfile, ".nuget");

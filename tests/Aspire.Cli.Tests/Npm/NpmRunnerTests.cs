@@ -31,9 +31,12 @@ public class NpmRunnerTests
     [Fact]
     public void CreateNpmProcessStartInfo_SetsCommonProperties()
     {
-        var startInfo = NpmRunner.CreateNpmProcessStartInfo("/usr/bin/npm", ["view", "express", "version"], "/tmp/workdir", new TestEnvironment());
+        using var stdin = File.OpenNullHandle();
+        var startInfo = NpmRunner.CreateNpmProcessStartInfo("/usr/bin/npm", ["view", "express", "version"], "/tmp/workdir", new TestEnvironment(), stdin);
 
-        Assert.True(startInfo.RedirectStandardInput);
+        // npm must see EOF on stdin rather than the CLI's terminal (#16791).
+        Assert.Same(stdin, startInfo.StandardInputHandle);
+        Assert.False(startInfo.RedirectStandardInput);
         Assert.True(startInfo.RedirectStandardOutput);
         Assert.True(startInfo.RedirectStandardError);
         Assert.False(startInfo.UseShellExecute);
@@ -46,10 +49,11 @@ public class NpmRunnerTests
     {
         Assert.SkipUnless(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Windows-only test.");
 
+        using var stdin = File.OpenNullHandle();
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             @"C:\Program Files\nodejs\npm.cmd",
             ["view", "@playwright/cli@0.1.1", "version", "--registry", "https://registry.npmjs.org/"],
-            @"C:\temp\workdir", new TestEnvironment());
+            @"C:\temp\workdir", new TestEnvironment(), stdin);
 
         Assert.Equal("cmd.exe", startInfo.FileName);
         Assert.Empty(startInfo.ArgumentList);
@@ -67,10 +71,11 @@ public class NpmRunnerTests
     {
         Assert.SkipUnless(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Windows-only test.");
 
+        using var stdin = File.OpenNullHandle();
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             @"C:\Program Files\nodejs\npm.cmd",
             ["view", "express", "version"],
-            @"C:\temp", new TestEnvironment());
+            @"C:\temp", new TestEnvironment(), stdin);
 
         // cmd.exe /c requires outer quotes wrapping the entire command:
         // /c ""C:\Program Files\nodejs\npm.cmd" "view" "express" "version""
@@ -84,10 +89,11 @@ public class NpmRunnerTests
     {
         Assert.SkipUnless(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Windows-only test.");
 
+        using var stdin = File.OpenNullHandle();
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             @"C:\Program Files\nodejs\npm.exe",
             ["view", "express", "version"],
-            @"C:\temp", new TestEnvironment());
+            @"C:\temp", new TestEnvironment(), stdin);
 
         Assert.Equal(@"C:\Program Files\nodejs\npm.exe", startInfo.FileName);
         Assert.Equal(["view", "express", "version"], startInfo.ArgumentList);
@@ -99,10 +105,11 @@ public class NpmRunnerTests
     {
         Assert.SkipUnless(!RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Non-Windows-only test.");
 
+        using var stdin = File.OpenNullHandle();
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             "/usr/local/bin/npm",
             ["view", "@playwright/cli@0.1.1", "version"],
-            "/tmp/workdir", new TestEnvironment());
+            "/tmp/workdir", new TestEnvironment(), stdin);
 
         Assert.Equal("/usr/local/bin/npm", startInfo.FileName);
         Assert.Equal(["view", "@playwright/cli@0.1.1", "version"], startInfo.ArgumentList);
@@ -115,10 +122,11 @@ public class NpmRunnerTests
         Assert.SkipUnless(!RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Non-Windows-only test.");
 
         // On non-Windows, even a .cmd path is invoked directly (not via cmd.exe).
+        using var stdin = File.OpenNullHandle();
         var startInfo = NpmRunner.CreateNpmProcessStartInfo(
             "/usr/local/bin/npm.cmd",
             ["view", "express", "version"],
-            "/tmp", new TestEnvironment());
+            "/tmp", new TestEnvironment(), stdin);
 
         Assert.Equal("/usr/local/bin/npm.cmd", startInfo.FileName);
         Assert.Equal(["view", "express", "version"], startInfo.ArgumentList);
@@ -130,7 +138,8 @@ public class NpmRunnerTests
     {
         Assert.SkipUnless(!RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Non-Windows-only test.");
 
-        var startInfo = NpmRunner.CreateNpmProcessStartInfo("/usr/bin/npm", [], "/tmp", new TestEnvironment());
+        using var stdin = File.OpenNullHandle();
+        var startInfo = NpmRunner.CreateNpmProcessStartInfo("/usr/bin/npm", [], "/tmp", new TestEnvironment(), stdin);
 
         Assert.Equal("/usr/bin/npm", startInfo.FileName);
         Assert.Empty(startInfo.ArgumentList);
@@ -141,7 +150,8 @@ public class NpmRunnerTests
     {
         Assert.SkipUnless(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Windows-only test.");
 
-        var startInfo = NpmRunner.CreateNpmProcessStartInfo(@"C:\Program Files\nodejs\npm.cmd", [], @"C:\temp", new TestEnvironment());
+        using var stdin = File.OpenNullHandle();
+        var startInfo = NpmRunner.CreateNpmProcessStartInfo(@"C:\Program Files\nodejs\npm.cmd", [], @"C:\temp", new TestEnvironment(), stdin);
 
         Assert.Equal("cmd.exe", startInfo.FileName);
         Assert.Contains("npm.cmd", startInfo.Arguments);

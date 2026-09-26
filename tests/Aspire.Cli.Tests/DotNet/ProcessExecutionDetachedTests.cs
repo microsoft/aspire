@@ -18,12 +18,44 @@ namespace Aspire.Cli.Tests.DotNet;
 
 public class ProcessExecutionDetachedTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    [SupportedOSPlatform("windows")]
+    public async Task StartAsync_OnWindows_ProvidesValidNullStdin()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows-only test.");
+
+        await using var child = CreateDetachedExecution(
+            "powershell.exe",
+            ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", """
+                Add-Type 'using System; using System.Runtime.InteropServices; public static class Stdio { [DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int id); }';
+                $inputHandle = [Stdio]::GetStdHandle(-10);
+                if ($inputHandle -eq [IntPtr]::Zero -or $inputHandle.ToInt64() -eq -1) { exit 42 }
+                if ([Console]::In.Read() -ne -1) { exit 43 }
+                [Console]::Out.WriteLine('discarded stdout');
+                [Console]::Error.WriteLine('discarded stderr');
+                exit 0
+                """],
+            Environment.CurrentDirectory);
+
+        Assert.True(await child.StartAsync(TestContext.Current.CancellationToken));
+        try
+        {
+            Assert.Equal(0, await child.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(10)));
+        }
+        finally
+        {
+            if (!child.HasExited)
+            {
+                child.Kill(entireProcessTree: true);
+                await child.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+            }
+        }
+    }
+
     // Regression test for the duplicate-handle bug that broke `aspire start` on Windows:
-    // The Windows detached path points both Stdout and Stderr at the same NUL
-    // handle, and PROC_THREAD_ATTRIBUTE_HANDLE_LIST rejects duplicate handle values —
-    // CreateProcessW returns ERROR_INVALID_PARAMETER (87). The unified
-    // WindowsProcessInterop.SpawnProcess de-duplicates the inheritable
-    // handle list, so this spawn must succeed.
+    // the Windows detached path points both Stdout and Stderr at the same NUL handle, and
+    // PROC_THREAD_ATTRIBUTE_HANDLE_LIST rejects duplicate handle values. Process.Start
+    // duplicates the standard handles before building the list, so this spawn must succeed.
     [Fact]
     [SupportedOSPlatform("windows")]
     public async Task StartAsync_OnWindows_WithSharedStdoutStderrHandle_Succeeds()
