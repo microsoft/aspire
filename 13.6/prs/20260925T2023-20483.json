@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Backport of #20482; removes redundant experimental API annotations from Azure Sandboxes",
+  "mergedAt": "2026-09-25T20:23:24Z",
+  "number": 20483,
+  "runDate": "2026-09-26T00:09:28Z",
+  "status": "included",
+  "title": "[release/13.6] Remove redundant experimental annotations from Azure Sandboxes"
+}

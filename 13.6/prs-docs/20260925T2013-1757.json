@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal docs-site navigation/rendering fix, not tied to a product feature; no matching changelog entry",
+  "mergedAt": "2026-09-25T20:13:16Z",
+  "number": 1757,
+  "runDate": "2026-09-26T00:09:28Z",
+  "status": "excluded",
+  "title": "fix: avoid repeated TypeScript API sidebar catalogs"
+}

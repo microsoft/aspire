@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Backport of #20461; fixes Azure sandbox ExtraSmall/Small tier disk size deployment failures",
+  "mergedAt": "2026-09-25T17:40:31Z",
+  "number": 20479,
+  "runDate": "2026-09-26T00:09:28Z",
+  "status": "included",
+  "title": "[release/13.6] Fix Azure sandbox ExtraSmall and Small tier disk sizes"
+}

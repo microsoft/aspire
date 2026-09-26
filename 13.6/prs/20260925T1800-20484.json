@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Engineering-only build configuration change (StabilizePackageVersion), no user-facing impact",
+  "mergedAt": "2026-09-25T18:00:37Z",
+  "number": 20484,
+  "runDate": "2026-09-26T00:09:28Z",
+  "status": "excluded",
+  "title": "Change StabilizePackageVersion condition to true"
+}

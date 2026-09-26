@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "Added an experimental `Aspire.Hosting.Azure.Sandboxes` deployment target so Aspire applications can publish container-backed compute resources to Azure Container Apps Sandboxes.",
-  "docsPrs": [],
+  "docsPrs": [
+    1752
+  ],
   "docsRequired": true,
   "emoji": "📦",
   "firstMergedAt": "2026-08-29T03:38:25Z",

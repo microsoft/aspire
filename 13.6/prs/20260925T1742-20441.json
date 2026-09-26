@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Backport of #20337; enables multithreaded .NET project builds for faster coordinated build phase",
+  "mergedAt": "2026-09-25T17:42:37Z",
+  "number": 20441,
+  "runDate": "2026-09-26T00:09:28Z",
+  "status": "included",
+  "title": "[release/13.6] Enable multithreaded .NET project builds"
+}

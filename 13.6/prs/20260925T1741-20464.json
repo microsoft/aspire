@@ -1,0 +1,9 @@
+{
+  "author": "dotnet-maestro[bot]",
+  "comment": "Backport of #20450; routine dependency version bump with no user-facing impact",
+  "mergedAt": "2026-09-25T17:41:15Z",
+  "number": 20464,
+  "runDate": "2026-09-26T00:09:28Z",
+  "status": "excluded",
+  "title": "[release/13.6] [main] Update dependencies from microsoft/dcp"
+}

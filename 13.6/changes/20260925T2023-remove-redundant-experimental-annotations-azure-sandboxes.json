@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Removed the `ASPIREAZURE001` experimental-API annotations from Azure Sandbox resources, extension methods, options, and enums, since the entire `Aspire.Hosting.Azure.Sandboxes` package is already prerelease. Consumers no longer need to suppress `ASPIREAZURE001` to use Azure Sandboxes.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🚫",
+  "firstMergedAt": "2026-09-25T20:23:24Z",
+  "lastMergedAt": "2026-09-25T20:23:24Z",
+  "name": "Remove redundant experimental annotations from Azure Sandboxes",
+  "owner": "eerhardt",
+  "prs": [
+    20483
+  ]
+}

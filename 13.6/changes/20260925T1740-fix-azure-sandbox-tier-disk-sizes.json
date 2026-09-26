@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed Azure sandbox deployments always failing for the ExtraSmall and Small tiers because requested disk sizes exceeded the Azure Container Apps Sandboxes service's per-tier maximum. ExtraSmall now requests 5Gi and Small requests 10Gi, matching the service's cores x 20Gi limit.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-09-25T17:40:31Z",
+  "lastMergedAt": "2026-09-25T17:40:31Z",
+  "name": "Fix Azure sandbox ExtraSmall and Small tier disk sizes",
+  "owner": "eerhardt",
+  "prs": [
+    20479
+  ]
+}
