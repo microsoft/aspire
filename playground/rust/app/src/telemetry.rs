@@ -3,12 +3,10 @@ use opentelemetry::global;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
-use opentelemetry_otlp::WithTonicConfig;
 use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use std::sync::OnceLock;
-use tonic::transport::ClientTlsConfig;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 static REQUEST_COUNTER: OnceLock<opentelemetry::metrics::Counter<u64>> = OnceLock::new();
@@ -46,11 +44,8 @@ pub fn record_metrics(route: &str, status: StatusCode, elapsed_secs: f64) {
 }
 
 pub fn init_telemetry() -> Result<OtelTelemetry, Box<dyn std::error::Error + Send + Sync>> {
-    let tls = ClientTlsConfig::new().with_native_roots();
-
     let trace_exporter = opentelemetry_otlp::SpanExporter::builder()
-        .with_tonic()
-        .with_tls_config(tls.clone())
+        .with_http()
         .build()?;
     let tracer_provider = SdkTracerProvider::builder()
         .with_batch_exporter(trace_exporter)
@@ -58,8 +53,7 @@ pub fn init_telemetry() -> Result<OtelTelemetry, Box<dyn std::error::Error + Sen
     global::set_tracer_provider(tracer_provider.clone());
 
     let metric_exporter = opentelemetry_otlp::MetricExporter::builder()
-        .with_tonic()
-        .with_tls_config(tls.clone())
+        .with_http()
         .build()?;
     let meter_provider = SdkMeterProvider::builder()
         .with_periodic_exporter(metric_exporter)
@@ -67,8 +61,7 @@ pub fn init_telemetry() -> Result<OtelTelemetry, Box<dyn std::error::Error + Sen
     global::set_meter_provider(meter_provider.clone());
 
     let log_exporter = opentelemetry_otlp::LogExporter::builder()
-        .with_tonic()
-        .with_tls_config(tls)
+        .with_http()
         .build()?;
     let logger_provider = SdkLoggerProvider::builder()
         .with_batch_exporter(log_exporter)
