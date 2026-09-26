@@ -20,5 +20,8 @@
     <ProjectReference Include="..\..\src\Aspire.Hosting.Yarp\Aspire.Hosting.Yarp.csproj" />
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" PrivateAssets="all" NoWarn="NU3018;NU3027;NU3042" Condition="'$(MicrosoftFluentUIAspNetCoreComponentsIsPreview)' == 'true'" />
+  </ItemGroup>
 
 </Project>
