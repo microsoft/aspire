@@ -29,35 +29,28 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
             IncludeFields = true
         };
 
-    #pragma warning disable ASPNETCORE9004 // Native AOT resolver composition is experimental in .NET 11.
+#pragma warning disable ASPNETCORE9004 // Native AOT resolver composition is experimental in .NET 11.
         foreach (var resolver in circuitOptions.Value.JsonTypeInfoResolvers)
         {
             _serializerOptions.TypeInfoResolverChain.Add(resolver);
         }
-    #pragma warning restore ASPNETCORE9004
+#pragma warning restore ASPNETCORE9004
     }
 
-    public async Task<StorageResult<TValue>> GetUnprotectedAsync<TValue>(string key)
-    {
-        var json = await GetJsonAsync(key).ConfigureAwait(false);
+    public Task<StorageResult<TValue>> GetUnprotectedAsync<TValue>(string key) => GetJsonAsync<TValue>(key);
 
-        if (json == null)
+    private Task<StorageResult<TValue>> GetJsonAsync<TValue>(string key)
+        => ReadAsync(key, async () =>
         {
-            return new StorageResult<TValue>(false, default);
-        }
+            var json = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", key).ConfigureAwait(false);
+            if (json is null)
+            {
+                return new StorageResult<TValue>(false, default);
+            }
 
-        try
-        {
             var typeInfo = (JsonTypeInfo<TValue>)_serializerOptions.GetTypeInfo(typeof(TValue));
             return new StorageResult<TValue>(true, JsonSerializer.Deserialize(json, typeInfo));
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
-
-            return new StorageResult<TValue>(false, default);
-        }
-    }
+        });
 
     public async Task SetUnprotectedAsync<TValue>(string key, TValue value)
     {
@@ -69,7 +62,4 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
 
     private ValueTask SetJsonAsync(string key, string json)
         => _jsRuntime.InvokeVoidAsync("localStorage.setItem", key, json);
-
-    private ValueTask<string?> GetJsonAsync(string key)
-        => _jsRuntime.InvokeAsync<string?>("localStorage.getItem", key);
 }
