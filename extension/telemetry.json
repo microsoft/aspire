@@ -654,17 +654,17 @@
     "apphost_languages": {
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
-      "comment": "The AppHost languages detected in the current workspace."
+      "comment": "The AppHost language summary from the latest workspace discovery; unknown while discovery is pending or incomplete, and none only for a confirmed empty workspace."
     },
     "apphost_target_versions": {
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
-      "comment": "The Aspire versions targeted by AppHosts in the current workspace."
+      "comment": "The Aspire target version summary from the latest workspace discovery; unknown until complete discovery and version metadata are available, and none only for a confirmed empty workspace."
     },
     "apphost_present": {
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
-      "comment": "Whether the current workspace contains an AppHost."
+      "comment": "Whether the current workspace contains an AppHost. Omitted when discovery cannot establish presence or absence; false only after complete discovery finds no AppHosts."
     },
     "is_microsoft_internal": {
       "classification": "SystemMetaData",
