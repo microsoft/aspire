@@ -1,0 +1,10 @@
+.interaction-message-box-content {
+    display: flex;
+    gap: 12px;
+    align-items: start;
+}
+
+.interaction-message-box-message {
+    flex: 1;
+    min-width: 0;
+}

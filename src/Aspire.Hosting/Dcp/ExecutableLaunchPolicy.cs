@@ -6,6 +6,7 @@
 
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.Dcp;
@@ -34,7 +35,8 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
                 // may still contribute optional launch metadata, matching the existing MAUI behavior, but its
                 // success does not determine whether the Process invocation can run.
                 var metadataProducer = supportsDebugging &&
-                    debugSupport is { LaunchConfigurationType: not KnownLaunchConfigurationTypes.Project }
+                    debugSupport is not null &&
+                    !KnownLaunchConfigurationTypes.IsProject(debugSupport.LaunchConfigurationType)
                         ? debugSupport
                         : null;
                 return new(
@@ -85,6 +87,16 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
             return false;
         }
 
+        // Capability-less Visual Studio sessions can only launch projects loaded in the solution, so bare .cs files
+        // stay on the Process path. An IDE that explicitly advertises "project" can launch the same .cs project
+        // configuration through this compatibility path even when the resource has no SupportsDebuggingAnnotation.
+        if (resource.TryGetProjectMetadata(out var projectMetadata) &&
+            projectMetadata.IsFileBasedApp &&
+            !HasExplicitProjectLaunchCapability())
+        {
+            return false;
+        }
+
         if (resource.TryGetLastAnnotation<ExecutableAnnotation>(out _) &&
             debugSupport?.LaunchConfigurationType is not null and not KnownLaunchConfigurationTypes.Project)
         {
@@ -102,9 +114,17 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
         return true;
     }
 
+    private bool HasExplicitProjectLaunchCapability()
+    {
+        return DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(
+            _configuration[KnownConfigNames.DebugSessionInfo],
+            out var supportedLaunchConfigurations)
+            && supportedLaunchConfigurations?.Contains(KnownLaunchConfigurationTypes.Project) is true;
+    }
+
     private string GetLaunchMode(string? launchConfigurationType)
     {
-        if (launchConfigurationType is KnownLaunchConfigurationTypes.Project)
+        if (KnownLaunchConfigurationTypes.IsProject(launchConfigurationType))
         {
             return GetProjectLaunchMode();
         }

@@ -10,6 +10,7 @@ import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvid
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import * as cliPathModule from '../utils/cliPath';
+import { noAppHostInWorkspace } from '../loc/strings';
 
 import { removeDirectorySafely } from './testHelpers';
 function createEditor(filePath: string): vscode.TextEditor {
@@ -193,6 +194,130 @@ suite('AspireEditorCommandProvider', () => {
             assert.strictEqual(launchConfiguration.command, 'run');
             assert.strictEqual(launchConfiguration.noDebug, true);
             assert.strictEqual(showErrorMessageStub.called, false);
+        }
+        finally {
+            provider.dispose();
+        }
+    });
+
+    test('explicit AppHost URI wins over the active editor AppHost', async () => {
+        const appHostADirectory = path.join(tempDir, 'AppHostA');
+        const appHostBDirectory = path.join(tempDir, 'AppHostB');
+        fs.mkdirSync(appHostADirectory);
+        fs.mkdirSync(appHostBDirectory);
+
+        const appHostAPath = path.join(appHostADirectory, 'AppHostA.csproj');
+        const appHostBPath = path.join(appHostBDirectory, 'AppHostB.csproj');
+        const programAPath = path.join(appHostADirectory, 'Program.cs');
+        fs.writeFileSync(appHostAPath, '<Project Sdk="Microsoft.NET.Sdk" />');
+        fs.writeFileSync(appHostBPath, '<Project Sdk="Microsoft.NET.Sdk" />');
+        fs.writeFileSync(programAPath, 'var builder = DistributedApplication.CreateBuilder(args);');
+        activeEditor = createEditor(programAPath);
+
+        const discoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            tryFindCandidateForEditorFile: async (filePath: string) => ({
+                path: filePath === vscode.Uri.file(appHostBPath).fsPath ? appHostBPath : appHostAPath,
+                language: 'csharp',
+                status: 'buildable',
+            }),
+        } as unknown as AppHostDiscoveryService;
+        const provider = new AspireEditorCommandProvider(discoveryService, createLaunchService());
+
+        try {
+            await provider.tryExecuteRunAppHost(true, vscode.Uri.file(appHostBPath));
+
+            const launchConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+            assert.strictEqual(launchConfiguration.program, appHostBPath);
+        }
+        finally {
+            provider.dispose();
+        }
+    });
+
+    test('active editor URI falls back to the workspace AppHost', async () => {
+        const activeDocumentPath = path.join(tempDir, 'Service.java');
+        const workspaceAppHostPath = path.join(tempDir, 'AppHost.java');
+        fs.writeFileSync(activeDocumentPath, 'public class Service {}');
+        fs.writeFileSync(workspaceAppHostPath, 'public class AppHost {}');
+        activeEditor = createEditor(activeDocumentPath);
+
+        const discoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            tryFindCandidateForEditorFile: async () => undefined,
+            discover: async () => [{
+                path: workspaceAppHostPath,
+                language: 'java',
+                status: 'buildable',
+            }],
+        } as unknown as AppHostDiscoveryService;
+        const provider = new AspireEditorCommandProvider(discoveryService, createLaunchService());
+
+        try {
+            await provider.tryExecuteRunAppHost(true);
+
+            assert.ok(startDebuggingStub.calledOnce);
+            const launchConfiguration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+            assert.strictEqual(launchConfiguration.program, workspaceAppHostPath);
+        }
+        finally {
+            provider.dispose();
+        }
+    });
+
+    test('explicit active editor AppHost URI does not fall back to another workspace AppHost', async () => {
+        const activeAppHostPath = path.join(tempDir, 'AppHost.java');
+        const workspaceAppHostPath = path.join(tempDir, 'OtherAppHost.java');
+        fs.writeFileSync(activeAppHostPath, 'public class AppHost {}');
+        fs.writeFileSync(workspaceAppHostPath, 'public class OtherAppHost {}');
+        activeEditor = createEditor(activeAppHostPath);
+
+        const discoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            tryFindCandidateForEditorFile: async () => undefined,
+            discover: async () => [{
+                path: workspaceAppHostPath,
+                language: 'java',
+                status: 'buildable',
+            }],
+        } as unknown as AppHostDiscoveryService;
+        const provider = new AspireEditorCommandProvider(discoveryService, createLaunchService());
+
+        try {
+            await provider.tryExecuteRunAppHost(true, activeEditor.document.uri, false);
+
+            assert.strictEqual(startDebuggingStub.called, false);
+            assert.ok(showErrorMessageStub.calledOnceWith(noAppHostInWorkspace));
+        }
+        finally {
+            provider.dispose();
+        }
+    });
+
+    test('explicit non-AppHost URI does not fall back to another workspace AppHost', async () => {
+        const workspaceAppHostPath = path.join(tempDir, 'AppHost.java');
+        const activeDocumentPath = path.join(tempDir, 'Service.java');
+        fs.writeFileSync(workspaceAppHostPath, 'public class AppHost {}');
+        fs.writeFileSync(activeDocumentPath, 'public class Service {}');
+        activeEditor = createEditor(activeDocumentPath);
+        const explicitUri = activeEditor.document.uri;
+
+        const discoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            tryFindCandidateForEditorFile: async () => undefined,
+            discover: async () => [{
+                path: workspaceAppHostPath,
+                language: 'java',
+                status: 'buildable',
+            }],
+        } as unknown as AppHostDiscoveryService;
+        const provider = new AspireEditorCommandProvider(discoveryService, createLaunchService());
+
+        try {
+            await provider.tryExecuteRunAppHost(true, explicitUri, false);
+
+            assert.strictEqual(startDebuggingStub.called, false);
+            assert.ok(showErrorMessageStub.calledOnce);
         }
         finally {
             provider.dispose();

@@ -102,8 +102,8 @@ public partial class GridValue
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
 
-    private readonly Icon _maskIcon = new Icons.Regular.Size16.EyeOff();
-    private readonly Icon _unmaskIcon = new Icons.Regular.Size16.Eye();
+    private readonly Icon _maskIcon = new Icons.Regular.Size16.EyeOff().WithColor(Color.Primary);
+    private readonly Icon _unmaskIcon = new Icons.Regular.Size16.Eye().WithColor(Color.Primary);
     private readonly string _cellTextId = $"celltext-{Guid.NewGuid():N}";
     private string? _value;
     private string? _formattedValue;

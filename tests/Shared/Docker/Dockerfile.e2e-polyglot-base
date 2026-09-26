@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for Aspire E2E testing (polyglot base variant).
 #
 # Includes: Docker CLI (via host socket mount), gh CLI,
-#           Node.js, Bun, Yarn, pnpm, Aspire install scripts.
+#           Node.js, Bun, Yarn, pnpm, Deno, Aspire install scripts.
 # Does NOT include .NET SDK or Java.
 #
 # Usage:
@@ -79,6 +79,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     curl -fsSL https://bun.sh/install | bash && \
     ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
     ln -s /root/.bun/bin/bunx /usr/local/bin/bunx && \
+    curl -fsSL https://deno.land/install.sh | sh -s v2.9.0 && \
+    ln -s /root/.deno/bin/deno /usr/local/bin/deno && \
     rm -rf /var/lib/apt/lists/*
 
 # --- Aspire CLI setup ---

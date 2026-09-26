@@ -18,22 +18,17 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
     private readonly string _language;
     private readonly ILogger _logger;
     private readonly FileLoggerProvider? _fileLoggerProvider;
-    private readonly Func<string, string?> _commandResolver;
     private readonly IProcessExecutionFactory _processExecutionFactory;
 
     public ProcessGuestLauncher(
         string language,
         ILogger logger,
         FileLoggerProvider? fileLoggerProvider,
-        Func<string, string?> commandResolver,
         IProcessExecutionFactory processExecutionFactory)
     {
-        ArgumentNullException.ThrowIfNull(commandResolver);
-
         _language = language;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
-        _commandResolver = commandResolver;
         // The guest launcher does its own per-line trace logging via the per-line callbacks below,
         // so callers pass a factory whose execution logger is suppressed (NullLogger) to avoid
         // double-logging each stdout/stderr line.
@@ -52,8 +47,12 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         var activity = GetCurrentProfilingActivity();
         AddEvent(activity, ProfilingTelemetry.Events.GuestProcessResolveStart);
 
-        if (!CommandPathResolver.TryResolveCommand(command, _commandResolver, out var resolvedCommand, out var errorMessage))
+        var effectiveEnvironmentVariables = environmentVariables.ToDictionary();
+        ProfilingTelemetry.AddActivityContextToEnvironment(activity, effectiveEnvironmentVariables);
+
+        if (!PathLookupHelper.TryResolveExecutablePath(command, out var resolvedCommand, effectiveEnvironmentVariables))
         {
+            var errorMessage = CommandPathResolver.GetMissingCommandMessage(command);
             AddEvent(activity, ProfilingTelemetry.Events.GuestProcessResolveFailed);
             activity?.SetStatus(ActivityStatusCode.Error, errorMessage);
             _logger.LogError("Command '{Command}' not found in PATH", command);
@@ -62,13 +61,9 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
             return (-1, errorOutput);
         }
 
-        var resolvedCommandPath = resolvedCommand ?? throw new InvalidOperationException("Command resolution succeeded without a resolved command path.");
-        ProfilingTelemetry.SetProcessInvocation(activity, resolvedCommandPath, args);
-        AddEvent(activity, ProfilingTelemetry.Events.GuestProcessResolved, TelemetryConstants.Tags.ProcessExecutablePath, resolvedCommandPath);
-        _logger.LogDebug("{ExecutingCommandPrefix}{Command} {Args}", CliLogFormat.MessagePrefixes.Executing, resolvedCommandPath, string.Join(" ", args));
-
-        var effectiveEnvironmentVariables = environmentVariables.ToDictionary();
-        ProfilingTelemetry.AddActivityContextToEnvironment(activity, effectiveEnvironmentVariables);
+        ProfilingTelemetry.SetProcessInvocation(activity, resolvedCommand, args);
+        AddEvent(activity, ProfilingTelemetry.Events.GuestProcessResolved, TelemetryConstants.Tags.ProcessExecutablePath, resolvedCommand);
+        _logger.LogDebug("{ExecutingCommandPrefix}{Command} {Args}", CliLogFormat.MessagePrefixes.Executing, resolvedCommand, string.Join(" ", args));
 
         var outputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.AppHost);
         var firstStdoutSeen = 0;
@@ -110,7 +105,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         // onto the inherited parent block, matching the previous inherited-console behavior.
         var startInfo = new ProcessStartInfo
         {
-            FileName = resolvedCommandPath,
+            FileName = resolvedCommand,
             WorkingDirectory = workingDirectory.FullName,
         };
 
@@ -150,7 +145,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         {
             await execution.StartAsync(cancellationToken).ConfigureAwait(false);
 
-            _logger.LogDebug("{Language} guest process {ProcessId} started: {Command}", _language, execution.ProcessId, resolvedCommandPath);
+            _logger.LogDebug("{Language} guest process {ProcessId} started: {Command}", _language, execution.ProcessId, resolvedCommand);
             activity?.SetTag(TelemetryConstants.Tags.ProcessPid, execution.ProcessId);
             AddEvent(activity, ProfilingTelemetry.Events.GuestProcessStarted, TelemetryConstants.Tags.ProcessPid, execution.ProcessId);
             if (afterLaunchAsync is not null)

@@ -770,7 +770,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
                 }
             ]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -879,7 +879,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
             },
             WatchResourceSnapshotsHandler = (_, cancellationToken) => WatchWithLateHidden(cancellationToken)
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -1020,7 +1020,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
                 }
             ]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -1601,7 +1601,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
             ]
         };
         configureConnection?.Invoke(connection);
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {

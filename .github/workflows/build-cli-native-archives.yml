@@ -16,12 +16,14 @@ on:
           Defaults to all platforms (linux-x64, linux-arm64, win-x64, win-arm64, osx-arm64).
         required: false
         type: string
+        # Use the VS 2026 ARM preview image for its newer native linker. The VS 2022 ARM image
+        # fails to link Aspire.Dashboard.obj with LNK1322.
         default: >-
           [
             {"os": "ubuntu-latest", "runner": "8-core-ubuntu-latest", "rids": "linux-x64"},
             {"os": "ubuntu-latest", "runner": "ubuntu-24.04-arm", "rids": "linux-arm64"},
             {"os": "windows-latest", "runner": "windows-latest", "rids": "win-x64"},
-            {"os": "windows-latest", "runner": "windows-11-arm", "rids": "win-arm64"},
+            {"os": "windows-latest", "runner": "windows-11-vs2026-arm", "rids": "win-arm64"},
             {"os": "macos-latest", "runner": "macos-latest", "rids": "osx-arm64"}
           ]
 
@@ -52,7 +54,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Node.js is required because PackDotnetTool now depends on PackNpmPackage,
       # which shells out to `npm pack` to produce the @microsoft/aspire-cli npm
@@ -60,7 +62,7 @@ jobs:
       # runners ship Node by default, but installing it explicitly pins the
       # version and avoids relying on the runner image.
       - name: Install node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22.x
 
@@ -68,22 +70,34 @@ jobs:
       # downloading them from the build_packages job. This allows the CLI archive
       # build to run in parallel with build_packages.
       #
-      # No shell: specified — GH Actions defaults to bash on Linux/macOS, pwsh on
-      # Windows. The /p: and /bl: prefixes are safe in both, and build.sh accepts
-      # single-dash flags because it normalizes -- to - before matching.
+      # Capture the complete build output so the expected framework-owned IL2026
+      # can remain visible while verification rejects any additional IL2026 warnings.
       - name: Build RID-specific packages
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $buildLog = '${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.log'
+          & '${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}' `
+            -ci `
+            -restore `
+            -build `
+            -pack `
+            -configuration '${{ inputs.configuration }}' `
+            '/bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.binlog' `
+            /p:ContinuousIntegrationBuild=true `
+            /p:BuildBundleDepsOnly=true `
+            /p:TargetRids=${{ matrix.targets.rids }} `
+            /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }} `
+            ${{ inputs.versionOverrideArg }} 2>&1 | Tee-Object -FilePath $buildLog
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Verify Native AOT Dashboard warnings
+        shell: pwsh
         run: >
-          ${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}
-          -ci
-          -restore
-          -build
-          -pack
-          -configuration ${{ inputs.configuration }}
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.binlog
-          /p:ContinuousIntegrationBuild=true
-          /p:BuildBundleDepsOnly=true
-          /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }}
-          ${{ inputs.versionOverrideArg }}
+          ./eng/scripts/verify-native-dashboard-warnings.ps1
+          -BuildLog "${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.log"
 
       - name: Build bundle payload archive
         run: >
@@ -151,7 +165,7 @@ jobs:
 
       # Upload DCP, Dashboard, and CLI tool packages so test/polyglot jobs can download them
       - name: Upload RID-specific packages
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: built-nugets-for-${{ matrix.targets.rids }}
           path: |
@@ -164,16 +178,25 @@ jobs:
 
       - name: Upload CLI archives
         if: success()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cli-native-archives-${{ matrix.targets.rids }}
           path: artifacts/packages/**/aspire-cli*
           retention-days: 15
           if-no-files-found: error
 
+      - name: Upload Native AOT Dashboard archive
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-dashboard-${{ matrix.targets.rids }}
+          path: artifacts/DashboardArtifacts/${{ inputs.configuration }}/${{ matrix.targets.rids }}/aspire-dashboard-${{ matrix.targets.rids }}.zip
+          retention-days: 15
+          if-no-files-found: error
+
       - name: Upload logs
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cli-native-logs-${{ matrix.targets.rids }}
           path: artifacts/log/**

@@ -72,8 +72,9 @@ public class RecipePackParametersBicepTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.AddRadiusEnvironment("myenv")
             .WithRecipeParameters(p => { p["region"] = "us-west-2"; p["replicas"] = 3; });
-        // Redis falls back to the legacy Applications.* recipe shape.
-        builder.AddRedis("cache");
+        // MongoDB falls back to the legacy Applications.* recipe shape. (Redis no longer does:
+        // it moved onto its Radius.Data UDT in Radius 0.60.)
+        builder.AddMongoDB("mongo");
 
         using var app = builder.Build();
         var bicep = Publish(app);

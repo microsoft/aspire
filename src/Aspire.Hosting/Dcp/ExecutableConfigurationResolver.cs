@@ -31,6 +31,7 @@ internal sealed class ExecutableConfigurationResolver(
     public async Task<ExecutableConfigurationResult> ResolveAsync(
         RenderedModelResource<Executable> renderedResource,
         ILogger resourceLogger,
+        IExecutionConfigurationGatherer preparationGatherer,
         CancellationToken cancellationToken)
     {
         var executable = renderedResource.DcpResource;
@@ -80,6 +81,7 @@ internal sealed class ExecutableConfigurationResolver(
                 CertificateWithKeyPath = ReferenceExpression.Create($"{Path.Join(baseServerAuthOutputPath, $"{certificate.Thumbprint}.pem")}"),
                 PfxPath = ReferenceExpression.Create($"{Path.Join(baseServerAuthOutputPath, $"{certificate.Thumbprint}.pfx")}"),
             })
+            .AddExecutionConfigurationGatherer(preparationGatherer)
             .BuildAsync(_executionContext, resourceLogger, cancellationToken)
             .ConfigureAwait(false);
 

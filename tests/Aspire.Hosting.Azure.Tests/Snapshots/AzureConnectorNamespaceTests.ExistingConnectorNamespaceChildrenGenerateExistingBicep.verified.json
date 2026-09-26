@@ -1,0 +1,7 @@
+﻿{
+  "type": "azure.bicep.v1",
+  "path": "gateway.module.bicep",
+  "scope": {
+    "resourceGroup": "existing-rg"
+  }
+}

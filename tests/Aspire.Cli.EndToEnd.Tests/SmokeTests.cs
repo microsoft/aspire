@@ -4,6 +4,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Input;
 using Xunit;
@@ -62,6 +63,87 @@ public sealed class SmokeTests(ITestOutputHelper output)
         // Stop the running apphost with Ctrl+C
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task RedirectedRemoteSshRunUsesStaticOutput()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        const string projectName = "RemoteSshRedirectedApp";
+        await auto.AspireNewAsync(projectName, counter, useRedisCache: false);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
+
+        // Playground mode normally forces interactive output and takes precedence over ambient CI
+        // markers. Keeping it enabled makes redirected stdout the condition that selects static
+        // rendering, so this test cannot silently pass because a new CI marker was inherited.
+        var runCommand =
+            "env " +
+            "-u ASPIRE_NON_INTERACTIVE -u ASPIRE_ANSI_PASS_THRU " +
+            "ASPIRE_PLAYGROUND=true " +
+            "TERM=dumb LINES=0 COLUMNS=80 " +
+            "VSCODE_IPC_HOOK_CLI=/tmp/vscode-ipc-remote-ssh " +
+            "SSH_CONNECTION='127.0.0.1 12345 127.0.0.1 22' " +
+            $"ASPIRE_CLI_START_TIMEOUT={CliE2EAutomatorHelpers.AspireRunStartupBudgetSeconds} " +
+            "aspire run > remote-ssh.stdout 2> remote-ssh.stderr & echo $! > remote-ssh.pid";
+        await auto.RunCommandAsync(runCommand, counter);
+
+        // Static resource updates are emitted once as lines such as:
+        //   Endpoints: worker has endpoint http://localhost:5830
+        // Wait for multiple updates so a cumulative-snapshot fallback would be observable.
+        await auto.RunCommandAsync(
+            $"endpoint_count=0; cli_alive=1; " +
+            $"for attempt in $(seq 1 {CliE2EAutomatorHelpers.AspireRunReadyTimeout.TotalSeconds}); do " +
+            "endpoint_count=$(grep -Fc 'has endpoint' remote-ssh.stdout || true); " +
+            "if [ \"$endpoint_count\" -ge 2 ]; then break; fi; " +
+            "if ! kill -0 \"$(cat remote-ssh.pid)\" 2>/dev/null; then cli_alive=0; break; fi; " +
+            "sleep 1; " +
+            "done; " +
+            "if [ \"$endpoint_count\" -ge 2 ]; then true; " +
+            "else " +
+            "if [ \"$cli_alive\" -eq 0 ]; then echo 'aspire run exited before two endpoint updates' >&2; " +
+            "else echo 'timed out waiting for two endpoint updates' >&2; fi; " +
+            "echo '--- remote-ssh.stdout ---' >&2; cat remote-ssh.stdout >&2; " +
+            "echo '--- remote-ssh.stderr ---' >&2; cat remote-ssh.stderr >&2; false; " +
+            "fi",
+            counter,
+            CliE2EAutomatorHelpers.AspireRunReadyTimeout + TimeSpan.FromSeconds(30));
+
+        await auto.RunCommandAsync("kill -0 \"$(cat remote-ssh.pid)\"", counter);
+        await auto.RunCommandAsync("aspire ps --format json > remote-ssh-ps.json", counter);
+        await auto.RunCommandAsync(
+            $"grep -Fq '{projectName}' remote-ssh-ps.json && grep -Fq '\"status\": \"running\"' remote-ssh-ps.json",
+            counter);
+        await auto.RunCommandAsync(
+            "test -f remote-ssh.stdout && test -f remote-ssh.stderr && " +
+            "! grep -F -e 'LiveRenderable' -e 'System.ArgumentException' " +
+            "-e 'An unexpected error occurred' remote-ssh.stdout remote-ssh.stderr",
+            counter);
+        await auto.RunCommandAsync(
+            "test \"$(tr -cd '\\r' < remote-ssh.stdout | wc -c)\" -eq 0",
+            counter);
+        await auto.RunCommandAsync(
+            "test -z \"$(grep -F 'has endpoint' remote-ssh.stdout | sort | uniq -d)\" && " +
+            "test \"$(grep -Foc 'CTRL+C' remote-ssh.stdout)\" -eq 1",
+            counter);
+        await auto.RunCommandAsync(
+            "cli_pid=$(cat remote-ssh.pid); kill -INT \"$cli_pid\"; wait \"$cli_pid\"; " +
+            "cli_exit=$?; test \"$cli_exit\" -eq 0 && ! kill -0 \"$cli_pid\" 2>/dev/null",
+            counter,
+            TimeSpan.FromMinutes(1));
     }
 
     [CaptureWorkspaceOnFailure]
@@ -177,6 +259,86 @@ public sealed class SmokeTests(ITestOutputHelper output)
         await auto.RunCommandAsync($"cd {projectName}", counter);
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);
+    }
+
+    [Fact]
+    public async Task AspireStart_TimeoutIncludesStartupDiagnostics()
+    {
+        await using var terminal = new Hex1bTerminal(new Hex1bTerminalOptions
+        {
+            WorkloadAdapter = new Hex1bAppWorkloadAdapter()
+        });
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.Zero);
+
+        var exception = await Assert.ThrowsAsync<TimeoutException>(() =>
+            auto.AspireStartAsync(new SequenceCounter(), startTimeout: TimeSpan.Zero));
+
+        Assert.Equal(
+            "aspire start did not complete within 1 seconds. AppHost startup may be stuck. " +
+            "Check the terminal recording and captured workspace diagnostics for CLI and AppHost logs.",
+            exception.Message);
+        var automationException = Assert.IsType<Hex1bAutomationException>(exception.InnerException);
+        Assert.IsType<WaitUntilTimeoutException>(automationException.InnerException);
+    }
+
+    [Fact]
+    public async Task DashboardReadiness_TimeoutIncludesStartupDiagnostics()
+    {
+        await using var terminal = new Hex1bTerminal(new Hex1bTerminalOptions
+        {
+            WorkloadAdapter = new Hex1bAppWorkloadAdapter()
+        });
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.Zero);
+
+        var exception = await Assert.ThrowsAsync<TimeoutException>(() =>
+            auto.WaitForDashboardReadyAsync(new SequenceCounter(), TimeSpan.Zero));
+
+        Assert.Equal(
+            "aspire start completed, but the Dashboard did not become ready within the 0-second readiness budget. " +
+            "Expected HTTP 200 from the Dashboard URL. The Dashboard may have failed to start or stopped responding. " +
+            "Check the terminal recording for the last HTTP status and the captured workspace diagnostics for AppHost and Dashboard logs.",
+            exception.Message);
+        var automationException = Assert.IsType<Hex1bAutomationException>(exception.InnerException);
+        Assert.IsType<WaitUntilTimeoutException>(automationException.InnerException);
+    }
+
+    [Fact]
+    public async Task TerminalCleanup_CompletedRunDoesNotCancel()
+    {
+        using var runCancellation = new CancellationTokenSource();
+
+        await TerminalRun.WaitForExitAsync(Task.CompletedTask, runCancellation, TimeSpan.Zero);
+
+        Assert.False(runCancellation.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task TerminalCleanup_CancelsStalledRun()
+    {
+        using var runCancellation = new CancellationTokenSource();
+        var pendingRun = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = runCancellation.Token.Register(() => pendingRun.SetCanceled(runCancellation.Token));
+
+        await TerminalRun.WaitForExitAsync(pendingRun.Task, runCancellation, TimeSpan.Zero);
+
+        Assert.True(runCancellation.IsCancellationRequested);
+        Assert.True(pendingRun.Task.IsCanceled);
+    }
+
+    [Fact]
+    public async Task TerminalCleanup_RunIgnoringCancellationStillTimesOut()
+    {
+        using var runCancellation = new CancellationTokenSource();
+        var pendingRun = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var exception = await Assert.ThrowsAsync<TimeoutException>(() => TerminalRun.WaitForExitAsync(pendingRun.Task, runCancellation, TimeSpan.Zero));
+
+        Assert.Equal(
+            "The terminal did not exit after cancellation. Stopped waiting so the original test failure can be reported. " +
+            "Check the terminal recording for the command that stopped making progress.",
+            exception.Message);
+        Assert.True(runCancellation.IsCancellationRequested);
+        Assert.False(pendingRun.Task.IsCompleted);
     }
 
     private static string GetAppHostSdkVersion(string appHostPath)

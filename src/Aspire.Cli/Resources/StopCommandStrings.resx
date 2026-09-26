@@ -151,7 +151,13 @@
     <value>Stop all running AppHosts</value>
   </data>
   <data name="ForceOptionDescription" xml:space="preserve">
-    <value>Stop the AppHost and clean up its persistent resources</value>
+    <value>Stop the AppHost and clean up its persistent resources, preserving volumes by default</value>
+  </data>
+  <data name="VolumesOptionDescription" xml:space="preserve">
+    <value>Also remove persistent volumes created by Aspire (requires --force)</value>
+  </data>
+  <data name="VolumesRequiresForce" xml:space="preserve">
+    <value>The {0} option requires the {1} option.</value>
   </data>
   <data name="CouldNotDetermineAppHostPath" xml:space="preserve">
     <value>Could not determine the AppHost project path.</value>
@@ -170,6 +176,9 @@
   </data>
   <data name="DcpCleanupUnsupportedAppHostVersion" xml:space="preserve">
     <value>This AppHost uses Aspire.Hosting {0}, which might not support persistent resource cleanup. Persistent resource cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent resource cleanup will still be attempted.</value>
+  </data>
+  <data name="DcpVolumeCleanupUnsupportedAppHostVersion" xml:space="preserve">
+    <value>This AppHost uses Aspire.Hosting {0}, which might not support persistent volume cleanup. Persistent volume cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent volume cleanup will still be attempted.</value>
   </data>
   <data name="DcpCleanupFailed" xml:space="preserve">
     <value>Failed to clean up persistent resources for {0}. {1}</value>

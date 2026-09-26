@@ -14,13 +14,6 @@ internal interface IAuxiliaryBackchannelMonitor
     IEnumerable<IAppHostAuxiliaryBackchannel> Connections { get; }
 
     /// <summary>
-    /// Gets connections for a specific AppHost hash (prefix).
-    /// </summary>
-    /// <param name="hash">The AppHost hash.</param>
-    /// <returns>All connections for the given hash, or empty if none.</returns>
-    IEnumerable<IAppHostAuxiliaryBackchannel> GetConnectionsByHash(string hash);
-
-    /// <summary>
     /// Gets or sets the path to the selected AppHost. When set, this AppHost will be used for MCP operations.
     /// </summary>
     string? SelectedAppHostPath { get; set; }

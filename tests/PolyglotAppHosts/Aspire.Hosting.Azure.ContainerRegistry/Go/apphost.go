@@ -19,6 +19,10 @@ func main() {
 			Keep:     aspire.Float64Ptr(5),
 			TaskName: aspire.StringPtr("purge-samples"),
 		})
+	_ = registry.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		service := infrastructure.GetContainerRegistryService()
+		service.Tags().Set("provisioning-proxy", "go")
+	})
 	if err = registry.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}

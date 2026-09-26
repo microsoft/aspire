@@ -207,9 +207,9 @@ function getThemeColors() {
     // Get colors from the current light/dark theme.
     var style = getComputedStyle(document.body);
     return {
-        backgroundColor: style.getPropertyValue("--fill-color"),
-        textColor: style.getPropertyValue("--neutral-foreground-rest"),
-        pointColor: style.getPropertyValue("--accent-fill-rest")
+        backgroundColor: style.getPropertyValue("--colorNeutralBackground2"),
+        textColor: style.getPropertyValue("--colorNeutralForeground1"),
+        pointColor: style.getPropertyValue("--colorBrandBackground")
     };
 }
 

@@ -49,6 +49,16 @@ def create_pull_request_item(**target_fields: object) -> dict:
     return item
 
 
+def raw_create_pull_request_item(**target_fields: object) -> dict:
+    item = {
+        "type": "create_pull_request",
+        "base_branch": "release/13.5",
+        "base_commit": "aa2777825624f037a77160728939e36f7c788eff",
+    }
+    item.update(target_fields)
+    return item
+
+
 class ValidateOutcomeTests(unittest.TestCase):
     def test_drafted_with_current_base_passes(self) -> None:
         drafted_payload = payload("drafted", target_branch="release/13.5")
@@ -59,6 +69,7 @@ class ValidateOutcomeTests(unittest.TestCase):
             "https://github.com/microsoft/aspire.dev/pull/1447",
             EXPECTED_SOURCE_PR_NUMBER,
             "release/13.5",
+            [raw_create_pull_request_item()],
         )
 
         self.assertEqual(
@@ -99,6 +110,22 @@ class ValidateOutcomeTests(unittest.TestCase):
 
         self.assertIn("Confirmed drafted documentation PR", message)
 
+    def test_drafted_without_create_base_uses_raw_target(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        create_item = create_pull_request_item()
+        create_item.pop("base")
+        drafted_payload["items"].append(create_item)
+
+        message = validate_outcome(
+            drafted_payload,
+            "https://github.com/microsoft/aspire.dev/pull/1447",
+            EXPECTED_SOURCE_PR_NUMBER,
+            "release/13.5",
+            [raw_create_pull_request_item()],
+        )
+
+        self.assertIn("Confirmed drafted documentation PR", message)
+
     def test_drafted_with_disagreeing_base_fields_fails(self) -> None:
         drafted_payload = payload("drafted", target_branch="release/13.5")
         drafted_payload["items"].append(
@@ -121,7 +148,6 @@ class ValidateOutcomeTests(unittest.TestCase):
 
     def test_drafted_with_invalid_canonical_target_fails(self) -> None:
         cases = {
-            "missing": {},
             "invalid current base": {"base": "release/latest"},
             "current base wrong type": {"base": 13.5},
             "invalid legacy base": {"base_branch": "release/latest"},
@@ -159,7 +185,7 @@ class ValidateOutcomeTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             OutcomeValidationError,
-            "Expected exactly one create_pull_request item for a drafted outcome, found 2",
+            "Expected exactly one canonical create_pull_request item, found 2",
         ):
             validate_outcome(
                 drafted_payload,
@@ -174,7 +200,7 @@ class ValidateOutcomeTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             OutcomeValidationError,
-            "Drafted PR base branch main does not match canonical "
+            "Drafted PR base branch main does not match resolved "
             "create_pull_request target branch release/13.5",
         ):
             validate_outcome(
@@ -433,7 +459,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
         self.assertTrue(outcome["allow_comment"])
         self.assertFalse(outcome["allow_sme_review"])
         self.assertEqual("invalid", outcome["render_kind"])
-        self.assertIn("does not match canonical", outcome["diagnostic"])
+        self.assertIn("does not match resolved", outcome["diagnostic"])
 
     def test_skipped_without_pr_allows_success_comment(self) -> None:
         outcome = build_side_effect_outcome(

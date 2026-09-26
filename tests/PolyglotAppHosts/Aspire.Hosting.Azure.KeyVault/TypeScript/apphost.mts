@@ -1,11 +1,28 @@
 // Aspire TypeScript AppHost — Azure Key Vault validation
-// Exercises every exported member of Aspire.Hosting.Azure.KeyVault
-import { AzureKeyVaultRole, createBuilder, refExpr } from './.aspire/modules/aspire.mjs';
+// Exercises the Key Vault resource and opt-in provisioning exports.
+import { AzureKeyVaultRole, BinaryBicepOperator, KeyVaultSkuName, createBuilder, refExpr } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 
 // ── 1. addAzureKeyVault ──────────────────────────────────────────────────────
 const vault = await builder.addAzureKeyVault("vault");
+
+await vault.configureInfrastructure(async infrastructure => {
+    const service = await infrastructure.getKeyVaultService();
+    const properties = await service.properties.get();
+    const sku = await properties.sku.get();
+    const bicep = infrastructure.bicep();
+    const retention = bicep.binary(
+        bicep.integer(20),
+        BinaryBicepOperator.Add,
+        bicep.integer(10));
+    const publicNetworkAccess = bicep.asString(bicep.string("Enabled"));
+
+    await properties.enablePurgeProtection.set(true);
+    await properties.publicNetworkAccess.set(publicNetworkAccess);
+    await properties.softDeleteRetentionInDays.set(retention);
+    await sku.name.set(KeyVaultSkuName.Premium);
+});
 
 // Parameters for secret-based APIs
 const secretParam = await builder.addParameter("secret-param", { secret: true });

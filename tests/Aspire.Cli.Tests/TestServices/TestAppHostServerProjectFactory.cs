@@ -9,8 +9,14 @@ internal sealed class TestAppHostServerProjectFactory : IAppHostServerProjectFac
 {
     public Func<string, CancellationToken, Task<IAppHostServerProject>>? CreateAsyncCallback { get; set; }
 
+    public string? RestoreRootConfigDirectory { get; private set; }
+
     public Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default)
+        => CreateAsync(appPath, restoreRootConfigDirectory: null, cancellationToken);
+
+    public Task<IAppHostServerProject> CreateAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken)
     {
+        RestoreRootConfigDirectory = restoreRootConfigDirectory;
         if (CreateAsyncCallback is { } callback)
         {
             return callback(appPath, cancellationToken);

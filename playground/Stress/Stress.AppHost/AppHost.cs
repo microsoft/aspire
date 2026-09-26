@@ -51,9 +51,10 @@ for (var i = 0; i < 2; i++)
     }
 }
 
+// Remove the initial values to test the unresolved parameters dialog.
 builder.AddParameter("testParameterResource", () => "value", secret: true);
-var apiKeyParam = builder.AddParameter("api-key", secret: true);
-var connectionStringParam = builder.AddParameter("db-connection-string");
+var apiKeyParam = builder.AddParameter("api-key", () => "value", secret: true);
+var connectionStringParam = builder.AddParameter("db-connection-string", () => "value");
 builder.AddContainer("hiddenContainer", "alpine")
     .WithHidden()
     .WithInitialState(new CustomResourceSnapshot

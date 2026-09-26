@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
+#pragma warning disable ASPIREPROJECTS001
 
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
@@ -862,14 +863,14 @@ public static class ResourceExtensions
 
                 // Check whether the project views this endpoint as Default (for its scheme).
                 // If so, we don't specify the target port, as it will get one from the deployment tool.
-                (ProjectResource, string uriScheme, null, _) when IsHttpScheme(uriScheme) && !httpSchemesEncountered.Contains(uriScheme) => ResolvedPort.None(),
+                (IDotnetProgramResource, string uriScheme, null, _) when IsHttpScheme(uriScheme) && !httpSchemesEncountered.Contains(uriScheme) => ResolvedPort.None(),
 
                 // Allocate a dynamic port
                 _ => ResolvedPort.Allocated(portAllocator.AllocatePort())
             };
 
-            // Track HTTP schemes encountered for ProjectResources
-            if (resource is ProjectResource && IsHttpScheme(endpoint.UriScheme))
+            // Track HTTP schemes encountered for .NET program resources.
+            if (resource is IDotnetProgramResource && IsHttpScheme(endpoint.UriScheme))
             {
                 httpSchemesEncountered.Add(endpoint.UriScheme);
             }
@@ -995,18 +996,20 @@ public static class ResourceExtensions
     /// <remarks>
     /// Resources require an image build if they provide their own Dockerfile or are a project.
     /// Resources that are excluded from publishing are not considered to require image building.
+    /// Resources with a prebuilt container image and no Dockerfile build annotation do not require a build.
     /// </remarks>
     /// <param name="resource">The resource to evaluate for image build requirements.</param>
     /// <returns>True if the resource requires image building; otherwise, false.</returns>
     [AspireExportIgnore(Reason = "Publishing inspection helper — not part of the ATS surface.")]
     public static bool RequiresImageBuild(this IResource resource)
     {
-        if (resource.IsExcludedFromPublish())
+        if (resource.IsExcludedFromPublish() || resource.HasPrebuiltContainerImage())
         {
             return false;
         }
 
-        return resource is ProjectResource || resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
+        return resource.SupportsDotnetProgramPublishing() ||
+            resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
     }
 
     /// <summary>
@@ -1029,6 +1032,12 @@ public static class ResourceExtensions
     {
         return resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuild) &&
             !dockerfileBuild.HasEntrypoint;
+    }
+
+    internal static bool HasPrebuiltContainerImage(this IResource resource)
+    {
+        return resource.TryGetLastAnnotation<ContainerImageAnnotation>(out _) &&
+            !resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out _);
     }
 
     /// <summary>
@@ -1780,41 +1789,85 @@ public static class ResourceExtensions
         HashSet<object> visitedValues,
         DistributedApplicationExecutionContext executionContext)
     {
+        VisitReferences(value, visitedValues, reference =>
+        {
+            if (reference is HostUrl hostUrl)
+            {
+                CollectHostUrlDependencies(hostUrl, dependencies, newDependencies, executionContext);
+            }
+            else if (reference is IResource resource && dependencies.Add(resource))
+            {
+                newDependencies.Add(resource);
+            }
+        });
+    }
+
+    /// <summary>
+    /// Gets references of the specified type from unresolved execution configuration values.
+    /// </summary>
+    internal static IReadOnlyList<T> GetReferences<T>(this IExecutionConfigurationGathererContext context)
+        where T : class
+    {
+        var references = new HashSet<T>(ReferenceEqualityComparer.Instance);
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+
+        foreach (var value in GetUnresolvedValues(context))
+        {
+            VisitReferences(value, visited, reference =>
+            {
+                if (reference is T typedReference)
+                {
+                    references.Add(typedReference);
+                }
+            });
+        }
+
+        return [.. references];
+    }
+
+    private static IEnumerable<object> GetUnresolvedValues(IExecutionConfigurationGathererContext context)
+    {
+        foreach (var argument in context.Arguments)
+        {
+            yield return argument;
+        }
+
+        foreach (var environmentVariable in context.EnvironmentVariables.Values)
+        {
+            yield return environmentVariable;
+        }
+
+        if (context is ExecutionConfigurationGathererContext gathererContext)
+        {
+            foreach (var launchToolArguments in gathererContext.AdditionalConfigurationData.OfType<UnresolvedLaunchToolArgumentsData>())
+            {
+                foreach (var argument in launchToolArguments.Arguments)
+                {
+                    yield return argument;
+                }
+            }
+        }
+    }
+
+    private static void VisitReferences(object? value, HashSet<object> visitedValues, Action<object> visitor)
+    {
         if (value is null || !visitedValues.Add(value))
         {
             return;
         }
 
-        if (value is HostUrl hostUrl)
-        {
-            CollectHostUrlDependencies(hostUrl, dependencies, newDependencies, executionContext);
-        }
+        visitor(value);
 
-        // Direct resource references
-        if (value is IResource resource)
-        {
-            if (dependencies.Add(resource))
-            {
-                newDependencies.Add(resource);
-            }
-        }
-
-        // Resource builder wrapping a resource
         if (value is IResourceBuilder<IResource> resourceBuilder)
         {
-            if (dependencies.Add(resourceBuilder.Resource))
-            {
-                newDependencies.Add(resourceBuilder.Resource);
-            }
-            value = resourceBuilder.Resource;
+            VisitReferences(resourceBuilder.Resource, visitedValues, visitor);
         }
 
-        // Recurse through IValueWithReferences
         if (value is IValueWithReferences valueWithReferences)
         {
             foreach (var reference in valueWithReferences.References)
             {
-                CollectDependenciesFromValue(reference, dependencies, newDependencies, visitedValues, executionContext);
+                VisitReferences(reference, visitedValues, visitor);
             }
         }
     }

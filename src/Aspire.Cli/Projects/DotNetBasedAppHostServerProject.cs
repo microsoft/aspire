@@ -49,6 +49,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     private readonly IEnvironment _environment;
     private readonly ILogger _logger;
     private readonly string? _logFilePath;
+    private readonly string? _restoreRootConfigDirectory;
 
     public DotNetBasedAppHostServerProject(
         string appPath,
@@ -60,7 +61,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         IEnvironment environment,
         ILogger<DotNetBasedAppHostServerProject> logger,
         string? projectModelPath = null,
-        string? logFilePath = null)
+        string? logFilePath = null,
+        string? restoreRootConfigDirectory = null)
     {
         _appPath = Path.GetFullPath(appPath);
         _appPath = new Uri(_appPath).LocalPath;
@@ -73,6 +75,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         _environment = environment;
         _logger = logger;
         _logFilePath = logFilePath;
+        _restoreRootConfigDirectory = restoreRootConfigDirectory is not null ? Path.GetFullPath(restoreRootConfigDirectory) : null;
 
         var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(_appPath));
 
@@ -160,7 +163,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                     <AspireHostingSDKVersion>42.42.42</AspireHostingSDKVersion>
                     <!-- DCP and Dashboard paths for local development -->
                     <DcpDir>$([MSBuild]::EnsureTrailingSlash('$(NuGetPackageRoot)')){dcpPackageName}/{dcpVersion}/tools/</DcpDir>
-                    <AspireDashboardDir>{_repoRoot}artifacts/bin/Aspire.Dashboard/Debug/net8.0/</AspireDashboardDir>
+                    <AspireDashboardDir>{_repoRoot}artifacts/bin/Aspire.Dashboard/Debug/net11.0/</AspireDashboardDir>
                 </PropertyGroup>
                 <ItemGroup>
                     <PackageReference Include="StreamJsonRpc" />
@@ -244,14 +247,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             doc.Root!.Add(new XElement("Import", new XAttribute("Project", sdkInTargets)));
         }
 
-        // Add Dashboard and RemoteHost project references
-        var dashboardProject = Path.Combine(_repoRoot, "src", "Aspire.Dashboard", "Aspire.Dashboard.csproj");
-        if (File.Exists(dashboardProject))
-        {
-            doc.Root!.Add(new XElement("ItemGroup",
-                new XElement("ProjectReference", new XAttribute("Include", dashboardProject))));
-        }
-
+        // The Dashboard is a standalone net11 process and isn't loaded by the net10 AppHost scanner.
         var remoteHostProject = Path.Combine(_repoRoot, "src", "Aspire.Hosting.RemoteHost", "Aspire.Hosting.RemoteHost.csproj");
         if (File.Exists(remoteHostProject))
         {
@@ -317,7 +313,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         // Handle NuGet config and channel resolution
         string? channelName = null;
 
-        var userNugetConfig = FindNuGetConfig(_appPath);
+        var userNugetConfig = _restoreRootConfigDirectory is null ? FindNuGetConfig(_appPath) : null;
         var nugetConfigContent = userNugetConfig is not null
             ? File.ReadAllText(userNugetConfig)
             : null;
@@ -365,6 +361,14 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         // Create the project file
         var doc = CreateProjectFile(integrations);
+
+        if (_restoreRootConfigDirectory is not null)
+        {
+            // Read configs in their original hierarchy so relative feeds and inherited settings
+            // retain their meaning even though the scanner project is generated elsewhere.
+            doc.Root!.Descendants("PropertyGroup").First()
+                .Add(new XElement("RestoreRootConfigDirectory", _restoreRootConfigDirectory));
+        }
 
         // Add channel sources to the project
         if (channelSources.Count > 0)

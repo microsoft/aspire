@@ -8,12 +8,12 @@ using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureKustoExtensionsTests
+public class AzureKustoExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task AddAzureKustoCluster()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var kusto = builder.AddAzureKustoCluster("kusto");
         kusto.AddReadWriteDatabase("testdb");
@@ -52,7 +52,7 @@ public class AzureKustoExtensionsTests
     [Fact]
     public async Task AddAsExistingResource_RespectsExistingAzureResourceAnnotation_ForAzureKustoClusterResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var existingName = builder.AddParameter("existing-kusto-name");
         var existingResourceGroup = builder.AddParameter("existing-kusto-rg");
 
@@ -73,7 +73,7 @@ public class AzureKustoExtensionsTests
     [Fact]
     public void AddAzureKustoCluster_ShouldAddResourceToBuilder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var resourceBuilder = builder.AddAzureKustoCluster("myKusto");
         Assert.NotNull(resourceBuilder);
         var resource = Assert.Single(builder.Resources.OfType<AzureKustoClusterResource>());
@@ -83,7 +83,7 @@ public class AzureKustoExtensionsTests
     [Fact]
     public void AddAzureKustoCluster_RunAsEmulator()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var kusto = builder.AddAzureKustoCluster("kusto").RunAsEmulator();
         

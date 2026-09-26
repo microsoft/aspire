@@ -18,6 +18,7 @@ import { isMatchingAppHostInstance, isMatchingAppHostPath, isPathInWorkspace } f
 import { AppHostPsPoller } from './appHostPsPoller';
 import { filterResourceCommandStatusOutput } from './resourceCommandStatusOutput';
 import { getCliPathTargetForUri } from '../utils/cliPathVariables';
+import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
 
 export * from './appHostCliContracts';
 export { shortenPath, shortenPaths };
@@ -1013,6 +1014,7 @@ export class AppHostDataRepository {
             if (this._disposed || this._describeStreams.get(appHostPath) !== stream || startVersion !== stream.version) {
                 return;
             }
+            reportCliResolvedForOperation(target, cliPath);
 
             // The capability is a property of the CLI this AppHost resolves to, not of the window: a
             // multi-root workspace can point each folder at a different aspire.cliPath, so a single

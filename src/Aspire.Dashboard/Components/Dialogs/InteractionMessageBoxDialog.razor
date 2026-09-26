@@ -1,0 +1,32 @@
+@using Aspire.Dashboard.Model.Interaction
+
+<FluentDialogBody>
+    <ChildContent>
+        <div class="interaction-message-box-content">
+            @if (Icon is { } icon)
+            {
+                <FluentIcon Value="@icon" Color="@IconColor" Class="interaction-message-box-icon" />
+            }
+            <div class="interaction-message-box-message">
+                @((MarkupString)Content.MarkupMessage)
+            </div>
+        </div>
+    </ChildContent>
+
+    <ActionTemplate>
+        <footer class="interaction-dialog-actions">
+            @if (!string.IsNullOrEmpty(Dialog.Options.Footer.PrimaryAction.Label))
+            {
+                <FluentButton Appearance="ButtonAppearance.Primary" Class="aspire-button" OnClick="@SubmitAsync">
+                    @Dialog.Options.Footer.PrimaryAction.Label
+                </FluentButton>
+            }
+            @if (!string.IsNullOrEmpty(Dialog.Options.Footer.SecondaryAction.Label))
+            {
+                <FluentButton Appearance="ButtonAppearance.Default" Class="aspire-button" OnClick="@CancelAsync">
+                    @Dialog.Options.Footer.SecondaryAction.Label
+                </FluentButton>
+            }
+        </footer>
+    </ActionTemplate>
+</FluentDialogBody>

@@ -44,8 +44,6 @@ internal sealed class MockAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
 {
     public IEnumerable<IAppHostAuxiliaryBackchannel> Connections => [];
 
-    public IEnumerable<IAppHostAuxiliaryBackchannel> GetConnectionsByHash(string hash) => [];
-
     public string? SelectedAppHostPath { get; set; }
 
     public IAppHostAuxiliaryBackchannel? SelectedConnection => null;
@@ -64,4 +62,3 @@ internal sealed class MockAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
         return [];
     }
 }
-

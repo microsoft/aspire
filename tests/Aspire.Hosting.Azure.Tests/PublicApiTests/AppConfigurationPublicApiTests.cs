@@ -5,7 +5,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
-public class AppConfigurationPublicApiTests
+public class AppConfigurationPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddAzureAppConfigurationShouldThrowWhenBuilderIsNull()
@@ -24,7 +24,7 @@ public class AppConfigurationPublicApiTests
     [InlineData(false)]
     public void AddAzureAppConfigurationShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddAzureAppConfiguration(name);

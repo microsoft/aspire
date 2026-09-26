@@ -22,6 +22,26 @@
         <target state="needs-review-translation">Před provedením příkazu počkejte na připojení ladicího programu.</target>
         <note />
       </trans-unit>
+      <trans-unit id="CompletionScriptDescription">
+        <source>Write a shell completion script to standard output</source>
+        <target state="new">Write a shell completion script to standard output</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CompletionShellDescription">
+        <source>Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</source>
+        <target state="new">Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CompletionShellRequired">
+        <source>Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</source>
+        <target state="new">Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CompletionsDescription">
+        <source>Generate shell completion scripts</source>
+        <target state="new">Generate shell completion scripts</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DebugArgumentDescription">
         <source>Enable debug logging to the console</source>
         <target state="needs-review-translation">Povolte protokolování ladění do konzoly.</target>
@@ -55,6 +75,11 @@ Read more about Aspire CLI telemetry: {0}</target>
       <trans-unit id="IdentityOverrideNotice">
         <source>Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</source>
         <target state="new">Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InvalidCompletionRequest">
+        <source>Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</source>
+        <target state="new">Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">

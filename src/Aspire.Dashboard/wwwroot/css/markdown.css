@@ -75,9 +75,9 @@
 }
 
 .markdown-container code {
-    font-family: var(--aspire-font-mono);
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
     color: unset;
-    background-color: var(--neutral-fill-secondary-focus);
+    background-color: var(--colorNeutralBackground1Selected);
     padding: .15rem .3rem;
     border-radius: .25rem;
 }
@@ -109,7 +109,7 @@
 }
 
 .markdown-container .code-copy-button:hover {
-    background-color: var(--neutral-fill-stealth-hover);
+    background-color: var(--colorSubtleBackgroundHover);
 }
 
 .markdown-container .copy-icon,
@@ -160,16 +160,16 @@
 
 /* Markdown headings are modified to never be larger than h4 */
 .markdown-container h4 {
-    font-size: var(--type-ramp-plus-2-font-size);
-    line-height: var(--type-ramp-plus-2-line-height);
+    font-size: var(--fontSizeBase500);
+    line-height: var(--lineHeightBase500);
 }
 
 .markdown-container h5 {
-    font-size: var(--type-ramp-plus-1-font-size);
-    line-height: var(--type-ramp-plus-1-line-height);
+    font-size: var(--fontSizeBase400);
+    line-height: var(--lineHeightBase400);
 }
 
 .markdown-container h6 {
-    font-size: var(--type-ramp-base-font-size);
-    line-height: var(--type-ramp-base-line-height);
+    font-size: var(--fontSizeBase300);
+    line-height: var(--lineHeightBase300);
 }

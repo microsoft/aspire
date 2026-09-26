@@ -161,6 +161,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     private _contentProviderRegistration: vscode.Disposable | undefined;
     private readonly _appHostSourceContents = new Map<string, string>();
     private _treeView: vscode.TreeView<TreeElement> | undefined;
+    private _treeViewVisibilitySubscription: vscode.Disposable | undefined;
 
     private _documentCloseSubscription: vscode.Disposable | undefined;
 
@@ -272,6 +273,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         this._stoppingAppHostTimeouts.clear();
         this._contentProviderRegistration?.dispose();
         this._documentCloseSubscription?.dispose();
+        this._treeViewVisibilitySubscription?.dispose();
         this._cliRunner.dispose();
         this._onDidChangeTreeData.dispose();
         this._onDidChangeStoppingState.dispose();
@@ -279,12 +281,21 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     }
 
     setTreeView(treeView: vscode.TreeView<TreeElement>): void {
+        this._treeViewVisibilitySubscription?.dispose();
         this._treeView = treeView;
+        this._treeViewVisibilitySubscription = treeView.onDidChangeVisibility(event => {
+            if (event.visible) {
+                this._autoExpandSingleWorkspaceAppHost();
+            }
+        });
         this._autoExpandSingleWorkspaceAppHost();
     }
 
     private _autoExpandSingleWorkspaceAppHost(): void {
-        if (!this._treeView || this._repository.viewMode !== 'workspace') {
+        // TreeView.reveal() activates a hidden view container. Only reveal after the user opens
+        // Aspire so discovery during activation cannot steal sidebar focus.
+        // https://github.com/microsoft/aspire/issues/19746
+        if (!this._treeView?.visible || this._repository.viewMode !== 'workspace') {
             return;
         }
 

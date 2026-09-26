@@ -1,0 +1,90 @@
+.dashboard-message-bar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: 6px;
+    background-color: var(--messagebar-info-background-color);
+    column-gap: 8px;
+    color: var(--messagebar-foreground-color);
+    font-size: var(--fontSizeBase200);
+    line-height: var(--lineHeightBase200);
+}
+
+.dashboard-message-bar:not(.intent-warning, .intent-error, .intent-success) {
+    border-color: var(--messagebar-info-border-color);
+}
+
+.dashboard-message-bar.intent-warning {
+    border-color: var(--messagebar-warning-border-color);
+    background-color: var(--messagebar-warning-background-color);
+}
+
+.dashboard-message-bar.intent-error {
+    border-color: var(--messagebar-error-border-color);
+    background-color: var(--messagebar-error-background-color);
+}
+
+.dashboard-message-bar.intent-success {
+    border-color: var(--messagebar-success-border-color);
+    background-color: var(--messagebar-success-background-color);
+}
+
+.dashboard-message-bar-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+}
+
+.dashboard-message-bar.intent-warning .dashboard-message-bar-icon ::deep svg {
+    fill: #e85e36 !important;
+}
+
+.dashboard-message-bar.intent-info .dashboard-message-bar-icon ::deep svg {
+    fill: var(--info) !important;
+}
+
+.dashboard-message-bar-content {
+    padding-block: 10px;
+}
+
+.dashboard-message-bar-title {
+    font-weight: var(--fontWeightSemibold);
+    padding-inline-end: 8px;
+}
+
+.dashboard-message-bar-link {
+    padding-inline-start: 8px;
+}
+
+.dashboard-message-bar-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+::deep .dashboard-message-bar-actions .dashboard-message-bar-dismiss {
+    flex: 0 0 16px;
+    width: 16px;
+    min-width: 16px;
+    max-width: 16px;
+    height: 16px;
+    min-height: 16px;
+    padding: 0;
+    border-color: transparent;
+    border-radius: 6px;
+    background-color: transparent;
+}
+
+::deep .dashboard-message-bar-dismiss svg {
+    display: block;
+    height: 16px;
+}
+

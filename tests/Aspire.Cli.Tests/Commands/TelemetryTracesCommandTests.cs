@@ -95,7 +95,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
                 IsHealthy = true
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var handler = new MockHttpMessageHandler(request =>
         {

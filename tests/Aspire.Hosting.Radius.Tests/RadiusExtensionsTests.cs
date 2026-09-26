@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRERADIUS003 // WithContainerImage is marked experimental; opt in for tests.
+#pragma warning disable ASPIREDOTNETPROJECT001
+#pragma warning disable ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.DependencyInjection;
@@ -186,6 +188,22 @@ public class RadiusExtensionsTests
         Assert.Equal("ghcr.io", annotation.Registry);
         Assert.Equal("owner/repo", annotation.Image);
         Assert.Equal("v2", annotation.Tag);
+    }
+
+    [Fact]
+    public void WithContainerImage_AcceptsDotnetProjectResource()
+    {
+        using var builder = Aspire.Hosting.Utils.TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddDotnetProject("webapp", "webapp.csproj", options => options.ExcludeLaunchProfile = true);
+
+        project.WithContainerImage("ghcr.io/owner/webapp:v1");
+
+        var annotation = Assert.Single(project.Resource.Annotations.OfType<ContainerImageAnnotation>());
+        Assert.Equal("ghcr.io", annotation.Registry);
+        Assert.Equal("owner/webapp", annotation.Image);
+        Assert.Equal("v1", annotation.Tag);
+        Assert.True(project.Resource.SupportsDotnetProgramPublishing());
+        Assert.False(project.Resource.RequiresImageBuild());
     }
 
     private sealed class ParseImageReferenceProjectMetadata : IProjectMetadata

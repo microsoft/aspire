@@ -76,33 +76,23 @@ internal sealed class MauiAndroidEnvironmentSubscriber(
 
         try
         {
-            // Add a CommandLineArgsCallback that will generate the targets file
-            // This runs AFTER all environment callbacks have been processed
-            // The callback itself ensures idempotency by only generating the file once
-            string? generatedFilePath = null;
+            var environmentTargetsDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-maui-android-env").Path;
 
+            // Generate the stable targets file whenever arguments are reevaluated so resource
+            // restarts receive environment values changed since the previous launch.
             resource.Annotations.Add(new CommandLineArgsCallbackAnnotation(async context =>
             {
-                // Only generate the file once, even if this callback is invoked multiple times
-                if (generatedFilePath is null)
-                {
-                    generatedFilePath = await MauiEnvironmentHelper.CreateAndroidEnvironmentTargetsFileAsync(
-                        fileSystemService,
-                        resource,
-                        executionContext,
-                        logger,
-                        cancellationToken
-                    ).ConfigureAwait(false);
-
-                    if (generatedFilePath is not null)
-                    {
-                        logger.LogInformation("Generated environment targets file for Android: {Path}", generatedFilePath);
-                    }
-                }
+                var generatedFilePath = await MauiEnvironmentHelper.CreateAndroidEnvironmentTargetsFileAsync(
+                    environmentTargetsDirectory,
+                    resource,
+                    executionContext,
+                    logger,
+                    context.CancellationToken
+                ).ConfigureAwait(false);
 
                 if (generatedFilePath is not null)
                 {
-                    // Add the targets file as an MSBuild property via command-line argument
+                    logger.LogInformation("Generated environment targets file for Android: {Path}", generatedFilePath);
                     var commandLineArg = $"-p:CustomAfterMicrosoftCommonTargets={generatedFilePath}";
                     context.Args.Add(commandLineArg);
                 }

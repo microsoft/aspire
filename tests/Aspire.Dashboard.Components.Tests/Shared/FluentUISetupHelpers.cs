@@ -11,8 +11,10 @@ using Aspire.Dashboard.ServiceClient;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Tests;
+using Aspire.Dashboard.Utils;
 using Aspire.Tests.Utils;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -22,39 +24,43 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class FluentUISetupHelpers
 {
-    private static readonly Version s_fluentUIVersion = typeof(FluentMain).Assembly.GetName().Version!;
+    private static readonly Version s_fluentUIVersion = typeof(FluentButton).Assembly.GetName().Version!;
 
     private static string GetFluentFile(string filePath)
     {
         return $"{filePath}?v={s_fluentUIVersion}";
     }
 
-    public static void SetupFluentDialogProvider(TestContext context)
+    public static void SetupFluentDialogProvider(BunitContext context)
     {
         var dialogProviderModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Dialog/FluentDialogProvider.razor.js"));
         dialogProviderModule.SetupModule("getActiveElement", _ => true);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Dialog.Show", _ => true);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Dialog.Hide", _ => true);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Dialog.FocusOnPreviousActiveElement", _ => true).SetVoidResult();
     }
 
-    public static void SetupFluentMenu(TestContext context)
+    public static void SetupFluentMenu(BunitContext context)
     {
-        var menuModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Menu/FluentMenu.razor.js"));
-        menuModule.SetupVoid("initialize", _ => true);
-        menuModule.SetupVoid("dispose", _ => true);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Menu.Initialize", _ => true).SetVoidResult();
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Menu.OpenMenu", _ => true).SetVoidResult();
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Menu.CloseMenu", _ => true).SetVoidResult();
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Menu.Dispose", _ => true).SetVoidResult();
     }
 
-    public static void SetupFluentOverflow(TestContext context)
+    public static void SetupFluentOverflow(BunitContext context)
     {
         var overflowModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Overflow/FluentOverflow.razor.js"));
         overflowModule.SetupVoid("fluentOverflowInitialize", _ => true);
         overflowModule.SetupVoid("fluentOverflowDispose", _ => true);
     }
 
-    public static void SetupFluentAnchor(TestContext context)
+    public static void SetupFluentAnchor(BunitContext context)
     {
         context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Anchor/FluentAnchor.razor.js"));
     }
 
-    public static void SetupFluentAnchoredRegion(TestContext context)
+    public static void SetupFluentAnchoredRegion(BunitContext context)
     {
         var module = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/AnchoredRegion/FluentAnchoredRegion.razor.js"));
         module.SetupVoid("goToNextFocusableElement", _ => true);
@@ -62,93 +68,91 @@ internal static class FluentUISetupHelpers
         module.SetupVoid("removeKeyboardNavigation", _ => true);
     }
 
-    public static void SetupFluentDivider(TestContext context)
+    public static void SetupFluentDivider(BunitContext context)
     {
         var dividerModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Divider/FluentDivider.razor.js"));
         dividerModule.SetupVoid("setDividerAriaOrientation");
     }
 
-    public static void SetupFluentDataGrid(TestContext context)
+    public static void SetupFluentDataGrid(BunitContext context)
     {
-        var dataGridModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/DataGrid/FluentDataGrid.razor.js"));
-        dataGridModule.SetupVoid("enableColumnResizing", _ => true);
+        var dataGridModule = context.JSInterop.SetupModule("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/DataGrid/FluentDataGrid.razor.js");
+        dataGridModule.SetupVoid("Microsoft.FluentUI.Blazor.DataGrid.EnableColumnResizing", _ => true);
 
-        var gridReference = dataGridModule.SetupModule("init", _ => true);
+        var gridReference = dataGridModule.SetupModule("Microsoft.FluentUI.Blazor.DataGrid.Initialize", _ => true);
         gridReference.SetupVoid("stop", _ => true);
     }
 
-    public static void SetupFluentSearch(TestContext context)
+    public static void SetupFluentSearch(BunitContext context)
     {
         var searchModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Search/FluentSearch.razor.js"));
         searchModule.SetupVoid("addAriaHidden", _ => true);
     }
 
-    public static void SetupFluentKeyCode(TestContext context)
+    public static void SetupFluentKeyCode(BunitContext context)
     {
-        var keycodeModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/KeyCode/FluentKeyCode.razor.js"));
-        keycodeModule.Setup<string>("RegisterKeyCode", _ => true);
+        context.JSInterop.Setup<string>("Microsoft.FluentUI.Blazor.Components.KeyCode.RegisterKeyCode", _ => true);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.KeyCode.UnregisterKeyCode", _ => true).SetVoidResult();
     }
 
-    public static void SetupFluentToolbar(TestContext context)
+    public static void SetupFluentToolbar(BunitContext context)
     {
         var toolbarModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Toolbar/FluentToolbar.razor.js"));
         toolbarModule.SetupVoid("removePreventArrowKeyNavigation", _ => true);
     }
 
-    public static void SetupFluentInputLabel(TestContext context)
+    public static void SetupFluentInputLabel(BunitContext context)
     {
         var inputLabelModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Label/FluentInputLabel.razor.js"));
         inputLabelModule.SetupVoid("setInputAriaLabel", _ => true);
     }
 
-    public static void SetupFluentList(TestContext context)
+    public static void SetupFluentList(BunitContext context)
     {
-        context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/List/ListComponentBase.razor.js"));
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Select.Initialize", _ => true);
     }
 
-    public static void SetupFluentTab(TestContext context)
+    public static void SetupFluentTab(BunitContext context)
     {
-        var tabModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Tabs/FluentTab.razor.js"));
-        tabModule.SetupVoid("TabEditable_Changed", _ => true);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Tabs.ObserveTabsChanged", _ => true);
     }
 
-    public static void SetupFluentCheckbox(TestContext context)
+    public static void SetupFluentCheckbox(BunitContext context)
     {
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.observeAttributeChange", _ => true);
         var checkboxModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Checkbox/FluentCheckbox.razor.js"));
         checkboxModule.SetupVoid("setFluentCheckBoxIndeterminate", _ => true);
         checkboxModule.SetupVoid("stop", _ => true);
     }
 
-    public static void SetupFluentTextField(TestContext context)
+    public static void SetupFluentTextField(BunitContext context)
     {
-        var textboxModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/TextField/FluentTextField.razor.js"));
-        textboxModule.SetupVoid("setControlAttribute", _ => true);
-        textboxModule.SetupVoid("ensureCurrentValueMatch", _ => true);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.observeAttributeChange", _ => true);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.applyShadowStyle", _ => true);
     }
 
-    public static void SetupFluentButton(TestContext context)
+    public static void SetupFluentButton(BunitContext context)
     {
         var buttonModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Button/FluentButton.razor.js"));
         buttonModule.SetupVoid("updateProxy", _ => true);
     }
 
-    public static void SetupFluentInputFile(TestContext context)
+    public static void SetupFluentInputFile(BunitContext context)
     {
-        var inputFileModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/InputFile/FluentInputFile.razor.js"));
-        inputFileModule.SetupVoid("attachClickHandler", _ => true);
-        inputFileModule.SetupVoid("detachClickHandler", _ => true);
-        var dropZoneReference = inputFileModule.SetupModule("initializeFileDropZone", _ => true);
+        var inputFileModule = context.JSInterop.SetupModule("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/InputFile/FluentInputFile.razor.js");
+        inputFileModule.SetupVoid("Microsoft.FluentUI.Blazor.InputFile.AttachClickHandler", _ => true);
+        var dropZoneReference = inputFileModule.SetupModule("Microsoft.FluentUI.Blazor.InputFile.InitializeFileDropZone", _ => true);
         dropZoneReference.SetupVoid("dispose", _ => true);
     }
 
-    public static void SetupFluentCombobox(TestContext context)
+    public static void SetupFluentCombobox(BunitContext context)
     {
-        var comboboxModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/List/FluentCombobox.razor.js"));
-        comboboxModule.SetupVoid("setControlAttribute", _ => true);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.copyToShadow", _ => true);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Select.UpdateValue", _ => true);
     }
 
     public static async Task ConfigureTelemetryRepository(
-        TestContext context,
+        BunitContext context,
         bool readOnly,
         Func<ITelemetryRepositoryWriter, Task> seed)
     {
@@ -172,14 +176,19 @@ internal static class FluentUISetupHelpers
     }
 
     public static void AddCommonDashboardServices(
-        TestContext context,
+        BunitContext context,
         ILocalStorage? localStorage = null,
         ISessionStorage? sessionStorage = null,
         ThemeManager? themeManager = null,
-        IMessageService? messageService = null,
         BrowserTimeProvider? browserTimeProvider = null,
         IDashboardRunStore? dashboardRunStore = null)
     {
+        context.Services.AddFluentUIComponents();
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.observeAttributeChange", _ => true);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.copyToShadow", _ => true);
+        context.JSInterop.SetupVoid("Blazor.theme.setThemeMode", _ => true);
+        var tooltipModule = context.JSInterop.SetupModule("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Tooltip/FluentTooltip.razor.js");
+        tooltipModule.SetupVoid("Microsoft.FluentUI.Blazor.Tooltip.FluentTooltipInitialize", _ => true);
         context.Services.AddLocalization();
         context.Services.AddSingleton<BrowserTimeProvider>(browserTimeProvider ?? new TestTimeProvider());
         context.Services.AddSingleton(TimeProvider.System);
@@ -214,7 +223,8 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<ITelemetryRepository>(services => services.GetRequiredService<SqliteTelemetryRepository>());
         context.Services.AddSingleton<ITelemetryRepositoryWriter>(services => services.GetRequiredService<SqliteTelemetryRepository>());
         context.Services.AddSingleton<PauseManager>();
-        context.Services.AddSingleton<IDialogService, DialogService>();
+        context.Services.AddScoped<NavigationDialogService>();
+        context.Services.AddScoped<IDialogService>(services => services.GetRequiredService<NavigationDialogService>());
         context.Services.AddSingleton<ILocalStorage>(localStorage ?? new TestLocalStorage());
         context.Services.AddSingleton<ISessionStorage>(sessionStorage ?? new TestSessionStorage());
         context.Services.AddSingleton<IDashboardRunStore>(services => dashboardRunStore ?? new TestDashboardRunStore(
@@ -228,18 +238,17 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<ShortcutManager>();
         context.Services.AddSingleton<LibraryConfiguration>();
         context.Services.AddSingleton<IKeyCodeService, KeyCodeService>();
-        context.Services.AddSingleton<IMessageService>(messageService ?? new MessageService());
         context.Services.AddSingleton<DashboardTelemetryService>();
         context.Services.AddSingleton<DashboardActivitySource>();
         context.Services.AddSingleton<IDashboardTelemetrySender, TestDashboardTelemetrySender>();
         context.Services.AddSingleton<ComponentTelemetryContextProvider>();
         context.Services.AddSingleton<ITelemetryErrorRecorder, TestTelemetryErrorRecorder>();
         context.Services.AddSingleton<ThemeManager>(themeManager ?? new ThemeManager(new TestThemeResolver()));
-        context.Services.AddSingleton<GlobalState>();
         context.Services.AddSingleton<DimensionManager>();
         context.Services.AddSingleton(TimeProvider.System);
-        context.Services.AddSingleton<INotificationService, NotificationService>();
+        context.Services.AddSingleton<Aspire.Dashboard.Model.INotificationService, Aspire.Dashboard.Model.NotificationService>();
         context.Services.AddScoped<DashboardDialogService>();
+        context.Services.AddScoped<DashboardMessageBarService>();
         context.Services.AddScoped<ResourceMenuBuilder>();
         context.Services.AddScoped<StructuredLogMenuBuilder>();
         context.Services.AddScoped<SpanMenuBuilder>();
@@ -277,8 +286,11 @@ internal static class FluentUISetupHelpers
 
         public DashboardRunDescriptor GetCurrentRun() => _runs.Single(run => run.IsCurrent);
 
-        public DashboardRunDescriptor? GetRunById(string runId) =>
-            _runs.SingleOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal));
+        public DashboardRunDescriptor? GetRunById(string runId, bool onlyCompatible) =>
+            _runs.SingleOrDefault(run =>
+                (!onlyCompatible || run.IsCompatible) &&
+                !run.IsPruned &&
+                string.Equals(run.RunId, runId, StringComparison.Ordinal));
 
         public void SetRunPinned(DashboardRunDescriptor run, bool isPinned)
         {
@@ -310,7 +322,7 @@ internal static class FluentUISetupHelpers
         public void SelectRun(string? runId)
         {
             OnSelectRun?.Invoke(runId);
-            SelectedRun = runId is not null ? runStore.GetRunById(runId) ?? runStore.GetCurrentRun() : runStore.GetCurrentRun();
+            SelectedRun = runId is not null ? runStore.GetRunById(runId, onlyCompatible: true) ?? runStore.GetCurrentRun() : runStore.GetCurrentRun();
             SelectedRunId = SelectedRun.IsCurrent ? null : SelectedRun.RunId;
         }
     }
@@ -323,37 +335,23 @@ internal static class FluentUISetupHelpers
         public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database) => dashboardClient;
     }
 
-    public static void SetupFluentUIComponents(TestContext context, bool setupAspireMenuButtonModule = true)
+    public static void SetupFluentUIComponents(BunitContext context, bool setupAspireMenuButtonModule = true)
     {
         context.Services.AddFluentUIComponents();
+        context.Services.AddScoped<NavigationDialogService>();
+        context.Services.AddScoped<IDialogService>(services => services.GetRequiredService<NavigationDialogService>());
 
         if (setupAspireMenuButtonModule)
         {
             SetupAspireMenuButtonModule(context);
         }
-
-        // Setting a provider ID on menu service is required to simulate <FluentMenuProvider> on the page.
-        // This makes FluentMenu render without error.
-        SetupMenuService(context);
-    }
-
-    /// <summary>
-    /// Registers the FluentUI menu service and simulates a <c>FluentMenuProvider</c> being present on the page.
-    /// Tests that configure FluentUI piecemeal (rather than calling <see cref="SetupFluentUIComponents"/>) still
-    /// need this because <see cref="AspireMenu"/> injects <see cref="IMenuService"/>.
-    /// </summary>
-    public static void SetupMenuService(TestContext context)
-    {
-        // Register a pre-configured instance rather than resolving one from the provider. Resolving here would
-        // seal bUnit's service collection, and callers add more services after this setup runs.
-        context.Services.AddSingleton<IMenuService>(new MenuService { ProviderId = "Test" });
     }
 
     /// <summary>
     /// Registers the JS module <see cref="AspireMenuButton"/> imports when its menu is first opened.
     /// Tests that click a menu button need this even when they configure FluentUI piecemeal.
     /// </summary>
-    public static void SetupAspireMenuButtonModule(TestContext context)
+    public static void SetupAspireMenuButtonModule(BunitContext context)
     {
         var menuButtonModule = context.JSInterop.SetupModule("./Components/Controls/AspireMenuButton.razor.js");
         menuButtonModule.SetupVoid("prepareForFluentMenuInitialization", _ => true).SetVoidResult();
@@ -362,7 +360,7 @@ internal static class FluentUISetupHelpers
     }
 
     public static void SetupDialogInfrastructure(
-        TestContext context,
+        BunitContext context,
         ThemeManager? themeManager = null,
         ILocalStorage? localStorage = null)
     {
@@ -371,11 +369,32 @@ internal static class FluentUISetupHelpers
         SetupFluentDialogProvider(context);
     }
 
-    public static IRenderedFragment RenderDialogProvider(TestContext context)
+    public static IRenderedComponent<IComponent> RenderDialogProvider(BunitContext context)
     {
         return context.Render(builder =>
         {
             builder.OpenComponent<FluentDialogProvider>(0);
+            builder.CloseComponent();
+        });
+    }
+
+    public static IRenderedComponent<IComponent> RenderMessageBarProviderWithPage<TPage>(BunitContext context, ViewportInformation viewport)
+        where TPage : IComponent
+    {
+        // Keep the provider and page in the same render tree, matching MainLayout so message bars
+        // raised while rendering the page are delivered to the provider under test.
+        return context.Render(builder =>
+        {
+            builder.OpenComponent<FluentMessageBarProvider>(0);
+            builder.AddComponentParameter(1, nameof(FluentMessageBarProvider.Section), DashboardUIHelpers.MessageBarSection);
+            builder.CloseComponent();
+            builder.OpenComponent<CascadingValue<ViewportInformation>>(2);
+            builder.AddComponentParameter(3, nameof(CascadingValue<ViewportInformation>.Value), viewport);
+            builder.AddComponentParameter(4, nameof(CascadingValue<ViewportInformation>.ChildContent), (RenderFragment)(contentBuilder =>
+            {
+                contentBuilder.OpenComponent<TPage>(5);
+                contentBuilder.CloseComponent();
+            }));
             builder.CloseComponent();
         });
     }

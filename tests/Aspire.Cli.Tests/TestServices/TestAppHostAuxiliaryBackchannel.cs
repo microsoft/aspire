@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
+using Aspire.Hosting.Backchannel;
 using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Tests.TestServices;
@@ -17,8 +18,18 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     private int _getResourceSnapshotsCallCount;
     private int _lastGetResourceSnapshotsIncludeHidden = -1;
 
-    public string Hash { get; set; } = "test-hash";
-    public string SocketPath { get; set; } = "/tmp/test.sock";
+    private IAppHostSocket _socket = new TestAppHostSocket("/tmp/test.sock");
+
+    public IAppHostSocket Socket
+    {
+        get => _socket;
+        set => _socket = value;
+    }
+    public string SocketPath
+    {
+        get => Socket.SocketPath;
+        set => Socket = new TestAppHostSocket(value);
+    }
     public AppHostInformation? AppHostInfo { get; set; }
     public bool IsInScope { get; set; } = true;
     public DateTimeOffset ConnectedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -350,8 +361,15 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public GetTerminalInfoResponse TerminalInfoResponse { get; set; } = new GetTerminalInfoResponse { IsAvailable = false };
 
+    public Func<string, CancellationToken, Task<GetTerminalInfoResponse>>? GetTerminalInfoHandler { get; set; }
+
     public Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
     {
+        if (GetTerminalInfoHandler is not null)
+        {
+            return GetTerminalInfoHandler(resourceName, cancellationToken);
+        }
+
         return Task.FromResult(TerminalInfoResponse);
     }
 
@@ -359,7 +377,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// Gets or sets the response returned by ListTerminalsAsync. Defaults to an empty list so
     /// existing tests that don't care about the new RPC don't have to set anything.
     /// </summary>
-    public ListTerminalsResponse ListTerminalsResponse { get; set; } = new ListTerminalsResponse { Terminals = Array.Empty<TerminalSummary>() };
+    public ListTerminalsResponse ListTerminalsResponse { get; set; } = new ListTerminalsResponse { ResourceTerminals = [], AppHostTerminals = [] };
 
     public Task<ListTerminalsResponse> ListTerminalsAsync(CancellationToken cancellationToken = default)
     {

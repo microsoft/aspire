@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Templating;
@@ -21,24 +22,24 @@ public class JavaStarterScaffoldTests(ITestOutputHelper outputHelper)
 {
     /// <summary>
     /// Embedded resources carry no file mode, so every scaffolded file used to land at the default
-    /// 0644. The Java starter ships a Maven wrapper the README and the Java tooling both invoke as
-    /// <c>./mvnw</c>, which fails with "Permission denied" against a non-executable file. The hosting
+    /// 0644. The Java starter ships a Gradle wrapper the README and the Java tooling both invoke as
+    /// <c>./gradlew</c>, which fails with "Permission denied" against a non-executable file. The hosting
     /// resolver launches the wrapper through <c>sh</c> and so survives either way, which is exactly
     /// why this needs its own test: the AppHost keeps working while everything a developer types by
     /// hand does not.
     /// </summary>
     [Fact]
-    [SkipOnPlatform(TestPlatforms.Windows, "File modes are a Unix concept; the wrapper is invoked as mvnw.cmd on Windows.")]
-    public async Task JavaStarter_ScaffoldsAnExecutableMavenWrapper()
+    [SkipOnPlatform(TestPlatforms.Windows, "File modes are a Unix concept; the wrapper is invoked as gradlew.bat on Windows.")]
+    public async Task JavaStarter_ScaffoldsAnExecutableGradleWrapper()
     {
         using var scaffold = await ScaffoldJavaStarterAsync();
         var outputDirectory = scaffold.OutputDirectory;
 
-        var wrapperPath = Path.Combine(outputDirectory, "api", "mvnw");
-        Assert.True(File.Exists(wrapperPath), $"Expected the scaffolded Maven wrapper at {wrapperPath}");
+        var wrapperPath = Path.Combine(outputDirectory, "api", "gradlew");
+        Assert.True(File.Exists(wrapperPath), $"Expected the scaffolded Gradle wrapper at {wrapperPath}");
 
         var mode = GetUnixFileMode(wrapperPath);
-        Assert.True(mode.HasFlag(UnixFileMode.UserExecute), $"Expected the scaffolded Maven wrapper to be executable, but its mode was {mode}.");
+        Assert.True(mode.HasFlag(UnixFileMode.UserExecute), $"Expected the scaffolded Gradle wrapper to be executable, but its mode was {mode}.");
     }
 
 #pragma warning disable CA1416 // Only reached from a test skipped on Windows, which the analyzer cannot see through.
@@ -65,18 +66,55 @@ public class JavaStarterScaffoldTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(
             [
-                "api/.mvn/wrapper/maven-wrapper.properties",
-                "api/mvnw",
-                "api/mvnw.cmd",
-                "api/pom.xml",
+                "api/build.gradle",
+                "api/gradle/wrapper/gradle-wrapper.jar",
+                "api/gradle/wrapper/gradle-wrapper.properties",
+                "api/gradlew",
+                "api/gradlew.bat",
+                "api/settings.gradle",
                 "api/src/main/java/com/example/api/ApiApplication.java",
                 "api/src/main/java/com/example/api/WeatherForecastController.java",
                 "api/src/main/resources/application.properties",
             ],
             apiFiles);
 
+        var templateWrapperJarPath = Path.Combine(
+            GetRepoRoot(),
+            "src",
+            "Aspire.Cli",
+            "Templating",
+            "Templates",
+            "java-starter",
+            "api",
+            "gradle",
+            "wrapper",
+            "gradle-wrapper.jar");
+        var scaffoldedWrapperJarPath = Path.Combine(outputDirectory, "api", "gradle", "wrapper", "gradle-wrapper.jar");
+        Assert.Equal(File.ReadAllBytes(templateWrapperJarPath), File.ReadAllBytes(scaffoldedWrapperJarPath));
+
         Assert.True(File.Exists(Path.Combine(outputDirectory, "frontend", "vite.config.ts")));
         Assert.True(File.Exists(Path.Combine(outputDirectory, "AppHost.java")));
+    }
+
+    [Fact]
+    public async Task JavaStarter_ScaffoldsRootJavaProjectWithoutChangingCliOwnership()
+    {
+        using var scaffold = await ScaffoldJavaStarterAsync();
+        var outputDirectory = scaffold.OutputDirectory;
+
+        Assert.True(File.Exists(Path.Combine(outputDirectory, ".project")));
+        Assert.True(File.Exists(Path.Combine(outputDirectory, ".classpath")));
+        Assert.True(File.Exists(Path.Combine(outputDirectory, ".settings", "org.eclipse.jdt.core.prefs")));
+        Assert.Contains("<name>JavaStarterOut</name>", File.ReadAllText(Path.Combine(outputDirectory, ".project")));
+
+        using var config = JsonDocument.Parse(File.ReadAllText(Path.Combine(outputDirectory, "aspire.config.json")));
+        var appHost = config.RootElement.GetProperty("appHost");
+        Assert.Equal("AppHost.java", appHost.GetProperty("path").GetString());
+        Assert.Equal("java", appHost.GetProperty("language").GetString());
+
+        var toolchain = JavaAppHostToolchainResolver.Resolve(new DirectoryInfo(outputDirectory));
+        Assert.Equal(JavaAppHostToolchain.Javac, toolchain.Toolchain);
+        Assert.Equal(outputDirectory, toolchain.ProjectDirectory.FullName);
     }
 
     private async Task<ScaffoldedTemplate> ScaffoldJavaStarterAsync()
@@ -112,6 +150,9 @@ public class JavaStarterScaffoldTests(ITestOutputHelper outputHelper)
 
         return new ScaffoldedTemplate(workspace, Path.Combine(workspace.WorkspaceRoot.FullName, outputDirectoryName));
     }
+
+    private static string GetRepoRoot()
+        => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
     private sealed class ScaffoldedTemplate(TemporaryWorkspace workspace, string outputDirectory) : IDisposable
     {

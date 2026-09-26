@@ -57,7 +57,7 @@ public class ExecuteResourceCommandToolTests
         {
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("api-service", "start")), CancellationToken.None).DefaultTimeout();
@@ -80,7 +80,7 @@ public class ExecuteResourceCommandToolTests
         {
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
         var result = await tool.CallToolAsync(
@@ -101,7 +101,7 @@ public class ExecuteResourceCommandToolTests
         {
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
         var result = await tool.CallToolAsync(
@@ -124,7 +124,7 @@ public class ExecuteResourceCommandToolTests
         {
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
         var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
@@ -143,7 +143,7 @@ public class ExecuteResourceCommandToolTests
         {
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
         var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
@@ -164,7 +164,7 @@ public class ExecuteResourceCommandToolTests
                 Message = "Resource not found"
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
 
@@ -187,7 +187,7 @@ public class ExecuteResourceCommandToolTests
                 ValidationErrors = null!
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
 
@@ -217,7 +217,7 @@ public class ExecuteResourceCommandToolTests
                 ]
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
 
@@ -241,7 +241,7 @@ public class ExecuteResourceCommandToolTests
                 Canceled = true
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
 
@@ -259,7 +259,7 @@ public class ExecuteResourceCommandToolTests
         {
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
 
@@ -281,7 +281,7 @@ public class ExecuteResourceCommandToolTests
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel();
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
 
@@ -314,7 +314,7 @@ public class ExecuteResourceCommandToolTests
                 }
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("api-service", "generate-token")), CancellationToken.None).DefaultTimeout();
@@ -340,7 +340,7 @@ public class ExecuteResourceCommandToolTests
         {
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ExecuteResourceCommandTool(monitor, NullLogger<ExecuteResourceCommandTool>.Instance);
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(CreateArguments("api-service", "start")), CancellationToken.None).DefaultTimeout();

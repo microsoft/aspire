@@ -10,7 +10,7 @@ MTP diagnostic arguments (hang dump, crash dump, exit code handling, timeouts) a
 ┌───────────────────────────────────────────────────────────────────────────┐
 │                           MSBuild (build time)                            │
 │                                                                           │
-│  eng/Testing.props                                                        │
+│  eng/Testing.targets                                                      │
 │    MtpBaseArgs = "<diagnostic flags> --hangdump-timeout <T> --timeout <S>"│
 │    _BlameArgs  = MtpBaseArgs                                              │
 │    TestRunnerAdditionalArguments = ... + _BlameArgs  (Arcade/Helix path)  │
@@ -42,9 +42,12 @@ MTP diagnostic arguments (hang dump, crash dump, exit code handling, timeouts) a
 
 ## Properties
 
-### `MtpBaseArgs` (defined in `eng/Testing.props`)
+### `MtpBaseArgs` (defined in `eng/Testing.targets`)
 
 The single source of truth for all MTP diagnostic and timeout arguments. Contains everything that should be passed to every test execution. Timeouts are baked into this property so they flow as one resolved string.
+
+The property is composed in a targets file, after project evaluation, so timeout
+overrides declared in an individual test project are reflected in the final arguments.
 
 **Default value:** `--ignore-exit-code 8 --crashdump --hangdump --hangdump-type none --hangdump-timeout 10m --timeout 20m`
 
@@ -81,7 +84,13 @@ For split test projects, the "uncollected" bucket (tests not in any named partit
 
 Consumed by Arcade's `Microsoft.Testing.Platform.targets` for direct assembly execution (`TestAssembly.exe <args>`). This is the Helix/AzDO path.
 
-Assembled in `eng/Testing.props` from:
+The repository's `eng/Xunit3/Microsoft.Testing.Platform.targets` adds XML, HTML,
+and TRX reporting options. xUnit v4 uses `--report-xunit-xml` and
+`--report-xunit-xml-filename` for the xUnit XML report; the former
+`--report-xunit` options fail argument parsing before any tests execute.
+`MicrosoftTestingPlatformTests` checks these options against the current test host.
+
+Assembled in `eng/Testing.targets` from:
 - `--filter-not-trait "category=failing"`
 - Filter args (quarantine/outerloop exclusions)
 - `_BlameArgs` (which equals `MtpBaseArgs` — diagnostic flags + timeouts)
@@ -100,7 +109,7 @@ Set in:
 
 ## How to add a new MTP diagnostic arg
 
-1. Edit `eng/Testing.props` — append the arg to `MtpBaseArgs` (or to `_MtpDiagnosticFlags` if it's timeout-independent)
+1. Edit `eng/Testing.targets` — append the arg to `MtpBaseArgs` (or to `_MtpDiagnosticFlags` if it's timeout-independent)
 2. That's it. The arg flows automatically through both paths:
    - **Arcade/Helix**: via `_BlameArgs` → `TestRunnerAdditionalArguments`
    - **GitHub Actions**: via runsheet → `run-tests.yml` `mtpBaseArgs` input
@@ -134,4 +143,4 @@ MTP MSBuild integration injects `TestingPlatformCommandLineArguments` automatica
 
 ## Backward compatibility
 
-The `run-tests.yml` `mtpBaseArgs` input has a default value that includes diagnostic flags (crashdump, hangdump, exit-code handling) but does not include timeout arguments. Timeout values are baked into `mtpBaseArgs` at build time by MSBuild (via `eng/Testing.props`) and flow through the test matrix metadata. Callers that bypass the matrix and don't pass `mtpBaseArgs` should include the timeout arguments explicitly if needed.
+The `run-tests.yml` `mtpBaseArgs` input has a default value that includes diagnostic flags (crashdump, hangdump, exit-code handling) but does not include timeout arguments. Timeout values are baked into `mtpBaseArgs` at build time by MSBuild (via `eng/Testing.targets`) and flow through the test matrix metadata. Callers that bypass the matrix and don't pass `mtpBaseArgs` should include the timeout arguments explicitly if needed.

@@ -2,14 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
-#if !CLI && !ASPIRE_DASHBOARD
+#if !CLI && !ASPIRE_DASHBOARD && !ASPIRE_TERMINAL_HOST
 using Aspire.Hosting;
 #endif
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire;
 
-#if CLI || ASPIRE_DASHBOARD
+#if CLI || ASPIRE_DASHBOARD || ASPIRE_TERMINAL_HOST
 [AttributeUsage(AttributeTargets.All)]
 internal sealed class AspireExportIgnoreAttribute : Attribute
 {
@@ -20,7 +20,7 @@ internal sealed class AspireExportIgnoreAttribute : Attribute
 [AspireExportIgnore(Reason = "Internal IConfiguration helper — use the dedicated ATS configuration exports instead.")]
 internal static class IConfigurationExtensions
 {
-#if !CLI
+#if !CLI && !ASPIRE_DASHBOARD
     public static T GetValue<T>(this IConfiguration configuration, string primaryKey, string secondaryKey, T defaultValue)
     {
         var primaryValue = configuration.GetValue(typeof(T), primaryKey, null);

@@ -533,22 +533,17 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task HelmUninstallStep_DependsOnCheckHelmPrereqs()
+    public async Task HelmUninstallStep_ValidatesHelmVersionBeforeUninstall()
     {
-        // Regression coverage for PR #17491 review feedback: direct uninstall
-        // invokes `helm`, so it must gate on the same prereq check as deploy.
-        // `destroy-helm-{env}` defers the check until saved state exists so the
-        // no-state path can still report "Nothing to destroy" without Helm.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-
+        var fakeHelm = new FakeHelmRunner { VersionExitCode = 1 };
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
             workspace.Path,
-            step: WellKnownPipelineSteps.Diagnostics);
-        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+            step: "helm-uninstall-env");
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
 
         builder.AddKubernetesEnvironment("env");
         builder.AddContainer("api", "myimage");
@@ -556,45 +551,23 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         await app.RunAsync();
 
-        var logs = mockActivityReporter.LoggedMessages
-            .Where(s => s.StepTitle == "diagnostics")
-            .Select(s => s.Message)
-            .ToList();
-
-        var diagnosticLines = string.Join('\n', logs)
-            .Split('\n')
-            .Select(l => l.Trim())
-            .ToList();
-
-        var destroyTargetLine = diagnosticLines.IndexOf("If targeting 'destroy-helm-env':");
-        Assert.InRange(destroyTargetLine, 0, diagnosticLines.Count - 2);
-        Assert.Equal("Direct dependencies: destroy-prereq", diagnosticLines[destroyTargetLine + 1]);
-
-        var uninstallTargetLine = diagnosticLines.IndexOf("If targeting 'helm-uninstall-env':");
-        Assert.InRange(uninstallTargetLine, 0, diagnosticLines.Count - 2);
-        Assert.Equal("Direct dependencies: check-helm-prereqs-env", diagnosticLines[uninstallTargetLine + 1]);
+        Assert.Equal(["version --short"], fakeHelm.Arguments);
+        Assert.True(fakeHelm.WasVersionCalled);
+        Assert.False(fakeHelm.WasUninstallCalled);
     }
 
     [Fact]
-    public async Task PerChartHelmUninstallStep_DependsOnCheckHelmPrereqs()
+    public async Task PerChartHelmUninstallStep_ValidatesHelmVersionBeforeUninstall()
     {
-        // Regression coverage for PR #17491 review feedback: per-chart
-        // `helm-uninstall-{name}` steps created by `AddHelmChart(...).WithDestroy()`
-        // must depend on `check-helm-prereqs-{env}`. The install side is covered
-        // transitively (via `helm-deploy-{env}`), but the uninstall side previously
-        // only set `DependsOnSteps = [DestroyPrereq]`, so a missing or too-old
-        // Helm during chart teardown would bypass the validator and surface as
-        // the cryptic spawn / unknown-flag error this PR exists to prevent.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-
+        var fakeHelm = new FakeHelmRunner { VersionExitCode = 1 };
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
             workspace.Path,
-            step: WellKnownPipelineSteps.Diagnostics);
-        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+            step: "helm-uninstall-podinfo");
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         k8s.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1")
@@ -603,14 +576,9 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         await app.RunAsync();
 
-        var logs = mockActivityReporter.LoggedMessages
-            .Where(s => s.StepTitle == "diagnostics")
-            .Select(s => s.Message)
-            .ToList();
-
-        var chartUninstallLines = logs.Where(l => l.Contains("helm-uninstall-podinfo")).ToList();
-        Assert.NotEmpty(chartUninstallLines);
-        Assert.Contains(chartUninstallLines, msg => msg.Contains("check-helm-prereqs-env"));
+        Assert.Equal(["version --short"], fakeHelm.Arguments);
+        Assert.True(fakeHelm.WasVersionCalled);
+        Assert.False(fakeHelm.WasUninstallCalled);
     }
 
     [Fact]
@@ -1754,8 +1722,14 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         Assert.NotNull(httpEndpoint);
     }
 
-    [Fact]
-    public async Task Dashboard_OtlpConfigured_ForComputeResources()
+    [Theory]
+    [InlineData(OtlpProtocol.Grpc, 18889, "grpc")]
+    [InlineData(OtlpProtocol.HttpProtobuf, 18890, "http/protobuf")]
+    [InlineData(OtlpProtocol.HttpJson, 18890, "http/json")]
+    public async Task Dashboard_HonorsRequiredOtlpProtocol(
+        OtlpProtocol protocol,
+        int expectedPort,
+        string expectedProtocol)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -1770,22 +1744,25 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
 
         var envBuilder = builder.AddKubernetesEnvironment("env");
 
-        // Use a project resource — projects get OtlpExporterAnnotation by default
-        builder.AddProject<Projects.ServiceA>("api");
+        builder.AddProject<Projects.ServiceA>("api")
+            .WithOtlpExporter(protocol);
 
         using var app = builder.Build();
         await app.RunAsync();
 
-        // Check that values.yaml contains OTLP configuration for the project resource
         var valuesPath = Path.Combine(workspace.Path, "values.yaml");
         Assert.True(File.Exists(valuesPath));
         var content = await File.ReadAllTextAsync(valuesPath);
         outputHelper.WriteLine(content);
 
         Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", content);
-        Assert.Contains("env-dashboard-service:18889", content);
+        Assert.Contains($"env-dashboard-service:{expectedPort}", content);
         Assert.Contains("OTEL_EXPORTER_OTLP_PROTOCOL", content);
+        Assert.Contains(expectedProtocol, content);
         Assert.Contains("OTEL_SERVICE_NAME", content);
+
+        await Verify(content, "yaml")
+            .UseParameters(protocol);
     }
 
     [Fact]
@@ -1821,6 +1798,77 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("OTEL_SERVICE_NAME", content);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Dashboard_DenoNativeOpenTelemetryFollowsInjectedEndpoint(bool dashboardEnabled)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        builder.AddKubernetesEnvironment("env")
+            .WithDashboard(dashboardEnabled);
+
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
+        Assert.True(File.Exists(valuesPath));
+        var content = await File.ReadAllTextAsync(valuesPath);
+        outputHelper.WriteLine(content);
+
+        var hasEndpoint = content.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", StringComparison.Ordinal);
+        var hasNativeDenoTelemetry = content.Contains("OTEL_DENO", StringComparison.Ordinal);
+
+        Assert.Equal(dashboardEnabled, hasEndpoint);
+        Assert.Equal(hasEndpoint, hasNativeDenoTelemetry);
+    }
+
+    [Fact]
+    public async Task Dashboard_LastOtlpExporterAnnotationDoesNotApplySupersededActivation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true")
+            .WithOtlpExporter();
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
+        Assert.True(File.Exists(valuesPath));
+        var content = await File.ReadAllTextAsync(valuesPath);
+
+        Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", content);
+        Assert.Contains("OTEL_EXPORTER_OTLP_PROTOCOL: \"grpc\"", content);
+        Assert.False(content.Contains("OTEL_DENO", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Dashboard_ResourceHasCorrectEndpoints()
     {
@@ -1831,8 +1879,10 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
 
         Assert.NotNull(dashboard.PrimaryEndpoint);
         Assert.NotNull(dashboard.OtlpGrpcEndpoint);
+        Assert.NotNull(dashboard.OtlpHttpEndpoint);
         Assert.Equal("http", dashboard.PrimaryEndpoint.EndpointName);
         Assert.Equal("otlp-grpc", dashboard.OtlpGrpcEndpoint.EndpointName);
+        Assert.Equal("otlp-http", dashboard.OtlpHttpEndpoint.EndpointName);
     }
 
     [Fact]
@@ -1866,10 +1916,9 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         await app.RunAsync();
 
-        // Verify helm uninstall was called with saved state values
-        Assert.True(fakeHelm.WasUninstallCalled);
-        Assert.Contains("my-release", fakeHelm.LastArguments!);
-        Assert.Contains("my-namespace", fakeHelm.LastArguments!);
+        Assert.Equal(
+            "uninstall my-release --namespace my-namespace --ignore-not-found",
+            fakeHelm.LastArguments);
     }
 
     [Fact]
@@ -1944,5 +1993,104 @@ public class KubernetesDeployTests(ITestOutputHelper outputHelper)
         // Verify state was NOT deleted (preserved for retry)
         var stateSection = await stateManager.AcquireSectionAsync("Helm:env");
         Assert.Equal("my-release", stateSection.Data["ReleaseName"]?.ToString());
+    }
+
+    [Fact]
+    public async Task DestroyHelm_WhenReleaseWasAlreadyRemoved_CompletesRetry()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var fakeHelm = new FakeHelmRunner
+        {
+            CommandResultFactory = arguments =>
+                arguments.Contains(" --ignore-not-found", StringComparison.Ordinal)
+                    ? (0, null)
+                    : (1, "Error: uninstall: Release not loaded: my-release: release: not found")
+        };
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("Helm:env", new JsonObject
+        {
+            ["ReleaseName"] = "my-release",
+            ["Namespace"] = "my-namespace"
+        });
+
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Destroy);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+
+        builder.AddKubernetesEnvironment("env");
+        builder.AddContainer("api", "myimage");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(
+            "uninstall my-release --namespace my-namespace --ignore-not-found",
+            Assert.Single(
+                fakeHelm.Arguments,
+                arguments => arguments.StartsWith("uninstall", StringComparison.OrdinalIgnoreCase)));
+        var stateSection = await stateManager.AcquireSectionAsync("Helm:env");
+        Assert.Empty(stateSection.Data);
+        Assert.Contains(
+            reporter.CompletedSteps,
+            step => step is ("pipeline-execution", "Completed successfully", CompletionState.Completed));
+    }
+
+    [Fact]
+    public async Task DestroyExternalHelmChart_DoesNotIgnoreUnrelatedFailure()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var fakeHelm = new FakeHelmRunner
+        {
+            CommandResultFactory = arguments => arguments.StartsWith("uninstall", StringComparison.OrdinalIgnoreCase)
+                ? (1, "Error: Kubernetes cluster unreachable")
+                : (0, null)
+        };
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("HelmChart:env:podinfo", new JsonObject
+        {
+            ["ReleaseName"] = "podinfo",
+            ["Namespace"] = "podinfo"
+        });
+
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Destroy);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+
+        builder.AddKubernetesEnvironment("env")
+            .AddHelmChart("podinfo", "oci://example.com/chart", "1.0.0")
+            .WithDestroy();
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var uninstallArguments = Assert.Single(
+            fakeHelm.Arguments,
+            arguments => arguments.StartsWith("uninstall", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(" --ignore-not-found", uninstallArguments, StringComparison.Ordinal);
+        Assert.Equal(
+            "Step 'helm-uninstall-podinfo' failed: helm uninstall for chart 'podinfo' failed: " +
+            "Error: Kubernetes cluster unreachable",
+            reporter.CompletionMessage);
+
+        var stateSection = await stateManager.AcquireSectionAsync("HelmChart:env:podinfo");
+        Assert.Equal("podinfo", stateSection.Data["ReleaseName"]?.ToString());
     }
 }

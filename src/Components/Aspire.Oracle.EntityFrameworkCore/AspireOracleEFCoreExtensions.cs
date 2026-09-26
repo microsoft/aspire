@@ -52,7 +52,7 @@ public static class AspireOracleEFCoreExtensions
             (settings, section) => section.Bind(settings)
         );
 
-        if (builder.Configuration.GetConnectionString(connectionName) is string connectionString)
+        if (builder.Configuration.TryGetConnectionString(connectionName, out var connectionString))
         {
             settings.ConnectionString = connectionString;
         }

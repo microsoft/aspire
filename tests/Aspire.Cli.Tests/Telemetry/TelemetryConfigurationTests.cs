@@ -41,7 +41,9 @@ public class TelemetryConfigurationTests
         var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter, logBufferContext);
         var identityChannelReader = new IdentityChannelReader(typeof(Program).Assembly);
         var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(finalDrainBudget: Timeout.InfiniteTimeSpan), identityChannelReader);
-        return await Program.BuildApplicationAsync([], startupContext, config);
+        var host = await Program.BuildApplicationAsync([], startupContext, config);
+        host.Services.GetRequiredService<TelemetryManager>().Initialize();
+        return host;
     }
 
     [Fact]
@@ -75,13 +77,16 @@ public class TelemetryConfigurationTests
         Assert.False(telemetryManager.HasAzureMonitor, $"Expected Azure Monitor to be disabled when telemetry opt-out is '{optOutValue}'");
     }
 
-    [Fact]
-    public async Task ReportedTelemetry_Disabled_WhenVersionFlagProvided()
+    [Theory]
+    [InlineData("--version")]
+    [InlineData("-v")]
+    public async Task ReportedTelemetry_Disabled_WhenVersionFlagProvided(string versionFlag)
     {
         var configuration = new ConfigurationBuilder().Build();
-        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, ["--version"]);
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, [versionFlag]);
         var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
         using var telemetryManager = new TelemetryManager(telemetryConfiguration, tagsSource);
+        telemetryManager.Initialize();
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
         {
             IsInternalMicrosoft = true
@@ -106,6 +111,73 @@ public class TelemetryConfigurationTests
         Assert.Empty(GetInternalMicrosoftTags(await telemetry.GetDefaultTagsAsync()));
     }
 
+    [Theory]
+    [InlineData("--help")]
+    [InlineData("-h")]
+    [InlineData("-?")]
+    [InlineData("/h")]
+    [InlineData("/?")]
+    public void ReportedTelemetry_Disabled_WhenHelpFlagProvided(string helpFlag)
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, [helpFlag]);
+
+        Assert.False(telemetryConfiguration.ReportedTelemetryEnabled);
+    }
+
+    [Theory]
+    [InlineData("terminal", "ps", "-v")]
+    [InlineData("run", "--", "-v")]
+    [InlineData("add", "docker", "--version", "9.2.0")]
+    public void ReportedTelemetry_RemainsEnabled_WhenVersionLikeOptionIsNotRootInformational(params string[] args)
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, args);
+
+        Assert.True(telemetryConfiguration.ReportedTelemetryEnabled);
+    }
+
+    [Fact]
+    public void ReportedTelemetry_Disabled_WhenShortVersionFollowsRootOptionValue()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, ["--log-level", "Debug", "-v"]);
+
+        Assert.False(telemetryConfiguration.ReportedTelemetryEnabled);
+    }
+
+    [Theory]
+    [InlineData("--log-level", "--help")]
+    [InlineData("-l", "-h")]
+    [InlineData("--capture-profile-output", "--version")]
+    [InlineData("--capture-profile-delay", "-v")]
+    [InlineData("--log-file", "-?")]
+    public void ReportedTelemetry_Disabled_WhenInformationalFlagIsConsumedAsMissingRootOptionValue(string rootOption, string informationalFlag)
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, [rootOption, informationalFlag]);
+
+        Assert.False(telemetryConfiguration.ReportedTelemetryEnabled);
+    }
+
+    [Fact]
+    public void DetectorDiagnostics_Disabled_ForAgentTelemetryInvocation()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var telemetryConfiguration = TelemetryConfiguration.Create(
+            configuration,
+            ["agent", "telemetry", "--event-type", "skill_invocation"]);
+
+        Assert.True(telemetryConfiguration.ReportedTelemetryEnabled);
+        Assert.False(telemetryConfiguration.EmitInternalMicrosoftDiagnostics);
+        Assert.Equal(TimeSpan.FromSeconds(5), telemetryConfiguration.InternalMicrosoftDetectionTimeout);
+    }
+
     [Fact]
     public async Task ReportedTelemetry_Disabled_WhenOptOutSet_DoesNotRunInternalMicrosoftDetector()
     {
@@ -118,6 +190,7 @@ public class TelemetryConfigurationTests
         var telemetryConfiguration = TelemetryConfiguration.Create(configuration);
         var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
         using var telemetryManager = new TelemetryManager(telemetryConfiguration, tagsSource);
+        telemetryManager.Initialize();
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
         {
             IsInternalMicrosoft = true
@@ -183,6 +256,7 @@ public class TelemetryConfigurationTests
         var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
 
         using var manager = new TelemetryManager(configuration, tagsSource);
+        manager.Initialize();
 
         Assert.False(manager.HasProfilingProvider, "Expected detached child profiling export to require an actual profiling session");
     }
@@ -258,7 +332,8 @@ public class TelemetryConfigurationTests
         var configuration = new ConfigurationBuilder().Build();
         var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
 
-        var manager = new TelemetryManager(configuration, tagsSource, ["--version"]);
+        using var manager = new TelemetryManager(configuration, tagsSource, ["--version"]);
+        manager.Initialize();
 
         Assert.False(manager.HasAzureMonitor);
     }
@@ -272,7 +347,8 @@ public class TelemetryConfigurationTests
         var configuration = new ConfigurationBuilder().Build();
         var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
 
-        var manager = new TelemetryManager(configuration, tagsSource, [flag]);
+        using var manager = new TelemetryManager(configuration, tagsSource, [flag]);
+        manager.Initialize();
 
         Assert.False(manager.HasAzureMonitor);
     }
@@ -291,6 +367,7 @@ public class TelemetryConfigurationTests
         var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
 
         using var manager = new TelemetryManager(configuration, tagsSource, ["agent", "telemetry", "--event-type", "skill_invocation"]);
+        manager.Initialize();
 
         Assert.False(manager.HasAzureMonitor);
     }
@@ -302,6 +379,7 @@ public class TelemetryConfigurationTests
         var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
 
         using var manager = new TelemetryManager(configuration, tagsSource, ["agent", "telemetry", "--event-type", "skill_invocation"]);
+        manager.Initialize();
 
         Assert.True(manager.HasAzureMonitor);
     }

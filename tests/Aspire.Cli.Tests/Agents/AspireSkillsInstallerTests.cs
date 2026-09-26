@@ -25,6 +25,9 @@ public class AspireSkillsInstallerTests
     private const string AspireSkillDescription = "Aspire CLI commands and workflows for distributed apps";
     private const string CacheLockRetryLogMessage = "Acquiring the Aspire skills cache lock";
     private const string GitHubReleaseAssetBuildType = "https://actions.github.io/buildtypes/workflow/v1";
+    private const string ReleaseTagPath = $"/releases/tags/v{AspireSkillsInstaller.Version}";
+    private const string ReleaseAssetName = $"aspire-skills-v{AspireSkillsInstaller.Version}.tgz";
+    private const string ReleaseAssetUrl = $"https://downloads.example.test/{ReleaseAssetName}";
 
     [Fact]
     public async Task InstallAsync_WhenValidBundleIsCached_UsesCacheWithoutNetwork()
@@ -150,11 +153,11 @@ public class AspireSkillsInstallerTests
             var assetDownloadRequested = false;
             var handler = new MockHttpMessageHandler(request =>
             {
-                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                if (request.RequestUri!.AbsolutePath.EndsWith(ReleaseTagPath, StringComparison.Ordinal))
                 {
                     return CreateJsonResponse(CreateGitHubReleaseJson(
-                        "aspire-skills-v0.0.1.tgz",
-                        "https://downloads.example.test/aspire-skills-v0.0.1.tgz",
+                        ReleaseAssetName,
+                        ReleaseAssetUrl,
                         $"sha256:{archiveSha256}"));
                 }
 
@@ -200,11 +203,11 @@ public class AspireSkillsInstallerTests
             var assetDownloadRequested = false;
             var handler = new MockHttpMessageHandler(request =>
             {
-                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                if (request.RequestUri!.AbsolutePath.EndsWith(ReleaseTagPath, StringComparison.Ordinal))
                 {
                     return CreateJsonResponse(CreateGitHubReleaseJson(
-                        "aspire-skills-v0.0.1.tgz",
-                        "https://downloads.example.test/aspire-skills-v0.0.1.tgz",
+                        ReleaseAssetName,
+                        ReleaseAssetUrl,
                         $"sha256:{archiveSha256}"));
                 }
 
@@ -251,11 +254,11 @@ public class AspireSkillsInstallerTests
             var archiveSha512 = ComputeSha512(archiveBytes);
             var handler = new MockHttpMessageHandler(request =>
             {
-                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                if (request.RequestUri!.AbsolutePath.EndsWith(ReleaseTagPath, StringComparison.Ordinal))
                 {
                     return CreateJsonResponse(CreateGitHubReleaseJson(
-                        "aspire-skills-v0.0.1.tgz",
-                        "https://downloads.example.test/aspire-skills-v0.0.1.tgz",
+                        ReleaseAssetName,
+                        ReleaseAssetUrl,
                         $"sha256:{archiveSha256}"));
                 }
 
@@ -317,11 +320,11 @@ public class AspireSkillsInstallerTests
             var assetDownloadRequested = false;
             var handler = new MockHttpMessageHandler(request =>
             {
-                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                if (request.RequestUri!.AbsolutePath.EndsWith(ReleaseTagPath, StringComparison.Ordinal))
                 {
                     return CreateJsonResponse(CreateGitHubReleaseJson(
-                        "aspire-skills-v0.0.1.tgz",
-                        "https://downloads.example.test/aspire-skills-v0.0.1.tgz",
+                        ReleaseAssetName,
+                        ReleaseAssetUrl,
                         $"sha256:{archiveSha256}"));
                 }
 
@@ -986,11 +989,11 @@ public class AspireSkillsInstallerTests
             var archiveBytes = await CreateBundleArchiveBytesAsync();
             var handler = new MockHttpMessageHandler(request =>
             {
-                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                if (request.RequestUri!.AbsolutePath.EndsWith(ReleaseTagPath, StringComparison.Ordinal))
                 {
                     return CreateJsonResponse(CreateGitHubReleaseJson(
-                        "aspire-skills-v0.0.1.tgz",
-                        "https://downloads.example.test/aspire-skills-v0.0.1.tgz",
+                        ReleaseAssetName,
+                        ReleaseAssetUrl,
                         $"sha256:{ComputeSha256(archiveBytes)}"));
                 }
 
@@ -1280,11 +1283,11 @@ public class AspireSkillsInstallerTests
             var assetDownloadRequested = false;
             var handler = new MockHttpMessageHandler(request =>
             {
-                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                if (request.RequestUri!.AbsolutePath.EndsWith(ReleaseTagPath, StringComparison.Ordinal))
                 {
                     return CreateJsonResponse(CreateGitHubReleaseJson(
-                        "aspire-skills-v0.0.1.tgz",
-                        "https://downloads.example.test/aspire-skills-v0.0.1.tgz",
+                        ReleaseAssetName,
+                        ReleaseAssetUrl,
                         $"sha256:{currentArchiveSha256}"));
                 }
 
@@ -1336,11 +1339,11 @@ public class AspireSkillsInstallerTests
             var assetDownloadRequested = false;
             var handler = new MockHttpMessageHandler(request =>
             {
-                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                if (request.RequestUri!.AbsolutePath.EndsWith(ReleaseTagPath, StringComparison.Ordinal))
                 {
                     return CreateJsonResponse(CreateGitHubReleaseJson(
-                        "aspire-skills-v0.0.1.tgz",
-                        "https://downloads.example.test/aspire-skills-v0.0.1.tgz",
+                        ReleaseAssetName,
+                        ReleaseAssetUrl,
                         releaseDigest));
                 }
 
@@ -1381,8 +1384,11 @@ public class AspireSkillsInstallerTests
 
         try
         {
+            const string migrationSkillName = "aspire-project-v2-migration";
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
+            var embeddedBundleProvider = new EmbeddedAspireSkillsBundleProvider(
+                new AspireSkillsBundleProvider(executionContext),
+                NullLogger<EmbeddedAspireSkillsBundleProvider>.Instance);
             var attestationVerifier = new TestGitHubArtifactAttestationVerifier();
             // Throw on any HTTP call so we can prove the GitHub path was never invoked.
             var handler = new MockHttpMessageHandler(_ => throw new InvalidOperationException("HTTP must not be called when remote fetch is disabled."));
@@ -1398,8 +1404,33 @@ public class AspireSkillsInstallerTests
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
-            Assert.True(embeddedBundleProvider.CreateBundleCalled);
+            Assert.Equal(AspireSkillsInstaller.Version, result.Bundle.Version);
             Assert.False(attestationVerifier.VerifyCalled);
+            var migrationSkill = Assert.Single(
+                result.Bundle.GetSkillDefinitions(),
+                skill => skill.HasName(migrationSkillName));
+            Assert.True(migrationSkill.IsDefault);
+            Assert.Empty(migrationSkill.ApplicableLanguages);
+            Assert.Equal(["evals"], migrationSkill.InstallExcludedRelativePaths);
+
+            var migrationFiles = await result.Bundle.GetSkillFilesAsync(migrationSkill, CancellationToken.None);
+            Assert.Collection(
+                migrationFiles.OrderBy(file => file.RelativePath, StringComparer.Ordinal),
+                skillFile =>
+                {
+                    Assert.Equal("SKILL.md", skillFile.RelativePath);
+                    Assert.Contains("# Aspire Project v2 migration", skillFile.Content, StringComparison.Ordinal);
+                },
+                compatibilityReference =>
+                {
+                    Assert.Equal(Path.Combine("references", "compatibility-and-validation.md"), compatibilityReference.RelativePath);
+                    Assert.Contains("# Project v2 compatibility and validation", compatibilityReference.Content, StringComparison.Ordinal);
+                },
+                migrationPatternsReference =>
+                {
+                    Assert.Equal(Path.Combine("references", "migration-patterns.md"), migrationPatternsReference.RelativePath);
+                    Assert.Contains("# Project v2 migration patterns", migrationPatternsReference.Content, StringComparison.Ordinal);
+                });
         }
         finally
         {
@@ -1426,6 +1457,8 @@ public class AspireSkillsInstallerTests
             Assert.Equal(AspireSkillsInstaller.Version, bundle.Version);
             Assert.Equal(AspireSkillsInstaller.Version, metadata.Version);
             Assert.Equal(AspireSkillsInstaller.GitHubRepository, metadata.Repository);
+            Assert.Equal($"v{AspireSkillsInstaller.Version}", metadata.Tag);
+            Assert.Equal(ReleaseAssetName, metadata.AssetName);
             Assert.Matches("^[0-9a-f]{128}$", metadata.Sha512);
             AssertNoTemporaryEntries(rootDirectory, "embedded");
         }
@@ -1565,12 +1598,12 @@ public class AspireSkillsInstallerTests
             Uri? assetRequestUri = null;
             var handler = new MockHttpMessageHandler(request =>
             {
-                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                if (request.RequestUri!.AbsolutePath.EndsWith(ReleaseTagPath, StringComparison.Ordinal))
                 {
                     releaseRequestUri = request.RequestUri;
                     return CreateJsonResponse(CreateGitHubReleaseJson(
-                        "aspire-skills-v0.0.1.tgz",
-                        "https://downloads.example.test/aspire-skills-v0.0.1.tgz"));
+                        ReleaseAssetName,
+                        ReleaseAssetUrl));
                 }
 
                 assetRequestUri = request.RequestUri;
@@ -1601,8 +1634,8 @@ public class AspireSkillsInstallerTests
             Assert.False(embeddedBundleProvider.CreateBundleCalled);
             Assert.NotNull(releaseRequestUri);
             Assert.NotNull(assetRequestUri);
-            Assert.Contains("/microsoft/aspire-skills/releases/tags/v0.0.1", releaseRequestUri.AbsolutePath);
-            Assert.Equal("https://downloads.example.test/aspire-skills-v0.0.1.tgz", assetRequestUri.AbsoluteUri);
+            Assert.Equal($"/repos/{AspireSkillsInstaller.GitHubRepository}{ReleaseTagPath}", releaseRequestUri.AbsolutePath);
+            Assert.Equal(ReleaseAssetUrl, assetRequestUri.AbsoluteUri);
             var cachedBundleDirectory = GetBundleCacheDirectory(executionContext, archiveSha512);
             Assert.Equal(
                 archiveSha512,
@@ -1631,11 +1664,11 @@ public class AspireSkillsInstallerTests
             var archiveBytes = await CreateBundleArchiveBytesAsync(skillBody: "# Downloaded GitHub");
             var handler = new MockHttpMessageHandler(request =>
             {
-                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                if (request.RequestUri!.AbsolutePath.EndsWith(ReleaseTagPath, StringComparison.Ordinal))
                 {
                     return CreateJsonResponse(CreateGitHubReleaseJson(
-                        "aspire-skills-v0.0.1.tgz",
-                        "https://downloads.example.test/aspire-skills-v0.0.1.tgz",
+                        ReleaseAssetName,
+                        ReleaseAssetUrl,
                         $"sha256:{new string('0', 64)}"));
                 }
 
@@ -1680,11 +1713,11 @@ public class AspireSkillsInstallerTests
             var malformedArchiveSha256 = ComputeSha256(malformedArchiveBytes);
             var handler = new MockHttpMessageHandler(request =>
             {
-                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                if (request.RequestUri!.AbsolutePath.EndsWith(ReleaseTagPath, StringComparison.Ordinal))
                 {
                     return CreateJsonResponse(CreateGitHubReleaseJson(
-                        "aspire-skills-v0.0.1.tgz",
-                        "https://downloads.example.test/aspire-skills-v0.0.1.tgz",
+                        ReleaseAssetName,
+                        ReleaseAssetUrl,
                         $"sha256:{malformedArchiveSha256}"));
                 }
 
@@ -1736,11 +1769,11 @@ public class AspireSkillsInstallerTests
             var archiveSha512 = ComputeSha512(archiveBytes);
             var handler = new MockHttpMessageHandler(request =>
             {
-                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                if (request.RequestUri!.AbsolutePath.EndsWith(ReleaseTagPath, StringComparison.Ordinal))
                 {
                     return CreateJsonResponse(CreateGitHubReleaseJson(
-                        "aspire-skills-v0.0.1.tgz",
-                        "https://downloads.example.test/aspire-skills-v0.0.1.tgz",
+                        ReleaseAssetName,
+                        ReleaseAssetUrl,
                         $"sha256:{archiveSha256}"));
                 }
 
@@ -1945,11 +1978,11 @@ public class AspireSkillsInstallerTests
             var assetDownloadRequested = false;
             var handler = new MockHttpMessageHandler(request =>
             {
-                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                if (request.RequestUri!.AbsolutePath.EndsWith(ReleaseTagPath, StringComparison.Ordinal))
                 {
                     return CreateJsonResponse(CreateGitHubReleaseJson(
-                        "aspire-skills-v0.0.1.tgz",
-                        "https://downloads.example.test/aspire-skills-v0.0.1.tgz",
+                        ReleaseAssetName,
+                        ReleaseAssetUrl,
                         $"sha256:{archiveSha256}"));
                 }
 

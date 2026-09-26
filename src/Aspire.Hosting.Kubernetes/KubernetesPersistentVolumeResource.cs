@@ -25,7 +25,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// <list type="bullet">
 /// <item><description>
 /// Adding a matching <c>WithVolume("name", "/mount/path")</c> on a container resource
-/// and then calling <c>WithPersistentVolume(volume)</c>. The publisher matches by
+/// and calling <c>WithPersistentVolume(volume)</c>. The publisher matches by
 /// volume name and routes the pod's <c>volumes[]</c> entry through this resource's
 /// generated PVC.
 /// </description></item>
@@ -35,6 +35,12 @@ namespace Aspire.Hosting.Kubernetes;
 /// overload that takes a mount path. Works for both <c>ContainerResource</c> and
 /// <c>ProjectResource</c>.
 /// </description></item>
+/// <item><description>
+/// Calling the
+/// <see cref="KubernetesPersistentVolumeExtensions.WithPersistentVolume{T}(IResourceBuilder{T}, IResourceBuilder{KubernetesPersistentVolumeResource}, string, string, bool)"/>
+/// overload that also sets an environment variable. Projects and executables receive
+/// a local persistent path in run mode and the deployed mount path in publish mode.
+/// </description></item>
 /// </list>
 /// <para>
 /// Any workload bound to a persistent volume is automatically rendered as a
@@ -42,7 +48,9 @@ namespace Aspire.Hosting.Kubernetes;
 /// stable identity and ordered rollout for pods that share named PVCs.
 /// </para>
 /// <para>
-/// This resource is publish-only. It has no run-mode behavior or dashboard surface.
+/// This resource is publish-only and has no dashboard surface. The environment-variable
+/// binding overload provides run-mode storage without adding the volume resource to the
+/// local application model.
 /// </para>
 /// </remarks>
 /// <example>

@@ -10,6 +10,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Semver;
 
@@ -36,6 +37,9 @@ internal sealed class StopCommand : BaseCommand
     private const int MinimumHostingMajorVersionForPersistentResourceCleanup = 13;
     private const int MinimumHostingMinorVersionForPersistentResourceCleanup = 5;
     private const string MinimumHostingVersionForPersistentResourceCleanupDisplay = "13.5.0";
+    private const int MinimumHostingMajorVersionForPersistentVolumeCleanup = 13;
+    private const int MinimumHostingMinorVersionForPersistentVolumeCleanup = 6;
+    private const string MinimumHostingVersionForPersistentVolumeCleanupDisplay = "13.6.0";
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", StopCommandStrings.ProjectArgumentDescription);
 
@@ -47,6 +51,11 @@ internal sealed class StopCommand : BaseCommand
     private static readonly Option<bool> s_forceOption = new("--force")
     {
         Description = StopCommandStrings.ForceOptionDescription
+    };
+
+    private static readonly Option<bool> s_volumesOption = new("--volumes")
+    {
+        Description = StopCommandStrings.VolumesOptionDescription
     };
 
     public StopCommand(
@@ -79,6 +88,7 @@ internal sealed class StopCommand : BaseCommand
         Options.Add(s_appHostOption);
         Options.Add(s_allOption);
         Options.Add(s_forceOption);
+        Options.Add(s_volumesOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -86,6 +96,7 @@ internal sealed class StopCommand : BaseCommand
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var stopAll = parseResult.GetValue(s_allOption);
         var force = parseResult.GetValue(s_forceOption);
+        var volumes = parseResult.GetValue(s_volumesOption);
         using var activity = _profilingTelemetry.StartStopCommand(stopAll, passedAppHostProjectFile is not null);
 
         // Validate mutual exclusivity of --all and --project
@@ -99,9 +110,14 @@ internal sealed class StopCommand : BaseCommand
             return CommandResult.Failure(CompleteStopActivity(activity, CliExitCodes.InvalidCommand), string.Format(CultureInfo.InvariantCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_allOption.Name, s_forceOption.Name));
         }
 
+        if (volumes && !force)
+        {
+            return CommandResult.Failure(CompleteStopActivity(activity, CliExitCodes.InvalidCommand), string.Format(CultureInfo.InvariantCulture, StopCommandStrings.VolumesRequiresForce, s_volumesOption.Name, s_forceOption.Name));
+        }
+
         if (force)
         {
-            return CommandResult.FromExitCode(CompleteStopActivity(activity, await ForceStopAppHostAsync(passedAppHostProjectFile, cancellationToken).ConfigureAwait(false)));
+            return CommandResult.FromExitCode(CompleteStopActivity(activity, await ForceStopAppHostAsync(passedAppHostProjectFile, volumes, cancellationToken).ConfigureAwait(false)));
         }
 
         // Handle --all: stop all running AppHosts
@@ -119,7 +135,7 @@ internal sealed class StopCommand : BaseCommand
         return CommandResult.FromExitCode(CompleteStopActivity(activity, await ExecuteInteractiveAsync(passedAppHostProjectFile, cancellationToken)));
     }
 
-    private async Task<int> ForceStopAppHostAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken)
+    private async Task<int> ForceStopAppHostAsync(FileInfo? passedAppHostProjectFile, bool deleteVolumes, CancellationToken cancellationToken)
     {
         var stopResult = _hostEnvironment.SupportsInteractiveInput
             ? await ExecuteInteractiveWithResultAsync(passedAppHostProjectFile, cancellationToken).ConfigureAwait(false)
@@ -143,7 +159,7 @@ internal sealed class StopCommand : BaseCommand
             return CliExitCodes.FailedToFindProject;
         }
 
-        return await CleanupPersistentResourcesAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+        return await CleanupPersistentResourcesAsync(appHostFile, deleteVolumes, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<FileInfo?> TryResolveAppHostFileAsync(
@@ -233,7 +249,9 @@ internal sealed class StopCommand : BaseCommand
             var appHostFile = GetAppHostFile(connection);
             if (appHostFile is not null)
             {
-                return await StopRunningAppHostsForResolvedFileAsync(appHostFile, displayNotRunningMessage: true, cancellationToken).ConfigureAwait(false);
+                // Reuse the connections already scanned above rather than scanning every socket a second
+                // time. A rescan pays each unreachable socket's connect retry budget again.
+                return await StopRunningAppHostsForResolvedFileAsync(appHostFile, allConnections, cancellationToken).ConfigureAwait(false);
             }
 
             _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
@@ -273,7 +291,13 @@ internal sealed class StopCommand : BaseCommand
         var appHostFile = GetAppHostFile(result.Connection!);
         if (appHostFile is not null)
         {
-            return await StopRunningAppHostsForResolvedFileAsync(appHostFile, displayNotRunningMessage: true, cancellationToken).ConfigureAwait(false);
+            // The resolver returns a single connection, but every instance running at that path should be
+            // stopped, so the full set is needed here.
+            var allConnections = await _connectionResolver.ResolveAllConnectionsAsync(
+                SharedCommandStrings.ScanningForRunningAppHosts,
+                cancellationToken).ConfigureAwait(false);
+
+            return await StopRunningAppHostsForResolvedFileAsync(appHostFile, allConnections, cancellationToken).ConfigureAwait(false);
         }
 
         _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
@@ -281,42 +305,25 @@ internal sealed class StopCommand : BaseCommand
         return new StopAppHostResult(exitCode, appHostFile);
     }
 
-    private async Task<StopAppHostResult> StopRunningAppHostsForResolvedFileAsync(FileInfo appHostFile, bool displayNotRunningMessage, CancellationToken cancellationToken)
+    private async Task<StopAppHostResult> StopRunningAppHostsForResolvedFileAsync(FileInfo appHostFile, AppHostConnectionResult[] allConnections, CancellationToken cancellationToken)
     {
-        var matchingSocketPaths = AppHostHelper.FindMatchingNonOrphanedSockets(
-            appHostFile.FullName,
-            ExecutionContext.HomeDirectory.FullName,
-            Environment.ProcessId,
-            _logger);
-
-        if (matchingSocketPaths.Length == 0)
-        {
-            if (displayNotRunningMessage)
-            {
-                var displayPath = Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, appHostFile.FullName);
-                InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AppHostNotRunningAtPath, displayPath));
-            }
-
-            return new StopAppHostResult(CliExitCodes.Success, null);
-        }
-
-        var matchingSocketPathSet = matchingSocketPaths.ToHashSet(GetSocketPathComparer());
-        var allConnections = await _connectionResolver.ResolveAllConnectionsAsync(
-            SharedCommandStrings.ScanningForRunningAppHosts,
-            cancellationToken).ConfigureAwait(false);
+        var canonicalAppHostPath = PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName);
 
         var matchingConnections = allConnections
-            .Where(result => result.Success && result.Connection is not null && matchingSocketPathSet.Contains(result.Connection.SocketPath))
+            .Where(result =>
+                result is { Success: true, Connection.AppHostInfo.AppHostPath: { } connectionAppHostPath } &&
+                StringComparers.FileSystemPath.Equals(
+                    PathNormalizer.ResolveToFilesystemPath(connectionAppHostPath),
+                    canonicalAppHostPath))
             .Select(result => result.Connection!)
             .ToArray();
 
         if (matchingConnections.Length == 0)
         {
-            if (displayNotRunningMessage)
-            {
-                var displayPath = Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, appHostFile.FullName);
-                InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AppHostNotRunningAtPath, displayPath));
-            }
+            // Reachable when the AppHost exits between being resolved and these connections being
+            // enumerated. Reporting it as not running is the right outcome for that race.
+            var displayPath = Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, appHostFile.FullName);
+            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AppHostNotRunningAtPath, displayPath));
 
             return new StopAppHostResult(CliExitCodes.Success, null);
         }
@@ -341,16 +348,16 @@ internal sealed class StopCommand : BaseCommand
         return new StopAppHostResult(allStopped ? CliExitCodes.Success : CliExitCodes.FailedToDotnetRunAppHost, appHostFile);
     }
 
-    private async Task<int> CleanupPersistentResourcesAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    private async Task<int> CleanupPersistentResourcesAsync(FileInfo appHostFile, bool deleteVolumes, CancellationToken cancellationToken)
     {
-        await WarnIfPersistentResourceCleanupMayBeUnsupportedAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+        await WarnIfCleanupMayBeUnsupportedAsync(appHostFile, deleteVolumes, cancellationToken).ConfigureAwait(false);
 
         var appHostPath = appHostFile.FullName;
         var appHostDisplayPath = FileSystemHelper.ShortenPaths([appHostPath], _environment)[appHostPath];
         var workloadId = AppHostWorkloadId.Create(appHostFile);
         var cleanupResult = await InteractionService.ShowStatusAsync(
             string.Format(CultureInfo.CurrentCulture, StopCommandStrings.CleaningPersistentResources, appHostDisplayPath),
-            () => _dcpCleanupService.CleanupAsync(workloadId, cancellationToken),
+            () => _dcpCleanupService.CleanupAsync(workloadId, deleteVolumes, cancellationToken),
             emoji: KnownEmojis.Gear).ConfigureAwait(false);
 
         InteractionService.DisplayPlainText("");
@@ -372,7 +379,7 @@ internal sealed class StopCommand : BaseCommand
         return CliExitCodes.Success;
     }
 
-    private async Task WarnIfPersistentResourceCleanupMayBeUnsupportedAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    private async Task WarnIfCleanupMayBeUnsupportedAsync(FileInfo appHostFile, bool deleteVolumes, CancellationToken cancellationToken)
     {
         if (!IsDotNetAppHost(appHostFile))
         {
@@ -397,7 +404,14 @@ internal sealed class StopCommand : BaseCommand
             return;
         }
 
-        if (appHostInfo.IsUsingCliBundle || SupportsPersistentResourceCleanup(appHostInfo.AspireHostingVersion))
+        var minimumMajorVersion = deleteVolumes
+            ? MinimumHostingMajorVersionForPersistentVolumeCleanup
+            : MinimumHostingMajorVersionForPersistentResourceCleanup;
+        var minimumMinorVersion = deleteVolumes
+            ? MinimumHostingMinorVersionForPersistentVolumeCleanup
+            : MinimumHostingMinorVersionForPersistentResourceCleanup;
+
+        if (appHostInfo.IsUsingCliBundle || SupportsCleanup(appHostInfo.AspireHostingVersion, minimumMajorVersion, minimumMinorVersion))
         {
             return;
         }
@@ -405,14 +419,20 @@ internal sealed class StopCommand : BaseCommand
         var appHostVersion = string.IsNullOrWhiteSpace(appHostInfo.AspireHostingVersion)
             ? StopCommandStrings.UnknownAspireHostingVersion
             : appHostInfo.AspireHostingVersion;
+        var unsupportedMessage = deleteVolumes
+            ? StopCommandStrings.DcpVolumeCleanupUnsupportedAppHostVersion
+            : StopCommandStrings.DcpCleanupUnsupportedAppHostVersion;
+        var minimumVersionDisplay = deleteVolumes
+            ? MinimumHostingVersionForPersistentVolumeCleanupDisplay
+            : MinimumHostingVersionForPersistentResourceCleanupDisplay;
         InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(
             CultureInfo.CurrentCulture,
-            StopCommandStrings.DcpCleanupUnsupportedAppHostVersion,
+            unsupportedMessage,
             appHostVersion,
-            MinimumHostingVersionForPersistentResourceCleanupDisplay));
+            minimumVersionDisplay));
     }
 
-    private static bool SupportsPersistentResourceCleanup(string? aspireHostingVersion)
+    private static bool SupportsCleanup(string? aspireHostingVersion, int minimumMajorVersion, int minimumMinorVersion)
     {
         if (string.IsNullOrWhiteSpace(aspireHostingVersion) ||
             !SemVersion.TryParse(aspireHostingVersion, SemVersionStyles.Any, out var version))
@@ -420,9 +440,9 @@ internal sealed class StopCommand : BaseCommand
             return false;
         }
 
-        return version.Major > MinimumHostingMajorVersionForPersistentResourceCleanup ||
-            (version.Major == MinimumHostingMajorVersionForPersistentResourceCleanup &&
-             version.Minor >= MinimumHostingMinorVersionForPersistentResourceCleanup);
+        return version.Major > minimumMajorVersion ||
+            (version.Major == minimumMajorVersion &&
+             version.Minor >= minimumMinorVersion);
     }
 
     private bool IsDotNetAppHost(FileInfo appHostFile)
@@ -513,7 +533,7 @@ internal sealed class StopCommand : BaseCommand
             // it here is the primary guard against a stale socket tripping up later commands: the AppHost's own
             // cleanup is skipped if it crashes hard, and the orphan-pruning backstop misfires on Windows when the
             // dead PID is reused (https://github.com/microsoft/aspire/issues/17587).
-            AppHostHelper.TryDeleteSocketFile(connection.SocketPath, _logger);
+            connection.Socket.TryDelete();
             InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostIdentifier));
             return CompleteStopActivity(activity, CliExitCodes.Success);
         }
@@ -574,13 +594,6 @@ internal sealed class StopCommand : BaseCommand
     }
 
     private StringComparer GetAppHostPathComparer()
-    {
-        return _environment.IsWindows()
-            ? StringComparer.OrdinalIgnoreCase
-            : StringComparer.Ordinal;
-    }
-
-    private StringComparer GetSocketPathComparer()
     {
         return _environment.IsWindows()
             ? StringComparer.OrdinalIgnoreCase

@@ -1,5 +1,45 @@
 # Aspire VS Code Extension Changelog
 
+## v1.23.0
+
+<!-- aspire-ext-changelog-done from=039a7c58f11a01521e49882e26d0d6593b87d9cf to=a7d8508b8e2f240580e17b6f97ffc663aeadc026 base=1.22.0 -->
+
+### Features
+
+- Add VS Code debugging support for Deno services running under Aspire with `deno run` or `deno serve` ([#18628](https://github.com/microsoft/aspire/pull/18628), [#20020](https://github.com/microsoft/aspire/pull/20020)).
+- Add VS Code debugging support for TypeScript AppHosts that use Deno ([#16218](https://github.com/microsoft/aspire/issues/16218), [#18627](https://github.com/microsoft/aspire/pull/18627)).
+- Add managed breakpoint support for Blazor WebAssembly projects launched with **Debug in Browser** in VS Code ([#17797](https://github.com/microsoft/aspire/issues/17797), [#17795](https://github.com/microsoft/aspire/issues/17795), [#20001](https://github.com/microsoft/aspire/pull/20001)).
+- Reuse Aspire's coordinated build output when debugging .NET resources in VS Code, avoiding redundant builds ([#19037](https://github.com/microsoft/aspire/issues/19037), [#19678](https://github.com/microsoft/aspire/pull/19678)).
+- Preselect default agent setup options in the VS Code picker when creating a new Aspire app or adding Aspire to an existing project ([#19629](https://github.com/microsoft/aspire/issues/19629), [#19996](https://github.com/microsoft/aspire/pull/19996)).
+
+### Fixes
+
+- Fix **Debug in Browser** getting stuck at `about:blank` on Windows when Microsoft Edge compatibility settings are enabled ([#20151](https://github.com/microsoft/aspire/issues/20151), [#20152](https://github.com/microsoft/aspire/pull/20152)).
+- Fix unpackaged WinUI 3 applications crashing when starting a debug session in VS Code ([#19091](https://github.com/microsoft/aspire/issues/19091), [#19877](https://github.com/microsoft/aspire/pull/19877)).
+- Fix delays when saving **Don't Show Again** for Aspire CLI update notifications in VS Code ([#19854](https://github.com/microsoft/aspire/pull/19854)).
+
+### Documentation
+
+- Update the **Enable Aspire Cli Debug Logging** setting description to explain where to find CLI log files ([#19739](https://github.com/microsoft/aspire/issues/19739), [#19868](https://github.com/microsoft/aspire/pull/19868)).
+
+## v1.22.0
+
+<!-- aspire-ext-changelog-done from=93b731db94a086cb90e6b126d6a2ebab555ee300 to=8e47a3dbf220a74a79fd734ea7b4b941c842595e base=1.21.0 -->
+
+### Fixes
+
+- Fix the Java starter using an ambient JDK instead of the modeled toolchain, and improve Java AppHost transport reliability ([#19635](https://github.com/microsoft/aspire/pull/19635)).
+- Fix Rust AppHost debugging so an early adapter-launched process no longer gets rejected and recycled by DCP, which could leave the resource with no logs or proxy ([#19750](https://github.com/microsoft/aspire/issues/19750), [#19831](https://github.com/microsoft/aspire/pull/19831)).
+- Consolidate AppHost build failure notifications into a single error notification with **Open CLI Log** and **Open AppHost Log** actions ([#19748](https://github.com/microsoft/aspire/issues/19748), [#19755](https://github.com/microsoft/aspire/pull/19755)).
+
+## v1.21.0
+
+<!-- aspire-ext-changelog-done from=689b3c3226482b5d84d80e6d8c7ea8408c704c1f to=1410c1a7fc2e0dce9539f234e2464ca3e20cd9bf base=1.20.0 -->
+
+### Fixes
+
+- Prevent the Aspire view from stealing sidebar focus and reappearing in the Activity Bar when the window is reloaded ([#19746](https://github.com/microsoft/aspire/issues/19746), [#19754](https://github.com/microsoft/aspire/pull/19754)).
+
 ## v1.20.0
 
 <!-- aspire-ext-changelog-done from=fe16c888de92ea0b3d1adc2d8bb4f37d58307ae2 to=5bd1eef49fbdf8b2cf72279bc4ba2127b430e7c1 base=1.19.0 -->

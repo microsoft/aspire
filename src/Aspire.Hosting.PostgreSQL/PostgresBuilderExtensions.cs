@@ -2,11 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREMCP001
+#pragma warning disable ASPIRETERMINAL001
 
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Postgres;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -124,6 +127,49 @@ public static class PostgresBuilderExtensions
     }
 
     /// <summary>
+    /// Adds a REPL command that opens an authenticated PostgreSQL shell in the dashboard terminal dock.
+    /// </summary>
+    /// <param name="builder">The PostgreSQL server resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// This command is opt-in and available only in run mode. Dashboard users who can execute resource commands
+    /// can run commands with the resource's configured credentials. Enable it only for trusted dashboard users,
+    /// especially when sharing the dashboard through a tunnel or remote development environment.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddPostgres("postgres").WithRepl();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<PostgresServerResource> WithRepl(this IResourceBuilder<PostgresServerResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
+    }
+
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(PostgresServerResource resource, CancellationToken cancellationToken)
+    {
+        var port = resource.PrimaryEndpoint.TargetPort ?? throw new DistributedApplicationException("The PostgreSQL REPL port is not available.");
+        var username = await resource.UserNameReference.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        var password = await resource.PasswordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+        {
+            throw new DistributedApplicationException("The PostgreSQL REPL credentials are not available.");
+        }
+
+        return new TerminalLaunchOptions
+        {
+            Title = $"psql ({resource.Name})",
+            Executable = "psql",
+            Arguments = ["--username", username, "--dbname", "postgres", "--no-password", "--port", port.ToString(CultureInfo.InvariantCulture)],
+            EnvironmentVariables = { ["PGPASSWORD"] = password }
+        };
+    }
+
+    /// <summary>
     /// Adds a PostgreSQL database to the application model.
     /// </summary>
     /// <param name="builder">The PostgreSQL server resource builder.</param>
@@ -210,7 +256,7 @@ public static class PostgresBuilderExtensions
                                                  .WithImage(PostgresContainerImageTags.PgAdminImage, PostgresContainerImageTags.PgAdminTag)
                                                  .WithImageRegistry(PostgresContainerImageTags.PgAdminRegistry)
                                                  .WithIconName("WindowDatabase")
-                                                 .WithHttpEndpoint(targetPort: 80, name: "http")
+                                                 .WithHttpEndpoint(targetPort: 80, name: PgAdminContainerResource.PrimaryEndpointName)
                                                  .WithEnvironment(SetPgAdminEnvironmentVariables)
                                                  .WithHttpHealthCheck("/browser")
                                                  .ExcludeFromManifest();
@@ -231,9 +277,11 @@ public static class PostgresBuilderExtensions
                     ];
                 });
 
+            AddManagementLinks(pgAdminContainerBuilder, pgAdminContainer.PrimaryEndpoint, "Manage (pgAdmin)");
+
             configureContainer?.Invoke(pgAdminContainerBuilder);
 
-            pgAdminContainerBuilder.WithRelationship(builder.Resource, "PgAdmin");
+            pgAdminContainerBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
 
             return builder;
         }
@@ -321,14 +369,16 @@ public static class PostgresBuilderExtensions
                                                .WithImage(PostgresContainerImageTags.PgWebImage, PostgresContainerImageTags.PgWebTag)
                                                .WithImageRegistry(PostgresContainerImageTags.PgWebRegistry)
                                                .WithIconName("WindowDatabase")
-                                               .WithHttpEndpoint(targetPort: 8081, name: "http")
+                                               .WithHttpEndpoint(targetPort: 8081, name: PgWebContainerResource.PrimaryEndpointName)
                                                .WithArgs("--bookmarks-dir=/.pgweb/bookmarks")
                                                .WithArgs("--sessions")
                                                .ExcludeFromManifest();
 
+            AddManagementLinks(pgwebContainerBuilder, pgwebContainer.PrimaryEndpoint, "Manage (pgweb)");
+
             configureContainer?.Invoke(pgwebContainerBuilder);
 
-            pgwebContainerBuilder.WithRelationship(builder.Resource, "PgWeb");
+            pgwebContainerBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
 
             pgwebContainerBuilder.WithHttpHealthCheck();
 
@@ -409,6 +459,34 @@ public static class PostgresBuilderExtensions
         mcpContainerBuilder.WithParentRelationship(builder.Resource);
 
         return builder;
+    }
+
+    /// <summary>
+    /// Hides <paramref name="resourceBuilder"/> and adds a "Manage" URL pointing at its <paramref name="endpoint"/>
+    /// endpoint to every <see cref="PostgresServerResource"/> in the app.
+    /// </summary>
+    private static void AddManagementLinks<T>(IResourceBuilder<T> resourceBuilder, EndpointReference endpoint, string displayText)
+        where T : IResourceWithEndpoints
+    {
+        resourceBuilder.WithHidden();
+
+        resourceBuilder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
+        {
+            foreach (var postgresResource in @event.Model.Resources.OfType<PostgresServerResource>())
+            {
+                resourceBuilder.WithRelationship(postgresResource, KnownRelationshipTypes.Manages);
+
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
+                resourceBuilder.ApplicationBuilder.CreateResourceBuilder(postgresResource).WithUrlForEndpoint(endpoint, url =>
+                {
+                    url.DisplayText = displayText;
+                    url.DisplayOrder = 1;
+                });
+#pragma warning restore CS0618
+            }
+
+            return Task.CompletedTask;
+        });
     }
 
     private static void SetPgAdminEnvironmentVariables(EnvironmentCallbackContext context)

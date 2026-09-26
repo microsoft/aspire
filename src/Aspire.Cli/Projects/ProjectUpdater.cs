@@ -12,6 +12,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -33,9 +34,11 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         var channel = context.Channel;
         logger.LogDebug("Fetching '{AppHostPath}' items and properties.", projectFile.FullName);
 
-        var (updateSteps, fallbackUsed) = await interactionService.ShowStatusAsync(UpdateCommandStrings.AnalyzingProjectStatus, () => GetUpdateStepsAsync(projectFile, channel, cancellationToken));
+        var (projectSteps, fallbackUsed) = await interactionService.ShowStatusAsync(UpdateCommandStrings.AnalyzingProjectStatus, () => GetUpdateStepsAsync(projectFile, channel, cancellationToken));
+        var projectUpdateSteps = projectSteps.ToArray();
+        var updateSteps = projectUpdateSteps.Concat(context.AdditionalUpdateSteps).ToArray();
 
-        if (!updateSteps.Any())
+        if (updateSteps.Length == 0)
         {
             logger.LogInformation("No updates required for project: {ProjectFile}", projectFile.FullName);
             interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, UpdateCommandStrings.ProjectUpToDateMessage);
@@ -67,12 +70,10 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             interactionService.DisplayEmptyLine();
         }
 
-        // Display the project config update so users see it in the pre-confirmation summary
-        // alongside package updates. At most one is ever enqueued because each `aspire update`
-        // invocation targets a single AppHost project.
-        if (updateSteps.OfType<ProjectConfigUpdateStep>().SingleOrDefault() is { } projectConfigUpdateStep)
+        // Show config and repository tool edits in the same confirmation as package edits.
+        foreach (var updateStep in updateSteps.Where(step => step is not PackageUpdateStep))
         {
-            interactionService.DisplayMessage(KnownEmojis.Package, projectConfigUpdateStep.GetFormattedDisplayText(), allowMarkup: true);
+            interactionService.DisplayMessage(KnownEmojis.Package, updateStep.GetFormattedDisplayText(), allowMarkup: true);
             interactionService.DisplayEmptyLine();
         }
 
@@ -88,7 +89,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             return new ProjectUpdateResult { UpdatedApplied = false };
         }
 
-        if (channel.Type == PackageChannelType.Explicit)
+        if (projectUpdateSteps.Length > 0 && channel.Type == PackageChannelType.Explicit)
         {
             var (configPathsExitCode, configPaths) = await runner.GetNuGetConfigPathsAsync(projectFile.Directory!, new(), cancellationToken);
 
@@ -168,6 +169,12 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
                 return 0;
             });
+
+        if (projectUpdateSteps.Length == 0)
+        {
+            // Manifest-only edits do not require an AppHost restore.
+            return new ProjectUpdateResult { UpdatedApplied = true };
+        }
 
         // Run a single restore *after* every package edit has been applied. Per-package
         // 'dotnet package add' calls use --no-restore (see UpdatePackageReferenceInProject)
@@ -339,7 +346,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             // Try normal MSBuild evaluation first
             return await GetItemsAndPropertiesAsync(projectFile, items, properties, cancellationToken);
         }
-        catch (ProjectUpdaterException ex) when (IsAppHostProject(projectFile, context))
+        catch (ProjectUpdaterException ex) when (IsAppHostProject(projectFile, context.AppHostProjectFile))
         {
             // Only use fallback for AppHost projects
             logger.LogWarning("Falling back to parsing for '{ProjectFile}'. Reason: {Message}", projectFile.FullName, ex.Message);
@@ -354,9 +361,12 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         }
     }
 
-    private static bool IsAppHostProject(FileInfo projectFile, UpdateContext context)
+    internal static bool IsAppHostProject(FileInfo projectFile, FileInfo appHostProjectFile)
     {
-        return string.Equals(projectFile.FullName, context.AppHostProjectFile.FullName, StringComparison.OrdinalIgnoreCase);
+        var projectPath = PathNormalizer.ResolveToFilesystemPath(projectFile.FullName);
+        var appHostProjectPath = PathNormalizer.ResolveToFilesystemPath(appHostProjectFile.FullName);
+
+        return string.Equals(projectPath, appHostProjectPath, StringComparisons.FileSystemPath);
     }
 
     private Task AnalyzeAppHostAsync(UpdateContext context, CancellationToken cancellationToken)
@@ -937,7 +947,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         }
 
         // Use fallback wrapper for AppHost project, normal method for others
-        var itemsAndPropertiesDocument = IsAppHostProject(projectFile, context)
+        var itemsAndPropertiesDocument = IsAppHostProject(projectFile, context.AppHostProjectFile)
             ? await GetItemsAndPropertiesWithFallbackAsync(projectFile, context, cancellationToken)
             : await GetItemsAndPropertiesAsync(projectFile, cancellationToken);
 

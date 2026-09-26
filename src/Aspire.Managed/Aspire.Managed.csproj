@@ -19,42 +19,21 @@
     <!-- Don't generate web.config or include IIS hosting -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
 
-    <!-- CreateLayout copies only the managed executable, so native dependencies must be embedded in the single file. -->
+    <!-- Native libraries are embedded except for Hex1b's Windows PTY sidecars, which CreateLayout copies together. -->
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 
-    <!-- Locate the SDK's trustedroots directory for NuGet signature verification certificates -->
-    <_SdkTrustedRootsDir>$([System.IO.Path]::Combine($([System.IO.Path]::GetDirectoryName($(BundledRuntimeIdentifierGraphFile))), 'trustedroots'))</_SdkTrustedRootsDir>
   </PropertyGroup>
 
-  <!-- Embed NuGet trusted root certificates from the .NET SDK for signature verification on Linux -->
   <ItemGroup>
-    <EmbeddedResource Include="$(_SdkTrustedRootsDir)\*.pem" />
-    <EmbeddedResource Update="$(_SdkTrustedRootsDir)\*.pem" LogicalName="%(Filename)%(Extension)" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Aspire.Dashboard\Aspire.Dashboard.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.RemoteHost\Aspire.Hosting.RemoteHost.csproj" />
     <ProjectReference Include="..\Aspire.TerminalHost\Aspire.TerminalHost.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Provided by the .NET SDK and points to the SDK's RuntimeIdentifierGraph.json file. -->
-    <EmbeddedResource Include="$(BundledRuntimeIdentifierGraphFile)" LogicalName="Aspire.Managed.RuntimeIdentifierGraph.json" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="NuGet.Commands" />
-    <PackageReference Include="NuGet.Protocol" />
-    <PackageReference Include="NuGet.Resolver" />
-    <PackageReference Include="System.CommandLine" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Shared\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Shared\BundleVersionLease.cs" />
-    <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="NuGet\IntegrationPackageProbeManifest.cs" />
+    <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Shared\HeldFileLease.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Shared\KnownConfigNames.cs" />
     <Compile Include="$(SharedDir)ParentProcessWatchdog.cs" Link="Shared\ParentProcessWatchdog.cs" />
     <Compile Include="$(SharedDir)ProcessStartTimeHelper.cs" Link="Shared\ProcessStartTimeHelper.cs" />
@@ -80,7 +59,7 @@
 
   <Target Name="ValidateSingleFilePublishConfiguration" BeforeTargets="PrepareForPublish">
     <Error Condition="'$(PublishSingleFile)' == 'true' and '$(IncludeNativeLibrariesForSelfExtract)' != 'true'"
-           Text="Aspire.Managed single-file publishing must embed native libraries because CreateLayout copies only the managed executable." />
+           Text="Aspire.Managed single-file publishing must embed native libraries other than the explicitly copied Windows PTY sidecars." />
   </Target>
 
 </Project>

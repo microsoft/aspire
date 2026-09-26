@@ -163,52 +163,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             {
                 var runtimeResolver = context.Services.GetRequiredService<IContainerRuntimeResolver>();
                 var containerRuntime = await runtimeResolver.ResolveAsync(context.CancellationToken).ConfigureAwait(false);
-
-                if (await containerRuntime.CheckIfRunningAsync(context.CancellationToken).ConfigureAwait(false))
-                {
-                    return;
-                }
-
-                // In interactive mode, prompt the user to start the runtime and retry
-                var interactionService = context.Services.GetService<IInteractionService>();
-                if (interactionService?.IsAvailable == true)
-                {
-                    var result = await interactionService.PromptNotificationAsync(
-                        $"{containerRuntime.Name} is not running",
-                        $"Start {containerRuntime.Name} and confirm to continue.",
-                        new NotificationInteractionOptions
-                        {
-                            Intent = MessageIntent.Warning
-                        },
-                        cancellationToken: context.CancellationToken).ConfigureAwait(false);
-
-                    if (!result.Canceled && result.Data)
-                    {
-                        // Poll for the runtime to become available — Docker can take
-                        // a while to start, especially on slower machines.
-                        // Give it up to 5 minutes before giving up.
-                        var timeProvider = context.Services.GetRequiredService<TimeProvider>();
-                        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
-                        waitCts.CancelAfter(TimeSpan.FromMinutes(5));
-
-                        try
-                        {
-                            while (!await containerRuntime.CheckIfRunningAsync(waitCts.Token).ConfigureAwait(false))
-                            {
-                                await Task.Delay(TimeSpan.FromSeconds(2), timeProvider, waitCts.Token).ConfigureAwait(false);
-                            }
-
-                            return;
-                        }
-                        catch (OperationCanceledException) when (!context.CancellationToken.IsCancellationRequested)
-                        {
-                            // Timed out waiting for the runtime to start — fall through to the error below
-                        }
-                    }
-                }
-
-                throw new DistributedApplicationException(
-                    $"{containerRuntime.Name} is not running. Start {containerRuntime.Name} and try again.");
+                var readiness = context.Services.GetRequiredService<ContainerRuntimeReadiness>();
+                await readiness.EnsureRunningAsync(containerRuntime, context.CancellationToken).ConfigureAwait(false);
             }
         });
 
@@ -545,8 +501,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     /// <summary>
     /// Creates a clone of this pipeline whose built-in steps are independent
     /// copies (with fresh <see cref="PipelineStep.DependsOnSteps"/> /
-    /// <see cref="PipelineStep.RequiredBySteps"/> lists). Configuration callbacks
-    /// are shallow-copied — the same delegates are reused.
+    /// <see cref="PipelineStep.RequiredBySteps"/> and final action lists).
+    /// Configuration callbacks are shallow-copied — the same delegates are reused.
     /// </summary>
     /// <remarks>
     /// Used by <c>DistributedApplication</c> to run the BeforeStart phase against
@@ -623,7 +579,9 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     internal async Task<List<PipelineStep>> ResolveStepsAsync(PipelineContext context)
     {
         var annotationSteps = await CollectStepsFromAnnotationsAsync(context).ConfigureAwait(false);
-        var allSteps = _steps.Concat(annotationSteps).ToList();
+        // Configuration callbacks are run on every resolution, so give them fresh built-in steps instead
+        // of retaining dependency and final-action mutations from an earlier list or execute request.
+        var allSteps = _steps.Select(step => step.Clone()).Concat(annotationSteps).ToList();
 
         // Execute configuration callbacks even if there are no steps
         // This allows callbacks to run validation or other logic
@@ -1132,6 +1090,10 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         try
         {
             await step.Action(stepContext).ConfigureAwait(false);
+            foreach (var finalAction in step.FinalActions)
+            {
+                await finalAction(stepContext).ConfigureAwait(false);
+            }
         }
         catch (DistributedApplicationException)
         {

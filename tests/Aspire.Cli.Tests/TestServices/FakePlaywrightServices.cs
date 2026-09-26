@@ -16,10 +16,12 @@ namespace Aspire.Cli.Tests.TestServices;
 /// </summary>
 internal sealed class FakeNpmRunner : INpmRunner
 {
-    public bool IsAvailable => true;
+    public bool IsAvailable { get; set; } = true;
+
+    public Func<string, string, CancellationToken, Task<NpmPackageInfo?>>? ResolvePackageAsyncCallback { get; set; }
 
     public Task<NpmPackageInfo?> ResolvePackageAsync(string packageName, string versionRange, CancellationToken cancellationToken)
-        => Task.FromResult<NpmPackageInfo?>(null);
+        => ResolvePackageAsyncCallback?.Invoke(packageName, versionRange, cancellationToken) ?? Task.FromResult<NpmPackageInfo?>(null);
 
     public Task<string?> PackAsync(string packageName, string version, string outputDirectory, CancellationToken cancellationToken)
         => Task.FromResult<string?>(null);
@@ -49,6 +51,7 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
     internal const string AspireInitSkillName = "aspire-init";
     internal const string AspireMonitoringSkillName = "aspire-monitoring";
     internal const string AspireOrchestrationSkillName = "aspire-orchestration";
+    internal const string AspireProjectV2MigrationSkillName = "aspire-project-v2-migration";
 
     private readonly DirectoryInfo _bundleDirectory;
     private readonly AspireSkillsInstallResult? _result;
@@ -141,7 +144,19 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
                 ---
 
                 # Aspire Orchestration
+                """,
+            [(AspireProjectV2MigrationSkillName, "SKILL.md")] =
                 """
+                ---
+                name: aspire-project-v2-migration
+                description: "Migrate approved project resources in Aspire 13.6 or newer AppHosts"
+                ---
+
+                # Project v2 migration
+                """,
+            [(AspireProjectV2MigrationSkillName, Path.Combine("references", "migration-patterns.md"))] = "# Migration patterns",
+            [(AspireProjectV2MigrationSkillName, Path.Combine("references", "compatibility-and-validation.md"))] = "# Compatibility and validation",
+            [(AspireProjectV2MigrationSkillName, Path.Combine("evals", "eval.yaml"))] = "stimuli: []"
         };
 
         foreach (var ((skillName, relativePath), content) in files)
@@ -166,7 +181,8 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
                 CreateSkill(CommonAgentApplicators.AspireDeploymentSkillName, ["evals"], files),
                 CreateSkill(AspireInitSkillName, ["evals"], files),
                 CreateSkill(AspireMonitoringSkillName, ["evals"], files),
-                CreateSkill(AspireOrchestrationSkillName, ["evals"], files)
+                CreateSkill(AspireOrchestrationSkillName, ["evals"], files),
+                CreateSkill(AspireProjectV2MigrationSkillName, ["evals"], files)
             ]
         };
 

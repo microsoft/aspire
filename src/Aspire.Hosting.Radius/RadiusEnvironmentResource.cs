@@ -9,6 +9,7 @@ using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Radius.Publishing;
+using Aspire.Hosting.Radius.ResourceMapping;
 
 namespace Aspire.Hosting.Radius;
 
@@ -72,6 +73,21 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
             // after publish and RequiredBy deploy; a no-op when no sealed store is declared.
             var applySealedSecretsStep = new SealedSecretApplyStep(this).CreatePipelineStep();
 
+            // Control-plane version gate. It lives in its own step, rather than inside the deploy
+            // step, so it runs before anything else touches the cluster or the machine: registering
+            // cloud credentials rewrites installation-global `rad` state and applying sealed secrets
+            // mutates the cluster, and neither should happen on a control plane too old to deploy to
+            // (ASPIRERADIUS091). Contacting the cluster is deploy-only work, so nothing here is
+            // RequiredBy the publish step.
+            var verifyControlPlaneStep = new PipelineStep
+            {
+                Name = $"verify-radius-control-plane-{Name}",
+                Description = $"Verifies the Radius control plane version for {Name}.",
+                Action = stepContext => RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(stepContext.Logger, stepContext.CancellationToken),
+                DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq],
+                RequiredBySteps = [applySealedSecretsStep.Name, deployStep.Name],
+            };
+
             // Only schedule the credential-register step when the environment
             // has cloud-provider configuration attached. Apps without the new
             // WithAzure/WithAws extensions emit byte-identical pipelines.
@@ -81,10 +97,11 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
             if (hasCloudProviders)
             {
                 var registerStep = new RadCredentialRegisterStep(this).CreatePipelineStep();
-                return [validateSecretStoresStep, prepareStep, publishStep, registerStep, applySealedSecretsStep, deployStep];
+                verifyControlPlaneStep.RequiredBy(registerStep.Name);
+                return [validateSecretStoresStep, prepareStep, publishStep, verifyControlPlaneStep, registerStep, applySealedSecretsStep, deployStep];
             }
 
-            return [validateSecretStoresStep, prepareStep, publishStep, applySealedSecretsStep, deployStep];
+            return [validateSecretStoresStep, prepareStep, publishStep, verifyControlPlaneStep, applySealedSecretsStep, deployStep];
         }));
     }
 
@@ -113,6 +130,15 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
         var resource = endpointReference.Resource;
+
+        // A backing resource (cache/database/queue) is provisioned by a Radius recipe, not emitted
+        // as a Radius.Compute/containers workload, so the container Service naming rule below does
+        // not describe it and no Aspire endpoint can address it. The publisher projects those
+        // values from the recipe's own outputs instead (RadiusBackingConnections); reaching here
+        // means some other caller is about to emit an address that resolves to nothing.
+        // See https://github.com/microsoft/aspire/issues/18935.
+        ThrowIfBackingResource(resource);
+
         // Kubernetes service DNS for a resource deployed to a namespace is
         // `<service>.<namespace>.svc.cluster.local`. The namespace segment is required: without
         // it the name only resolves for callers already inside the same namespace, so cross-
@@ -150,34 +176,133 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
         var endpoint = endpointReference.EndpointAnnotation;
         var scheme = endpoint.UriScheme;
 
+        // Guard the two address-bearing properties that never evaluate the lazy host below: Port
+        // and TargetPort. The other four (Url, Host, IPV4Host, HostAndPort) reach
+        // GetHostAddressExpression through `host`, which guards them there. Scheme and TlsEnabled
+        // carry no address, so the *address* guard does not apply to them — but transport security
+        // is guarded separately below, because a TLS-enabled endpoint makes them describe how the
+        // resource runs locally rather than how its recipe deploys it.
+        //
         // Unlike the default IComputeEnvironmentResource implementation (which uses the proxy/host
         // port), a Radius peer is reachable on the recipe Service's port, which equals the container
         // port (port == targetPort == containerPort). Resolve the service port from the same helper
         // the Bicep container-port emission uses so the emitted URL and the generated Service agree.
-        var resolvedServicePort = RadiusServiceDiscovery.ResolveServicePort(endpointReference.Resource, endpoint.Name);
-        var port = resolvedServicePort ?? GetDefaultPort(scheme, endpoint);
+        //
+        // Lazy because ResolveServicePort delegates to ResourceExtensions.ResolveEndpoints, which
+        // *allocates* a port for an otherwise-portless endpoint as a side effect. A Scheme or
+        // TlsEnabled query needs no port and must not burn an allocation.
+        ThrowIfTransportSecurityIsNotRecipeBacked(endpointReference, property);
+
+        var resolvedServicePort = new Lazy<int?>(() => RadiusServiceDiscovery.ResolveServicePort(endpointReference.Resource, endpoint.Name));
+        var port = new Lazy<int>(() => resolvedServicePort.Value ?? GetDefaultPort(scheme, endpoint));
         var host = new Lazy<ReferenceExpression>(() => GetHostAddressExpression(endpointReference));
 
         return property switch
         {
-            EndpointProperty.Url => IsDefaultPort(scheme, port)
+            EndpointProperty.Url => IsDefaultPort(scheme, port.Value)
                 ? ReferenceExpression.Create($"{scheme}://{host.Value}")
-                : ReferenceExpression.Create($"{scheme}://{host.Value}:{RadiusServiceDiscovery.ToInvariantString(port)}"),
+                : ReferenceExpression.Create($"{scheme}://{host.Value}:{RadiusServiceDiscovery.ToInvariantString(port.Value)}"),
             EndpointProperty.Host or EndpointProperty.IPV4Host => host.Value,
-            EndpointProperty.Port => ReferenceExpression.Create($"{RadiusServiceDiscovery.ToInvariantString(port)}"),
+            EndpointProperty.Port => GuardedAddress(endpointReference, () => ReferenceExpression.Create($"{RadiusServiceDiscovery.ToInvariantString(port.Value)}")),
             // The Radius recipe Service targets the container port, which equals the Service port
             // (port == targetPort == containerPort). Use the same resolved value as Port/Url so the
             // TargetPort property can't disagree with the container port ResolvePorts emits. Fall back
             // to the container's port reference only when no Service port is resolved (e.g. an
             // unallocated HTTPS endpoint that is dropped from service discovery anyway).
-            EndpointProperty.TargetPort => resolvedServicePort is int targetPort
+            EndpointProperty.TargetPort => GuardedAddress(endpointReference, () => resolvedServicePort.Value is int targetPort
                 ? ReferenceExpression.Create($"{RadiusServiceDiscovery.ToInvariantString(targetPort)}")
-                : ReferenceExpression.Create($"{new ContainerPortReference(endpointReference.Resource)}"),
+                : ReferenceExpression.Create($"{new ContainerPortReference(endpointReference.Resource)}")),
             EndpointProperty.Scheme => ReferenceExpression.Create($"{scheme}"),
-            EndpointProperty.HostAndPort => ReferenceExpression.Create($"{host.Value}:{RadiusServiceDiscovery.ToInvariantString(port)}"),
+            EndpointProperty.HostAndPort => ReferenceExpression.Create($"{host.Value}:{RadiusServiceDiscovery.ToInvariantString(port.Value)}"),
             EndpointProperty.TlsEnabled => ReferenceExpression.Create($"{(endpoint.TlsEnabled ? bool.TrueString : bool.FalseString)}"),
             _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{endpoint.Name}'.")
         };
+    }
+
+    // Applies the backing-resource guard to a port property that does not go through the lazy host.
+    private static ReferenceExpression GuardedAddress(EndpointReference endpointReference, Func<ReferenceExpression> build)
+    {
+        ThrowIfBackingResource(endpointReference.Resource);
+        return build();
+    }
+
+    // Rejects transport-security metadata for a TLS-enabled backing resource, mirroring the guard
+    // the Radius publisher applies when it projects the same endpoint (ASPIRERADIUS081).
+    //
+    // No mapped Radius type publishes a transport-security output, so the recipe decides the
+    // deployed transport on its own and Scheme/TlsEnabled/Url read off the local EndpointAnnotation
+    // would describe how the resource runs locally instead. That reasoning is publisher-independent:
+    // a Kubernetes, Azure Container Apps, or App Service consumer routed here through
+    // ComputeEnvironmentEndpointResolver would otherwise be told `rediss`/`True` for a broker the
+    // recipe deploys without TLS, so it is rejected here too rather than only on the Radius path.
+    private static void ThrowIfTransportSecurityIsNotRecipeBacked(EndpointReference endpointReference, EndpointProperty property)
+    {
+        if (!endpointReference.EndpointAnnotation.TlsEnabled ||
+            property is not (EndpointProperty.Scheme or EndpointProperty.TlsEnabled or EndpointProperty.Url))
+        {
+            return;
+        }
+
+        // Child resources (a database on a server, say) are represented by their parent in the
+        // Radius model, so classify against the resource Radius actually emits.
+        var resource = endpointReference.Resource is IResourceWithParent child ? child.Parent : endpointReference.Resource;
+
+        if (ResourceTypeMapper.TryGetEmittedBackingType(resource) is not { } radiusType)
+        {
+            return;
+        }
+
+        throw new RadiusBackingResourceProjectionException(
+            resource,
+            $"Endpoint '{endpointReference.EndpointName}' of resource '{resource.Name}' is TLS-enabled, but the Radius " +
+            $"type '{radiusType}' that provisions it publishes no transport-security output, so '{property}' would " +
+            $"describe how '{resource.Name}' runs locally rather than how the recipe deploys it. Remove the TLS " +
+            $"configuration for publishing, or provision the resource yourself if the deployed workload must use TLS. " +
+            $"Diagnostic: ASPIRERADIUS081.");
+    }
+
+    // A backing resource maps to a Radius recipe type (Applications.Datastores/*, Radius.Data/*,
+    // ...) rather than Radius.Compute/containers. Its Kubernetes objects and credentials are owned
+    // by the recipe, so every *address* for it is wrong. Fail loudly instead of emitting an address
+    // that silently resolves to nothing.
+    //
+    // This guard intentionally applies to every caller that asks for an address, including
+    // ComputeEnvironmentEndpointResolver, which routes here when a Kubernetes/ACA/App Service
+    // consumer references a resource owned by this Radius environment. Suppressing it there would
+    // not avoid a false positive — the resolver only delegates for resources this environment owns,
+    // so the address really is underivable — it would merely replace an accurate failure with a
+    // container-shaped FQDN that resolves to nothing, which is the defect
+    // https://github.com/microsoft/aspire/issues/18935 describes.
+    //
+    // It deliberately does *not* cover endpoint metadata that carries no address: Scheme comes from
+    // EndpointAnnotation.UriScheme and TlsEnabled from EndpointAnnotation.TlsEnabled, neither of
+    // which describes where the resource lives. They are instead guarded by
+    // ThrowIfTransportSecurityIsNotRecipeBacked, which rejects them only when the endpoint is
+    // TLS-enabled — the one case in which the local endpoint declaration can disagree with what the
+    // recipe actually deploys.
+    private static void ThrowIfBackingResource(IResource resource)
+    {
+        // Child resources (a database on a server, say) are represented by their parent in the
+        // Radius model, so classify against the resource Radius actually emits.
+        if (resource is IResourceWithParent child)
+        {
+            resource = child.Parent;
+        }
+
+        if (!ResourceTypeMapper.IsBackingResource(resource))
+        {
+            return;
+        }
+
+        throw new RadiusBackingResourceProjectionException(
+            resource,
+            $"Endpoints of '{resource.Name}' cannot be resolved because it is provisioned by a Radius recipe rather " +
+            $"than deployed as a container. The recipe owns its Kubernetes Service and its credentials, so no address " +
+            $"derived from the Aspire endpoint model describes it. Within a Radius deployment the publisher projects " +
+            $"the recipe's own host/port outputs instead. If you are publishing to Kubernetes, Azure Container Apps, " +
+            $"or Azure App Service, a consumer there cannot reach '{resource.Name}' through the Radius environment: " +
+            $"deploy '{resource.Name}' to the same compute environment as its consumer, or supply the address " +
+            $"explicitly with WithEnvironment. Diagnostic: ASPIRERADIUS069.");
     }
 
     // Mirrors the private helpers on IComputeEnvironmentResource so this override reproduces the

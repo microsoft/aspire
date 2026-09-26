@@ -58,7 +58,7 @@ export const coreTeamEmuLogins = [
 // still being visible to the owning team.
 export const nonBlockingCheckFailureRules = [
   {
-    repository: "devdiv-microsoft/aspire-1p",
+    repository: "coreai/aspire-1p",
     label: "proof of presence",
     checkNames: ["GitOps/GitHubPop"],
     checkNameContains: ["proof of presence"],

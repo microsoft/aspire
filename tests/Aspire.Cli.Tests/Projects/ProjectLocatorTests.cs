@@ -15,6 +15,7 @@ using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -53,6 +54,12 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         return appHostFile;
     }
 
+    private static void AssertSameFileSystemPath(string expected, string? actual)
+    {
+        Assert.NotNull(actual);
+        Assert.Equal(PathNormalizer.ResolveToFilesystemPath(expected), PathNormalizer.ResolveToFilesystemPath(actual));
+    }
+
     [Theory]
     [InlineData("explicit-launch-configuration")]
     [InlineData("explicit-cli")]
@@ -82,7 +89,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(secondAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(secondAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.Equal(originalConfig, await File.ReadAllTextAsync(configPath));
     }
 
@@ -111,7 +118,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(secondAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(secondAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.Equal(originalConfig, await File.ReadAllTextAsync(configPath));
     }
 
@@ -142,7 +149,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(secondAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(secondAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.Equal(originalConfig, await File.ReadAllTextAsync(configPath));
     }
 
@@ -174,7 +181,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(secondAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(secondAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.Equal("SecondAppHost/SecondAppHost.csproj", ReadConfiguredAppHostPath(configPath));
     }
 
@@ -209,7 +216,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(firstAlternative.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(firstAlternative.FullName, result.SelectedProjectFile?.FullName);
         Assert.True(result.WasExplicitDirectorySelectionPrompted);
         Assert.Equal("Alternatives/FirstAlternative.csproj", ReadConfiguredAppHostPath(configPath));
     }
@@ -239,7 +246,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(alternativeAppHost.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(alternativeAppHost.FullName, result.SelectedProjectFile?.FullName);
         Assert.Equal(originalConfig, await File.ReadAllTextAsync(configPath));
     }
 
@@ -263,7 +270,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(appHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(appHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.Equal("AppHost/AppHost.csproj", ReadConfiguredAppHostPath(configPath));
     }
 
@@ -285,7 +292,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(appHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(appHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.Equal("AppHost/AppHost.csproj", ReadConfiguredAppHostPath(configPath));
     }
 
@@ -330,8 +337,8 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         var results = await Task.WhenAll(callers).DefaultTimeout();
 
         Assert.Equal(
-            appHostProjectFiles.Select(appHostProjectFile => appHostProjectFile.FullName),
-            results.Select(result => result.SelectedProjectFile?.FullName));
+            appHostProjectFiles.Select(appHostProjectFile => PathNormalizer.ResolveToFilesystemPath(appHostProjectFile.FullName)),
+            results.Select(result => PathNormalizer.ResolveToFilesystemPath(result.SelectedProjectFile!.FullName)));
 
         var recordedDefault = ReadConfiguredAppHostPath(configPath);
         Assert.Contains(
@@ -350,14 +357,34 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void PersistedAppHostPathComparisonIsCaseInsensitiveOnlyOnWindows()
+    public void PersistedAppHostPathComparisonMatchesDifferentCasingOnCaseInsensitiveVolume()
     {
-        const string configuredPath = "/workspace/Foo/AppHost.csproj";
-        const string selectedPath = "/workspace/foo/AppHost.csproj";
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configuredPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        File.WriteAllText(configuredPath, "<Project />");
+        var differentlyCasedPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.csproj");
 
-        Assert.True(ProjectLocator.IsSamePersistedAppHostPath(configuredPath, selectedPath, TestEnvironment.CreateWindows()));
-        Assert.False(ProjectLocator.IsSamePersistedAppHostPath(configuredPath, selectedPath, TestEnvironment.CreateLinux()));
-        Assert.False(ProjectLocator.IsSamePersistedAppHostPath(configuredPath, selectedPath, TestEnvironment.CreateMacOS()));
+        // Writing one file and finding the other spelling on disk is what makes the volume
+        // case-insensitive; there is no API that reports it per-directory. Split into two tests with
+        // explicit skips so the run report shows which semantics were actually exercised rather than
+        // silently taking whichever branch the host filesystem dictates.
+        Assert.SkipUnless(File.Exists(differentlyCasedPath), "This test requires a case-insensitive filesystem.");
+
+        Assert.True(ProjectLocator.IsSamePersistedAppHostPath(configuredPath, differentlyCasedPath));
+    }
+
+    [Fact]
+    public void PersistedAppHostPathComparisonDistinguishesCasingOnCaseSensitiveVolume()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configuredPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj");
+        File.WriteAllText(configuredPath, "<Project />");
+        var differentlyCasedPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.csproj");
+
+        Assert.SkipWhen(File.Exists(differentlyCasedPath), "This test requires a case-sensitive filesystem.");
+
+        File.WriteAllText(differentlyCasedPath, "<Project />");
+        Assert.False(ProjectLocator.IsSamePersistedAppHostPath(configuredPath, differentlyCasedPath));
     }
 
     [Theory]
@@ -389,7 +416,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(secondAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(secondAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.Equal("SecondAppHost/SecondAppHost.csproj", ReadConfiguredAppHostPath(configPath));
     }
 
@@ -425,7 +452,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(secondAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(secondAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.Equal(originalConfig, await File.ReadAllTextAsync(configPath));
     }
 
@@ -454,7 +481,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(secondAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(secondAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.Equal("SecondAppHost/SecondAppHost.csproj", ReadConfiguredAppHostPath(configPath));
     }
 
@@ -521,8 +548,8 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(projectFile.FullName, result.SelectedProjectFile?.FullName);
-        Assert.Equal(projectFile.FullName, Assert.Single(result.AllProjectFileCandidates).FullName);
+        AssertSameFileSystemPath(projectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(projectFile.FullName, Assert.Single(result.AllProjectFileCandidates).FullName);
 
         // Never persist a candidate that was never confirmed to be an AppHost: a later ambient
         // invocation would silently reuse the unverified guess.
@@ -572,7 +599,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(brokenAppHost.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(brokenAppHost.FullName, result.SelectedProjectFile?.FullName);
 
         // Never persist a selection that was never confirmed to be an AppHost. Migrating the legacy
         // settings file here would promote an unverified guess into the modern config format.
@@ -613,7 +640,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: false,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(outsideAppHost.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(outsideAppHost.FullName, result.SelectedProjectFile?.FullName);
     }
 
     [Fact]
@@ -741,7 +768,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         // without prompting.
         var foundAppHost = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true).DefaultTimeout();
 
-        Assert.Equal(targetAppHostProjectFile.FullName, foundAppHost?.FullName);
+        AssertSameFileSystemPath(targetAppHostProjectFile.FullName, foundAppHost?.FullName);
     }
 
     [Fact]
@@ -769,7 +796,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         // With a single apphost, the settings file should be used
         var foundAppHost = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true).DefaultTimeout();
 
-        Assert.Equal(targetAppHostProjectFile.FullName, foundAppHost?.FullName);
+        AssertSameFileSystemPath(targetAppHostProjectFile.FullName, foundAppHost?.FullName);
     }
 
     [Fact]
@@ -799,7 +826,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         var foundAppHost = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true).DefaultTimeout();
 
-        Assert.Equal(targetAppHostProjectFile.FullName, foundAppHost?.FullName);
+        AssertSameFileSystemPath(targetAppHostProjectFile.FullName, foundAppHost?.FullName);
     }
 
     [Fact]
@@ -840,7 +867,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         // This should fallback to scanning and find the real apphost project
         var foundAppHost = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true).DefaultTimeout();
 
-        Assert.Equal(realAppHostProjectFile.FullName, foundAppHost?.FullName);
+        AssertSameFileSystemPath(realAppHostProjectFile.FullName, foundAppHost?.FullName);
     }
 
     [Fact]
@@ -883,7 +910,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         var foundAppHost = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: false).DefaultTimeout();
 
-        Assert.Equal(realAppHostProjectFile.FullName, foundAppHost?.FullName);
+        AssertSameFileSystemPath(realAppHostProjectFile.FullName, foundAppHost?.FullName);
     }
 
     // Regression test for https://github.com/microsoft/aspire/issues/12660. Single-file AppHost
@@ -913,7 +940,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         var foundAppHost = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: false).DefaultTimeout();
 
-        Assert.Equal(appHostFile.FullName, foundAppHost?.FullName);
+        AssertSameFileSystemPath(appHostFile.FullName, foundAppHost?.FullName);
     }
 
     // Companion to the legacy-settings regression test above, covering the modern
@@ -936,7 +963,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         var foundAppHost = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: false).DefaultTimeout();
 
-        Assert.Equal(appHostFile.FullName, foundAppHost?.FullName);
+        AssertSameFileSystemPath(appHostFile.FullName, foundAppHost?.FullName);
     }
 
     // When the stale configured path is the only lead and nothing else is discoverable, the CLI
@@ -987,7 +1014,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: false,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(targetAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(targetAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
         var candidate = Assert.Single(result.AllProjectFileCandidates);
         Assert.Equal(targetAppHostProjectFile.FullName, candidate.FullName);
     }
@@ -1025,7 +1052,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: false,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(targetAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(targetAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
         var candidate = Assert.Single(result.AllProjectFileCandidates);
         Assert.Equal(targetAppHostProjectFile.FullName, candidate.FullName);
     }
@@ -1061,7 +1088,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: false,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(guestAppHostFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(guestAppHostFile.FullName, result.SelectedProjectFile?.FullName);
         var candidate = Assert.Single(result.AllProjectFileCandidates);
         Assert.Equal(guestAppHostFile.FullName, candidate.FullName);
     }
@@ -1112,7 +1139,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: false,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(realAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(realAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
     }
 
     [Fact]
@@ -1165,7 +1192,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: false,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(configuredAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(configuredAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.Equal(
             [realAppHostProjectFile.FullName, configuredAppHostProjectFile.FullName],
             result.AllProjectFileCandidates.Select(f => f.FullName));
@@ -1202,7 +1229,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: false,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(targetAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(targetAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.Equal(2, result.AllProjectFileCandidates.Count);
         Assert.Contains(result.AllProjectFileCandidates, file => file.FullName == targetAppHostProjectFile.FullName);
         Assert.Contains(result.AllProjectFileCandidates, file => file.FullName == otherAppHostProjectFile.FullName);
@@ -1243,7 +1270,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: false,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(settingsAppHostFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(settingsAppHostFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.Contains(result.AllProjectFileCandidates, file => file.FullName == settingsAppHostFile.FullName);
         Assert.Contains(Path.Join("..", "SettingsAppHost.csproj"), displayedSubtleMessages);
     }
@@ -1311,7 +1338,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         var foundAppHost = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true).DefaultTimeout();
 
         // Should successfully find the file even though the path in settings uses forward slashes
-        Assert.Equal(targetAppHostProjectFile.FullName, foundAppHost?.FullName);
+        AssertSameFileSystemPath(targetAppHostProjectFile.FullName, foundAppHost?.FullName);
     }
 
     [Fact]
@@ -1329,7 +1356,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         var selectedProjectFile = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true).DefaultTimeout();
 
-        Assert.Equal(projectFile1.FullName, selectedProjectFile!.FullName);
+        AssertSameFileSystemPath(projectFile1.FullName, selectedProjectFile!.FullName);
     }
 
     [Fact]
@@ -1357,7 +1384,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
         var foundAppHost = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true).DefaultTimeout();
-        Assert.Equal(appHostProject.FullName, foundAppHost?.FullName);
+        AssertSameFileSystemPath(appHostProject.FullName, foundAppHost?.FullName);
     }
 
     [Fact]
@@ -1390,7 +1417,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         var returnedProjectFile = await projectLocator.UseOrFindAppHostProjectFileAsync(projectFile, createSettingsFile: true).DefaultTimeout();
 
-        Assert.Equal(projectFile, returnedProjectFile);
+        AssertSameFileSystemPath(projectFile.FullName, returnedProjectFile!.FullName);
     }
 
     [Fact]
@@ -1426,6 +1453,41 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UseOrFindAppHostProjectFilePreservesExplicitSymlinkedPathForExecution()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Unix-only: unprivileged symlink creation is not reliable on Windows.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("RealAppHost");
+        var onDiskProjectFile = new FileInfo(Path.Combine(realDirectory.FullName, "RealAppHost.csproj"));
+        await File.WriteAllTextAsync(onDiskProjectFile.FullName, "Not a real project file.");
+
+        var linkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "LinkedAppHost");
+        TestSymlinkHelper.TryCreateSymlink(linkDirectory, realDirectory.FullName);
+
+        var linkedProjectFile = new FileInfo(Path.Combine(linkDirectory, onDiskProjectFile.Name));
+        Assert.True(linkedProjectFile.Exists);
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext);
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            linkedProjectFile,
+            MultipleAppHostProjectsFoundBehavior.Throw,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.NotNull(result.SelectedProjectFile);
+        Assert.Equal(
+            PathNormalizer.ResolvePathCasing(linkedProjectFile.FullName),
+            result.SelectedProjectFile!.FullName);
+        Assert.NotEqual(
+            PathNormalizer.ResolveToFilesystemPath(linkedProjectFile.FullName),
+            result.SelectedProjectFile.FullName);
+    }
+
+    [Fact]
     public async Task UseOrFindAppHostProjectFileReturnsProjectFileInDirectoryIfNotExplicitlyProvided()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1436,7 +1498,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         var projectLocator = CreateProjectLocator(executionContext);
 
         var returnedProjectFile = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true).DefaultTimeout();
-        Assert.Equal(projectFile.FullName, returnedProjectFile!.FullName);
+        AssertSameFileSystemPath(projectFile.FullName, returnedProjectFile!.FullName);
     }
 
     [Fact]
@@ -1469,7 +1531,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         var returnedProjectFile = await projectLocator.UseOrFindAppHostProjectFileAsync(appHostFile, createSettingsFile: true).DefaultTimeout();
 
-        Assert.Equal(appHostFile.FullName, returnedProjectFile!.FullName);
+        AssertSameFileSystemPath(appHostFile.FullName, returnedProjectFile!.FullName);
 
         var updatedConfig = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
         Assert.Equal("apphost.mts", updatedConfig?.AppHost?.Path);
@@ -1567,7 +1629,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(appHostFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(appHostFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName)));
 
         var adjacentConfigJson = await File.ReadAllTextAsync(adjacentConfigPath);
@@ -1637,7 +1699,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(appHost2File.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(appHost2File.FullName, result.SelectedProjectFile?.FullName);
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName)));
 
         var appHost1ConfigJson = await File.ReadAllTextAsync(appHost1ConfigPath);
@@ -1691,7 +1753,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(appHostFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(appHostFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName)));
 
         var healedConfig = AspireConfigFile.Load(srcDirectory.FullName);
@@ -1959,7 +2021,7 @@ builder.Build().Run();");
 
         var result = await projectLocator.UseOrFindAppHostProjectFileAsync(appHostFile, createSettingsFile: true, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(appHostFile.FullName, result!.FullName);
+        Assert.Equal(PathNormalizer.ResolvePathCasing(appHostFile.FullName), result!.FullName);
     }
 
     [Fact]
@@ -2006,7 +2068,7 @@ builder.Build().Run();");
             displayProgress: false,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(projectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(projectFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.Equal(0, interactionService.DisplayEmptyLineCount);
     }
 
@@ -2275,7 +2337,7 @@ builder.Build().Run();");
         var directoryAsFileInfo = new FileInfo(projectDirectory.FullName);
         var returnedProjectFile = await projectLocator.UseOrFindAppHostProjectFileAsync(directoryAsFileInfo, createSettingsFile: true).DefaultTimeout();
 
-        Assert.Equal(projectFile.FullName, returnedProjectFile!.FullName);
+        AssertSameFileSystemPath(projectFile.FullName, returnedProjectFile!.FullName);
     }
 
     [Fact]
@@ -2325,7 +2387,7 @@ builder.Build().Run();");
             createSettingsFile: true,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(projectFile.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(projectFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName)));
     }
 
@@ -2452,7 +2514,7 @@ builder.Build().Run();");
             createSettingsFile: false,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(brokenAppHost.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(brokenAppHost.FullName, result.SelectedProjectFile?.FullName);
     }
 
     [Fact]
@@ -2541,14 +2603,34 @@ builder.Build().Run();");
     }
 
     [Fact]
-    public void IsUnderDirectoryTreatsMacOSPathsAsCaseSensitive()
+    public void IsUnderDirectoryTreatsPathsAsCaseSensitiveOffWindows()
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Windows filesystem paths are compared case-insensitively.");
+
         var directory = new DirectoryInfo(Path.Combine(Path.GetPathRoot(Environment.CurrentDirectory)!, "repo", "Apps"));
         var file = new FileInfo(Path.Combine(Path.GetPathRoot(Environment.CurrentDirectory)!, "repo", "apps", "AppHost.csproj"));
 
-        var result = ProjectLocator.IsUnderDirectory(file, directory, TestEnvironment.CreateMacOS());
+        var result = ProjectLocator.IsUnderDirectory(file, directory);
 
         Assert.False(result);
+    }
+
+    [Fact]
+    public void IsUnderDirectoryMatchesFilesystemAliases()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Unix-only: unprivileged symlink creation is not reliable on Windows.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var realDirectory = workspace.CreateDirectory("real");
+        var appHostFile = new FileInfo(Path.Combine(realDirectory.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+
+        var symlinkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
+        TestSymlinkHelper.TryCreateSymlink(symlinkDirectory, realDirectory.FullName);
+
+        Assert.True(ProjectLocator.IsUnderDirectory(appHostFile, new DirectoryInfo(symlinkDirectory)));
     }
 
     [Fact]
@@ -2597,7 +2679,7 @@ builder.Build().Run();");
             createSettingsFile: false,
             CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(brokenAppHost.FullName, result.SelectedProjectFile?.FullName);
+        AssertSameFileSystemPath(brokenAppHost.FullName, result.SelectedProjectFile?.FullName);
         Assert.Equal(
             new[] { firstHealthy.FullName, secondHealthy.FullName, brokenAppHost.FullName },
             result.AllProjectFileCandidates.Select(f => f.FullName).ToArray());
@@ -2637,7 +2719,7 @@ builder.Build().Run();");
         var returnedProjectFile = await projectLocator.UseOrFindAppHostProjectFileAsync(directoryAsFileInfo, createSettingsFile: true).DefaultTimeout();
 
         // Should return the first project file (TestInteractionService returns the first choice)
-        Assert.Equal(projectFile1.FullName, returnedProjectFile!.FullName);
+        AssertSameFileSystemPath(projectFile1.FullName, returnedProjectFile!.FullName);
     }
 
     [Fact]
@@ -2664,7 +2746,7 @@ builder.Build().Run();");
         var directoryAsFileInfo = new FileInfo(projectDirectory.FullName);
         var returnedProjectFile = await projectLocator.UseOrFindAppHostProjectFileAsync(directoryAsFileInfo, createSettingsFile: true).DefaultTimeout();
 
-        Assert.Equal(appHostFile.FullName, returnedProjectFile!.FullName);
+        AssertSameFileSystemPath(appHostFile.FullName, returnedProjectFile!.FullName);
     }
 
     [Fact]
@@ -2697,7 +2779,7 @@ builder.Build().Run();");
         var directoryAsFileInfo = new FileInfo(topDirectory.FullName);
         var returnedProjectFile = await projectLocator.UseOrFindAppHostProjectFileAsync(directoryAsFileInfo, createSettingsFile: true).DefaultTimeout();
 
-        Assert.Equal(projectFile.FullName, returnedProjectFile!.FullName);
+        AssertSameFileSystemPath(projectFile.FullName, returnedProjectFile!.FullName);
     }
 
     /// <summary>
@@ -4080,6 +4162,16 @@ builder.Build().Run();");
         // Exactly one candidate: the settings-derived path through the symlink must be
         // recognized as the same file as the walk-discovered real path.
         Assert.Single(found);
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile: null,
+            MultipleAppHostProjectsFoundBehavior.None,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.NotNull(result.SelectedProjectFile);
+        Assert.Equal(pathThroughLink, result.SelectedProjectFile.FullName);
+        Assert.Equal(result.SelectedProjectFile.FullName, Assert.Single(result.AllProjectFileCandidates).FullName);
     }
 
     [Fact]
@@ -4187,4 +4279,5 @@ builder.Build().Run();");
             telemetry ?? TestTelemetryHelper.CreateInitializedTelemetry(),
             configuration ?? new ConfigurationBuilder().Build());
     }
+
 }

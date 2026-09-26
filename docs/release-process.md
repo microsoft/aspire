@@ -33,7 +33,7 @@ The Aspire release process uses these main automation components:
    - Normally dispatched automatically by the AzDO pipeline; it can also be run manually as a fallback after the GitHub release assets are live.
 5. **GitHub Actions workflow** (`.github/workflows/homebrew-validate-release.yml`)
    - Triggered when the release manager publishes the draft (i.e. `release: [published]`).
-   - Generates the Homebrew cask file from the just-published `aspire-cli-osx-*` assets and runs `brew audit --cask --online --signing` + a real `brew install`/`brew uninstall` cycle to catch problems before Homebrew/homebrew-cask's autobump PR is opened.
+   - Generates the Homebrew cask file from the just-published `aspire-cli-osx-*` assets and runs `brew audit --cask --online` + explicit binary notarization verification + a real `brew install`/`brew uninstall` cycle to catch problems before Homebrew/homebrew-cask's autobump PR is opened.
 6. **GitHub Actions workflow** (`.github/workflows/extension-release.yml`)
    - Prepares a VS Code extension release PR.
    - Bumps `extension/package.json`.
@@ -81,7 +81,10 @@ Before starting a release:
    - The build must include native CLI NuGet packages, `microsoft-aspire-cli*.tgz` npm tarballs from the native archive jobs, matching `.tgz.sig` detached signature sidecars, and the Windows, Linux, and macOS npm install validation summaries.
    - If publishing the VS Code extension, the build must include the `aspire-vscode-extension` artifact with exactly one `.vsix`, matching `.manifest`, and matching `.signature.p7s`.
    - If publishing the VS Code extension as a Marketplace pre-release, the build that runs automatically on merge will not work because it packages a stable VSIX; manually queue the `microsoft-aspire` source build on the merge commit with `Package VS Code Extension as Pre-Release=true` so the produced VSIX is marked as pre-release before signing.
-2. **Release branch**: Ensure the release branch exists, for example `release/9.2`.
+2. **Release branch and version**: Ensure the release branch exists, for example `release/9.2`, and that `eng/Versions.props` identifies the next unshipped release.
+   - Before the first stable `X.Y.0` release, the branch remains on `X.Y.0`.
+   - Immediately after publishing stable `X.Y.Z`, merge a dedicated PR that increments `PatchVersion` to `Z+1` before accepting more backports.
+   - Do not leave the branch on a published version. A PR build such as `X.Y.Z-pr.*` has lower SemVer precedence than stable `X.Y.Z`, which can make release-branch CI and CLI update scenarios incorrectly treat the published release as an available update.
 3. **Permissions and approvals**:
    - Access to run Azure DevOps pipelines with the publishing pool.
    - Permission to use the NuGet.org service connection.
@@ -225,11 +228,12 @@ This is a **manual** step performed by the release manager. The release is creat
 3. Uncheck **Set as a pre-release** if it is checked but this is a stable release (or check it for a preview release).
 4. Click **Publish release**.
 5. **Now merge the baseline version PR.** With the release published, its `eng/nix/versions.json` asset URLs resolve, so merging it updates `PackageValidationBaselineVersion` and the Nix manifest on `main` without breaking the flake.
+6. For a stable release, open and merge a dedicated PR against the release branch that increments `PatchVersion` in `eng/Versions.props`. Complete this before accepting more backports so subsequent PR builds use the next unshipped servicing version.
 
 Publishing the draft fires the `release: [published]` event, which triggers:
 
 - [`release-update-support-mdx`](https://github.com/microsoft/aspire/actions/workflows/release-update-support-mdx.lock.yml): opens a draft PR on `microsoft/aspire.dev` to update the support mdx with the new release info.
-- [`homebrew-validate-release`](https://github.com/microsoft/aspire/actions/workflows/homebrew-validate-release.yml): runs `brew audit --cask --online --signing` + a real `brew install`/`brew uninstall` cycle against the cask generated from the just-published `aspire-cli-osx-*` assets.
+- [`homebrew-validate-release`](https://github.com/microsoft/aspire/actions/workflows/homebrew-validate-release.yml): runs `brew audit --cask --online` + explicit binary notarization verification + a real `brew install`/`brew uninstall` cycle against the cask generated from the just-published `aspire-cli-osx-*` assets.
 
 If either downstream workflow fails, the release itself is fine — the release is published and immutable. Investigate the failure on the workflow run, fix the underlying issue, and rerun via `workflow_dispatch` against the published tag.
 
@@ -440,7 +444,7 @@ GitHub release-update-support-mdx.lock.yml (triggered on `release: published`)
 
 GitHub homebrew-validate-release.yml (triggered on `release: published`)
   -> generates aspire.rb from the just-published aspire-cli-osx-* assets
-  -> runs `brew audit --cask --online --signing` + brew install/uninstall
+   -> runs `brew audit --cask --online` + binary notarization verification + brew install/uninstall
 ```
 
 ## Related documentation

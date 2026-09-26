@@ -30,6 +30,7 @@
 
     <!-- Timeout configuration -->
     <TestSessionTimeout>20m</TestSessionTimeout>
+    <TestSessionTimeout Condition="'$(RunOnlyBasicBuildTemplateTests)' == 'true'">30m</TestSessionTimeout>
     <TestHangTimeout>15m</TestHangTimeout>
 
     <!--
@@ -51,6 +52,7 @@
   <ItemGroup>
     <Compile Include="$(RepoRoot)src\Aspire.Hosting.Redis\RedisContainerImageTags.cs" />
     <Compile Include="$(RepoRoot)src\Shared\KnownConfigNames.cs" Link="KnownConfigNames.cs" />
+    <Compile Include="$(RepoRoot)src\Shared\ConsoleLogs\AnsiParser.cs" Link="ConsoleLogs\AnsiParser.cs" />
 
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />

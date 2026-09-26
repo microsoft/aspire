@@ -117,6 +117,18 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string VolumesOptionDescription {
+            get {
+                return ResourceManager.GetString("VolumesOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string VolumesRequiresForce {
+            get {
+                return ResourceManager.GetString("VolumesRequiresForce", resourceCulture);
+            }
+        }
+
         public static string CouldNotDetermineAppHostPath {
             get {
                 return ResourceManager.GetString("CouldNotDetermineAppHostPath", resourceCulture);
@@ -150,6 +162,12 @@ namespace Aspire.Cli.Resources {
         public static string DcpCleanupUnsupportedAppHostVersion {
             get {
                 return ResourceManager.GetString("DcpCleanupUnsupportedAppHostVersion", resourceCulture);
+            }
+        }
+
+        public static string DcpVolumeCleanupUnsupportedAppHostVersion {
+            get {
+                return ResourceManager.GetString("DcpVolumeCleanupUnsupportedAppHostVersion", resourceCulture);
             }
         }
 

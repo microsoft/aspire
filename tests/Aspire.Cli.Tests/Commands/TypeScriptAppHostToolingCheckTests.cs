@@ -25,6 +25,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
     [InlineData("bun@1.2.0", nameof(TypeScriptAppHostToolchain.Bun))]
     [InlineData("yarn@4.14.1", nameof(TypeScriptAppHostToolchain.Yarn))]
     [InlineData("pnpm@10.12.1", nameof(TypeScriptAppHostToolchain.Pnpm))]
+    [InlineData("deno@2.9.0", nameof(TypeScriptAppHostToolchain.Deno))]
     public async Task CheckAsync_ReturnsPass_WhenConfiguredToolchainIsAvailable(string packageManagerSpec, string toolchainName)
     {
         var toolchain = Enum.Parse<TypeScriptAppHostToolchain>(toolchainName);
@@ -54,6 +55,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
     [InlineData("bun@1.2.0", nameof(TypeScriptAppHostToolchain.Bun), "Bun", "https://bun.sh/docs/installation")]
     [InlineData("yarn@4.14.1", nameof(TypeScriptAppHostToolchain.Yarn), "Yarn", "https://yarnpkg.com/getting-started/install")]
     [InlineData("pnpm@10.12.1", nameof(TypeScriptAppHostToolchain.Pnpm), "pnpm", "https://pnpm.io/installation")]
+    [InlineData("deno@2.9.0", nameof(TypeScriptAppHostToolchain.Deno), "Deno", "https://docs.deno.com/runtime/getting_started/installation/")]
     public async Task CheckAsync_ReturnsFail_WhenConfiguredToolchainIsMissing(
         string packageManagerSpec,
         string toolchainName,
@@ -144,7 +146,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
         Assert.Equal("TypeScript AppHost does not support Yarn Classic.", result.Message);
         Assert.Contains("Yarn Classic is not supported", result.Details ?? string.Empty);
         Assert.Contains("yarn@1.22.22", result.Details ?? string.Empty);
-        Assert.Contains("Yarn 4", result.Fix ?? string.Empty);
+        Assert.Equal("Upgrade to Yarn 4 or later, or switch to npm, pnpm, Bun, or Deno, then rerun 'aspire doctor'.", result.Fix);
     }
 
     [Fact]
@@ -166,6 +168,72 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
         Assert.Equal(EnvironmentCheckCategories.Environment, result.Category);
         Assert.Equal("https://yarnpkg.com/getting-started/install", result.Link);
         Assert.Contains("yarn.lock", result.Details ?? string.Empty);
+        Assert.Equal("Upgrade to Yarn 4 or later, or switch to npm, pnpm, Bun, or Deno, then rerun 'aspire doctor'.", result.Fix);
+    }
+
+    [Theory]
+    [InlineData("deno@0.224.0")]
+    [InlineData("deno@1.46.3")]
+    public async Task CheckAsync_ReturnsFail_WhenConfiguredPackageManagerIsPreV2Deno(string packageManager)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateTypeScriptAppHost(workspace, $$"""{ "packageManager": "{{packageManager}}" }""");
+        var check = CreateCheck(
+            workspace,
+            appHostFile,
+            commandResolver: _ => "/usr/bin/deno",
+            denoVersionResolver: (_, _) => Task.FromResult<string?>("deno 2.9.0\nv8 14.0.365.5-rusty\ntypescript 5.9.2"));
+
+        var result = Assert.Single(await check.CheckAsync().DefaultTimeout());
+
+        AssertDenoVersionFailure(result);
+        Assert.Contains(packageManager, result.Details);
+    }
+
+    [Theory]
+    [InlineData("deno.lock")]
+    [InlineData("deno.json")]
+    public async Task CheckAsync_ReturnsFail_WhenDetectedDenoExecutableIsV1(string markerFile)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateTypeScriptAppHost(workspace, "{ \"name\": \"apphost\" }");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, markerFile), "{}");
+        var check = CreateCheck(
+            workspace,
+            appHostFile,
+            commandResolver: _ => "/usr/bin/deno",
+            denoVersionResolver: (_, _) => Task.FromResult<string?>("deno 1.46.3\nv8 12.9.202.6\ntypescript 5.5.2"));
+
+        var result = Assert.Single(await check.CheckAsync().DefaultTimeout());
+
+        AssertDenoVersionFailure(result);
+        Assert.Equal("Deno 1 is installed, but TypeScript AppHosts require Deno 2 or later.", result.Details);
+    }
+
+    [Fact]
+    public async Task CheckAsync_ReturnsFail_WhenDenoVersionCannotBeDetermined()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = CreateTypeScriptAppHost(workspace, "{ \"packageManager\": \"deno@2.9.0\" }");
+        var check = CreateCheck(
+            workspace,
+            appHostFile,
+            commandResolver: _ => "/usr/bin/deno",
+            denoVersionResolver: (_, _) => Task.FromResult<string?>(null));
+
+        var result = Assert.Single(await check.CheckAsync().DefaultTimeout());
+
+        AssertDenoVersionFailure(result);
+        Assert.Equal("The installed Deno version could not be determined. TypeScript AppHosts require Deno 2 or later.", result.Details);
+    }
+
+    [Theory]
+    [InlineData("deno 2.9.0 (stable, release, aarch64-apple-darwin)\nv8 14.0.365.5-rusty\ntypescript 5.9.2", 2)]
+    [InlineData("deno 10.1.2\nv8 15.0\ntypescript 6.0", 10)]
+    public void TryParseDenoMajorVersion_ParsesVersionOutput(string output, int expectedMajorVersion)
+    {
+        Assert.True(TypeScriptAppHostToolingCheck.TryParseDenoMajorVersion(output, out var majorVersion));
+        Assert.Equal(expectedMajorVersion, majorVersion);
     }
 
     private static FileInfo CreateTypeScriptAppHost(TemporaryWorkspace workspace, string packageJsonContent)
@@ -179,7 +247,8 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
     private static TypeScriptAppHostToolingCheck CreateCheck(
         TemporaryWorkspace workspace,
         FileInfo? appHostFile,
-        Func<string, string?> commandResolver)
+        Func<string, string?> commandResolver,
+        Func<string, CancellationToken, Task<string?>>? denoVersionResolver = null)
     {
         var projectLocator = new TestProjectLocator
         {
@@ -192,7 +261,17 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
             CreateExecutionContext(workspace),
             new TestEnvironment(),
             NullLogger<TypeScriptAppHostToolingCheck>.Instance,
-            commandResolver);
+            commandResolver,
+            denoVersionResolver ?? ((_, _) => Task.FromResult<string?>("deno 2.9.0\nv8 14.0.365.5-rusty\ntypescript 5.9.2")));
+    }
+
+    private static void AssertDenoVersionFailure(EnvironmentCheckResult result)
+    {
+        Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
+        Assert.Equal(TypeScriptAppHostToolingCheck.DenoVersionCheckName, result.Name);
+        Assert.Equal("TypeScript AppHost requires Deno 2 or later.", result.Message);
+        Assert.Equal("Upgrade to Deno 2 or later and rerun 'aspire doctor'.", result.Fix);
+        Assert.Equal("https://docs.deno.com/runtime/getting_started/installation/", result.Link);
     }
 
     private static CliExecutionContext CreateExecutionContext(TemporaryWorkspace workspace) =>

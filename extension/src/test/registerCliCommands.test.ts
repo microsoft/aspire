@@ -20,6 +20,7 @@ suite('registerCliCommands', () => {
     let terminalProvider: AspireTerminalProvider;
     let sendCommandStub: sinon.SinonStub;
     let getTerminalStub: sinon.SinonStub;
+    let getAspireCliExecutablePathStub: sinon.SinonStub;
     let resolveCliPathStub: sinon.SinonStub;
     let showWorkspaceFolderPickStub: sinon.SinonStub;
     let workspaceFoldersStub: sinon.SinonStub;
@@ -27,6 +28,9 @@ suite('registerCliCommands', () => {
     let getWorkspaceFolderStub: sinon.SinonStub;
     let getAppHostPathStub: sinon.SinonStub;
     let tryExecuteDoAppHostStub: sinon.SinonStub;
+    let tryExecuteRunAppHostStub: sinon.SinonStub;
+    let tryExecuteDeployAppHostStub: sinon.SinonStub;
+    let tryExecutePublishAppHostStub: sinon.SinonStub;
     let editorCommandProvider: AspireEditorCommandProvider;
     let tempDir: string;
 
@@ -43,9 +47,11 @@ suite('registerCliCommands', () => {
             terminal: { show: sinon.stub() },
             dispose: () => { },
         });
+        getAspireCliExecutablePathStub = sinon.stub().resolves('/resolved/aspire');
         terminalProvider = {
             sendAspireCommandToAspireTerminal: sendCommandStub,
             getAspireTerminal: getTerminalStub,
+            getAspireCliExecutablePath: getAspireCliExecutablePathStub,
         } as unknown as AspireTerminalProvider;
         resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({
             cliPath: '/resolved/aspire',
@@ -58,9 +64,15 @@ suite('registerCliCommands', () => {
         getWorkspaceFolderStub = sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns(undefined);
         getAppHostPathStub = sinon.stub().resolves(null);
         tryExecuteDoAppHostStub = sinon.stub().resolves();
+        tryExecuteRunAppHostStub = sinon.stub().resolves();
+        tryExecuteDeployAppHostStub = sinon.stub().resolves();
+        tryExecutePublishAppHostStub = sinon.stub().resolves();
         editorCommandProvider = {
             getAppHostPath: getAppHostPathStub,
             tryExecuteDoAppHost: tryExecuteDoAppHostStub,
+            tryExecuteRunAppHost: tryExecuteRunAppHostStub,
+            tryExecuteDeployAppHost: tryExecuteDeployAppHostStub,
+            tryExecutePublishAppHost: tryExecutePublishAppHostStub,
         } as unknown as AspireEditorCommandProvider;
 
         registerCliCommands(terminalProvider, editorCommandProvider, new ConfigInfoProvider(terminalProvider));
@@ -157,6 +169,30 @@ suite('registerCliCommands', () => {
                 { command: 'aspire-vscode.new', source: 'tree' },
                 { command: 'aspire-vscode.init', source: 'tree' },
             ]);
+    });
+
+    test('Explorer AppHost run and debug commands propagate the selected resource', async () => {
+        const resource = vscode.Uri.file('/repo/b/AppHost/AppHost.csproj');
+        const runFromExplorer = callbacks.get('aspire-vscode.runAppHostFromExplorer');
+        const debugFromExplorer = callbacks.get('aspire-vscode.debugAppHostFromExplorer');
+
+        assert.ok(runFromExplorer);
+        assert.ok(debugFromExplorer);
+        await runFromExplorer(resource);
+        await debugFromExplorer(resource);
+
+        assert.ok(tryExecuteRunAppHostStub.firstCall.calledWithExactly(true, resource, false));
+        assert.ok(tryExecuteRunAppHostStub.secondCall.calledWithExactly(false, resource, false));
+    });
+
+    test('editor-title AppHost run and debug commands ignore the supplied resource', async () => {
+        const resource = vscode.Uri.file('/repo/b/Service/Program.cs');
+
+        await callbacks.get('aspire-vscode.runAppHostFromEditorCommand')!(resource);
+        await callbacks.get('aspire-vscode.debugAppHostFromEditorCommand')!(resource);
+
+        assert.ok(tryExecuteRunAppHostStub.firstCall.calledWithExactly(true));
+        assert.ok(tryExecuteRunAppHostStub.secondCall.calledWithExactly(false));
     });
 
     test('workspace folder selection cancellation returns a handled outcome without running the gate or command body', async () => {
@@ -261,6 +297,15 @@ suite('registerCliCommands', () => {
         assert.ok(tryExecuteDoAppHostStub.calledOnceWith(false, undefined, appHostPath, target, '/resolved/aspire'));
     });
 
+    test('deploy and publish defer CLI resolution to the AppHost launch', async () => {
+        await callbacks.get('aspire-vscode.deploy')!();
+        await callbacks.get('aspire-vscode.publish')!();
+
+        assert.ok(tryExecuteDeployAppHostStub.calledOnceWithExactly(false));
+        assert.ok(tryExecutePublishAppHostStub.calledOnceWithExactly(false));
+        assert.strictEqual(resolveCliPathStub.called, false);
+    });
+
     test('do rejects a missing AppHost before probing the CLI', async () => {
         const hasCapabilityStub = sandbox.stub(ConfigInfoProvider.prototype, 'hasCapability').resolves(true);
         const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
@@ -317,6 +362,24 @@ suite('registerCliCommands', () => {
         await callbacks.get('aspire-vscode.updateSelf')!();
 
         assert.strictEqual(resolveCliPathStub.called, false);
-        assert.ok(sendCommandStub.calledOnceWith('update --self', true, undefined, { target: windowCliPathTarget }));
+        assert.ok(getAspireCliExecutablePathStub.calledOnceWith(windowCliPathTarget));
+        assert.ok(sendCommandStub.calledOnceWith('update --self', true, undefined, {
+            target: windowCliPathTarget,
+            cliPath: '/resolved/aspire',
+        }));
+    });
+
+    test('update self uses the pre-resolved workspace CLI supplied by the warning action', async () => {
+        const folder = createWorkspaceFolder('a', '/repo/a');
+        const target = workspaceFolderCliPathTarget(folder);
+
+        await callbacks.get('aspire-vscode.updateSelf')!(target, '/repo/a/.aspire/bin/aspire');
+
+        assert.strictEqual(resolveCliPathStub.called, false);
+        assert.strictEqual(getAspireCliExecutablePathStub.called, false);
+        assert.ok(sendCommandStub.calledOnceWith('update --self', true, undefined, {
+            target,
+            cliPath: '/repo/a/.aspire/bin/aspire',
+        }));
     });
 });

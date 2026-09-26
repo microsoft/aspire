@@ -26,14 +26,19 @@ namespace Aspire.SelectTests;
 /// closure is a BFS) from a directly-changed project to the affected one, plus the changed file that
 /// seeded that chain — the data the selector turns into a "why this test ran" path in the summary.
 /// </param>
+/// <param name="AffectedTestProjects">
+/// Affected project base names for graph projects under <c>tests/</c>, including projects omitted from <c>Aspire.slnx</c> but brought into the graph through ProjectReference.
+/// </param>
 internal sealed record AffectedResult(
     IReadOnlyCollection<string> AffectedProjects,
     IReadOnlySet<string> AttributedPaths,
-    IReadOnlyDictionary<string, AffectedPath> Paths)
+    IReadOnlyDictionary<string, AffectedPath> Paths,
+    IReadOnlySet<string> AffectedTestProjects)
 {
     public static readonly AffectedResult Empty =
         new(Array.Empty<string>(), new HashSet<string>(StringComparer.Ordinal),
-            new Dictionary<string, AffectedPath>(StringComparer.Ordinal));
+            new Dictionary<string, AffectedPath>(StringComparer.Ordinal),
+            new HashSet<string>(StringComparer.Ordinal));
 }
 
 /// <summary>
@@ -169,7 +174,17 @@ internal static class GraphAffectedProjects
 
         var paths = BuildAffectedPaths(affectedProjects, parentByProjectPath, originatingFileByProject);
 
-        return new AffectedResult(names, attributedPaths, paths);
+        // ProjectGraph includes ProjectReference nodes omitted from the solution, so path-derived
+        // classification prevents test-support projects from matching production affected_project_rules.
+        var normalizedTestsDir = NormalizeFullPath(Path.Combine(repoRoot, "tests"));
+        var affectedTestProjects = affectedProjects
+            .Where(p => IsUnder(p, normalizedTestsDir))
+            .Select(Path.GetFileNameWithoutExtension)
+            .Where(name => !string.IsNullOrEmpty(name))
+            .Select(name => name!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return new AffectedResult(names, attributedPaths, paths, affectedTestProjects);
     }
 
     // Reconstructs, for each affected project path, the shortest reverse-dependency chain back to the
@@ -214,7 +229,7 @@ internal static class GraphAffectedProjects
         static string NameOf(string projectPath) => Path.GetFileNameWithoutExtension(projectPath);
     }
 
-    private static ProjectGraph BuildGraph(string repoRoot, string solutionPath)
+    internal static ProjectGraph BuildGraph(string repoRoot, string solutionPath, IReadOnlyDictionary<string, string>? additionalGlobalProperties = null)
     {
         // Mirror the global properties the solution build evaluates with so the graph nodes match the
         // real build's project instances (and so .slnx solution-folder/config resolution succeeds).
@@ -227,6 +242,14 @@ internal static class GraphAffectedProjects
             ["SolutionFileName"] = Path.GetFileName(solutionPath),
             ["SolutionName"] = Path.GetFileNameWithoutExtension(solutionPath),
         };
+
+        if (additionalGlobalProperties is not null)
+        {
+            foreach (var (name, value) in additionalGlobalProperties)
+            {
+                globalProperties[name] = value;
+            }
+        }
 
         return new ProjectGraph(solutionPath, globalProperties);
     }

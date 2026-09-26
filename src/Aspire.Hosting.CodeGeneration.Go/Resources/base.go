@@ -644,7 +644,7 @@ func Float64Ptr(f float64) *float64 { return &f }
 //  7. fmt.Stringer (compatibility)                 → v.String()
 //  8. default                                      → pass through
 func serializeValue(value any) any {
-	if value == nil {
+	if isNil(value) {
 		return nil
 	}
 
@@ -681,6 +681,23 @@ func serializeValue(value any) any {
 			return stringer.String()
 		}
 		return value
+	}
+}
+
+// isNil recognizes typed nil values after they have been boxed into any. A direct comparison with nil
+// cannot see values such as any((*ReferenceExpression)(nil)), and dispatching those through ToJSON or
+// ToMap would dereference a nil receiver.
+func isNil(value any) bool {
+	if value == nil {
+		return true
+	}
+
+	reflectedValue := reflect.ValueOf(value)
+	switch reflectedValue.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return reflectedValue.IsNil()
+	default:
+		return false
 	}
 }
 

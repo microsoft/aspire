@@ -14,9 +14,9 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Aspire.Hosting;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
@@ -124,8 +124,8 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "AppHost.cs");
         var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "AppHost.cs");
-        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath1, int.MaxValue - 1));
-        monitor.AddConnection("hash2", "socket.hash2", CreateConnection(appHostPath2, int.MaxValue - 2));
+        monitor.AddConnection("socket.hash1", CreateConnection(appHostPath1, int.MaxValue - 1));
+        monitor.AddConnection("socket.hash2", CreateConnection(appHostPath2, int.MaxValue - 2));
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -160,8 +160,8 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
         var processId1 = int.MaxValue - 3;
         var processId2 = int.MaxValue - 4;
-        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath, processId1));
-        monitor.AddConnection("hash2", "socket.hash2", CreateConnection(appHostPath, processId2));
+        monitor.AddConnection("socket.hash1", CreateConnection(appHostPath, processId1));
+        monitor.AddConnection("socket.hash2", CreateConnection(appHostPath, processId2));
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -197,7 +197,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
         var connection = CreateConnection(appHostPath, int.MaxValue - 5);
         connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 5);
-        monitor.AddConnection("hash1", connection.SocketPath, connection);
+        monitor.AddConnection(connection.SocketPath, connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -248,8 +248,8 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             int.MaxValue - 8,
             isInScope: AuxiliaryBackchannelMonitor.IsAppHostInScopeOfDirectory(nestedAppHost, workspace.WorkspaceRoot.FullName));
         nestedConnection.SocketPath = CreateMatchingSocketFile(nestedAppHost, workspace, 8);
-        monitor.AddConnection("hash1", primaryConnection.SocketPath, primaryConnection);
-        monitor.AddConnection("hash2", nestedConnection.SocketPath, nestedConnection);
+        monitor.AddConnection(primaryConnection.SocketPath, primaryConnection);
+        monitor.AddConnection(nestedConnection.SocketPath, nestedConnection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -324,7 +324,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostPath = Path.Combine(worktreeRoot, "App1", "App1.AppHost", "App1.AppHost.csproj");
         var connection = CreateConnection(appHostPath, int.MaxValue - 6, isInScope: false);
         connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 6);
-        monitor.AddConnection("hash1", connection.SocketPath, connection);
+        monitor.AddConnection(connection.SocketPath, connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -363,7 +363,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
         var connection = CreateConnection(appHostPath, int.MaxValue - 6, isInScope: false);
         connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 6);
-        monitor.AddConnection("hash1", connection.SocketPath, connection);
+        monitor.AddConnection(connection.SocketPath, connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -399,8 +399,8 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "App2.AppHost.csproj");
         var processId1 = int.MaxValue - 7;
         var processId2 = int.MaxValue - 8;
-        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath1, processId1));
-        monitor.AddConnection("hash2", "socket.hash2", CreateConnection(appHostPath2, processId2));
+        monitor.AddConnection("socket.hash1", CreateConnection(appHostPath1, processId1));
+        monitor.AddConnection("socket.hash2", CreateConnection(appHostPath2, processId2));
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -465,8 +465,10 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(SharedCommandStrings.AppHostNotRunning, displayedMessage.Message);
     }
 
-    [Fact]
-    public async Task StopCommand_ForceInvokesDcpCleanupForResolvedAppHost()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StopCommand_ForceInvokesDcpCleanupForResolvedAppHost(bool deleteVolumes)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
@@ -489,12 +491,13 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+        var volumesOption = deleteVolumes ? " --volumes" : string.Empty;
+        var result = command.Parse($"stop --force{volumesOption} --apphost \"{appHostFile.FullName}\"");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        AssertDcpCleanupInvocation(processFactory, expectedWorkloadId);
+        AssertDcpCleanupInvocation(processFactory, expectedWorkloadId, deleteVolumes);
         Assert.Contains(interactionService.DisplayedMessages, message => message.Message == string.Format(SharedCommandStrings.AppHostNotRunningAtPath, Path.Combine("AppHost", "AppHost.csproj")));
         Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.PersistentResourcesCleaned, appHostFile.Name));
     }
@@ -549,7 +552,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = CreateConnection(runningAppHostFile.FullName, int.MaxValue - 11);
         connection.SocketPath = CreateMatchingSocketFile(runningAppHostFile.FullName, workspace, 11);
-        monitor.AddConnection("hash1", connection.SocketPath, connection);
+        monitor.AddConnection(connection.SocketPath, connection);
 
         var projectLocator = new TestProjectLocator
         {
@@ -663,7 +666,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var outOfScopeAppHostFile = Path.Combine(workspace.WorkspaceRoot.FullName, "OtherWorkspace", "Other.AppHost.csproj");
-        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(outOfScopeAppHostFile, int.MaxValue - 12, isInScope: false));
+        monitor.AddConnection("socket.hash1", CreateConnection(outOfScopeAppHostFile, int.MaxValue - 12, isInScope: false));
 
         var projectLocator = new TestProjectLocator
         {
@@ -725,8 +728,13 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("cleanup failed", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task StopCommand_ForceWarnsAndCleansUpForUnsupportedNonBundleAppHost()
+    [Theory]
+    [InlineData(false, "13.4.0", "persistent resource cleanup")]
+    [InlineData(true, "13.5.0", "persistent volume cleanup")]
+    public async Task StopCommand_ForceWarnsAndCleansUpForUnsupportedNonBundleAppHost(
+        bool deleteVolumes,
+        string aspireHostingVersion,
+        string expectedWarning)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
@@ -748,21 +756,22 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
             {
                 GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, _, _, _) =>
-                    (0, CreateAppHostInfoJson(aspireHostingVersion: "13.4.0", isUsingCliBundle: false))
+                    (0, CreateAppHostInfoJson(aspireHostingVersion, isUsingCliBundle: false))
             };
         });
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+        var volumesOption = deleteVolumes ? " --volumes" : string.Empty;
+        var result = command.Parse($"stop --force{volumesOption} --apphost \"{appHostFile.FullName}\"");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        AssertDcpCleanupInvocation(processFactory, expectedWorkloadId);
+        AssertDcpCleanupInvocation(processFactory, expectedWorkloadId, deleteVolumes);
         Assert.Contains(interactionService.DisplayedMessages, message =>
             message.Emoji.Equals(KnownEmojis.Warning) &&
-            message.Message.Contains("might not support persistent resource cleanup", StringComparison.Ordinal));
+            message.Message.Contains(expectedWarning, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1091,7 +1100,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             AppHostInfo = null,
             IsInScope = true
         };
-        monitor.AddConnection("hash1", connection.SocketPath, connection);
+        monitor.AddConnection(connection.SocketPath, connection);
         var projectLocator = new TestProjectLocator
         {
             UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
@@ -1130,7 +1139,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = CreateConnection(appHostFile.FullName, int.MaxValue - 10);
         connection.SocketPath = CreateMatchingSocketFile(appHostFile.FullName, workspace, 10);
-        monitor.AddConnection("hash1", connection.SocketPath, connection);
+        monitor.AddConnection(connection.SocketPath, connection);
 
         var projectLocator = new TestProjectLocator
         {
@@ -1177,6 +1186,28 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopCommand_VolumesRequiresForce()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop --volumes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal(
+            string.Format(CultureInfo.InvariantCulture, StopCommandStrings.VolumesRequiresForce, "--volumes", "--force"),
+            Assert.Single(interactionService.DisplayedErrors));
+    }
+
+    [Fact]
     public async Task StopCommand_DeletesSocketFile_AfterSuccessfulStop()
     {
         // Regression test for https://github.com/microsoft/aspire/issues/17587: 'aspire stop' is the command
@@ -1195,7 +1226,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         connection.SocketPath = socketPath;
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash1", socketPath, connection);
+        monitor.AddConnection(socketPath, connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -1252,13 +1283,19 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         });
     }
 
-    private static void AssertDcpCleanupInvocation(TestProcessExecutionFactory processFactory, string expectedWorkloadId)
+    private static void AssertDcpCleanupInvocation(
+        TestProcessExecutionFactory processFactory,
+        string expectedWorkloadId,
+        bool deleteVolumes = false)
     {
+        string[] expectedArguments = deleteVolumes
+            ? ["cleanup", "--volumes", expectedWorkloadId]
+            : ["cleanup", expectedWorkloadId];
         var execution = Assert.Single(processFactory.CreatedExecutions.OfType<TestProcessExecution>(), execution =>
-            execution.Arguments.Count == 2 &&
-            execution.Arguments[0] == "cleanup" &&
-            execution.Arguments[1] == expectedWorkloadId);
+            execution.Arguments.Count > 0 &&
+            execution.Arguments[0] == "cleanup");
 
+        Assert.Equal(expectedArguments, execution.Arguments);
         Assert.EndsWith(BundleDiscovery.GetDcpExecutableName(), execution.FileName, StringComparison.Ordinal);
     }
 
@@ -1282,7 +1319,6 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     {
         return new TestAppHostAuxiliaryBackchannel
         {
-            Hash = $"hash-{processId.ToString(CultureInfo.InvariantCulture)}",
             SocketPath = $"socket.{processId.ToString(CultureInfo.InvariantCulture)}",
             IsInScope = isInScope,
             AppHostInfo = new AppHostInformation
@@ -1300,7 +1336,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(backchannelsDirectory);
 
         var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(appHostPath);
-        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, homeDirectory.FullName);
+        var prefix = BackchannelConstants.ComputeSocketPrefix(resolvedAppHostPath, homeDirectory.FullName);
         var appHostId = Path.GetFileName(prefix);
         var instanceSuffix = instanceId.ToString("000", CultureInfo.InvariantCulture);
         var socketPath = Path.Combine(

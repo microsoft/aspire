@@ -22,6 +22,7 @@ public class MissingJavaScriptToolWarningTests(ITestOutputHelper outputHelper)
     [InlineData("bun is not installed or not found in PATH. Please install Bun and try again.")]
     [InlineData("yarn is not installed or not found in PATH. Please install Yarn and try again.")]
     [InlineData("pnpm is not installed or not found in PATH. Please install pnpm and try again.")]
+    [InlineData("deno is not installed or not found in PATH. Please install Deno and try again.")]
     public void IsMatch_WhenJavaScriptToolIsMissing_ReturnsTrue(string message)
     {
         var lines = new[]

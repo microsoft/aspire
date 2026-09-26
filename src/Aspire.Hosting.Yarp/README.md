@@ -178,6 +178,28 @@ builder.AddYarp("gateway")
        });
 ```
 
+### Terminate TLS and proxy h2c (for gRPC)
+
+```csharp
+var grpcBackend = builder.AddProject<Projects.GrpcBackend>("grpc-backend");
+
+builder.AddYarp("gateway")
+    .WithHostHttpsPort(8080)
+    .WithConfiguration(yarp =>
+    {
+        var cluster = yarp.AddCluster(grpcBackend.GetEndpoint("http"))
+            .WithForwarderRequestConfig(new ForwarderRequestConfig
+            {
+                Version = HttpVersion.Version20,
+                VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            });
+        yarp.AddRoute(cluster);
+    });
+```
+
+The `grpcBackend` resource must expose an `http` endpoint and be configured to accept HTTP/2 without TLS (h2c). Passing its endpoint reference lets Aspire resolve an address that is reachable from the YARP container.
+Aspire uses the local development certificate for TLS termination when it is available. For certificate setup or trust issues, see https://aka.ms/aspire/devcerts.
+
 ## Additional documentation
 
 * https://aspire.dev/integrations/gallery/

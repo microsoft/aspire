@@ -32,7 +32,7 @@ public enum CauseKind
     /// <summary>A changed file matched a <c>path_rules</c> glob (<see cref="Cause.Trigger"/> is the file; <see cref="Cause.Reason"/> is the rule's <c>reason</c>).</summary>
     PathRule,
 
-    /// <summary>An affected production project matched an <c>affected_project_rules</c> glob (<see cref="Cause.Trigger"/> is the project name).</summary>
+    /// <summary>An affected production/non-test project matched an <c>affected_project_rules</c> glob (<see cref="Cause.Trigger"/> is the project name).</summary>
     AffectedProject,
 
     /// <summary>The Layer 1 MSBuild graph marked this test project affected by a changed source file (<see cref="Cause.Trigger"/> is the project name).</summary>
@@ -110,6 +110,7 @@ public sealed class TestSelector
     private readonly string _mapPath;
     private readonly IReadOnlyCollection<string> _allTestProjects;
     private readonly IReadOnlyCollection<string> _projectDirectories;
+    private readonly IReadOnlySet<string> _affectedTestProjectNames;
 
     /// <param name="mapPath">Path to <c>eng/github-ci/test-trigger-map.yml</c>.</param>
     /// <param name="allTestProjects">All matrix test project names — the universe an <c>ALL</c> selection expands to.</param>
@@ -119,22 +120,27 @@ public sealed class TestSelector
     /// under one of these dirs is attributed by the graph, so it never triggers the run-all
     /// fallback. May be empty (then no file is treated as owned).
     /// </param>
+    /// <param name="affectedTestProjectNames">
+    /// Affected test project names from the current Layer 1 graph result (graph projects under <c>tests/</c>).
+    /// These names are excluded from affected production-project rules.
+    /// </param>
     public TestSelector(
         string mapPath,
         IReadOnlyCollection<string> allTestProjects,
-        IReadOnlyCollection<string> projectDirectories)
+        IReadOnlyCollection<string> projectDirectories,
+        IReadOnlySet<string> affectedTestProjectNames)
     {
         _mapPath = mapPath;
         _allTestProjects = allTestProjects;
         _projectDirectories = projectDirectories;
+        _affectedTestProjectNames = affectedTestProjectNames;
     }
 
     /// <param name="changedFiles">Repo-relative, '/'-separated paths changed in the PR.</param>
     /// <param name="layer1Affected">
-    /// The full affected project set reported by the graph tool — production <em>and</em> test
-    /// project names (the union of its <em>changed</em> and <em>affected</em> sets). Test names are
-    /// intersected with the matrix and selected; production names drive <c>project_rules</c>. May be
-    /// empty.
+    /// The full affected project set reported by the graph tool. The selector splits this by
+    /// current CI boundaries: matrix test projects are intersected and selected; production/non-test
+    /// project names drive <c>affected_project_rules</c>. May be empty.
     /// </param>
     /// <param name="options">Selection overrides (kill switch).</param>
     /// <param name="layer1AttributedPaths">
@@ -163,6 +169,7 @@ public sealed class TestSelector
         // attribution surfaced in the PR comment / step summary.
         var testCauses = new Dictionary<string, List<Cause>>(StringComparer.Ordinal);
         var jobCauses = new Dictionary<string, List<Cause>>(StringComparer.Ordinal);
+        var dotnetTestsCauses = new List<Cause>();
         var unmatchedFiles = new HashSet<string>(StringComparer.Ordinal);
         var selectsAll = false;
         string? reason = null;
@@ -204,7 +211,7 @@ public sealed class TestSelector
             {
                 if (rule.Paths.Any(g => TriggerMap.GlobMatches(g, file)))
                 {
-                    ApplyTargets(rule.Targets, map, testCauses, jobCauses, ref selectsAll, ref reason,
+                    ApplyTargets(rule.Targets, map, _allTestProjects, testCauses, jobCauses, dotnetTestsCauses, ref selectsAll, ref reason,
                         new Cause(CauseKind.PathRule, file, rule.Reason));
                     fileMatched = true;
                 }
@@ -240,9 +247,8 @@ public sealed class TestSelector
             reason ??= $"run-all fallback: '{file}' is neither Layer-1-owned nor matched by a Layer 2 rule";
         }
 
-        // Layer 1: the graph tool reports the full affected set (production + test projects). The
-        // affected TEST projects are always part of the answer; the production names drive
-        // project_rules below.
+        // Layer 1 reports the full affected set. Affected matrix test projects are always part of the
+        // answer; production/non-test project names drive affected_project_rules below.
         foreach (var project in layer1Affected)
         {
             if (_allTestProjects.Contains(project))
@@ -259,7 +265,7 @@ public sealed class TestSelector
             }
         }
 
-        // affected_project_rules: an affected PRODUCTION project (matched by name glob) pulls in
+        // affected_project_rules: an affected production/non-test project (matched by name glob) pulls in
         // jobs/tests. This replaces the duplicated src/<Project>/** path globs the job rules used to
         // carry, and follows the graph's transitive closure (a dependency change marks the project
         // affected). Keyed on the affected-project set, so it contributes nothing when Layer 1
@@ -272,7 +278,7 @@ public sealed class TestSelector
         // typescript-api-compat / deployment-e2e) for a TEST-ONLY change. See test-trigger-map.yml's
         // affected_project_rules comment ("matched against the affected PRODUCTION projects").
         var affectedProductionProjects = layer1Affected
-            .Where(name => !_allTestProjects.Contains(name))
+            .Where(name => !_affectedTestProjectNames.Contains(name))
             .ToList();
         foreach (var rule in map.AffectedProjectRules)
         {
@@ -281,7 +287,7 @@ public sealed class TestSelector
             var matchedProject = affectedProductionProjects.FirstOrDefault(name => rule.Projects.Any(p => TriggerMap.ProjectNameMatches(p, name)));
             if (matchedProject is not null)
             {
-                ApplyTargets(rule.Targets, map, testCauses, jobCauses, ref selectsAll, ref reason,
+                ApplyTargets(rule.Targets, map, _allTestProjects, testCauses, jobCauses, dotnetTestsCauses, ref selectsAll, ref reason,
                     new Cause(CauseKind.AffectedProject, matchedProject, rule.Reason));
             }
         }
@@ -294,11 +300,19 @@ public sealed class TestSelector
         // derived_targets: a selected test project (from Layer 1 or Layer 2) can pull in extra
         // jobs/tests. Iterate to a fixpoint so a test->test edge whose target has its own derived
         // rule is followed; a no-growth pass terminates (cycle-safe).
-        ApplyDerivedTargets(map, testCauses, jobCauses, ref selectsAll, ref reason);
+        ApplyDerivedTargets(map, _allTestProjects, testCauses, jobCauses, dotnetTestsCauses, ref selectsAll, ref reason);
 
         if (selectsAll)
         {
             return SelectsAllResult(reason, unmatchedFiles);
+        }
+
+        foreach (var dotnetTestsCause in dotnetTestsCauses)
+        {
+            foreach (var testProject in _allTestProjects)
+            {
+                AddCause(testCauses, testProject, dotnetTestsCause);
+            }
         }
 
         return new SelectionResult(
@@ -377,8 +391,10 @@ public sealed class TestSelector
     // ends the loop (so cycles such as A->B, B->A terminate).
     private static void ApplyDerivedTargets(
         TriggerMap map,
+        IReadOnlyCollection<string> allTestProjects,
         Dictionary<string, List<Cause>> testCauses,
         Dictionary<string, List<Cause>> jobCauses,
+        List<Cause> dotnetTestsCauses,
         ref bool selectsAll,
         ref string? reason)
     {
@@ -402,7 +418,7 @@ public sealed class TestSelector
                     .FirstOrDefault(testCauses.ContainsKey);
                 if (triggeringTest is not null)
                 {
-                    ApplyTargets(derived.Targets, map, testCauses, jobCauses, ref selectsAll, ref reason,
+                    ApplyTargets(derived.Targets, map, allTestProjects, testCauses, jobCauses, dotnetTestsCauses, ref selectsAll, ref reason,
                         new Cause(CauseKind.DerivedFromTest, triggeringTest, derived.Reason));
                 }
             }
@@ -414,8 +430,10 @@ public sealed class TestSelector
     private static void ApplyTargets(
         IEnumerable<string> targets,
         TriggerMap map,
+        IReadOnlyCollection<string> allTestProjects,
         Dictionary<string, List<Cause>> testCauses,
         Dictionary<string, List<Cause>> jobCauses,
+        List<Cause> dotnetTestsCauses,
         ref bool selectsAll,
         ref string? reason,
         Cause cause)
@@ -425,7 +443,7 @@ public sealed class TestSelector
 
         foreach (var target in targets)
         {
-            AddTarget(target, map, testCauses, jobCauses, ref localSelectsAll, ref localReason, cause, visitedGroups: null);
+            AddTarget(target, map, allTestProjects, testCauses, jobCauses, dotnetTestsCauses, ref localSelectsAll, ref localReason, cause, visitedGroups: null);
         }
 
         selectsAll = localSelectsAll;
@@ -438,8 +456,10 @@ public sealed class TestSelector
     private static void AddTarget(
         string target,
         TriggerMap map,
+        IReadOnlyCollection<string> allTestProjects,
         Dictionary<string, List<Cause>> testCauses,
         Dictionary<string, List<Cause>> jobCauses,
+        List<Cause> dotnetTestsCauses,
         ref bool selectsAll,
         ref string? reason,
         Cause cause,
@@ -449,6 +469,10 @@ public sealed class TestSelector
         {
             selectsAll = true;
             reason ??= $"a rule matching '{cause.Trigger}' selects ALL";
+        }
+        else if (target == "DOTNET_TESTS")
+        {
+            dotnetTestsCauses.Add(cause);
         }
         else if (map.Groups.TryGetValue(target, out var members))
         {
@@ -461,7 +485,7 @@ public sealed class TestSelector
 
             foreach (var member in members)
             {
-                AddTarget(member, map, testCauses, jobCauses, ref selectsAll, ref reason, cause, visitedGroups);
+                AddTarget(member, map, allTestProjects, testCauses, jobCauses, dotnetTestsCauses, ref selectsAll, ref reason, cause, visitedGroups);
             }
         }
         else if (target.StartsWith("test:", StringComparison.Ordinal))

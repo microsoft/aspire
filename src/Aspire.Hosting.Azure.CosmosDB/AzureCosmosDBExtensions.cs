@@ -164,6 +164,12 @@ public static class AzureCosmosExtensions
             var emulatorSurrogate = new AzureCosmosDBEmulatorResource(builder.Resource);
             var emulatorSurrogateBuilder = builder.ApplicationBuilder.CreateResourceBuilder(emulatorSurrogate);
 
+            // Wire the Aspire dashboard's OTLP endpoint into the emulator and tell the emulator to use it.
+            // WithOtlpExporter injects the OTLP endpoint address; ENABLE_OTLP_EXPORTER activates the
+            // emulator's built-in exporter so it forwards its own traces and metrics to that endpoint.
+            emulatorSurrogateBuilder.WithOtlpExporter()
+                .WithEnvironment("ENABLE_OTLP_EXPORTER", "true");
+
             // The vNext image enables the Data Explorer by default (ENABLE_EXPLORER=true). That runs an
             // otherwise-unused Node process and, because the emulator's readiness probe is
             // "ready = postgres && gateway && (explorer || !ENABLE_EXPLORER)" (the vNext emulator uses
@@ -489,28 +495,27 @@ public static class AzureCosmosExtensions
         // exposing this endpoint does not silently depend on the image's default remaining "true".
         builder.WithEnvironment("ENABLE_EXPLORER", "true");
 
-        var result = builder.WithEndpoint(endpointName: KnownUrls.DataExplorer.EndpointName, endpoint =>
+        const string dataExplorerEndpointName = "data-explorer";
+
+        var result = builder.WithEndpoint(endpointName: dataExplorerEndpointName, endpoint =>
             {
                 endpoint.UriScheme = "http";
                 endpoint.TargetPort = 1234;
                 endpoint.Port = port;
             })
-            .WithUrls(context =>
+            .WithUrlForEndpoint(dataExplorerEndpointName, c =>
             {
-                var url = context.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == KnownUrls.DataExplorer.EndpointName);
-#pragma warning disable IDE0031 // Use null propagation (IDE0031)
-                if (url is not null)
-#pragma warning restore IDE0031
-                {
-                    url.DisplayText = KnownUrls.DataExplorer.DisplayText;
-                }
+                c.DisplayText = "Manage";
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
+                c.DisplayOrder = 1;
+#pragma warning restore CS0618
             });
 
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
             builder.SubscribeHttpsEndpointsUpdate(ctx =>
             {
-                builder.WithEndpoint(KnownUrls.DataExplorer.EndpointName, ep =>
+                builder.WithEndpoint(dataExplorerEndpointName, ep =>
                 {
                     ep.UriScheme = "https";
                 });

@@ -87,7 +87,7 @@ internal static class KnownFeatures
 
         [NuGetSignatureVerificationEnabled] = new(
             NuGetSignatureVerificationEnabled,
-            "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
+            "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for NuGet operations",
             DefaultValue: true),
 
         [AspireSkillsRemoteFetchEnabled] = new(
@@ -101,7 +101,7 @@ internal static class KnownFeatures
 
         [TerminalCommandsEnabled] = new(
             TerminalCommandsEnabled,
-            "(Experimental) Enable the 'aspire terminal' command group ('aspire terminal ps', 'aspire terminal attach'). Used in conjunction with the experimental WithTerminal() API (ASPIRETERMINAL001). Hidden by default while the API surface is in preview.",
+            "(Experimental) Enable the 'aspire terminal' command group ('aspire terminal ps', 'aspire terminal attach', 'aspire terminal tape play'). Used in conjunction with the experimental WithTerminal() API (ASPIRETERMINAL001). Hidden by default while the API surface is in preview.",
             DefaultValue: false),
 
         [PolyglotIntegrationFilterEnabled] = new(

@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Aspire.Hosting.Radius.CloudProviders;
 
@@ -13,6 +14,7 @@ namespace Aspire.Hosting.Radius.CloudProviders;
 /// write wins) and the final value is hoisted into
 /// <see cref="AwsRadiusProviderConfig"/> by <c>WithAwsProvider</c>.
 /// </summary>
+[Experimental("ASPIRERADIUS003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 internal sealed class AwsRadiusProviderBuilder : IAwsRadiusProviderBuilder
 {
     private readonly ILogger _logger;

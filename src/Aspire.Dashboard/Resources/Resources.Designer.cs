@@ -474,6 +474,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Resource actions for {0}.
+        /// </summary>
+        public static string ResourcesGraphResourceActionsButton {
+            get {
+                return ResourceManager.GetString("ResourcesGraphResourceActionsButton", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Zoom in.
         /// </summary>
         public static string ResourcesGraphZoomInButton {

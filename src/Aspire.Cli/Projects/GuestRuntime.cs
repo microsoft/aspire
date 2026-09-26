@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.TypeSystem;
@@ -20,31 +21,45 @@ internal sealed class GuestRuntime
     private readonly RuntimeSpec _spec;
     private readonly ILogger _logger;
     private readonly FileLoggerProvider? _fileLoggerProvider;
-    private readonly Func<string, string?> _commandResolver;
     private readonly IEnvironment _environment;
     private readonly ProfilingTelemetry _profilingTelemetry;
+    private readonly CommandSpec[]? _installDependencies;
 
     /// <summary>
     /// Creates a new GuestRuntime for the given runtime specification.
     /// </summary>
     /// <param name="spec">The runtime specification describing how to execute the guest language.</param>
     /// <param name="logger">Logger for debugging output.</param>
-    /// <param name="commandResolver">Command resolver used to locate executables on PATH.</param>
     /// <param name="environment">The environment abstraction for OS detection.</param>
     /// <param name="profilingTelemetry">Profiling telemetry for child-process diagnostics.</param>
     /// <param name="fileLoggerProvider">Optional file logger for writing output to disk.</param>
-    public GuestRuntime(RuntimeSpec spec, ILogger logger, Func<string, string?> commandResolver, IEnvironment environment, ProfilingTelemetry profilingTelemetry, FileLoggerProvider? fileLoggerProvider = null)
+    /// <param name="installDependencies">
+    /// Optional internal command sequence that replaces <see cref="RuntimeSpec.InstallDependencies"/>.
+    /// </param>
+    public GuestRuntime(
+        RuntimeSpec spec,
+        ILogger logger,
+        IEnvironment environment,
+        ProfilingTelemetry profilingTelemetry,
+        FileLoggerProvider? fileLoggerProvider = null,
+        CommandSpec[]? installDependencies = null)
     {
-        ArgumentNullException.ThrowIfNull(commandResolver);
         ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(profilingTelemetry);
 
         _spec = spec;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
-        _commandResolver = commandResolver;
         _environment = environment;
         _profilingTelemetry = profilingTelemetry;
+        _installDependencies = installDependencies
+            ?? (spec.InstallDependencies is null ? null : [spec.InstallDependencies]);
+    }
+
+    public GuestRuntime(RuntimeSpec spec, ILogger logger, Func<string, string?> commandResolver, IEnvironment environment, ProfilingTelemetry profilingTelemetry, FileLoggerProvider? fileLoggerProvider = null)
+        : this(spec, logger, environment, profilingTelemetry, fileLoggerProvider)
+    {
+        ArgumentNullException.ThrowIfNull(commandResolver);
     }
 
     /// <summary>
@@ -115,38 +130,54 @@ internal sealed class GuestRuntime
     /// Installs dependencies for the guest language project.
     /// </summary>
     /// <param name="directory">The project directory.</param>
+    /// <param name="environmentVariables">Environment variables inherited by each dependency installation command.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A tuple containing the exit code and captured output from the dependency installation command.</returns>
-    public async Task<(int ExitCode, OutputCollector Output)> InstallDependenciesAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    /// <returns>A tuple containing the exit code and captured output from the dependency installation commands.</returns>
+    public async Task<(int ExitCode, OutputCollector Output)> InstallDependenciesAsync(
+        DirectoryInfo directory,
+        IDictionary<string, string> environmentVariables,
+        CancellationToken cancellationToken)
     {
         var outputCollector = new OutputCollector();
 
-        if (_spec.InstallDependencies is null)
+        if (_installDependencies is null or { Length: 0 })
         {
             _logger.LogDebug("No dependency installation configured for {Language}", _spec.Language);
             return (0, outputCollector);
         }
 
-        var args = ReplacePlaceholders(_spec.InstallDependencies.Args, null, directory, null);
-        var environmentVariables = _spec.InstallDependencies.EnvironmentVariables ?? new Dictionary<string, string>();
-
         var launcher = CreateDefaultLauncher();
-        using var activity = _profilingTelemetry.StartGuestInstallDependencies(_spec.Language, _spec.DisplayName, _spec.InstallDependencies.Command, args, directory);
-        var (exitCode, output) = await launcher.LaunchAsync(
-            _spec.InstallDependencies.Command,
-            args,
-            directory,
-            environmentVariables,
-            afterLaunchAsync: null,
-            options: null,
-            cancellationToken);
-        activity.SetProcessExitCode(exitCode);
-        if (exitCode != 0)
+        OutputCollector lastOutput = outputCollector;
+        foreach (var command in _installDependencies)
         {
-            activity.SetError($"{_spec.DisplayName} dependency installation exited with code {exitCode}.");
+            var args = ReplacePlaceholders(command.Args, null, directory, null);
+            var mergedEnvironment = MergeEnvironmentVariables(environmentVariables, command);
+
+            using var activity = _profilingTelemetry.StartGuestInstallDependencies(
+                _spec.Language,
+                _spec.DisplayName,
+                command.Command,
+                args,
+                directory);
+            var (exitCode, output) = await launcher.LaunchAsync(
+                command.Command,
+                args,
+                directory,
+                mergedEnvironment,
+                afterLaunchAsync: null,
+                options: null,
+                cancellationToken);
+            activity.SetProcessExitCode(exitCode);
+            if (exitCode != 0)
+            {
+                activity.SetError($"{_spec.DisplayName} dependency installation exited with code {exitCode}.");
+                return (exitCode, output ?? outputCollector);
+            }
+
+            lastOutput = output ?? outputCollector;
         }
 
-        return (exitCode, output ?? outputCollector);
+        return (0, lastOutput);
     }
 
     /// <summary>
@@ -297,7 +328,7 @@ internal sealed class GuestRuntime
     }
 
     /// <summary>
-    /// Determines whether every declared input is older than the stamp file.
+    /// Determines whether every declared output exists and every declared input is older than the stamp file.
     /// </summary>
     /// <remarks>
     /// Comparison is strictly "no input newer than the stamp". An input written in the same second as
@@ -310,6 +341,16 @@ internal sealed class GuestRuntime
         if (!stampFile.Exists)
         {
             return false;
+        }
+
+        var outputs = ReplacePlaceholders(check.Outputs ?? [], appHostFile, directory, null);
+        foreach (var output in outputs)
+        {
+            var path = Path.IsPathRooted(output) ? output : Path.Combine(directory.FullName, output);
+            if (!File.Exists(path) && !Directory.Exists(path))
+            {
+                return false;
+            }
         }
 
         var stampWriteTime = stampFile.LastWriteTimeUtc;
@@ -560,7 +601,12 @@ internal sealed class GuestRuntime
         IDictionary<string, string> environmentVariables,
         CommandSpec commandSpec)
     {
-        var mergedEnvironment = new Dictionary<string, string>(environmentVariables);
+        var mergedEnvironment = new Dictionary<string, string>(environmentVariables.Count, ProcessEnvironment.Comparer);
+        foreach (var (key, value) in environmentVariables)
+        {
+            mergedEnvironment[key] = value;
+        }
+
         if (commandSpec.EnvironmentVariables is not null)
         {
             foreach (var (key, value) in commandSpec.EnvironmentVariables)
@@ -601,7 +647,6 @@ internal sealed class GuestRuntime
         _spec.Language,
         _logger,
         fileLoggerProvider: _fileLoggerProvider,
-        commandResolver: _commandResolver,
         // The launcher logs each guest stdout/stderr line itself, so the execution factory is given
         // a NullLogger to avoid double-logging those lines.
         processExecutionFactory: new ProcessExecutionFactory(_environment, NullLogger<ProcessExecutionFactory>.Instance));

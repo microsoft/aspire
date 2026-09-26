@@ -39,7 +39,7 @@ resource apiOriginGroup 'Microsoft.Cdn/profiles/originGroups@2025-06-01' = {
 }
 
 resource apiOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2025-06-01' = {
-  name: take('apiOrigin-${uniqueString(resourceGroup().id)}', 90)
+  name: take('apiOrigin-${uniqueString(resourceGroup().id, api_host)}', 90)
   properties: {
     hostName: api_host
     originHostHeader: api_host
@@ -89,7 +89,7 @@ resource webOriginGroup 'Microsoft.Cdn/profiles/originGroups@2025-06-01' = {
 }
 
 resource webOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2025-06-01' = {
-  name: take('webOrigin-${uniqueString(resourceGroup().id)}', 90)
+  name: take('webOrigin-${uniqueString(resourceGroup().id, web_host)}', 90)
   properties: {
     hostName: web_host
     originHostHeader: web_host

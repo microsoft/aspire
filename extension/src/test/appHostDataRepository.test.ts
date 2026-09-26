@@ -15,6 +15,7 @@ import * as configInfoProvider from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
 import { errorFetchingAppHosts } from '../loc/strings';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
 
 import { removeDirectorySafely } from './testHelpers';
 class TestChildProcess extends EventEmitter {
@@ -2741,6 +2742,31 @@ suite('AppHostDataRepository', () => {
 
             assert.strictEqual(context.repository.errorMessage, undefined);
         } finally {
+            context.dispose();
+        }
+    });
+
+    test('describe reports the exact CLI path for each active workspace folder', async () => {
+        const resolutions: Array<{ folder: string; cliPath: string }> = [];
+        const resolutionSubscription = onDidResolveCliForOperation(resolution => {
+            if (resolution.target.kind === 'workspaceFolder') {
+                resolutions.push({
+                    folder: resolution.target.workspaceFolder.name,
+                    cliPath: resolution.cliPath,
+                });
+            }
+        });
+
+        const context = await startTwoFolderDescribeStreams();
+
+        try {
+            assert.deepStrictEqual(resolutions.sort((left, right) => left.folder.localeCompare(right.folder)), [
+                { folder: 'peer', cliPath: '/cli/peer/aspire' },
+                { folder: 'selected', cliPath: '/cli/selected/aspire' },
+            ]);
+        }
+        finally {
+            resolutionSubscription.dispose();
             context.dispose();
         }
     });

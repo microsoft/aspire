@@ -2,9 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Authentication;
+using Aspire.Dashboard.Utils;
 using Grpc.Core;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
 using OpenTelemetry.Proto.Collector.Logs.V1;
 
 namespace Aspire.Dashboard.Otlp.Grpc;

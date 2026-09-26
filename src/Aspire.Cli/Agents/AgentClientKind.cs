@@ -11,6 +11,9 @@ internal enum AgentClientKind
     /// <summary>GitHub Copilot CLI.</summary>
     CopilotCli,
 
+    /// <summary>GitHub Copilot App.</summary>
+    CopilotApp,
+
     /// <summary>Anthropic Claude Code.</summary>
     ClaudeCode,
 

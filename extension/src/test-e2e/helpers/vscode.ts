@@ -57,29 +57,132 @@ export async function openAspireView(): Promise<TreeSection> {
     }, 30000, `Timed out waiting for '${aspireAppHostsSectionTitle}' section. Visible sections: ${lastSectionTitles.join(', ') || '<none>'}.`);
 }
 
-export async function waitForTreeItem(section: TreeSection, label: string, timeoutMs = 30000): Promise<TreeItem> {
-    return await VSBrowser.instance.driver.wait(async () => {
-        try {
-            const item = await section.findItem(label, 4);
-            if (item) {
-                return item;
-            }
-        }
-        catch (error) {
-            throwIfWebDriverSessionFailure(error);
+export async function observeVisibleSideBarSectionTitles(durationMs = 2000): Promise<string[]> {
+    const observedTitles = new Set<string>();
+    const deadline = Date.now() + durationMs;
+
+    do {
+        const sections = await new SideBarView().getContent().getSections();
+        const titles = await Promise.all(sections.map(section => section.getTitle()));
+        for (const title of titles) {
+            observedTitles.add(title);
         }
 
-        try {
-            const sections = await new SideBarView().getContent().getSections();
-            const sectionTitles = await Promise.all(sections.map(section => section.getTitle()));
-            const currentSection = sections.find((_, index) => sectionTitles[index] === aspireAppHostsSectionTitle);
-            return currentSection ? await currentSection.findItem(label, 4) ?? false : false;
-        }
-        catch (error) {
-            throwIfWebDriverSessionFailure(error);
+        await delay(100);
+    } while (Date.now() < deadline);
+
+    return [...observedTitles];
+}
+
+export async function waitForTreeItem(section: TreeSection, label: string, timeoutMs = 30000): Promise<TreeItem> {
+    let lastLabel: string | undefined;
+    const findMatchingItem = async (candidateSection: TreeSection): Promise<TreeItem | false> => {
+        const item = await candidateSection.findItem(label, 4);
+        if (!item) {
             return false;
         }
-    }, timeoutMs, `Timed out waiting for tree item '${label}'.`);
+
+        // Monaco can recycle the row after ExTester matched it but before findItem returns.
+        lastLabel = await item.getLabel();
+        return lastLabel === label ? item : false;
+    };
+
+    try {
+        return await VSBrowser.instance.driver.wait(async () => {
+            try {
+                const item = await findMatchingItem(section);
+                if (item) {
+                    return item;
+                }
+            }
+            catch (error) {
+                throwIfWebDriverSessionFailure(error);
+            }
+
+            try {
+                const sections = await new SideBarView().getContent().getSections();
+                const sectionTitles = await Promise.all(sections.map(section => section.getTitle()));
+                const currentSection = sections.find((_, index) => sectionTitles[index] === aspireAppHostsSectionTitle);
+                return currentSection ? await findMatchingItem(currentSection) : false;
+            }
+            catch (error) {
+                throwIfWebDriverSessionFailure(error);
+                return false;
+            }
+        }, timeoutMs, `Timed out waiting for tree item '${label}'.`);
+    }
+    catch (error) {
+        throw withWaitDiagnostics(error, [`Last observed tree item label: ${JSON.stringify(lastLabel)}`]);
+    }
+}
+
+export async function waitForAppHostsTreePath(labels: readonly string[], timeoutMs = 30000): Promise<string[]> {
+    if (labels.length === 0) {
+        throw new Error('An AppHosts tree path must contain at least one label.');
+    }
+
+    let lastRows: { label: string; level: number; index: number }[] = [];
+    try {
+        return await VSBrowser.instance.driver.wait(async () => {
+            try {
+                // Read labels and hierarchy in one browser turn. Returning a live TreeItem then
+                // calling getLabel/findChildItem leaves another row-recycling race (#20335).
+                lastRows = await VSBrowser.instance.driver.executeScript<typeof lastRows>(`
+                    const titles = Array.from(document.querySelectorAll('.part.sidebar .pane > .pane-header > .title'));
+                    const title = titles.find(candidate => candidate.textContent?.trim() === arguments[0]);
+                    const pane = title?.closest('.pane');
+                    if (!pane || pane.getClientRects().length === 0) {
+                        return [];
+                    }
+
+                    return Array.from(pane.querySelectorAll('.monaco-list-row'))
+                        .filter(row => row.getClientRects().length > 0)
+                        .map(row => ({
+                            label: row.querySelector('.monaco-highlighted-label')?.textContent ?? '',
+                            level: Number(row.getAttribute('aria-level') ?? '0'),
+                            index: Number(row.getAttribute('data-index') ?? '-1'),
+                        }))
+                        .filter(row => Number.isInteger(row.level) && row.level > 0
+                            && Number.isInteger(row.index) && row.index >= 0)
+                        .sort((left, right) => left.index - right.index);
+                `, aspireAppHostsSectionTitle);
+            }
+            catch (error) {
+                if (error instanceof webDriverError.StaleElementReferenceError) {
+                    return false;
+                }
+                throw error;
+            }
+
+            // Monaco rows are flattened: aria-level describes depth and data-index describes
+            // tree order, which can differ from DOM order when virtualized rows are recycled.
+            const ancestors: typeof lastRows = [];
+            let previousIndex = -1;
+            for (const row of lastRows) {
+                // A gap may contain another parent that has scrolled out of the rendered rows.
+                if (row.index !== previousIndex + 1) {
+                    ancestors.length = 0;
+                }
+                previousIndex = row.index;
+                while (ancestors.length > 0 && ancestors[ancestors.length - 1].level >= row.level) {
+                    ancestors.pop();
+                }
+                if (ancestors.length > 0 && ancestors[ancestors.length - 1].level !== row.level - 1) {
+                    ancestors.length = 0;
+                }
+                ancestors.push(row);
+
+                const path = ancestors.slice(-labels.length).map(ancestor => ancestor.label);
+                if (path.length === labels.length && path.every((label, index) => label === labels[index])) {
+                    return path;
+                }
+            }
+            return false;
+        }, timeoutMs, `Timed out waiting for AppHosts tree path ${labels.map(label => JSON.stringify(label)).join(' > ')}.`);
+    }
+    catch (error) {
+        throw withWaitDiagnostics(error, [`Last observed AppHosts tree rows: ${JSON.stringify(lastRows)}`]);
+    }
 }
 
 export async function waitForChildTreeItem(parent: TreeItem, label: string, timeoutMs = 30000): Promise<TreeItem> {
@@ -360,6 +463,37 @@ export async function waitForNotificationMessage(expectedText: string, timeoutMs
     }, timeoutMs, `Timed out waiting for notification containing '${expectedText}'.`);
 }
 
+export async function takeNotificationAction(expectedText: string, actionTitle: string, timeoutMs = 30000): Promise<void> {
+    await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const notifications = await new Workbench().getNotifications();
+            for (const notification of notifications) {
+                if ((await notification.getMessage()).includes(expectedText)) {
+                    await notification.takeAction(actionTitle);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            if (error instanceof webDriverError.ElementClickInterceptedError) {
+                // VS Code can leave a custom hover over a notification action after Selenium
+                // positions the pointer. Escape dismisses that hover so the next poll can click.
+                await VSBrowser.instance.driver.actions().sendKeys(escapeKey).perform();
+                return false;
+            }
+            if (error instanceof webDriverError.StaleElementReferenceError
+                || error instanceof webDriverError.NoSuchElementError) {
+                return false;
+            }
+
+            throw error;
+        }
+    }, timeoutMs, `Timed out selecting notification action '${actionTitle}' from '${expectedText}'.`);
+}
+
 export interface AcceptedModalDialog {
     message: string;
     details: string;
@@ -371,11 +505,13 @@ export async function acceptModalDialog(buttonTitle: string, timeoutMs = 120000,
         try {
             const dialog = new ModalDialog();
             const message = await dialog.getMessage();
-            if (!message) {
+            const details = await dialog.getDetails().catch(() => '');
+            // Debug launch errors can have an empty heading with the entire
+            // "Unable to launch browser: ..." message in the details element.
+            if (!message && !details) {
                 return false;
             }
 
-            const details = await dialog.getDetails().catch(() => '');
             if (screenshotName) {
                 await VSBrowser.instance.takeScreenshot(screenshotName).catch(() => undefined);
             }
@@ -399,6 +535,28 @@ export async function getNotificationCount(): Promise<number> {
 export async function getNotificationMessages(): Promise<string[]> {
     const notifications = await new Workbench().getNotifications();
     return await Promise.all(notifications.map(notification => notification.getMessage()));
+}
+
+export async function dismissAllNotifications(timeoutMs = 30000): Promise<void> {
+    await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const notifications = await new Workbench().getNotifications();
+            if (notifications.length === 0) {
+                return true;
+            }
+
+            await notifications[0].dismiss();
+            return false;
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            if (error instanceof webDriverError.StaleElementReferenceError) {
+                return false;
+            }
+
+            throw error;
+        }
+    }, timeoutMs, 'Timed out dismissing VS Code notifications.');
 }
 
 export async function waitForNotificationCountGreaterThan(count: number, timeoutMs = 30000): Promise<void> {

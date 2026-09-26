@@ -225,7 +225,7 @@ The matrix:
 Three things to call out:
 
 1. **The csproj `<AspireCliChannel>local</AspireCliChannel>` default can stay** as a no-op — it costs nothing and keeps `dotnet build` producing a binary whose assembly metadata reads sensibly when inspected. What changes is that CI stops *overriding* it for non-dotnet-tool publish paths.
-2. **`dotnet run --project src/Aspire.Cli` continues to find no sidecar**, because the project's `bin/Debug/net10.0/` directory is not an install directory and nothing writes a sidecar there. This is correct: a `dotnet run` invocation is not an installed CLI and should resolve `local`.
+2. **`dotnet run --project src/Aspire.Cli` continues to find no sidecar**, because the project's `bin/Debug/net11.0/` directory is not an install directory and nothing writes a sidecar there. This is correct: a `dotnet run` invocation is not an installed CLI and should resolve `local`.
 3. **The validation patterns become available in the `dotnet run` loop too.** Want to reproduce a customer's stable-channel bug while iterating on `src/Aspire.Cli`?
 
    ```bash
@@ -313,7 +313,7 @@ A user reports an issue against `aspire 13.4.0` (stable, commit `abc123`). Today
 ASPIRE_CLI_CHANNEL=stable \
 ASPIRE_CLI_VERSION=13.4.0 \
 ASPIRE_CLI_COMMIT=abc123 \
-  ./artifacts/bin/Aspire.Cli/Debug/net10.0/aspire init
+  ./artifacts/bin/Aspire.Cli/Debug/net11.0/aspire init
 ```
 
 The dev binary now runs every identity-conditional code path under the reported identity. Reproduction is a single command on the developer's machine, against the in-tree source code, with debugger attached.
@@ -466,4 +466,4 @@ The resolver and call-site migration land together; the test plan reflects that.
 
 - `EmulatedReleasedBuildTests` (C# + TS): emulate the latest **shipped stable**; assert no `NuGet.config` is dropped (stable packages live on nuget.org) and the AppHost SDK is pinned stable-shaped.
 - `EmulatedStagingBuildTests` (C# + TS): emulate the latest **staging** build (discovered darc commit); assert a `NuGet.config` mapping `Aspire*` to the SHA-specific darc feed is dropped and `aspire add` resolves the staging version.
-- `EmulatedLocalReleaseBuildTests` (C# + TS): the **all-local "future release"** row. Build a stable-shaped archive with `localhive --version <X.Y.Z> --archive`, emulate `stable` with `ASPIRE_CLI_PACKAGES` pointed at the extracted hive, and assert `aspire new`/`aspire add` resolve the future-only version (e.g. `13.5.0`) **from the local hive** — proving the resolution fix (override honored under any emulated channel name). Registers the hive as an ambient NuGet source for buildability. Skips unless the CLI was installed from a stable-shaped `LocalHive` archive, so it adds zero default-CI cost (relying on `--ignore-exit-code 8` in `eng/Testing.props` for the all-skipped class job).
+- `EmulatedLocalReleaseBuildTests` (C# + TS): the **all-local "future release"** row. Build a stable-shaped archive with `localhive --version <X.Y.Z> --archive`, emulate `stable` with `ASPIRE_CLI_PACKAGES` pointed at the extracted hive, and assert `aspire new`/`aspire add` resolve the future-only version (e.g. `13.5.0`) **from the local hive** — proving the resolution fix (override honored under any emulated channel name). Registers the hive as an ambient NuGet source for buildability. Skips unless the CLI was installed from a stable-shaped `LocalHive` archive, so it adds zero default-CI cost (relying on `--ignore-exit-code 8` in `eng/Testing.targets` for the all-skipped class job).

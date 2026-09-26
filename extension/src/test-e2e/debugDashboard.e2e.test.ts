@@ -2,9 +2,10 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getBrowserDebugSessions, getCommandInvocationCount, getDebugLaunchCount, getStoppingPathEventCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForBrowserDebugSession, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoBrowserDebugSessions, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForStoppingPathEvent, waitForWorkspaceAppHost } from './helpers/assertions';
+import { VSBrowser } from './helpers/extester';
 import { executeE2eControlCommand, resetDashboardDefaultChangedNotificationForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceSetting } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+import { getNotificationMessages, openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
 suite('Aspire debug dashboard E2E', function () {
     this.timeout(240000);
@@ -257,10 +258,24 @@ suite('Aspire debug dashboard E2E', function () {
             await waitForDebugConsoleOutput('The project could not be built', appHostPath, 120000);
             const logOutput = await waitForDebugConsoleOutput('See logs at', appHostPath, 120000);
             assert.ok(!logOutput.output.includes('\u001b]8;'), `Expected debug console log output to omit terminal hyperlinks: ${JSON.stringify(logOutput.output)}`);
+            const logFileMatch = /See logs at (.+?\.log)(?:\r?\n|$)/.exec(logOutput.output);
+            assert.ok(logFileMatch, `Expected the Debug Console to contain a CLI log path: ${JSON.stringify(logOutput.output)}`);
+            const logFilePath = logFileMatch[1].trim();
+
+            const notification = await waitForNotificationMessage('The project could not be built.', 60000);
+            const buildFailureNotifications = (await getNotificationMessages()).filter(message =>
+                message.includes('The project could not be built') || message.includes('See logs at'));
+            assert.deepStrictEqual(buildFailureNotifications, ['The project could not be built.']);
+            await VSBrowser.instance.takeScreenshot('apphost-build-failure-notification').catch(() => undefined);
+
+            await notification.takeAction('Open CLI Log');
+            await waitForEditorTitle(path.basename(logFilePath), 60000);
+            await VSBrowser.instance.takeScreenshot('apphost-build-failure-open-log').catch(() => undefined);
         }
         finally {
             await runE2eTeardown([
                 () => setShowStatusDelayForE2E(undefined),
+                () => executeE2eControlCommand({ name: 'closeAllEditors' }),
                 () => writeFileWithRetry(appHostSourcePath, originalSource),
                 () => executeE2eControlCommand({ name: 'stopDebugging' }),
                 () => waitForNoDebugSessions().catch(() => undefined),

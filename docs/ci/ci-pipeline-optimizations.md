@@ -32,7 +32,6 @@ The main test workflow in `.github/workflows/tests.yml` is organized into these 
 
 4. Test execution lanes
    - `tests_no_nugets`
-   - `tests_no_nugets_overflow`
    - `tests_requires_nugets_linux`
    - `tests_requires_nugets_windows`
    - `tests_requires_nugets_macos`

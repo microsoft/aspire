@@ -64,6 +64,7 @@ internal sealed class InitCommand : BaseCommand
 
     private readonly Option<string?> _channelOption;
     private readonly Option<string?> _languageOption;
+    private readonly Option<bool> _fileBasedOption;
 
     public InitCommand(
         ILanguageService languageService,
@@ -100,10 +101,15 @@ internal sealed class InitCommand : BaseCommand
         {
             Description = InitCommandStrings.LanguageOptionDescription
         };
+        _fileBasedOption = new Option<bool>("--file-based")
+        {
+            Description = InitCommandStrings.FileBasedOptionDescription
+        };
         Options.Add(s_sourceOption);
         Options.Add(s_versionOption);
         Options.Add(_channelOption);
         Options.Add(_languageOption);
+        Options.Add(_fileBasedOption);
         Options.Add(NewCommand.s_suppressAgentInitOption);
         Options.Add(AgentInitCommand.s_skillLocationsOption);
         Options.Add(AgentInitCommand.s_skillsOption);
@@ -121,11 +127,18 @@ internal sealed class InitCommand : BaseCommand
         var selectedProject = projectSelection.Project;
 
         var isCSharp = selectedProject.LanguageId == KnownLanguageId.CSharp;
+        var fileBased = parseResult.GetValue(_fileBasedOption);
+        if (fileBased && !isCSharp)
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, InitCommandStrings.FileBasedRequiresCSharp);
+        }
+
         var workingDirectory = _executionContext.WorkingDirectory;
 
         // Step 2: Detect solution (C# only — determines single-file vs full project).
+        // File-based initialization bypasses discovery so incidental solutions cannot trigger a prompt.
         FileInfo? solutionFile = null;
-        if (isCSharp)
+        if (isCSharp && !fileBased)
         {
             solutionFile = await _solutionLocator.FindSolutionFileAsync(workingDirectory, cancellationToken);
         }
@@ -155,14 +168,16 @@ internal sealed class InitCommand : BaseCommand
             _ = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
         }
 
-        // Step 4: Chain to aspire agent init for MCP server + skill configuration.
-        // This prompt lets users choose which skills to install — including aspireify.
+        // Step 4: Chain to aspire agent init for skill configuration.
+        // MCP remains an explicit opt-in through standalone `aspire agent init`.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
         var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
         // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
-        // (which includes aspireify as the natural follow-up wiring skill).
+        // (which includes aspireify as the natural follow-up wiring skill). This chained flow
+        // never registers `--mcp`, so MCP configuration is unavailable here by construction —
+        // it remains reachable only through standalone `aspire agent init`.
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
             InteractionService,
             CliExitCodes.Success,
@@ -170,7 +185,6 @@ internal sealed class InitCommand : BaseCommand
             agentInitBinding,
             skillLocationsBinding,
             skillsBinding,
-            null,
             cancellationToken);
 
         // Step 5: Print follow-up commands only when the user selected the one-time init skill.

@@ -1,3 +1,5 @@
+#pragma warning disable ASPIRECONNECTIONSTRINGS001
+
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
@@ -30,7 +32,6 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class ResourceBuilderExtensions
 {
-    private const string ConnectionStringEnvironmentName = "ConnectionStrings__";
     private const string PersistenceExperimentalDiagnosticId = "ASPIREPERSISTENCE001";
     private static readonly MethodInfo s_dispatchCustomWithReferenceMethod = typeof(ResourceBuilderExtensions).GetMethod(nameof(DispatchCustomWithReference), BindingFlags.NonPublic | BindingFlags.Static)!;
 
@@ -1085,7 +1086,10 @@ public static class ResourceBuilderExtensions
 
     /// <summary>
     /// Injects a connection string as an environment variable from the source resource into the destination resource, using the source resource's name as the connection string name (if not overridden).
-    /// The format of the environment variable will be "ConnectionStrings__{sourceResourceName}={connectionString}".
+    /// The logical connection name is preserved for application configuration. When the source resource does not specify
+    /// <see cref="IResourceWithConnectionString.ConnectionStringEnvironmentVariable"/> and the logical name is not portable as an environment-variable suffix,
+    /// Aspire emits both the original name and a portable alias that replaces characters unsupported in environment-variable names.
+    /// For example, <c>my-db</c> produces <c>ConnectionStrings__my-db</c> and <c>ConnectionStrings__my_db</c> on targets that support both names.
     /// <para>
     /// Each resource defines the format of the connection string value. The
     /// underlying connection string value can be retrieved using <see cref="IResourceWithConnectionString.GetConnectionStringAsync(CancellationToken)"/>.
@@ -1098,7 +1102,10 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="TDestination">The destination resource.</typeparam>
     /// <param name="builder">The resource where connection string will be injected.</param>
     /// <param name="source">The resource from which to extract the connection string.</param>
-    /// <param name="connectionName">An override of the source resource's name for the connection string. The resulting connection string will be "ConnectionStrings__connectionName" if this is not null.</param>
+    /// <param name="connectionName">
+    /// An override of the source resource's logical connection name. The physical environment-variable names are derived from this value when it is not <see langword="null"/>,
+    /// unless the source resource specifies <see cref="IResourceWithConnectionString.ConnectionStringEnvironmentVariable"/>, in which case that explicit physical name is preserved.
+    /// </param>
     /// <param name="optional"><see langword="true"/> to allow a missing connection string; <see langword="false"/> to throw an exception if the connection string is not found.</param>
     /// <exception cref="DistributedApplicationException">Throws an exception if the connection string resolves to null. It can be null if the resource has no connection string, and if the configuration has no connection string for the source resource.</exception>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
@@ -1117,13 +1124,30 @@ public static class ResourceBuilderExtensions
         // Determine what to inject based on the annotation on the destination resource
         builder.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var injectionAnnotation);
         var flags = injectionAnnotation?.Flags ?? ReferenceEnvironmentInjectionFlags.All;
+        var environmentVariableNames = ConnectionStringEnvironmentVariableNames.Create(resource, connectionName);
+        ConnectionStringReference? connectionStringReference = null;
+
+        if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
+        {
+            connectionStringReference = new ConnectionStringReference(
+                resource,
+                optional,
+                environmentVariableNames,
+                nameof(IResourceWithConnectionString.ConnectionStringExpression),
+                connectionStringExpression: null);
+        }
 
         return builder.WithEnvironment(context =>
         {
-            if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
+            if (connectionStringReference is not null)
             {
-                var connectionStringName = resource.ConnectionStringEnvironmentVariable ?? $"{ConnectionStringEnvironmentName}{connectionName}";
-                context.EnvironmentVariables[connectionStringName] = new ConnectionStringReference(resource, optional);
+                ValidateConnectionStringReference(context, connectionStringReference);
+                context.EnvironmentVariables[environmentVariableNames.OriginalName] = connectionStringReference;
+
+                if (!string.Equals(environmentVariableNames.OriginalName, environmentVariableNames.PortableName, StringComparison.OrdinalIgnoreCase))
+                {
+                    context.EnvironmentVariables[environmentVariableNames.PortableName] = connectionStringReference;
+                }
             }
 
             if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionProperties))
@@ -1145,6 +1169,44 @@ public static class ResourceBuilderExtensions
                 }
             }
         });
+    }
+
+    internal static void ValidateConnectionStringReference(EnvironmentCallbackContext context, ConnectionStringReference candidate)
+    {
+        if (candidate.EnvironmentVariableNames is not { } candidateNames)
+        {
+            return;
+        }
+
+        foreach (var existing in context.EnvironmentVariables.Values.OfType<ConnectionStringReference>())
+        {
+            if (existing.EnvironmentVariableNames is not { } existingNames ||
+                IsEquivalentConnectionStringReference(existing, candidate))
+            {
+                continue;
+            }
+
+            var conflictingName = existingNames.GetPhysicalNames()
+                .Intersect(candidateNames.GetPhysicalNames(), StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+
+            if (conflictingName is not null)
+            {
+                throw new DistributedApplicationException(
+                    $"Connection-string references '{existingNames.LogicalName}' and " +
+                    $"'{candidateNames.LogicalName}' on resource '{context.Resource.Name}' both use " +
+                    $"the environment variable '{conflictingName}'. Use unique connectionName values when calling WithReference.");
+            }
+        }
+    }
+
+    private static bool IsEquivalentConnectionStringReference(
+        ConnectionStringReference left,
+        ConnectionStringReference right)
+    {
+        return ReferenceEquals(left.Resource, right.Resource) &&
+            string.Equals(left.ValueName, right.ValueName, StringComparison.Ordinal) &&
+            left.EnvironmentVariableNames == right.EnvironmentVariableNames;
     }
 
     private static void SplatConnectionProperties(IResourceWithConnectionString resource, string prefix, EnvironmentCallbackContext context)
@@ -2183,20 +2245,27 @@ public static class ResourceBuilderExtensions
     public static IResourceBuilder<T> WithUrlForEndpoint<T>(this IResourceBuilder<T> builder, string endpointName, Action<ResourceUrlAnnotation> callback)
         where T : IResource
     {
-        builder.WithUrls(context =>
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(endpointName);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        if (builder.Resource is IResourceWithEndpoints resource)
         {
-            var urlForEndpoint = context.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == endpointName);
-            if (urlForEndpoint is not null)
+            return builder.WithUrlForEndpoint(resource.GetEndpoint(endpointName), callback);
+        }
+
+        return builder.WithUrls(context =>
+        {
+            var url = context.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == endpointName);
+            if (url is not null)
             {
-                callback(urlForEndpoint);
+                callback(url);
             }
             else
             {
                 context.Logger.LogWarning("Could not execute callback to customize endpoint URL as no endpoint with name '{EndpointName}' could be found on resource '{ResourceName}'.", endpointName, builder.Resource.Name);
             }
         });
-
-        return builder;
     }
 
     /// <summary>
@@ -2245,6 +2314,58 @@ public static class ResourceBuilderExtensions
         });
 
         return builder;
+    }
+
+    /// <summary>
+    /// Configures the URL for an endpoint, including an endpoint on another resource.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The builder for the resource that will display the URL.</param>
+    /// <param name="endpoint">The endpoint to link to.</param>
+    /// <param name="callback">The callback that configures the URL.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// The callback runs after endpoints have been allocated. An existing URL for the endpoint is updated.
+    /// When the endpoint belongs to another resource, a URL is added with its endpoint set before the callback runs.
+    /// A relative URL is combined with the referenced endpoint's URL.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the endpoint name overload for withUrlForEndpoint.")]
+    public static IResourceBuilder<T> WithUrlForEndpoint<T>(this IResourceBuilder<T> builder, EndpointReference endpoint, Action<ResourceUrlAnnotation> callback)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        var resourceComparer = new ResourceNameComparer();
+
+        return builder.WithUrls(context =>
+        {
+            if (endpoint.Exists)
+            {
+                var url = context.Urls.FirstOrDefault(u =>
+                    u.Endpoint is { } urlEndpoint &&
+                    resourceComparer.Equals(urlEndpoint.Resource, endpoint.Resource) &&
+                    string.Equals(urlEndpoint.EndpointName, endpoint.EndpointName, StringComparisons.EndpointAnnotationName));
+                if (url is null)
+                {
+                    if (resourceComparer.Equals(builder.Resource, endpoint.Resource))
+                    {
+                        context.Logger.LogWarning("Could not execute callback to customize endpoint URL as no URL for endpoint '{EndpointName}' could be found on resource '{ResourceName}'.", endpoint.EndpointName, builder.Resource.Name);
+                        return;
+                    }
+
+                    url = new ResourceUrlAnnotation { Url = "/", Endpoint = endpoint };
+                    context.Urls.Add(url);
+                }
+
+                callback(url);
+            }
+            else
+            {
+                context.Logger.LogWarning("Could not execute callback to add an endpoint URL as no endpoint with name '{EndpointName}' could be found on resource '{ResourceName}'.", endpoint.EndpointName, endpoint.Resource.Name);
+            }
+        });
     }
 
     /// <summary>
@@ -4444,7 +4565,12 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(type);
 
-        return builder.WithAnnotation(new ResourceRelationshipAnnotation(resource, type));
+        if (!builder.Resource.Annotations.OfType<ResourceRelationshipAnnotation>().Any(r => ReferenceEquals(r.Resource, resource) && r.Type == type))
+        {
+            builder.WithAnnotation(new ResourceRelationshipAnnotation(resource, type));
+        }
+
+        return builder;
     }
 
     /// <summary>
@@ -4817,17 +4943,58 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(callback);
 
+        return builder.WithLaunchToolArgs(
+            ctx =>
+            {
+                callback(ctx);
+                return Task.CompletedTask;
+            },
+            ownedByLaunchConfigurationType,
+            showInCommandLine);
+    }
+
+    /// <summary>
+    /// Asynchronously declares the resource's launch tool arguments.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="callback">
+    /// Callback that produces the launch tool arguments. It is invoked with an empty
+    /// <see cref="CommandLineArgsCallbackContext.Args"/> list.
+    /// </param>
+    /// <param name="ownedByLaunchConfigurationType">
+    /// The debug launch configuration type that performs this tool invocation, or <see langword="null"/> when
+    /// the prefix is always passed to the launched program.
+    /// </param>
+    /// <param name="showInCommandLine">Whether these arguments appear in the dashboard command line.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="builder"/> or <paramref name="callback"/> is null.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="ownedByLaunchConfigurationType"/> is empty.
+    /// </exception>
+    /// <remarks>
+    /// The ordering, IDE ownership, visibility, and replacement behavior is the same as the synchronous overload.
+    /// </remarks>
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Generic launch tool argument support is not part of the ATS surface.")]
+    public static IResourceBuilder<T> WithLaunchToolArgs<T>(
+        this IResourceBuilder<T> builder,
+        Func<CommandLineArgsCallbackContext, Task> callback,
+        string? ownedByLaunchConfigurationType = null,
+        bool showInCommandLine = true)
+        where T : IResourceWithArgs
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(callback);
+
         if (ownedByLaunchConfigurationType is not null)
         {
             ArgumentException.ThrowIfNullOrEmpty(ownedByLaunchConfigurationType);
         }
 
         return builder.WithAnnotation(new LaunchToolArgsCallbackAnnotation(
-            ctx =>
-            {
-                callback(ctx);
-                return Task.CompletedTask;
-            },
+            callback,
             ownedByLaunchConfigurationType,
             showInCommandLine));
     }

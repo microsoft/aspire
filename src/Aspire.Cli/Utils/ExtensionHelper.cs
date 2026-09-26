@@ -32,12 +32,14 @@ internal static class KnownCapabilities
     public const string DevKit = "devkit";
     public const string Project = "project";
     public const string Node = "node";
+    public const string Deno = "deno.v1";
     public const string BuildDotnetUsingCli = "build-dotnet-using-cli";
     public const string Baseline = "baseline.v1";
     public const string SecretPrompts = "secret-prompts.v1";
     public const string FilePickers = "file-pickers.v1";
     public const string Pipelines = "pipelines";
     public const string PipelineStepListJson = "pipeline-step-list-json.v1";
+    public const string MessageActions = "message-actions.v1";
 
     // Advertised so tooling (e.g. the VS Code extension) can detect that `aspire describe`
     // understands the hidden `--include-disabled-commands` flag without having to optimistically

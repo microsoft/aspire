@@ -5,12 +5,14 @@ using System.Globalization;
 using System.Text;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Redis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
+#pragma warning disable ASPIRETERMINAL001
 
 namespace Aspire.Hosting;
 
@@ -212,6 +214,57 @@ public static class RedisBuilderExtensions
     }
 
     /// <summary>
+    /// Adds a REPL command that opens an authenticated Redis shell in the dashboard terminal dock.
+    /// </summary>
+    /// <param name="builder">The Redis resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// This command is opt-in and available only in run mode. Dashboard users who can execute resource commands
+    /// can run commands with the resource's configured credentials. Enable it only for trusted dashboard users,
+    /// especially when sharing the dashboard through a tunnel or remote development environment.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddRedis("redis").WithRepl();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<RedisResource> WithRepl(this IResourceBuilder<RedisResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
+    }
+
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(RedisResource resource, CancellationToken cancellationToken)
+    {
+        // TLS-enabled Redis also exposes a non-TLS port. The REPL runs inside the container,
+        // so use that port over loopback rather than bypassing TLS certificate validation.
+        var endpoint = resource.GetEndpoint(resource.TlsEnabled ? RedisResource.SecondaryEndpointName : RedisResource.PrimaryEndpointName);
+        var port = endpoint.TargetPort ?? throw new DistributedApplicationException("The Redis REPL port is not available.");
+        var options = new TerminalLaunchOptions
+        {
+            Title = $"redis-cli ({resource.Name})",
+            Executable = "redis-cli",
+            Arguments = ["-h", "127.0.0.1", "-p", port.ToString(CultureInfo.InvariantCulture)]
+        };
+
+        if (resource.PasswordParameter is { } passwordParameter)
+        {
+            var password = await passwordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrEmpty(password))
+            {
+                throw new DistributedApplicationException("The Redis REPL password is not available.");
+            }
+
+            options.EnvironmentVariables["REDISCLI_AUTH"] = password;
+        }
+
+        return options;
+    }
+
+    /// <summary>
     /// Configures a container resource for Redis Commander which is pre-configured to connect to the <see cref="RedisResource"/> that this method is used on.
     /// </summary>
     /// <ats-summary>Adds Redis Commander management UI</ats-summary>
@@ -242,8 +295,10 @@ public static class RedisBuilderExtensions
                                       .WithImage(RedisContainerImageTags.RedisCommanderImage, RedisContainerImageTags.RedisCommanderTag)
                                       .WithImageRegistry(RedisContainerImageTags.RedisCommanderRegistry)
                                       .WithIconName("WindowDatabase")
-                                      .WithHttpEndpoint(targetPort: 8081, name: "http")
+                                      .WithHttpEndpoint(targetPort: 8081, name: RedisCommanderResource.PrimaryEndpointName)
                                       .ExcludeFromManifest();
+
+            AddManagementLinks(resourceBuilder, resource.PrimaryEndpoint, "Manage (Commander)");
 
             builder.ApplicationBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>(resource, async (e, ct) =>
             {
@@ -285,7 +340,7 @@ public static class RedisBuilderExtensions
 
             configureContainer?.Invoke(resourceBuilder);
 
-            resourceBuilder.WithRelationship(builder.Resource, "RedisCommander");
+            resourceBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
 
             return builder;
         }
@@ -322,7 +377,7 @@ public static class RedisBuilderExtensions
                 .WithImage(RedisContainerImageTags.RedisInsightImage, RedisContainerImageTags.RedisInsightTag)
                 .WithImageRegistry(RedisContainerImageTags.RedisInsightRegistry)
                 .WithIconName("WindowDatabase")
-                .WithHttpEndpoint(targetPort: 5540, name: "http")
+                .WithHttpEndpoint(targetPort: 5540, name: RedisInsightResource.PrimaryEndpointName)
                 .WithEnvironment(context =>
                 {
                     var redisInstances = builder.ApplicationBuilder.Resources.OfType<RedisResource>();
@@ -353,7 +408,7 @@ public static class RedisBuilderExtensions
                         counter++;
                     }
                 })
-                .WithRelationship(builder.Resource, "RedisInsight")
+                .WithRelationship(builder.Resource, KnownRelationshipTypes.Manages)
                 .WithCertificateTrustConfiguration(ctx =>
                 {
                     var redisInstances = builder.ApplicationBuilder.Resources.OfType<RedisResource>();
@@ -392,10 +447,40 @@ public static class RedisBuilderExtensions
                 resourceBuilder.WithEndpoint("http", ep => ep.UriScheme = "https");
             });
 
+            AddManagementLinks(resourceBuilder, resource.PrimaryEndpoint, "Manage (Insights)");
+
             configureContainer?.Invoke(resourceBuilder);
 
             return builder;
         }
+    }
+
+    /// <summary>
+    /// Hides <paramref name="resourceBuilder"/> and adds a "Manage" URL pointing at its <paramref name="endpoint"/>
+    /// endpoint to every <see cref="RedisResource"/> in the app.
+    /// </summary>
+    private static void AddManagementLinks<T>(IResourceBuilder<T> resourceBuilder, EndpointReference endpoint, string displayText)
+        where T : IResourceWithEndpoints
+    {
+        resourceBuilder.WithHidden();
+
+        resourceBuilder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
+        {
+            foreach (var redisResource in @event.Model.Resources.OfType<RedisResource>())
+            {
+                resourceBuilder.WithRelationship(redisResource, KnownRelationshipTypes.Manages);
+
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
+                resourceBuilder.ApplicationBuilder.CreateResourceBuilder(redisResource).WithUrlForEndpoint(endpoint, url =>
+                {
+                    url.DisplayText = displayText;
+                    url.DisplayOrder = 1;
+                });
+#pragma warning restore CS0618
+            }
+
+            return Task.CompletedTask;
+        });
     }
 
     /// <summary>

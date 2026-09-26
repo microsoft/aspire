@@ -137,6 +137,16 @@
         <target state="new">The {0} option must be specified when running in non-interactive mode.</target>
         <note>{0} is the option/argument display name like '--publisher' or '&lt;integration&gt;'</note>
       </trans-unit>
+      <trans-unit id="OpenAppHostLog">
+        <source>Open AppHost Log</source>
+        <target state="new">Open AppHost Log</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OpenCliLog">
+        <source>Open CLI Log</source>
+        <target state="new">Open CLI Log</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OperationCancelled">
         <source>The operation was canceled.</source>
         <target state="translated">A operação foi cancelada.</target>

@@ -7,6 +7,7 @@
 #pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Aspire.Hosting.Ats;
 using Aspire.Hosting.ApplicationModel;
@@ -197,6 +198,11 @@ public static class ContainerResourceBuilderExtensions
     /// They are not shared with the host's file-system. To mount files from the host inside the container, call <see cref="WithBindMount{T}(IResourceBuilder{T}, string, string, bool)"/>.
     /// </para>
     /// <para>
+    /// Named volumes are preserved independently of the container lifetime. A session-lifetime
+    /// container is removed when the AppHost stops and reuses the named volume on its next run.
+    /// A persistent-lifetime container can remain running and keeps the same attached volume.
+    /// </para>
+    /// <para>
     /// If a value for the <paramref name="name"/> of the volume is not provided, the volume is created as an "anonymous volume" and will be given a random name by the container
     /// runtime. To share a volume between multiple containers, specify the same <paramref name="name"/>.
     /// </para>
@@ -217,14 +223,11 @@ public static class ContainerResourceBuilderExtensions
     /// </remarks>
     // Note: [AspireExport] is on CoreExports.WithVolume which reorders parameters
     // so the required 'target' comes before the optional 'name' - better for polyglot APIs.
+    [OverloadResolutionPriority(1)]
     [AspireExportIgnore(Reason = "Polyglot export is via CoreExports.WithVolume which reorders parameters.")]
     public static IResourceBuilder<T> WithVolume<T>(this IResourceBuilder<T> builder, string? name, string target, bool isReadOnly = false) where T : ContainerResource
     {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(target);
-
-        var annotation = new ContainerMountAnnotation(name, target, ContainerMountType.Volume, isReadOnly);
-        return builder.WithAnnotation(annotation);
+        return VolumeResourceBuilderExtensions.WithVolumeCore(builder, name, target, isReadOnly, env: null);
     }
 
     /// <summary>
@@ -261,11 +264,7 @@ public static class ContainerResourceBuilderExtensions
     [AspireExportIgnore(Reason = "Polyglot export is via CoreExports.WithVolume which accepts optional name parameter.")]
     public static IResourceBuilder<T> WithVolume<T>(this IResourceBuilder<T> builder, string target) where T : ContainerResource
     {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(target);
-
-        var annotation = new ContainerMountAnnotation(null, target, ContainerMountType.Volume, false);
-        return builder.WithAnnotation(annotation);
+        return VolumeResourceBuilderExtensions.WithVolumeCore(builder, name: null, target, isReadOnly: false, env: null);
     }
 
     /// <summary>

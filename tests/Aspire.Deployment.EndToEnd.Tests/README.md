@@ -87,6 +87,10 @@ Common quota increase requests:
 |----------|----------|-------------|
 | `ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION` | Yes | Azure subscription ID for test deployments |
 | `ASPIRE_DEPLOYMENT_TEST_RG_PREFIX` | No | Prefix for resource group names (default: `aspire-e2e`) |
+| `ASPIRE_DEPLOYMENT_TEST_ENABLE_CONNECTOR_NAMESPACE` | Connector Namespace test only | Set to `true` after the subscription is enrolled in the Connector Namespace preview |
+| `ASPIRE_DEPLOYMENT_TEST_CONNECTOR_NAMESPACE_LOCATION` | Connector Namespace test only | Preview-enabled Azure region |
+| `ASPIRE_DEPLOYMENT_TEST_CONNECTOR_NAMESPACE_PRINCIPAL_OBJECT_ID` | Connector Namespace test only | Object ID of a tenant user used to validate connection and MCP access policies |
+| `ASPIRE_DEPLOYMENT_TEST_CONNECTOR_NAMESPACE_TENANT_ID` | Connector Namespace test only | Tenant ID containing the access-policy user |
 | `AZURE_DEPLOYMENT_TEST_TENANT_ID` | CI only | Azure AD tenant ID for OIDC authentication |
 | `AZURE_DEPLOYMENT_TEST_CLIENT_ID` | CI only | Azure AD app client ID for OIDC authentication |
 | `AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID` | CI only | Azure subscription ID (GitHub variable) |
@@ -124,6 +128,58 @@ dotnet test tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Te
 ```
 
 ## CI/CD
+
+### Polyglot provisioning SDK scenarios
+
+These TypeScript deployment scenarios exercise opt-in `Aspire.Hosting.Azure.Provisioning.*`
+packages from the current build and check the deployed Azure configuration, not just generated Bicep:
+
+| Scenario | Live Azure assertions |
+|----------|-----------------------|
+| `TypeScriptAzureProvisioningDeploymentTests.DeployAppConfigurationWithProvisioningOverrides` | The App Configuration root proxy sets one-day soft-delete retention, disables local authentication, and writes a custom tag. |
+| `TypeScriptAzureProvisioningDeploymentTests.DeployNetworkAndPrivateDnsWithProvisioningOverrides` | Network root proxies set the VNet flow timeout and VNet/NSG tags while preserving its subnet. A Private DNS factory creates a globally located zone, then its root lookup sets the name and tag. |
+| `TypeScriptAzureContainerAppJobDeploymentTests` | An identifier-based Container App job proxy customizes the nested configuration's replica timeout and retry limit, while the existing manual/scheduled trigger assertions remain in place. |
+
+The first two scenarios do not create compute resources. They run in the dedicated deployment
+workflow, which discovers test classes automatically, rather than ordinary PR test jobs.
+Local execution requires Linux, Azure authentication, and a current-source local-hive archive
+selected with `ASPIRE_E2E_ARCHIVE`; released packages do not contain these new proxies.
+Use the class names above as the deployment workflow's `test_filter`.
+
+### Project V2 deployment scenarios
+
+These separately sharded classes exercise conventional `.csproj` workloads registered with
+`AddDotnetProject`. The legacy starter, App Service slot/network upgrade, and Sandbox
+scenarios remain independent controls.
+
+| Class | Workload assertions |
+|-------|---------------------|
+| `AcaDotnetProjectDeploymentTests` | Both API and Web images have ready current revisions; a frontend request reaches the API and returns a fresh source marker. |
+| `AppServiceDotnetProjectDeploymentTests` | One production site serves the V2 API marker and the static frontend file layered through `PublishWithContainerFiles`. |
+| `AzureSandboxesDotnetProjectDeploymentTests` | Both V2 workloads share their HTTP target behind TLS; the protected workload must return its authenticated marker, and the anonymous workload must write/read a blob using managed identity. |
+| `FoundryDotnetProjectDeploymentTests` | A newly published registry image backs the single `echo-ha` hosted version; an authenticated Responses invocation must return exactly `Echo: {nonce}`. |
+
+Use a current-source local-hive archive (`ASPIRE_E2E_ARCHIVE`) containing both the CLI and
+hosting packages for local validation. Remote PR binaries do not include unpushed fixes.
+For example, after explicitly authorizing real Azure deployment:
+
+```bash
+ASPIRE_E2E_ARCHIVE="$PWD/artifacts/azure-e2e.tar.gz" \
+  dotnet test --project tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj \
+  --no-launch-profile -- --filter-class "*.AcaDotnetProjectDeploymentTests" \
+  --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+```
+
+Sandbox execution requires preview enrollment, appropriate roles, and
+`ASPIRE_DEPLOYMENT_TEST_ENABLE_SANDBOXES=true` in CI. Its protected ingress probe requires
+the deployment credential to obtain and use a Sandbox token; a redirect or authentication
+error does not count as workload success.
+
+The Foundry echo worker uses no model deployment, chat reference, or TPM quota. It still
+requires Foundry hosted-compute capacity and authorization in `swedencentral`. The
+model-backed test disabled under #16330 is unchanged. Compiling or enumerating these tests
+does not establish that hosted Responses routing or Sandbox authentication works in a
+particular Azure environment; those checks require an actual authorized deployment.
 
 ### Triggers
 

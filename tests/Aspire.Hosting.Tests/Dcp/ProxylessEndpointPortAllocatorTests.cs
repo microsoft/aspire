@@ -80,6 +80,20 @@ public class ProxylessEndpointPortAllocatorTests
         Assert.Equal(10001, allocator.AllocatePort(CreateEndpoint("other")));
     }
 
+    [Fact]
+    public void AllocatePortWithoutEndpointReservesUniquePort()
+    {
+        var allocator = new ProxylessEndpointPortAllocator(
+            rangeStart: 10000,
+            rangeEnd: 10001,
+            randomWalkOffset: 0,
+            randomWalkStep: 1,
+            tryProbe: static (_, _) => true);
+
+        Assert.Equal(10000, allocator.AllocatePort(ProtocolType.Tcp));
+        Assert.Equal(10001, allocator.AllocatePort(ProtocolType.Tcp));
+    }
+
     private static EndpointAnnotation CreateEndpoint(string name)
     {
         return new EndpointAnnotation(ProtocolType.Tcp, name: name, isProxied: false);

@@ -3,12 +3,13 @@
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Agents.Copilot;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Agents.Hooks;
 
 /// <summary>
-/// Default <see cref="ITelemetryHookConfigurator"/>. Materializes the hook scripts once and writes the
+/// Default <see cref="ITelemetryHookConfigurator"/>. Refreshes compatibility scripts and writes the native
 /// <c>PostToolUse</c> hook into each supported client's <b>user-level</b> configuration.
 /// </summary>
 /// <remarks>
@@ -21,10 +22,8 @@ namespace Aspire.Cli.Agents.Hooks;
 /// </remarks>
 internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 {
-    private const string CopilotFolderName = ".copilot";
     private const string CopilotHooksDirectoryName = "hooks";
     private const string CopilotHookFileName = "aspire-telemetry.json";
-    private const string CopilotHomeEnvironmentVariable = "COPILOT_HOME";
 
     private const string ClaudeFolderName = ".claude";
     private const string ClaudeSettingsFileName = "settings.json";
@@ -64,26 +63,40 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
         var skipped = new List<TelemetryHookSkip>();
 
         // VS Code and OpenCode hook schemas are not yet verified, so they are intentionally not
-        // configured here even though they are detected/marked. Only configure once per client kind.
-        var supported = detectedClients
-            .Where(static c => c is AgentClientKind.CopilotCli or AgentClientKind.ClaudeCode)
-            .Distinct()
-            .ToList();
+        // configured here even though they are detected/marked. The Copilot App and CLI share the
+        // same ~/.copilot hook location, so prefer the App display name when both are detected.
+        // This identifies the configuration target, not the hook event's client-name: the canonical
+        // scripts currently report App events as copilot-cli. See https://github.com/microsoft/aspire-skills/issues/71.
+        var supported = new List<AgentClientKind>();
+        if (detectedClients.Contains(AgentClientKind.CopilotApp))
+        {
+            supported.Add(AgentClientKind.CopilotApp);
+        }
+        else if (detectedClients.Contains(AgentClientKind.CopilotCli))
+        {
+            supported.Add(AgentClientKind.CopilotCli);
+        }
+
+        if (detectedClients.Contains(AgentClientKind.ClaudeCode))
+        {
+            supported.Add(AgentClientKind.ClaudeCode);
+        }
 
         if (supported.Count == 0)
         {
             return new TelemetryHookConfigurationResult(configured, skipped);
         }
 
-        // Materialize the scripts once; every supported client references the same absolute paths.
-        var scripts = await _installer.EnsureInstalledAsync(cancellationToken);
+        // Keep compatibility scripts current for existing registrations and older clients.
+        await _installer.EnsureInstalledAsync(cancellationToken);
 
         foreach (var client in supported)
         {
             switch (client)
             {
+                case AgentClientKind.CopilotApp:
                 case AgentClientKind.CopilotCli:
-                    if (await TryConfigureCopilotAsync(scripts, cancellationToken))
+                    if (await TryConfigureCopilotAsync(cancellationToken))
                     {
                         configured.Add(client);
                     }
@@ -94,7 +107,7 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
                     break;
 
                 case AgentClientKind.ClaudeCode:
-                    var claudeSkipReason = await ConfigureClaudeAsync(scripts, cancellationToken);
+                    var claudeSkipReason = await ConfigureClaudeAsync(cancellationToken);
                     if (claudeSkipReason is { } reason)
                     {
                         skipped.Add(new TelemetryHookSkip(client, reason));
@@ -110,7 +123,7 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
         return new TelemetryHookConfigurationResult(configured, skipped);
     }
 
-    private async Task<bool> TryConfigureCopilotAsync(TelemetryHookScripts scripts, CancellationToken cancellationToken)
+    private async Task<bool> TryConfigureCopilotAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -119,11 +132,9 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 
             var filePath = Path.Combine(hooksDirectory, CopilotHookFileName);
 
-            // Owned file: a full overwrite is trivially idempotent. The Copilot CLI hooks reference
-            // (https://docs.github.com/en/copilot/reference/hooks-reference) defines `bash` and
-            // `powershell` as keys whose values are shell command strings. The `powershell` value
-            // invokes `pwsh` (PowerShell 7+) because that is the documented Windows prerequisite for
-            // Copilot CLI hooks.
+            // Direct exec avoids shell cold starts on every tool call while keeping all-event coverage.
+            // https://docs.github.com/en/copilot/reference/hooks-reference#command-hooks
+            var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
             var config = new JsonObject
             {
                 ["version"] = 1,
@@ -133,8 +144,8 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
                         new JsonObject
                         {
                             ["type"] = "command",
-                            ["bash"] = HookCommandFormatter.BuildBashCommand(scripts.ShellScriptPath),
-                            ["powershell"] = HookCommandFormatter.BuildPwshCommand(scripts.PowerShellScriptPath),
+                            ["exec"] = command,
+                            ["args"] = new JsonArray(args.Select(arg => (JsonNode?)JsonValue.Create(arg)).ToArray()),
                             ["timeoutSec"] = HookTimeoutSeconds,
                         }),
                 },
@@ -150,7 +161,7 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
         }
     }
 
-    private async Task<TelemetryHookSkipReason?> ConfigureClaudeAsync(TelemetryHookScripts scripts, CancellationToken cancellationToken)
+    private async Task<TelemetryHookSkipReason?> ConfigureClaudeAsync(CancellationToken cancellationToken)
     {
         var claudeDirectory = Path.Combine(_executionContext.HomeDirectory.FullName, ClaudeFolderName);
         var settingsPath = Path.Combine(claudeDirectory, ClaudeSettingsFileName);
@@ -236,34 +247,12 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
             hooks[ClaudePostToolUseKey] = postToolUse;
         }
 
-        // Idempotent: drop any previously written Aspire entry before adding exactly one. This also
-        // refreshes the command if the script path changed across CLI upgrades.
+        // Idempotent: replace both legacy scripts and native Aspire entries, preserving user hooks.
         RemoveExistingAspireEntries(postToolUse);
 
-        // Claude Code runs a path-referencing hook best in exec form (`command` + `args`): the executable
-        // is spawned directly with no shell, so the script path passes through verbatim with no quoting.
-        // Shell form is avoided because on Windows Claude runs the command line through Git Bash (or
-        // PowerShell only when Git Bash is absent), which would mismatch PowerShell-style path quoting. The
-        // Claude hooks reference recommends exec form for any hook that references a script path; see the
-        // "Exec form and shell form" / "Reference scripts by path" sections in
+        // Keep exec form and wildcard coverage, but run the CLI directly instead of a shell.
         // https://docs.claude.com/en/docs/claude-code/hooks.
-        string command;
-        JsonArray commandArgs;
-        if (OperatingSystem.IsWindows())
-        {
-            // Use modern PowerShell 7+ (pwsh), consistent with the Copilot hook. pwsh is the documented
-            // Windows prerequisite for agent hooks; if it is absent the hook simply does not run, the same
-            // as Copilot. `-ExecutionPolicy Bypass` is passed straight to the process (exec form has no
-            // shell) so the local script runs regardless of the machine policy; `-NoProfile` avoids profile
-            // side effects and startup cost.
-            command = "pwsh";
-            commandArgs = new JsonArray("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scripts.PowerShellScriptPath);
-        }
-        else
-        {
-            command = "bash";
-            commandArgs = new JsonArray(scripts.ShellScriptPath);
-        }
+        var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
 
         postToolUse.Add((JsonNode?)new JsonObject
         {
@@ -273,9 +262,7 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
                 {
                     ["type"] = "command",
                     ["command"] = command,
-                    ["args"] = commandArgs,
-                    // Bound the hook so a stuck telemetry call can never stall a Claude session. The shell
-                    // scripts also self-limit, but Claude's own timeout is the reliable backstop.
+                    ["args"] = new JsonArray(args.Select(arg => (JsonNode?)JsonValue.Create(arg)).ToArray()),
                     ["timeout"] = HookTimeoutSeconds,
                 }),
         });
@@ -297,13 +284,8 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
     {
         // The Copilot CLI hooks reference resolves the user-level hooks directory from COPILOT_HOME when
         // set, otherwise ~/.copilot/hooks. Mirror that so the hook lands where Copilot actually reads it.
-        var copilotHome = _environment.GetEnvironmentVariable(CopilotHomeEnvironmentVariable);
-        if (!string.IsNullOrEmpty(copilotHome))
-        {
-            return Path.Combine(copilotHome, CopilotHooksDirectoryName);
-        }
-
-        return Path.Combine(_executionContext.HomeDirectory.FullName, CopilotFolderName, CopilotHooksDirectoryName);
+        var configDirectory = CopilotPaths.GetConfigDirectory(_executionContext.HomeDirectory, _environment);
+        return Path.Combine(configDirectory, CopilotHooksDirectoryName);
     }
 
     private static void RemoveExistingAspireEntries(JsonArray postToolUse)
@@ -337,11 +319,7 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 
     private static bool IsAspireHook(JsonNode? node)
     {
-        // Match the distinctive script file name (track-telemetry.sh/.ps1) wherever a hook entry can
-        // carry the path: an `args` element in exec form (the form we write), or embedded in the
-        // `command` shell string in shell form. Both forms are valid in the hook schema, so checking
-        // each keeps re-init idempotent regardless of which one an existing entry uses. Matching the
-        // file name rather than just "aspire" avoids removing an unrelated user hook.
+        // Recognize legacy scripts and our exact native command, not arbitrary Aspire commands.
         if (node is not JsonObject hook)
         {
             return false;
@@ -357,6 +335,19 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 
         if (hook.TryGetPropertyValue("args", out var argsNode) && argsNode is JsonArray args)
         {
+            var values = args.Select(arg => arg is JsonValue value && value.TryGetValue<string>(out var text) ? text : null).ToArray();
+            var executable = hook["command"] is JsonValue executableValue && executableValue.TryGetValue<string>(out var executableText)
+                ? executableText : null;
+            var (currentCommand, _) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
+            var executableName = Path.GetFileNameWithoutExtension(executable);
+            var isDotnet = string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase);
+            if ((values is [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName] && !isDotnet
+                    && (executable == currentCommand || string.Equals(executableName, "aspire", StringComparison.OrdinalIgnoreCase)))
+                || (values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName] && isDotnet
+                    && string.Equals(Path.GetFileName(assemblyPath), "aspire.dll", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
             foreach (var arg in args)
             {
                 if (arg is JsonValue argValue
@@ -373,8 +364,8 @@ internal sealed class TelemetryHookConfigurator : ITelemetryHookConfigurator
 
     private static bool ReferencesTelemetryScript(string? value)
         => value is not null
-            && (value.Contains("track-telemetry.sh", StringComparison.OrdinalIgnoreCase)
-                || value.Contains("track-telemetry.ps1", StringComparison.OrdinalIgnoreCase));
+            && (value.Contains(TelemetryHookInstaller.ShellResourceName, StringComparison.OrdinalIgnoreCase)
+                || value.Contains(TelemetryHookInstaller.PowerShellResourceName, StringComparison.OrdinalIgnoreCase));
 
     private static async Task WriteJsonAtomicAsync(string path, JsonObject config, CancellationToken cancellationToken)
     {

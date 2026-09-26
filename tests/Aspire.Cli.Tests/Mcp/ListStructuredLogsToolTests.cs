@@ -40,7 +40,7 @@ public class ListStructuredLogsToolTests
         {
             DashboardInfoResponse = null
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = CreateTool(monitor);
 
@@ -416,7 +416,7 @@ public class ListStructuredLogsToolTests
                 DashboardUrls = dashboardUrls ?? ["http://localhost:18888"]
             }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
         return monitor;
     }
 

@@ -7,6 +7,7 @@
     <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <DefineConstants>$(DefineConstants);ASPIRE_TERMINAL_HOST</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RollForward>Major</RollForward>
     <!--
@@ -38,10 +39,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\Shared\DirectoryHelper.cs" Link="Shared\DirectoryHelper.cs" />
+    <Compile Include="..\Shared\IConfigurationExtensions.cs" Link="Shared\IConfigurationExtensions.cs" />
     <Compile Include="..\Shared\KnownConfigNames.cs" Link="Shared\KnownConfigNames.cs" />
     <Compile Include="..\Shared\ParentProcessLivenessMonitor.cs" Link="Shared\ParentProcessLivenessMonitor.cs" />
     <Compile Include="..\Shared\ParentProcessWatchdog.cs" Link="Shared\ParentProcessWatchdog.cs" />
     <Compile Include="..\Shared\ProcessStartTimeHelper.cs" Link="Shared\ProcessStartTimeHelper.cs" />
+    <Compile Include="..\Shared\SocketPermissionHelper.cs" Link="Shared\SocketPermissionHelper.cs" />
+    <Compile Include="..\Shared\SocketDirectoryNames.cs" Link="Shared\SocketDirectoryNames.cs" />
     <Compile Include="..\Shared\TerminalHost\*.cs" Link="Shared\%(Filename)%(Extension)" />
   </ItemGroup>
 

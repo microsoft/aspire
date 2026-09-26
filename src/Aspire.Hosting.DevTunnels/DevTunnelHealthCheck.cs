@@ -42,15 +42,21 @@ internal sealed class DevTunnelHealthCheck(
                 }
             }
 
+            // `devtunnel show <id>` resolves a bare ID and returns its cluster-qualified ID, but
+            // `devtunnel access list <id> --port-number <port>` requires the qualified form.
+            // Remove this workaround when the CLI resolves bare IDs for per-port access queries.
+            // See https://github.com/microsoft/aspire/issues/18790.
+            var resolvedTunnelId = tunnelStatus.TunnelId;
+
             // Get tunnel and port access status
-            var tunnelAccessStatus = await _devTunnelClient.GetAccessAsync(_tunnelResource.ResolvedTunnelId, portNumber: null, logger, cancellationToken).ConfigureAwait(false);
+            var tunnelAccessStatus = await _devTunnelClient.GetAccessAsync(resolvedTunnelId, portNumber: null, logger, cancellationToken).ConfigureAwait(false);
             _tunnelResource.LastKnownAccessStatus = tunnelAccessStatus;
 
             // Get access status for each port
             foreach (var portResource in _tunnelResource.Ports)
             {
                 var tunnelPort = await portResource.GetTunnelPortAsync(cancellationToken).ConfigureAwait(false);
-                var portAccessStatus = await _devTunnelClient.GetAccessAsync(_tunnelResource.ResolvedTunnelId, tunnelPort, logger, cancellationToken).ConfigureAwait(false);
+                var portAccessStatus = await _devTunnelClient.GetAccessAsync(resolvedTunnelId, tunnelPort, logger, cancellationToken).ConfigureAwait(false);
                 portResource.LastKnownAccessStatus = portAccessStatus;
             }
 

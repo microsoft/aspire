@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREEXTENSION001 // Debug support APIs are experimental.
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+#pragma warning disable ASPIRECSHARPAPPS001 // AddCSharpApp is experimental.
 
 using System.Reflection;
 using System.Text.Json;
@@ -15,7 +16,7 @@ using Microsoft.Extensions.Configuration;
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "2")]
-public class DebugSupportExtensionsTests
+public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void LaunchConfigurationCallbackContextExposesOnlyLaunchProducerInputs()
@@ -107,6 +108,10 @@ public class DebugSupportExtensionsTests
         Assert.Equal(GetProjectPath(project.Resource), launchConfiguration.ProjectPath);
         Assert.Equal("http", launchConfiguration.LaunchProfile);
         Assert.False(launchConfiguration.DisableLaunchProfile);
+        Assert.Equal(
+            builder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration,
+            launchConfiguration.BuildConfiguration);
+        Assert.False(launchConfiguration.SuppressBuild);
     }
 
     [Fact]
@@ -346,12 +351,44 @@ public class DebugSupportExtensionsTests
     [Fact]
     public void SupportsDebuggingTreatsProjectAsSupportedWhenTheIdeSendsNoCapabilityList()
     {
-        // Visual Studio does not send DEBUG_SESSION_INFO at all. It launches every project resource
-        // natively, so "project" stays implicitly supported instead of falling back to a plain process.
+        // Visual Studio does not send DEBUG_SESSION_INFO at all. It launches loaded project files natively,
+        // so "project" stays implicitly supported instead of using a plain process.
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
 
         Assert.True(project.Resource.SupportsDebugging(CreateConfiguration(), out var annotation));
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, annotation.LaunchConfigurationType);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("{ not json")]
+    public void SupportsDebuggingDoesNotTreatFileBasedAppsAsImplicitlySupported(string? debugSessionInfo)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.cs");
+        File.WriteAllText(appPath, "");
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var fileApp = builder.AddCSharpApp("file-app", appPath);
+
+        var configuration = CreateConfiguration(debugSessionInfo: debugSessionInfo);
+
+        Assert.False(fileApp.Resource.SupportsDebugging(configuration, out _));
+    }
+
+    [Fact]
+    public void SupportsDebuggingTreatsFileBasedAppsAsSupportedWhenTheIdeAdvertisesProject()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.cs");
+        File.WriteAllText(appPath, "");
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var fileApp = builder.AddCSharpApp("file-app", appPath);
+
+        var configuration = CreateConfiguration(
+            debugSessionInfo: CreateDebugSessionInfo([KnownLaunchConfigurationTypes.Project]));
+
+        Assert.True(fileApp.Resource.SupportsDebugging(configuration, out var annotation));
         Assert.Equal(KnownLaunchConfigurationTypes.Project, annotation.LaunchConfigurationType);
     }
 

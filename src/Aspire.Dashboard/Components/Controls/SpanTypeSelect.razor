@@ -4,38 +4,33 @@
 
 @if (ViewportInformation.IsDesktop)
 {
-    <FluentInputLabel slot="end"
-                      Label="@Loc[nameof(Dashboard.Resources.Traces.SpanTypeLabel)]"
-                      ForId="@spanTypeSelectId"
-                      Orientation="@(ViewportInformation.IsDesktop ? Orientation.Horizontal : Orientation.Vertical)" />
+    <label for="@spanTypeSelectId">@Loc[nameof(Dashboard.Resources.Traces.SpanTypeLabel)]</label>
 
     <DesktopToolbarDivider />
 
-    <FluentSelect TOption="SelectViewModel<SpanType>"
+    <FluentSelect TOption="SelectViewModel<SpanType>" TValue="SelectViewModel<SpanType>"
+                  Class="toolbar-select"
                   Id="@spanTypeSelectId"
                   Items="@SpanTypes"
                   Position="SelectPosition.Below"
-                  OptionText="@(c => c.Name)"
-                  @bind-SelectedOption="@SpanType"
-                  @bind-SelectedOption:after="@HandleSelectedSpanTypeChangedInternalAsync"
-                  Width="120px"
-                  Style="min-width: auto;"
+                  OptionText="@(c => c?.Name)"
+                  @bind-Value="@SpanType"
+                  @bind-Value:after="@HandleSelectedSpanTypeChangedInternalAsync"
                   AriaLabel="@Loc[nameof(Dashboard.Resources.Traces.SpanTypeSelectSpanType)]"
                   @attributes="@AdditionalAttributes" />
 }
 else
 {
     <div>
-        <FluentSelect TOption="SelectViewModel<SpanType>"
+        <FluentSelect TOption="SelectViewModel<SpanType>" TValue="SelectViewModel<SpanType>"
+                      Class="toolbar-select"
                       Id="@spanTypeSelectId"
                       Items="@SpanTypes"
                       Position="SelectPosition.Below"
-                      OptionText="@(c => c.Name)"
+                      OptionText="@(c => c?.Name)"
                       Label="@Loc[nameof(Dashboard.Resources.Traces.SpanTypeLabel)]"
-                      @bind-SelectedOption="@SpanType"
-                      @bind-SelectedOption:after="@HandleSelectedSpanTypeChangedInternalAsync"
-                      Width="120px"
-                      Style="min-width: auto;"
+                      @bind-Value="@SpanType"
+                      @bind-Value:after="@HandleSelectedSpanTypeChangedInternalAsync"
                       AriaLabel="@Loc[nameof(Dashboard.Resources.Traces.SpanTypeSelectSpanType)]"
                       @attributes="@AdditionalAttributes" />
     </div>

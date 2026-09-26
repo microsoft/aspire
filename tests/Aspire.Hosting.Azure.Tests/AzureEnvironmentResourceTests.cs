@@ -2,12 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning;
 using Azure.Provisioning.Storage;
 using Microsoft.DotNet.RemoteExecutor;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -19,7 +23,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         // Arrange
         var workspace = Directory.CreateTempSubdirectory(".azure-environment-resource-test");
         output.WriteLine($"Temp directory: {workspace.FullName}");
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.FullName);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, workspace.FullName);
 
         var containerAppEnv = builder.AddAzureContainerAppEnvironment("env");
 
@@ -51,7 +55,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         // Arrange
         var workspace = Directory.CreateTempSubdirectory(".azure-environment-resource-test");
         output.WriteLine($"Temp directory: {workspace.FullName}");
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.FullName);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, workspace.FullName);
 
         var locationParam = builder.AddParameter("location", "eastus2");
         var resourceGroupParam = builder.AddParameter("resourceGroup", "my-rg");
@@ -83,7 +87,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         // Arrange
         var workspace = Directory.CreateTempSubdirectory(".azure-environment-resource-test");
         output.WriteLine($"Temp directory: {workspace.FullName}");
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish,
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output,
             workspace.FullName);
 
         builder.AddAzureContainerAppEnvironment("acaEnv");
@@ -131,7 +135,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
     {
         var workspace = Directory.CreateTempSubdirectory(".azure-environment-resource-test");
         output.WriteLine($"Temp directory: {workspace.FullName}");
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish,
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output,
             workspace.FullName);
         builder.AddAzureContainerAppEnvironment("acaEnv");
         var storageSku = builder.AddParameter("storage-Sku", "Standard_LRS", publishValueAsDefault: true);
@@ -175,10 +179,36 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task AzurePublishingContext_DoesNotPromotePrincipalTypeForApplicationPrincipal()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            output,
+            workspace.Path);
+
+        builder.AddAzureContainerAppEnvironment("acaEnv");
+        var roles = builder.AddBicepTemplateString("roles",
+            """
+            param location string
+            param principalId string
+            param principalType string
+            """);
+        roles.Resource.Parameters[AzureBicepResource.KnownParameters.PrincipalId] = null;
+        roles.Resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = null;
+
+        using var app = builder.Build();
+        app.Run();
+
+        var mainBicep = File.ReadAllText(Path.Combine(workspace.Path, "main.bicep"));
+        await Verify(mainBicep, "bicep");
+    }
+
+    [Fact]
     public async Task AzurePublishingContext_WritesScopedModuleExpressions()
     {
         using var workspace = TemporaryWorkspace.Create(output);
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, workspace.Path);
 
         builder.AddAzureContainerAppEnvironment("acaEnv");
         var resourceGroup = builder.AddParameter("moduleResourceGroup", "rg-shared", publishValueAsDefault: true);
@@ -220,6 +250,93 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         await Verify(mainBicep, "bicep");
     }
 
+    [Fact]
+    public async Task AzurePublishingContext_ExcludeMainBicepFile_WritesModulesWithoutMainBicep()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, workspace.Path);
+
+        builder.AddAzureEnvironment();
+        AddTenantScopedModuleWithoutLocation(builder);
+
+        using var app = builder.Build();
+
+        var outputPath = Path.Combine(workspace.Path, "exclude-main");
+        var context = await CreatePublishingContextAsync(app, outputPath);
+        context.ExcludeMainBicepFile = true;
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var environment = model.Resources.OfType<AzureEnvironmentResource>().Single();
+
+        await context.WriteModelAsync(model, environment, CancellationToken.None);
+
+        Assert.False(File.Exists(Path.Combine(outputPath, "main.bicep")));
+        Assert.True(File.Exists(Path.Combine(outputPath, "mod", "mod.bicep")));
+
+        // The lookups are still populated so callers can resolve parameters and outputs
+        // even though the root template was never compiled.
+        Assert.Contains(environment.Location, context.ParameterLookup.Keys);
+        Assert.Contains(environment.ResourceGroupName, context.ParameterLookup.Keys);
+    }
+
+    [Fact]
+    public async Task AzurePublishingContext_WritesMainBicepByDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, workspace.Path);
+
+        builder.AddAzureEnvironment();
+        AddTenantScopedModuleWithoutLocation(builder);
+
+        using var app = builder.Build();
+
+        var outputPath = Path.Combine(workspace.Path, "write-main");
+        var context = await CreatePublishingContextAsync(app, outputPath);
+
+        Assert.False(context.ExcludeMainBicepFile);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var environment = model.Resources.OfType<AzureEnvironmentResource>().Single();
+
+        await context.WriteModelAsync(model, environment, CancellationToken.None);
+
+        Assert.True(File.Exists(Path.Combine(outputPath, "mod", "mod.bicep")));
+
+        // The default root is written, and it passes `location` to the tenant-scoped module even though
+        // that module declares no such parameter. This is the shape that fails a real `bicep build` with
+        // BCP037 and motivates ExcludeMainBicepFile. Azure.Provisioning emits the text without running the
+        // Bicep compiler, so the invalid template is only observable in the generated content here.
+        var mainBicep = await File.ReadAllTextAsync(Path.Combine(outputPath, "main.bicep"));
+        Assert.Contains("scope: tenant()", mainBicep);
+        Assert.Contains("location: location", mainBicep);
+    }
+
+    /// <summary>
+    /// Adds the module shape that motivates <see cref="AzurePublishingContext.ExcludeMainBicepFile"/>: a
+    /// tenant-scoped module that declares no <c>location</c> parameter, which the generated root passes
+    /// <c>location</c> to regardless.
+    /// </summary>
+    private static void AddTenantScopedModuleWithoutLocation(IDistributedApplicationBuilder builder)
+    {
+        var module = builder.AddBicepTemplateString("mod",
+            """
+            targetScope = 'tenant'
+
+            output value string = 'mod'
+            """);
+
+        module.Resource.Scope = AzureBicepResourceScope.CreateForTenant();
+    }
+
+    private async Task<AzurePublishingContext> CreatePublishingContextAsync(DistributedApplication app, string outputPath)
+    {
+        var provisioningOptions = app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>().Value;
+        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<AzurePublishingContext>();
+        var step = await new TestPipelineActivityReporter(output).CreateStepAsync("Publishing Azure resources");
+
+        return new AzurePublishingContext(outputPath, provisioningOptions, app.Services, logger, step);
+    }
+
     private sealed class TestProject : IProjectMetadata
     {
         public string ProjectPath => "another-path";
@@ -233,7 +350,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         // Arrange
         using var workspace = TemporaryWorkspace.Create(output);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish,
-            workspace.Path);
+            output, workspace.Path);
 
         // Add an Azure storage resource that will be included
         var includedStorage = builder.AddAzureStorage("included-storage");
@@ -266,7 +383,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
     public async Task PublishAsync_WithDockerfileFactory_WritesDockerfileToOutputFolder()
     {
         using var workspace = TemporaryWorkspace.Create(output);
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, workspace.Path);
 
         var containerAppEnv = builder.AddAzureContainerAppEnvironment("env");
 
@@ -290,9 +407,12 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
     {
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var remoteInvokeOptions = new RemoteInvokeOptions();
+        var remoteInvokeOptions = RemoteTestOutputHelper.CreateRemoteInvokeOptions();
         remoteInvokeOptions.StartInfo.WorkingDirectory = workspace.Path;
-        RemoteExecutor.Invoke(RunTest, workspace.Path, remoteInvokeOptions).Dispose();
+        using var handle = RemoteExecutor.Invoke(RunTest, workspace.Path, remoteInvokeOptions);
+        RemoteTestOutputHelper.StartAndWait(handle, output);
+
+        Assert.Contains("[RemoteExecutor] Remote publishing test completed.", output.Output);
 
         static async Task RunTest(string workspace)
         {
@@ -324,7 +444,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
             var outputDir = Path.Combine(workspace, "output");
             Directory.CreateDirectory(outputDir);
 
-            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: outputDir);
+            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, new RemoteTestOutputHelper(), outputPath: outputDir);
 
             // Add a container app environment (required for publishing)
             builder.AddAzureContainerAppEnvironment("env");
@@ -351,6 +471,8 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
             // Verify the main.bicep references the resource
             var mainBicepContent = await File.ReadAllTextAsync(mainBicepPath);
             Assert.Contains("module custom_resource 'custom-resource/custom-resource.bicep'", mainBicepContent);
+
+            Console.WriteLine("Remote publishing test completed.");
         }
     }
 

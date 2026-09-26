@@ -232,6 +232,11 @@
         <target state="translated">リセット</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcesGraphResourceActionsButton">
+        <source>Resource actions for {0}</source>
+        <target state="new">Resource actions for {0}</target>
+        <note>Accessible label and tooltip for the cog affordance on a graph resource node that opens the resource actions menu. {0} is the resource display name.</note>
+      </trans-unit>
       <trans-unit id="ResourcesGraphZoomInButton">
         <source>Zoom in</source>
         <target state="translated">拡大</target>

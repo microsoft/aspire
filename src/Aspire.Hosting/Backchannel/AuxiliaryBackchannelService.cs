@@ -4,7 +4,6 @@
 using System.Net.Sockets;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
-using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -23,8 +22,10 @@ internal sealed class AuxiliaryBackchannelService(
     IServiceProvider serviceProvider)
     : BackgroundService
 {
-    private Socket? _serverSocket;
+    private AppHostSocketManager.AppHostSocketListener? _appHostSocket;
     private readonly TaskCompletionSource _listeningTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly object _clientTasksLock = new();
+    private readonly HashSet<Task> _clientTasks = [];
 
     /// <summary>
     /// Gets the Unix socket path where the auxiliary backchannel is listening.
@@ -43,52 +44,14 @@ internal sealed class AuxiliaryBackchannelService(
     {
         try
         {
-            // Create the socket path
-            SocketPath = GetAuxiliaryBackchannelSocketPath(configuration);
+            _appHostSocket = AppHostSocketManager.CreateSocket(
+                GetAppHostPath(configuration),
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                Environment.ProcessId,
+                logger);
+            SocketPath = _appHostSocket.SocketPath;
 
             logger.LogDebug("Starting auxiliary backchannel service on socket path: {SocketPath}", SocketPath);
-
-            // Ensure the directory exists
-            var directory = Path.GetDirectoryName(SocketPath);
-            if (directory != null && !Directory.Exists(directory))
-            {
-                logger.LogDebug("Creating backchannels directory: {Directory}", directory);
-                Directory.CreateDirectory(directory);
-            }
-
-            // Clean up orphaned sockets from crashed instances of this same AppHost
-            var appHostPath = GetSocketKeyAppHostPath(configuration);
-            if (!string.IsNullOrEmpty(appHostPath))
-            {
-                var appHostId = BackchannelConstants.ComputeAppHostId(appHostPath);
-                var orphansDeleted = BackchannelConstants.CleanupOrphanedSockets(directory!, appHostId, Environment.ProcessId);
-
-                var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                var legacyDirectory = BackchannelConstants.GetLegacyBackchannelsDirectory(homeDirectory);
-                foreach (var legacyHash in BackchannelConstants.ComputeLegacyHashes(appHostPath))
-                {
-                    orphansDeleted += BackchannelConstants.CleanupOrphanedSockets(legacyDirectory, legacyHash, Environment.ProcessId, prefixedFilesOnly: true);
-                }
-
-                if (orphansDeleted > 0)
-                {
-                    logger.LogDebug("Cleaned up {Count} orphaned socket(s) from previous instances.", orphansDeleted);
-                }
-            }
-
-            // Clean up any existing socket file (shouldn't exist with PID in name, but just in case)
-            if (File.Exists(SocketPath))
-            {
-                logger.LogDebug("Deleting existing socket file: {SocketPath}", SocketPath);
-                File.Delete(SocketPath);
-            }
-
-            // Create and bind the server socket
-            logger.LogDebug("Creating and binding server socket...");
-            _serverSocket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            var endpoint = new UnixDomainSocketEndPoint(SocketPath);
-            _serverSocket.Bind(endpoint);
-            _serverSocket.Listen(backlog: 10); // Allow multiple pending connections
 
             logger.LogDebug("Auxiliary backchannel listening on {SocketPath}", SocketPath);
             _listeningTcs.TrySetResult();
@@ -98,10 +61,17 @@ internal sealed class AuxiliaryBackchannelService(
             {
                 try
                 {
-                    var clientSocket = await _serverSocket.AcceptAsync(stoppingToken).ConfigureAwait(false);
+                    var clientSocket = await _appHostSocket.Socket.AcceptAsync(stoppingToken).ConfigureAwait(false);
 
-                    // Handle each connection on a separate task
-                    _ = Task.Run(async () => await HandleClientConnectionAsync(clientSocket, stoppingToken).ConfigureAwait(false), stoppingToken);
+                    // Calling the async handler directly transfers socket ownership before the first await.
+                    // Task.Run with the stopping token could cancel before invoking the delegate and leak an
+                    // already-accepted socket.
+                    var clientTask = HandleClientConnectionAsync(clientSocket, stoppingToken);
+                    lock (_clientTasksLock)
+                    {
+                        _clientTasks.Add(clientTask);
+                    }
+                    _ = ObserveClientTaskAsync(clientTask);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -117,31 +87,40 @@ internal sealed class AuxiliaryBackchannelService(
         catch (TaskCanceledException ex)
         {
             logger.LogDebug("Auxiliary backchannel service was cancelled: {Message}", ex.Message);
+            _listeningTcs.TrySetCanceled(stoppingToken);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error in auxiliary backchannel service.");
+            _listeningTcs.TrySetException(ex);
         }
         finally
         {
-            // Clean up the socket
-            _serverSocket?.Dispose();
-            if (SocketPath != null && File.Exists(SocketPath))
+            // Creating the socket can fail (bind failure, an AF_UNIX path over the platform byte
+            // limit, permissions) and the accept loop only completes the source once it is already
+            // listening, so guarantee completion on every exit path. Waiters would otherwise block
+            // until their own timeout instead of observing the failure.
+            _listeningTcs.TrySetCanceled(stoppingToken);
+
+            // Nothing outside tests awaits ListeningTask, so read the fault here to mark it observed
+            // and keep it from resurfacing as an UnobservedTaskException when the task is finalized.
+            _ = _listeningTcs.Task.Exception;
+
+            _appHostSocket?.Dispose();
+
+            Task[] clientTasks;
+            lock (_clientTasksLock)
             {
-                try
-                {
-                    File.Delete(SocketPath);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Failed to delete socket file: {SocketPath}", SocketPath);
-                }
+                clientTasks = [.. _clientTasks];
             }
+            await Task.WhenAll(clientTasks).ConfigureAwait(false);
         }
     }
 
     private async Task HandleClientConnectionAsync(Socket clientSocket, CancellationToken stoppingToken)
     {
+        using var ownedClientSocket = clientSocket;
+
         try
         {
             logger.LogDebug("Client connected to auxiliary backchannel.");
@@ -161,7 +140,7 @@ internal sealed class AuxiliaryBackchannelService(
                 serviceProvider);
 
             // Set up JSON-RPC over the client socket
-            using var stream = new NetworkStream(clientSocket, ownsSocket: true);
+            using var stream = new NetworkStream(ownedClientSocket, ownsSocket: false);
 
             // Create JSON-RPC connection with proper System.Text.Json formatter so it doesn't use Newtonsoft.Json
             // and handles correct MCP SDK type serialization
@@ -180,8 +159,9 @@ internal sealed class AuxiliaryBackchannelService(
             };
             rpc.StartListening();
 
-            // Wait for the connection to be disposed (client disconnect or cancellation)
-            await rpc.Completion.ConfigureAwait(false);
+            // Stop waiting when the hosted service is shutting down so the RPC, stream, and socket
+            // are disposed before the application's service provider is torn down.
+            await rpc.Completion.WaitAsync(stoppingToken).ConfigureAwait(false);
 
             logger.LogDebug("Client disconnected from auxiliary backchannel");
         }
@@ -201,33 +181,27 @@ internal sealed class AuxiliaryBackchannelService(
         }
     }
 
-    /// <summary>
-    /// Generates the Unix socket path for the auxiliary backchannel.
-    /// </summary>
-    private static string GetAuxiliaryBackchannelSocketPath(IConfiguration configuration)
+    private async Task ObserveClientTaskAsync(Task clientTask)
     {
-        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
-        // Use the symlink-resolved AppHost:FilePath or AppHost:Path from configuration for consistent hashing.
-        var appHostPath = GetSocketKeyAppHostPath(configuration);
-
-        if (!string.IsNullOrEmpty(appHostPath))
+        try
         {
-            // Use shared helper for consistent socket naming with PID
-            return BackchannelConstants.ComputeSocketPath(appHostPath, homeDirectory, Environment.ProcessId);
+            await clientTask.ConfigureAwait(false);
         }
-
-        // Fallback: Generate socket path using process ID as the AppHost ID seed (rare edge case)
-        var fallbackAppHostId = BackchannelConstants.ComputeAppHostId(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        return BackchannelConstants.ComputeSocketPathFromAppHostId(fallbackAppHostId, homeDirectory, Environment.ProcessId);
+        catch (Exception ex)
+        {
+            // HandleClientConnectionAsync handles connection failures itself. Reaching this catch means
+            // its cleanup path failed, and this detached observer is the only place that can report it.
+            logger.LogError(ex, "Unexpected error while observing an auxiliary backchannel client");
+        }
+        finally
+        {
+            lock (_clientTasksLock)
+            {
+                _clientTasks.Remove(clientTask);
+            }
+        }
     }
 
-    /// <summary>
-    /// Reads the AppHost path used to key this AppHost's auxiliary backchannel socket and canonicalizes it by resolving symlinks.
-    /// </summary>
-    internal static string? GetSocketKeyAppHostPath(IConfiguration configuration)
-    {
-        var appHostPath = configuration["AppHost:FilePath"] ?? configuration["AppHost:Path"];
-        return string.IsNullOrEmpty(appHostPath) ? appHostPath : PathNormalizer.ResolveSymlinks(appHostPath);
-    }
+    private static string? GetAppHostPath(IConfiguration configuration) =>
+        configuration["AppHost:FilePath"] ?? configuration["AppHost:Path"];
 }

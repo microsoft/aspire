@@ -23,6 +23,14 @@ cd "$WORK_DIR"
 echo "Creating Python apphost project..."
 aspire init --language python --non-interactive -d
 
+cat <<'EOF' > appsettings.json
+{
+  "PolyglotTest": {
+    "Value": "from-appsettings"
+  }
+}
+EOF
+
 # Add Redis integration
 echo "Adding Redis integration..."
 aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
@@ -37,11 +45,11 @@ aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
     fi
 }
 
-# Insert Redis line into apphost.py
-echo "Configuring apphost.py with Redis..."
+# Verify appsettings.json through the generated SDK before adding Redis.
+echo "Configuring apphost.py with appsettings validation and Redis..."
 if grep -q "builder.run()" apphost.py; then
-    sed -i '/builder.run()/i\    # Add Redis cache resource\n    redis = builder.add_redis("cache").with_image_registry("netaspireci.azurecr.io")' apphost.py
-    echo "✅ Redis configuration added to apphost.py"
+    sed -i '/builder.run()/i\    appsettings_value = builder.get_config().get_config_value("PolyglotTest:Value")\n    if appsettings_value != "from-appsettings":\n        raise RuntimeError(f'\''Expected appsettings.json value, got "{appsettings_value}"'\'')\n\n    # Add Redis cache resource\n    redis = builder.add_redis("cache").with_image_registry("netaspireci.azurecr.io")' apphost.py
+    echo "✅ appsettings validation and Redis configuration added to apphost.py"
 fi
 
 echo "=== apphost.py ==="

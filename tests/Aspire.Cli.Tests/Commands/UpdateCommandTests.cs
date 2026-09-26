@@ -18,6 +18,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
@@ -126,7 +127,10 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal(appHostProjectFile.FullName, updatedProjectFile?.FullName);
+        Assert.NotNull(updatedProjectFile);
+        Assert.Equal(
+            PathNormalizer.ResolveToFilesystemPath(appHostProjectFile.FullName),
+            PathNormalizer.ResolveToFilesystemPath(updatedProjectFile.FullName));
     }
 
     [Fact]
@@ -372,7 +376,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_GuestProject_WhenTargetSdkNewerThanCli_PromptsForCliUpdateBeforeProjectUpdateAndSkipsWhenAccepted()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string processPath = "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/net10.0/linux-x64/aspire";
+        const string processPath = "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/any/linux-x64/aspire";
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
         File.WriteAllText(appHostPath, "// test apphost");
 
@@ -546,7 +550,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_WhenProjectUpdatedSuccessfullyAndRunningAsDotnetTool_DisplaysDotnetToolUpdateCommand()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        const string processPath = "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/net10.0/linux-x64/aspire";
+        const string processPath = "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/any/linux-x64/aspire";
         var interactionService = new TestInteractionService()
         {
             ConfirmCallback = (_, _) => true
@@ -2679,6 +2683,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     [InlineData("pr-12345", "pr-12345")]
     [InlineData("daily", "daily")]
     [InlineData("DAILY", "daily")] // case-insensitive match against allChannels
+    [InlineData("staging", "staging")]
     public async Task UpdateCommand_WhenIdentityChannelMatchesRegisteredChannel_UsesItWithoutPrompting(string identityChannel, string expectedChannelName)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -3345,7 +3350,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             "aspire.cli.linux-x64",
             "9.4.0",
             "tools",
-            "net10.0",
+            "any",
             "linux-x64",
             GetAspireExecutableName());
 

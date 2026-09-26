@@ -295,6 +295,84 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task BaseCommand_OnFailure_WithMessageActions_CombinesErrorAndDiagnosticLogs()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cliLogPath = Path.Combine(workspace.WorkspaceRoot.FullName, "current-cli.log");
+        var appHostLogPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost-cli.log");
+        var backchannelMonitor = new TestAuxiliaryBackchannelMonitor
+        {
+            ScanAsyncCallback = _ => throw new InvalidOperationException("Something went wrong")
+        };
+        (string? ErrorMessage, string CliLogPath, string? AppHostLogPath)? capturedFailure = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = serviceProvider => new TestExtensionInteractionService(serviceProvider)
+            {
+                TryDisplayCommandFailureAsyncCallback = (errorMessage, capturedCliLogPath, capturedAppHostLogPath, _) =>
+                {
+                    capturedFailure = (errorMessage, capturedCliLogPath, capturedAppHostLogPath);
+                    return Task.FromResult(true);
+                }
+            };
+            options.AuxiliaryBackchannelMonitorFactory = _ => backchannelMonitor;
+            options.CliExecutionContextFactory = _ =>
+            {
+                var context = workspace.CreateExecutionContext(logFilePath: cliLogPath);
+                context.AppHostCliLogFilePath = appHostLogPath;
+                return context;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var interactionService = Assert.IsType<TestExtensionInteractionService>(provider.GetRequiredService<IInteractionService>());
+        var result = provider.GetRequiredService<RootCommand>().Parse("ps");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.NotNull(capturedFailure);
+        Assert.Contains("Something went wrong", capturedFailure.Value.ErrorMessage);
+        Assert.Equal(cliLogPath, capturedFailure.Value.CliLogPath);
+        Assert.Equal(appHostLogPath, capturedFailure.Value.AppHostLogPath);
+        Assert.Empty(interactionService.DisplayedErrors);
+        Assert.Empty(interactionService.DisplayedMessages);
+    }
+
+    [Fact]
+    public async Task BaseCommand_OnFailure_WithoutMessageActions_PreservesLegacyNotifications()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cliLogPath = Path.Combine(workspace.WorkspaceRoot.FullName, "current-cli.log");
+        var backchannelMonitor = new TestAuxiliaryBackchannelMonitor
+        {
+            ScanAsyncCallback = _ => throw new InvalidOperationException("Something went wrong")
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = serviceProvider => new TestExtensionInteractionService(serviceProvider);
+            options.AuxiliaryBackchannelMonitorFactory = _ => backchannelMonitor;
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(logFilePath: cliLogPath);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var interactionService = Assert.IsType<TestExtensionInteractionService>(provider.GetRequiredService<IInteractionService>());
+        var result = provider.GetRequiredService<RootCommand>().Parse("ps");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Single(interactionService.DisplayedErrors);
+        Assert.Empty(interactionService.DisplayedErrorsWithActions);
+        var logMessage = Assert.Single(interactionService.DisplayedMessages);
+        Assert.Contains(cliLogPath, logMessage.Message);
+    }
+
+    [Fact]
     public async Task BaseCommand_OnCancellationWithErrorExitCode_DisplaysCancellationMessageOnStderr()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

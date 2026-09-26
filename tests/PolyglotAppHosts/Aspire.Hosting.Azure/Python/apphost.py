@@ -8,8 +8,16 @@ def configure_infrastructure(_infrastructure: AzureResourceInfrastructure):
     pass
 
 
+def configure_front_door(infrastructure: AzureResourceInfrastructure) -> None:
+    profile = infrastructure.get_cdn_profile()
+    profile.origin_response_timeout_seconds = 60
+    _origin_timeout = profile.origin_response_timeout_seconds
+
+
 with create_builder() as builder:
     builder.add_azure_provisioning()
+    front_door = builder.add_azure_front_door("frontdoor")
+    front_door.configure_infrastructure(configure_front_door)
     location = builder.add_parameter("parameter")
     resource_group = builder.add_parameter("parameter")
     existing_name = builder.add_parameter("parameter")
@@ -62,9 +70,9 @@ with create_builder() as builder:
     infrastructure.publish_as_existing(existing_name, resource_group=existing_resource_group)
     infrastructure.as_existing(existing_name)
     identity = builder.add_azure_user_assigned_identity("resource")
+
     identity_client_id = identity.get_output("clientId")
     identity_client_id_expression = ReferenceExpression.format_string("{0}", identity_client_id)
-    identity.configure_infrastructure(configure_infrastructure)
     identity.with_parameter("default")
     identity.with_parameter("string-value", value="value")
     identity.with_parameter("string-values", value=["value-1", "value-2"])
@@ -75,7 +83,6 @@ with create_builder() as builder:
     identity.with_parameter("endpoint", value=endpoint)
     identity.publish_as_connection_string()
     identity.clear_default_role_assignments()
-    identity.get_bicep_identifier()
     identity.is_existing()
     identity.run_as_existing(existing_name)
     identity.run_as_existing(existing_name, resource_group=existing_resource_group)

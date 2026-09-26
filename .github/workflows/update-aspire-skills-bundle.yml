@@ -19,13 +19,13 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.repository_owner == 'microsoft' }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Generate GitHub App Token for bundle update
         id: update-token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
 
       - name: Update embedded Aspire skills bundle
@@ -44,7 +44,7 @@ jobs:
       - name: Restore solution
         run: ./restore.sh
 
-      - name: Test Aspire skills installer
+      - name: Test Aspire skills bundle and telemetry hooks
         run: >
           dotnet test --project tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj
           --no-launch-profile
@@ -52,14 +52,16 @@ jobs:
           --filter-class "*.AspireSkillsInstallerTests"
           --filter-class "*.AspireSkillsBundleTests"
           --filter-class "*.AgentInitCommandTests"
+          --filter-class "*.TelemetryHookInstallerTests"
+          --filter-class "*.TelemetryHookScriptTests"
           --filter-not-trait "quarantined=true"
           --filter-not-trait "outerloop=true"
 
       - name: Generate GitHub App Token for pull request
         id: pr-token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
 
       - name: Create or update pull request

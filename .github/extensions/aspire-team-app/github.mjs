@@ -19,6 +19,7 @@ import {
   isChecksFailing,
   isCoreTeamAuthor,
   isReviewDebt,
+  reviewAgeStartedAt,
   shouldHideFromSharedPullRequestLists,
   visibleCheckState,
 } from "./model.mjs";
@@ -40,12 +41,12 @@ export const DEFAULT_REPOS = [
   "CommunityToolkit/Aspire",
 ];
 
-// Enterprise Managed User (EMU) accounts (e.g. "dapine_microsoft") work against
-// the private first-party mirror rather than the public Aspire repos, so they get
-// a different default watch set. See accounts.isEmuAccountId for how an account is
-// classified and state.defaultReposForId for how this default is applied.
-export const DEFAULT_EMU_REPOS = [
-  "devdiv-microsoft/aspire-1p",
+// The Proxima enterprise account has its own host and repository location. Keep this
+// separate from the public defaults because account-specific GraphQL requests target
+// the account's host.
+export const DEFAULT_PROXIMA_REPOS = [
+  "coreai/aspire-1p",
+  "coreai/sisyphus",
 ];
 
 const GRAPHQL = "https://api.github.com/graphql";
@@ -98,6 +99,9 @@ query($owner:String!, $name:String!, $after:String) {
         baseRefName
         mergeable
         reviewDecision
+        readyForReviewEvents: timelineItems(last:1, itemTypes:[READY_FOR_REVIEW_EVENT]) {
+          nodes { ... on ReadyForReviewEvent { createdAt } }
+        }
         additions deletions changedFiles
         milestone { title }
         labels(first:15) { nodes { name } }
@@ -320,6 +324,7 @@ function normalizePr(repo, node, viewers, repoPrivate = false) {
     authorType,
     authorAvatarUrl: node.author?.avatarUrl ?? null,
     createdAt: node.createdAt,
+    readyForReviewAt: node.readyForReviewEvents?.nodes?.[0]?.createdAt ?? null,
     updatedAt: node.updatedAt,
     baseRef: node.baseRefName,
     milestone: node.milestone?.title ?? null,
@@ -496,7 +501,7 @@ function awaitingReview(pr) {
 // Oldest waits float to the top so nothing starves, with nudges for explicitly
 // requested reviewers and quick wins. Order is team-managed, not user-sortable.
 function reviewQueueScore(pr) {
-  const ageDays = (Date.now() - new Date(pr.createdAt).getTime()) / DAY_MS;
+  const ageDays = (Date.now() - new Date(reviewAgeStartedAt(pr)).getTime()) / DAY_MS;
   let s = Math.min(ageDays, 90);
   if (pr.requestedReviewers.length > 0) s += 20;
   if (isQuickWin(pr)) s += 12;

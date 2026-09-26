@@ -13,7 +13,7 @@
   have a similar script with different runner mappings and output format.
 
   Downstream consumers (e.g., tests.yml) are responsible for splitting the
-  matrix by dependency type and handling overflow.
+  matrix by dependency type.
 
 .PARAMETER CanonicalMatrixFile
   Path to the canonical test matrix JSON file (output of build-test-matrix.ps1).

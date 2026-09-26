@@ -1,7 +1,14 @@
 {
-  "version": "0.0.1",
+  "version": "0.0.3",
   "repository": "microsoft/aspire-skills",
-  "tag": "v0.0.1",
-  "assetName": "aspire-skills-v0.0.1.tgz",
-  "sha512": "d968e7c9268d92c5964490ee5f96182c06a1d48879fe3f56e496544c2ec172596307a82cb4d8d1ee5f680db33570c3f12aae8768f186a5deac973d2ca06ca8bf"
+  "tag": "v0.0.3",
+  "assetName": "aspire-skills-v0.0.3.tgz",
+  "sha512": "a5f8bd971b6aa0556994a6f6003d5a763056f6c64d1d9e6ae7a883ef9408c3d8a7689371c0499d980d4f82a9cd55e37cebd1e182e3cb71fc028380cec0ececad",
+  "hooks": {
+    "commitSha": "a83ca78b9d35b8238f9c4fdba72cb779defe2a90",
+    "files": {
+      "track-telemetry.sh": "6fa64f350e2709a7abb52842232cc8d584e24d104b17a200a93ca4010d36a838dd1f6f73b83e92cd2ad0d8ad4abf9753323f840dc28625ccaf2f082097667181",
+      "track-telemetry.ps1": "303dc8d0eba181154222dacf6151d6bbe24614dd0e3144704fab1cb83c81f149e95cac47e87488357f0c04d232629a2f91f5551fe33e5c6c91f25a8f97aa0af3"
+    }
+  }
 }

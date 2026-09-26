@@ -41,6 +41,10 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
             if (configuration.isApphost && !isOwnedAppHostSession) {
                 return undefined;
             }
+            // The AppHost child is tracked for output and restart handling, but it is not
+            // a DCP resource run. Its run ID is intentionally empty, and forwarding its
+            // lifecycle would make DCP reject the notification and recycle the shared socket.
+            const hasDcpRunSession = configuration.isApphost !== true;
 
             let debuggeeExitCode: number | undefined;
 
@@ -90,6 +94,10 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                         }
                     }
 
+                    if (!hasDcpRunSession) {
+                        return;
+                    }
+
                     // Listen for process event with isRestart (if supported by adapter)
                     if (message.type === 'event' && message.event === 'process') {
                         // A new debuggee process invalidates any exit code captured from a prior run.
@@ -121,6 +129,17 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                     }
                 },
                 onExit(code: number | undefined) {
+                    if (!hasDcpRunSession) {
+                        return;
+                    }
+
+                    // Browser adapters are server-hosted or can disconnect without exiting the
+                    // launched browser. The root VS Code debug session owns their terminal
+                    // notification, so an adapter exit must not report the run a second time.
+                    if (configuration.resourceType === 'browser') {
+                        return;
+                    }
+
                     let exitCode = debuggeeExitCode ?? code;
 
                     // Exit code 143 should be treated as normal exit (SIGTERM) on macOS and Linux

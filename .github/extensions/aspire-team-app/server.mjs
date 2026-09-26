@@ -30,7 +30,9 @@ import {
   setAccountActive,
   setHealthOrder,
   activeIds,
+  activateNewProximaAccounts,
 } from "./state.mjs";
+import { isProximaAccountId } from "./accounts.mjs";
 
 const servers = new Map(); // instanceId -> { server, url }
 const sseClients = new Set();
@@ -101,6 +103,28 @@ async function resolveAuth(prefs, { reprobe = false } = {}) {
   const reposForId = (id) => accountConfig(prefs, id).repos;
   const isActive = (id) => accountConfig(prefs, id).active;
   const { accounts, tokenById } = await resolveAccounts(reposForId, isActive);
+
+  const hasNewProximaAccount = accounts.some((account) =>
+    isProximaAccountId(account.id) &&
+    account.status !== "failed" &&
+    account.accessible > 0 &&
+    !Object.prototype.hasOwnProperty.call(prefs.accounts || {}, account.id));
+  if (hasNewProximaAccount) {
+    const saved = await updatePrefs((next) => {
+      activateNewProximaAccounts(next, accounts);
+    });
+    Object.assign(prefs, saved);
+  }
+  for (const account of accounts) {
+    account.active = accountConfig(prefs, account.id).active;
+  }
+
+  // A concurrent account mutation can update the preferences while credential probing is
+  // in flight. Do not publish accounts probed from the old configuration under the new
+  // cache key; re-probe against the latest repository selections instead.
+  if (accountsKey(prefs) !== key) {
+    return resolveAuth(prefs, { reprobe: true });
+  }
 
   // First-run convenience: if the user has never configured accounts and none are
   // active, auto-enable the strongest usable account so the canvas works out of the
@@ -677,7 +701,7 @@ async function handle(req, res, log, instanceId) {
       const { id, repos } = await readBody(req);
       if (typeof id === "string" && id) {
         // Pass an empty fallback so a cleared submission resets to the account's own
-        // default (public vs EMU) inside setAccountRepos, rather than parseRepos
+        // default (public vs Proxima) inside setAccountRepos, rather than parseRepos
         // pre-filling the public default here.
         await updatePrefs((prefs) => { setAccountRepos(prefs, id, parseRepos(repos, [])); });
         invalidateAuth();
@@ -986,7 +1010,7 @@ export async function toggleAccount(id, active) {
 
 export async function setReposFor(id, repos) {
   // Empty fallback: a cleared list resets to the account's own default in
-  // setAccountRepos (public vs EMU) instead of parseRepos forcing the public one.
+  // setAccountRepos (public vs Proxima) instead of parseRepos forcing the public one.
   await updatePrefs((prefs) => { setAccountRepos(prefs, id, parseRepos(repos, [])); });
   invalidateAuth();
   return getDashboard(true);

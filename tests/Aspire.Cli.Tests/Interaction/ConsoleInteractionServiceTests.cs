@@ -29,8 +29,52 @@ public class ConsoleInteractionServiceTests
     private static ConsoleInteractionService CreateInteractionService(IAnsiConsole console, CliExecutionContext? executionContext = null, ICliHostEnvironment? hostEnvironment = null, ILoggerFactory? loggerFactory = null)
     {
         executionContext ??= CreateExecutionContext();
-        var consoleEnvironment = new ConsoleEnvironment(console, console);
+        var consoleEnvironment = new ConsoleEnvironment(console, console, TextReader.Null);
         return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), loggerFactory ?? NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+    }
+
+    [Fact]
+    public async Task DisplayLiveAsync_WhenNonInteractive_ThrowsInvalidOperationException()
+    {
+        var callbackInvoked = false;
+        var interactionService = CreateInteractionService(AnsiConsole.Console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            interactionService.DisplayLiveAsync(Text.Empty, _ =>
+            {
+                callbackInvoked = true;
+                return Task.CompletedTask;
+            }));
+
+        Assert.Equal("Live rendering requires interactive output.", exception.Message);
+        Assert.False(callbackInvoked);
+    }
+
+    [Fact]
+    public async Task DisplayLiveAsync_WhenInteractive_UsesLiveRendering()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = int.MaxValue;
+        var interactionService = CreateInteractionService(console);
+
+        await interactionService.DisplayLiveAsync(new Text("Initial\n"), update =>
+        {
+            update(new Text("Updated once\n"));
+            update(new Text("Updated twice\n"));
+            return Task.CompletedTask;
+        });
+
+        var renderedOutput = output.ToString();
+        Assert.Contains("\u001b[?25l", renderedOutput);
+        Assert.Contains("Updated twice", renderedOutput);
+        Assert.Contains("\u001b[?25h", renderedOutput);
     }
 
     [Fact]
@@ -845,7 +889,7 @@ public class ConsoleInteractionServiceTests
         });
 
         var executionContext = CreateExecutionContext();
-        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
+        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole, TextReader.Null);
         var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
 
         // Console defaults to Standard (stdout), but errors should still go to stderr
@@ -874,7 +918,7 @@ public class ConsoleInteractionServiceTests
         });
 
         var executionContext = CreateExecutionContext();
-        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
+        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole, TextReader.Null);
         var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
 
         interactionService.DisplayMessage(KnownEmojis.Information, "Status update");
