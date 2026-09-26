@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Dashboard.Model;
 using Aspire.Shared.Model.Serialization;
 
 namespace Aspire.Cli.Tests.Backchannel;
@@ -149,6 +150,25 @@ public class ResourceSnapshotMapperTests
         Assert.Equal(["restart", "start"], result.Commands!.Keys);
         Assert.Equal(KnownCommandState.Enabled, result.Commands["restart"].State);
         Assert.Equal(KnownCommandState.Disabled, result.Commands["start"].State);
+    }
+
+    [Fact]
+    public void MapToResourceJson_WithProjectSource_MapsTheOriginalProjectPath()
+    {
+        var snapshot = new ResourceSnapshot
+        {
+            Name = "frontend",
+            DisplayName = "frontend",
+            ResourceType = "Project",
+            Properties =
+            {
+                [KnownProperties.Project.Path] = "/repo/frontend/frontend.csproj"
+            }
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot]);
+
+        Assert.Equal("/repo/frontend/frontend.csproj", result.Source);
     }
 
     [Fact]

@@ -143,6 +143,6 @@ export class ResourceItem extends vscode.TreeItem {
         this.iconPath = getResourceIcon(resource);
         this.description = buildResourceDescription(resource);
         this.tooltip = buildResourceTooltip(resource);
-        this.contextValue = getResourceContextValue(resource);
+        this.contextValue = getResourceContextValue(resource, appHostPath);
     }
 }

@@ -15,7 +15,7 @@ import { AppHostDataRepository, shortenPath, shortenPaths } from '../data/AppHos
 import { AspireCliFailedError } from '../data/appHostCliContracts';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { getResourceContextValue, getResourceIcon, getResourceCommandIcon, resolveAppHostSourcePath, buildResourceDescription } from '../views/treePresentation';
-import { AppHostItem, WorkspaceAppHostItem, WorkspaceResourcesItem } from '../views/treeItems';
+import { AppHostItem, ResourceItem, WorkspaceAppHostItem, WorkspaceResourcesItem } from '../views/treeItems';
 import type { Clipboard } from '../views/AspireAppHostTreeProvider';
 import type { AppHostDisplayInfo, ResourceJson, ViewMode } from '../data/AppHostDataRepository';
 import { AppHostCliRunner } from '../data/appHostCliRunner';
@@ -1771,11 +1771,85 @@ suite('getResourceContextValue', () => {
         assert.strictEqual(getResourceContextValue(makeResource()), 'resource');
     });
 
+    test('resource with an existing source path includes source context', () => {
+        const result = getResourceContextValue(makeResource({ source: __filename }));
+        assert.strictEqual(result, 'resource:canOpenSource');
+    });
+
+    test('relative resource source resolves from the AppHost directory', () => {
+        const appHostPath = path.join(path.dirname(__filename), 'apphost.csproj');
+        const result = getResourceContextValue(makeResource({ source: path.basename(__filename) }), appHostPath);
+        assert.strictEqual(result, 'resource:canOpenSource');
+    });
+
+    test('resource source falls back to the path-bearing project property', () => {
+        const result = getResourceContextValue(makeResource({
+            source: path.basename(__filename),
+            properties: { 'project.path': __filename },
+        }));
+        assert.strictEqual(result, 'resource:canOpenSource');
+    });
+
+    test('resource with an unavailable source path does not include source context', () => {
+        const result = getResourceContextValue(makeResource({ source: path.join(os.tmpdir(), 'missing-resource-source') }));
+        assert.strictEqual(result, 'resource');
+    });
+
     test('resource with start command', () => {
         const result = getResourceContextValue(makeResource({
             commands: { 'start': { displayName: null, description: null, state: 'Enabled' } },
         }));
         assert.strictEqual(result, 'resource:canStart');
+    });
+
+    suite('openResourceSource', () => {
+        test('reveals an existing resource source in Explorer', async () => {
+            const sandbox = sinon.createSandbox();
+            const sourcePath = __filename;
+            const provider = makeTreeProvider([
+                makeAppHost({
+                    resources: [makeResource({ source: sourcePath })],
+                }),
+            ]);
+            const executeCommand = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+            sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns({} as vscode.WorkspaceFolder);
+
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup);
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+            assert.ok(resourceItem instanceof ResourceItem);
+
+            await provider.openResourceSource(resourceItem);
+
+            assert.strictEqual(executeCommand.calledWith('revealInExplorer', vscode.Uri.file(sourcePath)), true);
+            provider.dispose();
+            sandbox.restore();
+        });
+
+        test('does not reveal a missing resource source', async () => {
+            const sandbox = sinon.createSandbox();
+            const provider = makeTreeProvider([
+                makeAppHost({
+                    resources: [makeResource({ source: path.join(os.tmpdir(), 'missing-resource-source') })],
+                }),
+            ]);
+            const executeCommand = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+            const warning = sandbox.stub(vscode.window, 'showWarningMessage');
+
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup);
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+            assert.ok(resourceItem instanceof ResourceItem);
+
+            await provider.openResourceSource(resourceItem);
+
+            assert.strictEqual(executeCommand.called, false);
+            assert.strictEqual(warning.calledOnce, true);
+            provider.dispose();
+            sandbox.restore();
+        });
     });
 
     test('resource with resource-start command', () => {

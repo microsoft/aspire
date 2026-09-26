@@ -62,6 +62,7 @@ export interface ResourceJson {
     name: string;
     displayName: string | null;
     resourceType: string;
+    source?: string | null;
     state: string | null;
     stateStyle: string | null;
     healthStatus: string | null;
