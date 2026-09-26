@@ -217,8 +217,10 @@ builder.Build().Run();`));
     test('process-owner cleanup stops the owned CLI and AppHost process tree', async () => {
         await openAspireView();
         await waitForRepositoryIdle();
-        const discovered = await waitForWorkspaceAppHost();
-        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+        await waitForWorkspaceAppHost();
+        // The previous test removes a generated AppHost; discovery can still select it while
+        // that deletion propagates. This test targets the permanent fixture, not the selection.
+        const appHostPath = getPrimaryAppHostProjectPath();
 
         const beforeInvocation = getCommandInvocationCount('aspire-vscode.debugAppHost');
         await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
