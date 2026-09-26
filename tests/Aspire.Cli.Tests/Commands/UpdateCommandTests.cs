@@ -29,15 +29,17 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class UpdateCommandTests(ITestOutputHelper outputHelper)
 {
-    [Fact]
-    public async Task UpdateCommandWithHelpArgumentReturnsZero()
+    [Theory]
+    [InlineData("update --help")]
+    [InlineData("upgrade --help")]
+    public async Task UpdateCommandWithHelpArgumentReturnsZero(string commandLine)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("update --help");
+        var result = command.Parse(commandLine);
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -62,6 +64,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("update --non-interactive")]
     [InlineData("--non-interactive update")]
+    [InlineData("upgrade --non-interactive")]
+    [InlineData("--non-interactive upgrade")]
     public async Task UpdateCommandFailsFastWhenNonInteractiveWithoutYes(string commandLine)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
