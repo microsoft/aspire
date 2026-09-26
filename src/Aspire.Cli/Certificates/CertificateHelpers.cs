@@ -119,7 +119,9 @@ internal static partial class CertificateHelpers
                 CreateNoWindow = true
             };
 
-            // The timeout bounds both output capture and exit; on timeout the process is killed and TimeoutException is thrown.
+            // The timeout bounds both output capture and exit, and the process is killed when it fires.
+            // If output is still open, TimeoutException is thrown (caught below); if output already
+            // closed, a canceled non-zero exit status is returned. Both mean "not detected".
             var result = Process.RunAndCaptureText(processInfo, TimeSpan.FromSeconds(5));
             if (result.ExitStatus.ExitCode != 0)
             {

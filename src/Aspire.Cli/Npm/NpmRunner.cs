@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Logging;
+using Microsoft.Win32.SafeHandles;
 using Semver;
 
 namespace Aspire.Cli.Npm;
@@ -203,10 +204,21 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
     /// Creates a <see cref="ProcessStartInfo"/> configured to run an npm command.
     /// On Windows, .cmd files are invoked via cmd.exe /c for reliable stdout redirection.
     /// </summary>
-    internal static ProcessStartInfo CreateNpmProcessStartInfo(string npmPath, string[] args, string workingDirectory, IEnvironment environment)
+    /// <param name="npmPath">Path to the npm executable or batch wrapper.</param>
+    /// <param name="args">npm arguments.</param>
+    /// <param name="workingDirectory">Working directory for the npm process.</param>
+    /// <param name="environment">Environment used to detect the host platform.</param>
+    /// <param name="standardInput">
+    /// Handle given to npm as stdin; callers pass a null-device handle and keep it alive until the process starts.
+    /// </param>
+    internal static ProcessStartInfo CreateNpmProcessStartInfo(string npmPath, string[] args, string workingDirectory, IEnvironment environment, SafeFileHandle standardInput)
     {
         var startInfo = new ProcessStartInfo
         {
+            // Give npm (and any lifecycle scripts it invokes) a null stdin so reads see EOF
+            // instead of blocking on the CLI's terminal. NpmRunner is intended to be fully
+            // non-interactive. See https://github.com/microsoft/aspire/issues/16791.
+            StandardInputHandle = standardInput,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
@@ -282,13 +294,8 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
 
         try
         {
-            var startInfo = CreateNpmProcessStartInfo(npmPath, args, workingDirectory, environment);
-
-            // Give npm (and any lifecycle scripts it invokes) a null stdin so reads see EOF
-            // instead of blocking on the CLI's terminal. NpmRunner is intended to be fully
-            // non-interactive. See https://github.com/microsoft/aspire/issues/16791.
             using var nullInput = File.OpenNullHandle();
-            startInfo.StandardInputHandle = nullInput;
+            var startInfo = CreateNpmProcessStartInfo(npmPath, args, workingDirectory, environment, nullInput);
 
             using var activity = profilingTelemetry.StartNpmCommand(npmPath, args, workingDirectory);
             var result = await Process.RunAndCaptureTextAsync(startInfo, cancellationToken).ConfigureAwait(false);
