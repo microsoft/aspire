@@ -1,5 +1,7 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
+import * as processHelpers from '../test-e2e/helpers/process';
+import { listProcessEntries } from '../test-e2e/helpers/processArguments';
 import { assertExactLinkedAppHostCliLaunch, assertLinkedAppHostCliLaunch, getExpectedLinkedAppHostCliProcessArguments } from './helpers/processArguments';
 
 suite('process argument parsing', () => {
@@ -16,6 +18,40 @@ suite('process argument parsing', () => {
             'C:\\Users\\runner\\workspace with spaces\\AppHost.csproj',
             'C:\\Tools\\ASPIRE.EXE',
             'win32'));
+    });
+
+    test('normalizes Windows process listings with inaccessible command lines', async () => {
+        sinon.stub(process, 'platform').value('win32');
+        sinon.stub(processHelpers, 'runProcess').resolves({
+            exitCode: 0,
+            signal: null,
+            stderr: '',
+            stdout: JSON.stringify([
+                { ProcessId: 4, CommandLine: null, Arguments: {} },
+                { ProcessId: 101, CommandLine: 'deno apphost.mts', Arguments: ['deno', 'apphost.mts'] },
+                { ProcessId: 202, CommandLine: 'worker', Arguments: 'worker' },
+                { ProcessId: 303, CommandLine: null, Arguments: null },
+            ]),
+        });
+
+        assert.deepStrictEqual(await listProcessEntries(), [
+            { pid: 4, commandLine: '', arguments: [] },
+            { pid: 101, commandLine: 'deno apphost.mts', arguments: ['deno', 'apphost.mts'] },
+            { pid: 202, commandLine: 'worker', arguments: ['worker'] },
+            { pid: 303, commandLine: '', arguments: [] },
+        ]);
+    });
+
+    test('rejects malformed Windows arguments when a command line is available', async () => {
+        sinon.stub(process, 'platform').value('win32');
+        sinon.stub(processHelpers, 'runProcess').resolves({
+            exitCode: 0,
+            signal: null,
+            stderr: '',
+            stdout: JSON.stringify({ ProcessId: 101, CommandLine: 'deno apphost.mts', Arguments: {} }),
+        });
+
+        await assert.rejects(listProcessEntries(), /Unexpected arguments for Windows process 101/);
     });
 
     test('rejects --isolated=false as evidence of inferred isolation', () => {
