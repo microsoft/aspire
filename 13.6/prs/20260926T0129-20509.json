@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backport of #20472; fixes unhandled JSDisconnectedException telemetry in dashboard layout",
+  "mergedAt": "2026-09-26T01:29:07Z",
+  "number": 20509,
+  "runDate": "2026-09-26T06:07:22Z",
+  "status": "included",
+  "title": "[release/13.6] Avoid JSDisconnectedException telemetry during dashboard layout initialization"
+}

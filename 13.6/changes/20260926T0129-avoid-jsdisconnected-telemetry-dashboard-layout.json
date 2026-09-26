@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Disconnecting from the dashboard while its layout restores saved navigation state no longer raises an unhandled JSDisconnectedException in telemetry; other browser-storage read errors continue to be logged at Information level.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔕",
+  "firstMergedAt": "2026-09-26T01:29:07Z",
+  "lastMergedAt": "2026-09-26T01:29:07Z",
+  "name": "Avoid JSDisconnectedException telemetry during dashboard layout initialization",
+  "owner": "JamesNK",
+  "prs": [
+    20509
+  ]
+}

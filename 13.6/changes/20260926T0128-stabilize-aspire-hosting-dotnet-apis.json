@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Aspire.Hosting.Dotnet APIs no longer require the ASPIREDOTNETPROJECT001 experimental suppression to use, though the package itself remains prerelease.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔓",
+  "firstMergedAt": "2026-09-26T01:28:16Z",
+  "lastMergedAt": "2026-09-26T01:28:16Z",
+  "name": "Stabilize Aspire.Hosting.Dotnet APIs",
+  "owner": "eerhardt",
+  "prs": [
+    20496
+  ]
+}

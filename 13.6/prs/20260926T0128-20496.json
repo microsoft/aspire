@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Backport of #20490; removes experimental attribute requirement from Aspire.Hosting.Dotnet APIs",
+  "mergedAt": "2026-09-26T01:28:16Z",
+  "number": 20496,
+  "runDate": "2026-09-26T06:07:22Z",
+  "status": "included",
+  "title": "[release/13.6] Remove Experimental attributes from Aspire.Hosting.Dotnet"
+}

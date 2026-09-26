@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Dashboard filter badges no longer stay visible with an empty count, narrow resource-details controls wrap instead of overlapping properties, and mobile Resources tab navigation updates the URL immediately unless the filter panel is open.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-09-26T01:31:26Z",
+  "lastMergedAt": "2026-09-26T01:31:26Z",
+  "name": "Fix dashboard filter badges and toolbar navigation",
+  "owner": "JamesNK",
+  "prs": [
+    20511
+  ]
+}
