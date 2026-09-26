@@ -535,6 +535,14 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             }));
         }
 
+        // aspire ls already omits configured paths that don't exist on disk. If the configured
+        // path wasn't among the CLI's candidates, only fall back to adding it here when the file
+        // is actually still present -- otherwise this re-introduces a phantom candidate that the
+        // CLI deliberately excluded (see #20013).
+        if (!(await this._configuredAppHostPathExists(configuredPath))) {
+            return candidates;
+        }
+
         const configuredLanguage = classifyAppHostPath(configuredPath);
         return [
             ...candidates,
@@ -545,6 +553,16 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 selected: true,
             },
         ];
+    }
+
+    private async _configuredAppHostPathExists(configuredPath: string): Promise<boolean> {
+        try {
+            await vscode.workspace.fs.stat(vscode.Uri.file(configuredPath));
+            return true;
+        }
+        catch {
+            return false;
+        }
     }
 
     private _filterExcludedCandidates(workspaceFolder: vscode.WorkspaceFolder, candidates: CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo[] {
@@ -814,4 +832,4 @@ function withCancellation<T>(promise: Promise<T>, cancellationToken?: vscode.Can
                 reject(error);
             });
     });
-}
+}``
