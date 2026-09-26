@@ -39,4 +39,5 @@ Aspire.Hosting.PostgreSQL/withPgWeb(configureContainer?: callback, containerName
 Aspire.Hosting.PostgreSQL/withPgWebHostPort(port: number) -> Aspire.Hosting.PostgreSQL/Aspire.Hosting.Postgres.PgWebContainerResource
 Aspire.Hosting.PostgreSQL/withPostgresHostPort(port: number) -> Aspire.Hosting.PostgreSQL/Aspire.Hosting.ApplicationModel.PostgresServerResource
 Aspire.Hosting.PostgreSQL/withPostgresMcp(configureContainer?: callback, containerName?: string) -> Aspire.Hosting.PostgreSQL/Aspire.Hosting.ApplicationModel.PostgresDatabaseResource
+Aspire.Hosting.PostgreSQL/withRepl() -> Aspire.Hosting.PostgreSQL/Aspire.Hosting.ApplicationModel.PostgresServerResource
 Aspire.Hosting.PostgreSQL/withUserName(userName: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.PostgreSQL/Aspire.Hosting.ApplicationModel.PostgresServerResource
