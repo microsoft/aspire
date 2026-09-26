@@ -3,7 +3,6 @@
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
@@ -17,10 +16,7 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
     private const string ClaudeCodeFolderName = ".claude";
     private const string McpConfigFileName = ".mcp.json";
     private const string AspireServerName = "aspire";
-    private static readonly string s_skillBaseDirectory = Path.Combine(".claude", "skills");
-
     private readonly IClaudeCodeCliRunner _claudeCodeCliRunner;
-    private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly CliExecutionContext _executionContext;
     private readonly ILogger<ClaudeCodeAgentEnvironmentScanner> _logger;
 
@@ -28,17 +24,14 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
     /// Initializes a new instance of <see cref="ClaudeCodeAgentEnvironmentScanner"/>.
     /// </summary>
     /// <param name="claudeCodeCliRunner">The Claude Code CLI runner for checking if Claude Code is installed.</param>
-    /// <param name="playwrightCliInstaller">The Playwright CLI installer for secure installation.</param>
     /// <param name="executionContext">The CLI execution context for accessing environment variables and settings.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
-    public ClaudeCodeAgentEnvironmentScanner(IClaudeCodeCliRunner claudeCodeCliRunner, PlaywrightCliInstaller playwrightCliInstaller, CliExecutionContext executionContext, ILogger<ClaudeCodeAgentEnvironmentScanner> logger)
+    public ClaudeCodeAgentEnvironmentScanner(IClaudeCodeCliRunner claudeCodeCliRunner, CliExecutionContext executionContext, ILogger<ClaudeCodeAgentEnvironmentScanner> logger)
     {
         ArgumentNullException.ThrowIfNull(claudeCodeCliRunner);
-        ArgumentNullException.ThrowIfNull(playwrightCliInstaller);
         ArgumentNullException.ThrowIfNull(executionContext);
         ArgumentNullException.ThrowIfNull(logger);
         _claudeCodeCliRunner = claudeCodeCliRunner;
-        _playwrightCliInstaller = playwrightCliInstaller;
         _executionContext = executionContext;
         _logger = logger;
     }
@@ -73,9 +66,6 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
             {
                 _logger.LogDebug("Aspire MCP server is already configured");
             }
-
-            // Register Playwright CLI installation applicator
-            CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
         }
         else
         {
@@ -99,9 +89,6 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
                 {
                     _logger.LogDebug("Aspire MCP server is already configured");
                 }
-
-                // Register Playwright CLI installation applicator
-                CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
             }
             else
             {
