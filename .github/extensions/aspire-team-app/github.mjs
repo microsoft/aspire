@@ -851,7 +851,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
     // notifier uses this to detect brand-new external PRs; it is intentionally independent
     // of the capped focus queue so a new PR is announced even before it surfaces there.
     const externalOpenPrs = allPrs
-      .filter((p) => isSlaRepo(p.repository) && p.state === "open" && !isCoreTeamAuthor(p.author))
+      .filter((p) => isSlaRepo(p.repository, p.url) && p.state === "open" && !isCoreTeamAuthor(p.author))
       .map((p) => ({
         repo: p.repository,
         number: p.number,
@@ -902,11 +902,13 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
     // Tell the SLA reconciler which SLA repos actually fetched OK this run so a transient
     // failure can't prune tracked PRs and reset their breach clock (#5). okRepos holds
     // hostRepoKey(graphql, repo) = `${graphql??""}\n${repo}`, so the repo slug is the text
-    // after the newline; keep only the ones under SLA, lowercased to match slaCandidateKey.
+    // after the newline. Check the host too: success on a same-slug repo on another host
+    // cannot authorize pruning or hide a failed fetch of the real SLA repo.
     const authoritativeRepos = new Set();
     for (const entry of okRepos) {
-      const repo = entry.slice(entry.indexOf("\n") + 1).toLowerCase();
-      if (isSlaRepo(repo)) authoritativeRepos.add(repo);
+      const separator = entry.indexOf("\n");
+      const repo = entry.slice(separator + 1).toLowerCase();
+      if (isSlaRepo(repo, entry.slice(0, separator))) authoritativeRepos.add(repo);
     }
     // The SLA repos this run was actually supposed to fetch (watched by some active account).
     // annotateDashboardSla compares this against authoritativeRepos to flag a partial fetch, so
@@ -914,7 +916,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
     const expectedSlaRepos = new Set();
     for (const acct of usable) {
       for (const repo of acct.repos ?? []) {
-        if (isSlaRepo(repo)) expectedSlaRepos.add(repo.toLowerCase());
+        if (isSlaRepo(repo, acct.graphql)) expectedSlaRepos.add(repo.toLowerCase());
       }
     }
     await annotateDashboardSla(snap, { now: Date.now(), authoritativeRepos, expectedSlaRepos });

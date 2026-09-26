@@ -95,7 +95,12 @@ test("slaState: flips only at the warn and deadline thresholds", () => {
   assert.equal(slaState(a, deadline + hourMs), "breached");
 });
 
-test("isSlaRepo: case-insensitive match against the configured repos", () => {
+test("isSlaRepo: matches configured repositories only on their owning hosts", () => {
+  assert.equal(isSlaRepo("CoreAI/Aspire-1P", "https://msft.ghe.com/coreai/aspire-1p"), true);
+  assert.equal(isSlaRepo("coreai/aspire-1p", "https://api.msft.ghe.com/graphql"), true);
+  assert.equal(isSlaRepo("coreai/aspire-1p"), false);
+  assert.equal(isSlaRepo("coreai/aspire-1p", "https://other.ghe.com"), false);
+  assert.equal(isSlaRepo("devdiv-microsoft/aspire-1p", "https://msft.ghe.com"), false);
   assert.equal(isSlaRepo("devdiv-microsoft/aspire-1p"), true);
   assert.equal(isSlaRepo("DevDiv-Microsoft/Aspire-1p"), true);
   assert.equal(isSlaRepo("microsoft/aspire"), false);
@@ -110,6 +115,7 @@ test("slaCandidateKey: lowercased repo plus number", () => {
 function candidatePr(overrides = {}) {
   return {
     repository: "devdiv-microsoft/aspire-1p",
+    url: "https://github.com/devdiv-microsoft/aspire-1p/pull/1",
     number: 1,
     author: "external-dev",
     review: { reviewerCount: 0 },
@@ -119,6 +125,14 @@ function candidatePr(overrides = {}) {
 
 test("isSlaCandidatePr: only non-team, un-reviewed PRs on an SLA repo qualify", () => {
   assert.equal(isSlaCandidatePr(candidatePr()), true);
+  assert.equal(isSlaCandidatePr(candidatePr({
+    repository: "coreai/aspire-1p",
+    url: "https://msft.ghe.com/coreai/aspire-1p/pull/1",
+  })), true);
+  assert.equal(isSlaCandidatePr(candidatePr({
+    repository: "coreai/aspire-1p",
+    url: "https://github.com/coreai/aspire-1p/pull/1",
+  })), false);
   // A core-team author is exempt (they are not the review target).
   assert.equal(isSlaCandidatePr(candidatePr({ author: "joperezr" })), false);
   // A core-team enterprise alias is exempt too.
@@ -184,7 +198,7 @@ test("annotateDashboardSla: seeded past clocks populate the breached and approac
       number,
       author,
       title: `PR ${number}`,
-      url: `https://example/${number}`,
+      url: `https://msft.ghe.com/${repo}/pull/${number}`,
       review: { reviewerCount: 0 },
     },
   });
@@ -241,7 +255,7 @@ test("annotateDashboardSla: freshly-qualified candidates populate the ok panel l
       number,
       author,
       title: `PR ${number}`,
-      url: `https://example/${number}`,
+      url: `https://msft.ghe.com/${repo}/pull/${number}`,
       review: { reviewerCount: 0 },
     },
   });

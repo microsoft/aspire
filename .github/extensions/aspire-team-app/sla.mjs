@@ -22,12 +22,14 @@
 // crossings — never a live "waiting Xh" delta or a per-run timestamp. The live
 // "due in ~2h" text is computed client-side in render.mjs from deadlineAt.
 
-import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { mkdir, mkdtemp, readdir, readFile, writeFile, rename, rm, rmdir, unlink } from "node:fs/promises";
+import { homedir, hostname } from "node:os";
+import { basename, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
 import {
   SLA_REPOS,
+  SLA_REPO_HOSTS,
   SLA_BUDGET_HOURS,
   SLA_WARN_HOURS,
   SLA_TIMEZONE,
@@ -41,17 +43,22 @@ import { isCoreTeamAuthor } from "./model.mjs";
 const COPILOT_HOME = process.env.COPILOT_HOME || join(homedir(), ".copilot");
 const ARTIFACT_DIR = join(COPILOT_HOME, "extensions", "aspire-team-app", "artifacts");
 const TRACKING_FILE = join(ARTIFACT_DIR, "sla-tracking.json");
+const TRACKING_LOCK = `${TRACKING_FILE}.lock`;
 
-const SLA_REPO_SET = new Set(SLA_REPOS.map((r) => r.toLowerCase()));
 const WORK_DAY_SET = new Set(SLA_WORK_DAYS);
 
 // ---------------------------------------------------------------------------
 // Candidate predicates
 // ---------------------------------------------------------------------------
 
-// Whether a repository is under the review SLA (case-insensitive).
-export function isSlaRepo(repo) {
-  return SLA_REPO_SET.has(String(repo || "").toLowerCase());
+// Accept both PR URLs and account API endpoints: Proxima uses api.msft.ghe.com,
+// while PRs live on msft.ghe.com. A missing endpoint is the data layer's dotcom default.
+export function isSlaRepo(repo, endpoint = "https://github.com") {
+  const expectedHost = SLA_REPO_HOSTS[String(repo || "").toLowerCase()];
+  if (!expectedHost) return false;
+  const url = new URL(endpoint || "https://github.com");
+  return url.protocol === "https:" && !url.port &&
+    url.hostname.toLowerCase().replace(/^api\./, "") === expectedHost;
 }
 
 // A PR is SLA-eligible when it is on an SLA repo, authored outside the core team,
@@ -60,12 +67,14 @@ export function isSlaRepo(repo) {
 // stops the moment any human comments on or approves the PR.
 export function isSlaCandidatePr(pr) {
   if (!pr) return false;
-  if (!isSlaRepo(pr.repository)) return false;
+  if (!isSlaRepo(pr.repository, pr.url)) return false;
   if (isCoreTeamAuthor(pr.author)) return false;
   return (pr.review?.reviewerCount ?? 0) === 0;
 }
 
-// Stable key for a PR across runs and stores. "repo#number", lowercased repo.
+// Keep the persisted "repo#number" identity so existing clocks survive upgrades.
+// Each eligible slug is pinned to exactly one host by isSlaRepo, including pruning.
+// The old mirror and Proxima have different slugs; never guess a PR-number mapping.
 export function slaCandidateKey(pr) {
   return `${String(pr.repository).toLowerCase()}#${pr.number}`;
 }
@@ -221,11 +230,9 @@ export function slaState(anchors, nowMs) {
 // Tracking store (durable firstQualifiedAt per PR)
 // ---------------------------------------------------------------------------
 //
-// Shape: { prs: { "repo#num": { firstQualifiedAt: ISO } } }. Writes are serialized
-// in-process and atomic (temp file + rename) to reduce cross-process races between
-// the canvas session and the hourly workflow session. A rare lost update is
-// self-healing: at worst firstQualifiedAt resets later, which pushes the deadline
-// out — it never causes a false breach.
+// Shape: { prs: { "repo#num": { firstQualifiedAt: ISO } } }. The canvas and CLI
+// share a cross-process lock around the entire read/reconcile/write transaction.
+// Atomic replacement alone prevents torn JSON, but does not prevent lost clocks.
 
 let trackingUpdate = Promise.resolve();
 
@@ -233,17 +240,121 @@ export async function loadTracking() {
   try {
     const raw = await readFile(TRACKING_FILE, "utf8");
     const parsed = JSON.parse(raw);
-    return { prs: parsed && typeof parsed.prs === "object" && parsed.prs ? parsed.prs : {} };
-  } catch {
-    return { prs: {} };
+    if (!parsed?.prs || typeof parsed.prs !== "object" || Array.isArray(parsed.prs) ||
+        Object.values(parsed.prs).some((entry) =>
+          typeof entry?.firstQualifiedAt !== "string" || !Number.isFinite(Date.parse(entry.firstQualifiedAt)))) {
+      throw new Error("Invalid SLA tracking data");
+    }
+    return { prs: parsed.prs };
+  } catch (error) {
+    if (error.code === "ENOENT") return { prs: {} };
+    throw new Error(`Cannot read SLA tracking store ${TRACKING_FILE}`, { cause: error });
+  }
+}
+
+async function removeLockOwner(owner) {
+  try {
+    await unlink(join(TRACKING_LOCK, owner));
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  await removeEmptyLock();
+}
+
+async function removeEmptyLock() {
+  try {
+    await rmdir(TRACKING_LOCK);
+  } catch (error) {
+    // Another contender can atomically publish its nonempty directory after the
+    // old owner marker is removed. Never recursively remove that new owner's lock.
+    if (!["ENOENT", "ENOTEMPTY", "EEXIST"].includes(error.code)) throw error;
+  }
+}
+
+async function recoverAbandonedLock() {
+  let owners;
+  try {
+    owners = await readdir(TRACKING_LOCK);
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  if (owners.length === 0) {
+    await removeEmptyLock();
+    return;
+  }
+  if (owners.length !== 1) throw new Error("Invalid SLA tracking lock");
+  let owner;
+  try {
+    // A published lock contains one uniquely named marker:
+    // owner-1234-.sla-lock-<random> -> { "pid": 1234, "host": "workstation" }.
+    owner = JSON.parse(await readFile(join(TRACKING_LOCK, owners[0]), "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  if (!Number.isInteger(owner.pid) || owner.pid <= 0 || typeof owner.host !== "string") {
+    throw new Error("Invalid SLA tracking lock owner");
+  }
+  if (owner.host !== hostname()) return;
+  try {
+    process.kill(owner.pid, 0);
+  } catch (error) {
+    if (error.code === "ESRCH") {
+      // Remove only this dead owner's unique marker. Concurrent recovery cannot
+      // unlink a replacement owner's marker, even if it already acquired the lock.
+      await removeLockOwner(owners[0]);
+    } else if (error.code !== "EPERM") {
+      throw error;
+    }
+  }
+}
+
+async function withTrackingLock(action) {
+  await mkdir(ARTIFACT_DIR, { recursive: true });
+  const candidate = await mkdtemp(join(ARTIFACT_DIR, ".sla-lock-"));
+  const owner = `owner-${process.pid}-${basename(candidate)}`;
+  let acquired = false;
+  try {
+    await writeFile(join(candidate, owner), JSON.stringify({ pid: process.pid, host: hostname() }), { flag: "wx" });
+    const started = performance.now();
+    while (!acquired) {
+      try {
+        // Publish an already-populated directory atomically. This avoids a crash
+        // between mkdir(lock) and writing its owner leaving an unknowable owner.
+        // rename cannot replace another owner's nonempty directory on Windows/POSIX.
+        await rename(candidate, TRACKING_LOCK);
+        acquired = true;
+      } catch (error) {
+        if (!["EEXIST", "ENOTEMPTY", "EPERM", "EACCES"].includes(error.code)) throw error;
+        await recoverAbandonedLock();
+        if (performance.now() - started >= 10_000) {
+          throw new Error("Timed out waiting for the SLA tracking lock", { cause: error });
+        }
+        await delay(25);
+      }
+    }
+    return await action();
+  } finally {
+    if (acquired) {
+      await removeLockOwner(owner);
+    } else {
+      // This is our private, unpublished staging directory, never the shared lock.
+      await rm(candidate, { recursive: true, force: true });
+    }
   }
 }
 
 async function saveTracking(tracking) {
-  await mkdir(ARTIFACT_DIR, { recursive: true });
-  const tmp = `${TRACKING_FILE}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(tmp, JSON.stringify(tracking, null, 2) + "\n", "utf8");
-  await rename(tmp, TRACKING_FILE);
+  const directory = await mkdtemp(join(ARTIFACT_DIR, ".sla-write-"));
+  const tmp = join(directory, "tracking.json");
+  try {
+    await writeFile(tmp, JSON.stringify(tracking, null, 2) + "\n", { encoding: "utf8", flag: "wx" });
+    await rename(tmp, TRACKING_FILE);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
   return tracking;
 }
 
@@ -288,12 +399,12 @@ export function reconcileTracking(tracking, candidateKeys, nowIso, authoritative
 function reconcileAndPersist(candidateKeys, nowIso, authoritativeRepos) {
   const run = trackingUpdate
     .catch(() => {})
-    .then(async () => {
+    .then(() => withTrackingLock(async () => {
       const tracking = await loadTracking();
       const changed = reconcileTracking(tracking, candidateKeys, nowIso, authoritativeRepos);
       if (changed) await saveTracking(tracking);
       return tracking.prs;
-    });
+    }));
   trackingUpdate = run.then(() => {}, () => {});
   return run;
 }

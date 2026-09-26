@@ -1,8 +1,20 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import { dayMs } from "./constants.mjs";
-import { capFocusKeepingDebt, deriveReview, loadDashboard } from "./github.mjs";
+
+const originalHome = process.env.COPILOT_HOME;
+const testHome = await mkdtemp(join(tmpdir(), "aspire-github-tests-"));
+process.env.COPILOT_HOME = testHome;
+const { capFocusKeepingDebt, deriveReview, loadDashboard } = await import("./github.mjs");
+test.after(async () => {
+  if (originalHome === undefined) delete process.env.COPILOT_HOME;
+  else process.env.COPILOT_HOME = originalHome;
+  await rm(testHome, { recursive: true, force: true });
+});
 
 const originalFetch = globalThis.fetch;
 
@@ -245,6 +257,61 @@ test("loadDashboard surfaces a repo error on one host even when the same slug su
     dashboard.errors.some((m) => m.includes("org/repo") && m.includes("GHES boom")),
     `expected a surfaced GHES error, got ${JSON.stringify(dashboard.errors)}`,
   );
+});
+
+test("loadDashboard tracks Proxima and legacy SLA repositories independently", async () => {
+  const accounts = [
+    { token: "proxima", login: "viewer", repos: ["coreai/aspire-1p"], graphql: "https://api.msft.ghe.com/graphql" },
+    { token: "legacy", login: "viewer", repos: ["devdiv-microsoft/aspire-1p"] },
+  ];
+  globalThis.fetch = async (url) => {
+    const proxima = url.includes("msft.ghe.com");
+    const repo = proxima ? "coreai/aspire-1p" : "devdiv-microsoft/aspire-1p";
+    const node = prNode(123, new Date().toISOString());
+    node.url = `https://${proxima ? "msft.ghe.com" : "github.com"}/${repo}/pull/123`;
+    return jsonResponse({ data: { repository: { isPrivate: true, pullRequests: {
+      nodes: [node], pageInfo: { hasNextPage: false, endCursor: null },
+    } } } });
+  };
+  const dashboard = await loadDashboard({ accounts, mode: "review", prefs: {}, dismissed: [] });
+  assert.equal(dashboard.sla.partial, false);
+  assert.equal(dashboard.sla.total, 2);
+  assert.deepEqual(dashboard.sla.ok.map((card) => card.sla.key).sort(), [
+    "coreai/aspire-1p#123", "devdiv-microsoft/aspire-1p#123",
+  ]);
+  assert.deepEqual(dashboard.externalOpenPrs.map((pr) => pr.repo).sort(), [
+    "coreai/aspire-1p", "devdiv-microsoft/aspire-1p",
+  ]);
+});
+
+test("loadDashboard cannot mask a Proxima outage with a same-slug dotcom repository", async () => {
+  const { annotateDashboardSla, loadTracking } = await import("./sla.mjs");
+  const firstQualifiedAt = "2025-01-06T17:00:00.000Z";
+  await annotateDashboardSla({ attention: { slaCandidates: [{ pr: {
+    repository: "coreai/aspire-1p", number: 456, author: "external",
+    url: "https://msft.ghe.com/coreai/aspire-1p/pull/456", review: { reviewerCount: 0 },
+  } }] } }, { now: Date.parse(firstQualifiedAt), authoritativeRepos: new Set(["coreai/aspire-1p"]) });
+  globalThis.fetch = async (url) => {
+    if (url.includes("msft.ghe.com")) throw new Error("Proxima unavailable");
+    const node = prNode(123, new Date().toISOString());
+    node.url = "https://github.com/coreai/aspire-1p/pull/123";
+    return jsonResponse({ data: { repository: { isPrivate: true, pullRequests: {
+      nodes: [node], pageInfo: { hasNextPage: false, endCursor: null },
+    } } } });
+  };
+  const dashboard = await loadDashboard({
+    accounts: [
+      { token: "proxima", login: "viewer", repos: ["coreai/aspire-1p"], graphql: "https://api.msft.ghe.com/graphql" },
+      { token: "dotcom", login: "viewer", repos: ["coreai/aspire-1p"] },
+    ],
+    mode: "review", prefs: {}, dismissed: [],
+  });
+  assert.equal(dashboard.sla.partial, true);
+  assert.deepEqual(dashboard.sla.unfetchedRepos, ["coreai/aspire-1p"]);
+  assert.equal(dashboard.sla.total, 0);
+  assert.deepEqual(dashboard.externalOpenPrs, []);
+  const tracking = await loadTracking();
+  assert.equal(tracking.prs["coreai/aspire-1p#456"].firstQualifiedAt, firstQualifiedAt);
 });
 
 function page(after, firstNode, secondNode) {

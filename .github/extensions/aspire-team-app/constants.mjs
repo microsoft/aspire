@@ -76,8 +76,13 @@ export const nonBlockingCheckFailureRules = [
 // *business time* (Mon-Fri, 09:00-17:00 Pacific) so overnight and weekend hours do
 // not burn the budget. See sla.mjs for the business-hours math and tracking store.
 
-// Repos the SLA applies to. Matched case-insensitively against pr.repository.
-export const SLA_REPOS = ["devdiv-microsoft/aspire-1p"];
+// Pin each slug to its owning host so an unrelated same-slug repository cannot
+// start or prune its clocks. Keep the legacy mirror for explicitly watched accounts.
+export const SLA_REPO_HOSTS = {
+  "coreai/aspire-1p": "msft.ghe.com",
+  "devdiv-microsoft/aspire-1p": "github.com",
+};
+export const SLA_REPOS = Object.keys(SLA_REPO_HOSTS);
 
 // Total business-time budget before a ready, un-reviewed external PR is "out of SLA".
 export const SLA_BUDGET_HOURS = 8;

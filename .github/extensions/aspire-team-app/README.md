@@ -61,7 +61,7 @@ card shows are driven by its lane and its signal pills:
   Related provider sources are grouped by repository and each group can be dragged
   into a preferred order that persists across reloads.
 - **Review SLA (aspire-1p)** — a pinned panel and per-card countdown that track the
-  1-business-day review SLA on the first-party `devdiv-microsoft/aspire-1p` repo, so
+  1-business-day review SLA on the first-party `coreai/aspire-1p` Proxima repo, so
   ready, externally-authored PRs don't sit unreviewed past budget. See
   [Review SLA](#review-sla-aspire-1p).
 - **Signal pills** — Draft, CI failing, Merge conflicts, Changes requested,
@@ -153,12 +153,13 @@ without refetching provider data.
 
 ## Review SLA (aspire-1p)
 
-The private first-party mirror `devdiv-microsoft/aspire-1p` carries a **1-business-day
-review SLA**. Review mode tracks it so a genuinely-ready PR from outside the core team
-never sits unreviewed past budget.
+The private first-party repository `coreai/aspire-1p` on `msft.ghe.com` carries a
+**1-business-day review SLA**. The legacy `devdiv-microsoft/aspire-1p` mirror on
+`github.com` remains supported when explicitly watched. Review mode tracks them so a
+genuinely-ready PR from outside the core team never sits unreviewed past budget.
 
 - **Who it applies to** — a PR qualifies for the SLA clock when **all** of these hold:
-  it lives on an SLA repo (`devdiv-microsoft/aspire-1p`), it already qualifies for the
+  it lives on an SLA repo on its configured host, it already qualifies for the
   focused **Needs attention** queue, its author is **not** on the core team (core-team
   membership on the mirror is an explicit allowlist of enterprise `_microsoft` accounts —
   see `coreTeamEmuLogins` in `constants.mjs`; any other `_microsoft` author is a review
@@ -180,13 +181,17 @@ never sits unreviewed past budget.
   cached snapshot. The tracking store lives at
   `artifacts/sla-tracking.json` under the extension's Copilot home directory and records
   only when each PR first qualified, so restarts and refreshes never reset a clock.
+  Existing mirror keys and timestamps are preserved; Proxima PRs get separate keys,
+  without assuming PR numbers map between repositories. A cross-process lock covers
+  the entire load/reconcile/save transaction shared by the canvas and headless CLI.
+  Locks left by exited processes are recovered; a live owner is never evicted based
+  on elapsed time. Storage corruption and lock timeouts surface as errors instead of
+  silently resetting clocks.
 - **Headless report for external automation** — `sla-cli.mjs` computes the same review-SLA
   snapshot outside the canvas and prints it as a single JSON document (tracked PRs with their
   stable anchors and state, plus every open external PR). An external scheduled automation can
   consume that output to nudge reviewers even with the canvas closed; the report is a plain
   read-only projection and takes no action itself.
-
-
 
 | File | Responsibility |
 | --- | --- |
