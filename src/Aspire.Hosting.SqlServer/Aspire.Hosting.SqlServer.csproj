@@ -12,6 +12,7 @@
   <ItemGroup>
     <Compile Include="$(SharedDir)ContainerReplCommand.cs" Link="Utils\ContainerReplCommand.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
+    <Compile Include="$(SharedDir)X509Certificate2Extensions.cs" Link="Utils\X509Certificate2Extensions.cs" />
   </ItemGroup>
 
   <ItemGroup>

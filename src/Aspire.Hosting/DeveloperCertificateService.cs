@@ -19,6 +19,7 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
 {
     private readonly Lazy<ImmutableList<X509Certificate2>> _certificates;
     private readonly Lazy<bool> _supportsContainerTrust;
+    private readonly Lazy<bool> _supportsLoopbackAddresses;
     private readonly Lazy<bool> _supportsTlsTermination;
     private bool _latestCertificateIsUntrusted;
 
@@ -94,6 +95,13 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
             return containerTrustAvailable;
         });
 
+        _supportsLoopbackAddresses = new Lazy<bool>(() =>
+        {
+            var supportsLoopbackAddresses = Certificates.Any(c => c.SupportsLoopbackAddresses());
+            logger.LogDebug("Loopback address support for developer certificates is {Status}.", supportsLoopbackAddresses ? "available" : "not available");
+            return supportsLoopbackAddresses;
+        });
+
         _supportsTlsTermination = new Lazy<bool>(() =>
         {
             var supportsTlsTermination = Certificates.Any(c => c.HasPrivateKey);
@@ -112,6 +120,9 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
 
     /// <inheritdoc />
     public bool SupportsContainerTrust => _supportsContainerTrust.Value;
+
+    /// <inheritdoc />
+    public bool SupportsLoopbackAddresses => _supportsLoopbackAddresses.Value;
 
     /// <inheritdoc />
     public bool TrustCertificate { get; }

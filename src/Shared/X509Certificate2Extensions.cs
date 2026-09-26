@@ -16,6 +16,7 @@ internal static class X509Certificate2Extensions
     internal const string AspNetHttpsOidFriendlyName = "ASP.NET Core HTTPS development certificate";
 
     internal const int MinimumCertificateVersionSupportingContainerTrust = 4; // The minimum version of the ASP.NET Core certificate with SAN support for container domains
+    internal const int MinimumCertificateVersionSupportingLoopbackAddresses = 6; // The minimum version of the ASP.NET Core certificate with SAN support for loopback addresses (127.0.0.1 and ::1)
 
     /// <summary>
     /// Determines if the specified certificate is an ASP.NET Core development certificate.
@@ -76,6 +77,19 @@ internal static class X509Certificate2Extensions
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Indicates that this is an ASP.NET Core development certificate with SAN support for loopback addresses
+    /// (127.0.0.1 and ::1), allowing clients that connect via a loopback address to validate the certificate.
+    /// </summary>
+    /// <param name="certificate">The certificate to check.</param>
+    /// <returns>True if the certificate supports loopback address validation; otherwise, false.</returns>
+    public static bool SupportsLoopbackAddresses(this X509Certificate2 certificate)
+    {
+        ArgumentNullException.ThrowIfNull(certificate);
+
+        return certificate.GetCertificateVersion() >= MinimumCertificateVersionSupportingLoopbackAddresses;
     }
 
     /// <summary>

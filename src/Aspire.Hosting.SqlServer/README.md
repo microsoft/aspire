@@ -82,7 +82,7 @@ The SQL Server server resource exposes the following connection properties:
 | `Username` | The username for authentication |
 | `Password` | The password for authentication |
 | `Uri` | The connection URI in mssql:// format, with the format `mssql://{Username}:{Password}@{Host}:{Port}` |
-| `JdbcConnectionString` | JDBC-format connection string, with the format `jdbc:sqlserver://{Host}:{Port};trustServerCertificate=true`. User and password credentials are provided as separate `Username` and `Password` properties. |
+| `JdbcConnectionString` | JDBC-format connection string, with the format `jdbc:sqlserver://{Host}:{Port};encrypt=true` when the configured certificate can be validated by the client, or `jdbc:sqlserver://{Host}:{Port};trustServerCertificate=true` otherwise. User and password credentials are provided as separate `Username` and `Password` properties. |
 
 ### SQL Server database
 
@@ -91,7 +91,7 @@ The SQL Server database resource inherits all properties from its parent `SqlSer
 | Property Name | Description |
 |---------------|-------------|
 | `Uri` | The connection URI in mssql:// format, with the format `mssql://{Username}:{Password}@{Host}:{Port}/{DatabaseName}` |
-| `JdbcConnectionString` | JDBC connection string with database name, with the format `jdbc:sqlserver://{Host}:{Port};trustServerCertificate=true;databaseName={DatabaseName}`. User and password credentials are provided as separate `Username` and `Password` properties. |
+| `JdbcConnectionString` | JDBC connection string with database name, with the format `jdbc:sqlserver://{Host}:{Port};databaseName={DatabaseName};encrypt=true` when the configured certificate can be validated by the client, or `jdbc:sqlserver://{Host}:{Port};databaseName={DatabaseName};trustServerCertificate=true` otherwise. User and password credentials are provided as separate `Username` and `Password` properties. |
 | `DatabaseName` | The name of the database |
 
 Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPERTY]`. For instance, the `Uri` property of a resource called `db1` becomes `DB1_URI`.
