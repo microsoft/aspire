@@ -1091,6 +1091,62 @@ public partial class ConsoleLogsTests : DashboardTestContext
         }
     }
 
+    [Fact]
+    public async Task UtcTimestampsMenuItem_HiddenWhenShowTimestampsDisabled_ShownWhenEnabled()
+    {
+        // Arrange
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: name => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+
+        var viewport = CreateViewport(isDesktop: true);
+        var cut = RenderConsoleLogsPage(viewport, "test-resource");
+
+        cut.WaitForState(() => cut.Instance.PageViewModel.SelectedResource?.Id?.InstanceId == "test-resource");
+
+        // Act: open settings menu while timestamps are off (default)
+        var settingsMenuButton = cut.Find("fluent-button[title='" + Resources.ConsoleLogs.ConsoleLogsSettings + "']");
+        settingsMenuButton.Click();
+
+        // Assert: UTC timestamps option is not present when Show timestamps is disabled
+        cut.WaitForAssertion(() =>
+        {
+            var settingsMenu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i =>
+                i.Text == Resources.ConsoleLogs.ConsoleLogsTimestampShow ||
+                i.Text == Resources.ConsoleLogs.ConsoleLogsTimestampHide));
+            Assert.DoesNotContain(settingsMenu.Instance.Items, i => i.Text == Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc);
+        });
+
+        // Act: enable Show timestamps
+        var menu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i =>
+            i.Text == Resources.ConsoleLogs.ConsoleLogsTimestampShow ||
+            i.Text == Resources.ConsoleLogs.ConsoleLogsTimestampHide));
+        var showTimestampsItem = menu.Instance.Items.Single(i => i.Text == Resources.ConsoleLogs.ConsoleLogsTimestampShow);
+        Assert.NotNull(showTimestampsItem.OnClick);
+        await cut.InvokeAsync(() => menu.Instance.OpenChanged.InvokeAsync(false));
+        await cut.InvokeAsync(showTimestampsItem.OnClick);
+        cut.Render();
+
+        // Re-open settings menu
+        cut.WaitForAssertion(() => Assert.False(menu.Instance.Open));
+        settingsMenuButton.Click();
+
+        // Assert: UTC timestamps option appears once timestamps are shown
+        cut.WaitForAssertion(() =>
+        {
+            var settingsMenu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i =>
+                i.Text == Resources.ConsoleLogs.ConsoleLogsTimestampHide));
+            Assert.Contains(settingsMenu.Instance.Items, i => i.Text == Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc);
+        });
+    }
+
     private void SetupConsoleLogsServices(TestDashboardClient? dashboardClient = null, TestTimeProvider? timeProvider = null, IResourceRepository? resourceRepository = null)
     {
         FluentUISetupHelpers.SetupFluentDialogProvider(this);
