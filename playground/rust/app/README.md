@@ -15,7 +15,7 @@ See the [native-tls documentation](https://docs.rs/native-tls/latest/native_tls/
 
 HTTPS collectors must present a valid certificate for their hostname, trusted by
 the platform TLS library. HTTP collectors remain supported. Certificate
-verification is not disabled. The AppHost explicitly selects the dashboard's
+verification is not disabled. Both the Rust and C# AppHosts select the dashboard's
 HTTP/protobuf OTLP endpoint rather than the default gRPC endpoint.
 
 When running directly, set `OTEL_EXPORTER_OTLP_ENDPOINT` to the collector's HTTP
