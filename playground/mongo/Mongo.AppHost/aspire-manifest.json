@@ -2,8 +2,8 @@
   "resources": {
     "mongo": {
       "type": "container.v0",
-      "connectionString": "mongodb://admin:{mongo-password-uri-encoded.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}/?authSource=admin\u0026authMechanism=SCRAM-SHA-256",
-      "image": "docker.io/library/mongo:8.2",
+      "connectionString": "mongodb://admin:{mongo-password-uri-encoded.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}/?authSource=admin\u0026authMechanism=SCRAM-SHA-256{cond-mongo-bindings-tcp-tlsenabled-6a254ce1.connectionString}",
+      "image": "docker.io/library/mongo:8.3",
       "env": {
         "MONGO_INITDB_ROOT_USERNAME": "admin",
         "MONGO_INITDB_ROOT_PASSWORD": "{mongo-password.value}"
@@ -19,7 +19,7 @@
     },
     "db": {
       "type": "value.v0",
-      "connectionString": "mongodb://admin:{mongo-password-uri-encoded.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}/db?authSource=admin\u0026authMechanism=SCRAM-SHA-256"
+      "connectionString": "mongodb://admin:{mongo-password-uri-encoded.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}/db?authSource=admin\u0026authMechanism=SCRAM-SHA-256{cond-mongo-bindings-tcp-tlsenabled-6a254ce1.connectionString}"
     },
     "api": {
       "type": "project.v0",
@@ -35,7 +35,7 @@
         "DB_PASSWORD": "{mongo-password.value}",
         "DB_AUTHENTICATIONDATABASE": "admin",
         "DB_AUTHENTICATIONMECHANISM": "SCRAM-SHA-256",
-        "DB_URI": "mongodb://admin:{mongo-password-uri-encoded.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}/db?authSource=admin\u0026authMechanism=SCRAM-SHA-256",
+        "DB_URI": "mongodb://admin:{mongo-password-uri-encoded.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}/db?authSource=admin\u0026authMechanism=SCRAM-SHA-256{cond-mongo-bindings-tcp-tlsenabled-6a254ce1.connectionString}",
         "DB_DATABASENAME": "db"
       },
       "bindings": {
@@ -73,6 +73,10 @@
       "type": "annotated.string",
       "value": "{mongo-password.value}",
       "filter": "uri"
+    },
+    "cond-mongo-bindings-tcp-tlsenabled-6a254ce1": {
+      "type": "value.v0",
+      "connectionString": ""
     }
   }
 }
