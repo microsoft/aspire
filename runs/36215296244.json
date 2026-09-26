@@ -1,0 +1,197 @@
+{
+  "run_id": 36215296244,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/36215296244",
+  "run_scope": "main",
+  "analyzed_at": "2026-09-26T04:22:25Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20516,
+    "title": "Address build Component Governance alerts",
+    "author": "joperezr",
+    "state": "closed",
+    "head_branch": "joperezr-critical-cg-vulnerabilities",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20516",
+    "merged_at": "2026-09-26T03:35:48Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "1c37c50d93f938bc85f7031c4d08fb577b40e655",
+    "failed_sha": "22bee5e1266b7b66ff53008957dde86efb370c79",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "38247de8eee27525ca0cc892112aa1160a547408",
+        "message": "Update Aspire.Cli to target net11.0 (#20436) ## Description This retargets the Aspire CLI from `net10.0` to `net11.0`, with only the changes needed to build, publish Native AOT, package, and pass tests. Follow-up PRs will start using new .NET 11 features. ### User-facing impact - **Nothing changes in behavior for users of the native `aspire` binary.** - **The `Aspire.Cli` dotnet tool package layout changes.** The platform-specific packages (`Aspire.Cli.<rid>`) now put the binary under `tools/any",
+        "html_url": "https://github.com/microsoft/aspire/commit/38247de8eee27525ca0cc892112aa1160a547408",
+        "pull_request": {
+          "number": 20436,
+          "title": "Update Aspire.Cli to target net11.0",
+          "url": "https://github.com/microsoft/aspire/pull/20436",
+          "merged_at": "2026-09-25T17:57:29Z"
+        }
+      },
+      {
+        "sha": "f03a257eefa74620fa178cadb0e8cc9a6a9aa7ad",
+        "message": "Remove redundant experimental annotations from Azure Sandboxes (#20482) ## Description Consumers should not need to suppress `ASPIREAZURE001` to use Azure Sandboxes: the entire `Aspire.Hosting.Azure.Sandboxes` package is already prerelease. Remove the `Experimental` attributes for `ASPIREAZURE001` from the sandbox resource, extension methods, options, and enums. Remove obsolete warning suppressions and unused imports, including the suppression in the README and generated deployment-test AppHost.",
+        "html_url": "https://github.com/microsoft/aspire/commit/f03a257eefa74620fa178cadb0e8cc9a6a9aa7ad",
+        "pull_request": {
+          "number": 20482,
+          "title": "Remove redundant experimental annotations from Azure Sandboxes",
+          "url": "https://github.com/microsoft/aspire/pull/20482",
+          "merged_at": "2026-09-25T17:58:02Z"
+        }
+      },
+      {
+        "sha": "ecb0fc13b512451c18c033db2f827cadc7858d53",
+        "message": "[ci] Fix internal builds (#20455) ## Description **Official internal builds are broken because the `Template Tests` stage now needs about 25 minutes, but the test session is terminated after 20 minutes.** The completed tests pass; the pipeline fails because Microsoft.Testing.Platform aborts the still-running session. In [build 3086035](https://dev.azure.com/dnceng/internal/_build/results?buildId=3086035&view=results), 129 tests passed with no failures before the deadline: ```text Test run summar",
+        "html_url": "https://github.com/microsoft/aspire/commit/ecb0fc13b512451c18c033db2f827cadc7858d53",
+        "pull_request": {
+          "number": 20455,
+          "title": "[ci] Fix internal builds",
+          "url": "https://github.com/microsoft/aspire/pull/20455",
+          "merged_at": "2026-09-25T18:12:28Z"
+        }
+      },
+      {
+        "sha": "d32787cddecffe27c071c0742afedceb8ac258c8",
+        "message": "Bump the GitHub Actions group to current major versions (#20382) ## Description Updates the root `.github/workflows/*.yml` GitHub Actions group from the CAO task to the requested target versions and immutable SHAs: - `actions/create-github-app-token` 3.1.1 -> 3.2.0 - `github/gh-aw-actions/setup` and `setup-cli` 0.88.8 -> 0.89.15 - `actions/checkout` 6.x -> 7.0.1 - `actions/upload-artifact` 7.0.0 -> 7.0.1 - `actions/setup-node` 6.3.0 -> 7.0.0 - `actions/setup-dotnet` 5.2.0 -> 6.0.0 - `actions/set",
+        "html_url": "https://github.com/microsoft/aspire/commit/d32787cddecffe27c071c0742afedceb8ac258c8",
+        "pull_request": {
+          "number": 20382,
+          "title": "Bump the GitHub Actions group to current major versions",
+          "url": "https://github.com/microsoft/aspire/pull/20382",
+          "merged_at": "2026-09-25T19:24:01Z"
+        }
+      },
+      {
+        "sha": "e9a633024ede5187200bc9d392180a90e2d1fe86",
+        "message": "Bump the github-actions group across 1 directory with 2 updates (#20489) Bumps the github-actions group with 2 updates in the / directory: [github/gh-aw-actions/setup](https://github.com/github/gh-aw-actions) and [github/gh-aw-actions/setup-cli](https://github.com/github/gh-aw-actions). Updates `github/gh-aw-actions/setup` from 0.89.15 to 0.89.16 <details> <summary>Release notes</summary> <p><em>Sourced from <a href=\"https://github.com/github/gh-aw-actions/releases\">github/gh-aw-actions/setup's ",
+        "html_url": "https://github.com/microsoft/aspire/commit/e9a633024ede5187200bc9d392180a90e2d1fe86",
+        "pull_request": {
+          "number": 20489,
+          "title": "Bump the github-actions group across 1 directory with 2 updates",
+          "url": "https://github.com/microsoft/aspire/pull/20489",
+          "merged_at": "2026-09-25T20:48:27Z"
+        }
+      },
+      {
+        "sha": "733a9e23fe842e8b921cd9fa606cf7118ac36219",
+        "message": "Remove Experimental attributes from Aspire.Hosting.Dotnet (#20490) ## Description `Aspire.Hosting.Dotnet` is already a prerelease package, so consumers should not also need to suppress `ASPIREDOTNETPROJECT001` to use its APIs. Remove the `Experimental` attributes from `DotnetProjectResource`, the public extension methods, and the internal polyglot exports without changing runtime behavior or the package's prerelease status. Remove obsolete suppressions within the integration and its tests, updat",
+        "html_url": "https://github.com/microsoft/aspire/commit/733a9e23fe842e8b921cd9fa606cf7118ac36219",
+        "pull_request": {
+          "number": 20490,
+          "title": "Remove Experimental attributes from Aspire.Hosting.Dotnet",
+          "url": "https://github.com/microsoft/aspire/pull/20490",
+          "merged_at": "2026-09-25T21:01:08Z"
+        }
+      },
+      {
+        "sha": "f48a7b1251d339b21856497f10b36d227a5e57cc",
+        "message": "Fix remaining Outerloop failures in DCP, CLI, and Dashboard tests (#20466) Four repeat failures remained in the Outerloop workflow: ```text The SDK 'Aspire.AppHost.Sdk/14.0.0-ci' specified could not be found. ``` ```text Watch task over Kubernetes ContainerExec resources terminated unexpectedly. Polly.Timeout.TimeoutRejectedException: The operation didn't complete within the allowed timeout of '00:01:00'. ``` ```text Expected rows not found: apiservice, webfrontend, cache ``` ```text ScrollButto",
+        "html_url": "https://github.com/microsoft/aspire/commit/f48a7b1251d339b21856497f10b36d227a5e57cc",
+        "pull_request": {
+          "number": 20466,
+          "title": "Fix remaining Outerloop failures in DCP, CLI, and Dashboard tests",
+          "url": "https://github.com/microsoft/aspire/pull/20466",
+          "merged_at": "2026-09-25T21:35:11Z"
+        }
+      },
+      {
+        "sha": "9272b28a8a767175dd89f3e7b0e6a8ae8f8978d0",
+        "message": "Add deterministic CI validation for agentic workflows (#20458) ## What was missing **Agentic-only changes could bypass deterministic compilation, generated-file drift checks, lint, and repository contracts.** Stale executable workflows, edited action-pin output, or shell errors could reach main without a blocking validation job. The main CI skip gate intentionally excludes agentic Markdown sources and generated locks, but those files lacked a dedicated validation path. Compile-time lint diagnost",
+        "html_url": "https://github.com/microsoft/aspire/commit/9272b28a8a767175dd89f3e7b0e6a8ae8f8978d0",
+        "pull_request": {
+          "number": 20458,
+          "title": "Add deterministic CI validation for agentic workflows",
+          "url": "https://github.com/microsoft/aspire/pull/20458",
+          "merged_at": "2026-09-25T22:08:33Z"
+        }
+      },
+      {
+        "sha": "84af5257c01c79de475ee01c734494b383769099",
+        "message": "Update Arcade to 10.0.0-beta.26472.2 (#20395) ## Description Keep Aspire's build infrastructure aligned with the latest Arcade build on the `.NET 10 Eng` channel. Ran `darc update-dependencies -c '.NET 10 Eng'` in an isolated worktree. This updates the seven Arcade toolset dependencies from `10.0.0-beta.26423.1` to `10.0.0-beta.26472.2` (build `20260922.2`, dotnet/arcade commit `614293a9b3aa17dda9dc7e69c4dfcd576f59741a`), updates the corresponding SDK/package pins, and synchronizes the generated",
+        "html_url": "https://github.com/microsoft/aspire/commit/84af5257c01c79de475ee01c734494b383769099",
+        "pull_request": {
+          "number": 20395,
+          "title": "Update Arcade to 10.0.0-beta.26472.2",
+          "url": "https://github.com/microsoft/aspire/pull/20395",
+          "merged_at": "2026-09-25T22:39:55Z"
+        }
+      },
+      {
+        "sha": "0bffdd8458defda8f7300c1308408738bac74999",
+        "message": "Avoid JSDisconnectedException telemetry during dashboard layout initialization (#20472) ## Description Disconnecting from the dashboard while its layout restores browser state can raise `JSDisconnectedException` from local storage and report an unhandled circuit error. This is a commonly reported exception in telemetry. Protected and unprotected browser-storage reads now return failed results without emitting telemetry when the circuit disconnects. Other read errors are logged at Information lev",
+        "html_url": "https://github.com/microsoft/aspire/commit/0bffdd8458defda8f7300c1308408738bac74999",
+        "pull_request": {
+          "number": 20472,
+          "title": "Avoid JSDisconnectedException telemetry during dashboard layout initialization",
+          "url": "https://github.com/microsoft/aspire/pull/20472",
+          "merged_at": "2026-09-25T23:34:51Z"
+        }
+      },
+      {
+        "sha": "4ad568f2330d8d1421bd035f8d2c3bade019ffa1",
+        "message": "Address container supply-chain warnings to make the official build green (#20505) ## Description Address container-analysis warnings to make the official build green: - Use Microsoft Go on an MCR Ubuntu 24.04 base; Bookworm's glibc is too old for the native CLI. - Exclude two playground Dockerfiles not executed by the official build and the Java E2E Dockerfile's locally built base-image reference. Validated the image build, Go AppHost/Redis scenario, and all 53 Go fixtures. Official pipeline val",
+        "html_url": "https://github.com/microsoft/aspire/commit/4ad568f2330d8d1421bd035f8d2c3bade019ffa1",
+        "pull_request": {
+          "number": 20505,
+          "title": "Address container supply-chain warnings to make the official build green",
+          "url": "https://github.com/microsoft/aspire/pull/20505",
+          "merged_at": "2026-09-26T00:56:34Z"
+        }
+      },
+      {
+        "sha": "e62dceba954899a33326297b4669e226c27dcdce",
+        "message": "Fix Windows AppHost cleanup job routing (#20494) ## Description On Windows, session-scoped containers could survive AppHost shutdown because DCP was terminated before it finished cleanup. When a .NET AppHost runs through `dotnet run`, DCP inherits both the Aspire CLI's outer kill-on-close job and .NET ProcessReaper's inner non-breakaway job. DCP cannot escape that nested job chain, so closing the CLI job kills it during cleanup. This change omits the Aspire CLI kill-on-close job only for `dotnet",
+        "html_url": "https://github.com/microsoft/aspire/commit/e62dceba954899a33326297b4669e226c27dcdce",
+        "pull_request": {
+          "number": 20494,
+          "title": "Fix Windows AppHost cleanup job routing",
+          "url": "https://github.com/microsoft/aspire/pull/20494",
+          "merged_at": "2026-09-26T01:14:53Z"
+        }
+      },
+      {
+        "sha": "22bee5e1266b7b66ff53008957dde86efb370c79",
+        "message": "Address build Component Governance alerts (#20516) ## Description Addresses multiple Component Governance alerts reported by the build by updating affected Java sample dependencies and requiring a patched Snappier version for the MongoDB integrations. The Rust playground switches telemetry to OTLP/HTTP protobuf with native TLS to remove `ring`, a dependency that would require special approval to retain and is not needed for the sample's purposes. Validation: targeted MongoDB tests, Java sample s",
+        "html_url": "https://github.com/microsoft/aspire/commit/22bee5e1266b7b66ff53008957dde86efb370c79",
+        "pull_request": {
+          "number": 20516,
+          "title": "Address build Component Governance alerts",
+          "url": "https://github.com/microsoft/aspire/pull/20516",
+          "merged_at": "2026-09-26T03:35:48Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "id": 108330294210,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/36215296244/job/108330294210",
+      "classification": "flaky-test",
+      "reason": "The 'Run tests (Linux/macOS)' step failed because Aspire.Cli.Tests.NuGet.NuGetPackagePrefetcherTests.PrefetchingCancellationDueToShutdownLogsCleanMessage timed out after 30000ms; all other 6243 tests passed. This exact test/error matches a prior recurring flaky-test cause.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.NuGet.NuGetPackagePrefetcherTests.PrefetchingCancellationDueToShutdownLogsCleanMessage",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "error": "System.TimeoutException : The operation at /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/NuGet/NuGetPackagePrefetcherTests.cs:175 timed out after reaching the limit of 30000ms.",
+      "stack_trace": "at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in /home/runner/work/aspire/aspire/tests/Shared/AsyncTestHelpers.cs:line 194\n   at Aspire.Cli.Tests.NuGet.NuGetPackagePrefetcherTests.PrefetchingCancellationDueToShutdownLogsCleanMessage() in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/NuGet/NuGetPackagePrefetcherTests.cs:line 175\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Timing-sensitive shutdown-cancellation test exceeded a 30s timeout under CI load; this exact test/error matches a previously recorded recurring flaky-test cause (cli-nuget-prefetcher-shutdown-timeout) seen the prior day, and the PR merged to main did not touch this code path."
+    }
+  ],
+  "causes": [
+    "cli-nuget-prefetcher-shutdown-timeout"
+  ]
+}
