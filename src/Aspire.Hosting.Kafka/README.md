@@ -34,6 +34,38 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
                        .withReference(kafka);
 ```
 
+To have a schema registry associated with the Kafka resource, use the following code:
+
+**C#**
+
+```csharp
+var kafka = builder.AddKafka("messaging");
+
+var schemaRegistry =
+    kafka.WithKafkaSchemaRegistry(registry => registry.WithHostPort(7000), "schema-registry");
+
+var myService = builder.AddProject<Projects.MyService>()
+                       .WithReference(kafka)
+                       .WithReference(schemaRegistry);
+```
+
+**TypeScript**
+
+```typescript
+const kafka = await builder.addKafka("messaging");
+
+const schemaRegistry = await kafka.withKafkaSchemaRegistry({
+    configureContainer: async (registry) => {
+        await registry.withHostPort({ port: 7000 });
+    },
+    containerName: "schema-registry",
+});
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(kafka)
+                       .withReference(schemaRegistry);
+```
+
 ## Connection Properties
 
 When you reference a Kafka resource using `WithReference`, the following connection properties are made available to the consuming project:
