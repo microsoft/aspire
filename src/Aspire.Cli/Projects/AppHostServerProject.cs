@@ -17,6 +17,7 @@ namespace Aspire.Cli.Projects;
 internal interface IAppHostServerProjectFactory
 {
     Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default);
+    Task<IAppHostServerProject> CreateAsync(string appPath, FileInfo appHostFile, CancellationToken cancellationToken);
     Task<IAppHostServerProject> CreateAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken);
 }
 
@@ -36,9 +37,38 @@ internal sealed class AppHostServerProjectFactory(
     ILoggerFactory loggerFactory) : IAppHostServerProjectFactory
 {
     public Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default)
-        => CreateAsync(appPath, restoreRootConfigDirectory: null, cancellationToken);
+        => CreateAsync(
+            appPath,
+            restoreRootConfigDirectory: null,
+            workloadId: AppHostWorkloadId.Create(appPath),
+            cancellationToken: cancellationToken);
+
+    public Task<IAppHostServerProject> CreateAsync(
+        string appPath,
+        FileInfo appHostFile,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(appHostFile);
+
+        return CreateAsync(
+            appPath,
+            restoreRootConfigDirectory: null,
+            workloadId: AppHostWorkloadId.Create(appHostFile),
+            cancellationToken: cancellationToken);
+    }
 
     public async Task<IAppHostServerProject> CreateAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken)
+        => await CreateAsync(
+            appPath,
+            restoreRootConfigDirectory,
+            AppHostWorkloadId.Create(appPath),
+            cancellationToken).ConfigureAwait(false);
+
+    private async Task<IAppHostServerProject> CreateAsync(
+        string appPath,
+        string? restoreRootConfigDirectory,
+        string workloadId,
+        CancellationToken cancellationToken)
     {
         var socketPath = CliPathHelper.CreateGuestAppHostSocketPath("apphost.sock");
 
@@ -66,7 +96,7 @@ internal sealed class AppHostServerProjectFactory(
         // Priority 3: Check if we have a bundle layout with a pre-built AppHost server
         if (layout is not null && layout.GetManagedPath() is string serverPath && File.Exists(serverPath))
         {
-            return CreatePrebuiltAppHostServer(appPath, socketPath, layout, layoutLease);
+            return CreatePrebuiltAppHostServer(appPath, socketPath, layout, layoutLease, workloadId);
         }
 
         layoutLease?.Dispose();
@@ -79,7 +109,8 @@ internal sealed class AppHostServerProjectFactory(
         string appPath,
         string socketPath,
         LayoutConfiguration layout,
-        BundleLayoutLease? layoutLease)
+        BundleLayoutLease? layoutLease,
+        string? workloadId = null)
     {
         try
         {
@@ -95,7 +126,8 @@ internal sealed class AppHostServerProjectFactory(
                 processExecutionFactory,
                 environment,
                 loggerFactory.CreateLogger<PrebuiltAppHostServer>(),
-                layoutLease);
+                layoutLease,
+                workloadId);
         }
         catch
         {

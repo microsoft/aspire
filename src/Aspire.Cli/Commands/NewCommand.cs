@@ -434,7 +434,7 @@ internal sealed class NewCommand : BaseCommand
                 // When both options are explicit, the channel still owns version policy and persistence.
                 var templateDiscoveryMappings = string.IsNullOrWhiteSpace(source)
                     ? selectedChannel.Mappings
-                    : PackageSourceOverrideMappings.CreateForTemplateOperations(source);
+                    : PackageSourceOverrideMappings.CreateForSourceOnlyOperations(source);
 
                 try
                 {

@@ -125,7 +125,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         var package = Assert.Single(await channel.GetTemplatePackagesAsync(
             workspace.WorkspaceRoot,
-            PackageSourceOverrideMappings.CreateForTemplateOperations(sourceOverride),
+            PackageSourceOverrideMappings.CreateForSourceOnlyOperations(sourceOverride),
             CancellationToken.None));
 
         Assert.Equal(pinnedVersion, package.Version);
@@ -159,10 +159,61 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         var package = Assert.Single(await channel.GetTemplatePackagesAsync(
             workspace.WorkspaceRoot,
-            PackageSourceOverrideMappings.CreateForTemplateOperations(packageSource),
+            PackageSourceOverrideMappings.CreateForSourceOnlyOperations(packageSource),
             CancellationToken.None).DefaultTimeout());
 
         Assert.Equal("13.6.0", package.Version);
+    }
+
+    [Fact]
+    public async Task SourceScopedIntegrationDiscovery_UsesOnlyLocalOverridePackagesAndVersions()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var channelPackagesDirectory = workspace.CreateDirectory("channel-packages");
+        var overridePackagesDirectory = workspace.CreateDirectory("override-packages");
+        const string packageId = "Aspire.Hosting.Redis";
+
+        CreatePackageWithTags(channelPackagesDirectory, packageId, "99.0.0", string.Empty);
+        CreatePackageWithTags(overridePackagesDirectory, packageId, "13.5.0", "aspire integration hosting cache");
+        CreatePackageWithTags(overridePackagesDirectory, packageId, "13.6.0-preview.1", "aspire integration hosting cache polyglot");
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly."),
+            GetPackageVersionsAsyncCallback = (_, _, _, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly."),
+            GetPackagesAsyncCallback = (_, _, _, _, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly.")
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            "local",
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", channelPackagesDirectory.FullName)],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: "99.0.0");
+        var sourceMappings = PackageSourceOverrideMappings.CreateForSourceOnlyOperations(
+            overridePackagesDirectory.FullName);
+
+        var packages = (await channel.GetIntegrationPackagesAsync(
+            workspace.WorkspaceRoot,
+            sourceMappings,
+            CancellationToken.None)).ToArray();
+        var versions = (await channel.GetPackageVersionsAsync(
+            packageId,
+            workspace.WorkspaceRoot,
+            sourceMappings,
+            CancellationToken.None)).ToArray();
+        var polyglotIds = await channel.GetPolyglotCompatiblePackageIdsAsync(
+            workspace.WorkspaceRoot,
+            sourceMappings,
+            CancellationToken.None);
+
+        var package = Assert.Single(packages);
+        Assert.Equal(packageId, package.Id);
+        Assert.Equal("13.6.0-preview.1", package.Version);
+        Assert.Equal(overridePackagesDirectory.FullName, package.Source);
+        Assert.Equal(["13.6.0-preview.1", "13.5.0"], versions.Select(static version => version.Version));
+        Assert.Equal([packageId], polyglotIds);
     }
 
     [Theory]
@@ -239,7 +290,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         var packages = (await channel.GetTemplatePackagesAsync(
             workspace.WorkspaceRoot,
-            PackageSourceOverrideMappings.CreateForTemplateOperations(packageSource),
+            PackageSourceOverrideMappings.CreateForSourceOnlyOperations(packageSource),
             CancellationToken.None).DefaultTimeout()).ToArray();
 
         if (!packageFileExists)
@@ -288,7 +339,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         var package = Assert.Single(await channel.GetTemplatePackagesAsync(
             workspace.WorkspaceRoot,
-            PackageSourceOverrideMappings.CreateForTemplateOperations(overrideSource),
+            PackageSourceOverrideMappings.CreateForSourceOnlyOperations(overrideSource),
             CancellationToken.None).DefaultTimeout());
 
         Assert.Equal("Aspire.ProjectTemplates", package.Id);
@@ -313,7 +364,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
 
         var package = Assert.Single(await channel.GetTemplatePackagesAsync(
             workspace.WorkspaceRoot,
-            PackageSourceOverrideMappings.CreateForTemplateOperations(source),
+            PackageSourceOverrideMappings.CreateForSourceOnlyOperations(source),
             CancellationToken.None).DefaultTimeout());
 
         Assert.Equal("Aspire.ProjectTemplates", package.Id);
