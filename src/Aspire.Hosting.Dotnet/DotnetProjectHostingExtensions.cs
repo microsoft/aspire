@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet;
@@ -65,7 +64,6 @@ public static class DotnetProjectHostingExtensions
     ///     .WithBuildEnvironment("BUILD_FLAVOR", "custom");
     /// </code>
     /// </example>
-    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<DotnetProjectResource> WithBuildEnvironment(
         this IResourceBuilder<DotnetProjectResource> builder,
@@ -107,7 +105,6 @@ public static class DotnetProjectHostingExtensions
     /// temporary MSBuild response files, and the values can appear in build diagnostics.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Raw Action delegate callbacks are not ATS-compatible.")]
     public static IResourceBuilder<DotnetProjectResource> WithBuildEnvironment(
         this IResourceBuilder<DotnetProjectResource> builder,
@@ -151,7 +148,6 @@ public static class DotnetProjectHostingExtensions
     /// temporary MSBuild response files, and the values can appear in build diagnostics.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Raw Func delegate callbacks are not ATS-compatible.")]
     public static IResourceBuilder<DotnetProjectResource> WithBuildEnvironment(
         this IResourceBuilder<DotnetProjectResource> builder,
@@ -181,7 +177,6 @@ public static class DotnetProjectHostingExtensions
     /// <summary>
     /// Configures the number of .NET project replicas for polyglot AppHosts.
     /// </summary>
-    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withDotnetProjectReplicas", MethodName = "withReplicas")]
     internal static IResourceBuilder<DotnetProjectResource> WithReplicasForPolyglot(
         this IResourceBuilder<DotnetProjectResource> builder,
@@ -193,7 +188,6 @@ public static class DotnetProjectHostingExtensions
     /// <summary>
     /// Disables forwarded headers for a .NET project in polyglot AppHosts.
     /// </summary>
-    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("disableDotnetProjectForwardedHeaders", MethodName = "disableForwardedHeaders")]
     internal static IResourceBuilder<DotnetProjectResource> DisableForwardedHeadersForPolyglot(
         this IResourceBuilder<DotnetProjectResource> builder)
@@ -204,7 +198,6 @@ public static class DotnetProjectHostingExtensions
     /// <summary>
     /// Configures endpoint environment-variable injection for a .NET project in polyglot AppHosts.
     /// </summary>
-    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withDotnetProjectEndpointsInEnvironment", MethodName = "withEndpointsInEnvironment")]
     internal static IResourceBuilder<DotnetProjectResource> WithEndpointsInEnvironmentForPolyglot(
         this IResourceBuilder<DotnetProjectResource> builder,
@@ -244,7 +237,6 @@ public static class DotnetProjectHostingExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addDotnetProject dispatcher export.")]
     public static IResourceBuilder<DotnetProjectResource> AddDotnetProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path)
     {
@@ -258,7 +250,6 @@ public static class DotnetProjectHostingExtensions
     /// <summary>
     /// Adds a C# application resource.
     /// </summary>
-    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("addDotnetProject")]
     internal static IResourceBuilder<DotnetProjectResource> AddDotnetProjectForPolyglot(
         this IDistributedApplicationBuilder builder,
@@ -296,7 +287,6 @@ public static class DotnetProjectHostingExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addDotnetProject dispatcher export.")]
     public static IResourceBuilder<DotnetProjectResource> AddDotnetProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path, Action<ProjectResourceOptions> configure)
     {
@@ -468,7 +458,6 @@ public static class DotnetProjectHostingExtensions
         return resource;
     }
 
-#pragma warning disable ASPIREDOTNETPROJECT001
     internal static async Task<DotnetProjectRunProperties> ResolveRunPropertiesAfterBuildAsync(
         DotnetProjectBuildCoordinator.CoordinatorState coordinator,
         DotnetProjectResource resource,
@@ -483,7 +472,6 @@ public static class DotnetProjectHostingExtensions
 
         return await resolver(cancellationToken).ConfigureAwait(false);
     }
-#pragma warning restore ASPIREDOTNETPROJECT001
 
     private static void ApplyProjectResourceOptions(ProjectResourceOptions target, DotnetProjectOptions source)
     {
