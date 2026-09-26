@@ -19,7 +19,7 @@ internal sealed class TestNewCommandPrompter(IInteractionService interactionServ
     public Func<string, string>? PromptForOutputPathCallback { get; set; }
     public Func<string, Func<string, ValidationResult>?, string>? PromptForOutputPathWithValidatorCallback { get; set; }
 
-    public override Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken)
+    public override Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken, PromptBinding<string?>? binding = null)
     {
         return PromptForTemplateCallback switch
         {
