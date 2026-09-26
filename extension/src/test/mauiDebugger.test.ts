@@ -86,10 +86,7 @@ suite('MAUI Debugger Extension Tests', () => {
             OpenArguments: '-W',
             CustomAfterMicrosoftCommonTargets: '/tmp/maui.env.targets',
         });
-        assert.deepStrictEqual(getLoggableDebugConfiguration(debugConfig, false).msbuildProperties, {
-            OpenArguments: '-W',
-            CustomAfterMicrosoftCommonTargets: '/tmp/maui.env.targets',
-        });
+        assert.strictEqual(getLoggableDebugConfiguration(debugConfig, false).msbuildProperties, '<redacted>');
         assert.strictEqual(debugConfig.environmentVariables, 'OTEL_SERVICE_NAME=mauiapp-maccatalyst');
         assert.strictEqual(debugConfig.noDebug, false);
         assert.strictEqual(debugConfig.skipDebug, false);
@@ -1014,9 +1011,7 @@ suite('MAUI Debugger Extension Tests', () => {
         assertMsBuildProperties(debugConfig, {
             Configuration: 'Release',
         });
-        assert.deepStrictEqual(getLoggableDebugConfiguration(debugConfig, false).msbuildProperties, {
-            Configuration: 'Release',
-        });
+        assert.strictEqual(getLoggableDebugConfiguration(debugConfig, false).msbuildProperties, '<redacted>');
     });
 
     test('resolves default Android device selectors when a matching target is available', async () => {

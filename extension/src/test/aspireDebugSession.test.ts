@@ -5013,6 +5013,29 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.deepStrictEqual(debugConfig.runtimeArgs, ['--runtime-secret']);
     });
 
+    [false, true].forEach(includeEnvironment => test(`redacts MAUI msbuildProperties from logs when environment logging is ${includeEnvironment ? 'enabled' : 'disabled'}`, () => {
+        const debugConfig = {
+            runId: 'run-1',
+            debugSessionId: 'debug-1',
+            type: 'maui',
+            name: 'MAUI',
+            request: 'launch',
+            msbuildProperties: {
+                AdbTarget: '-s emulator-5554',
+                AuthClientId: 'super-secret-client-id',
+            },
+        } as unknown as AspireResourceExtendedDebugConfiguration;
+
+        const loggableConfig = getLoggableDebugConfiguration(debugConfig, includeEnvironment);
+
+        assert.strictEqual(loggableConfig.msbuildProperties, '<redacted>');
+        // The original configuration is not mutated by redaction.
+        assert.deepStrictEqual(debugConfig.msbuildProperties, {
+            AdbTarget: '-s emulator-5554',
+            AuthClientId: 'super-secret-client-id',
+        });
+    }));
+
     test('redacts debug configuration arguments without mutating the source when environment logging is enabled', () => {
         const debugConfig = {
             runId: 'run-1',
