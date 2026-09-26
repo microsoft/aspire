@@ -19,6 +19,27 @@ public class AzureFrontDoorResource(string name, Action<AzureResourceInfrastruct
     : AzureProvisioningResource(name, configureInfrastructure)
 {
     /// <summary>
+    /// Gets the "id" output reference for the Azure Front Door profile.
+    /// </summary>
+    /// <remarks>
+    /// Use this reference to configure dependent Azure resources, such as diagnostic settings.
+    /// <example>
+    /// Pass the profile ID to another Bicep module:
+    /// <code lang="C#">
+    /// var frontDoor = builder.AddAzureFrontDoor("frontdoor");
+    /// builder.AddAzureInfrastructure("consumer", infrastructure =&gt;
+    /// {
+    ///     infrastructure.Add(new ProvisioningOutput("frontDoorId", typeof(string))
+    ///     {
+    ///         Value = frontDoor.Resource.Id.AsProvisioningParameter(infrastructure)
+    ///     });
+    /// });
+    /// </code>
+    /// </example>
+    /// </remarks>
+    public BicepOutputReference Id => new("id", this);
+
+    /// <summary>
     /// Gets the endpoint URL output reference for a specific origin by its resource name.
     /// </summary>
     /// <param name="originResourceName">The name of the origin resource (as specified in the Aspire application model).</param>

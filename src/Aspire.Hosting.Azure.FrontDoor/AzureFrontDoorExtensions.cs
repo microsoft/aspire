@@ -76,6 +76,11 @@ public static class AzureFrontDoorExtensions
             };
             infrastructure.Add(profile);
 
+            infrastructure.Add(new ProvisioningOutput("id", typeof(string))
+            {
+                Value = profile.Id
+            });
+
             // Create a separate endpoint → origin group → origin → route per WithOrigin call.
             // This gives each backend app its own Front Door hostname.
             var originAnnotations = azureResource.Annotations.OfType<AzureFrontDoorOriginAnnotation>().ToList();
