@@ -474,7 +474,7 @@ function statusFor(pr, firstQualifiedAt, nowMs, opts) {
 // opts: { now?: epoch ms, persist?: bool (default true), authoritativeRepos?: Set<string>,
 //         seedTracking?: { [key]: { firstQualifiedAt } } }.
 // authoritativeRepos (lowercased repo slugs that fetched successfully this run) is forwarded
-// to reconcileTracking so a failed SLA-repo fetch never prunes still-tracked PRs (#5).
+// to reconcileTracking so a failed SLA-repo fetch never prunes still-tracked PRs.
 // seedTracking is a test-only seam: with persist:false the tracking store is in-memory and
 // would otherwise stamp firstQualifiedAt=now for every key (always "ok"). Seeding lets a test
 // start the clock in the past to exercise the approaching/breached panel arrays without

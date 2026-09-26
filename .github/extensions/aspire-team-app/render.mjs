@@ -2601,9 +2601,9 @@ function reviewBoardHtml() {
   seedReviewCollapse(att);
   let html = "";
 
-  // 0. Review SLA — pinned above everything. First-party aspire-1p PRs from outside the
-  //    team that are on the 1 business-day review SLA and in danger (approaching) or past
-  //    it (breached). Rendered first so at-risk reviews are impossible to miss.
+  // 0. Review SLA — all tracked first-party PRs, pinned above everything: breached
+  //    first, then approaching, then comfortable "ok" candidates. Each group is
+  //    ordered by deadline so the most urgent reviews come first.
   html += slaPanelHtml();
 
   // 1. For you — personalized headline of your highest-leverage actions.

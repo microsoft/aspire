@@ -107,7 +107,10 @@ query($owner:String!, $name:String!, $after:String) {
         labels(first:15) { nodes { name } }
         assignees(first:10) { nodes { login } }
         reviewRequests(first:20) { nodes { requestedReviewer { __typename ... on User { login } } } }
-        reviews(first:60) { nodes { state author { login } submittedAt } }
+        reviews(first:60) {
+          pageInfo { hasNextPage endCursor }
+          nodes { state author { login } submittedAt }
+        }
         reviewThreads(first:60) { nodes { isResolved } }
         commits(last:1) { totalCount nodes { commit { committedDate statusCheckRollup { state } } } }
         closingIssuesReferences(first:10) {
@@ -118,6 +121,18 @@ query($owner:String!, $name:String!, $after:String) {
             labels(first:15) { nodes { name } }
           }
         }
+      }
+    }
+  }
+}`;
+
+const PR_REVIEWS_QUERY = `
+query($owner:String!, $name:String!, $number:Int!, $after:String!) {
+  repository(owner:$owner, name:$name) {
+    pullRequest(number:$number) {
+      reviews(first:100, after:$after) {
+        pageInfo { hasNextPage endCursor }
+        nodes { state author { login } submittedAt }
       }
     }
   }
@@ -145,6 +160,33 @@ query($owner:String!, $name:String!, $after:String) {
 function splitRepo(repo) {
   const [owner, ...rest] = repo.split("/");
   return { owner, name: rest.join("/") };
+}
+
+async function loadPrReviews(acct, owner, name, node) {
+  const reviews = [...(node.reviews?.nodes ?? [])];
+  let pageInfo = node.reviews?.pageInfo;
+  const cursors = new Set();
+  // Most PRs fit in the list query's first 60 reviews. Follow only overflowing
+  // connections: a later human review must stop the SLA even after many bot reviews,
+  // and later changes requested must supersede an earlier approval in the same summary.
+  for (let page = 1; pageInfo?.hasNextPage; page++) {
+    // GitHub connections use { hasNextPage: true, endCursor: "opaque-cursor" }.
+    // A missing/repeated cursor or exhausted safety bound is incomplete data, not
+    // evidence that no human reviewed. The caller surfaces a partial repository fetch.
+    const after = pageInfo.endCursor;
+    if (page >= MAX_PAGES || !after || cursors.has(after)) {
+      throw new Error(`Incomplete review history for PR #${node.number}`);
+    }
+    cursors.add(after);
+    const data = await gql(acct.token, PR_REVIEWS_QUERY, { owner, name, number: node.number, after }, acct.graphql);
+    const connection = data.repository?.pullRequest?.reviews;
+    if (!Array.isArray(connection?.nodes) || typeof connection.pageInfo?.hasNextPage !== "boolean") {
+      throw new Error(`Incomplete review history for PR #${node.number}`);
+    }
+    reviews.push(...connection.nodes);
+    pageInfo = connection.pageInfo;
+  }
+  return reviews;
 }
 
 // ---------------------------------------------------------------------------
@@ -735,7 +777,8 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
                 const repoPrivate = !!data.repository?.isPrivate;
                 const conn = data.repository?.pullRequests;
                 for (const node of conn?.nodes ?? []) {
-                  const pr = normalizePr(repo, node, viewers, repoPrivate);
+                  const reviews = await loadPrReviews(acct, owner, name, node);
+                  const pr = normalizePr(repo, { ...node, reviews: { nodes: reviews } }, viewers, repoPrivate);
                   if (!prById.has(pr.url)) prById.set(pr.url, pr);
                 }
                 if (!conn?.pageInfo?.hasNextPage) break;
@@ -900,7 +943,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
   // reconciles + persists the durable firstQualifiedAt tracking store.
   if (snap.mode === "review") {
     // Tell the SLA reconciler which SLA repos actually fetched OK this run so a transient
-    // failure can't prune tracked PRs and reset their breach clock (#5). okRepos holds
+    // failure can't prune tracked PRs and reset their breach clock. okRepos holds
     // hostRepoKey(graphql, repo) = `${graphql??""}\n${repo}`, so the repo slug is the text
     // after the newline. Check the host too: success on a same-slug repo on another host
     // cannot authorize pruning or hide a failed fetch of the real SLA repo.

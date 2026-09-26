@@ -165,6 +165,8 @@ genuinely-ready PR from outside the core team never sits unreviewed past budget.
   see `coreTeamEmuLogins` in `constants.mjs`; any other `_microsoft` author is a review
   target), and it has had **zero human reviews** so far (Copilot/bot reviews don't stop
   the clock). The first human review — comment or approval — stops the clock immediately.
+  Review history is paged before eligibility is determined. Failed or truncated history
+  on an SLA repository produces a partial report instead of an unreviewed classification.
 - **Business-time budget** — the budget is **8 business hours**, measured Mon–Fri
   09:00–17:00 **Pacific**. Overnight, weekend, and holiday-adjacent hours don't burn
   budget, and the window tracks Pacific daylight/standard transitions automatically. A
@@ -172,8 +174,9 @@ genuinely-ready PR from outside the core team never sits unreviewed past budget.
 - **Pinned SLA panel** — the top of the review board shows an at-a-glance panel: how
   many tracked PRs are OK, approaching, or already out of SLA, with the breached and
   approaching PRs listed by soonest deadline first.
-- **Per-card countdown** — every tracked card shows a live note (e.g. *"Review SLA: due
-  in 2h 40m"* or *"Out of SLA by 1h 10m"*) that ticks against your browser clock, plus a
+- **Per-card countdown** — every tracked card shows a live note (e.g. *"Review within
+  SLA · due in 2h 40m"* or *"Out of SLA · was due 1h ago"*) that ticks against your
+  browser clock. Overdue text uses whole seconds, minutes, hours, or days. Cards also show a
   **Review SLA** (approaching) or **Out of SLA** (breached) pill.
 - **Stable anchors, live text** — only the fixed anchors (first-qualified, warn, and
   deadline instants) and a stepwise state are stored on the dashboard; the "due in"/

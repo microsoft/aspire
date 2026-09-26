@@ -314,6 +314,125 @@ test("loadDashboard cannot mask a Proxima outage with a same-slug dotcom reposit
   assert.equal(tracking.prs["coreai/aspire-1p#456"].firstQualifiedAt, firstQualifiedAt);
 });
 
+for (const humanState of ["COMMENTED", "APPROVED", "CHANGES_REQUESTED", null]) {
+  test(`loadDashboard completes review history before SLA selection (${humanState ?? "bots only"})`, async () => {
+    const node = reviewHistoryNode();
+    if (humanState === "CHANGES_REQUESTED") {
+      node.reviews.nodes[0] = {
+        state: "APPROVED", author: { login: "human-reviewer" }, submittedAt: "2025-01-06T17:00:00Z",
+      };
+    }
+    await seedReviewHistoryClock(node);
+    const cursors = [];
+    globalThis.fetch = async (url, options) => {
+      assert.equal(url, "https://api.msft.ghe.com/graphql");
+      assert.equal(options.headers.Authorization, "bearer proxima");
+      const { query, variables } = JSON.parse(options.body);
+      if (query.includes("pullRequests(")) {
+        assert.match(query, /reviews\(first:60\)\s*\{\s*pageInfo/);
+        return reviewHistoryList(node);
+      }
+      assert.match(query, /reviews\(first:100, after:\$after\)/);
+      assert.deepEqual({ owner: variables.owner, name: variables.name, number: variables.number }, {
+        owner: "coreai", name: "aspire-1p", number: node.number,
+      });
+      cursors.push(variables.after);
+      const last = variables.after === "review-2";
+      const nodes = last
+        ? (humanState ? [{ state: humanState, author: { login: "human-reviewer" }, submittedAt: new Date().toISOString() }] : [])
+        : Array.from({ length: 100 }, () => botReview());
+      return jsonResponse({ data: { repository: { pullRequest: { reviews: {
+        nodes, pageInfo: { hasNextPage: !last, endCursor: last ? null : "review-2" },
+      } } } } });
+    };
+    const dashboard = await loadReviewHistoryDashboard();
+    assert.deepEqual(cursors, ["review-1", "review-2"]);
+    assert.equal(dashboard.sla.partial, false);
+    assert.deepEqual(dashboard.errors, []);
+    assert.equal(dashboard.sla.total, humanState ? 0 : 1);
+    const card = dashboard.attention.buckets.flatMap((bucket) => bucket.items).find((item) => item.pr.number === node.number);
+    assert.ok(card);
+    assert.equal(card.pr.review.reviewerCount, humanState ? 1 : 0);
+    assert.equal(card.pr.review.state, {
+      COMMENTED: "reviewed", APPROVED: "approved", CHANGES_REQUESTED: "changes_requested",
+    }[humanState] ?? "waiting");
+    assert.equal(card.pr.review.copilotReviewed, true);
+    const { loadTracking } = await import("./sla.mjs");
+    const tracking = await loadTracking();
+    const proximaClocks = Object.keys(tracking.prs).filter((key) => key.startsWith("coreai/aspire-1p#"));
+    assert.deepEqual(proximaClocks, humanState ? [] : ["coreai/aspire-1p#789"]);
+    if (!humanState) {
+      assert.equal(tracking.prs["coreai/aspire-1p#789"].firstQualifiedAt, "2025-01-06T17:00:00.000Z");
+    }
+  });
+}
+
+for (const failure of ["request failure", "missing connection", "missing cursor", "repeated cursor", "page limit"]) {
+  test(`loadDashboard preserves clocks and marks incomplete reviews partial (${failure})`, async () => {
+    const node = reviewHistoryNode();
+    await seedReviewHistoryClock(node);
+    if (failure === "missing cursor") node.reviews.pageInfo.endCursor = null;
+    let pages = 0;
+    globalThis.fetch = async (_url, options) => {
+      const { query, variables } = JSON.parse(options.body);
+      if (query.includes("pullRequests(")) return reviewHistoryList(node);
+      pages++;
+      if (failure === "request failure") throw new Error("review page unavailable");
+      if (failure === "missing connection") return jsonResponse({ data: { repository: { pullRequest: null } } });
+      return jsonResponse({ data: { repository: { pullRequest: { reviews: {
+        nodes: [botReview()],
+        pageInfo: { hasNextPage: true, endCursor: failure === "repeated cursor" ? variables.after : `review-${pages + 1}` },
+      } } } } });
+    };
+    const dashboard = await loadReviewHistoryDashboard();
+    assert.equal(dashboard.sla.partial, true);
+    assert.deepEqual(dashboard.sla.unfetchedRepos, ["coreai/aspire-1p"]);
+    assert.equal(dashboard.sla.total, 0);
+    assert.equal(dashboard.counts.total, 0, "a PR with incomplete reviews must not be classified as unreviewed");
+    assert.deepEqual(dashboard.errors, [
+      failure === "request failure" ? "coreai/aspire-1p: review page unavailable" : "coreai/aspire-1p: Incomplete review history for PR #789",
+    ]);
+    assert.equal(pages, failure === "missing cursor" ? 0 : failure === "page limit" ? 24 : 1);
+    const { loadTracking } = await import("./sla.mjs");
+    assert.equal((await loadTracking()).prs["coreai/aspire-1p#789"].firstQualifiedAt, "2025-01-06T17:00:00.000Z");
+  });
+}
+
+function botReview() {
+  return { state: "COMMENTED", author: { login: "copilot-pull-request-reviewer" }, submittedAt: "2025-01-06T17:00:00Z" };
+}
+
+function reviewHistoryNode() {
+  const node = prNode(789, new Date().toISOString());
+  node.url = "https://msft.ghe.com/coreai/aspire-1p/pull/789";
+  node.reviews = {
+    nodes: Array.from({ length: 60 }, () => botReview()),
+    pageInfo: { hasNextPage: true, endCursor: "review-1" },
+  };
+  return node;
+}
+
+function reviewHistoryList(node) {
+  return jsonResponse({ data: { repository: { isPrivate: true, pullRequests: {
+    nodes: [node], pageInfo: { hasNextPage: false, endCursor: null },
+  } } } });
+}
+
+function loadReviewHistoryDashboard() {
+  return loadDashboard({
+    accounts: [{ token: "proxima", login: "viewer", repos: ["coreai/aspire-1p"], graphql: "https://api.msft.ghe.com/graphql" }],
+    mode: "review", prefs: {}, dismissed: [],
+  });
+}
+
+async function seedReviewHistoryClock(node) {
+  const { annotateDashboardSla } = await import("./sla.mjs");
+  await annotateDashboardSla({ attention: { slaCandidates: [{ pr: {
+    repository: "coreai/aspire-1p", number: node.number, author: node.author.login,
+    url: node.url, review: { reviewerCount: 0 },
+  } }] } }, { now: Date.parse("2025-01-06T17:00:00.000Z"), authoritativeRepos: new Set(["coreai/aspire-1p"]) });
+}
+
 function page(after, firstNode, secondNode) {
   if (after == null) {
     return { nodes: [firstNode], pageInfo: { hasNextPage: true, endCursor: "cursor-1" } };
