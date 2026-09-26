@@ -93,6 +93,9 @@ type TestRedisResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.
 /** Test context type with exposed instance methods. Verifies [AspireExport(ExposeMethods=true)] generates async methods. */
 type TestResourceContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext'>;
 
+/** Handle to TestReturnValueContext */
+type TestReturnValueContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext'>;
+
 /** Handle to TestVaultResource */
 type TestVaultResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource'>;
 
@@ -1687,6 +1690,13 @@ export interface SaveStateJsonOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
+export interface SetValueAsyncOptions {
+    /** The value to use for this parameter. */
+    value?: string;
+    /** The cancellation token to observe while applying the value. */
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
 export interface UpdateTaskMarkdownOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }
@@ -1928,6 +1938,11 @@ export interface WithRequiredCommandOptions {
 export interface WithRequiredCommandValidationOptions {
     /** An optional help link URL to guide users when the command is missing or fails validation. */
     helpLink?: string;
+}
+
+export interface WithRequiredOptions {
+    /** A value indicating whether the parameter must have a value before it can be resolved. */
+    required?: boolean;
 }
 
 export interface WithUrlOptions {
@@ -4329,7 +4344,7 @@ export interface EndpointReference {
      * @param options Additional options.
      * @returns The URL of the endpoint.
      */
-    getValueAsync(options?: GetValueAsyncOptions): Promise<string>;
+    getValueAsync(options?: GetValueAsyncOptions): Promise<string | null>;
     /**
      * Gets the specified property expression of the endpoint.
      * @param property The `EndpointProperty` enum value to use in the reference.
@@ -4396,7 +4411,7 @@ export interface EndpointReferencePromise extends PromiseLike<EndpointReference>
      * @param options Additional options.
      * @returns The URL of the endpoint.
      */
-    getValueAsync(options?: GetValueAsyncOptions): Promise<string>;
+    getValueAsync(options?: GetValueAsyncOptions): Promise<string | null>;
     /**
      * Gets the specified property expression of the endpoint.
      * @param property The `EndpointProperty` enum value to use in the reference.
@@ -4542,11 +4557,11 @@ class EndpointReferenceImpl implements EndpointReference {
      * @param options Additional options.
      * @returns The URL of the endpoint.
      */
-    async getValueAsync(options?: GetValueAsyncOptions): Promise<string> {
+    async getValueAsync(options?: GetValueAsyncOptions): Promise<string | null> {
         const cancellationToken = options?.cancellationToken;
         const rpcArgs: Record<string, unknown> = { context: this._handle };
         if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
-        return await this._client.invokeCapability<string>(
+        return await this._client.invokeCapability<string | null>(
             'Aspire.Hosting.ApplicationModel/EndpointReference.getValueAsync',
             rpcArgs
         );
@@ -9265,6 +9280,202 @@ const TestResourceContextPromiseImpl = $aspireCreateFluentPromiseClass<TestResou
 }));
 
 // ============================================================================
+// TestReturnValueContext
+// ============================================================================
+
+export interface TestReturnValueContext {
+    toJSON(): MarshalledHandle;
+    /** Invokes the GetNullableString method */
+    getNullableString(): Promise<string | null>;
+    /** Invokes the GetNullableStringTaskAsync method */
+    getNullableStringTaskAsync(): Promise<string | null>;
+    /** Invokes the GetNullableStringValueTaskAsync method */
+    getNullableStringValueTaskAsync(): Promise<string | null>;
+    /** Invokes the GetString method */
+    getString(): Promise<string>;
+    /** Invokes the GetStringTaskAsync method */
+    getStringTaskAsync(): Promise<string>;
+    /** Invokes the GetStringValueTaskAsync method */
+    getStringValueTaskAsync(): Promise<string>;
+    /** Invokes the GetNullableInt method */
+    getNullableInt(): Promise<number | null>;
+    /** Invokes the GetNullableIntTaskAsync method */
+    getNullableIntTaskAsync(): Promise<number | null>;
+    /** Invokes the GetNullableIntValueTaskAsync method */
+    getNullableIntValueTaskAsync(): Promise<number | null>;
+    /** Invokes the GetInt method */
+    getInt(): Promise<number>;
+    /** Invokes the GetIntTaskAsync method */
+    getIntTaskAsync(): Promise<number>;
+    /** Invokes the GetIntValueTaskAsync method */
+    getIntValueTaskAsync(): Promise<number>;
+}
+
+export interface TestReturnValueContextPromise extends PromiseLike<TestReturnValueContext> {
+    /** Invokes the GetNullableString method */
+    getNullableString(): Promise<string | null>;
+    /** Invokes the GetNullableStringTaskAsync method */
+    getNullableStringTaskAsync(): Promise<string | null>;
+    /** Invokes the GetNullableStringValueTaskAsync method */
+    getNullableStringValueTaskAsync(): Promise<string | null>;
+    /** Invokes the GetString method */
+    getString(): Promise<string>;
+    /** Invokes the GetStringTaskAsync method */
+    getStringTaskAsync(): Promise<string>;
+    /** Invokes the GetStringValueTaskAsync method */
+    getStringValueTaskAsync(): Promise<string>;
+    /** Invokes the GetNullableInt method */
+    getNullableInt(): Promise<number | null>;
+    /** Invokes the GetNullableIntTaskAsync method */
+    getNullableIntTaskAsync(): Promise<number | null>;
+    /** Invokes the GetNullableIntValueTaskAsync method */
+    getNullableIntValueTaskAsync(): Promise<number | null>;
+    /** Invokes the GetInt method */
+    getInt(): Promise<number>;
+    /** Invokes the GetIntTaskAsync method */
+    getIntTaskAsync(): Promise<number>;
+    /** Invokes the GetIntValueTaskAsync method */
+    getIntValueTaskAsync(): Promise<number>;
+}
+
+// ============================================================================
+// TestReturnValueContextImpl
+// ============================================================================
+
+/** Type class for TestReturnValueContext. */
+class TestReturnValueContextImpl implements TestReturnValueContext {
+    constructor(private _handle: TestReturnValueContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** Invokes the GetNullableString method */
+    async getNullableString(): Promise<string | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableString',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetNullableStringTaskAsync method */
+    async getNullableStringTaskAsync(): Promise<string | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetNullableStringValueTaskAsync method */
+    async getNullableStringValueTaskAsync(): Promise<string | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringValueTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetString method */
+    async getString(): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getString',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetStringTaskAsync method */
+    async getStringTaskAsync(): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetStringValueTaskAsync method */
+    async getStringValueTaskAsync(): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringValueTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetNullableInt method */
+    async getNullableInt(): Promise<number | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableInt',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetNullableIntTaskAsync method */
+    async getNullableIntTaskAsync(): Promise<number | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetNullableIntValueTaskAsync method */
+    async getNullableIntValueTaskAsync(): Promise<number | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number | null>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntValueTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetInt method */
+    async getInt(): Promise<number> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getInt',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetIntTaskAsync method */
+    async getIntTaskAsync(): Promise<number> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntTaskAsync',
+            rpcArgs
+        );
+    }
+
+    /** Invokes the GetIntValueTaskAsync method */
+    async getIntValueTaskAsync(): Promise<number> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<number>(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntValueTaskAsync',
+            rpcArgs
+        );
+    }
+
+}
+
+/** @internal */
+const TestReturnValueContextPromiseImpl = $aspireCreateFluentPromiseClass<TestReturnValueContext, TestReturnValueContextPromise>((): $aspireFluentPromiseTransitions => ({
+    ["getNullableString"]: null,
+    ["getNullableStringTaskAsync"]: null,
+    ["getNullableStringValueTaskAsync"]: null,
+    ["getString"]: null,
+    ["getStringTaskAsync"]: null,
+    ["getStringValueTaskAsync"]: null,
+    ["getNullableInt"]: null,
+    ["getNullableIntTaskAsync"]: null,
+    ["getNullableIntValueTaskAsync"]: null,
+    ["getInt"]: null,
+    ["getIntTaskAsync"]: null,
+    ["getIntValueTaskAsync"]: null,
+}));
+
+// ============================================================================
 // UpdateCommandStateContext
 // ============================================================================
 
@@ -9414,13 +9625,13 @@ export interface Configuration {
      * @param key The configuration key (e.g., "ConnectionStrings:Default").
      * @returns The configuration value, or null if not found.
      */
-    getConfigValue(key: string): Promise<string>;
+    getConfigValue(key: string): Promise<string | null>;
     /**
      * Gets a connection string by name.
      * @param name The connection string name.
      * @returns The connection string value, or null if not found.
      */
-    getConnectionString(name: string): Promise<string>;
+    getConnectionString(name: string): Promise<string | null>;
     /**
      * Gets a configuration section by key.
      * @param key The configuration key.
@@ -9446,13 +9657,13 @@ export interface ConfigurationPromise extends PromiseLike<Configuration> {
      * @param key The configuration key (e.g., "ConnectionStrings:Default").
      * @returns The configuration value, or null if not found.
      */
-    getConfigValue(key: string): Promise<string>;
+    getConfigValue(key: string): Promise<string | null>;
     /**
      * Gets a connection string by name.
      * @param name The connection string name.
      * @returns The connection string value, or null if not found.
      */
-    getConnectionString(name: string): Promise<string>;
+    getConnectionString(name: string): Promise<string | null>;
     /**
      * Gets a configuration section by key.
      * @param key The configuration key.
@@ -9488,9 +9699,9 @@ class ConfigurationImpl implements Configuration {
      * @param key The configuration key (e.g., "ConnectionStrings:Default").
      * @returns The configuration value, or null if not found.
      */
-    async getConfigValue(key: string): Promise<string> {
+    async getConfigValue(key: string): Promise<string | null> {
         const rpcArgs: Record<string, unknown> = { configuration: this._handle, key };
-        return await this._client.invokeCapability<string>(
+        return await this._client.invokeCapability<string | null>(
             'Aspire.Hosting/getConfigValue',
             rpcArgs
         );
@@ -9501,9 +9712,9 @@ class ConfigurationImpl implements Configuration {
      * @param name The connection string name.
      * @returns The connection string value, or null if not found.
      */
-    async getConnectionString(name: string): Promise<string> {
+    async getConnectionString(name: string): Promise<string | null> {
         const rpcArgs: Record<string, unknown> = { configuration: this._handle, name };
-        return await this._client.invokeCapability<string>(
+        return await this._client.invokeCapability<string | null>(
             'Aspire.Hosting/getConnectionString',
             rpcArgs
         );
@@ -32990,6 +33201,20 @@ export interface ParameterResource {
      */
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise;
     /**
+     * Marks the parameter resource as optional.
+     *
+     * Optional parameters that do not have values are not prompted for during run or publish operations.
+     * When referenced as environment variables or other value providers, unset optional parameters resolve to `null`.
+     * @returns The configured resource builder.
+     */
+    withOptional(): ParameterResourcePromise;
+    /**
+     * Sets whether the parameter resource requires a value.
+     * @param options Additional options.
+     * @returns The configured resource builder.
+     */
+    withRequired(options?: WithRequiredOptions): ParameterResourcePromise;
+    /**
      * Sets a custom input for the parameter resource from a polyglot app host.
      * @param options Options used to customize the input for the parameter.
      * @returns Resource builder for the parameter.
@@ -33232,6 +33457,23 @@ export interface ParameterResource {
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Gets the current value for this parameter without waiting for unresolved input.
+     *
+     * This method returns `null` for unresolved parameters, parameters with initialization errors, and optional
+     * parameters that resolved without a value.
+     * @returns The current parameter value, or `null` if the parameter does not currently have a non-empty value.
+     */
+    tryGetCurrentValue(): Promise<string | null>;
+    /**
+     * Sets or replaces the value for this parameter.
+     *
+     * Setting a value directly on the resource updates dashboard state after the resource has been observed by the host.
+     * It does not save the value to deployment state. Required parameters set to `null` or an empty string
+     * are faulted with `MissingParameterValueException`, while optional parameters can be cleared to `null`.
+     * @param options Additional options.
+     */
+    setValueAsync(options?: SetValueAsyncOptions): Promise<void>;
     /**
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
@@ -33335,6 +33577,20 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      */
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise;
     /**
+     * Marks the parameter resource as optional.
+     *
+     * Optional parameters that do not have values are not prompted for during run or publish operations.
+     * When referenced as environment variables or other value providers, unset optional parameters resolve to `null`.
+     * @returns The configured resource builder.
+     */
+    withOptional(): ParameterResourcePromise;
+    /**
+     * Sets whether the parameter resource requires a value.
+     * @param options Additional options.
+     * @returns The configured resource builder.
+     */
+    withRequired(options?: WithRequiredOptions): ParameterResourcePromise;
+    /**
      * Sets a custom input for the parameter resource from a polyglot app host.
      * @param options Options used to customize the input for the parameter.
      * @returns Resource builder for the parameter.
@@ -33577,6 +33833,23 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The execution configuration builder.
      */
     createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
+    /**
+     * Gets the current value for this parameter without waiting for unresolved input.
+     *
+     * This method returns `null` for unresolved parameters, parameters with initialization errors, and optional
+     * parameters that resolved without a value.
+     * @returns The current parameter value, or `null` if the parameter does not currently have a non-empty value.
+     */
+    tryGetCurrentValue(): Promise<string | null>;
+    /**
+     * Sets or replaces the value for this parameter.
+     *
+     * Setting a value directly on the resource updates dashboard state after the resource has been observed by the host.
+     * It does not save the value to deployment state. Required parameters set to `null` or an empty string
+     * are faulted with `MissingParameterValueException`, while optional parameters can be cleared to `null`.
+     * @param options Additional options.
+     */
+    setValueAsync(options?: SetValueAsyncOptions): Promise<void>;
     /**
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
@@ -33732,6 +34005,48 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise {
         const enableMarkdown = options?.enableMarkdown;
         return new ParameterResourcePromiseImpl(this._withDescriptionInternal(description, enableMarkdown), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalInternal(): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withOptional',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks the parameter resource as optional.
+     *
+     * Optional parameters that do not have values are not prompted for during run or publish operations.
+     * When referenced as environment variables or other value providers, unset optional parameters resolve to `null`.
+     * @returns The configured resource builder.
+     */
+    withOptional(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withOptionalInternal(), this._client);
+    }
+
+    /** @internal */
+    private async _withRequiredInternal(required?: boolean): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (required !== undefined) rpcArgs.required = required;
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withRequired',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets whether the parameter resource requires a value.
+     * @param options Additional options.
+     * @returns The configured resource builder.
+     */
+    withRequired(options?: WithRequiredOptions): ParameterResourcePromise {
+        const required = options?.required;
+        return new ParameterResourcePromiseImpl(this._withRequiredInternal(required), this._client);
     }
 
     /** @internal */
@@ -34571,6 +34886,41 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
         return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
     }
 
+    /**
+     * Gets the current value for this parameter without waiting for unresolved input.
+     *
+     * This method returns `null` for unresolved parameters, parameters with initialization errors, and optional
+     * parameters that resolved without a value.
+     * @returns The current parameter value, or `null` if the parameter does not currently have a non-empty value.
+     */
+    async tryGetCurrentValue(): Promise<string | null> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        return await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Sets or replaces the value for this parameter.
+     *
+     * Setting a value directly on the resource updates dashboard state after the resource has been observed by the host.
+     * It does not save the value to deployment state. Required parameters set to `null` or an empty string
+     * are faulted with `MissingParameterValueException`, while optional parameters can be cleared to `null`.
+     * @param options Additional options.
+     */
+    async setValueAsync(options?: SetValueAsyncOptions): Promise<void> {
+        const value = options?.value;
+        const cancellationToken = options?.cancellationToken;
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        if (value !== undefined) rpcArgs.value = value;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<void>(
+            'Aspire.Hosting.ApplicationModel/ParameterResource.setValueAsync',
+            rpcArgs
+        );
+    }
+
     /** @internal */
     private async _withContainerBuildOptionsInternal(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): Promise<ParameterResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
@@ -34976,6 +35326,8 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withContainerRegistry"]: () => ParameterResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ParameterResourcePromiseImpl,
     ["withDescription"]: () => ParameterResourcePromiseImpl,
+    ["withOptional"]: () => ParameterResourcePromiseImpl,
+    ["withRequired"]: () => ParameterResourcePromiseImpl,
     ["withCustomInput"]: () => ParameterResourcePromiseImpl,
     ["withRequiredCommand"]: () => ParameterResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ParameterResourcePromiseImpl,
@@ -35009,6 +35361,8 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["onInitializeResource"]: () => ParameterResourcePromiseImpl,
     ["onResourceReady"]: () => ParameterResourcePromiseImpl,
     ["createExecutionConfiguration"]: () => ExecutionConfigurationBuilderPromiseImpl,
+    ["tryGetCurrentValue"]: null,
+    ["setValueAsync"]: null,
     ["withContainerBuildOptions"]: () => ParameterResourcePromiseImpl,
     ["withOptionalString"]: () => ParameterResourcePromiseImpl,
     ["withConfig"]: () => ParameterResourcePromiseImpl,
@@ -57104,6 +57458,18 @@ class TestPromiseCollisionResourcePromiseImpl extends ResourceBuilderBase<ITestP
 }
 
 // ============================================================================
+// Entry Point Functions
+// ============================================================================
+
+export async function getStaticNullableStringAsync(client: AspireClientRpc): Promise<string | null> {
+    const rpcArgs: Record<string, unknown> = {  };
+    return await client.invokeCapability<string | null>(
+        'Aspire.Hosting.CodeGeneration.TypeScript.Tests/getStaticNullableStringAsync',
+        rpcArgs
+    );
+}
+
+// ============================================================================
 // Connection Helper
 // ============================================================================
 
@@ -57296,6 +57662,7 @@ registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hos
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext', (handle, client) => new TestEnvironmentContextImpl(handle as TestEnvironmentContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext', (handle, client) => new TestMutableCollectionContextImpl(handle as TestMutableCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext', (handle, client) => new TestResourceContextImpl(handle as TestResourceContextHandle, client));
+registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext', (handle, client) => new TestReturnValueContextImpl(handle as TestReturnValueContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext', (handle, client) => new UpdateCommandStateContextImpl(handle as UpdateCommandStateContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore', (handle, client) => new AspireStoreImpl(handle as IAspireStoreHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration', (handle, client) => new ConfigurationImpl(handle as IConfigurationHandle, client));

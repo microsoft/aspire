@@ -1986,6 +1986,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext", (h, c) -> new TestCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMutablePromiseCollisionResource", (h, c) -> new ITestMutablePromiseCollisionResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext", (h, c) -> new TestResourceContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext", (h, c) -> new TestReturnValueContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", (h, c) -> new TestEnvironmentContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext", (h, c) -> new TestCollectionContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", (h, c) -> new TestMutableCollectionContext(h, c));
@@ -11153,7 +11154,7 @@ public class EndpointReference extends HandleWrapperBase {
             reqArgs.put("cancellationToken", cancellationToken);
         }
         var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.getValueAsync", reqArgs);
-        return (String) result;
+        return result == null ? null : (String) result;
     }
 
     /** Gets the specified property expression of the endpoint. */
@@ -15193,7 +15194,7 @@ public class IConfiguration extends HandleWrapperBase {
         reqArgs.put("configuration", AspireClient.serializeValue(getHandle()));
         reqArgs.put("key", AspireClient.serializeValue(key));
         var result = getClient().invokeCapability("Aspire.Hosting/getConfigValue", reqArgs);
-        return (String) result;
+        return result == null ? null : (String) result;
     }
 
     /** Gets a connection string by name. */
@@ -15202,7 +15203,7 @@ public class IConfiguration extends HandleWrapperBase {
         reqArgs.put("configuration", AspireClient.serializeValue(getHandle()));
         reqArgs.put("name", AspireClient.serializeValue(name));
         var result = getClient().invokeCapability("Aspire.Hosting/getConnectionString", reqArgs);
-        return (String) result;
+        return result == null ? null : (String) result;
     }
 
     /** Gets a configuration section by key. */
@@ -18348,6 +18349,29 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Marks the parameter resource as optional. */
+    public ParameterResource withOptional() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withOptional", reqArgs);
+        return this;
+    }
+
+    public ParameterResource withRequired() {
+        return withRequired(null);
+    }
+
+    /** Sets whether the parameter resource requires a value. */
+    public ParameterResource withRequired(Boolean required) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (required != null) {
+            reqArgs.put("required", AspireClient.serializeValue(required));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withRequired", reqArgs);
+        return this;
+    }
+
     /** Sets a custom input for the parameter resource from a polyglot app host. */
     public ParameterResource withCustomInput(ParameterCustomInputOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -18850,6 +18874,38 @@ public class ParameterResource extends ResourceBuilderBase {
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
         return (IExecutionConfigurationBuilder) result;
+    }
+
+    /** Gets the current value for this parameter without waiting for unresolved input. */
+    public String tryGetCurrentValue() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue", reqArgs);
+        return result == null ? null : (String) result;
+    }
+
+    /** Sets or replaces the value for this parameter. */
+    public void setValueAsync(SetValueAsyncOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        setValueAsyncImpl(value, cancellationToken);
+    }
+
+    public void setValueAsync() {
+        setValueAsync(null);
+    }
+
+    /** Sets or replaces the value for this parameter. */
+    private void setValueAsyncImpl(String value, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        if (value != null) {
+            reqArgs.put("value", AspireClient.serializeValue(value));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", cancellationToken);
+        }
+        getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ParameterResource.setValueAsync", reqArgs);
     }
 
     /** Configures container build options for a compute resource using an async callback. */
@@ -22535,7 +22591,7 @@ public class ResourceNotificationService extends HandleWrapperBase {
         reqArgs.put("notificationService", AspireClient.serializeValue(getHandle()));
         reqArgs.put("resourceName", AspireClient.serializeValue(resourceName));
         var result = getClient().invokeCapability("Aspire.Hosting/tryGetResourceState", reqArgs);
-        return ResourceEventDto.fromMap((Map<String, Object>) result);
+        return result == null ? null : ResourceEventDto.fromMap((Map<String, Object>) result);
     }
 
     /** Publishes an update for a resource's state. */
@@ -22847,6 +22903,31 @@ public class RunConfiguration implements JsonSerializable {
         map.put("WatchEnabled", AspireClient.serializeValue(watchEnabled));
         return map;
     }
+}
+
+// ===== aspire/SetValueAsyncOptions.java =====
+// SetValueAsyncOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for SetValueAsync. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class SetValueAsyncOptions {
+    private String value;
+    private CancellationToken cancellationToken;
+
+    public String getValue() { return value; }
+    public SetValueAsyncOptions value(String value) {
+        this.value = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public SetValueAsyncOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
 }
 
 // ===== aspire/TestCallbackContext.java =====
@@ -27581,6 +27662,119 @@ public enum TestResourceStatus implements WireValueEnum {
     }
 }
 
+// ===== aspire/TestReturnValueContext.java =====
+// TestReturnValueContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class TestReturnValueContext extends HandleWrapperBase {
+    TestReturnValueContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Invokes the GetNullableString method */
+    public String getNullableString() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableString", reqArgs);
+        return result == null ? null : (String) result;
+    }
+
+    /** Invokes the GetNullableStringTaskAsync method */
+    public String getNullableStringTaskAsync() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringTaskAsync", reqArgs);
+        return result == null ? null : (String) result;
+    }
+
+    /** Invokes the GetNullableStringValueTaskAsync method */
+    public String getNullableStringValueTaskAsync() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringValueTaskAsync", reqArgs);
+        return result == null ? null : (String) result;
+    }
+
+    /** Invokes the GetString method */
+    public String getString() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getString", reqArgs);
+        return (String) result;
+    }
+
+    /** Invokes the GetStringTaskAsync method */
+    public String getStringTaskAsync() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringTaskAsync", reqArgs);
+        return (String) result;
+    }
+
+    /** Invokes the GetStringValueTaskAsync method */
+    public String getStringValueTaskAsync() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringValueTaskAsync", reqArgs);
+        return (String) result;
+    }
+
+    /** Invokes the GetNullableInt method */
+    public Number getNullableInt() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableInt", reqArgs);
+        return result == null ? null : ((Number) result).doubleValue();
+    }
+
+    /** Invokes the GetNullableIntTaskAsync method */
+    public Number getNullableIntTaskAsync() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntTaskAsync", reqArgs);
+        return result == null ? null : ((Number) result).doubleValue();
+    }
+
+    /** Invokes the GetNullableIntValueTaskAsync method */
+    public Number getNullableIntValueTaskAsync() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntValueTaskAsync", reqArgs);
+        return result == null ? null : ((Number) result).doubleValue();
+    }
+
+    /** Invokes the GetInt method */
+    public double getInt() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getInt", reqArgs);
+        return ((Number) result).doubleValue();
+    }
+
+    /** Invokes the GetIntTaskAsync method */
+    public double getIntTaskAsync() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntTaskAsync", reqArgs);
+        return ((Number) result).doubleValue();
+    }
+
+    /** Invokes the GetIntValueTaskAsync method */
+    public double getIntValueTaskAsync() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntValueTaskAsync", reqArgs);
+        return ((Number) result).doubleValue();
+    }
+
+}
+
 // ===== aspire/TestVaultResource.java =====
 // TestVaultResource.java - GENERATED CODE - DO NOT EDIT
 
@@ -30639,6 +30833,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/ResourceUrlsCallbackContext.java
 .aspire/modules/aspire/ResourceUrlsEditor.java
 .aspire/modules/aspire/RunConfiguration.java
+.aspire/modules/aspire/SetValueAsyncOptions.java
 .aspire/modules/aspire/TestCallbackContext.java
 .aspire/modules/aspire/TestCollectionContext.java
 .aspire/modules/aspire/TestConfigDto.java
@@ -30652,6 +30847,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/TestRedisResource.java
 .aspire/modules/aspire/TestResourceContext.java
 .aspire/modules/aspire/TestResourceStatus.java
+.aspire/modules/aspire/TestReturnValueContext.java
 .aspire/modules/aspire/TestVaultResource.java
 .aspire/modules/aspire/UpdateCommandStateContext.java
 .aspire/modules/aspire/UpdateCommandStateResourceSnapshot.java

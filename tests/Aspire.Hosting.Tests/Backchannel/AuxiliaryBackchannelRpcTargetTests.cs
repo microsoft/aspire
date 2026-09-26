@@ -393,7 +393,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         await app.StartAsync().DefaultTimeout();
 
         // Simulate the generated parameter having been resolved to its runtime value.
-        passwordParameter.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        passwordParameter.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         passwordParameter.WaitForValueTcs.SetResult("generated-s3cr3t");
 
         // Cache the env callback the way DCP does on start, so peek-only discovery can observe the reference.
@@ -440,9 +440,9 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         await app.StartAsync().DefaultTimeout();
 
-        topLevelParameter.Resource.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        topLevelParameter.Resource.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         topLevelParameter.Resource.WaitForValueTcs.SetResult("top-level-secret");
-        referencedParameter.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        referencedParameter.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         referencedParameter.WaitForValueTcs.SetResult("referenced-secret");
 
         // Cache the env callback the way DCP does on start, so peek-only discovery can observe the reference.
@@ -488,11 +488,11 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         // callback result, and re-priming exactly as a restart does — and asserts the second call redacts the
         // newly referenced secret.
         var secretA = new ParameterResource("secret-a", _ => "value-a", secret: true);
-        secretA.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secretA.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         secretA.WaitForValueTcs.SetResult("value-a");
 
         var secretB = new ParameterResource("secret-b", _ => "value-b", secret: true);
-        secretB.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secretB.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         secretB.WaitForValueTcs.SetResult("value-b");
 
         // The environment callback references whichever secret this local points at when it is evaluated.
@@ -570,11 +570,11 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         // set, the stale old value would be emitted in plaintext. The per-connection redaction set is add-only,
         // so a secret observed on an earlier pass stays redacted even after the resource stops referencing it.
         var secretA = new ParameterResource("secret-a", _ => "value-a", secret: true);
-        secretA.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secretA.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         secretA.WaitForValueTcs.SetResult("value-a");
 
         var secretB = new ParameterResource("secret-b", _ => "value-b", secret: true);
-        secretB.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secretB.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         secretB.WaitForValueTcs.SetResult("value-b");
 
         var referencedSecret = secretA;
@@ -645,7 +645,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         // secret STRINGS add-only — retaining the parameter object alone is not enough because its value has been
         // overwritten in place. The owner keeps referencing the same parameter throughout; only its value changes.
         var secret = new ParameterResource("secret", _ => "value-a", secret: true);
-        secret.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secret.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         secret.WaitForValueTcs.SetResult("value-a");
 
         var owner = builder.AddResource(new CustomResourceWithEnvironment("owner"))
@@ -682,7 +682,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         // The runtime replaces the parameter's resolved value with value-b (as SetParameterValue does by swapping
         // the completed WaitForValueTcs), but a lagging snapshot still carries value-a. Re-resolving the same
         // parameter object now yields only value-b.
-        secret.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secret.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         secret.WaitForValueTcs.SetResult("value-b");
 
         await notificationService.PublishUpdateAsync(owner.Resource, s => s with
@@ -716,7 +716,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         // AppHost-scoped (the SecretRedactionHistory singleton) and shared by every target, so a value one
         // connection observed stays redacted for a later, independently constructed connection.
         var secret = new ParameterResource("secret", _ => "value-a", secret: true);
-        secret.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secret.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         secret.WaitForValueTcs.SetResult("value-a");
 
         var owner = builder.AddResource(new CustomResourceWithEnvironment("owner"))
@@ -750,7 +750,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         // The runtime replaces the parameter's resolved value with value-b (as SetParameterValue does by swapping
         // the completed WaitForValueTcs), but a lagging snapshot still carries value-a.
-        secret.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secret.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         secret.WaitForValueTcs.SetResult("value-b");
 
         await notificationService.PublishUpdateAsync(owner.Resource, s => s with
@@ -812,7 +812,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         // Start the secret UNRESOLVED; the MCP resolver completes it mid-loop while the "owner" snapshot is still to
         // be built. (A fresh uncompleted TCS also discards any startup resolution of the referenced parameter.)
-        secret.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secret.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         await PrimeEnvironmentCallbackCacheAsync(owner.Resource, app.Services).DefaultTimeout();
 
@@ -873,7 +873,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         // The value is replaced with value-b in place (as the runtime "Set parameter" path does). Peek-only discovery
         // on a first-ever connection would now resolve only value-b, so value-a can only stay redacted via the
         // assignment-time record captured at startup.
-        coldSecret.Resource.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        coldSecret.Resource.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         coldSecret.Resource.WaitForValueTcs.SetResult("value-b");
 
         var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
@@ -1023,7 +1023,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         // Leave the secret unresolved: its completion source never completes. GetResolvedSecretParameterValues must
         // peek (not await) the task, so an unresolved secret cannot block the snapshot call.
-        secret.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secret.WaitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         // Cache the env callback the way DCP does on start, so peek-only discovery can observe (and then skip) the
         // unresolved secret reference.
@@ -1074,7 +1074,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         await app.StartAsync().DefaultTimeout();
 
         // Begin with the secret unresolved so the watch starts before the value is known.
-        var waitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var waitForValueTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         secret.WaitForValueTcs = waitForValueTcs;
 
         // Cache the env callback the way DCP does on start, so peek-only discovery can observe the secret reference.

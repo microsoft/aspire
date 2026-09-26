@@ -2689,7 +2689,19 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         {
             // This will be a big if/elif/else clause, so we start with if on the first type variation.
             clause = "if";
-            builder.AppendLine(CultureInfo.InvariantCulture, $"        if _{optionName} := kwargs.pop(\"{optionName}\", None):");
+            if (variations.All(v => v.OptionType == "typing.Literal[True]"))
+            {
+                builder.AppendLine(CultureInfo.InvariantCulture, $"        if _{optionName} := kwargs.pop(\"{optionName}\", None):");
+            }
+            else
+            {
+                // Falsy parameter values must reach the RPC, but False still disables opt-in flags
+                // unless the option also accepts an actual boolean parameter.
+                var hasFlag = variations.Any(v => v.OptionType == "typing.Literal[True]");
+                var hasBooleanParameter = variations.Any(v => v.OptionType.Split(" | ").Contains("bool"));
+                var flagGuard = hasFlag && !hasBooleanParameter ? $" and _{optionName} is not False" : string.Empty;
+                builder.AppendLine(CultureInfo.InvariantCulture, $"        if (_{optionName} := kwargs.pop(\"{optionName}\", None)) is not None{flagGuard}:");
+            }
         }
 
         // Resolve the correct capability ID for this variation.
