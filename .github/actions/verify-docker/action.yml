@@ -1,0 +1,20 @@
+name: 'Verify Docker'
+description: 'Verify that the runner Docker daemon is available and emit Docker/buildx version diagnostics. No-op on non-Linux runners.'
+runs:
+  using: "composite"
+  steps:
+    - name: Verify Docker daemon and emit diagnostics
+      # Aspire CI only relies on Docker on Linux runners; the macOS and Windows
+      # GitHub-hosted runners don't have a working Docker daemon. Skip there so
+      # callers don't need to repeat `if: runner.os == 'Linux'` at every call site.
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        # Run docker info first as the gating check, but never let it short-circuit
+        # the diagnostics that follow — those are most useful when the daemon is
+        # broken. Re-raise its exit code at the end so the step still fails.
+        rc=0
+        docker info || rc=$?
+        docker version || echo "::warning::docker version failed with exit code $?"
+        docker buildx version || echo "::warning::docker buildx version failed with exit code $?"
+        exit $rc
