@@ -10,21 +10,27 @@ namespace Aspire.Hosting
 {
     public static partial class DotnetProjectHostingExtensions
     {
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDotnetProject dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addDotnetProject dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> AddDotnetProject(this IDistributedApplicationBuilder builder, string name, string path, System.Action<ProjectResourceOptions> configure) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDotnetProject dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addDotnetProject dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> AddDotnetProject(this IDistributedApplicationBuilder builder, string name, string path) { throw null; }
+
+        [AspireExportIgnore(Reason = "Raw Action delegate callbacks are not ATS-compatible.")]
+        public static ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> WithBuildEnvironment(this ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> builder, System.Action<ApplicationModel.EnvironmentCallbackContext> callback) { throw null; }
+
+        [AspireExportIgnore(Reason = "Raw Func delegate callbacks are not ATS-compatible.")]
+        public static ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> WithBuildEnvironment(this ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> builder, System.Func<ApplicationModel.EnvironmentCallbackContext, System.Threading.Tasks.Task> callback) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> WithBuildEnvironment(this ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> builder, string name, string value) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.Dotnet
 {
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport(ExposeProperties = true)]
-    public partial class DotnetProjectResource : ApplicationModel.ExecutableResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource
+    public partial class DotnetProjectResource : ApplicationModel.ExecutableResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IContainerFilesDestinationResource, ApplicationModel.IDotnetProgramResource
     {
         public DotnetProjectResource(string name, string workingDirectory) : base(default!, default!, default!) { }
     }
